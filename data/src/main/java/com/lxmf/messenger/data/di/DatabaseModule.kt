@@ -1689,9 +1689,17 @@ object DatabaseModule {
             }
         }
 
+    // Migration 43→44: Add source column + interface_first_seen table
     private val MIGRATION_43_44 =
         object : Migration(43, 44) {
             override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE received_locations ADD COLUMN source TEXT NOT NULL DEFAULT 'location_sharing'",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_received_locations_source " +
+                        "ON received_locations(source, senderHash, timestamp)",
+                )
                 database.execSQL(
                     "CREATE TABLE IF NOT EXISTS interface_first_seen (" +
                         "interfaceId TEXT NOT NULL PRIMARY KEY, " +

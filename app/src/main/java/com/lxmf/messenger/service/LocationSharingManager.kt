@@ -11,7 +11,6 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.lxmf.messenger.util.LocationCompat
 import com.lxmf.messenger.data.db.dao.ReceivedLocationDao
 import com.lxmf.messenger.data.db.entity.ReceivedLocationEntity
 import com.lxmf.messenger.data.model.LocationTelemetry
@@ -20,6 +19,7 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.ui.model.SharingDuration
+import com.lxmf.messenger.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

@@ -282,9 +282,7 @@ class MigrationExporter
          * Handles both encrypted (new) and unencrypted (legacy) storage.
          */
         @Suppress("DEPRECATION")
-        private suspend fun getDecryptedKeyData(
-            identity: com.lxmf.messenger.data.db.entity.LocalIdentityEntity,
-        ): ByteArray? {
+        private suspend fun getDecryptedKeyData(identity: com.lxmf.messenger.data.db.entity.LocalIdentityEntity): ByteArray? {
             // Try to get from encrypted storage first
             if (identity.keyEncryptionVersion > 0 && identity.encryptedKeyData != null) {
                 return try {

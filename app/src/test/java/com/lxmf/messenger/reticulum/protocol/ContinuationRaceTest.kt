@@ -1,4 +1,5 @@
 @file:Suppress("InjectDispatcher")
+
 package com.lxmf.messenger.reticulum.protocol
 
 import kotlinx.coroutines.Dispatchers

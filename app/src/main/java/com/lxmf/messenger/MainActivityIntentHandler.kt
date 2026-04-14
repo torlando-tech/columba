@@ -22,6 +22,8 @@ class MainActivityIntentHandler(
         when (intent.action) {
             NotificationHelper.ACTION_OPEN_ANNOUNCE -> handleOpenAnnounce(intent)
             NotificationHelper.ACTION_OPEN_CONVERSATION -> handleOpenConversation(intent)
+            NotificationHelper.ACTION_SOS_CALL_BACK -> handleSosCallBack(intent)
+            NotificationHelper.ACTION_SOS_VIEW_MAP -> handleSosViewMap(intent)
             Intent.ACTION_VIEW -> handleActionView(intent)
             Intent.ACTION_SEND -> handleActionSend(intent)
             Intent.ACTION_SEND_MULTIPLE -> handleActionSendMultiple(intent)
@@ -81,11 +83,23 @@ class MainActivityIntentHandler(
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun handleActionSend(intent: Intent) {
         val mimeType = intent.type
 
         if (mimeType != null && mimeType.startsWith("image/")) {
-            handleActionSendImage(intent)
+            val uri: Uri? =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM)
+                }
+            if (uri != null) {
+                Log.d(logTag, "Received shared image (ACTION_SEND): $uri")
+                triggerSharedImages(listOf(uri))
+            } else {
+                Log.w(logTag, "ACTION_SEND received with image/* but no EXTRA_STREAM URI found")
+            }
             return
         }
 
@@ -124,27 +138,22 @@ class MainActivityIntentHandler(
     }
 
     @Suppress("DEPRECATION")
-    private fun handleActionSendImage(intent: Intent) {
-        val uri: Uri? =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
-            } else {
-                intent.getParcelableExtra(Intent.EXTRA_STREAM)
-            }
-
-        if (uri != null) {
-            Log.d(logTag, "Received shared image (ACTION_SEND): $uri")
-            triggerSharedImages(listOf(uri))
-        } else {
-            Log.w(logTag, "ACTION_SEND received with image/* but no EXTRA_STREAM URI found")
-        }
-    }
-
     private fun handleActionSendMultiple(intent: Intent) {
         val mimeType = intent.type
 
         if (mimeType != null && mimeType.startsWith("image/")) {
-            handleActionSendMultipleImages(intent)
+            val uris: List<Uri> =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java) ?: emptyList()
+                } else {
+                    intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: emptyList()
+                }
+            if (uris.isNotEmpty()) {
+                Log.d(logTag, "Received ${uris.size} shared images (ACTION_SEND_MULTIPLE)")
+                triggerSharedImages(uris)
+            } else {
+                Log.w(logTag, "ACTION_SEND_MULTIPLE received with image/* but no EXTRA_STREAM URIs found")
+            }
             return
         }
 
@@ -181,23 +190,6 @@ class MainActivityIntentHandler(
                 logTag,
                 "ACTION_SEND_MULTIPLE received with text/* mimeType=$mimeType but no text found (extras=[$extrasKeys], clipLabel=$clipLabel)",
             )
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun handleActionSendMultipleImages(intent: Intent) {
-        val uris: List<Uri> =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java) ?: emptyList()
-            } else {
-                intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: emptyList()
-            }
-
-        if (uris.isNotEmpty()) {
-            Log.d(logTag, "Received ${uris.size} shared images (ACTION_SEND_MULTIPLE)")
-            triggerSharedImages(uris)
-        } else {
-            Log.w(logTag, "ACTION_SEND_MULTIPLE received with image/* but no EXTRA_STREAM URIs found")
         }
     }
 
@@ -256,6 +248,26 @@ class MainActivityIntentHandler(
             Log.w(logTag, "📞 pendingNavigation.value is now: ${pendingNavigation.value}")
         } else {
             Log.e(logTag, "📞 identityHash is NULL! Cannot navigate to call")
+        }
+    }
+
+    private fun handleSosCallBack(intent: Intent) {
+        val destinationHash = intent.getStringExtra(NotificationHelper.EXTRA_DESTINATION_HASH)
+        val peerName = intent.getStringExtra(NotificationHelper.EXTRA_PEER_NAME) ?: "Contact"
+        if (destinationHash != null) {
+            Log.d(logTag, "SOS call-back: opening conversation with $peerName ($destinationHash)")
+            pendingNavigation.value = PendingNavigation.Conversation(destinationHash, peerName)
+        }
+    }
+
+    private fun handleSosViewMap(intent: Intent) {
+        val lat = intent.getDoubleExtra("latitude", 0.0)
+        val lon = intent.getDoubleExtra("longitude", 0.0)
+        val label = intent.getStringExtra(NotificationHelper.EXTRA_PEER_NAME) ?: "SOS"
+        val senderHash = intent.getStringExtra(NotificationHelper.EXTRA_DESTINATION_HASH)
+        if (lat != 0.0 && lon != 0.0) {
+            Log.d(logTag, "SOS view map: focusing on $lat, $lon ($label) trail=${senderHash?.take(8)}")
+            pendingNavigation.value = PendingNavigation.SosMapFocus(lat, lon, "SOS: $label", senderHash)
         }
     }
 

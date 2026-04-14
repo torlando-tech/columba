@@ -32,4 +32,10 @@ data class ReceivedLocationEntity(
     val receivedAt: Long, // When we received this update
     val approximateRadius: Int = 0, // Coarsening radius in meters (0 = precise)
     val appearanceJson: String? = null, // Icon appearance JSON: {"icon_name":"car","foreground_color":"RRGGBB","background_color":"RRGGBB"}
-)
+    val source: String = SOURCE_LOCATION_SHARING,
+) {
+    companion object {
+        const val SOURCE_LOCATION_SHARING = "location_sharing"
+        const val SOURCE_SOS_TRAIL = "sos_trail"
+    }
+}

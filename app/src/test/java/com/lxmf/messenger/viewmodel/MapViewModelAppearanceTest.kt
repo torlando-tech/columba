@@ -91,7 +91,7 @@ class MapViewModelAppearanceTest {
 
         assertNotNull(result)
         assertEquals("a1b2c3", result!!.second) // second = foreground
-        assertEquals("0f1e2d", result.third)     // third = background
+        assertEquals("0f1e2d", result.third) // third = background
     }
 
     @Test
@@ -108,66 +108,72 @@ class MapViewModelAppearanceTest {
     @Test
     fun `fresh location returns FRESH`() {
         val now = System.currentTimeMillis()
-        val result = MapViewModel.calculateMarkerState(
-            timestamp = now - 60_000L, // 1 minute ago
-            expiresAt = now + 3600_000L, // expires in 1 hour
-            currentTime = now,
-        )
+        val result =
+            MapViewModel.calculateMarkerState(
+                timestamp = now - 60_000L, // 1 minute ago
+                expiresAt = now + 3600_000L, // expires in 1 hour
+                currentTime = now,
+            )
         assertEquals(MarkerState.FRESH, result)
     }
 
     @Test
     fun `stale location returns STALE`() {
         val now = System.currentTimeMillis()
-        val result = MapViewModel.calculateMarkerState(
-            timestamp = now - 6 * 60_000L, // 6 minutes ago (> 5 min threshold)
-            expiresAt = now + 3600_000L,
-            currentTime = now,
-        )
+        val result =
+            MapViewModel.calculateMarkerState(
+                timestamp = now - 6 * 60_000L, // 6 minutes ago (> 5 min threshold)
+                expiresAt = now + 3600_000L,
+                currentTime = now,
+            )
         assertEquals(MarkerState.STALE, result)
     }
 
     @Test
     fun `expired within grace period returns EXPIRED_GRACE_PERIOD`() {
         val now = System.currentTimeMillis()
-        val result = MapViewModel.calculateMarkerState(
-            timestamp = now - 10 * 60_000L,
-            expiresAt = now - 1000L, // just expired
-            currentTime = now,
-        )
+        val result =
+            MapViewModel.calculateMarkerState(
+                timestamp = now - 10 * 60_000L,
+                expiresAt = now - 1000L, // just expired
+                currentTime = now,
+            )
         assertEquals(MarkerState.EXPIRED_GRACE_PERIOD, result)
     }
 
     @Test
     fun `expired beyond grace period returns null`() {
         val now = System.currentTimeMillis()
-        val result = MapViewModel.calculateMarkerState(
-            timestamp = now - 10 * 60_000L,
-            expiresAt = now - 2 * 3600_000L, // expired 2 hours ago (> 1 hour grace)
-            currentTime = now,
-        )
+        val result =
+            MapViewModel.calculateMarkerState(
+                timestamp = now - 10 * 60_000L,
+                expiresAt = now - 2 * 3600_000L, // expired 2 hours ago (> 1 hour grace)
+                currentTime = now,
+            )
         assertNull(result)
     }
 
     @Test
     fun `null expiresAt with fresh timestamp returns FRESH`() {
         val now = System.currentTimeMillis()
-        val result = MapViewModel.calculateMarkerState(
-            timestamp = now - 60_000L,
-            expiresAt = null, // indefinite sharing
-            currentTime = now,
-        )
+        val result =
+            MapViewModel.calculateMarkerState(
+                timestamp = now - 60_000L,
+                expiresAt = null, // indefinite sharing
+                currentTime = now,
+            )
         assertEquals(MarkerState.FRESH, result)
     }
 
     @Test
     fun `null expiresAt with stale timestamp returns STALE`() {
         val now = System.currentTimeMillis()
-        val result = MapViewModel.calculateMarkerState(
-            timestamp = now - 10 * 60_000L, // 10 minutes ago
-            expiresAt = null,
-            currentTime = now,
-        )
+        val result =
+            MapViewModel.calculateMarkerState(
+                timestamp = now - 10 * 60_000L, // 10 minutes ago
+                expiresAt = null,
+                currentTime = now,
+            )
         assertEquals(MarkerState.STALE, result)
     }
 
@@ -175,15 +181,16 @@ class MapViewModelAppearanceTest {
 
     @Test
     fun `ContactMarker uses telemetry appearance when available`() {
-        val marker = ContactMarker(
-            destinationHash = "abc123",
-            displayName = "Alice",
-            latitude = 37.7749,
-            longitude = -122.4194,
-            iconName = "person",           // from telemetryAppearance?.first
-            iconForegroundColor = "ff0000", // from telemetryAppearance?.second
-            iconBackgroundColor = "00ff00", // from telemetryAppearance?.third
-        )
+        val marker =
+            ContactMarker(
+                destinationHash = "abc123",
+                displayName = "Alice",
+                latitude = 37.7749,
+                longitude = -122.4194,
+                iconName = "person", // from telemetryAppearance?.first
+                iconForegroundColor = "ff0000", // from telemetryAppearance?.second
+                iconBackgroundColor = "00ff00", // from telemetryAppearance?.third
+            )
 
         assertEquals("person", marker.iconName)
         assertEquals("ff0000", marker.iconForegroundColor)
@@ -192,12 +199,13 @@ class MapViewModelAppearanceTest {
 
     @Test
     fun `ContactMarker defaults icon fields to null`() {
-        val marker = ContactMarker(
-            destinationHash = "abc123",
-            displayName = "Alice",
-            latitude = 37.7749,
-            longitude = -122.4194,
-        )
+        val marker =
+            ContactMarker(
+                destinationHash = "abc123",
+                displayName = "Alice",
+                latitude = 37.7749,
+                longitude = -122.4194,
+            )
 
         assertNull(marker.iconName)
         assertNull(marker.iconForegroundColor)

@@ -25,12 +25,13 @@ class PttMediaSessionManagerTest {
     fun setup() {
         lastPttState = null
         pttStateChanges.clear()
-        manager = PttMediaSessionManager(
-            ApplicationProvider.getApplicationContext(),
-        ) { active ->
-            lastPttState = active
-            pttStateChanges.add(active)
-        }
+        manager =
+            PttMediaSessionManager(
+                ApplicationProvider.getApplicationContext(),
+            ) { active ->
+                lastPttState = active
+                pttStateChanges.add(active)
+            }
     }
 
     @After

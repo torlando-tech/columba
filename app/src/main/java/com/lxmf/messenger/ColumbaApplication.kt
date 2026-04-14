@@ -14,6 +14,9 @@ import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.IdentityResolutionManager
 import com.lxmf.messenger.service.MessageCollector
 import com.lxmf.messenger.service.PropagationNodeManager
+import com.lxmf.messenger.service.SosActiveTracker
+import com.lxmf.messenger.service.SosManager
+import com.lxmf.messenger.service.SosTriggerDetector
 import com.lxmf.messenger.service.TelemetryCollectorManager
 import com.lxmf.messenger.startup.ConfigApplyFlagManager
 import com.lxmf.messenger.startup.ServiceIdentityVerifier
@@ -88,6 +91,15 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var telemetryCollectorManager: TelemetryCollectorManager
 
+    @Inject
+    lateinit var sosManager: SosManager
+
+    @Inject
+    lateinit var sosTriggerDetector: SosTriggerDetector
+
+    @Inject
+    lateinit var receivedLocationDao: com.lxmf.messenger.data.db.dao.ReceivedLocationDao
+
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Default for background initialization (no main-thread work needed)
     // SupervisorJob ensures failures don't crash the entire app
@@ -136,6 +148,26 @@ class ColumbaApplication : Application() {
         }
 
         android.util.Log.d("ColumbaApplication", "Main app process detected ($processName) - proceeding with auto-initialization")
+
+        // Start SOS trigger detector (observes settings, starts/stops accelerometer listener)
+        sosTriggerDetector.startObserving()
+        // Restore SOS active state if app was restarted while SOS was active
+        sosManager.restoreIfActive()
+        // Restore SOS active tracker from recent trail data (receiver side)
+        applicationScope.launch {
+            try {
+                val recentSenders =
+                    receivedLocationDao.getRecentSosTrailSenders(
+                        sinceTimestamp = System.currentTimeMillis() - 24 * 3600_000L,
+                    )
+                if (recentSenders.isNotEmpty()) {
+                    SosActiveTracker.restoreFromSenders(recentSenders.toSet())
+                    android.util.Log.d("ColumbaApplication", "Restored ${recentSenders.size} SOS active senders")
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("ColumbaApplication", "Failed to restore SOS active senders", e)
+            }
+        }
 
         // Preload theme preference into DataStore's in-memory cache
         // This eliminates theme flash on app startup by ensuring the theme is cached

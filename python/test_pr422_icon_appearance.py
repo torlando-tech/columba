@@ -844,10 +844,13 @@ class TestPollReceivedMessagesIconAppearance(unittest.TestCase):
         self.assertEqual(len(results), 1)
         result = results[0]
         self.assertIn('fields', result)
-        self.assertIn('4', result['fields'])
-        self.assertEqual(result['fields']['4']['icon_name'], "test-icon")
-        self.assertEqual(result['fields']['4']['foreground_color'], "112233")
-        self.assertEqual(result['fields']['4']['background_color'], "aabbcc")
+        # fields is now a JSON string (consistent with callback path)
+        import json
+        fields = json.loads(result['fields']) if isinstance(result['fields'], str) else result['fields']
+        self.assertIn('4', fields)
+        self.assertEqual(fields['4']['icon_name'], "test-icon")
+        self.assertEqual(fields['4']['foreground_color'], "112233")
+        self.assertEqual(fields['4']['background_color'], "aabbcc")
 
     def test_poll_without_icon_appearance(self):
         """poll_received_messages without field 4 should not have icon_appearance."""

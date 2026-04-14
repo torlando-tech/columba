@@ -28,7 +28,10 @@ data class ScreenMarker(
  * Allows testing without MapLibre dependency.
  */
 fun interface ScreenToLatLng {
-    fun convert(screenX: Float, screenY: Float): Pair<Double, Double>
+    fun convert(
+        screenX: Float,
+        screenY: Float,
+    ): Pair<Double, Double>
 }
 
 // Declutter constants
@@ -58,6 +61,7 @@ fun calculateDeclutteredPositions(
 
     // Union-Find grouping of overlapping markers
     val parent = IntArray(screenMarkers.size) { it }
+
     fun find(i: Int): Int {
         var x = i
         while (parent[x] != x) {
@@ -66,7 +70,11 @@ fun calculateDeclutteredPositions(
         }
         return x
     }
-    fun union(a: Int, b: Int) {
+
+    fun union(
+        a: Int,
+        b: Int,
+    ) {
         val ra = find(a)
         val rb = find(b)
         if (ra != rb) parent[ra] = rb

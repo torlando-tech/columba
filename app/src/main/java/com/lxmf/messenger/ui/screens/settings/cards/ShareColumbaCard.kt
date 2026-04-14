@@ -28,8 +28,9 @@ fun ShareColumbaCard(
         onExpandedChange = onExpandedChange,
     ) {
         Text(
-            text = "Share the Columba app with someone nearby. " +
-                "The other person scans a QR code to download and install the app directly from your phone.",
+            text =
+                "Share the Columba app with someone nearby. " +
+                    "The other person scans a QR code to download and install the app directly from your phone.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

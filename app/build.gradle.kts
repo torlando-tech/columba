@@ -257,13 +257,14 @@ android {
                 val total = project.findProperty("testShardTotal")?.toString()?.toIntOrNull()
                 if (shard != null && total != null && total > 1) {
                     val testSourceDir = project.file("src/test/java")
-                    val allTestClasses = project.fileTree(testSourceDir) {
-                        include("**/*Test.kt")
-                    }.files.map { f ->
-                        f.relativeTo(testSourceDir)
-                            .path.replace(File.separatorChar, '.')
-                            .removeSuffix(".kt")
-                    }.sorted()
+                    val allTestClasses =
+                        project.fileTree(testSourceDir) {
+                            include("**/*Test.kt")
+                        }.files.map { f ->
+                            f.relativeTo(testSourceDir)
+                                .path.replace(File.separatorChar, '.')
+                                .removeSuffix(".kt")
+                        }.sorted()
                     val shardClasses = allTestClasses.filterIndexed { i, _ -> i % total == shard }
                     shardClasses.forEach { cls -> it.filter.includeTestsMatching(cls) }
                 }

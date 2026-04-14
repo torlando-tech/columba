@@ -519,9 +519,10 @@ class IdentityManagerViewModel
                 try {
                     _uiState.value = IdentityManagerUiState.Loading("Exporting identity...")
 
-                    val fileData = withContext(Dispatchers.IO) {
-                        reticulumProtocol.exportIdentityFile(identityHash, filePath)
-                    }
+                    val fileData =
+                        withContext(Dispatchers.IO) {
+                            reticulumProtocol.exportIdentityFile(identityHash, filePath)
+                        }
 
                     if (fileData.isEmpty()) {
                         _uiState.value =

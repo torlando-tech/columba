@@ -1,4 +1,5 @@
 @file:Suppress("InjectDispatcher", "NoNameShadowing")
+
 package com.lxmf.messenger.reticulum.util
 
 import kotlinx.coroutines.Dispatchers

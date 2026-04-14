@@ -126,10 +126,11 @@ class MigrationCryptoTest {
         val plaintext = "stream test data".toByteArray()
         val encrypted = MigrationCrypto.encrypt(plaintext, testPassword)
 
-        val decryptedStream = MigrationCrypto.decryptStream(
-            encrypted.inputStream(),
-            testPassword,
-        )
+        val decryptedStream =
+            MigrationCrypto.decryptStream(
+                encrypted.inputStream(),
+                testPassword,
+            )
         val result = decryptedStream.readBytes()
         assertArrayEquals(plaintext, result)
     }

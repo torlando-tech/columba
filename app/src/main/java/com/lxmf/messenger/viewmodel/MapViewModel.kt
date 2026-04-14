@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -788,6 +789,19 @@ class MapViewModel
             Log.d(TAG, "Deleting marker for: ${destinationHash.take(16)}")
             viewModelScope.launch {
                 receivedLocationDao.deleteLocationsForSender(destinationHash)
+            }
+        }
+
+        /**
+         * Observe all stored locations for a sender (for live SOS breadcrumb trail).
+         */
+        fun observeSosTrailLocations(senderHash: String): kotlinx.coroutines.flow.Flow<List<com.lxmf.messenger.data.db.entity.ReceivedLocationEntity>> =
+            receivedLocationDao.getSosTrailForSender(senderHash)
+
+        fun clearSosTrail(senderHash: String) {
+            viewModelScope.launch {
+                receivedLocationDao.deleteSosTrailForSender(senderHash)
+                Log.d("MapViewModel", "Cleared SOS trail for ${senderHash.take(8)}")
             }
         }
     }

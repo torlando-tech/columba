@@ -13,11 +13,9 @@ import com.lxmf.messenger.viewmodel.MigrationUiState
 import com.lxmf.messenger.viewmodel.MigrationViewModel
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain

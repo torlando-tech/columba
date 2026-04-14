@@ -45,10 +45,11 @@ class LocalHotspotManagerTest {
 
     @Test
     fun `HotspotInfo data class holds ssid and password`() {
-        val info = LocalHotspotManager.HotspotInfo(
-            ssid = "TestNetwork",
-            password = "password123",
-        )
+        val info =
+            LocalHotspotManager.HotspotInfo(
+                ssid = "TestNetwork",
+                password = "password123",
+            )
         assertEquals("TestNetwork", info.ssid)
         assertEquals("password123", info.password)
     }

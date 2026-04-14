@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,11 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,11 +37,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -98,7 +104,7 @@ private val MdiFont = FontFamily(Font(R.font.materialdesignicons))
 @Composable
 fun DiscoveredInterfacesScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToTcpClientWizard: (host: String, port: Int, name: String) -> Unit = { _, _, _ -> },
+    onNavigateToTcpClientWizard: (host: String, port: Int, name: String, ifacNetname: String?, ifacNetkey: String?) -> Unit = { _, _, _, _, _ -> },
     onNavigateToMapWithInterface: (details: FocusInterfaceDetails) -> Unit = { _ -> },
     onNavigateToRNodeWizardWithParams: (
         frequency: Long?,
@@ -201,11 +207,11 @@ fun DiscoveredInterfacesScreen(
                             )
                         }
 
-                        // Status summary (only if we have interfaces)
-                        if (state.interfaces.isNotEmpty()) {
+                        // Status summary (counts reflect ALL discovered interfaces, not filtered)
+                        if (state.originalInterfaces.isNotEmpty()) {
                             item {
                                 DiscoveryStatusSummary(
-                                    totalCount = state.interfaces.size,
+                                    totalCount = state.originalInterfaces.size,
                                     availableCount = state.availableCount,
                                     unknownCount = state.unknownCount,
                                     staleCount = state.staleCount,
@@ -220,12 +226,29 @@ fun DiscoveredInterfacesScreen(
                                     onModeSelected = { viewModel.setSortMode(it) },
                                 )
                             }
+
+                            // Search + type filters
+                            item {
+                                DiscoveredInterfaceSearchAndFilter(
+                                    searchQuery = state.searchQuery,
+                                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                                    typeFilters = state.typeFilters,
+                                    onToggleTypeFilter = { viewModel.toggleTypeFilter(it) },
+                                    onClearFilters = { viewModel.clearFilters() },
+                                    filteredCount = state.interfaces.size,
+                                    totalCount = state.originalInterfaces.size,
+                                )
+                            }
                         }
 
                         // Show empty state or interfaces
                         if (state.interfaces.isEmpty()) {
                             item {
-                                EmptyDiscoveredCard()
+                                if (state.originalInterfaces.isEmpty()) {
+                                    EmptyDiscoveredCard()
+                                } else {
+                                    NoFilterMatchesCard(onClearFilters = { viewModel.clearFilters() })
+                                }
                             }
                         } else {
                             items(
@@ -246,6 +269,8 @@ fun DiscoveredInterfacesScreen(
                                                 reachableHost,
                                                 iface.port ?: 4242,
                                                 iface.name,
+                                                iface.ifacNetname,
+                                                iface.ifacNetkey,
                                             )
                                         } else {
                                             Toast
@@ -554,6 +579,135 @@ internal fun DiscoverySettingsCard(
 /**
  * Card shown when no interfaces are discovered.
  */
+@Composable
+internal fun NoFilterMatchesCard(onClearFilters: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "No matches",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "No discovered interfaces match the current search or filters.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(onClick = onClearFilters) {
+                Text("Clear filters")
+            }
+        }
+    }
+}
+
+/**
+ * Search field + type-filter chip row for the discovered interfaces list.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+internal fun DiscoveredInterfaceSearchAndFilter(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    typeFilters: Set<com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter>,
+    onToggleTypeFilter: (com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter) -> Unit,
+    onClearFilters: () -> Unit,
+    filteredCount: Int,
+    totalCount: Int,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("Search by name, type, host, or IFAC network") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchQueryChange("") }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear search",
+                            )
+                        }
+                    }
+                },
+            )
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter.entries.forEach { filter ->
+                    FilterChip(
+                        selected = filter in typeFilters,
+                        onClick = { onToggleTypeFilter(filter) },
+                        label = { Text(filter.label) },
+                    )
+                }
+            }
+
+            val hasActiveFilters = searchQuery.isNotBlank() || typeFilters.isNotEmpty()
+            if (hasActiveFilters) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "$filteredCount of $totalCount",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onClearFilters) {
+                        Text("Clear")
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 internal fun EmptyDiscoveredCard() {
     Card(
@@ -874,6 +1028,33 @@ internal fun DiscoveredInterfaceCard(
                 }
                 iface.isRadioInterface -> {
                     RadioInterfaceDetails(iface)
+                }
+            }
+
+            // IFAC indicator — the remote is publishing its IFAC network identity,
+            // so connecting to it requires the matching network_name / passphrase
+            // (which will be auto-filled into the Add flow).
+            iface.ifacNetname?.takeIf { it.isNotBlank() }?.let { ifacNet ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "IFAC: ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = ifacNet,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (!iface.ifacNetkey.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "🔑",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
 

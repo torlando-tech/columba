@@ -781,6 +781,11 @@ data class DiscoveredInterface(
     val latitude: Double?,
     val longitude: Double?,
     val height: Double?, // Altitude in meters
+    // IFAC (Interface Access Code) — when the remote interface publishes its IFAC
+    // identity, peers adding this interface locally must match network_name and
+    // passphrase or the IFAC handshake fails and no packets get through.
+    val ifacNetname: String? = null,
+    val ifacNetkey: String? = null,
 ) {
     /**
      * Returns true if this is a TCP-based interface.
@@ -845,6 +850,9 @@ data class DiscoveredInterface(
                 latitude = item.optDoubleOrNull("latitude"),
                 longitude = item.optDoubleOrNull("longitude"),
                 height = item.optDoubleOrNull("height"),
+                // IFAC
+                ifacNetname = item.optString("ifac_netname", "").ifEmpty { null },
+                ifacNetkey = item.optString("ifac_netkey", "").ifEmpty { null },
             )
 
         // JSON extension helpers for nullable values

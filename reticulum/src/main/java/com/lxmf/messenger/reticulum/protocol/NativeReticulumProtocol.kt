@@ -1629,6 +1629,8 @@ class NativeReticulumProtocol(
                 latitude = info.latitude,
                 longitude = info.longitude,
                 height = info.height,
+                ifacNetname = info.ifacNetname,
+                ifacNetkey = info.ifacNetkey,
             )
         }
 

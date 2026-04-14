@@ -29,6 +29,32 @@ enum class DiscoveredInterfacesSortMode {
 }
 
 /**
+ * Coarse-grained bucket for filtering discovered interfaces by type. Maps from
+ * the fine-grained type strings RNS reports (e.g. "TCPServerInterface",
+ * "BackboneInterface", "RNodeInterface") to UI-friendly buckets.
+ */
+enum class DiscoveredInterfaceTypeFilter(
+    val label: String,
+) {
+    TCP("TCP"),
+    RADIO("Radio"),
+    I2P("I2P"),
+    OTHER("Other"),
+    ;
+
+    companion object {
+        /** Classify a DiscoveredInterface into a filter bucket. */
+        fun classify(iface: DiscoveredInterface): DiscoveredInterfaceTypeFilter =
+            when {
+                iface.isTcpInterface -> TCP
+                iface.isRadioInterface -> RADIO
+                iface.type.contains("I2P", ignoreCase = true) -> I2P
+                else -> OTHER
+            }
+    }
+}
+
+/**
  * State for the discovered interfaces screen.
  */
 @androidx.compose.runtime.Immutable
@@ -57,6 +83,10 @@ data class DiscoveredInterfacesState(
     val isRestarting: Boolean = false,
     // Currently auto-connected interface endpoints (e.g., "host:port")
     val autoconnectedEndpoints: Set<String> = emptySet(),
+    // Free-form search filter, matched against interface name + reachableOn + type.
+    val searchQuery: String = "",
+    // Multi-select type filter. Empty set = no filtering (all types shown).
+    val typeFilters: Set<DiscoveredInterfaceTypeFilter> = emptySet(),
 )
 
 /**
@@ -111,16 +141,18 @@ class DiscoveredInterfacesViewModel
                                 currentState.sortMode
                             }
 
-                        val sortedInterfaces =
-                            sortInterfaces(
-                                discovered,
-                                effectiveSortMode,
-                                currentState.userLatitude,
-                                currentState.userLongitude,
+                        val visibleInterfaces =
+                            applySearchAndFilter(
+                                source = discovered,
+                                searchQuery = currentState.searchQuery,
+                                typeFilters = currentState.typeFilters,
+                                sortMode = effectiveSortMode,
+                                userLat = currentState.userLatitude,
+                                userLon = currentState.userLongitude,
                             )
                         currentState.copy(
-                            interfaces = sortedInterfaces,
-                            originalInterfaces = discovered, // Store original Python-sorted list
+                            interfaces = visibleInterfaces,
+                            originalInterfaces = discovered, // Store original list for re-filtering
                             sortMode = effectiveSortMode,
                             isLoading = false,
                             availableCount = availableCount,
@@ -294,6 +326,95 @@ class DiscoveredInterfacesViewModel
         }
 
         /**
+         * Update the free-form search query. Matches against interface name,
+         * reachableOn (host/IP), and raw type string, case-insensitive.
+         */
+        fun setSearchQuery(query: String) {
+            _state.update { currentState ->
+                val newInterfaces =
+                    applySearchAndFilter(
+                        source = currentState.originalInterfacesForFiltering(),
+                        searchQuery = query,
+                        typeFilters = currentState.typeFilters,
+                        sortMode = currentState.sortMode,
+                        userLat = currentState.userLatitude,
+                        userLon = currentState.userLongitude,
+                    )
+                currentState.copy(searchQuery = query, interfaces = newInterfaces)
+            }
+        }
+
+        /**
+         * Toggle a type filter chip. Empty filter set means no type filtering.
+         */
+        fun toggleTypeFilter(filter: DiscoveredInterfaceTypeFilter) {
+            _state.update { currentState ->
+                val newFilters =
+                    if (filter in currentState.typeFilters) {
+                        currentState.typeFilters - filter
+                    } else {
+                        currentState.typeFilters + filter
+                    }
+                val newInterfaces =
+                    applySearchAndFilter(
+                        source = currentState.originalInterfacesForFiltering(),
+                        searchQuery = currentState.searchQuery,
+                        typeFilters = newFilters,
+                        sortMode = currentState.sortMode,
+                        userLat = currentState.userLatitude,
+                        userLon = currentState.userLongitude,
+                    )
+                currentState.copy(typeFilters = newFilters, interfaces = newInterfaces)
+            }
+        }
+
+        /** Clear search query and type filters. */
+        fun clearFilters() {
+            _state.update { currentState ->
+                val newInterfaces =
+                    applySearchAndFilter(
+                        source = currentState.originalInterfacesForFiltering(),
+                        searchQuery = "",
+                        typeFilters = emptySet(),
+                        sortMode = currentState.sortMode,
+                        userLat = currentState.userLatitude,
+                        userLon = currentState.userLongitude,
+                    )
+                currentState.copy(
+                    searchQuery = "",
+                    typeFilters = emptySet(),
+                    interfaces = newInterfaces,
+                )
+            }
+        }
+
+        private fun DiscoveredInterfacesState.originalInterfacesForFiltering(): List<DiscoveredInterface> = originalInterfaces.ifEmpty { interfaces }
+
+        private fun applySearchAndFilter(
+            source: List<DiscoveredInterface>,
+            searchQuery: String,
+            typeFilters: Set<DiscoveredInterfaceTypeFilter>,
+            sortMode: DiscoveredInterfacesSortMode,
+            userLat: Double?,
+            userLon: Double?,
+        ): List<DiscoveredInterface> {
+            val filtered =
+                source
+                    .asSequence()
+                    .filter { iface ->
+                        typeFilters.isEmpty() || DiscoveredInterfaceTypeFilter.classify(iface) in typeFilters
+                    }.filter { iface ->
+                        if (searchQuery.isBlank()) return@filter true
+                        val q = searchQuery.trim()
+                        iface.name.contains(q, ignoreCase = true) ||
+                            iface.type.contains(q, ignoreCase = true) ||
+                            (iface.reachableOn?.contains(q, ignoreCase = true) ?: false) ||
+                            (iface.ifacNetname?.contains(q, ignoreCase = true) ?: false)
+                    }.toList()
+            return sortInterfaces(filtered, sortMode, userLat, userLon)
+        }
+
+        /**
          * Set the sort mode and re-sort the interfaces list.
          * PROXIMITY mode requires user location; if unavailable, the request is ignored.
          */
@@ -305,19 +426,14 @@ class DiscoveredInterfacesViewModel
                 ) {
                     return@update currentState
                 }
-                // Use originalInterfaces for QUALITY mode to restore Python's sort order
-                val sourceList =
-                    if (mode == DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY) {
-                        currentState.originalInterfaces
-                    } else {
-                        currentState.interfaces
-                    }
                 val sortedInterfaces =
-                    sortInterfaces(
-                        sourceList,
-                        mode,
-                        currentState.userLatitude,
-                        currentState.userLongitude,
+                    applySearchAndFilter(
+                        source = currentState.originalInterfacesForFiltering(),
+                        searchQuery = currentState.searchQuery,
+                        typeFilters = currentState.typeFilters,
+                        sortMode = mode,
+                        userLat = currentState.userLatitude,
+                        userLon = currentState.userLongitude,
                     )
                 currentState.copy(
                     sortMode = mode,

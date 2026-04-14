@@ -1574,10 +1574,17 @@ fun ColumbaNavigation(
                         composable("discovered_interfaces") {
                             DiscoveredInterfacesScreen(
                                 onNavigateBack = { navController.popBackStack() },
-                                onNavigateToTcpClientWizard = { host, port, name ->
+                                onNavigateToTcpClientWizard = { host, port, name, ifacNet, ifacKey ->
                                     val encodedHost = Uri.encode(host)
                                     val encodedName = Uri.encode(name)
-                                    navController.navigate("tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName")
+                                    val ifacNetParam =
+                                        if (!ifacNet.isNullOrEmpty()) "&ifacNetname=${Uri.encode(ifacNet)}" else ""
+                                    val ifacKeyParam =
+                                        if (!ifacKey.isNullOrEmpty()) "&ifacNetkey=${Uri.encode(ifacKey)}" else ""
+                                    navController.navigate(
+                                        "tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName" +
+                                            ifacNetParam + ifacKeyParam,
+                                    )
                                 },
                                 onNavigateToMapWithInterface = { details ->
                                     val encodedLabel = Uri.encode(details.name)
@@ -1608,7 +1615,9 @@ fun ColumbaNavigation(
                         }
 
                         composable(
-                            route = "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}",
+                            route =
+                                "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}" +
+                                    "&ifacNetname={ifacNetname}&ifacNetkey={ifacNetkey}",
                             arguments =
                                 listOf(
                                     navArgument("interfaceId") {
@@ -1627,12 +1636,22 @@ fun ColumbaNavigation(
                                         type = NavType.StringType
                                         defaultValue = ""
                                     },
+                                    navArgument("ifacNetname") {
+                                        type = NavType.StringType
+                                        defaultValue = ""
+                                    },
+                                    navArgument("ifacNetkey") {
+                                        type = NavType.StringType
+                                        defaultValue = ""
+                                    },
                                 ),
                         ) { backStackEntry ->
                             val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
                             val host = backStackEntry.arguments?.getString("host") ?: ""
                             val port = backStackEntry.arguments?.getInt("port") ?: 0
                             val name = backStackEntry.arguments?.getString("name") ?: ""
+                            val ifacNetname = backStackEntry.arguments?.getString("ifacNetname") ?: ""
+                            val ifacNetkey = backStackEntry.arguments?.getString("ifacNetkey") ?: ""
                             TcpClientWizardScreen(
                                 onNavigateBack = { navController.popBackStack() },
                                 onComplete = {
@@ -1644,6 +1663,8 @@ fun ColumbaNavigation(
                                 initialHost = host.ifEmpty { null },
                                 initialPort = if (port > 0) port else null,
                                 initialName = name.ifEmpty { null },
+                                initialIfacNetname = ifacNetname.ifEmpty { null },
+                                initialIfacNetkey = ifacNetkey.ifEmpty { null },
                             )
                         }
 

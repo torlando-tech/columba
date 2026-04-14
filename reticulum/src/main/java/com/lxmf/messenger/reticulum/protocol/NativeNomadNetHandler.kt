@@ -15,7 +15,9 @@ internal class NativeNomadNetHandler(
     }
 
     val nomadnetLinks = java.util.concurrent.ConcurrentHashMap<String, network.reticulum.link.Link>()
-    val identifiedNomadnetLinks = mutableSetOf<String>()
+    val identifiedNomadnetLinks: MutableSet<String> =
+        java.util.concurrent.ConcurrentHashMap
+            .newKeySet()
 
     @Volatile var nomadnetCancelled = false
 

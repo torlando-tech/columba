@@ -869,6 +869,11 @@ data class DiscoveredInterface(
                 // IFAC
                 ifacNetname = item.optString("ifac_netname", "").ifEmpty { null },
                 ifacNetkey = item.optString("ifac_netkey", "").ifEmpty { null },
+                // Additional raw announce fields
+                transport = item.optBoolean("transport", false),
+                discoveryHash = item.optString("discovery_hash", "").ifEmpty { null },
+                receivedAt = item.optLong("received", 0L),
+                discoveredAt = item.optLong("discovered", 0L),
             )
 
         // JSON extension helpers for nullable values

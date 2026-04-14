@@ -90,6 +90,7 @@ import com.lxmf.messenger.ui.components.ServiceRestartBanner
 import com.lxmf.messenger.ui.components.SortModeSelector
 import com.lxmf.messenger.ui.theme.MaterialDesignIcons
 import com.lxmf.messenger.util.LocationCompat
+import com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter
 import com.lxmf.messenger.viewmodel.DiscoveredInterfacesViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -675,8 +676,8 @@ internal fun NoFilterMatchesCard(onClearFilters: () -> Unit) {
 internal fun DiscoveredInterfaceSearchAndFilter(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    typeFilters: Set<com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter>,
-    onToggleTypeFilter: (com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter) -> Unit,
+    typeFilters: Set<DiscoveredInterfaceTypeFilter>,
+    onToggleTypeFilter: (DiscoveredInterfaceTypeFilter) -> Unit,
     ifacOnly: Boolean,
     onToggleIfacOnly: () -> Unit,
     onClearFilters: () -> Unit,
@@ -726,7 +727,7 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter.entries.forEach { filter ->
+                DiscoveredInterfaceTypeFilter.entries.forEach { filter ->
                     FilterChip(
                         selected = filter in typeFilters,
                         onClick = { onToggleTypeFilter(filter) },

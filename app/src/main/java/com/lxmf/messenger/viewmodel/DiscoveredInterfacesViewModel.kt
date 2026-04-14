@@ -314,8 +314,11 @@ class DiscoveredInterfacesViewModel
         fun toggleAutoconnectIfacOnly() {
             viewModelScope.launch(ioDispatcher) {
                 try {
-                    val newValue = !_state.value.autoconnectIfacOnly
-                    _state.update { it.copy(autoconnectIfacOnly = newValue) }
+                    var newValue = false
+                    _state.update { currentState ->
+                        newValue = !currentState.autoconnectIfacOnly
+                        currentState.copy(autoconnectIfacOnly = newValue)
+                    }
                     settingsRepository.saveAutoconnectIfacOnly(newValue)
                     reticulumProtocol.setAutoconnectIfacOnly(newValue)
                     Log.d(TAG, "Autoconnect IFAC-only: $newValue")

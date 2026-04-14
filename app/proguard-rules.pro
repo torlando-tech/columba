@@ -53,6 +53,15 @@
 # These classes bridge between Kotlin and Python
 -keep class com.lxmf.messenger.reticulum.protocol.** { *; }
 
+# ===== Python-Kotlin Bridge Classes (CRITICAL) =====
+# Any class ending in "Bridge" may be called from Python via Chaquopy.
+# Python uses reflection to call methods by name, so these classes and their
+# methods MUST NOT be obfuscated. Removed alongside Python runtime in PR 4/4;
+# until then the bridge classes still exist and the `verify_proguard_bridge.py`
+# CI step asserts they are unobfuscated in the release APK.
+-keep class com.lxmf.messenger.**.*Bridge { *; }
+-keepclassmembers class com.lxmf.messenger.**.*Bridge { *; }
+
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations
 # Without these rules, LXMF message deserialization crashes

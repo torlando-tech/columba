@@ -25,7 +25,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -200,10 +203,12 @@ fun DiscoveredInterfacesScreen(
                                 isRuntimeEnabled = state.isDiscoveryEnabled,
                                 isSettingEnabled = state.discoverInterfacesEnabled,
                                 autoconnectCount = state.autoconnectCount,
+                                autoconnectIfacOnly = state.autoconnectIfacOnly,
                                 bootstrapInterfaceNames = state.bootstrapInterfaceNames,
                                 isRestarting = state.isRestarting,
                                 onToggleDiscovery = { viewModel.toggleDiscovery() },
                                 onAutoconnectCountChange = { viewModel.setAutoconnectCount(it) },
+                                onToggleAutoconnectIfacOnly = { viewModel.toggleAutoconnectIfacOnly() },
                             )
                         }
 
@@ -234,6 +239,8 @@ fun DiscoveredInterfacesScreen(
                                     onSearchQueryChange = { viewModel.setSearchQuery(it) },
                                     typeFilters = state.typeFilters,
                                     onToggleTypeFilter = { viewModel.toggleTypeFilter(it) },
+                                    ifacOnly = state.ifacOnly,
+                                    onToggleIfacOnly = { viewModel.toggleIfacOnlyFilter() },
                                     onClearFilters = { viewModel.clearFilters() },
                                     filteredCount = state.interfaces.size,
                                     totalCount = state.originalInterfaces.size,
@@ -341,10 +348,12 @@ internal fun DiscoverySettingsCard(
     isRuntimeEnabled: Boolean,
     isSettingEnabled: Boolean,
     autoconnectCount: Int = 0,
+    autoconnectIfacOnly: Boolean = false,
     bootstrapInterfaceNames: List<String> = emptyList(),
     isRestarting: Boolean = false,
     onToggleDiscovery: () -> Unit = {},
     onAutoconnectCountChange: (Int) -> Unit = {},
+    onToggleAutoconnectIfacOnly: () -> Unit = {},
 ) {
     val isEnabled = isRuntimeEnabled || isSettingEnabled
 
@@ -514,6 +523,43 @@ internal fun DiscoverySettingsCard(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isRestarting,
                     )
+
+                    // IFAC-only sub-toggle. Only relevant when auto-connect is on.
+                    if (autoconnectCount > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "IFAC-protected interfaces only",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                }
+                                Text(
+                                    text = "Skip auto-connect for public interfaces; only join networks that announced IFAC credentials.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                )
+                            }
+                            Switch(
+                                checked = autoconnectIfacOnly,
+                                onCheckedChange = { onToggleAutoconnectIfacOnly() },
+                                enabled = !isRestarting,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -631,6 +677,8 @@ internal fun DiscoveredInterfaceSearchAndFilter(
     onSearchQueryChange: (String) -> Unit,
     typeFilters: Set<com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter>,
     onToggleTypeFilter: (com.lxmf.messenger.viewmodel.DiscoveredInterfaceTypeFilter) -> Unit,
+    ifacOnly: Boolean,
+    onToggleIfacOnly: () -> Unit,
     onClearFilters: () -> Unit,
     filteredCount: Int,
     totalCount: Int,
@@ -685,9 +733,21 @@ internal fun DiscoveredInterfaceSearchAndFilter(
                         label = { Text(filter.label) },
                     )
                 }
+                FilterChip(
+                    selected = ifacOnly,
+                    onClick = onToggleIfacOnly,
+                    label = { Text("IFAC only") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    },
+                )
             }
 
-            val hasActiveFilters = searchQuery.isNotBlank() || typeFilters.isNotEmpty()
+            val hasActiveFilters = searchQuery.isNotBlank() || typeFilters.isNotEmpty() || ifacOnly
             if (hasActiveFilters) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1091,6 +1151,10 @@ internal fun DiscoveredInterfaceCard(
                 }
             }
 
+            // Expandable "all announced fields" section
+            Spacer(modifier = Modifier.height(8.dp))
+            DiscoveredInterfaceAllFieldsSection(iface = iface)
+
             // Add to Config button (only for TCP interfaces with host info)
             if (iface.isTcpInterface && iface.reachableOn != null) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1153,6 +1217,112 @@ internal fun DiscoveredInterfaceCard(
             }
         }
     }
+}
+
+/**
+ * Collapsible "all announced fields" section. Shows every field the remote
+ * published in its discovery announce as a key/value list — useful for
+ * diagnosing unexpected interfaces and confirming radio parameters.
+ */
+@Composable
+internal fun DiscoveredInterfaceAllFieldsSection(iface: DiscoveredInterface) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector =
+                    if (expanded) {
+                        Icons.Default.KeyboardArrowUp
+                    } else {
+                        Icons.Default.KeyboardArrowDown
+                    },
+                contentDescription = if (expanded) "Collapse details" else "Expand details",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = if (expanded) "Hide announced fields" else "Show all announced fields",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (expanded) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(6.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    val rows =
+                        buildList<Pair<String, String?>> {
+                            add("name" to iface.name)
+                            add("type" to iface.type)
+                            add("status" to iface.status)
+                            add("transport node" to if (iface.transport) "yes" else "no")
+                            add("hops" to iface.hops.toString())
+                            add("heard count" to iface.heardCount.toString())
+                            add("stamp value" to iface.stampValue.toString())
+                            add("network id" to iface.networkId)
+                            add("transport id" to iface.transportId)
+                            add("discovery hash" to iface.discoveryHash)
+                            add("reachable on" to iface.reachableOn)
+                            add("port" to iface.port?.toString())
+                            add("frequency" to iface.frequency?.let { "$it Hz" })
+                            add("bandwidth" to iface.bandwidth?.let { "$it Hz" })
+                            add("spreading factor" to iface.spreadingFactor?.toString())
+                            add("coding rate" to iface.codingRate?.toString())
+                            add("modulation" to iface.modulation)
+                            add("channel" to iface.channel?.toString())
+                            add("latitude" to iface.latitude?.toString())
+                            add("longitude" to iface.longitude?.toString())
+                            add("height" to iface.height?.let { "$it m" })
+                            add("ifac network name" to iface.ifacNetname)
+                            // The passphrase was sent in the cleartext announce — anyone on
+                            // the discovery network already has it — so there's nothing to
+                            // obfuscate here and showing the value is useful for diagnostics.
+                            add("ifac passphrase" to iface.ifacNetkey?.takeIf { it.isNotBlank() })
+                            add("received at" to iface.receivedAt.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
+                            add("discovered at" to iface.discoveredAt.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
+                            add("last heard" to iface.lastHeard.takeIf { it > 0 }?.let { formatUnixSeconds(it) })
+                        }
+                    rows.forEach { (key, value) ->
+                        if (value.isNullOrBlank()) return@forEach
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = key,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(120.dp),
+                            )
+                            Text(
+                                text = value,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatUnixSeconds(seconds: Long): String {
+    val date = Date(seconds * 1000L)
+    val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    return fmt.format(date)
 }
 
 /**

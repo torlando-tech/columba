@@ -110,6 +110,7 @@ class SettingsRepository
             // RNS 1.1.x Interface Discovery preferences
             val DISCOVER_INTERFACES_ENABLED = booleanPreferencesKey("discover_interfaces_enabled")
             val AUTOCONNECT_DISCOVERED_COUNT = intPreferencesKey("autoconnect_discovered_count")
+            val AUTOCONNECT_IFAC_ONLY = booleanPreferencesKey("autoconnect_ifac_only")
 
             // Location sharing preferences
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
@@ -1115,6 +1116,30 @@ class SettingsRepository
         suspend fun saveAutoconnectDiscoveredCount(count: Int) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] = count
+            }
+        }
+
+        /**
+         * Flow of the "auto-connect to IFAC-protected interfaces only" setting.
+         * When true, auto-connect skips discovered interfaces that did not
+         * publish an IFAC network name. Useful on mixed-trust networks where
+         * the user only wants to auto-join known private networks.
+         */
+        val autoconnectIfacOnlyFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_IFAC_ONLY] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun getAutoconnectIfacOnly(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_IFAC_ONLY] ?: false
+                }.first()
+
+        suspend fun saveAutoconnectIfacOnly(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTOCONNECT_IFAC_ONLY] = enabled
             }
         }
 

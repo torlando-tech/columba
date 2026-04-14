@@ -93,6 +93,9 @@ class DiscoveredInterfacesViewModelTest {
         coEvery { reticulumProtocol.setAutoconnectLimit(any()) } returns Unit
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+        coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+        coEvery { settingsRepository.saveAutoconnectIfacOnly(any()) } returns Unit
+        coEvery { reticulumProtocol.setAutoconnectIfacOnly(any()) } returns Unit
         every { interfaceRepository.bootstrapInterfaceNames } returns bootstrapNamesFlow
     }
 
@@ -1261,6 +1264,43 @@ class DiscoveredInterfacesViewModelTest {
             assertEquals("", state.searchQuery)
             assertTrue(state.typeFilters.isEmpty())
             assertEquals(2, state.interfaces.size)
+        }
+
+    // ========== Autoconnect IFAC-only toggle ==========
+
+    @Test
+    fun `loadDiscoverySettings pushes persisted IFAC-only value to protocol`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns true
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(true) }
+        }
+
+    @Test
+    fun `toggleAutoconnectIfacOnly flips state, persists, and forwards to protocol`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            assertFalse(viewModel.state.value.autoconnectIfacOnly)
+
+            viewModel.toggleAutoconnectIfacOnly()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { settingsRepository.saveAutoconnectIfacOnly(true) }
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(true) }
+
+            viewModel.toggleAutoconnectIfacOnly()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { settingsRepository.saveAutoconnectIfacOnly(false) }
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(false) }
         }
 
     // ========== Helper Functions ==========

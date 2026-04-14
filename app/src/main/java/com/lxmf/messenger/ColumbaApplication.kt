@@ -355,6 +355,7 @@ class ColumbaApplication : Application() {
                         enableTransport = transportNodeEnabled,
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
+                        autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
                     )
 
                 reticulumProtocol
@@ -620,6 +621,7 @@ class ColumbaApplication : Application() {
                     enableTransport = transportNodeEnabled,
                     discoverInterfaces = discoverInterfaces,
                     autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
+                    autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
                 )
 
             protocol

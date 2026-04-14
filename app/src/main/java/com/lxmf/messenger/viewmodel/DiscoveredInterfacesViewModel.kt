@@ -75,6 +75,8 @@ data class DiscoveredInterfacesState(
     // Discovery settings (from DataStore - user preference)
     val discoverInterfacesEnabled: Boolean = false,
     val autoconnectCount: Int = 0,
+    /** When true, auto-connect only accepts interfaces that announced IFAC. */
+    val autoconnectIfacOnly: Boolean = false,
     // Runtime status (from RNS - current state)
     val isDiscoveryEnabled: Boolean = false,
     // Bootstrap interfaces that enable discovery
@@ -87,6 +89,8 @@ data class DiscoveredInterfacesState(
     val searchQuery: String = "",
     // Multi-select type filter. Empty set = no filtering (all types shown).
     val typeFilters: Set<DiscoveredInterfaceTypeFilter> = emptySet(),
+    // When true, only show interfaces that announced an IFAC network name.
+    val ifacOnly: Boolean = false,
 )
 
 /**
@@ -146,6 +150,7 @@ class DiscoveredInterfacesViewModel
                                 source = discovered,
                                 searchQuery = currentState.searchQuery,
                                 typeFilters = currentState.typeFilters,
+                                ifacOnly = currentState.ifacOnly,
                                 sortMode = effectiveSortMode,
                                 userLat = currentState.userLatitude,
                                 userLon = currentState.userLongitude,
@@ -183,22 +188,28 @@ class DiscoveredInterfacesViewModel
                 try {
                     val discoverEnabled = settingsRepository.getDiscoverInterfacesEnabled()
                     val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
+                    val ifacOnly = settingsRepository.getAutoconnectIfacOnly()
                     val bootstrapNames = interfaceRepository.bootstrapInterfaceNames.first()
 
                     // Coerce -1 (never configured) to 0 for UI display
                     // The actual default of 3 is applied in toggleDiscovery() when enabling
                     val autoconnectCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
 
+                    // Push persisted value into the native protocol so the
+                    // filter applies from the moment the service starts.
+                    reticulumProtocol.setAutoconnectIfacOnly(ifacOnly)
+
                     _state.update {
                         it.copy(
                             discoverInterfacesEnabled = discoverEnabled,
                             autoconnectCount = autoconnectCount,
+                            autoconnectIfacOnly = ifacOnly,
                             bootstrapInterfaceNames = bootstrapNames,
                         )
                     }
                     Log.d(
                         TAG,
-                        "Loaded discovery settings: enabled=$discoverEnabled, autoconnect=$autoconnectCount (saved=$savedAutoconnect), bootstrap=$bootstrapNames",
+                        "Loaded discovery settings: enabled=$discoverEnabled, autoconnect=$autoconnectCount (saved=$savedAutoconnect), ifacOnly=$ifacOnly, bootstrap=$bootstrapNames",
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load discovery settings", e)
@@ -295,6 +306,29 @@ class DiscoveredInterfacesViewModel
         }
 
         /**
+         * Toggle the "auto-connect to IFAC-protected interfaces only" setting.
+         * Applies immediately — subsequent announces from non-IFAC interfaces
+         * will be skipped by the autoconnect factory. Already-connected
+         * non-IFAC interfaces are not affected retroactively.
+         */
+        fun toggleAutoconnectIfacOnly() {
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    val newValue = !_state.value.autoconnectIfacOnly
+                    _state.update { it.copy(autoconnectIfacOnly = newValue) }
+                    settingsRepository.saveAutoconnectIfacOnly(newValue)
+                    reticulumProtocol.setAutoconnectIfacOnly(newValue)
+                    Log.d(TAG, "Autoconnect IFAC-only: $newValue")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to toggle autoconnect IFAC-only", e)
+                    _state.update {
+                        it.copy(errorMessage = "Failed to update IFAC-only setting: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        /**
          * Set user's location for distance calculation.
          * Re-sorts the interface list if currently in PROXIMITY sort mode.
          */
@@ -336,6 +370,7 @@ class DiscoveredInterfacesViewModel
                         source = currentState.originalInterfacesForFiltering(),
                         searchQuery = query,
                         typeFilters = currentState.typeFilters,
+                        ifacOnly = currentState.ifacOnly,
                         sortMode = currentState.sortMode,
                         userLat = currentState.userLatitude,
                         userLon = currentState.userLongitude,
@@ -360,6 +395,7 @@ class DiscoveredInterfacesViewModel
                         source = currentState.originalInterfacesForFiltering(),
                         searchQuery = currentState.searchQuery,
                         typeFilters = newFilters,
+                        ifacOnly = currentState.ifacOnly,
                         sortMode = currentState.sortMode,
                         userLat = currentState.userLatitude,
                         userLon = currentState.userLongitude,
@@ -368,7 +404,28 @@ class DiscoveredInterfacesViewModel
             }
         }
 
-        /** Clear search query and type filters. */
+        /**
+         * Toggle the IFAC-only filter. When enabled, only interfaces that
+         * announced an IFAC network name are shown.
+         */
+        fun toggleIfacOnlyFilter() {
+            _state.update { currentState ->
+                val newValue = !currentState.ifacOnly
+                val newInterfaces =
+                    applySearchAndFilter(
+                        source = currentState.originalInterfacesForFiltering(),
+                        searchQuery = currentState.searchQuery,
+                        typeFilters = currentState.typeFilters,
+                        ifacOnly = newValue,
+                        sortMode = currentState.sortMode,
+                        userLat = currentState.userLatitude,
+                        userLon = currentState.userLongitude,
+                    )
+                currentState.copy(ifacOnly = newValue, interfaces = newInterfaces)
+            }
+        }
+
+        /** Clear search query and all filters (type + IFAC). */
         fun clearFilters() {
             _state.update { currentState ->
                 val newInterfaces =
@@ -376,6 +433,7 @@ class DiscoveredInterfacesViewModel
                         source = currentState.originalInterfacesForFiltering(),
                         searchQuery = "",
                         typeFilters = emptySet(),
+                        ifacOnly = false,
                         sortMode = currentState.sortMode,
                         userLat = currentState.userLatitude,
                         userLon = currentState.userLongitude,
@@ -383,6 +441,7 @@ class DiscoveredInterfacesViewModel
                 currentState.copy(
                     searchQuery = "",
                     typeFilters = emptySet(),
+                    ifacOnly = false,
                     interfaces = newInterfaces,
                 )
             }
@@ -394,6 +453,7 @@ class DiscoveredInterfacesViewModel
             source: List<DiscoveredInterface>,
             searchQuery: String,
             typeFilters: Set<DiscoveredInterfaceTypeFilter>,
+            ifacOnly: Boolean,
             sortMode: DiscoveredInterfacesSortMode,
             userLat: Double?,
             userLon: Double?,
@@ -403,6 +463,8 @@ class DiscoveredInterfacesViewModel
                     .asSequence()
                     .filter { iface ->
                         typeFilters.isEmpty() || DiscoveredInterfaceTypeFilter.classify(iface) in typeFilters
+                    }.filter { iface ->
+                        !ifacOnly || !iface.ifacNetname.isNullOrBlank()
                     }.filter { iface ->
                         if (searchQuery.isBlank()) return@filter true
                         val q = searchQuery.trim()
@@ -431,6 +493,7 @@ class DiscoveredInterfacesViewModel
                         source = currentState.originalInterfacesForFiltering(),
                         searchQuery = currentState.searchQuery,
                         typeFilters = currentState.typeFilters,
+                        ifacOnly = currentState.ifacOnly,
                         sortMode = mode,
                         userLat = currentState.userLatitude,
                         userLon = currentState.userLongitude,

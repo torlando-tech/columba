@@ -600,6 +600,13 @@ interface ReticulumProtocol {
     /** Update the auto-connect limit without restarting. Default no-op (ServiceReticulumProtocol needs restart). */
     suspend fun setAutoconnectLimit(count: Int) {}
 
+    /**
+     * When enabled, auto-connect only accepts discovered interfaces that
+     * published an IFAC network name. Useful on mixed-trust networks where
+     * the user only wants Columba to auto-join known private networks.
+     */
+    suspend fun setAutoconnectIfacOnly(enabled: Boolean) {}
+
     // ==================== NomadNet Page Browsing ====================
 
     /**
@@ -786,6 +793,15 @@ data class DiscoveredInterface(
     // passphrase or the IFAC handshake fails and no packets get through.
     val ifacNetname: String? = null,
     val ifacNetkey: String? = null,
+    // Additional raw announce fields exposed for the "all fields" card view.
+    /** Whether the remote interface is a transport (routing) node. */
+    val transport: Boolean = false,
+    /** Unique identifier for this announce (hex SHA256 of transportId + name). */
+    val discoveryHash: String? = null,
+    /** When the remote generated the announce (unix seconds). */
+    val receivedAt: Long = 0L,
+    /** When we first discovered this interface locally (unix seconds). */
+    val discoveredAt: Long = 0L,
 ) {
     /**
      * Returns true if this is a TCP-based interface.

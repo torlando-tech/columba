@@ -48,6 +48,12 @@ data class ReticulumConfig(
      */
     val autoconnectDiscoveredInterfaces: Int = 0,
     /**
+     * When true, the auto-connect factory only accepts discovered interfaces
+     * whose announce included an IFAC network name. Non-IFAC interfaces are
+     * skipped, freeing the autoconnect slot for an IFAC-advertised peer.
+     */
+    val autoconnectIfacOnly: Boolean = false,
+    /**
      * List of identity hashes (hex) of trusted discovery sources.
      * If null or empty, all discovered interfaces are considered.
      * If set, only interfaces from these sources will be auto-connected.

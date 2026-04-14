@@ -175,6 +175,10 @@ class NativeReticulumProtocol(
 
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // When true, auto-connect ignores discovered interfaces that did not
+    // advertise an IFAC network name. Set via setAutoconnectIfacOnly().
+    @Volatile private var autoconnectIfacOnly: Boolean = false
+
     // Native reticulum-kt / lxmf-kt instances
     private var reticulum: Reticulum? = null
     private var router: LXMRouter? = null
@@ -428,6 +432,13 @@ class NativeReticulumProtocol(
                 // Register announce handlers for all relevant aspects
                 registerAnnounceHandlers()
 
+                // Apply the IFAC-only autoconnect filter before starting the
+                // discovery listener so the filter is active from the first
+                // announce — otherwise a non-IFAC interface could race in and
+                // grab the slot before the user-facing screen has a chance to
+                // re-push the setting.
+                autoconnectIfacOnly = config.autoconnectIfacOnly
+
                 // Wire up interface discovery if configured
                 if (config.discoverInterfaces) {
                     startDiscovery(config)
@@ -577,13 +588,14 @@ class NativeReticulumProtocol(
                 ?.map { network.reticulum.common.ByteArrayKey(hexStringToByteArray(it)) }
                 ?.toSet()
 
-        // Auto-connect factory: creates a TCPClientInterface from discovered info
-        val autoConnectFactory: ((network.reticulum.discovery.DiscoveredInterface) -> network.reticulum.transport.InterfaceRef?)? =
-            if (config.autoconnectDiscoveredInterfaces > 0) {
-                { discovered -> createAutoconnectInterface(discovered) }
-            } else {
-                null
-            }
+        // Auto-connect factory: creates a TCPClientInterface from discovered
+        // info. Always register the factory, even when autoconnect count is 0
+        // at init time — InterfaceDiscovery.autoConnectFactory is immutable
+        // after construction, so if we pass null here the user can't later turn
+        // on autoconnect without restarting the service. `maxAutoConnected` is
+        // mutable and gates the factory's callers.
+        val autoConnectFactory: (network.reticulum.discovery.DiscoveredInterface) -> network.reticulum.transport.InterfaceRef? =
+            { discovered -> createAutoconnectInterface(discovered) }
 
         // Start the listener (receives others' discovery announces)
         Transport.discoverInterfaces(
@@ -603,6 +615,13 @@ class NativeReticulumProtocol(
     private fun createAutoconnectInterface(discovered: network.reticulum.discovery.DiscoveredInterface): network.reticulum.transport.InterfaceRef? {
         val host = discovered.reachableOn ?: return null
         val port = discovered.port ?: return null
+        if (autoconnectIfacOnly && discovered.ifacNetname.isNullOrBlank()) {
+            Log.i(
+                TAG,
+                "Skipping auto-connect for ${discovered.name} at $host:$port — IFAC-only mode and interface has no IFAC",
+            )
+            return null
+        }
         return try {
             val iface =
                 network.reticulum.interfaces.tcp.TCPClientInterface(
@@ -1583,6 +1602,11 @@ class NativeReticulumProtocol(
         Log.i(TAG, "Auto-connect limit updated to $count (no restart)")
     }
 
+    override suspend fun setAutoconnectIfacOnly(enabled: Boolean) {
+        autoconnectIfacOnly = enabled
+        Log.i(TAG, "Auto-connect IFAC-only filter ${if (enabled) "enabled" else "disabled"}")
+    }
+
     override suspend fun getFailedInterfaces(): List<FailedInterface> = emptyList()
 
     override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? {
@@ -1629,6 +1653,12 @@ class NativeReticulumProtocol(
                 latitude = info.latitude,
                 longitude = info.longitude,
                 height = info.height,
+                ifacNetname = info.ifacNetname,
+                ifacNetkey = info.ifacNetkey,
+                transport = info.transport,
+                discoveryHash = info.discoveryHash.joinToString("") { "%02x".format(it) },
+                receivedAt = info.received,
+                discoveredAt = info.discovered,
             )
         }
 

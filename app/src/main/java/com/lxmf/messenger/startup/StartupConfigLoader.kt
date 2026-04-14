@@ -36,6 +36,7 @@ class StartupConfigLoader
             val batteryProfile: BatteryProfile,
             val discoverInterfaces: Boolean,
             val autoconnectDiscoveredCount: Int,
+            val autoconnectIfacOnly: Boolean,
         )
 
         /**
@@ -54,6 +55,7 @@ class StartupConfigLoader
                 val batteryProfileDeferred = async { settingsRepository.getBatteryProfile() }
                 val discoverInterfacesDeferred = async { settingsRepository.getDiscoverInterfacesEnabled() }
                 val autoconnectCountDeferred = async { settingsRepository.getAutoconnectDiscoveredCount() }
+                val autoconnectIfacOnlyDeferred = async { settingsRepository.getAutoconnectIfacOnly() }
 
                 val savedAutoconnect = autoconnectCountDeferred.await()
                 StartupConfig(
@@ -64,8 +66,9 @@ class StartupConfigLoader
                     transport = transportDeferred.await(),
                     batteryProfile = batteryProfileDeferred.await(),
                     discoverInterfaces = discoverInterfacesDeferred.await(),
-                    // Coerce -1 (never configured sentinel) to 0 for Python layer
+                    // Coerce -1 (never configured sentinel) to 0 for the native stack
                     autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0,
+                    autoconnectIfacOnly = autoconnectIfacOnlyDeferred.await(),
                 )
             }
     }

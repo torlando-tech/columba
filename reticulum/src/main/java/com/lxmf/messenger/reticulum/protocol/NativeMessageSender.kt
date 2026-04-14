@@ -161,9 +161,16 @@ internal class NativeMessageSender(
     ) {
         message.deliveryCallback = deliveryCallback@{ msg ->
             val hash = msg.hash?.toHex() ?: return@deliveryCallback
+            // In lxmf-kt, deliveryCallback fires with state == SENT only for
+            // PROPAGATED messages (where SENT is the final state, set when the
+            // resource completes uploading to the propagation node) and with
+            // state == DELIVERED for DIRECT/OPPORTUNISTIC (where the receipt's
+            // delivery confirmation transitions state to DELIVERED before the
+            // callback runs). Distinguish by method, not state — checking state
+            // alone risks misclassifying a future direct path that briefly
+            // transitions through SENT before DELIVERED.
             val status =
-                if (msg.state == network.reticulum.lxmf.MessageState.SENT ||
-                    msg.method == NativeDeliveryMethod.PROPAGATED ||
+                if (msg.method == NativeDeliveryMethod.PROPAGATED ||
                     msg.desiredMethod == NativeDeliveryMethod.PROPAGATED
                 ) {
                     "propagated"

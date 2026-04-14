@@ -613,13 +613,16 @@ class NativeReticulumProtocol(
      * Creates a TCPClientInterface and registers it with Transport.
      */
     private fun createAutoconnectInterface(discovered: network.reticulum.discovery.DiscoveredInterface): network.reticulum.transport.InterfaceRef? {
-        val host = discovered.reachableOn ?: return null
-        val port = discovered.port ?: return null
-        if (autoconnectIfacOnly && discovered.ifacNetname.isNullOrBlank()) {
-            Log.i(
-                TAG,
-                "Skipping auto-connect for ${discovered.name} at $host:$port — IFAC-only mode and interface has no IFAC",
-            )
+        val host = discovered.reachableOn
+        val port = discovered.port
+        val ifacMissing = autoconnectIfacOnly && discovered.ifacNetname.isNullOrBlank()
+        if (host == null || port == null || ifacMissing) {
+            if (ifacMissing) {
+                Log.i(
+                    TAG,
+                    "Skipping auto-connect for ${discovered.name} at $host:$port — IFAC-only mode and interface has no IFAC",
+                )
+            }
             return null
         }
         return try {

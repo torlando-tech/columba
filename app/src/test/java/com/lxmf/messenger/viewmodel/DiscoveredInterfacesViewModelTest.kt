@@ -1305,6 +1305,7 @@ class DiscoveredInterfacesViewModelTest {
 
     // ========== Helper Functions ==========
 
+    @Suppress("LongParameterList")
     private fun createTestDiscoveredInterface(
         name: String = "TestInterface",
         type: String = "TCPServerInterface",

@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.lxmf.messenger.ui.screens
 
 import android.widget.Toast

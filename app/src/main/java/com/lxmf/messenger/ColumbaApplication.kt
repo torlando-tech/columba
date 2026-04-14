@@ -184,7 +184,7 @@ class ColumbaApplication : Application() {
         }
 
         // Set up the reinitialization callback for when Android kills the service
-        // and we successfully rebind but Python/Reticulum needs to be restarted
+        // and we successfully rebind but Reticulum needs to be restarted
         reticulumProtocol.onServiceNeedsInitialization = {
             android.util.Log.i("ColumbaApplication", "Service needs reinitialization after rebind - starting initialization")
             initializeReticulumService(reticulumProtocol)
@@ -231,8 +231,9 @@ class ColumbaApplication : Application() {
                 }
                 android.util.Log.d("ColumbaApplication", "Successfully bound to ReticulumService")
 
-                // Start PropagationNodeManager early so relay is synced to Python ASAP
-                // This allows PROPAGATED sends to work before full initialization completes
+                // Start PropagationNodeManager early so relay is synced to the native
+                // stack ASAP. This allows PROPAGATED sends to work before full
+                // initialization completes.
                 propagationNodeManager.start()
                 android.util.Log.d("ColumbaApplication", "PropagationNodeManager started early (relay sync)")
 
@@ -332,7 +333,7 @@ class ColumbaApplication : Application() {
                             "ColumbaApplication",
                             "Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
                         )
-                        // identityPath remains null - Python will create new default
+                        // identityPath remains null — the native stack will create a new default
                     }
                     android.util.Log.d("ColumbaApplication", "Display name: $displayName")
                 } else {

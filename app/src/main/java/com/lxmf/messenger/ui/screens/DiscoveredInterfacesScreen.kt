@@ -263,9 +263,10 @@ fun DiscoveredInterfacesScreen(
                                 state.interfaces,
                                 key = { iface ->
                                     // discoveryHash (hex SHA256 of transportId + name) is stable across re-announces;
-                                    // fall back to an endpoint-based composite for announces that don't carry one.
+                                    // fall back to a composite for announces that don't carry one. Including
+                                    // name keeps radio interfaces (no reachableOn/port) unique.
                                     iface.discoveryHash
-                                        ?: "${iface.networkId}:${iface.reachableOn ?: ""}:${iface.port ?: ""}"
+                                        ?: "${iface.networkId}:${iface.reachableOn ?: ""}:${iface.port ?: ""}:${iface.name}"
                                 },
                             ) { iface ->
                                 val reachableHost = iface.reachableOn

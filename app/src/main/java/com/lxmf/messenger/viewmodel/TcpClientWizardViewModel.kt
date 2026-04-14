@@ -43,6 +43,12 @@ data class TcpClientWizardState(
     val interfaceName: String = "",
     val targetHost: String = "",
     val targetPort: String = "",
+    // IFAC (network_name / passphrase). Auto-populated from interface discovery
+    // when the remote side publishes IFAC; remote will refuse packets unless the
+    // local interface matches. User-editable for manual entry.
+    val networkName: String = "",
+    val passphrase: String = "",
+    val passphraseVisible: Boolean = false,
     // RNS 1.1.x Bootstrap Interface option
     val bootstrapOnly: Boolean = false,
     // SOCKS5 proxy (Tor/Orbot) settings
@@ -102,6 +108,8 @@ class TcpClientWizardViewModel
                             interfaceName = config.name,
                             targetHost = config.targetHost,
                             targetPort = config.targetPort.toString(),
+                            networkName = config.networkName.orEmpty(),
+                            passphrase = config.passphrase.orEmpty(),
                             bootstrapOnly = config.bootstrapOnly,
                             socksProxyEnabled = config.socksProxyEnabled,
                             socksProxyHost = config.socksProxyHost,
@@ -118,11 +126,18 @@ class TcpClientWizardViewModel
 
         /**
          * Set initial values when creating from a discovered interface.
+         *
+         * @param ifacNetname IFAC network name from discovery announce, if the
+         *   remote interface published one. Required to pass the IFAC handshake
+         *   on the remote side.
+         * @param ifacNetkey IFAC passphrase from discovery announce.
          */
         fun setInitialValues(
             host: String,
             port: Int,
             name: String,
+            ifacNetname: String? = null,
+            ifacNetkey: String? = null,
         ) {
             // Check if this matches a community server
             val matchingServer =
@@ -138,6 +153,8 @@ class TcpClientWizardViewModel
                     interfaceName = name,
                     targetHost = host,
                     targetPort = port.toString(),
+                    networkName = ifacNetname.orEmpty(),
+                    passphrase = ifacNetkey.orEmpty(),
                     bootstrapOnly = matchingServer?.isBootstrap ?: false,
                     // Auto-enable SOCKS proxy for .onion addresses
                     socksProxyEnabled = isOnion,
@@ -145,7 +162,27 @@ class TcpClientWizardViewModel
                     currentStep = TcpClientWizardStep.REVIEW_CONFIGURE,
                 )
             }
-            Log.d(TAG, "Set initial values from discovered: $name @ $host:$port, matched server: ${matchingServer?.name}")
+            Log.d(
+                TAG,
+                "Set initial values from discovered: $name @ $host:$port, " +
+                    "matched server: ${matchingServer?.name}, " +
+                    "ifacNet=${ifacNetname?.take(8)}…",
+            )
+        }
+
+        /** Update IFAC network name field. */
+        fun setNetworkName(value: String) {
+            _state.update { it.copy(networkName = value) }
+        }
+
+        /** Update IFAC passphrase field. */
+        fun setPassphrase(value: String) {
+            _state.update { it.copy(passphrase = value) }
+        }
+
+        /** Toggle passphrase visibility. */
+        fun togglePassphraseVisibility() {
+            _state.update { it.copy(passphraseVisible = !it.passphraseVisible) }
         }
 
         /**
@@ -338,6 +375,8 @@ class TcpClientWizardViewModel
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
                             kissFraming = false,
                             mode = "full",
+                            networkName = currentState.networkName.trim().ifEmpty { null },
+                            passphrase = currentState.passphrase.trim().ifEmpty { null },
                             bootstrapOnly = currentState.bootstrapOnly,
                             socksProxyEnabled = currentState.socksProxyEnabled,
                             socksProxyHost = currentState.socksProxyHost.trim().ifEmpty { "127.0.0.1" },

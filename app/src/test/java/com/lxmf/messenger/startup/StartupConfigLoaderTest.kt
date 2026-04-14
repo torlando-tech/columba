@@ -71,6 +71,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.getBatteryProfile() } returns BatteryProfile.BALANCED
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+        coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
 
         loader = StartupConfigLoader(interfaceRepository, identityRepository, settingsRepository)
     }
@@ -227,6 +228,21 @@ class StartupConfigLoaderTest {
         }
 
     @Test
+    fun `loadConfig surfaces autoconnect IFAC-only setting`() =
+        runTest {
+            coEvery { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
+            coEvery { identityRepository.getActiveIdentitySync() } returns null
+            coEvery { settingsRepository.preferOwnInstanceFlow } returns flowOf(false)
+            coEvery { settingsRepository.rpcKeyFlow } returns flowOf(null)
+            coEvery { settingsRepository.getTransportNodeEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns true
+
+            val config = loader.loadConfig()
+
+            assertTrue(config.autoconnectIfacOnly)
+        }
+
+    @Test
     fun `StartupConfig data class equals and hashCode work correctly`() {
         val config1 =
             StartupConfigLoader.StartupConfig(
@@ -238,6 +254,7 @@ class StartupConfigLoaderTest {
                 batteryProfile = BatteryProfile.BALANCED,
                 discoverInterfaces = false,
                 autoconnectDiscoveredCount = 0,
+                autoconnectIfacOnly = false,
             )
         val config2 =
             StartupConfigLoader.StartupConfig(
@@ -249,6 +266,7 @@ class StartupConfigLoaderTest {
                 batteryProfile = BatteryProfile.BALANCED,
                 discoverInterfaces = false,
                 autoconnectDiscoveredCount = 0,
+                autoconnectIfacOnly = false,
             )
         val config3 =
             StartupConfigLoader.StartupConfig(
@@ -260,6 +278,7 @@ class StartupConfigLoaderTest {
                 batteryProfile = BatteryProfile.PERFORMANCE,
                 discoverInterfaces = true,
                 autoconnectDiscoveredCount = 5,
+                autoconnectIfacOnly = true,
             )
 
         assertEquals(config1, config2)

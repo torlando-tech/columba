@@ -98,7 +98,7 @@ private val MdiFont = FontFamily(Font(R.font.materialdesignicons))
 @Composable
 fun DiscoveredInterfacesScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToTcpClientWizard: (host: String, port: Int, name: String) -> Unit = { _, _, _ -> },
+    onNavigateToTcpClientWizard: (host: String, port: Int, name: String, networkName: String?, passphrase: String?) -> Unit = { _, _, _, _, _ -> },
     onNavigateToMapWithInterface: (details: FocusInterfaceDetails) -> Unit = { _ -> },
     onNavigateToRNodeWizardWithParams: (
         frequency: Long?,
@@ -246,6 +246,8 @@ fun DiscoveredInterfacesScreen(
                                                 reachableHost,
                                                 iface.port ?: 4242,
                                                 iface.name,
+                                                iface.networkName ?: "",
+                                                iface.passphrase ?: "",
                                             )
                                         } else {
                                             Toast

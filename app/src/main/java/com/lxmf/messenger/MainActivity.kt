@@ -1573,10 +1573,12 @@ fun ColumbaNavigation(
                         composable("discovered_interfaces") {
                             DiscoveredInterfacesScreen(
                                 onNavigateBack = { navController.popBackStack() },
-                                onNavigateToTcpClientWizard = { host, port, name ->
+                                onNavigateToTcpClientWizard = { host, port, name, networkName, passphrase ->
                                     val encodedHost = Uri.encode(host)
                                     val encodedName = Uri.encode(name)
-                                    navController.navigate("tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName")
+                                    var encodedNetworkName = Uri.encode(networkName)
+                                    var encodedPassphrase = Uri.encode(passphrase)
+                                    navController.navigate("tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName&networkName=$encodedNetworkName&passphrase=$encodedPassphrase")
                                 },
                                 onNavigateToMapWithInterface = { details ->
                                     val encodedLabel = Uri.encode(details.name)
@@ -1607,7 +1609,7 @@ fun ColumbaNavigation(
                         }
 
                         composable(
-                            route = "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}",
+                            route = "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}&networkName={networkName}&passphrase={passphrase}",
                             arguments =
                                 listOf(
                                     navArgument("interfaceId") {
@@ -1626,12 +1628,22 @@ fun ColumbaNavigation(
                                         type = NavType.StringType
                                         defaultValue = ""
                                     },
+                                    navArgument("networkName") {
+                                        type = NavType.StringType
+                                        defaultValue = ""
+                                    },
+                                    navArgument("passphrase") {
+                                        type = NavType.StringType
+                                        defaultValue = ""
+                                    },
                                 ),
                         ) { backStackEntry ->
                             val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
                             val host = backStackEntry.arguments?.getString("host") ?: ""
                             val port = backStackEntry.arguments?.getInt("port") ?: 0
                             val name = backStackEntry.arguments?.getString("name") ?: ""
+                            val networkName = backStackEntry.arguments?.getString("networkName") ?: ""
+                            val passphrase = backStackEntry.arguments?.getString("passphrase") ?: ""
                             TcpClientWizardScreen(
                                 onNavigateBack = { navController.popBackStack() },
                                 onComplete = {
@@ -1643,6 +1655,8 @@ fun ColumbaNavigation(
                                 initialHost = host.ifEmpty { null },
                                 initialPort = if (port > 0) port else null,
                                 initialName = name.ifEmpty { null },
+                                initialNetworkName = networkName.ifEmpty { null },
+                                initialPassphrase = passphrase.ifEmpty { null },
                             )
                         }
 

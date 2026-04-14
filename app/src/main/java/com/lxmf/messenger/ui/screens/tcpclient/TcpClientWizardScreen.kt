@@ -38,6 +38,8 @@ fun TcpClientWizardScreen(
     initialHost: String? = null,
     initialPort: Int? = null,
     initialName: String? = null,
+    initialNetworkName: String? = null,
+    initialPassphrase: String? = null,
     viewModel: TcpClientWizardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -51,6 +53,8 @@ fun TcpClientWizardScreen(
                 host = initialHost,
                 port = initialPort ?: 4242,
                 name = initialName ?: "TCP Connection",
+                networkName = initialNetworkName ?: "",
+                passphrase = initialPassphrase ?: "",
             )
         }
     }

@@ -118,6 +118,28 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
 
+        Spacer(Modifier.height(16.dp))
+
+        // IFAC Network Name
+        OutlinedTextField(
+            value = state.networkName,
+            onValueChange = { viewModel.updateNetworkName(it) },
+            label = { Text("IFAC Network Name") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // IFAC Passphrase
+        OutlinedTextField(
+            value = state.passphrase,
+            onValueChange = { viewModel.updatePassphrase(it) },
+            label = { Text("IFAC Passphrase") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+
         Spacer(Modifier.height(24.dp))
 
         // Bootstrap interface toggle (RNS 1.1.x feature)

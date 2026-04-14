@@ -628,6 +628,9 @@ data class DiscoveredInterface(
     val latitude: Double?,
     val longitude: Double?,
     val height: Double?, // Altitude in meters
+    // IFAC fields
+    val networkName: String?, // IFAC network name
+    val passphrase: String?, // IFAC passphrase
 ) {
     /**
      * Returns true if this is a TCP-based interface.
@@ -671,6 +674,8 @@ data class DiscoveredInterface(
                 type = item.optString("type", "Unknown"),
                 transportId = item.optString("transport_id", "").ifEmpty { null },
                 networkId = item.optString("network_id", "").ifEmpty { null },
+                networkName = item.optString("network_name", "").ifEmpty { null },
+                passphrase = item.optString("passphrase", "").ifEmpty { null },
                 // Status information
                 status = item.optString("status", "unknown"),
                 statusCode = item.optInt("status_code", STATUS_UNKNOWN),

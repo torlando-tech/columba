@@ -467,6 +467,12 @@ class ColumbaApplication : Application() {
                     action = com.lxmf.messenger.service.ReticulumService.ACTION_UPDATE_NOTIFICATION
                     putExtra(com.lxmf.messenger.service.ReticulumService.EXTRA_NETWORK_STATUS, status)
                 }
+            // startForegroundService also spins up the :reticulum process if it isn't running.
+            // ReticulumService.onStartCommand guards on ::managers.isInitialized and returns
+            // START_STICKY if onCreate hasn't finished, so an ACTION_UPDATE_NOTIFICATION delivered
+            // during that brief window is dropped. In practice we only call this after
+            // initialize() has resolved, by which point the service process has been alive for
+            // seconds, so the window never opens for real notification updates.
             androidx.core.content.ContextCompat
                 .startForegroundService(this, intent)
         } catch (e: Exception) {

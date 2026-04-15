@@ -215,6 +215,10 @@ class PropagationNodeManager
             java.util.concurrent.atomic
                 .AtomicBoolean(false)
 
+        // Kept so a new sync can cancel a still-delaying poll loop from the previous sync
+        // before it wakes up and starts observing the new sync's flags.
+        private var activePollJob: kotlinx.coroutines.Job? = null
+
         private val _lastSyncTimestamp = MutableStateFlow<Long?>(null)
         val lastSyncTimestamp: StateFlow<Long?> = _lastSyncTimestamp.asStateFlow()
 
@@ -784,6 +788,10 @@ class PropagationNodeManager
             }
 
             Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.destinationHash.take(16)}")
+            // Cancel any still-alive poll loop from a previous sync so it can't wake up
+            // mid-delay and start observing this sync's _isSyncing flag.
+            activePollJob?.cancel()
+            activePollJob = null
             syncFinalized.set(false)
             _isSyncing.value = true
             _syncProgress.value = SyncProgress.Starting
@@ -826,9 +834,10 @@ class PropagationNodeManager
                             }
                             else -> {
                                 // Poll for completion (propagationStateFlow doesn't work on native path)
-                                scope.launch {
-                                    pollForSyncCompletion(timeoutJob)
-                                }
+                                activePollJob =
+                                    scope.launch {
+                                        pollForSyncCompletion(timeoutJob)
+                                    }
                             }
                         }
                     }.onFailure { error ->
@@ -872,6 +881,10 @@ class PropagationNodeManager
             }
 
             Log.d(TAG, "📡 Manual sync with propagation node: ${relay.destinationHash.take(16)} (silent=$silent)")
+            // Cancel any still-alive poll loop from a previous sync so it can't wake up
+            // mid-delay and start observing this sync's _isSyncing flag.
+            activePollJob?.cancel()
+            activePollJob = null
             syncFinalized.set(false)
             _isSyncing.value = true
             _isManualSync = !silent
@@ -962,9 +975,10 @@ class PropagationNodeManager
                     }
                 }
                 else -> {
-                    scope.launch {
-                        pollForSyncCompletion(timeoutJob)
-                    }
+                    activePollJob =
+                        scope.launch {
+                            pollForSyncCompletion(timeoutJob)
+                        }
                 }
             }
         }

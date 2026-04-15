@@ -89,8 +89,13 @@ class DiscoveredInterfacesViewModelTest {
         coEvery { reticulumProtocol.isDiscoveryEnabled() } returns false
         coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns emptyList()
         coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns emptySet()
+        coEvery { reticulumProtocol.setDiscoveryEnabled(any()) } returns Unit
+        coEvery { reticulumProtocol.setAutoconnectLimit(any()) } returns Unit
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+        coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+        coEvery { settingsRepository.saveAutoconnectIfacOnly(any()) } returns Unit
+        coEvery { reticulumProtocol.setAutoconnectIfacOnly(any()) } returns Unit
         every { interfaceRepository.bootstrapInterfaceNames } returns bootstrapNamesFlow
     }
 
@@ -108,10 +113,11 @@ class DiscoveredInterfacesViewModelTest {
             reticulumProtocol,
             settingsRepository,
             interfaceRepository,
-            interfaceConfigManager,
         )
 
-    /** Mock applyInterfaceChanges to succeed and invoke the onServiceReady callback. */
+    /**
+     * Legacy helper retained for older tests; direct native hot-apply no longer uses it.
+     */
     private fun mockApplyInterfaceChangesSuccess() {
         coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
             firstArg<(() -> Unit)?>()?.invoke()
@@ -616,10 +622,9 @@ class DiscoveredInterfacesViewModelTest {
         }
 
     @Test
-    fun `setAutoconnectCount - triggers service restart`() =
+    fun `setAutoconnectCount - applies limit directly without service restart`() =
         runTest {
             // Given
-            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -627,9 +632,10 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.setAutoconnectCount(5)
             advanceUntilIdle()
 
-            // Then: Restart completed (isRestarting cleared) AND config manager was called
+            // Then
             assertFalse(viewModel.state.value.isRestarting)
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { reticulumProtocol.setAutoconnectLimit(5) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
         }
 
     @Test
@@ -649,10 +655,10 @@ class DiscoveredInterfacesViewModelTest {
         }
 
     @Test
-    fun `setAutoconnectCount - sets error message on failure`() =
+    fun `setAutoconnectCount - sets error message on hot-apply failure`() =
         runTest {
             // Given
-            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns Result.failure(RuntimeException("Restart failed"))
+            coEvery { reticulumProtocol.setAutoconnectLimit(any()) } throws RuntimeException("Hot update failed")
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -663,7 +669,7 @@ class DiscoveredInterfacesViewModelTest {
             // Then
             assertTrue(
                 viewModel.state.value.errorMessage
-                    ?.contains("Failed to restart service") == true,
+                    ?.contains("Failed to update autoconnect count") == true,
             )
             assertFalse(viewModel.state.value.isRestarting)
         }
@@ -813,11 +819,10 @@ class DiscoveredInterfacesViewModelTest {
         }
 
     @Test
-    fun `toggleDiscovery - triggers service restart`() =
+    fun `toggleDiscovery - applies setting directly without service restart`() =
         runTest {
             // Given
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -825,17 +830,18 @@ class DiscoveredInterfacesViewModelTest {
             viewModel.toggleDiscovery()
             advanceUntilIdle()
 
-            // Then: Restart completed (isRestarting cleared) AND config manager was called
+            // Then
             assertFalse(viewModel.state.value.isRestarting)
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { reticulumProtocol.setDiscoveryEnabled(true) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
         }
 
     @Test
-    fun `toggleDiscovery - sets error message on restart failure`() =
+    fun `toggleDiscovery - sets error message on direct apply failure`() =
         runTest {
             // Given
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns Result.failure(RuntimeException("Service error"))
+            coEvery { reticulumProtocol.setDiscoveryEnabled(any()) } throws RuntimeException("Service error")
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -846,7 +852,7 @@ class DiscoveredInterfacesViewModelTest {
             // Then
             assertTrue(
                 viewModel.state.value.errorMessage
-                    ?.contains("Failed to restart service") == true,
+                    ?.contains("Failed to update discovery settings") == true,
             )
             assertFalse(viewModel.state.value.isRestarting)
         }
@@ -1162,8 +1168,144 @@ class DiscoveredInterfacesViewModelTest {
             assertEquals("NoLoc2", state.interfaces[1].name)
         }
 
+    // ========== Search + Filter Tests ==========
+
+    @Test
+    fun `setSearchQuery filters by name case-insensitively`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Columba Node Alpha", reachableOn = "10.0.0.1"),
+                    createTestDiscoveredInterface(name = "Some Other Interface", reachableOn = "10.0.0.2"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setSearchQuery("columba")
+
+            val state = viewModel.state.value
+            assertEquals("columba", state.searchQuery)
+            assertEquals(1, state.interfaces.size)
+            assertEquals("Columba Node Alpha", state.interfaces[0].name)
+        }
+
+    @Test
+    fun `setSearchQuery also matches host and ifac network name`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Node A", reachableOn = "mesh.example.com"),
+                    createTestDiscoveredInterface(name = "Node B", reachableOn = "10.0.0.2", ifacNetname = "community-mesh"),
+                    createTestDiscoveredInterface(name = "Node C", reachableOn = "10.0.0.3"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setSearchQuery("mesh")
+
+            val names =
+                viewModel.state.value.interfaces
+                    .map { it.name }
+                    .toSet()
+            assertEquals(setOf("Node A", "Node B"), names)
+        }
+
+    @Test
+    fun `toggleTypeFilter restricts to selected types`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "TCP-1", type = "TCPServerInterface"),
+                    createTestDiscoveredInterface(name = "Radio-1", type = "RNodeInterface"),
+                    createTestDiscoveredInterface(name = "I2P-1", type = "I2PInterface"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.toggleTypeFilter(DiscoveredInterfaceTypeFilter.TCP)
+
+            assertEquals(
+                listOf("TCP-1"),
+                viewModel.state.value.interfaces
+                    .map { it.name },
+            )
+
+            viewModel.toggleTypeFilter(DiscoveredInterfaceTypeFilter.RADIO)
+
+            val names =
+                viewModel.state.value.interfaces
+                    .map { it.name }
+                    .toSet()
+            assertEquals(setOf("TCP-1", "Radio-1"), names)
+        }
+
+    @Test
+    fun `clearFilters resets search and type filters`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "TCP-1", type = "TCPServerInterface"),
+                    createTestDiscoveredInterface(name = "Radio-1", type = "RNodeInterface"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setSearchQuery("TCP")
+            viewModel.toggleTypeFilter(DiscoveredInterfaceTypeFilter.TCP)
+            assertEquals(1, viewModel.state.value.interfaces.size)
+
+            viewModel.clearFilters()
+
+            val state = viewModel.state.value
+            assertEquals("", state.searchQuery)
+            assertTrue(state.typeFilters.isEmpty())
+            assertEquals(2, state.interfaces.size)
+        }
+
+    // ========== Autoconnect IFAC-only toggle ==========
+
+    @Test
+    fun `loadDiscoverySettings pushes persisted IFAC-only value to protocol`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns true
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(true) }
+        }
+
+    @Test
+    fun `toggleAutoconnectIfacOnly flips state, persists, and forwards to protocol`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            assertFalse(viewModel.state.value.autoconnectIfacOnly)
+
+            viewModel.toggleAutoconnectIfacOnly()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { settingsRepository.saveAutoconnectIfacOnly(true) }
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(true) }
+
+            viewModel.toggleAutoconnectIfacOnly()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { settingsRepository.saveAutoconnectIfacOnly(false) }
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(false) }
+        }
+
     // ========== Helper Functions ==========
 
+    @Suppress("LongParameterList")
     private fun createTestDiscoveredInterface(
         name: String = "TestInterface",
         type: String = "TCPServerInterface",
@@ -1172,6 +1314,8 @@ class DiscoveredInterfacesViewModelTest {
         port: Int? = 4242,
         latitude: Double? = null,
         longitude: Double? = null,
+        ifacNetname: String? = null,
+        ifacNetkey: String? = null,
     ): DiscoveredInterface =
         DiscoveredInterface(
             name = name,
@@ -1200,5 +1344,7 @@ class DiscoveredInterfacesViewModelTest {
             latitude = latitude,
             longitude = longitude,
             height = null,
+            ifacNetname = ifacNetname,
+            ifacNetkey = ifacNetkey,
         )
 }

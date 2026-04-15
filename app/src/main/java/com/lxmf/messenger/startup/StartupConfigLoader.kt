@@ -4,6 +4,7 @@ import com.lxmf.messenger.data.db.entity.LocalIdentityEntity
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.BatteryProfile
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -32,8 +33,10 @@ class StartupConfigLoader
             val preferOwn: Boolean,
             val rpcKey: String?,
             val transport: Boolean,
+            val batteryProfile: BatteryProfile,
             val discoverInterfaces: Boolean,
             val autoconnectDiscoveredCount: Int,
+            val autoconnectIfacOnly: Boolean,
         )
 
         /**
@@ -49,8 +52,10 @@ class StartupConfigLoader
                 val preferOwnDeferred = async { settingsRepository.preferOwnInstanceFlow.first() }
                 val rpcKeyDeferred = async { settingsRepository.rpcKeyFlow.first() }
                 val transportDeferred = async { settingsRepository.getTransportNodeEnabled() }
+                val batteryProfileDeferred = async { settingsRepository.getBatteryProfile() }
                 val discoverInterfacesDeferred = async { settingsRepository.getDiscoverInterfacesEnabled() }
                 val autoconnectCountDeferred = async { settingsRepository.getAutoconnectDiscoveredCount() }
+                val autoconnectIfacOnlyDeferred = async { settingsRepository.getAutoconnectIfacOnly() }
 
                 val savedAutoconnect = autoconnectCountDeferred.await()
                 StartupConfig(
@@ -59,9 +64,11 @@ class StartupConfigLoader
                     preferOwn = preferOwnDeferred.await(),
                     rpcKey = rpcKeyDeferred.await(),
                     transport = transportDeferred.await(),
+                    batteryProfile = batteryProfileDeferred.await(),
                     discoverInterfaces = discoverInterfacesDeferred.await(),
-                    // Coerce -1 (never configured sentinel) to 0 for Python layer
+                    // Coerce -1 (never configured sentinel) to 0 for the native stack
                     autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0,
+                    autoconnectIfacOnly = autoconnectIfacOnlyDeferred.await(),
                 )
             }
     }

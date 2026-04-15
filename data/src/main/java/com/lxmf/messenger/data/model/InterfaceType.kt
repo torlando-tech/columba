@@ -17,9 +17,10 @@ enum class InterfaceType(
         /**
          * Parse interface type from the interface name string.
          * Interface names follow patterns like:
-         * - "AutoInterface[Local]" or "AutoInterface[fe80::...]"
-         * - "TCPInterface[192.168.1.100:4965]" or "TCPClientInterface[...]"
-         * - Names containing "BLE" or "Bluetooth"
+         * - "AutoInterface[Local]", "AutoInterface[fe80::...]", or "Auto Discovery"
+         * - "TCPInterface[192.168.1.100:4965]", "TCPClientInterface[...]",
+         *   "TCPServerInterface[...]", or Backbone
+         * - "BLE", "Bluetooth", or "AndroidBLE"
          * - Names containing "RNode"
          */
         fun fromInterfaceName(interfaceName: String?): InterfaceType {
@@ -27,10 +28,10 @@ enum class InterfaceType(
 
             val name = interfaceName.lowercase()
             return when {
-                name.contains("autointerface") -> AUTO_INTERFACE
-                name.contains("tcpclient") || name.contains("tcpinterface") || name.contains("backbone") -> TCP_CLIENT
+                name.contains("autointerface") || name.contains("auto discovery") -> AUTO_INTERFACE
+                name.contains("tcpclient") || name.contains("tcpinterface") || name.contains("tcpserver") || name.contains("backbone") -> TCP_CLIENT
                 name.contains("rnode") -> RNODE
-                name.contains("ble") || name.contains("androidble") -> ANDROID_BLE
+                name.contains("ble") || name.contains("bluetooth") || name.contains("androidble") -> ANDROID_BLE
                 else -> UNKNOWN
             }
         }

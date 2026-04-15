@@ -64,11 +64,8 @@ class ServiceModuleTest {
         assertNotNull("notificationManager should not be null", managers.notificationManager)
         assertNotNull("broadcaster should not be null", managers.broadcaster)
         assertNotNull("bleCoordinator should not be null", managers.bleCoordinator)
-        assertNotNull("wrapperManager should not be null", managers.wrapperManager)
-        assertNotNull("identityManager should not be null", managers.identityManager)
-        assertNotNull("routingManager should not be null", managers.routingManager)
-        assertNotNull("messagingManager should not be null", managers.messagingManager)
-        assertNotNull("eventHandler should not be null", managers.eventHandler)
+        assertNotNull("persistenceManager should not be null", managers.persistenceManager)
+        assertNotNull("settingsAccessor should not be null", managers.settingsAccessor)
     }
 
     @Test
@@ -88,10 +85,7 @@ class ServiceModuleTest {
 
         val binder =
             ServiceModule.createBinder(
-                context = context,
                 managers = managers,
-                scope = testScope,
-                onInitialized = {},
                 onShutdown = {},
                 onForceExit = {},
             )
@@ -107,10 +101,7 @@ class ServiceModuleTest {
         // Should not throw when creating binder with all managers
         val binder =
             ServiceModule.createBinder(
-                context = context,
                 managers = managers,
-                scope = testScope,
-                onInitialized = {},
                 onShutdown = {},
                 onForceExit = {},
             )

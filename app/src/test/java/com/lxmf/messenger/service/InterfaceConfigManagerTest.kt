@@ -10,8 +10,8 @@ import com.lxmf.messenger.data.repository.ConversationRepository
 import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.BatteryProfile
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import io.mockk.Ordering
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -111,8 +111,10 @@ class InterfaceConfigManagerTest {
         every { settingsRepository.preferOwnInstanceFlow } returns flowOf(true)
         every { settingsRepository.rpcKeyFlow } returns flowOf(null)
         coEvery { settingsRepository.getTransportNodeEnabled() } returns true
+        coEvery { settingsRepository.getBatteryProfile() } returns BatteryProfile.BALANCED
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+        coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Setup identity repository mock
@@ -127,6 +129,8 @@ class InterfaceConfigManagerTest {
         coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns emptyList()
 
         // Setup protocol mock
+        every { reticulumProtocol.unbindService() } just Runs
+        coEvery { reticulumProtocol.bindService() } returns Unit
         coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
         coEvery { reticulumProtocol.initialize(any()) } returns Result.success(Unit)
 
@@ -353,8 +357,8 @@ class InterfaceConfigManagerTest {
     @Test
     fun `applyInterfaceChanges - calls restorePeerIdentities when peer identities exist`() =
         runTest {
-            // Given: ServiceReticulumProtocol with peer identities
-            val serviceProtocol = mockk<ServiceReticulumProtocol>()
+            // Given: NativeReticulumProtocol with peer identities
+            val serviceProtocol = mockk<ReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.bindService() } just Runs
@@ -395,8 +399,8 @@ class InterfaceConfigManagerTest {
     @Test
     fun `applyInterfaceChanges - calls restoreAnnounceIdentities when announces exist`() =
         runTest {
-            // Given: ServiceReticulumProtocol with announce identities
-            val serviceProtocol = mockk<ServiceReticulumProtocol>()
+            // Given: NativeReticulumProtocol with announce identities
+            val serviceProtocol = mockk<ReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.bindService() } just Runs
@@ -467,8 +471,8 @@ class InterfaceConfigManagerTest {
     @Test
     fun `applyInterfaceChanges - skips restorePeerIdentities when list is empty`() =
         runTest {
-            // Given: ServiceReticulumProtocol with no peer identities
-            val serviceProtocol = mockk<ServiceReticulumProtocol>()
+            // Given: NativeReticulumProtocol with no peer identities
+            val serviceProtocol = mockk<ReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.bindService() } just Runs
@@ -502,8 +506,8 @@ class InterfaceConfigManagerTest {
     @Test
     fun `applyInterfaceChanges - skips restoreAnnounceIdentities when list is empty`() =
         runTest {
-            // Given: ServiceReticulumProtocol with no announces
-            val serviceProtocol = mockk<ServiceReticulumProtocol>()
+            // Given: NativeReticulumProtocol with no announces
+            val serviceProtocol = mockk<ReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.bindService() } just Runs
@@ -539,8 +543,8 @@ class InterfaceConfigManagerTest {
     @Test
     fun `applyInterfaceChanges - continues when restorePeerIdentities fails`() =
         runTest {
-            // Given: ServiceReticulumProtocol where restorePeerIdentities fails
-            val serviceProtocol = mockk<ServiceReticulumProtocol>()
+            // Given: NativeReticulumProtocol where restorePeerIdentities fails
+            val serviceProtocol = mockk<ReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.bindService() } just Runs
@@ -579,8 +583,8 @@ class InterfaceConfigManagerTest {
     @Test
     fun `applyInterfaceChanges - continues when restoreAnnounceIdentities fails`() =
         runTest {
-            // Given: ServiceReticulumProtocol where restoreAnnounceIdentities fails
-            val serviceProtocol = mockk<ServiceReticulumProtocol>()
+            // Given: NativeReticulumProtocol where restoreAnnounceIdentities fails
+            val serviceProtocol = mockk<ReticulumProtocol>()
             coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
             coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
             coEvery { serviceProtocol.bindService() } just Runs

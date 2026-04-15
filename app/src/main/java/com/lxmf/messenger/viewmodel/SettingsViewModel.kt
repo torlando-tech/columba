@@ -10,9 +10,9 @@ import com.lxmf.messenger.data.repository.IdentityRepository
 import com.lxmf.messenger.map.MapTileSourceManager
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.repository.SettingsRepository
+import com.lxmf.messenger.reticulum.model.BatteryProfile
 import com.lxmf.messenger.reticulum.model.NetworkStatus
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.AvailableRelaysState
 import com.lxmf.messenger.service.PropagationNodeManager
 import com.lxmf.messenger.service.RelayInfo
@@ -113,8 +113,9 @@ data class SettingsState(
     val retrievalIntervalSeconds: Int = 3600,
     val lastSyncTimestamp: Long? = null,
     val isSyncing: Boolean = false,
-    // Transport node state
+    // Transport node + battery profile state
     val transportNodeEnabled: Boolean = true,
+    val batteryProfile: BatteryProfile = BatteryProfile.BALANCED,
     // Location sharing state
     val locationSharingEnabled: Boolean = true,
     val activeSharingSessions: List<com.lxmf.messenger.service.SharingSession> = emptyList(),
@@ -157,6 +158,7 @@ data class SettingsState(
     val reticulumVersion: String? = null,
     val lxmfVersion: String? = null,
     val bleReticulumVersion: String? = null,
+    val lxstVersion: String? = null,
     // Card expansion states (all collapsed by default)
     val cardExpansionStates: Map<String, Boolean> =
         SettingsCardId.entries.associate { it.name to false },
@@ -242,7 +244,9 @@ class SettingsViewModel
             startSyncStateMonitor()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
-                startSharedInstanceAvailabilityMonitor()
+                if (reticulumProtocol.supportsSharedInstanceAvailabilityChecks) {
+                    startSharedInstanceAvailabilityMonitor()
+                }
                 startRelayMonitor()
                 startLocationSharingMonitor()
                 startTelemetryCollectorMonitor()
@@ -301,6 +305,7 @@ class SettingsViewModel
                         settingsRepository.isSharedInstanceFlow,
                         settingsRepository.rpcKeyFlow,
                         settingsRepository.transportNodeEnabledFlow,
+                        settingsRepository.batteryProfileFlow,
                         settingsRepository.defaultDeliveryMethodFlow,
                         // Sync state flows - included here to avoid race conditions with separate collectors
                         // Note: isSyncing is excluded because it changes rapidly (true→false in ms)
@@ -343,18 +348,21 @@ class SettingsViewModel
                         val transportNodeEnabled = flows[10] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val defaultDeliveryMethod = flows[11] as String
+                        val batteryProfile = flows[11] as BatteryProfile
+
+                        @Suppress("UNCHECKED_CAST")
+                        val defaultDeliveryMethod = flows[12] as String
 
                         // Sync state from flows (not preserved from _state.value to avoid races)
                         // Note: isSyncing is handled separately to avoid rapid recomposition
                         @Suppress("UNCHECKED_CAST")
-                        val lastSyncTimestamp = flows[12] as Long?
+                        val lastSyncTimestamp = flows[13] as Long?
 
                         @Suppress("UNCHECKED_CAST")
-                        val autoRetrieveEnabled = flows[13] as Boolean
+                        val autoRetrieveEnabled = flows[14] as Boolean
 
                         @Suppress("UNCHECKED_CAST")
-                        val retrievalIntervalSeconds = flows[14] as Int
+                        val retrievalIntervalSeconds = flows[15] as Int
 
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
@@ -399,8 +407,9 @@ class SettingsViewModel
                             autoSelectPropagationNode = _state.value.autoSelectPropagationNode,
                             availableRelays = _state.value.availableRelays,
                             availableRelaysLoading = _state.value.availableRelaysLoading,
-                            // Transport node state
+                            // Transport node + battery profile state
                             transportNodeEnabled = transportNodeEnabled,
+                            batteryProfile = batteryProfile,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
                             tryPropagationOnFail = _state.value.tryPropagationOnFail,
@@ -553,59 +562,54 @@ class SettingsViewModel
 
             while (attemptCount < MAX_RETRIES) {
                 try {
-                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                        // Get identity
-                        val identityResult = reticulumProtocol.getLxmfIdentity()
-                        if (!identityResult.isSuccess) {
-                            Log.w(TAG, "Identity result was not successful on attempt ${attemptCount + 1}")
-                            attemptCount++
-                            if (attemptCount < MAX_RETRIES) {
-                                delay(RETRY_DELAY_MS)
-                            }
-                            continue
+                    // Get identity
+                    val identityResult = reticulumProtocol.getLxmfIdentity()
+                    if (!identityResult.isSuccess) {
+                        Log.w(TAG, "Identity result was not successful on attempt ${attemptCount + 1}")
+                        attemptCount++
+                        if (attemptCount < MAX_RETRIES) {
+                            delay(RETRY_DELAY_MS)
                         }
-
-                        val identity = identityResult.getOrNull()
-                        if (identity == null) {
-                            Log.w(TAG, "Identity is null on attempt ${attemptCount + 1}")
-                            attemptCount++
-                            if (attemptCount < MAX_RETRIES) {
-                                delay(RETRY_DELAY_MS)
-                            }
-                            continue
-                        }
-
-                        // Get destination
-                        val destinationResult = reticulumProtocol.getLxmfDestination()
-                        if (!destinationResult.isSuccess) {
-                            Log.w(TAG, "Destination result was not successful on attempt ${attemptCount + 1}")
-                            attemptCount++
-                            if (attemptCount < MAX_RETRIES) {
-                                delay(RETRY_DELAY_MS)
-                            }
-                            continue
-                        }
-
-                        val destination = destinationResult.getOrNull()
-                        if (destination == null) {
-                            Log.w(TAG, "Destination is null on attempt ${attemptCount + 1}")
-                            attemptCount++
-                            if (attemptCount < MAX_RETRIES) {
-                                delay(RETRY_DELAY_MS)
-                            }
-                            continue
-                        }
-
-                        // Convert to hex strings
-                        val identityHashHex = identity.hash.joinToString("") { "%02x".format(it) }
-                        val destinationHashHex = destination.hexHash
-
-                        Log.d(TAG, "Successfully loaded identity info on attempt ${attemptCount + 1}")
-                        return Pair(identityHashHex, destinationHashHex)
-                    } else {
-                        Log.w(TAG, "ReticulumProtocol is not ServiceReticulumProtocol")
-                        return Pair(null, null)
+                        continue
                     }
+
+                    val identity = identityResult.getOrNull()
+                    if (identity == null) {
+                        Log.w(TAG, "Identity is null on attempt ${attemptCount + 1}")
+                        attemptCount++
+                        if (attemptCount < MAX_RETRIES) {
+                            delay(RETRY_DELAY_MS)
+                        }
+                        continue
+                    }
+
+                    // Get destination
+                    val destinationResult = reticulumProtocol.getLxmfDestination()
+                    if (!destinationResult.isSuccess) {
+                        Log.w(TAG, "Destination result was not successful on attempt ${attemptCount + 1}")
+                        attemptCount++
+                        if (attemptCount < MAX_RETRIES) {
+                            delay(RETRY_DELAY_MS)
+                        }
+                        continue
+                    }
+
+                    val destination = destinationResult.getOrNull()
+                    if (destination == null) {
+                        Log.w(TAG, "Destination is null on attempt ${attemptCount + 1}")
+                        attemptCount++
+                        if (attemptCount < MAX_RETRIES) {
+                            delay(RETRY_DELAY_MS)
+                        }
+                        continue
+                    }
+
+                    // Convert to hex strings
+                    val identityHashHex = identity.hash.joinToString("") { "%02x".format(it) }
+                    val destinationHashHex = destination.hexHash
+
+                    Log.d(TAG, "Successfully loaded identity info on attempt ${attemptCount + 1}")
+                    return Pair(identityHashHex, destinationHashHex)
                 } catch (e: Exception) {
                     lastException = e
                     Log.w(TAG, "Attempt ${attemptCount + 1} failed to get identity info: ${e.message}")
@@ -630,14 +634,21 @@ class SettingsViewModel
                     var rnsVersion: String? = null
                     var lxmfVer: String? = null
                     var bleVer: String? = null
+                    var lxstVer: String? = null
 
                     // Retry up to 3 times if versions are null (service might not be bound yet)
                     repeat(3) { attempt ->
                         rnsVersion = reticulumProtocol.getReticulumVersion()
                         lxmfVer = reticulumProtocol.getLxmfVersion()
                         bleVer = reticulumProtocol.getBleReticulumVersion()
+                        lxstVer = reticulumProtocol.getLxstVersion()
 
-                        if (rnsVersion != null || lxmfVer != null || bleVer != null) {
+                        val hasAnyVersion =
+                            rnsVersion != null ||
+                                lxmfVer != null ||
+                                bleVer != null ||
+                                lxstVer != null
+                        if (hasAnyVersion) {
                             return@repeat
                         }
 
@@ -651,6 +662,7 @@ class SettingsViewModel
                             reticulumVersion = rnsVersion,
                             lxmfVersion = lxmfVer,
                             bleReticulumVersion = bleVer,
+                            lxstVersion = lxstVer,
                         )
                     }
                 } catch (e: Exception) {
@@ -779,45 +791,31 @@ class SettingsViewModel
                     // Get display name
                     val displayName = state.value.displayName
 
-                    // Trigger announce if using ServiceReticulumProtocol
-                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                        val result = reticulumProtocol.triggerAutoAnnounce(displayName)
+                    val result = reticulumProtocol.triggerAutoAnnounce(displayName)
 
-                        if (result.isSuccess) {
-                            // Update last announce timestamp
-                            val timestamp = System.currentTimeMillis()
-                            settingsRepository.saveLastAutoAnnounceTime(timestamp)
+                    if (result.isSuccess) {
+                        // Update last announce timestamp
+                        val timestamp = System.currentTimeMillis()
+                        settingsRepository.saveLastAutoAnnounceTime(timestamp)
 
-                            _state.value =
-                                _state.value.copy(
-                                    isManualAnnouncing = false,
-                                    showManualAnnounceSuccess = true,
-                                )
-                            Log.d(TAG, "Manual announce successful")
-
-                            // Auto-dismiss success message after 3 seconds
-                            delay(3000)
-                            clearManualAnnounceStatus()
-                        } else {
-                            val error = result.exceptionOrNull()?.message ?: "Unknown error"
-                            _state.value =
-                                _state.value.copy(
-                                    isManualAnnouncing = false,
-                                    manualAnnounceError = error,
-                                )
-                            Log.e(TAG, "Manual announce failed: $error")
-
-                            // Auto-dismiss error message after 5 seconds
-                            delay(5000)
-                            clearManualAnnounceStatus()
-                        }
-                    } else {
                         _state.value =
                             _state.value.copy(
                                 isManualAnnouncing = false,
-                                manualAnnounceError = "Service not available",
+                                showManualAnnounceSuccess = true,
                             )
-                        Log.w(TAG, "Manual announce skipped: ReticulumProtocol is not ServiceReticulumProtocol")
+                        Log.d(TAG, "Manual announce successful")
+
+                        // Auto-dismiss success message after 3 seconds
+                        delay(3000)
+                        clearManualAnnounceStatus()
+                    } else {
+                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        _state.value =
+                            _state.value.copy(
+                                isManualAnnouncing = false,
+                                manualAnnounceError = error,
+                            )
+                        Log.e(TAG, "Manual announce failed: $error")
 
                         // Auto-dismiss error message after 5 seconds
                         delay(5000)
@@ -900,12 +898,9 @@ class SettingsViewModel
                     // Unbind FIRST to prevent auto-rebind if the service process crashes.
                     // Do NOT call reticulumProtocol.shutdown() — its async Python cleanup can
                     // crash the service process before ACTION_STOP is delivered, triggering
-                    // ServiceReticulumProtocol's auto-rebind which restarts the service.
+                    // the protocol's auto-rebind which restarts the service.
                     // ACTION_STOP will handle shutdown internally in the service process.
-                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                        (reticulumProtocol as com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol)
-                            .unbindService()
-                    }
+                    reticulumProtocol.unbindService()
 
                     // Send ACTION_STOP to actually stop the foreground service and remove notification
                     val stopIntent =
@@ -1170,14 +1165,7 @@ class SettingsViewModel
                         val networkReady = reticulumProtocol.networkStatus.value is NetworkStatus.READY
                         if (!currentState.isRestarting && networkReady) {
                             // Query service for shared instance availability
-                            val isOnline =
-                                if (reticulumProtocol is
-                                        com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
-                                ) {
-                                    reticulumProtocol.isSharedInstanceAvailable()
-                                } else {
-                                    false
-                                }
+                            val isOnline = reticulumProtocol.isSharedInstanceAvailable()
 
                             // Update sharedInstanceOnline if changed
                             if (isOnline != currentState.sharedInstanceOnline) {
@@ -1535,6 +1523,25 @@ class SettingsViewModel
             }
         }
 
+        fun setBatteryProfile(profile: BatteryProfile) {
+            viewModelScope.launch {
+                try {
+                    // Apply the change to the running stack first; only persist and update the
+                    // displayed state after it succeeds. If setBatteryProfile throws we don't want
+                    // DataStore and the UI to disagree with the actual runtime behaviour.
+                    reticulumProtocol.setBatteryProfile(profile)
+                    settingsRepository.saveBatteryProfile(profile)
+                    _state.update { it.copy(batteryProfile = profile) }
+                    Log.d(TAG, "Battery profile set to $profile")
+                } catch (e: Exception) {
+                    // viewModelScope's SupervisorJob would otherwise swallow this — the tap
+                    // visibly did nothing, no toast, no revert. Log at least, and leave the
+                    // displayed profile unchanged so it still matches the running stack.
+                    Log.e(TAG, "Failed to apply battery profile $profile", e)
+                }
+            }
+        }
+
         // Location sharing methods
 
         /**
@@ -1672,9 +1679,7 @@ class SettingsViewModel
                 Log.d(TAG, "Incoming message size limit set to: ${limitKb}KB")
 
                 // Apply the change at runtime via the protocol
-                if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                    reticulumProtocol.setIncomingMessageSizeLimit(limitKb)
-                }
+                reticulumProtocol.setIncomingMessageSizeLimit(limitKb)
             }
         }
 

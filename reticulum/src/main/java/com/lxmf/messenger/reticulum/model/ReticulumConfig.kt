@@ -8,6 +8,12 @@ data class ReticulumConfig(
     val logLevel: LogLevel = LogLevel.INFO,
     val allowAnonymous: Boolean = false,
     /**
+     * User-selected runtime battery/performance profile.
+     * This tunes native Reticulum transport/interface aggressiveness without changing
+     * explicit user feature schedules like telemetry or propagation retrieval intervals.
+     */
+    val batteryProfile: BatteryProfile = BatteryProfile.BALANCED,
+    /**
      * When false (default), Columba will attempt to connect to a shared RNS instance
      * (e.g., from Sideband) if one is available on the device.
      * When true, Columba will always create its own RNS instance.
@@ -41,6 +47,12 @@ data class ReticulumConfig(
      * Default: 0 (disabled)
      */
     val autoconnectDiscoveredInterfaces: Int = 0,
+    /**
+     * When true, the auto-connect factory only accepts discovered interfaces
+     * whose announce included an IFAC network name. Non-IFAC interfaces are
+     * skipped, freeing the autoconnect slot for an IFAC-advertised peer.
+     */
+    val autoconnectIfacOnly: Boolean = false,
     /**
      * List of identity hashes (hex) of trusted discovery sources.
      * If null or empty, all discovered interfaces are considered.
@@ -240,6 +252,29 @@ enum class LogLevel {
     INFO,
     DEBUG,
     VERBOSE,
+}
+
+enum class BatteryProfile(
+    val displayName: String,
+    val description: String,
+) {
+    MAXIMUM_BATTERY(
+        displayName = "Maximum Battery",
+        description = "Best battery life with slower background networking and discovery.",
+    ),
+    BALANCED(
+        displayName = "Balanced",
+        description = "Good battery life with normal responsiveness for most users.",
+    ),
+    PERFORMANCE(
+        displayName = "Performance",
+        description = "Fastest path recovery and networking responsiveness at higher battery cost.",
+    ),
+    ;
+
+    companion object {
+        fun fromName(name: String?): BatteryProfile = entries.firstOrNull { it.name == name } ?: BALANCED
+    }
 }
 
 /**

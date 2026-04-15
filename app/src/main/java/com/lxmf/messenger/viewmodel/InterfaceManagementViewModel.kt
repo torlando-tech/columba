@@ -10,7 +10,6 @@ import com.lxmf.messenger.data.repository.BleStatusRepository
 import com.lxmf.messenger.repository.InterfaceRepository
 import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.InterfaceConfigManager
 import com.lxmf.messenger.util.validation.InputValidator
 import com.lxmf.messenger.util.validation.ValidationResult
@@ -21,7 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,12 +52,27 @@ data class InterfaceManagementState(
     val infoMessage: String? = null,
     // Interface online status from Python/RNS (interface name -> online status)
     val interfaceOnlineStatus: Map<String, Boolean> = emptyMap(),
+    // Transport-reported interfaces (includes spawned sub-interfaces from AutoInterface/BLE)
+    val transportInterfaces: List<TransportInterfaceInfo> = emptyList(),
     // RNS 1.1.x Interface Discovery
     val discoveredInterfaceCount: Int = 0,
     val discoveredAvailableCount: Int = 0,
     val discoveredUnknownCount: Int = 0,
     val discoveredStaleCount: Int = 0,
     val isDiscoveryEnabled: Boolean = false,
+)
+
+/**
+ * Live interface info from Transport (includes spawned sub-interfaces).
+ */
+data class TransportInterfaceInfo(
+    val name: String,
+    val type: String,
+    val isOnline: Boolean,
+    val canSend: Boolean,
+    val parentName: String?,
+    val rxBytes: Long = 0,
+    val txBytes: Long = 0,
 )
 
 /**
@@ -176,40 +190,41 @@ class InterfaceManagementViewModel
          */
         private fun checkExternalPendingChanges() {
             if (configManager.checkAndClearPendingChanges()) {
-                Log.d(TAG, "Found pending changes from external source")
-                _state.value = _state.value.copy(hasPendingChanges = true)
+                Log.d(TAG, "Found pending changes from external source — hot-reloading")
+                syncNativeInterfaces()
             }
         }
 
         /**
-         * Observe interface status change events (event-driven, no polling).
-         * Uses the JSON-based interfaceStatusFlow for immediate updates when
-         * interfaces go online or offline.
+         * Observe interface status change events.
+         *
+         * - `interfaceStatusFlow` provides lightweight online/offline updates
+         * - `debugInfoFlow` provides full transport interface snapshots including spawned peers
+         * - one initial fetch seeds the state before the first event arrives
          */
         private fun observeInterfaceStatusChanges() {
-            // Check if protocol is ServiceReticulumProtocol which has the event flow
-            val serviceProtocol = reticulumProtocol as? ServiceReticulumProtocol
-            if (serviceProtocol == null) {
-                Log.d(TAG, "Protocol is not ServiceReticulumProtocol, falling back to initial fetch")
-                viewModelScope.launch(ioDispatcher) {
-                    fetchInterfaceStatus()
-                }
-                return
+            viewModelScope.launch(ioDispatcher) {
+                fetchInterfaceStatus()
             }
 
             viewModelScope.launch(ioDispatcher) {
-                serviceProtocol.interfaceStatusFlow
-                    .onStart {
-                        // Fetch initial status before first event arrives
-                        fetchInterfaceStatus()
-                    }.collect { statusJson ->
-                        Log.d(TAG, "████ INTERFACE STATUS EVENT ████ Received: $statusJson")
-                        try {
-                            parseAndUpdateInterfaceStatus(statusJson)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing interface status from event", e)
-                        }
+                reticulumProtocol.interfaceStatusFlow.collect { statusJson ->
+                    try {
+                        parseAndUpdateInterfaceStatus(statusJson)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing interface status from event", e)
                     }
+                }
+            }
+
+            viewModelScope.launch(ioDispatcher) {
+                reticulumProtocol.debugInfoFlow.collect { debugInfoJson ->
+                    try {
+                        parseAndUpdateDebugInfo(debugInfoJson)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing debug info event", e)
+                    }
+                }
             }
         }
 
@@ -223,11 +238,44 @@ class InterfaceManagementViewModel
                 json.keys().forEach { name ->
                     statusMap[name] = json.optBoolean(name, false)
                 }
-                _state.value = _state.value.copy(interfaceOnlineStatus = statusMap)
+                _state.update { it.copy(interfaceOnlineStatus = statusMap) }
                 Log.d(TAG, "Interface status updated from event: $statusMap")
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing interface status JSON", e)
             }
+        }
+
+        private fun parseAndUpdateDebugInfo(debugInfoJson: String) {
+            val json = JSONObject(debugInfoJson)
+            val interfacesArray = json.optJSONArray("interfaces") ?: return
+
+            val statusMap = mutableMapOf<String, Boolean>()
+            val transportList = mutableListOf<TransportInterfaceInfo>()
+            for (i in 0 until interfacesArray.length()) {
+                val iface = interfacesArray.optJSONObject(i)
+                val name = iface?.optString("name")?.takeIf { it.isNotBlank() } ?: continue
+                val online = iface.optBoolean("online", false)
+                statusMap[name] = online
+                transportList.add(
+                    TransportInterfaceInfo(
+                        name = name,
+                        type = iface.optString("type", name),
+                        isOnline = online,
+                        canSend = iface.optBoolean("can_send", false),
+                        parentName = iface.optString("parent_name").takeIf { it.isNotBlank() },
+                        rxBytes = iface.optLong("rx_bytes", 0L),
+                        txBytes = iface.optLong("tx_bytes", 0L),
+                    ),
+                )
+            }
+
+            _state.update {
+                it.copy(
+                    interfaceOnlineStatus = statusMap,
+                    transportInterfaces = transportList,
+                )
+            }
+            Log.d(TAG, "Interface debug info updated from event: interfaces=${transportList.size}")
         }
 
         /**
@@ -280,13 +328,29 @@ class InterfaceManagementViewModel
                 val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return
 
                 val statusMap = mutableMapOf<String, Boolean>()
+                val transportList = mutableListOf<TransportInterfaceInfo>()
                 for (ifaceMap in interfacesData) {
                     val name = ifaceMap["name"] as? String ?: continue
                     val online = ifaceMap["online"] as? Boolean ?: false
                     statusMap[name] = online
+                    transportList.add(
+                        TransportInterfaceInfo(
+                            name = name,
+                            type = ifaceMap["type"] as? String ?: name,
+                            isOnline = online,
+                            canSend = ifaceMap["can_send"] as? Boolean ?: false,
+                            parentName = (ifaceMap["parent_name"] as? String)?.takeIf { it.isNotEmpty() },
+                            rxBytes = (ifaceMap["rx_bytes"] as? Number)?.toLong() ?: 0L,
+                            txBytes = (ifaceMap["tx_bytes"] as? Number)?.toLong() ?: 0L,
+                        ),
+                    )
                 }
 
-                _state.value = _state.value.copy(interfaceOnlineStatus = statusMap)
+                _state.value =
+                    _state.value.copy(
+                        interfaceOnlineStatus = statusMap,
+                        transportInterfaces = transportList,
+                    )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to fetch interface status", e)
             }
@@ -461,8 +525,8 @@ class InterfaceManagementViewModel
                         showSuccess("Interface added successfully")
                     }
 
-                    // Mark that there are pending changes
-                    _state.value = _state.value.copy(hasPendingChanges = true)
+                    // Hot-reload interfaces on native stack
+                    syncNativeInterfaces()
 
                     hideDialog()
                 } catch (e: Exception) {
@@ -480,8 +544,8 @@ class InterfaceManagementViewModel
                     interfaceRepository.deleteInterface(id)
                     showSuccess("Interface deleted successfully")
 
-                    // Mark that there are pending changes
-                    _state.value = _state.value.copy(hasPendingChanges = true)
+                    // Hot-reload interfaces on native stack
+                    syncNativeInterfaces()
                 } catch (e: Exception) {
                     showError("Failed to delete interface: ${e.message}")
                 }
@@ -517,8 +581,8 @@ class InterfaceManagementViewModel
 
                     interfaceRepository.toggleInterfaceEnabled(id, enabled)
 
-                    // Mark that there are pending changes
-                    _state.value = _state.value.copy(hasPendingChanges = true)
+                    // Hot-reload interfaces on native stack
+                    syncNativeInterfaces()
                 } catch (e: Exception) {
                     showError("Failed to toggle interface: ${e.message}")
                 }
@@ -963,6 +1027,39 @@ class InterfaceManagementViewModel
          *
          * This operation typically takes 3-5 seconds.
          */
+
+        /**
+         * Hot-reload interfaces on the native stack without restarting Reticulum.
+         * Reads current enabled interfaces from the DB and syncs them to NativeInterfaceFactory.
+         */
+        private var syncJob: kotlinx.coroutines.Job? = null
+
+        private fun syncNativeInterfaces() {
+            syncJob?.cancel()
+            syncJob =
+                viewModelScope.launch(ioDispatcher) {
+                    try {
+                        val configs = interfaceRepository.enabledInterfaces.first()
+                        reticulumProtocol.reloadInterfaces(configs)
+                        kotlinx.coroutines.delay(1000)
+                        fetchInterfaceStatus()
+                        kotlinx.coroutines.delay(4000)
+                        fetchInterfaceStatus()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to sync native interfaces: ${e.message}", e)
+                        // Hot-reload failed and the caller has already shown a success toast for
+                        // the DB write — expose the Apply Changes button so the user has a way
+                        // to retry without restarting the app.
+                        _state.update {
+                            it.copy(
+                                hasPendingChanges = true,
+                                applyChangesError = e.message ?: "Failed to apply changes to the running stack",
+                            )
+                        }
+                    }
+                }
+        }
+
         fun applyChanges() {
             viewModelScope.launch {
                 try {

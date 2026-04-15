@@ -1531,4 +1531,34 @@ class SettingsRepositoryTest {
                 cancelAndConsumeRemainingEvents()
             }
         }
+
+    // ========== Autoconnect IFAC-only filter ==========
+
+    @Test
+    fun autoconnectIfacOnly_defaultsToFalse() =
+        runTest {
+            assertFalse(repository.getAutoconnectIfacOnly())
+        }
+
+    @Test
+    fun autoconnectIfacOnly_persistsValue() =
+        runTest {
+            repository.saveAutoconnectIfacOnly(true)
+            assertTrue(repository.getAutoconnectIfacOnly())
+            repository.saveAutoconnectIfacOnly(false)
+            assertFalse(repository.getAutoconnectIfacOnly())
+        }
+
+    @Test
+    fun autoconnectIfacOnlyFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.autoconnectIfacOnlyFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                repository.saveAutoconnectIfacOnly(initial)
+                expectNoEvents()
+                repository.saveAutoconnectIfacOnly(!initial)
+                assertEquals(!initial, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

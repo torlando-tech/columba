@@ -2,7 +2,6 @@
 
 package com.lxmf.messenger.ui.screens
 
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -35,8 +33,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -51,7 +47,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -70,9 +65,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -272,40 +266,45 @@ fun InterfaceManagementScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(state.interfaces) { iface ->
+                            state.interfaces.forEach { iface ->
                                 val isOnline = state.interfaceOnlineStatus[iface.name]
-                                InterfaceCard(
-                                    interfaceEntity = iface,
-                                    onClick = { onNavigateToInterfaceStats(iface.id) },
-                                    onToggle = { enabled ->
-                                        val hasPermissions = BlePermissionManager.hasAllPermissions(context)
-                                        viewModel.toggleInterface(iface.id, enabled, hasPermissions)
-                                    },
-                                    onEdit = {
-                                        // Use wizard for RNode, dialog for other types
-                                        if (iface.type == "RNode") {
-                                            onNavigateToRNodeWizard(iface.id)
-                                        } else {
-                                            viewModel.showEditDialog(iface)
-                                        }
-                                    },
-                                    onDelete = { interfaceToDelete = iface },
-                                    bluetoothState = state.bluetoothState,
-                                    blePermissionsGranted = state.blePermissionsGranted,
-                                    isOnline = isOnline,
-                                    onErrorClick = {
-                                        errorDialogInterface = iface
-                                    },
-                                    onReconnect =
-                                        if (iface.type == "RNode") {
-                                            { viewModel.reconnectRNodeInterface() }
-                                        } else {
-                                            null
+                                // Count spawned peers for this interface
+                                val spawnedPeers =
+                                    state.transportInterfaces.filter {
+                                        it.parentName == iface.name
+                                    }
+
+                                item(key = "iface_${iface.id}") {
+                                    InterfaceCard(
+                                        interfaceEntity = iface,
+                                        onClick = { onNavigateToInterfaceStats(iface.id) },
+                                        onToggle = { enabled ->
+                                            val hasPermissions = BlePermissionManager.hasAllPermissions(context)
+                                            viewModel.toggleInterface(iface.id, enabled, hasPermissions)
                                         },
-                                )
+                                        bluetoothState = state.bluetoothState,
+                                        blePermissionsGranted = state.blePermissionsGranted,
+                                        isOnline = isOnline,
+                                        peerCount = spawnedPeers.size,
+                                        onErrorClick = { errorDialogInterface = iface },
+                                        onRequestPermissions =
+                                            if (iface.isBleInterface()) {
+                                                { permissionLauncher.launch(BlePermissionManager.getRequiredPermissions().toTypedArray()) }
+                                            } else {
+                                                null
+                                            },
+                                    )
+                                }
+
+                                // Spawned sub-interfaces indented below parent
+                                for ((index, peer) in spawnedPeers.withIndex()) {
+                                    item(key = "peer_${iface.id}_$index") {
+                                        SpawnedPeerCard(info = peer)
+                                    }
+                                }
                             }
                         }
                     }
@@ -460,220 +459,173 @@ fun InterfaceCard(
     interfaceEntity: InterfaceEntity,
     onClick: (() -> Unit)? = null,
     onToggle: (Boolean) -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
     bluetoothState: Int,
     blePermissionsGranted: Boolean,
     isOnline: Boolean? = null,
+    peerCount: Int = 0,
     onErrorClick: (() -> Unit)? = null,
-    onReconnect: (() -> Unit)? = null,
+    onRequestPermissions: (() -> Unit)? = null,
 ) {
-    // Determine if toggle should be enabled and if there's an error
     val toggleEnabled = interfaceEntity.shouldToggleBeEnabled(bluetoothState, blePermissionsGranted)
     val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted, isOnline)
+    val online = isOnline == true && interfaceEntity.enabled
+    val statusColor = if (online) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
     Card(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .then(
-                    if (onClick != null) {
-                        Modifier.clickable(onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                ),
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Header Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = interfaceEntity.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
+            // Type icon with online status color
+            Icon(
+                imageVector =
+                    when (interfaceEntity.type) {
+                        "AutoInterface" -> Icons.Default.Settings
+                        "TCPClient" -> Icons.Default.CheckCircle
+                        "TCPServer" -> Icons.Default.CheckCircle
+                        "RNode" -> Icons.Default.Settings
+                        "AndroidBLE" -> Icons.Default.Settings
+                        else -> Icons.Default.Settings
+                    },
+                contentDescription = null,
+                tint = statusColor,
+                modifier = Modifier.size(32.dp),
+            )
 
-                    // For TCPServer, make the description tappable to copy address
-                    if (interfaceEntity.type == "TCPServer") {
-                        val clipboardManager = LocalClipboardManager.current
-                        val context = LocalContext.current
-                        val (localIp, isYggdrasil) = getLocalIpAddress()
-                        val copyAddress =
-                            try {
-                                val json = org.json.JSONObject(interfaceEntity.configJson)
-                                val port = json.optInt("listen_port", 4242)
-                                if (localIp != null) formatAddressWithPort(localIp, port, isYggdrasil) else null
-                            } catch (e: Exception) {
-                                null
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Name, type, target
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = interfaceEntity.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = getInterfaceTypeLabel(interfaceEntity.type),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = getInterfaceDescription(interfaceEntity),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // Error / permission prompt
+                val needsPermission = !blePermissionsGranted && interfaceEntity.isBleInterface()
+                if (needsPermission) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "BLE permission required",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        if (onRequestPermissions != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(
+                                onClick = onRequestPermissions,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text("Grant", style = MaterialTheme.typography.labelSmall)
                             }
-
-                        Text(
-                            text = getInterfaceDescription(interfaceEntity),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier =
-                                Modifier.clickable(enabled = copyAddress != null) {
-                                    copyAddress?.let {
-                                        clipboardManager.setText(AnnotatedString(it))
-                                        Toast.makeText(context, "Copied $it", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                        )
-                    } else {
-                        Text(
-                            text = getInterfaceDescription(interfaceEntity),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        }
                     }
+                } else if (interfaceEntity.enabled && errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = if (onErrorClick != null) Modifier.clickable(onClick = onErrorClick) else Modifier,
+                    )
                 }
+            }
 
+            // Right column: status + peer count + toggle
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text =
+                        when {
+                            !interfaceEntity.enabled -> "Disabled"
+                            online -> "Online"
+                            else -> "Offline"
+                        },
+                    style = MaterialTheme.typography.labelSmall,
+                    color =
+                        when {
+                            !interfaceEntity.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                            online -> Color(0xFF4CAF50)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        },
+                )
+                if (peerCount > 0) {
+                    Text(
+                        text = "$peerCount peer${if (peerCount != 1) "s" else ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Switch(
                     checked = interfaceEntity.enabled,
                     onCheckedChange = onToggle,
                     enabled = toggleEnabled,
                 )
             }
+        }
+    }
+}
 
-            // Status and Error Badges
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Status Badge
-                Surface(
-                    color =
-                        if (interfaceEntity.enabled) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                    shape = RoundedCornerShape(4.dp),
-                ) {
-                    Text(
-                        text = if (interfaceEntity.enabled) "ENABLED" else "DISABLED",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color =
-                            if (interfaceEntity.enabled) {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                    )
-                }
+/**
+ * Compact card for a spawned sub-interface (AutoInterface peer, BLE peer, TCP client).
+ * Indented to show hierarchy under the parent interface.
+ */
+@Composable
+fun SpawnedPeerCard(info: com.lxmf.messenger.viewmodel.TransportInterfaceInfo) {
+    val statusColor = if (info.isOnline) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
-                // Error Badge (only show if interface is enabled and there's an error)
-                if (interfaceEntity.enabled && errorMessage != null) {
-                    if (onErrorClick != null) {
-                        // Clickable error badge
-                        Surface(
-                            onClick = onErrorClick,
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Default.Warning,
-                                    contentDescription = "Tap for details",
-                                    modifier = Modifier.size(12.dp),
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                                Text(
-                                    text = errorMessage,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                            }
-                        }
-                    } else {
-                        // Non-clickable error badge
-                        Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Default.Warning,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                                Text(
-                                    text = errorMessage,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                            }
-                        }
-                    }
-                }
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(start = 24.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = statusColor,
+                modifier = Modifier.size(20.dp),
+            )
 
-                // Reconnect button for offline RNode interfaces
-                val showReconnect =
-                    interfaceEntity.type == "RNode" &&
-                        interfaceEntity.enabled &&
-                        isOnline == false &&
-                        onReconnect != null
-                if (showReconnect) {
-                    TextButton(
-                        onClick = onReconnect,
-                        colors =
-                            ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.primary,
-                            ),
-                    ) {
-                        Text("Reconnect", style = MaterialTheme.typography.labelMedium)
-                    }
-                }
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = info.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
 
-            // Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = onEdit,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Edit")
-                }
-
-                OutlinedButton(
-                    onClick = onDelete,
-                    modifier = Modifier.weight(1f),
-                    colors =
-                        ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Delete")
-                }
-            }
+            Text(
+                text = if (info.isOnline) "Online" else "Offline",
+                style = MaterialTheme.typography.labelSmall,
+                color = statusColor,
+            )
         }
     }
 }
@@ -931,8 +883,8 @@ fun ApplyErrorDialog(
 /**
  * Get user-friendly label for interface type.
  */
-internal fun getInterfaceTypeLabel(type: String): String {
-    return when (type) {
+internal fun getInterfaceTypeLabel(type: String): String =
+    when (type) {
         "AutoInterface" -> "Auto Discovery"
         "TCPClient" -> "TCP Client"
         "TCPServer" -> "TCP Server"
@@ -941,7 +893,6 @@ internal fun getInterfaceTypeLabel(type: String): String {
         "AndroidBLE" -> "Bluetooth LE"
         else -> type
     }
-}
 
 // TODO: Nice-to-have: Show connected peer count for TCP Server interfaces.
 //       TCPServerInterface.clients returns len(spawned_interfaces).
@@ -954,13 +905,12 @@ internal fun formatAddressWithPort(
     ip: String?,
     port: Int,
     isIpv6: Boolean,
-): String {
-    return when {
+): String =
+    when {
         ip == null -> "no network:$port"
         isIpv6 || ip.contains(":") -> "[$ip]:$port"
         else -> "$ip:$port"
     }
-}
 
 /**
  * Get the device's local IP address, preferring Yggdrasil if available.

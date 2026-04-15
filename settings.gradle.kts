@@ -39,3 +39,28 @@ include(":micron")
 include(":reticulum")
 include(":detekt-rules")
 include(":screenshot-tests")
+
+// Native Reticulum/LXMF Kotlin implementations
+val reticulumKtPopulated = file("reticulum-kt/rns-core/build.gradle.kts").exists()
+val lxmfKtPopulated = file("lxmf-kt/lxmf-core/build.gradle.kts").exists()
+
+if (!reticulumKtPopulated || !lxmfKtPopulated) {
+    logger.warn("Submodules not populated — run: git submodule update --init --recursive")
+}
+
+if (reticulumKtPopulated) {
+    includeBuild("reticulum-kt") {
+        dependencySubstitution {
+            substitute(module("network.reticulum:rns-core")).using(project(":rns-core"))
+            substitute(module("network.reticulum:rns-interfaces")).using(project(":rns-interfaces"))
+            substitute(module("network.reticulum:rns-android")).using(project(":rns-android"))
+        }
+    }
+}
+if (lxmfKtPopulated) {
+    includeBuild("lxmf-kt") {
+        dependencySubstitution {
+            substitute(module("network.reticulum.lxmf:lxmf-core")).using(project(":lxmf-core"))
+        }
+    }
+}

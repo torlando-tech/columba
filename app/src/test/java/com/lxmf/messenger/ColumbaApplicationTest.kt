@@ -1,6 +1,6 @@
 package com.lxmf.messenger
 
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
+import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -28,12 +28,12 @@ import org.junit.Test
 class ColumbaApplicationTest {
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var mockProtocol: ServiceReticulumProtocol
+    private lateinit var mockProtocol: ReticulumProtocol
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockProtocol = mockk()
+        mockProtocol = mockk<ReticulumProtocol>()
     }
 
     @After

@@ -16,7 +16,6 @@ import com.lxmf.messenger.repository.SettingsRepository
 import com.lxmf.messenger.reticulum.model.Identity
 import com.lxmf.messenger.reticulum.protocol.DeliveryMethod
 import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
-import com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol
 import com.lxmf.messenger.service.ConversationLinkManager
 import com.lxmf.messenger.service.LocationSharingManager
 import com.lxmf.messenger.service.PropagationNodeManager
@@ -645,11 +644,13 @@ class MessagingViewModel
                         Log.d(TAG, "Removed $peerHash from contacts")
                         _contactToggleResult.emit(ContactToggleResult.Removed)
                     } else {
-                        // Get public key from conversation
-                        val publicKey = conversationRepository.getPeerPublicKey(peerHash)
+                        val publicKey = resolvePeerPublicKey(peerHash)
                         if (publicKey != null) {
                             contactRepository.addContactFromConversation(peerHash, publicKey)
                             Log.d(TAG, "Added $peerHash to contacts from messaging")
+                            viewModelScope.launch(Dispatchers.IO) {
+                                identityResolutionManager.requestPathForContact(peerHash)
+                            }
                             _contactToggleResult.emit(ContactToggleResult.Added)
                         } else {
                             Log.e(TAG, "Cannot add contact: public key not available for $peerHash")
@@ -677,7 +678,7 @@ class MessagingViewModel
             val peerHash = _currentConversation.value ?: return
             viewModelScope.launch {
                 try {
-                    val publicKey = conversationRepository.getPeerPublicKey(peerHash)
+                    val publicKey = resolvePeerPublicKey(peerHash)
                     val peerIdentityHash =
                         publicKey?.let {
                             com.lxmf.messenger.data.util.HashUtils
@@ -749,53 +750,49 @@ class MessagingViewModel
 
             // Collect delivery status updates and update database
             // Safe to enable now that identity loading is lazy (doesn't crash init)
-            if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                viewModelScope.launch {
-                    try {
-                        reticulumProtocol.observeDeliveryStatus().collect { update ->
-                            try {
-                                Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.status}")
-                                handleDeliveryStatusUpdate(update)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error handling delivery status update", e)
-                            }
+            viewModelScope.launch {
+                try {
+                    reticulumProtocol.observeDeliveryStatus().collect { update ->
+                        try {
+                            Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.status}")
+                            handleDeliveryStatusUpdate(update)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error handling delivery status update", e)
                         }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error collecting delivery status updates", e)
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error collecting delivery status updates", e)
                 }
+            }
 
-                // Collect incoming reactions and update target messages
-                viewModelScope.launch {
-                    try {
-                        reticulumProtocol.reactionReceivedFlow.collect { reactionJson ->
-                            try {
-                                handleIncomingReaction(reactionJson)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error handling incoming reaction", e)
-                            }
+            // Collect incoming reactions and update target messages
+            viewModelScope.launch {
+                try {
+                    reticulumProtocol.reactionReceivedFlow.collect { reactionJson ->
+                        try {
+                            handleIncomingReaction(reactionJson)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error handling incoming reaction", e)
                         }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error collecting reactions", e)
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error collecting reactions", e)
                 }
+            }
 
-                // Pre-load identity hash for reaction ownership checks
-                viewModelScope.launch {
-                    try {
-                        loadIdentityIfNeeded()
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error pre-loading identity in init", e)
-                    }
+            // Pre-load identity hash for reaction ownership checks
+            viewModelScope.launch {
+                try {
+                    loadIdentityIfNeeded()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error pre-loading identity in init", e)
                 }
-            } else {
-                Log.d(TAG, "Delivery status collection skipped for ${reticulumProtocol.javaClass.simpleName}")
             }
         }
 
@@ -811,28 +808,13 @@ class MessagingViewModel
 
             // Try to load identity
             return try {
-                if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                    val identity = reticulumProtocol.getLxmfIdentity().getOrThrow()
-                    sourceIdentity = identity
-                    // Cache the identity hash for reaction ownership checks
-                    val hashHex = identity.hash.joinToString("") { "%02x".format(it) }
-                    _myIdentityHash.value = hashHex
-                    Log.d(TAG, "Loaded LXMF identity for messaging: ${hashHex.take(16)}...")
-                    identity
-                } else {
-                    // Fallback for non-service protocols
-                    val identity =
-                        reticulumProtocol.loadIdentity("default_identity").getOrNull()
-                            ?: reticulumProtocol.createIdentity().getOrThrow().also {
-                                reticulumProtocol.saveIdentity(it, "default_identity")
-                            }
-                    sourceIdentity = identity
-                    // Cache the identity hash for reaction ownership checks
-                    val hashHex = identity.hash.joinToString("") { "%02x".format(it) }
-                    _myIdentityHash.value = hashHex
-                    Log.d(TAG, "Loaded fallback identity for messaging: ${hashHex.take(16)}...")
-                    identity
-                }
+                val identity = reticulumProtocol.getLxmfIdentity().getOrThrow()
+                sourceIdentity = identity
+                // Cache the identity hash for reaction ownership checks
+                val hashHex = identity.hash.joinToString("") { "%02x".format(it) }
+                _myIdentityHash.value = hashHex
+                Log.d(TAG, "Loaded LXMF identity for messaging: ${hashHex.take(16)}...")
+                identity
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading identity for messaging", e)
                 null
@@ -1009,9 +991,10 @@ class MessagingViewModel
             message: DataMessage,
         ) {
             try {
-                // Look up public key from peer_identities BEFORE calling saveMessage
-                // to avoid nested transaction issues
-                val publicKey = conversationRepository.getPeerPublicKey(peerHash)
+                // Look up public key before calling saveMessage to avoid nested transaction issues.
+                // Prefer the conversation row, then peer_identities keyed by destination hash,
+                // then the announce row for this destination.
+                val publicKey = resolvePeerPublicKey(peerHash)
 
                 conversationRepository.saveMessage(peerHash, peerName, message, publicKey)
                 Log.d(TAG, "Saved message to database for conversation $peerHash")
@@ -1019,6 +1002,11 @@ class MessagingViewModel
                 Log.e(TAG, "Error saving message to database", e)
             }
         }
+
+        private suspend fun resolvePeerPublicKey(peerHash: String): ByteArray? =
+            conversationRepository.getConversation(peerHash)?.peerPublicKey
+                ?: conversationRepository.getPeerPublicKey(peerHash)
+                ?: announceRepository.getAnnounce(peerHash)?.publicKey
 
         private fun DataMessage.toReticulumMessage() =
             ReticulumMessage(
@@ -2097,10 +2085,8 @@ class MessagingViewModel
                     Log.d(TAG, "Temporarily increasing incoming size limit from ${originalLimitKb}KB to ${newLimitKb}KB for ${fileSizeKb}KB file")
 
                     // Update Python layer temporarily (don't persist to DataStore)
-                    if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                        reticulumProtocol.setIncomingMessageSizeLimit(newLimitKb)
-                        Log.d(TAG, "Python layer updated with temporary size limit")
-                    }
+                    reticulumProtocol.setIncomingMessageSizeLimit(newLimitKb)
+                    Log.d(TAG, "Python layer updated with temporary size limit")
 
                     // Trigger sync to fetch the file (silent = no toast)
                     // Don't use keepSyncingState so isSyncing properly reflects sync completion/failure
@@ -2112,12 +2098,14 @@ class MessagingViewModel
                     val timeoutMs = ((fileSizeKb / 100) + 60).coerceIn(60, 300) * 1000L
                     Log.d(TAG, "Waiting up to ${timeoutMs / 1000}s for sync to complete")
 
-                    // Wait for isSyncing to become false (sync complete or failed)
+                    // Wait for isSyncing to become false (sync complete or failed).
+                    // triggerSync now finishes synchronously on an instant-complete response, so
+                    // isSyncing can already be false by the time we get here. Waiting for it to
+                    // flip true first would hang until the timeout fires. StateFlow.first
+                    // matches the current value immediately when the predicate already holds.
                     val syncCompleted =
                         withTimeoutOrNull(timeoutMs) {
-                            // Wait for isSyncing to go true first (sync started), then wait for it to go false
-                            propagationNodeManager.isSyncing.first { it } // Wait for sync to start
-                            propagationNodeManager.isSyncing.first { !it } // Wait for sync to end
+                            propagationNodeManager.isSyncing.first { !it }
                             true
                         }
 
@@ -2131,10 +2119,8 @@ class MessagingViewModel
                 } finally {
                     // Always revert the size limit when done
                     if (originalLimitKb != null) {
-                        if (reticulumProtocol is com.lxmf.messenger.reticulum.protocol.ServiceReticulumProtocol) {
-                            reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
-                            Log.d(TAG, "Size limit reverted to ${originalLimitKb}KB")
-                        }
+                        reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
+                        Log.d(TAG, "Size limit reverted to ${originalLimitKb}KB")
                     }
                 }
             }
@@ -2290,21 +2276,17 @@ class MessagingViewModel
         suspend fun getRecommendedCodecProfile(): CodecProfile {
             val destHash = _currentConversation.value
             val destHashBytes = destHash?.let { validateDestinationHash(it) }
-            val protocol = reticulumProtocol as? ServiceReticulumProtocol
 
-            return if (destHashBytes != null && protocol != null) {
-                probeAndRecommendCodec(protocol, destHashBytes)
+            return if (destHashBytes != null) {
+                probeAndRecommendCodec(destHashBytes)
             } else {
                 CodecProfile.DEFAULT
             }
         }
 
-        private suspend fun probeAndRecommendCodec(
-            protocol: ServiceReticulumProtocol,
-            destHashBytes: ByteArray,
-        ): CodecProfile =
+        private suspend fun probeAndRecommendCodec(destHashBytes: ByteArray): CodecProfile =
             try {
-                val probe = protocol.probeLinkSpeed(destHashBytes, 5.0f, "direct")
+                val probe = reticulumProtocol.probeLinkSpeed(destHashBytes, 5.0f, "direct")
                 if (probe.isSuccess) CodecProfile.recommendFromProbe(probe) else CodecProfile.DEFAULT
             } catch (e: Exception) {
                 Log.e(TAG, "Error probing link speed for codec recommendation", e)

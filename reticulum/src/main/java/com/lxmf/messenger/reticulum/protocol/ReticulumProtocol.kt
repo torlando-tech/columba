@@ -5,6 +5,7 @@ import com.lxmf.messenger.reticulum.model.Destination
 import com.lxmf.messenger.reticulum.model.DestinationType
 import com.lxmf.messenger.reticulum.model.Direction
 import com.lxmf.messenger.reticulum.model.Identity
+import com.lxmf.messenger.reticulum.model.InterfaceConfig
 import com.lxmf.messenger.reticulum.model.Link
 import com.lxmf.messenger.reticulum.model.LinkEvent
 import com.lxmf.messenger.reticulum.model.LinkSpeedProbeResult
@@ -14,6 +15,9 @@ import com.lxmf.messenger.reticulum.model.PacketType
 import com.lxmf.messenger.reticulum.model.ReceivedPacket
 import com.lxmf.messenger.reticulum.model.ReticulumConfig
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -314,6 +318,7 @@ interface ReticulumProtocol {
         fileAttachments: List<Pair<String, ByteArray>>? = null,
         replyToMessageId: String? = null,
         iconAppearance: IconAppearance? = null,
+        extraFields: Map<Int, Any>? = null,
     ): Result<MessageReceipt>
 
     /**
@@ -427,6 +432,12 @@ interface ReticulumProtocol {
      */
     suspend fun getBleReticulumVersion(): String?
 
+    /**
+     * Get the LXST voice calling protocol version.
+     * @return Version string like "LXST-kt 0.0.1" or null if unavailable
+     */
+    suspend fun getLxstVersion(): String? = null
+
     // ==================== Voice Calls (LXST) ====================
 
     // Peer Blocking & Blackhole
@@ -485,6 +496,162 @@ interface ReticulumProtocol {
      * @return Result containing CallState
      */
     suspend fun getCallState(): Result<VoiceCallState>
+
+    // ==================== Service Lifecycle (no-op for native stack) ====================
+
+    suspend fun bindService() {}
+
+    fun unbindService() {}
+
+    fun cleanup() {}
+
+    fun getStatus(): Result<String> = Result.success("ready")
+
+    fun isInitialized(): Result<Boolean> = Result.success(true)
+
+    suspend fun waitForReady(timeoutMs: Long = 5000): Result<Unit> = Result.success(Unit)
+
+    fun forceExit() {}
+
+    // ==================== Identity Access ====================
+
+    suspend fun getLxmfIdentity(): Result<Identity> = Result.failure(UnsupportedOperationException("Not implemented"))
+
+    suspend fun getLxmfDestination(): Result<Destination> = Result.failure(UnsupportedOperationException("Not implemented"))
+
+    /**
+     * Return the raw 64-byte private key (X25519_prv + Ed25519_prv) for encrypted Room
+     * storage, or null if the implementation has no key material to export yet.
+     * Implementations without persistent keys (tests, mocks) return null.
+     */
+    fun getFullIdentityKey(): ByteArray? = null
+
+    // ==================== Announce & Identity Restoration ====================
+
+    suspend fun triggerAutoAnnounce(displayName: String): Result<Unit> =
+        announceDestination(
+            Destination(
+                hash = ByteArray(0),
+                hexHash = "",
+                identity = Identity(hash = ByteArray(0), publicKey = ByteArray(0), privateKey = null),
+                direction = Direction.OUT,
+                type = DestinationType.SINGLE,
+                appName = "lxmf",
+                aspects = listOf("delivery"),
+            ),
+            displayName.toByteArray(Charsets.UTF_8),
+        )
+
+    suspend fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> = Result.success(0)
+
+    suspend fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> = Result.success(0)
+
+    // ==================== Observable Flows ====================
+
+    val interfaceStatusChanged: SharedFlow<Unit>
+        get() = MutableSharedFlow()
+
+    val bleConnectionsFlow: SharedFlow<String>
+        get() = MutableSharedFlow()
+
+    val debugInfoFlow: SharedFlow<String>
+        get() = MutableSharedFlow()
+
+    val interfaceStatusFlow: SharedFlow<String>
+        get() = MutableSharedFlow()
+
+    val locationTelemetryFlow: SharedFlow<String>
+        get() = MutableSharedFlow()
+
+    val reactionReceivedFlow: SharedFlow<String>
+        get() = MutableSharedFlow()
+
+    val propagationStateFlow: SharedFlow<PropagationState>
+        get() = MutableSharedFlow()
+
+    val nomadnetRequestStatusFlow: StateFlow<String>
+        get() = MutableStateFlow("idle")
+
+    val nomadnetDownloadProgressFlow: StateFlow<Float>
+        get() = MutableStateFlow(0f)
+
+    // ==================== BLE ====================
+
+    fun getBleConnectionDetails(): String = "[]"
+
+    fun getRNodeRssi(): Int = -100
+
+    // ==================== Shared Instance ====================
+
+    val supportsSharedInstanceAvailabilityChecks: Boolean
+        get() = false
+
+    suspend fun isSharedInstanceAvailable(): Boolean = false
+
+    // ==================== Message Size Limit ====================
+
+    fun setIncomingMessageSizeLimit(limitKb: Int) {}
+
+    // ==================== Battery / Performance ====================
+
+    fun setBatteryProfile(profile: com.lxmf.messenger.reticulum.model.BatteryProfile) {}
+
+    // ==================== Hot-reload Interfaces ====================
+
+    /** Reload network interfaces from the given config without restarting Reticulum. */
+    suspend fun reloadInterfaces(configs: List<InterfaceConfig>) {}
+
+    /** Enable or disable interface discovery without restarting. */
+    suspend fun setDiscoveryEnabled(enabled: Boolean) {}
+
+    /** Update the auto-connect limit without restarting. Default no-op (ServiceReticulumProtocol needs restart). */
+    suspend fun setAutoconnectLimit(count: Int) {}
+
+    /**
+     * When enabled, auto-connect only accepts discovered interfaces that
+     * published an IFAC network name. Useful on mixed-trust networks where
+     * the user only wants Columba to auto-join known private networks.
+     */
+    suspend fun setAutoconnectIfacOnly(enabled: Boolean) {}
+
+    // ==================== NomadNet Page Browsing ====================
+
+    /**
+     * Result of a NomadNet page request.
+     */
+    data class NomadnetPageResult(
+        val content: String,
+        val path: String,
+        val type: String = "page",
+        val filePath: String? = null,
+        val fileName: String? = null,
+        val fileSize: Long = 0L,
+    )
+
+    suspend fun requestNomadnetPage(
+        destinationHash: String,
+        path: String = "/page/index.mu",
+        formDataJson: String? = null,
+        timeoutSeconds: Float = 45f,
+    ): Result<NomadnetPageResult> = Result.failure(UnsupportedOperationException("NomadNet browsing not yet supported on native stack"))
+
+    suspend fun cancelNomadnetPageRequest() {}
+
+    suspend fun getNomadnetRequestStatus(): String = "idle"
+
+    suspend fun getNomadnetDownloadProgress(): Float = 0f
+
+    suspend fun identifyNomadnetLink(destinationHash: String): Result<Boolean> = Result.success(false)
+
+    // ==================== Alternative Relay ====================
+
+    var alternativeRelayHandler: (suspend (excludeHashes: List<String>) -> ByteArray?)?
+        get() = null
+        set(_) {}
+
+    var onServiceNeedsInitialization: (suspend () -> Unit)?
+        get() = null
+        set(_) {}
 }
 
 /**
@@ -628,6 +795,20 @@ data class DiscoveredInterface(
     val latitude: Double?,
     val longitude: Double?,
     val height: Double?, // Altitude in meters
+    // IFAC (Interface Access Code) — when the remote interface publishes its IFAC
+    // identity, peers adding this interface locally must match network_name and
+    // passphrase or the IFAC handshake fails and no packets get through.
+    val ifacNetname: String? = null,
+    val ifacNetkey: String? = null,
+    // Additional raw announce fields exposed for the "all fields" card view.
+    /** Whether the remote interface is a transport (routing) node. */
+    val transport: Boolean = false,
+    /** Unique identifier for this announce (hex SHA256 of transportId + name). */
+    val discoveryHash: String? = null,
+    /** When the remote generated the announce (unix seconds). */
+    val receivedAt: Long = 0L,
+    /** When we first discovered this interface locally (unix seconds). */
+    val discoveredAt: Long = 0L,
 ) {
     /**
      * Returns true if this is a TCP-based interface.
@@ -692,6 +873,14 @@ data class DiscoveredInterface(
                 latitude = item.optDoubleOrNull("latitude"),
                 longitude = item.optDoubleOrNull("longitude"),
                 height = item.optDoubleOrNull("height"),
+                // IFAC
+                ifacNetname = item.optString("ifac_netname", "").ifEmpty { null },
+                ifacNetkey = item.optString("ifac_netkey", "").ifEmpty { null },
+                // Additional raw announce fields
+                transport = item.optBoolean("transport", false),
+                discoveryHash = item.optString("discovery_hash", "").ifEmpty { null },
+                receivedAt = item.optLong("received", 0L),
+                discoveredAt = item.optLong("discovered", 0L),
             )
 
         // JSON extension helpers for nullable values

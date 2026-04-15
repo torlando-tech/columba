@@ -87,6 +87,7 @@ import com.lxmf.messenger.ui.components.StarToggleButton
 import com.lxmf.messenger.ui.components.SyncStatusBottomSheet
 import com.lxmf.messenger.ui.components.simpleVerticalScrollbar
 import com.lxmf.messenger.viewmodel.ChatsViewModel
+import com.lxmf.messenger.viewmodel.ContactToggleResult
 import com.lxmf.messenger.viewmodel.SharedImageViewModel
 import com.lxmf.messenger.viewmodel.SharedTextViewModel
 import java.text.SimpleDateFormat
@@ -154,6 +155,18 @@ fun ChatsScreen(
                     is SyncResult.Error -> "Sync failed: ${result.message}"
                     is SyncResult.NoRelay -> "No relay configured"
                     is SyncResult.Timeout -> "Sync timed out"
+                }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.contactToggleResult.collect { result ->
+            val message =
+                when (result) {
+                    ContactToggleResult.Added -> "Saved contact"
+                    ContactToggleResult.Removed -> "Removed contact"
+                    is ContactToggleResult.Error -> result.message
                 }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -274,13 +287,10 @@ fun ChatsScreen(
                                 onStarClick = {
                                     if (isSaved) {
                                         viewModel.removeFromContacts(conversation.peerHash)
-                                        showMenu = false
-                                        Toast.makeText(context, "Removed ${conversation.displayName} from Contacts", Toast.LENGTH_SHORT).show()
                                     } else {
                                         viewModel.saveToContacts(conversation)
-                                        showMenu = false
-                                        Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
                                     }
+                                    showMenu = false
                                 },
                             )
 
@@ -292,12 +302,10 @@ fun ChatsScreen(
                                 onSaveToContacts = {
                                     viewModel.saveToContacts(conversation)
                                     showMenu = false
-                                    Toast.makeText(context, "Saved ${conversation.displayName} to Contacts", Toast.LENGTH_SHORT).show()
                                 },
                                 onRemoveFromContacts = {
                                     viewModel.removeFromContacts(conversation.peerHash)
                                     showMenu = false
-                                    Toast.makeText(context, "Removed ${conversation.displayName} from Contacts", Toast.LENGTH_SHORT).show()
                                 },
                                 onMarkAsUnread = {
                                     viewModel.markAsUnread(conversation.peerHash)

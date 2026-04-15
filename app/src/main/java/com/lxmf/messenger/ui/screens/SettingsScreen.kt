@@ -483,6 +483,8 @@ fun SettingsScreen(
                 BatteryOptimizationCard(
                     isExpanded = state.cardExpansionStates[SettingsCardId.BATTERY.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.BATTERY, it) },
+                    batteryProfile = state.batteryProfile,
+                    onBatteryProfileChange = { viewModel.setBatteryProfile(it) },
                 )
 
                 DataMigrationCard(
@@ -510,6 +512,7 @@ fun SettingsScreen(
                         state.reticulumVersion,
                         state.lxmfVersion,
                         state.bleReticulumVersion,
+                        state.lxstVersion,
                     ) {
                         DeviceInfoUtil.getSystemInfo(
                             context = context,
@@ -517,6 +520,7 @@ fun SettingsScreen(
                             reticulumVersion = state.reticulumVersion,
                             lxmfVersion = state.lxmfVersion,
                             bleReticulumVersion = state.bleReticulumVersion,
+                            lxstVersion = state.lxstVersion,
                         )
                     }
 
@@ -614,6 +618,7 @@ fun SettingsScreen(
                             reticulumVersion = state.reticulumVersion,
                             lxmfVersion = state.lxmfVersion,
                             bleReticulumVersion = state.bleReticulumVersion,
+                            lxstVersion = state.lxstVersion,
                         )
                     coroutineScope.launch {
                         val report = crashReportManager.generateBugReport(systemInfo, pendingCrashReport)

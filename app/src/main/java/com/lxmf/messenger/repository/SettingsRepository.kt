@@ -994,9 +994,9 @@ class SettingsRepository
 
         /**
          * Flow of the transport node enabled setting.
-         * When enabled (default), this device forwards traffic for the mesh network.
-         * When disabled, only handles its own traffic.
-         * Defaults to true if not set.
+         * When enabled, this device forwards traffic for the mesh network.
+         * When disabled (default), only handles its own traffic.
+         * Defaults to false if not set.
          */
         val transportNodeEnabledFlow: Flow<Boolean> =
             context.dataStore.data

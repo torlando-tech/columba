@@ -412,7 +412,11 @@ class PropagationNodeManager
          */
         private suspend fun pollForSyncCompletion(timeoutJob: kotlinx.coroutines.Job) {
             val pollInterval = 500L
-            val maxPolls = 120 // 60 seconds max
+            // Poll for the full sync timeout rather than a hardcoded 60s. The previous 120-poll
+            // cap left up to syncTimeoutMs - 60s of dead time where _isSyncing stayed true and
+            // _syncProgress was frozen at the last InProgress snapshot, so the user saw a stuck
+            // spinner for minutes before the watchdog fired.
+            val maxPolls = (syncTimeoutMs / pollInterval).toInt().coerceAtLeast(1)
             for (i in 0 until maxPolls) {
                 kotlinx.coroutines.delay(pollInterval)
                 if (!_isSyncing.value) return

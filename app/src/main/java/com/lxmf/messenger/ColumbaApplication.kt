@@ -626,6 +626,11 @@ class ColumbaApplication : Application() {
                 .onSuccess {
                     android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
 
+                    // Match the cold-start path so the foreground notification reflects the new
+                    // state — otherwise a post-rebind reinit leaves the notification stuck on
+                    // whatever status was showing when the service was last killed.
+                    updateServiceNotification("READY")
+
                     restorePeerIdentities(protocol)
 
                     // Start the message collector and other services after Reticulum is ready

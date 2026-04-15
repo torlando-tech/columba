@@ -383,11 +383,9 @@ class ColumbaApplication : Application() {
                                     val destHash = destination?.hash?.joinToString("") { "%02x".format(it) }
 
                                     if (idHash != null && destHash != null) {
-                                        // Get the full 64-byte keypair directly from native identity
+                                        // Get the full 64-byte keypair directly from the protocol
                                         // (bypasses the Columba model which only carries 32-byte sigPrv)
-                                        val keyData =
-                                            (reticulumProtocol as? com.lxmf.messenger.reticulum.protocol.NativeReticulumProtocol)
-                                                ?.getFullIdentityKey()
+                                        val keyData = reticulumProtocol.getFullIdentityKey()
 
                                         val result =
                                             identityRepository.createIdentity(

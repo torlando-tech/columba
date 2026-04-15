@@ -2117,7 +2117,7 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `initial transportNodeEnabled state is true by default`() =
+    fun `state reflects transportNodeEnabled when explicitly set to true`() =
         runTest {
             transportNodeEnabledFlow.value = true
             viewModel = createViewModel()
@@ -2129,7 +2129,7 @@ class SettingsViewModelTest {
                     state = awaitItem()
                 }
 
-                assertTrue("Transport node should be enabled by default", state.transportNodeEnabled)
+                assertTrue("Transport node should reflect the true value from the flow", state.transportNodeEnabled)
 
                 cancelAndConsumeRemainingEvents()
             }

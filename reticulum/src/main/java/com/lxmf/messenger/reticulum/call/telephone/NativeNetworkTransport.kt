@@ -32,10 +32,11 @@ class NativeNetworkTransport : NetworkTransport {
         private const val LXST_ASPECT = "telephony"
     }
 
-    private var activeLink: Link? = null
+    @Volatile private var activeLink: Link? = null
     private var packetCallback: ((ByteArray) -> Unit)? = null
     private var signalCallback: ((Int) -> Unit)? = null
-    private var locallyClosingLink: Link? = null
+
+    @Volatile private var locallyClosingLink: Link? = null
 
     /**
      * Local identity used to identify ourselves to the remote peer.

@@ -499,6 +499,7 @@ class PropagationNodeManager
                         else -> "Unknown error (${state.state})"
                     }
                 Log.w(TAG, "Sync error: $errorMsg (manual=$_isManualSync)")
+                syncFinalized.set(true)
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
 
@@ -813,6 +814,10 @@ class PropagationNodeManager
                             }
                             "failed" -> {
                                 timeoutJob.cancel()
+                                // Match the finalization discipline used everywhere else so a stale
+                                // propagationStateFlow "complete" can't later pass the CAS in
+                                // handleSyncComplete and consume the next sync's finalizer.
+                                syncFinalized.set(true)
                                 _isSyncing.value = false
                                 _syncProgress.value = SyncProgress.Idle
                             }
@@ -826,12 +831,14 @@ class PropagationNodeManager
                     }.onFailure { error ->
                         Log.w(TAG, "Periodic sync request failed: ${error.message}")
                         timeoutJob.cancel()
+                        syncFinalized.set(true)
                         _isSyncing.value = false
                         _syncProgress.value = SyncProgress.Idle
                     }
             } catch (e: Exception) {
                 Log.e(TAG, "Error requesting messages from propagation node", e)
                 timeoutJob.cancel()
+                syncFinalized.set(true)
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
             }
@@ -938,6 +945,10 @@ class PropagationNodeManager
                 }
                 "failed" -> {
                     timeoutJob.cancel()
+                    // Match the finalization discipline used everywhere else so a stale
+                    // propagationStateFlow "complete" can't later pass the CAS in
+                    // handleSyncComplete and consume the next sync's finalizer.
+                    syncFinalized.set(true)
                     if (!keepSyncingState) {
                         _isSyncing.value = false
                         _syncProgress.value = SyncProgress.Idle
@@ -961,6 +972,7 @@ class PropagationNodeManager
             errorMessage: String,
         ) {
             timeoutJob.cancel()
+            syncFinalized.set(true)
             if (!keepSyncingState) {
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle

@@ -2098,12 +2098,14 @@ class MessagingViewModel
                     val timeoutMs = ((fileSizeKb / 100) + 60).coerceIn(60, 300) * 1000L
                     Log.d(TAG, "Waiting up to ${timeoutMs / 1000}s for sync to complete")
 
-                    // Wait for isSyncing to become false (sync complete or failed)
+                    // Wait for isSyncing to become false (sync complete or failed).
+                    // triggerSync now finishes synchronously on an instant-complete response, so
+                    // isSyncing can already be false by the time we get here. Waiting for it to
+                    // flip true first would hang until the timeout fires. StateFlow.first
+                    // matches the current value immediately when the predicate already holds.
                     val syncCompleted =
                         withTimeoutOrNull(timeoutMs) {
-                            // Wait for isSyncing to go true first (sync started), then wait for it to go false
-                            propagationNodeManager.isSyncing.first { it } // Wait for sync to start
-                            propagationNodeManager.isSyncing.first { !it } // Wait for sync to end
+                            propagationNodeManager.isSyncing.first { !it }
                             true
                         }
 

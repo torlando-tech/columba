@@ -15,6 +15,9 @@ internal class NativeNomadNetHandler(
     }
 
     val nomadnetLinks = java.util.concurrent.ConcurrentHashMap<String, network.reticulum.link.Link>()
+
+    // Concurrent callers can race through identifyNomadnetLink; use a set backed by a
+    // ConcurrentHashMap and atomic add() so we never double-identify the same link.
     val identifiedNomadnetLinks: MutableSet<String> =
         java.util.concurrent.ConcurrentHashMap
             .newKeySet()
@@ -273,13 +276,23 @@ internal class NativeNomadNetHandler(
     ): ReticulumProtocol.NomadnetPageResult {
         val fileMeta = metadata?.let { parseNomadnetFileMetadata(it) }
         if (fileMeta != null) {
-            val fileName = fileMeta["name"] as? String ?: safePath.substringAfterLast("/")
+            val rawName = fileMeta["name"] as? String ?: safePath.substringAfterLast("/")
+            // Strip any directory components so a malicious server can't escape the
+            // download dir via "../" segments and clobber app files.
+            val fileName =
+                java.io
+                    .File(rawName)
+                    .name
+                    .ifBlank { "download" }
             Log.i(TAG, "NomadNet: response is a file download: $fileName (${data.size} bytes)")
             val downloadDir =
                 appContext?.cacheDir?.resolve("nomadnet_downloads")
                     ?: java.io.File(System.getProperty("java.io.tmpdir") ?: "/tmp", "nomadnet_downloads")
             downloadDir.mkdirs()
             val outFile = downloadDir.resolve(fileName)
+            check(outFile.canonicalPath.startsWith(downloadDir.canonicalPath + java.io.File.separator)) {
+                "Rejected path traversal attempt in NomadNet download: $rawName"
+            }
             outFile.writeBytes(data)
             return ReticulumProtocol.NomadnetPageResult(
                 content = "",
@@ -336,12 +349,13 @@ internal class NativeNomadNetHandler(
                     ?: error("No local identity available")
 
             val linkIdHex = link.linkId.joinToString("") { "%02x".format(it) }
-            if (linkIdHex in identifiedNomadnetLinks) {
+            // add() returns false if the link was already identified — use it as an
+            // atomic check-then-act so concurrent callers can't both pass the guard.
+            if (!identifiedNomadnetLinks.add(linkIdHex)) {
                 return@runCatching true
             }
 
             link.identify(identity)
-            identifiedNomadnetLinks.add(linkIdHex)
             false
         }
 }

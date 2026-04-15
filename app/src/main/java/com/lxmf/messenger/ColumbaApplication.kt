@@ -208,7 +208,13 @@ class ColumbaApplication : Application() {
         applicationScope.launch {
             reticulumProtocol.networkStatus.collect { status ->
                 val serviceStatus = networkStatusToServiceString(status)
-                serviceSettingsAccessor.saveLastNetworkStatus(serviceStatus)
+                // applicationScope runs on Dispatchers.Default; commit() is a synchronous
+                // disk write, so move the persistence hop to IO to keep StrictMode quiet
+                // in debug builds. updateServiceNotification itself just dispatches an
+                // Intent and can stay on the collector's context.
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    serviceSettingsAccessor.saveLastNetworkStatus(serviceStatus)
+                }
                 updateServiceNotification(serviceStatus)
             }
         }
@@ -506,10 +512,13 @@ class ColumbaApplication : Application() {
                 }
             // startForegroundService also spins up the :reticulum process if it isn't running.
             // ReticulumService.onStartCommand guards on ::managers.isInitialized and returns
-            // START_STICKY if onCreate hasn't finished, so an ACTION_UPDATE_NOTIFICATION delivered
-            // during that brief window is dropped. In practice we only call this after
-            // initialize() has resolved, by which point the service process has been alive for
-            // seconds, so the window never opens for real notification updates.
+            // START_STICKY if onCreate hasn't finished, so an ACTION_UPDATE_NOTIFICATION
+            // delivered during that brief window is dropped. Because this function now fires
+            // for every networkStatus transition (including early SHUTDOWN / INITIALIZING /
+            // CONNECTING emissions during startup), the drop window can be hit — but
+            // ReticulumService.onCreate reads saveLastNetworkStatus back from cross-process
+            // prefs before it calls startForeground, so the initial notification still
+            // reflects the most recent status even when an early intent was dropped.
             androidx.core.content.ContextCompat
                 .startForegroundService(this, intent)
         } catch (e: Exception) {

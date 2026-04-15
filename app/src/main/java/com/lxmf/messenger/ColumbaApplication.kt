@@ -386,8 +386,9 @@ class ColumbaApplication : Application() {
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
 
-                        // Update the service notification to reflect the native stack is ready
-                        updateServiceNotification("READY")
+                        // networkStatus.collect (set up earlier) already pushes
+                        // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no
+                        // explicit call is needed here.
 
                         // Battery optimization exemption is now handled in OnboardingPagerScreen
                         // for new users, and via Settings for existing users
@@ -669,10 +670,8 @@ class ColumbaApplication : Application() {
                 .onSuccess {
                     android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
 
-                    // Match the cold-start path so the foreground notification reflects the new
-                    // state — otherwise a post-rebind reinit leaves the notification stuck on
-                    // whatever status was showing when the service was last killed.
-                    updateServiceNotification("READY")
+                    // networkStatus.collect (set up in onCreate) handles the READY
+                    // notification push.
 
                     restorePeerIdentities(protocol)
 

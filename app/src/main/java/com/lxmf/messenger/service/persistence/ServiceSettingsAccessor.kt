@@ -78,10 +78,15 @@ class ServiceSettingsAccessor(
      * "INITIALIZING", "CONNECTING", "READY", or "ERROR:message".
      */
     fun saveLastNetworkStatus(status: String) {
+        // commit() rather than apply(): the service process reads this in the very first
+        // thing onCreate() does when Android restarts :reticulum, so an async-queued write
+        // that hasn't flushed can lose the transition and leave the notification stale.
+        // The disk sync is ~1ms and happens on the networkStatus collector coroutine, not
+        // the main thread.
         getCrossProcessPrefs()
             .edit()
             .putString(KEY_LAST_NETWORK_STATUS, status)
-            .apply()
+            .commit()
     }
 
     /**

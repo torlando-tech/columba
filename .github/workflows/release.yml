@@ -38,6 +38,7 @@ jobs:
           echo "Building version: $VERSION from tag: $TAG_NAME"
 
       - name: Build Release APK
+        timeout-minutes: 20
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

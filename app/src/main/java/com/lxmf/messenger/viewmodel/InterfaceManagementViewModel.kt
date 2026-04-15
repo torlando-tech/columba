@@ -1047,6 +1047,15 @@ class InterfaceManagementViewModel
                         fetchInterfaceStatus()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to sync native interfaces: ${e.message}", e)
+                        // Hot-reload failed and the caller has already shown a success toast for
+                        // the DB write — expose the Apply Changes button so the user has a way
+                        // to retry without restarting the app.
+                        _state.update {
+                            it.copy(
+                                hasPendingChanges = true,
+                                applyChangesError = e.message ?: "Failed to apply changes to the running stack",
+                            )
+                        }
                     }
                 }
         }

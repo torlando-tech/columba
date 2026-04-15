@@ -333,7 +333,7 @@ class ColumbaApplication : Application() {
                             "ColumbaApplication",
                             "Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
                         )
-                        // identityPath remains null — the native stack will create a new default
+                        // identityPath remains null — native stack will use its in-memory identity
                     }
                     android.util.Log.d("ColumbaApplication", "Display name: $displayName")
                 } else {

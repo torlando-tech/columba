@@ -396,6 +396,10 @@ class NativeReticulumProtocol(
         withContext(Dispatchers.IO) {
             runCatching {
                 _networkStatus.value = NetworkStatus.INITIALIZING
+                // Drain any coroutines from a previous (possibly failed-partway) init before
+                // replacing the scope, or orphaned launches can outlive their scope and
+                // emit stale snapshots once a fresh initialize() installs a new one.
+                scope.cancel()
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 storagePath = config.storagePath
                 lastConfig = config

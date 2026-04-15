@@ -1548,7 +1548,8 @@ class NativeReticulumProtocol(
 
     override suspend fun setDiscoveryEnabled(enabled: Boolean) {
         if (enabled) {
-            startDiscovery(lastConfig ?: return)
+            val cfg = lastConfig ?: error("Cannot enable discovery before initialize() has run")
+            startDiscovery(cfg)
         } else {
             Transport.disableDiscovery()
         }

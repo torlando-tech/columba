@@ -2,7 +2,6 @@ package com.lxmf.messenger.ui.util
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -18,7 +17,6 @@ fun rememberLifecycleTickerMillis(
     enabled: Boolean = true,
 ): Long {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val latestEnabled = rememberUpdatedState(enabled)
 
     return produceState(
         initialValue = System.currentTimeMillis(),
@@ -29,7 +27,7 @@ fun rememberLifecycleTickerMillis(
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             value = System.currentTimeMillis()
             @Suppress("StateFlowPollingLoop")
-            while (latestEnabled.value) {
+            while (enabled) {
                 delay(periodMs)
                 value = System.currentTimeMillis()
             }

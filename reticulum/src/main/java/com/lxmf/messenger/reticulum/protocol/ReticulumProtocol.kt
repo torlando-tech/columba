@@ -519,6 +519,13 @@ interface ReticulumProtocol {
 
     suspend fun getLxmfDestination(): Result<Destination> = Result.failure(UnsupportedOperationException("Not implemented"))
 
+    /**
+     * Return the raw 64-byte private key (X25519_prv + Ed25519_prv) for encrypted Room
+     * storage, or null if the implementation has no key material to export yet.
+     * Implementations without persistent keys (tests, mocks) return null.
+     */
+    fun getFullIdentityKey(): ByteArray? = null
+
     // ==================== Announce & Identity Restoration ====================
 
     suspend fun triggerAutoAnnounce(displayName: String): Result<Unit> =

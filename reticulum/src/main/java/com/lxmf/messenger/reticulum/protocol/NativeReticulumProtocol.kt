@@ -861,7 +861,7 @@ class NativeReticulumProtocol(
      * Get the full 64-byte private key (X25519_prv + Ed25519_prv) for encrypted Room storage.
      * Returns null if identity not initialized or has no private key.
      */
-    fun getFullIdentityKey(): ByteArray? =
+    override fun getFullIdentityKey(): ByteArray? =
         try {
             deliveryIdentity?.getPrivateKey()
         } catch (_: Exception) {

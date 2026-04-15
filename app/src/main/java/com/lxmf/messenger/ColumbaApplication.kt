@@ -44,6 +44,14 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var reticulumProtocol: ReticulumProtocol
 
+    // Cross-process SharedPreferences wrapper shared with the :reticulum process.
+    // Constructed lazily rather than via Hilt because it only needs a Context and has
+    // no other dependencies — this avoids adding a module binding for a single call site.
+    private val serviceSettingsAccessor by lazy {
+        com.lxmf.messenger.service.persistence
+            .ServiceSettingsAccessor(this)
+    }
+
     @Inject
     lateinit var startupConfigLoader: StartupConfigLoader
 
@@ -188,6 +196,21 @@ class ColumbaApplication : Application() {
         reticulumProtocol.onServiceNeedsInitialization = {
             android.util.Log.i("ColumbaApplication", "Service needs reinitialization after rebind - starting initialization")
             initializeReticulumService(reticulumProtocol)
+        }
+
+        // Mirror the protocol's networkStatus into the :reticulum service process so the
+        // foreground notification stays in sync. On the native stack the protocol lives in
+        // the app process — the service is just the notification/wake-lock host. When its
+        // state changes (INITIALIZING → READY, or later ERROR) we push it; we also persist
+        // the value via cross-process prefs so that if Android kills and restarts :reticulum
+        // on its own, onCreate() can restore the correct initial text instead of defaulting
+        // to SHUTDOWN / "Disconnected".
+        applicationScope.launch {
+            reticulumProtocol.networkStatus.collect { status ->
+                val serviceStatus = networkStatusToServiceString(status)
+                serviceSettingsAccessor.saveLastNetworkStatus(serviceStatus)
+                updateServiceNotification(serviceStatus)
+            }
         }
 
         applicationScope.launch {
@@ -455,6 +478,19 @@ class ColumbaApplication : Application() {
             reticulumProtocol.unbindService()
         }
     }
+
+    /**
+     * Map the protocol's sealed NetworkStatus to the string vocabulary that
+     * ServiceNotificationManager.getStatusTexts already branches on.
+     */
+    private fun networkStatusToServiceString(status: com.lxmf.messenger.reticulum.model.NetworkStatus): String =
+        when (status) {
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.READY -> "READY"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.CONNECTING -> "CONNECTING"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR -> "ERROR:${status.message}"
+        }
 
     /**
      * Send a network status update to the service process to refresh

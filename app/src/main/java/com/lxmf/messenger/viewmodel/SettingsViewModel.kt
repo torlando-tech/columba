@@ -1525,9 +1525,12 @@ class SettingsViewModel
 
         fun setBatteryProfile(profile: BatteryProfile) {
             viewModelScope.launch {
+                // Apply the change to the running stack first; only persist and update the
+                // displayed state after it succeeds. If setBatteryProfile throws we don't want
+                // DataStore and the UI to disagree with the actual runtime behaviour.
+                reticulumProtocol.setBatteryProfile(profile)
                 settingsRepository.saveBatteryProfile(profile)
                 _state.update { it.copy(batteryProfile = profile) }
-                reticulumProtocol.setBatteryProfile(profile)
                 Log.d(TAG, "Battery profile set to $profile")
             }
         }

@@ -185,6 +185,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build release APK
+        timeout-minutes: 20
         run: ./gradlew :app:assembleSentryRelease --stacktrace --max-workers=2
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}

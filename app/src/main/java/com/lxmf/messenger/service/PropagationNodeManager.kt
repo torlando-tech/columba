@@ -794,6 +794,9 @@ class PropagationNodeManager
                     kotlinx.coroutines.delay(syncTimeoutMs)
                     if (_isSyncing.value) {
                         Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
+                        // Finalize before clearing _isSyncing so an orphaned pollForSyncCompletion
+                        // loop can't race the next startSync and prematurely finish it.
+                        syncFinalized.set(true)
                         _isSyncing.value = false
                         _syncProgress.value = SyncProgress.Idle
                     }

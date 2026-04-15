@@ -400,10 +400,10 @@ class NativeReticulumProtocol(
         withContext(Dispatchers.IO) {
             runCatching {
                 _networkStatus.value = NetworkStatus.INITIALIZING
-                // Cancel any coroutines from a previous init cycle before
-                // replacing the scope. Otherwise doze-state and battery-monitor
-                // observers from the prior initialize() stay alive and race
-                // against the new one.
+                // Cancel any coroutines from a previous init cycle before replacing the scope.
+                // Otherwise doze-state/battery-monitor observers and orphaned launches from a
+                // (possibly failed-partway) prior initialize() stay alive and emit stale state
+                // once the fresh initialize() installs a new scope.
                 scope.cancel()
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 storagePath = config.storagePath

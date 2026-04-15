@@ -146,15 +146,23 @@ class NativeNetworkTransportInstrumentedTest {
             }
             assertNotNull("Responder should have accepted link", responderLink)
 
-            // Send LXST signalling
+            // Send LXST signalling — wrapped in msgpack {0: [signal]} for Python interop
             transport.sendSignal(0x02) // STATUS_CALLING
             transport.sendSignal(0x06) // STATUS_ESTABLISHED
 
             Thread.sleep(500)
 
             assertTrue("Responder should receive signals", responderReceived.size >= 2)
-            assertEquals("First signal should be CALLING", 0x02.toByte(), responderReceived[0][0])
-            assertEquals("Second signal should be ESTABLISHED", 0x06.toByte(), responderReceived[1][0])
+            assertEquals(
+                "First signal should be CALLING",
+                0x02,
+                unpackSignalling(responderReceived[0]),
+            )
+            assertEquals(
+                "Second signal should be ESTABLISHED",
+                0x06,
+                unpackSignalling(responderReceived[1]),
+            )
         }
 
     @Test
@@ -169,7 +177,7 @@ class NativeNetworkTransportInstrumentedTest {
             }
             assertNotNull("Responder should have accepted link", responderLink)
 
-            // Send audio frame (Opus: codec byte + data)
+            // Send audio frame (Opus: codec byte + data) — wrapped in msgpack {1: binary}
             val audioFrame = ByteArray(40) { it.toByte() }
             audioFrame[0] = 0x01 // Opus codec identifier
             transport.sendPacket(audioFrame)
@@ -177,9 +185,35 @@ class NativeNetworkTransportInstrumentedTest {
             Thread.sleep(500)
 
             assertTrue("Responder should receive audio frame", responderReceived.isNotEmpty())
-            assertEquals("Frame size should match", 40, responderReceived[0].size)
-            assertTrue("Frame content should match", audioFrame.contentEquals(responderReceived[0]))
+            val unpacked = unpackFrames(responderReceived[0])
+            assertEquals("Frame size should match", 40, unpacked.size)
+            assertTrue("Frame content should match", audioFrame.contentEquals(unpacked))
         }
+
+    private fun unpackSignalling(bytes: ByteArray): Int {
+        val unpacker =
+            org.msgpack.core.MessagePack
+                .newDefaultUnpacker(bytes)
+        val mapSize = unpacker.unpackMapHeader()
+        require(mapSize == 1) { "Expected single-entry map, got $mapSize" }
+        val fieldId = unpacker.unpackInt()
+        require(fieldId == 0x00) { "Expected FIELD_SIGNALLING(0x00), got $fieldId" }
+        val arraySize = unpacker.unpackArrayHeader()
+        require(arraySize == 1) { "Expected 1-element signal array, got $arraySize" }
+        return unpacker.unpackInt().also { unpacker.close() }
+    }
+
+    private fun unpackFrames(bytes: ByteArray): ByteArray {
+        val unpacker =
+            org.msgpack.core.MessagePack
+                .newDefaultUnpacker(bytes)
+        val mapSize = unpacker.unpackMapHeader()
+        require(mapSize == 1) { "Expected single-entry map, got $mapSize" }
+        val fieldId = unpacker.unpackInt()
+        require(fieldId == 0x01) { "Expected FIELD_FRAMES(0x01), got $fieldId" }
+        val payloadLen = unpacker.unpackBinaryHeader()
+        return unpacker.readPayload(payloadLen).also { unpacker.close() }
+    }
 
     @Test
     fun callbackDispatching_distinguishesSignalsFromAudio() =

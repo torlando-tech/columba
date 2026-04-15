@@ -803,14 +803,24 @@ class PropagationNodeManager
                 result
                     .onSuccess { state ->
                         Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
-                        if (state.stateName == "failed" || state.stateName == "complete") {
-                            timeoutJob.cancel()
-                            _isSyncing.value = false
-                            _syncProgress.value = SyncProgress.Idle
-                        } else {
-                            // Poll for completion (propagationStateFlow doesn't work on native path)
-                            scope.launch {
-                                pollForSyncCompletion(timeoutJob)
+                        when (state.stateName) {
+                            "complete" -> {
+                                timeoutJob.cancel()
+                                // Run completion bookkeeping so _lastSyncTimestamp is updated;
+                                // skipping this leaves the Settings "Last synced" display stale
+                                // forever whenever the initial response is already complete.
+                                handleSyncComplete(state.messagesReceived)
+                            }
+                            "failed" -> {
+                                timeoutJob.cancel()
+                                _isSyncing.value = false
+                                _syncProgress.value = SyncProgress.Idle
+                            }
+                            else -> {
+                                // Poll for completion (propagationStateFlow doesn't work on native path)
+                                scope.launch {
+                                    pollForSyncCompletion(timeoutJob)
+                                }
                             }
                         }
                     }.onFailure { error ->
@@ -914,19 +924,29 @@ class PropagationNodeManager
             keepSyncingState: Boolean,
         ) {
             Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
-            if (propState.stateName == "failed" || propState.stateName == "complete") {
-                timeoutJob.cancel()
-                if (!keepSyncingState) {
-                    _isSyncing.value = false
-                    _syncProgress.value = SyncProgress.Idle
+            when (propState.stateName) {
+                "complete" -> {
+                    timeoutJob.cancel()
+                    // Run completion bookkeeping (updates _lastSyncTimestamp, emits success
+                    // to _manualSyncResult when appropriate). Clearing _isSyncing without
+                    // calling this left the "Last synced" display stale on instant-complete.
+                    handleSyncComplete(propState.messagesReceived)
                 }
-                if (_isManualSync && propState.stateName == "failed") {
-                    _manualSyncResult.emit(SyncResult.Error("Propagation node not reachable"))
-                    _isManualSync = false
+                "failed" -> {
+                    timeoutJob.cancel()
+                    if (!keepSyncingState) {
+                        _isSyncing.value = false
+                        _syncProgress.value = SyncProgress.Idle
+                    }
+                    if (_isManualSync) {
+                        _manualSyncResult.emit(SyncResult.Error("Propagation node not reachable"))
+                        _isManualSync = false
+                    }
                 }
-            } else {
-                scope.launch {
-                    pollForSyncCompletion(timeoutJob)
+                else -> {
+                    scope.launch {
+                        pollForSyncCompletion(timeoutJob)
+                    }
                 }
             }
         }

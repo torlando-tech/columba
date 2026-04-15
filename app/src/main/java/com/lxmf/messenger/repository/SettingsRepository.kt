@@ -1001,7 +1001,7 @@ class SettingsRepository
         val transportNodeEnabledFlow: Flow<Boolean> =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
+                    preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: false
                 }.distinctUntilChanged()
 
         /**
@@ -1010,7 +1010,7 @@ class SettingsRepository
         suspend fun getTransportNodeEnabled(): Boolean =
             context.dataStore.data
                 .map { preferences ->
-                    preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: true
+                    preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] ?: false
                 }.first()
 
         /**

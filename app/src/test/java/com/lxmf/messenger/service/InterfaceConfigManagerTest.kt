@@ -114,6 +114,7 @@ class InterfaceConfigManagerTest {
         coEvery { settingsRepository.getBatteryProfile() } returns BatteryProfile.BALANCED
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+        coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Setup identity repository mock

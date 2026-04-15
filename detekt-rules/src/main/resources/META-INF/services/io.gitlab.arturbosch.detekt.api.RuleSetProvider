@@ -1,1 +1,1 @@
-com.lxmf.messenger.detekt.rules.ColumbaRuleSetProvider
+network.columba.app.detekt.rules.ColumbaRuleSetProvider

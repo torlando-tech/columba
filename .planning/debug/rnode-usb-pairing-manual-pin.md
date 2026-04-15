@@ -62,4 +62,4 @@ verification: Build successful, APK deployed to device. Ready for user testing. 
 4. Observe: App should now re-send pairing command, wait 500ms, then start BLE scan
 5. Expected: RNode should be found via BLE scan and pairing should complete
 files_changed:
-  - app/src/main/java/com/lxmf/messenger/viewmodel/RNodeWizardViewModel.kt: Modified submitManualPin() to re-enter pairing mode before BLE scan
+  - app/src/main/java/network.columba.app/viewmodel/RNodeWizardViewModel.kt: Modified submitManualPin() to re-enter pairing mode before BLE scan

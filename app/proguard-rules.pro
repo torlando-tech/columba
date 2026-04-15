@@ -8,10 +8,10 @@
 -keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
 
 # Keep Reticulum model classes
--keep class com.lxmf.messenger.reticulum.model.** { *; }
+-keep class network.columba.app.reticulum.model.** { *; }
 
 # Keep Room entities
--keep class com.lxmf.messenger.data.local.entities.** { *; }
+-keep class network.columba.app.data.local.entities.** { *; }
 
 # Preserve attributes needed for debugging
 -keepattributes *Annotation*
@@ -22,15 +22,15 @@
 # Without these rules, IPC between app and ReticulumService will fail
 -keep class * implements android.os.IInterface { *; }
 -keep class * extends android.os.Binder { *; }
--keep class com.lxmf.messenger.I** { *; }
+-keep class network.columba.app.I** { *; }
 -keepclassmembers class * implements android.os.IInterface {
     public *;
 }
 
 # ===== Service Protection =====
 # ReticulumService runs in a separate process and uses IPC
--keep class com.lxmf.messenger.service.** { *; }
--keepclassmembers class com.lxmf.messenger.service.** { *; }
+-keep class network.columba.app.service.** { *; }
+-keepclassmembers class network.columba.app.service.** { *; }
 
 # ===== Android IPC Components =====
 -keep class android.os.RemoteCallbackList { *; }
@@ -51,7 +51,7 @@
 
 # ===== Reticulum Protocol Bridge Classes =====
 # These classes bridge between Kotlin and Python
--keep class com.lxmf.messenger.reticulum.protocol.** { *; }
+-keep class network.columba.app.reticulum.protocol.** { *; }
 
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations

@@ -105,5 +105,5 @@ verification:
 - Device testing required to fully verify
 
 files_changed:
-- reticulum/src/main/java/com/lxmf/messenger/reticulum/flasher/FirmwarePackage.kt
-- reticulum/src/main/java/com/lxmf/messenger/reticulum/flasher/RNodeFlasher.kt
+- reticulum/src/main/java/network.columba.app/reticulum/flasher/FirmwarePackage.kt
+- reticulum/src/main/java/network.columba.app/reticulum/flasher/RNodeFlasher.kt

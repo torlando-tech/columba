@@ -99,4 +99,4 @@ fix:
 verification: After fix, test the flow: connect via USB, wait for 3s timeout, enter manual PIN, verify BLE scan finds "RNode E16A" device.
 
 files_changed:
-  - app/src/main/java/com/lxmf/messenger/viewmodel/RNodeWizardViewModel.kt
+  - app/src/main/java/network.columba.app/viewmodel/RNodeWizardViewModel.kt

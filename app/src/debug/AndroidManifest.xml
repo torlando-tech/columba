@@ -6,7 +6,7 @@
 
     <application>
         <activity
-            android:name="com.lxmf.messenger.test.TestHostActivity"
+            android:name="network.columba.app.test.TestHostActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

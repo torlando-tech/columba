@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.lxmf.messenger.screenshot"
+    namespace = "network.columba.app.screenshot"
     compileSdk = 36
 
     defaultConfig {

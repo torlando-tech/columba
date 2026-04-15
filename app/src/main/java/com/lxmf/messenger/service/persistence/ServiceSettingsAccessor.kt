@@ -23,6 +23,7 @@ class ServiceSettingsAccessor(
         const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
         const val KEY_NETWORK_CHANGE_ANNOUNCE_TIME = "network_change_announce_time"
         const val KEY_LAST_AUTO_ANNOUNCE_TIME = "last_auto_announce_time"
+        const val KEY_LAST_NETWORK_STATUS = "last_network_status"
     }
 
     // Get fresh SharedPreferences each time to avoid caching issues across processes
@@ -36,7 +37,8 @@ class ServiceSettingsAccessor(
      * @param timestamp The timestamp in epoch milliseconds
      */
     fun saveNetworkChangeAnnounceTime(timestamp: Long) {
-        getCrossProcessPrefs().edit()
+        getCrossProcessPrefs()
+            .edit()
             .putLong(KEY_NETWORK_CHANGE_ANNOUNCE_TIME, timestamp)
             .apply()
     }
@@ -48,7 +50,8 @@ class ServiceSettingsAccessor(
      * @param timestamp The timestamp in epoch milliseconds
      */
     fun saveLastAutoAnnounceTime(timestamp: Long) {
-        getCrossProcessPrefs().edit()
+        getCrossProcessPrefs()
+            .edit()
             .putLong(KEY_LAST_AUTO_ANNOUNCE_TIME, timestamp)
             .apply()
     }
@@ -63,4 +66,33 @@ class ServiceSettingsAccessor(
      * @return true if unknown senders should be blocked, false otherwise (default)
      */
     fun getBlockUnknownSenders(): Boolean = getCrossProcessPrefs().getBoolean(KEY_BLOCK_UNKNOWN_SENDERS, false)
+
+    /**
+     * Persist the app process's current network-status string so the service process can
+     * restore the correct initial notification across Android-driven restarts of the
+     * `:reticulum` process. Without this the service comes back with the default "SHUTDOWN"
+     * and the foreground notification flashes (or sticks on) "Disconnected" even though
+     * the native stack in the app process is still READY.
+     *
+     * Values follow the same vocabulary the notification already expects: "SHUTDOWN",
+     * "INITIALIZING", "CONNECTING", "READY", or "ERROR:message".
+     */
+    fun saveLastNetworkStatus(status: String) {
+        // commit() rather than apply(): the service process reads this in the very first
+        // thing onCreate() does when Android restarts :reticulum, so an async-queued write
+        // that hasn't flushed can lose the transition and leave the notification stale.
+        // The disk sync is ~1ms and happens on the networkStatus collector coroutine, not
+        // the main thread.
+        getCrossProcessPrefs()
+            .edit()
+            .putString(KEY_LAST_NETWORK_STATUS, status)
+            .commit()
+    }
+
+    /**
+     * Read the last network status written by the app process. Returns null when nothing
+     * has been persisted yet (first install, or before the app process has run) so the
+     * caller can fall back to its own default.
+     */
+    fun getLastNetworkStatus(): String? = getCrossProcessPrefs().getString(KEY_LAST_NETWORK_STATUS, null)
 }

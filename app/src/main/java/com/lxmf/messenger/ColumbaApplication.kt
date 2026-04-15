@@ -44,6 +44,14 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var reticulumProtocol: ReticulumProtocol
 
+    // Cross-process SharedPreferences wrapper shared with the :reticulum process.
+    // Constructed lazily rather than via Hilt because it only needs a Context and has
+    // no other dependencies — this avoids adding a module binding for a single call site.
+    private val serviceSettingsAccessor by lazy {
+        com.lxmf.messenger.service.persistence
+            .ServiceSettingsAccessor(this)
+    }
+
     @Inject
     lateinit var startupConfigLoader: StartupConfigLoader
 
@@ -188,6 +196,27 @@ class ColumbaApplication : Application() {
         reticulumProtocol.onServiceNeedsInitialization = {
             android.util.Log.i("ColumbaApplication", "Service needs reinitialization after rebind - starting initialization")
             initializeReticulumService(reticulumProtocol)
+        }
+
+        // Mirror the protocol's networkStatus into the :reticulum service process so the
+        // foreground notification stays in sync. On the native stack the protocol lives in
+        // the app process — the service is just the notification/wake-lock host. When its
+        // state changes (INITIALIZING → READY, or later ERROR) we push it; we also persist
+        // the value via cross-process prefs so that if Android kills and restarts :reticulum
+        // on its own, onCreate() can restore the correct initial text instead of defaulting
+        // to SHUTDOWN / "Disconnected".
+        applicationScope.launch {
+            reticulumProtocol.networkStatus.collect { status ->
+                val serviceStatus = networkStatusToServiceString(status)
+                // applicationScope runs on Dispatchers.Default; commit() is a synchronous
+                // disk write, so move the persistence hop to IO to keep StrictMode quiet
+                // in debug builds. updateServiceNotification itself just dispatches an
+                // Intent and can stay on the collector's context.
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    serviceSettingsAccessor.saveLastNetworkStatus(serviceStatus)
+                }
+                updateServiceNotification(serviceStatus)
+            }
         }
 
         applicationScope.launch {
@@ -363,8 +392,9 @@ class ColumbaApplication : Application() {
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
 
-                        // Update the service notification to reflect the native stack is ready
-                        updateServiceNotification("READY")
+                        // networkStatus.collect (set up earlier) already pushes
+                        // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no
+                        // explicit call is needed here.
 
                         // Battery optimization exemption is now handled in OnboardingPagerScreen
                         // for new users, and via Settings for existing users
@@ -457,6 +487,19 @@ class ColumbaApplication : Application() {
     }
 
     /**
+     * Map the protocol's sealed NetworkStatus to the string vocabulary that
+     * ServiceNotificationManager.getStatusTexts already branches on.
+     */
+    private fun networkStatusToServiceString(status: com.lxmf.messenger.reticulum.model.NetworkStatus): String =
+        when (status) {
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.READY -> "READY"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.CONNECTING -> "CONNECTING"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+            is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR -> "ERROR:${status.message}"
+        }
+
+    /**
      * Send a network status update to the service process to refresh
      * the foreground notification text.
      */
@@ -469,10 +512,13 @@ class ColumbaApplication : Application() {
                 }
             // startForegroundService also spins up the :reticulum process if it isn't running.
             // ReticulumService.onStartCommand guards on ::managers.isInitialized and returns
-            // START_STICKY if onCreate hasn't finished, so an ACTION_UPDATE_NOTIFICATION delivered
-            // during that brief window is dropped. In practice we only call this after
-            // initialize() has resolved, by which point the service process has been alive for
-            // seconds, so the window never opens for real notification updates.
+            // START_STICKY if onCreate hasn't finished, so an ACTION_UPDATE_NOTIFICATION
+            // delivered during that brief window is dropped. Because this function now fires
+            // for every networkStatus transition (including early SHUTDOWN / INITIALIZING /
+            // CONNECTING emissions during startup), the drop window can be hit — but
+            // ReticulumService.onCreate reads saveLastNetworkStatus back from cross-process
+            // prefs before it calls startForeground, so the initial notification still
+            // reflects the most recent status even when an early intent was dropped.
             androidx.core.content.ContextCompat
                 .startForegroundService(this, intent)
         } catch (e: Exception) {
@@ -633,10 +679,8 @@ class ColumbaApplication : Application() {
                 .onSuccess {
                     android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
 
-                    // Match the cold-start path so the foreground notification reflects the new
-                    // state — otherwise a post-rebind reinit leaves the notification stuck on
-                    // whatever status was showing when the service was last killed.
-                    updateServiceNotification("READY")
+                    // networkStatus.collect (set up in onCreate) handles the READY
+                    // notification push.
 
                     restorePeerIdentities(protocol)
 

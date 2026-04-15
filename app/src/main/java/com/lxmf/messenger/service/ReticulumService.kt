@@ -101,6 +101,14 @@ class ReticulumService : Service() {
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
 
+        // Restore the last persisted network status written by the app process. If Android
+        // restarted the :reticulum process on its own (START_STICKY), the native stack in
+        // the app process is still READY, and without this restore the first notification
+        // would flash "Disconnected" with no one around to push a fresh update.
+        managers.settingsAccessor.getLastNetworkStatus()?.let { status ->
+            managers.state.networkStatus.set(status)
+        }
+
         // CRITICAL: Start foreground immediately in onCreate to prevent being killed
         // before onStartCommand or onBind are called. This is the earliest safe point.
         managers.notificationManager.startForeground(this)

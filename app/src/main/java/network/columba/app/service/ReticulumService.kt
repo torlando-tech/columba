@@ -16,16 +16,14 @@ import network.columba.app.service.binder.ReticulumServiceBinder
 import network.columba.app.service.di.ServiceModule
 
 /**
- * Background service that hosts the Python Reticulum instance.
- * Runs as a foreground service to ensure reliability and proper threading for socket I/O.
- *
- * This solves the Chaquopy threading limitation where background threads for socket I/O
- * don't work reliably in the main app process.
+ * Background service that hosts the native Reticulum stack.
+ * Runs as a foreground service for OOM protection and reliable BLE/socket I/O
+ * while the main UI process may come and go.
  *
  * Architecture:
- * - This class is a thin lifecycle shell (~150 lines vs original 1,762)
+ * - This class is a thin lifecycle shell
  * - All business logic is delegated to specialized managers via ServiceModule
- * - AIDL implementation is in ReticulumServiceBinder
+ * - Binder is a plain android.os.Binder liveness handle (no cross-process protocol calls)
  * - State is managed in ServiceState
  */
 class ReticulumService : Service() {
@@ -48,7 +46,7 @@ class ReticulumService : Service() {
     // Managers container (initialized in onCreate)
     private lateinit var managers: ServiceModule.ServiceManagers
 
-    // AIDL binder (initialized in onCreate)
+    // Local binder returned from onBind() — liveness handle only, no protocol calls
     private lateinit var binder: ReticulumServiceBinder
 
     override fun onCreate() {
@@ -179,17 +177,13 @@ class ReticulumService : Service() {
                 // Shutdown and stop service
                 Log.d(TAG, "Received ACTION_STOP - forcing process exit")
 
-                // Remove notification FIRST — binder.shutdown()'s async Python cleanup
-                // can crash the process, so ensure the notification is gone before that.
+                // Remove notification before anything else so System.exit(0) can't leave a
+                // lingering entry in the shade.
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
 
-                if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
-
-                // Stop BLE immediately on Main thread before process exit.
-                // The normal Python shutdown path (ReticulumWrapper.shutdown() → BLEInterface.detach()
-                // → AndroidBLEDriver.stop() → KotlinBLEBridge.stop()) won't complete because
-                // System.exit(0) kills the process before async cleanup finishes.
+                // Stop BLE immediately on the Main thread before process exit, since
+                // System.exit(0) will kill the process before any async cleanup runs.
                 if (::managers.isInitialized) {
                     try {
                         managers.bleCoordinator.stopImmediate()
@@ -264,11 +258,6 @@ class ReticulumService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
-
-        // Set kill switch to prevent SIGSEGV from late Python calls
-        if (::managers.isInitialized) {
-            managers.state.isPythonShutdownStarted.set(true)
-        }
 
         // Clean up all resources (if initialized)
         if (::managers.isInitialized) {

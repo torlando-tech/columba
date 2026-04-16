@@ -62,7 +62,6 @@ class LockManager(
     /**
      * When true, acquireAll() skips the multicast lock.
      * Set by the native stack (NativeInterfaceFactory manages it per-AutoInterface).
-     * The Python stack leaves this false so the lock is acquired unconditionally.
      */
     var skipMulticastLock: Boolean = false
 

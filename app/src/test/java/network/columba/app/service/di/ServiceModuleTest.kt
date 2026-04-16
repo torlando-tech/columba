@@ -6,7 +6,6 @@ import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
-import network.columba.app.service.manager.MaintenanceManager
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Before
@@ -14,9 +13,6 @@ import org.junit.Test
 
 /**
  * Unit tests for ServiceModule.
- *
- * Tests that the dependency injection module correctly creates and wires
- * service managers, particularly the MaintenanceManager integration.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ServiceModuleTest {
@@ -35,32 +31,13 @@ class ServiceModuleTest {
         clearAllMocks()
     }
 
-    // ========== createManagers Tests ==========
-
-    @Test
-    fun `createManagers returns ServiceManagers with maintenanceManager`() {
-        val managers = ServiceModule.createManagers(context, testScope)
-
-        assertNotNull("ServiceManagers should contain maintenanceManager", managers.maintenanceManager)
-    }
-
-    @Test
-    fun `createManagers creates MaintenanceManager with correct dependencies`() {
-        val managers = ServiceModule.createManagers(context, testScope)
-
-        // MaintenanceManager should be properly initialized
-        assertNotNull(managers.maintenanceManager)
-        // MaintenanceManager should have lockManager (verified by not throwing when used)
-        assertNotNull(managers.lockManager)
-    }
-
     @Test
     fun `createManagers returns all required managers`() {
         val managers = ServiceModule.createManagers(context, testScope)
 
         assertNotNull("state should not be null", managers.state)
         assertNotNull("lockManager should not be null", managers.lockManager)
-        assertNotNull("maintenanceManager should not be null", managers.maintenanceManager)
+        assertNotNull("networkChangeManager should not be null", managers.networkChangeManager)
         assertNotNull("notificationManager should not be null", managers.notificationManager)
         assertNotNull("bleCoordinator should not be null", managers.bleCoordinator)
         assertNotNull("persistenceManager should not be null", managers.persistenceManager)
@@ -68,35 +45,9 @@ class ServiceModuleTest {
     }
 
     @Test
-    fun `createManagers maintenanceManager is correct type`() {
+    fun `createBinder returns a non-null binder`() {
         val managers = ServiceModule.createManagers(context, testScope)
 
-        assert(managers.maintenanceManager is MaintenanceManager) {
-            "maintenanceManager should be instance of MaintenanceManager"
-        }
-    }
-
-    // ========== createBinder Tests ==========
-
-    @Test
-    fun `createBinder creates binder with maintenanceManager from managers`() {
-        val managers = ServiceModule.createManagers(context, testScope)
-
-        val binder =
-            ServiceModule.createBinder(
-                managers = managers,
-                onShutdown = {},
-            )
-
-        // Binder should be created without throwing
-        assertNotNull("Binder should be created", binder)
-    }
-
-    @Test
-    fun `createBinder passes all dependencies to binder`() {
-        val managers = ServiceModule.createManagers(context, testScope)
-
-        // Should not throw when creating binder with all managers
         val binder =
             ServiceModule.createBinder(
                 managers = managers,

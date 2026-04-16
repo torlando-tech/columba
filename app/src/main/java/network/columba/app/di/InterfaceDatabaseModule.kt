@@ -2,6 +2,15 @@ package network.columba.app.di
 
 import android.content.Context
 import androidx.room.Room
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import network.columba.app.data.database.InterfaceDatabase
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.db.ColumbaDatabase
@@ -15,15 +24,6 @@ import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.MessageCollector
 import network.columba.app.service.PropagationNodeManager
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import javax.inject.Provider
 import javax.inject.Qualifier
 import javax.inject.Singleton
@@ -93,12 +93,8 @@ object InterfaceDatabaseModule {
                 InterfaceDatabase::class.java,
                 "interface_database",
             ).addCallback(InterfaceDatabase.Callback(context, database, applicationScope))
-            .addMigrations(
-                InterfaceDatabase.MIGRATION_1_2,
-                InterfaceDatabase.MIGRATION_2_3,
-                InterfaceDatabase.MIGRATION_3_4,
-                InterfaceDatabase.MIGRATION_4_5,
-            ).build()
+            .fallbackToDestructiveMigration()
+            .build()
 
     /**
      * Provides the InterfaceDao from the database.

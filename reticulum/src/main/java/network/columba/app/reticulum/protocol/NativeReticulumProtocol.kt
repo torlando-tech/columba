@@ -1877,9 +1877,9 @@ class NativeReticulumProtocol(
 
     // ==================== Version Info ====================
 
-    override suspend fun getReticulumVersion(): String? = "Reticulum-kt 0.1.0"
+    override suspend fun getReticulumVersion(): String? = "Reticulum-kt 0.0.3"
 
-    override suspend fun getLxmfVersion(): String? = "LXMF-kt 0.1.0"
+    override suspend fun getLxmfVersion(): String? = "LXMF-kt 0.0.3"
 
     override suspend fun getBleReticulumVersion(): String? = null
 

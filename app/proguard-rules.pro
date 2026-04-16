@@ -60,6 +60,15 @@
 -keepclassmembers class org.msgpack.** { *; }
 -dontwarn org.msgpack.**
 
+# ===== Java 16+ Unix Domain Sockets =====
+# reticulum-kt's LocalClientInterface / LocalServerInterface reference
+# java.net.UnixDomainSocketAddress for its local-IPC transport. The class
+# is only available on Android API 31+; minSdk is 24 so R8 can't find it
+# in the bootclasspath at link time. The code path is guarded by runtime
+# API-level checks so it never executes on older devices; this just
+# silences the build-time warning.
+-dontwarn java.net.UnixDomainSocketAddress
+
 # ===== ProGuard Debugging (Optional) =====
 # Uncomment these to see what R8 is removing in build/outputs/mapping/release/
 # -printconfiguration build/outputs/mapping/release/configuration.txt

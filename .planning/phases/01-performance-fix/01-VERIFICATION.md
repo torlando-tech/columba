@@ -252,13 +252,13 @@ All artifacts exist ✓
 - .planning/phases/01-performance-fix/01-FINDINGS.md - Created with 3 documented issues
 
 **Fixes (Plan 01-02):**
-- data/src/main/java/com/lxmf/messenger/data/repository/AnnounceRepository.kt - Added @Stable annotation
+- data/src/main/java/network.columba.app/data/repository/AnnounceRepository.kt - Added @Stable annotation
 - data/build.gradle.kts - Added Compose runtime dependency (for @Stable)
-- app/src/main/java/com/lxmf/messenger/viewmodel/AnnounceStreamViewModel.kt - Added withContext(Dispatchers.IO)
+- app/src/main/java/network.columba.app/viewmodel/AnnounceStreamViewModel.kt - Added withContext(Dispatchers.IO)
 
 **Monitoring (Plan 01-03):**
-- app/src/main/java/com/lxmf/messenger/ColumbaApplication.kt - Added Sentry performance config
-- app/src/main/java/com/lxmf/messenger/MainActivity.kt - Added JankStats integration
+- app/src/main/java/network.columba.app/ColumbaApplication.kt - Added Sentry performance config
+- app/src/main/java/network.columba.app/MainActivity.kt - Added JankStats integration
 - app/build.gradle.kts - Added JankStats dependency
 
 **All files are substantive implementations with no stub patterns.**

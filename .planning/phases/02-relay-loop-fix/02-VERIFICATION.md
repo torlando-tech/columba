@@ -38,13 +38,13 @@ human_verification:
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` | State machine (IDLE/SELECTING/STABLE/BACKING_OFF) | ✓ VERIFIED | Enum at lines 105-114, all 4 states present |
-| `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` | debounce(1000) on Flow | ✓ VERIFIED | Line 840: `.debounce(1000) // Batch rapid Room invalidation triggers` |
-| `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` | recordSelection function | ✓ VERIFIED | Lines 768-833: tracks selections, detects loops, triggers backoff |
-| `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` | State tracking (_selectionState) | ✓ VERIFIED | Lines 144-145: MutableStateFlow initialized to IDLE |
-| `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` | Loop detection infrastructure | ✓ VERIFIED | Lines 153-161: ArrayDeque, thresholds, backoff config |
-| `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` | User action state resets | ✓ VERIFIED | setManualRelay (576), clearRelay (634), enableAutoSelect (601), setManualRelayByHash (660) all reset to IDLE |
-| `app/src/test/java/com/lxmf/messenger/service/PropagationNodeManagerTest.kt` | State machine tests | ✓ VERIFIED | Tests at lines 2528+ verify lifecycle, guards, debounce behavior |
+| `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` | State machine (IDLE/SELECTING/STABLE/BACKING_OFF) | ✓ VERIFIED | Enum at lines 105-114, all 4 states present |
+| `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` | debounce(1000) on Flow | ✓ VERIFIED | Line 840: `.debounce(1000) // Batch rapid Room invalidation triggers` |
+| `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` | recordSelection function | ✓ VERIFIED | Lines 768-833: tracks selections, detects loops, triggers backoff |
+| `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` | State tracking (_selectionState) | ✓ VERIFIED | Lines 144-145: MutableStateFlow initialized to IDLE |
+| `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` | Loop detection infrastructure | ✓ VERIFIED | Lines 153-161: ArrayDeque, thresholds, backoff config |
+| `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` | User action state resets | ✓ VERIFIED | setManualRelay (576), clearRelay (634), enableAutoSelect (601), setManualRelayByHash (660) all reset to IDLE |
+| `app/src/test/java/network.columba.app/service/PropagationNodeManagerTest.kt` | State machine tests | ✓ VERIFIED | Tests at lines 2528+ verify lifecycle, guards, debounce behavior |
 
 **Score:** 7/7 artifacts exist, substantive, and wired
 

@@ -9,7 +9,7 @@ columba/
 ├── app/                              # Main UI application module (Android app)
 │   ├── src/
 │   │   ├── main/
-│   │   │   ├── java/com/lxmf/messenger/
+│   │   │   ├── java/network.columba.app/
 │   │   │   │   ├── ui/                       # Compose screens, components, themes
 │   │   │   │   ├── viewmodel/                # MVVM state holders
 │   │   │   │   ├── service/                  # Background service & managers
@@ -34,7 +34,7 @@ columba/
 ├── data/                             # Data layer library module
 │   ├── src/
 │   │   ├── main/
-│   │   │   ├── java/com/lxmf/messenger/data/
+│   │   │   ├── java/network.columba.app/data/
 │   │   │   │   ├── db/                       # Room database schema
 │   │   │   │   │   ├── ColumbaDatabase.kt
 │   │   │   │   │   ├── dao/                  # Data Access Objects
@@ -49,7 +49,7 @@ columba/
 ├── reticulum/                        # Reticulum library module (networking)
 │   ├── src/
 │   │   ├── main/
-│   │   │   ├── java/com/lxmf/messenger/reticulum/
+│   │   │   ├── java/network.columba.app/reticulum/
 │   │   │   │   ├── protocol/                 # Protocol abstraction & implementations
 │   │   │   │   ├── model/                    # Domain models (Identity, Destination, etc.)
 │   │   │   │   ├── ble/                      # Bluetooth Low Energy bridge
@@ -68,7 +68,7 @@ columba/
 ├── detekt-rules/                     # Custom Detekt linting rules
 │   ├── src/
 │   │   └── main/kotlin/
-│   │       └── com/lxmf/messenger/detekt/
+│   │       └── network.columba.app/detekt/
 │   └── build.gradle.kts
 │
 ├── gradle/                           # Gradle wrapper scripts
@@ -106,9 +106,9 @@ columba/
 ## Key File Locations
 
 **Entry Points:**
-- `app/src/main/java/com/lxmf/messenger/MainActivity.kt`: Main activity launcher
-- `app/src/main/java/com/lxmf/messenger/ColumbaApplication.kt`: Application initialization
-- `app/src/main/java/com/lxmf/messenger/service/ReticulumService.kt`: Background service
+- `app/src/main/java/network.columba.app/MainActivity.kt`: Main activity launcher
+- `app/src/main/java/network.columba.app/ColumbaApplication.kt`: Application initialization
+- `app/src/main/java/network.columba.app/service/ReticulumService.kt`: Background service
 
 **Configuration:**
 - `app/src/main/AndroidManifest.xml`: Permissions, intent filters, service definitions
@@ -117,16 +117,16 @@ columba/
 - `detekt-config.yml`: Code quality rules (advisory, not enforced)
 
 **Core Logic:**
-- `data/src/main/java/com/lxmf/messenger/data/db/ColumbaDatabase.kt`: Database schema
-- `app/src/main/java/com/lxmf/messenger/repository/`: Repository layer (conversations, identities, settings)
-- `app/src/main/java/com/lxmf/messenger/service/manager/`: Service managers (messaging, health, BLE)
-- `reticulum/src/main/java/com/lxmf/messenger/reticulum/protocol/ReticulumProtocol.kt`: Protocol contract
+- `data/src/main/java/network.columba.app/data/db/ColumbaDatabase.kt`: Database schema
+- `app/src/main/java/network.columba.app/repository/`: Repository layer (conversations, identities, settings)
+- `app/src/main/java/network.columba.app/service/manager/`: Service managers (messaging, health, BLE)
+- `reticulum/src/main/java/network.columba.app/reticulum/protocol/ReticulumProtocol.kt`: Protocol contract
 
 **Testing:**
 - `app/src/test/`: Unit tests (JVM, mocked Android, no device needed)
 - `app/src/androidTest/`: Instrumented tests (require device/emulator)
-- `app/src/test/java/com/lxmf/messenger/test/`: Test fixtures and helpers
-- Test fixture location: `app/src/test/java/com/lxmf/messenger/test/` (e.g., `BleTestFixtures.kt`)
+- `app/src/test/java/network.columba.app/test/`: Test fixtures and helpers
+- Test fixture location: `app/src/test/java/network.columba.app/test/` (e.g., `BleTestFixtures.kt`)
 
 ## Naming Conventions
 
@@ -144,41 +144,41 @@ columba/
 - Test fixtures: `*TestFixtures.kt` or `*Fixtures.kt` (e.g., `BleTestFixtures.kt`)
 
 **Directories:**
-- Package structure mirrors domain: `com.lxmf.messenger.[feature]`
+- Package structure mirrors domain: `network.columba.app.[feature]`
 - Feature-specific packages group related code (e.g., `ui.screens.rnode`, `service.manager`)
-- Test directories mirror source structure: `app/src/test/java/com/lxmf/messenger/[mirror-of-main]`
+- Test directories mirror source structure: `app/src/test/java/network.columba.app/[mirror-of-main]`
 
 ## Where to Add New Code
 
 **New Feature (UI + Logic):**
-- Primary code: `app/src/main/java/com/lxmf/messenger/ui/screens/[feature]/` for screens
-- ViewModel: `app/src/main/java/com/lxmf/messenger/viewmodel/[Feature]ViewModel.kt`
-- Repository: `data/src/main/java/com/lxmf/messenger/data/repository/[Feature]Repository.kt`
+- Primary code: `app/src/main/java/network.columba.app/ui/screens/[feature]/` for screens
+- ViewModel: `app/src/main/java/network.columba.app/viewmodel/[Feature]ViewModel.kt`
+- Repository: `data/src/main/java/network.columba.app/data/repository/[Feature]Repository.kt`
 - Tests: Mirror structure under `app/src/test/java/` and `app/src/androidTest/java/`
 
 **New Network Protocol Feature:**
-- Implementation: `reticulum/src/main/java/com/lxmf/messenger/reticulum/[feature]/`
-- Models: `reticulum/src/main/java/com/lxmf/messenger/reticulum/model/[Model].kt`
-- Tests: `reticulum/src/test/java/com/lxmf/messenger/reticulum/[feature]/`
+- Implementation: `reticulum/src/main/java/network.columba.app/reticulum/[feature]/`
+- Models: `reticulum/src/main/java/network.columba.app/reticulum/model/[Model].kt`
+- Tests: `reticulum/src/test/java/network.columba.app/reticulum/[feature]/`
 
 **New Component/Composable:**
-- Implementation: `app/src/main/java/com/lxmf/messenger/ui/components/[ComponentName].kt`
-- Models: `app/src/main/java/com/lxmf/messenger/ui/model/[ComponentModel].kt`
+- Implementation: `app/src/main/java/network.columba.app/ui/components/[ComponentName].kt`
+- Models: `app/src/main/java/network.columba.app/ui/model/[ComponentModel].kt`
 
 **Utilities:**
-- Shared helpers: `app/src/main/java/com/lxmf/messenger/util/`
-- Validation logic: `app/src/main/java/com/lxmf/messenger/util/validation/`
-- Reticulum utilities: `reticulum/src/main/java/com/lxmf/messenger/reticulum/util/`
+- Shared helpers: `app/src/main/java/network.columba.app/util/`
+- Validation logic: `app/src/main/java/network.columba.app/util/validation/`
+- Reticulum utilities: `reticulum/src/main/java/network.columba.app/reticulum/util/`
 
 **Database Changes:**
-- Entity: Add to `data/src/main/java/com/lxmf/messenger/data/db/entity/[EntityName].kt`
-- DAO: Add to `data/src/main/java/com/lxmf/messenger/data/db/dao/[EntityName]Dao.kt`
-- Migration: Add `MIGRATION_X_Y` in `data/src/main/java/com/lxmf/messenger/data/di/DatabaseModule.kt`
+- Entity: Add to `data/src/main/java/network.columba.app/data/db/entity/[EntityName].kt`
+- DAO: Add to `data/src/main/java/network.columba.app/data/db/dao/[EntityName]Dao.kt`
+- Migration: Add `MIGRATION_X_Y` in `data/src/main/java/network.columba.app/data/di/DatabaseModule.kt`
 - Update: `ColumbaDatabase.version++`, add new entity to @Database annotation
 
 **Service Managers (Background Process):**
-- Manager: `app/src/main/java/com/lxmf/messenger/service/manager/[Feature]Manager.kt`
-- Register: Add to `ServiceModule.createManagers()` in `app/src/main/java/com/lxmf/messenger/service/di/ServiceModule.kt`
+- Manager: `app/src/main/java/network.columba.app/service/manager/[Feature]Manager.kt`
+- Register: Add to `ServiceModule.createManagers()` in `app/src/main/java/network.columba.app/service/di/ServiceModule.kt`
 
 ## Special Directories
 

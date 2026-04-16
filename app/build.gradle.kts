@@ -76,7 +76,7 @@ fun getGitCommitHash(): String {
 val (versionCodeValue, versionNameValue) = getVersionFromTag()
 
 android {
-    namespace = "com.lxmf.messenger"
+    namespace = "network.columba.app"
     compileSdk = 36
 
     defaultConfig {

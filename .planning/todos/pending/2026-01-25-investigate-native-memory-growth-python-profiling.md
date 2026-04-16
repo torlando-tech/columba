@@ -5,7 +5,7 @@ area: performance
 files:
   - python/Reticulum/RNS/Transport.py
   - python/LXMF/LXMRouter.py
-  - reticulum/src/main/java/com/lxmf/messenger/reticulum/python/PythonWrapperManager.kt
+  - reticulum/src/main/java/network.columba.app/reticulum/python/PythonWrapperManager.kt
   - .planning/phases/01-performance-fix/01-FINDINGS.md
 ---
 

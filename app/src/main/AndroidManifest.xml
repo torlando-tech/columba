@@ -211,7 +211,7 @@
             android:launchMode="singleTask"
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
-            android:taskAffinity="com.lxmf.messenger.incoming_call"
+            android:taskAffinity="network.columba.app.incoming_call"
             android:excludeFromRecents="true"
             android:theme="@style/Theme.Columba" />
 

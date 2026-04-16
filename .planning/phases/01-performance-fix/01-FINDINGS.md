@@ -39,7 +39,7 @@ The memory growth is in native heap, not Java heap. This points to the Python/Ch
 **Files to investigate:**
 - `python/Reticulum/RNS/Transport.py` (path table)
 - `python/LXMF/LXMRouter.py` (message routing)
-- `reticulum/src/main/java/com/lxmf/messenger/reticulum/python/PythonWrapperManager.kt` (Chaquopy lifecycle)
+- `reticulum/src/main/java/network.columba.app/reticulum/python/PythonWrapperManager.kt` (Chaquopy lifecycle)
 
 ### Issue 2: High Input Latency (UI Responsiveness Issue)
 
@@ -67,8 +67,8 @@ Touch events are being delayed before they reach the UI framework. The frame ren
 5. Check for `collectAsState()` calls that might block
 
 **Files to investigate:**
-- `app/src/main/java/com/lxmf/messenger/ui/announce/AnnounceStreamScreen.kt`
-- `app/src/main/java/com/lxmf/messenger/viewmodel/AnnounceStreamViewModel.kt`
+- `app/src/main/java/network.columba.app/ui/announce/AnnounceStreamScreen.kt`
+- `app/src/main/java/network.columba.app/viewmodel/AnnounceStreamViewModel.kt`
 - Any Compose components rendering announce items
 
 ### Issue 3: Janky Frames (Secondary)
@@ -131,11 +131,11 @@ The profiling focused on Interface Discovery screen. The `:reticulum` process me
 ### Priority 1: Native Memory Investigation
 - `python/Reticulum/RNS/Transport.py` - Path table management
 - `python/LXMF/LXMRouter.py` - Message/announce caching
-- `reticulum/src/main/java/com/lxmf/messenger/reticulum/python/PythonWrapperManager.kt`
+- `reticulum/src/main/java/network.columba.app/reticulum/python/PythonWrapperManager.kt`
 
 ### Priority 2: Input Latency Fix
-- `app/src/main/java/com/lxmf/messenger/ui/announce/AnnounceStreamScreen.kt`
-- `app/src/main/java/com/lxmf/messenger/viewmodel/AnnounceStreamViewModel.kt`
+- `app/src/main/java/network.columba.app/ui/announce/AnnounceStreamScreen.kt`
+- `app/src/main/java/network.columba.app/viewmodel/AnnounceStreamViewModel.kt`
 - Compose item renderers in announce list
 
 ### Priority 3: Janky Frame Reduction

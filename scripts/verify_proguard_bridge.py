@@ -33,7 +33,7 @@ BRIDGE_CALL_PATTERNS = [
 
 # Bridge classes are detected dynamically from the codebase
 # Any class ending in "Bridge" in the messenger package should be preserved
-# This matches the ProGuard rule: -keep class com.lxmf.messenger.**.*Bridge { *; }
+# This matches the ProGuard rule: -keep class network.columba.app.**.*Bridge { *; }
 BRIDGE_CLASS_PATTERN = r'(\w+Bridge)'
 
 
@@ -58,7 +58,7 @@ def extract_methods_from_python(python_dir: Path) -> set[str]:
 def extract_bridge_classes_from_kotlin(kotlin_dir: Path) -> set[str]:
     """Extract all *Bridge class names from Kotlin source code.
 
-    This matches the ProGuard rule: -keep class com.lxmf.messenger.**.*Bridge { *; }
+    This matches the ProGuard rule: -keep class network.columba.app.**.*Bridge { *; }
     Any class ending in 'Bridge' is considered a Python-callable bridge.
     """
     classes = set()
@@ -215,8 +215,8 @@ def main():
         print()
         print("Fix: Add the missing classes/methods to app/proguard-rules.pro")
         print("Example:")
-        print("  -keep class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }")
-        print("  -keepclassmembers class com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge { *; }")
+        print("  -keep class network.columba.app.reticulum.bridge.KotlinReticulumBridge { *; }")
+        print("  -keepclassmembers class network.columba.app.reticulum.bridge.KotlinReticulumBridge { *; }")
         sys.exit(1)
     else:
         print("VERIFICATION PASSED")

@@ -32,9 +32,9 @@ ignore:
   # Network-dependent Python code requires a live RNS instance, not unit tests
   - "python/rns_api.py"
   # Service layer code requires instrumented tests, not unit tests
-  - "app/src/main/java/com/lxmf/messenger/service/**"
-  - "app/src/main/java/com/lxmf/messenger/reticulum/protocol/**"
+  - "app/src/main/java/network.columba.app/service/**"
+  - "app/src/main/java/network.columba.app/reticulum/protocol/**"
   # Compose UI files with @Preview functions (private preview functions can't be tested)
   # These components have extensive Robolectric tests but @Preview functions inflate totals
-  - "app/src/main/java/com/lxmf/messenger/ui/components/FileAttachmentCard.kt"
-  - "app/src/main/java/com/lxmf/messenger/ui/components/FileAttachmentPreviewRow.kt"
+  - "app/src/main/java/network.columba.app/ui/components/FileAttachmentCard.kt"
+  - "app/src/main/java/network.columba.app/ui/components/FileAttachmentPreviewRow.kt"

@@ -357,7 +357,7 @@ sentry {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
-    implementation("tech.torlando:lxst")
+    implementation(libs.lxst.kt)
     implementation(project(":reticulum"))
     implementation(project(":micron"))
 

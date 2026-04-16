@@ -1,4 +1,4 @@
-package com.lxmf.messenger.service
+package network.columba.app.service
 
 import android.content.Context
 import android.util.Log
@@ -40,7 +40,7 @@ object LocationServiceCoordinator {
     fun acquire(context: Context, reason: String) {
         if (serviceFailed) {
             // Check if permission was re-granted since the failure
-            if (com.lxmf.messenger.util.LocationPermissionManager.hasPermission(context)) {
+            if (network.columba.app.util.LocationPermissionManager.hasPermission(context)) {
                 resetFailedState()
             } else {
                 return

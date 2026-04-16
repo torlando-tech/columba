@@ -1,4 +1,4 @@
-package com.lxmf.messenger.service
+package network.columba.app.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -12,8 +12,8 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.lxmf.messenger.MainActivity
-import com.lxmf.messenger.R
+import network.columba.app.MainActivity
+import network.columba.app.R
 
 /**
  * Lightweight foreground service that keeps the main process alive during Android Doze

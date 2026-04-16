@@ -43,6 +43,7 @@ object DatabaseModule {
                 ColumbaDatabase::class.java,
                 DATABASE_NAME,
             ).fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .build()
 

@@ -30,6 +30,7 @@ object ServiceDatabaseProvider {
                 ColumbaDatabase::class.java,
                 DatabaseModule.DATABASE_NAME,
             ).fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .build()
 

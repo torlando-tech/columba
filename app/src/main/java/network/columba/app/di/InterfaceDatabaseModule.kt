@@ -94,6 +94,7 @@ object InterfaceDatabaseModule {
                 "interface_database",
             ).addCallback(InterfaceDatabase.Callback(context, database, applicationScope))
             .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 
     /**

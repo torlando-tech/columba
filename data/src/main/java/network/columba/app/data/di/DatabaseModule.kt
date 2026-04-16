@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
@@ -99,6 +100,23 @@ object DatabaseModule {
             override fun onOpen(db: SupportSQLiteDatabase) = applyPragmas(db)
         }
 
+    // Adds the `source` column + index to received_locations.
+    // Introduced when location sharing started recording how each entry was produced
+    // (e.g. "location_sharing" vs "sos_trail").
+    private val MIGRATION_1_2 =
+        object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE received_locations " +
+                        "ADD COLUMN source TEXT NOT NULL DEFAULT 'location_sharing'",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_received_locations_source " +
+                        "ON received_locations (source, senderHash, timestamp)",
+                )
+            }
+        }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
@@ -109,7 +127,8 @@ object DatabaseModule {
                 context,
                 ColumbaDatabase::class.java,
                 DATABASE_NAME,
-            ).fallbackToDestructiveMigration()
+            ).addMigrations(MIGRATION_1_2)
+            .fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .addCallback(DURABILITY_CALLBACK)

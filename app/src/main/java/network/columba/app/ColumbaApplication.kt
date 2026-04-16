@@ -393,13 +393,19 @@ class ColumbaApplication : Application() {
                 // usable as a future unlock-flow input rather than silently booting
                 // a fresh ephemeral identity that severs contact with the user's
                 // peers. TODO: wire an unlock screen that resumes this init path.
+                // Fail safe on a DB/Keystore error: a thrown requiresPassword would
+                // otherwise escape to the outer catch and get logged as "Failed to bind
+                // to ReticulumService" — the real failure is a DB query, and we want to
+                // skip init in that case rather than power on with the wrong identity.
                 if (activeIdentity != null &&
-                    identityRepository.requiresPassword(activeIdentity.identityHash)
+                    runCatching {
+                        identityRepository.requiresPassword(activeIdentity.identityHash)
+                    }.getOrDefault(true)
                 ) {
                     android.util.Log.w(
                         "ColumbaApplication",
-                        "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected - " +
-                            "skipping auto-init until an unlock flow provides the password",
+                        "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected " +
+                            "(or password status unreadable) - skipping auto-init until unlock",
                     )
                     return@launch
                 }
@@ -672,12 +678,14 @@ class ColumbaApplication : Application() {
             val activeIdentity = startupConfig.identity
 
             if (activeIdentity != null &&
-                identityRepository.requiresPassword(activeIdentity.identityHash)
+                runCatching {
+                    identityRepository.requiresPassword(activeIdentity.identityHash)
+                }.getOrDefault(true)
             ) {
                 android.util.Log.w(
                     "ColumbaApplication",
                     "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
-                        "is password-protected - skipping init until an unlock flow provides the password",
+                        "is password-protected (or password status unreadable) - skipping init until unlock",
                 )
                 return
             }

@@ -128,6 +128,29 @@ data class ReticulumConfig(
             this == null || other == null -> false
             else -> contentEquals(other)
         }
+
+    // Render deliveryIdentityKey as "[N bytes]" so a stray log of the config doesn't
+    // leak the JVM object reference (which exposes non-null presence) or, worse, the
+    // raw bytes. Rest of the fields are plain data and go through their own toString.
+    override fun toString(): String =
+        "ReticulumConfig(" +
+            "storagePath=$storagePath, " +
+            "enabledInterfaces=$enabledInterfaces, " +
+            "identityFilePath=$identityFilePath, " +
+            "deliveryIdentityKey=${deliveryIdentityKey?.let { "[${it.size} bytes]" }}, " +
+            "displayName=$displayName, " +
+            "logLevel=$logLevel, " +
+            "allowAnonymous=$allowAnonymous, " +
+            "batteryProfile=$batteryProfile, " +
+            "preferOwnInstance=$preferOwnInstance, " +
+            "rpcKey=$rpcKey, " +
+            "enableTransport=$enableTransport, " +
+            "discoverInterfaces=$discoverInterfaces, " +
+            "autoconnectDiscoveredInterfaces=$autoconnectDiscoveredInterfaces, " +
+            "autoconnectIfacOnly=$autoconnectIfacOnly, " +
+            "interfaceDiscoverySources=$interfaceDiscoverySources, " +
+            "requiredDiscoveryValue=$requiredDiscoveryValue" +
+            ")"
 }
 
 /**

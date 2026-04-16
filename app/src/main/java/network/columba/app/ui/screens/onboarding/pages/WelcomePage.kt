@@ -1,6 +1,8 @@
 package network.columba.app.ui.screens.onboarding.pages
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,22 +12,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Sensors
-import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Welcome page - introduces privacy-first messaging.
@@ -48,13 +51,32 @@ fun WelcomePage(
     ) {
         Spacer(modifier = Modifier.weight(1f))
 
-        // App icon
-        Icon(
-            imageVector = Icons.Default.Sensors,
-            contentDescription = "Columba",
-            modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
+        // App icon: adaptive launcher background + foreground, circle-clipped.
+        // The gradient background fills the circle. The foreground vector bakes in
+        // both the adaptive-icon safe-zone padding and an internal scaleX/Y=0.65,
+        // so we apply a visual scale (no layout impact) to make the logo read at
+        // launcher scale.
+        Box(
+            modifier =
+                Modifier
+                    .size(120.dp)
+                    .clip(CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_background),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                contentDescription = "Columba",
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .scale(2.3f),
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -140,11 +162,10 @@ private fun PrivacyFeature(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Cancel,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary,
+        Text(
+            text = "\u2022",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.size(8.dp))
         Text(

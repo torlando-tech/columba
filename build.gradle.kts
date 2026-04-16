@@ -14,6 +14,16 @@ plugins {
     id("de.aaschmid.cpd") version "3.5"
 }
 
+// Reproducible archives across all subprojects (including detekt-rules):
+// strip per-file timestamps and sort entries by name so ZIP/JAR/APK outputs are
+// byte-identical for the same inputs.
+allprojects {
+    tasks.withType<AbstractArchiveTask>().configureEach {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
+}
+
 // Apply JaCoCo, ktlint, and detekt to all subprojects (except detekt-rules)
 subprojects {
     // Skip detekt-rules module - it's a pure JVM module for detekt custom rules

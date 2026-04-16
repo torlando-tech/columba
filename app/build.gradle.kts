@@ -73,6 +73,36 @@ fun getGitCommitHash(): String {
     }
 }
 
+/**
+ * Return a deterministic build timestamp (epoch millis).
+ *
+ * In order:
+ *   1. `SOURCE_DATE_EPOCH` env var (the standard reproducible-build convention) if set.
+ *   2. The HEAD commit's committer timestamp via `git log -1 --format=%ct`.
+ *   3. 0L as a last-resort fallback so the build still succeeds outside a git tree.
+ *
+ * Using the commit timestamp (not System.currentTimeMillis()) means two builds from the
+ * same commit produce the same BuildConfig.BUILD_TIMESTAMP, which keeps the APK byte-for-
+ * byte reproducible.
+ */
+fun getReproducibleBuildTimestamp(): Long {
+    System.getenv("SOURCE_DATE_EPOCH")?.toLongOrNull()?.let { return it * 1000L }
+    return try {
+        providers.exec {
+            commandLine("git", "log", "-1", "--format=%ct")
+        }.standardOutput.asText
+            .get()
+            .trim()
+            .toLong() * 1000L
+    } catch (_: Exception) {
+        println(
+            "Warning: could not read git commit timestamp; BUILD_TIMESTAMP will be 0 " +
+                "(renders as 1970-01-01 on the About screen). Set SOURCE_DATE_EPOCH to override.",
+        )
+        0L
+    }
+}
+
 val (versionCodeValue, versionNameValue) = getVersionFromTag()
 
 android {
@@ -87,7 +117,7 @@ android {
         versionName = versionNameValue
 
         buildConfigField("String", "GIT_COMMIT_HASH", "\"${getGitCommitHash()}\"")
-        buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
+        buildConfigField("long", "BUILD_TIMESTAMP", "${getReproducibleBuildTimestamp()}L")
         buildConfigField("String", "COPYRIGHT_YEAR", "\"2026\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

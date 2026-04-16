@@ -210,13 +210,21 @@ class ColumbaApplication : Application() {
             }
             try {
                 val reticulumDir = java.io.File(filesDir, "reticulum")
+                // Two legacy layouts to scrub:
+                //   - reticulum/identity_<hash>  (old NativeReticulumProtocol layout)
+                //   - reticulum/identities/<hash> (current NativeReticulumProtocol layout;
+                //     user-initiated create/import/recover paths still write here between
+                //     action and next cold boot — this is the catch-up cleanup)
                 val staleIdentityFiles =
-                    reticulumDir.listFiles { f -> f.isFile && f.name.startsWith("identity_") }
-                        ?: return@launch
+                    (reticulumDir.listFiles { f -> f.isFile && f.name.startsWith("identity_") } ?: emptyArray()) +
+                        (java.io.File(reticulumDir, "identities").listFiles { f -> f.isFile } ?: emptyArray())
                 staleIdentityFiles.forEach { f ->
                     runCatching { f.writeBytes(ByteArray(f.length().toInt())) }
                     if (f.delete()) {
-                        android.util.Log.i("ColumbaApplication", "Removed stale identity file: ${f.name}")
+                        android.util.Log.i(
+                            "ColumbaApplication",
+                            "Removed stale identity file: ${f.parentFile?.name}/${f.name}",
+                        )
                     }
                 }
             } catch (e: Exception) {

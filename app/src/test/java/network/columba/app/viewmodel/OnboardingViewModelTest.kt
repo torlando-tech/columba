@@ -2,14 +2,6 @@ package network.columba.app.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import network.columba.app.data.database.entity.InterfaceEntity
-import network.columba.app.data.db.entity.LocalIdentityEntity
-import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.repository.InterfaceRepository
-import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.service.InterfaceConfigManager
-import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -25,6 +17,14 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.data.database.entity.InterfaceEntity
+import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -170,26 +170,27 @@ class OnboardingViewModelTest {
             }
         }
 
-    // ========== Upgrade Detection Tests ==========
+    // ========== Onboarding Status Tests ==========
 
     @Test
-    fun `detects upgrade when identity exists but onboarding not marked complete`() =
+    fun `shows onboarding on fresh install even if an identity already exists`() =
         runTest {
-            // Given: DataStore has no onboarding key (returns false) but an identity exists
+            // Cold boot of the app creates a Reticulum identity before the user hits Welcome,
+            // so "identity exists + hasCompleted=false" is the fresh-install shape — not a
+            // pre-onboarding upgrade. Trusting the persisted flag alone keeps the welcome
+            // flow visible; users upgrading from the brief pre-onboarding window can Skip.
             coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
             coEvery { mockIdentityRepository.getActiveIdentitySync() } returns createTestIdentity()
 
-            // When: ViewModel is created
             val viewModel = createViewModel()
             advanceUntilIdle()
 
-            // Then: Upgrade should be detected, onboarding marked complete
             viewModel.state.test {
                 val state = awaitItem()
-                assertTrue("Should detect upgrade and mark onboarding complete", state.hasCompletedOnboarding)
+                assertFalse("Should show onboarding regardless of existing identity", state.hasCompletedOnboarding)
                 assertFalse(state.isLoading)
             }
-            coVerify { mockSettingsRepository.markOnboardingCompleted() }
+            coVerify(exactly = 0) { mockSettingsRepository.markOnboardingCompleted() }
         }
 
     @Test
@@ -432,8 +433,7 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            // First call (upgrade check in init) returns null, second call (completeOnboarding) returns identity
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             advanceUntilIdle()
 
@@ -453,8 +453,7 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            // First call (upgrade check in init) returns null, second call (completeOnboarding) returns identity
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             advanceUntilIdle()
 
@@ -676,8 +675,7 @@ class OnboardingViewModelTest {
         runTest {
             val viewModel = createViewModel()
             val testIdentity = createTestIdentity()
-            // First call (upgrade check in init) returns null, second call (skipOnboarding) returns identity
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returnsMany listOf(null, testIdentity)
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns testIdentity
             coEvery { mockIdentityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
             every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(emptyList())
             advanceUntilIdle()

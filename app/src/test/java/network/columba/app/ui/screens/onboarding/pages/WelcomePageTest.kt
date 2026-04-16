@@ -87,9 +87,11 @@ class WelcomePageTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(
-            "Your identity is generated and stored securely on your device. You control it completely.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Your identity is generated and stored securely on your device. You control it completely.",
+            ).performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -319,9 +321,11 @@ class WelcomePageTest {
         composeTestRule.onNodeWithText("No phone number").assertIsDisplayed()
         composeTestRule.onNodeWithText("No email address").assertIsDisplayed()
         composeTestRule.onNodeWithText("No sign-up or accounts").assertIsDisplayed()
-        composeTestRule.onNodeWithText(
-            "Your identity is generated and stored securely on your device. You control it completely.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Your identity is generated and stored securely on your device. You control it completely.",
+            ).performScrollTo()
+            .assertIsDisplayed()
         composeTestRule.onNodeWithText("Get Started").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Restore from backup").performScrollTo().assertIsDisplayed()
     }

@@ -664,35 +664,8 @@ class ColumbaApplication : Application() {
                 "initializeReticulumService: Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount",
             )
 
-            // Decrypt the active identity's private key into memory so we can hand
-            // it to the native stack without ever writing plaintext to disk.
-            var deliveryKey: ByteArray? = null
             val displayName = activeIdentity?.displayName
-            if (activeIdentity != null) {
-                android.util.Log.d(
-                    "ColumbaApplication",
-                    "initializeReticulumService: Active identity: ${activeIdentity.displayName} " +
-                        "(${activeIdentity.identityHash.take(8)}...)",
-                )
-                val keyResult = identityKeyProvider.getDecryptedKeyData(activeIdentity.identityHash)
-                if (keyResult.isSuccess) {
-                    deliveryKey = keyResult.getOrNull()
-                    android.util.Log.d(
-                        "ColumbaApplication",
-                        "initializeReticulumService: Decrypted delivery identity key into memory (${deliveryKey?.size ?: 0} bytes)",
-                    )
-                } else {
-                    android.util.Log.e(
-                        "ColumbaApplication",
-                        "initializeReticulumService: Could not decrypt identity key: ${keyResult.exceptionOrNull()}",
-                    )
-                }
-            } else {
-                android.util.Log.d(
-                    "ColumbaApplication",
-                    "initializeReticulumService: No active identity found, native stack will create default",
-                )
-            }
+            val deliveryKey = decryptDeliveryKey(activeIdentity)
 
             // Initialize Reticulum with config from database
             android.util.Log.d("ColumbaApplication", "initializeReticulumService: Initializing Reticulum...")
@@ -738,6 +711,44 @@ class ColumbaApplication : Application() {
         } catch (e: Exception) {
             android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error during initialization", e)
         }
+    }
+
+    /**
+     * Decrypt the active identity's private key into memory so it can be handed
+     * to the native stack without ever writing plaintext to disk. Returns null
+     * when no active identity exists (native stack will create a fresh one) or
+     * when decryption fails (caller falls back to the same path).
+     */
+    private suspend fun decryptDeliveryKey(activeIdentity: network.columba.app.data.db.entity.LocalIdentityEntity?): ByteArray? {
+        if (activeIdentity == null) {
+            android.util.Log.d(
+                "ColumbaApplication",
+                "initializeReticulumService: No active identity found, native stack will create default",
+            )
+            return null
+        }
+        android.util.Log.d(
+            "ColumbaApplication",
+            "initializeReticulumService: Active identity: ${activeIdentity.displayName} " +
+                "(${activeIdentity.identityHash.take(8)}...)",
+        )
+        val keyResult = identityKeyProvider.getDecryptedKeyData(activeIdentity.identityHash)
+        return keyResult.fold(
+            onSuccess = { key ->
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "initializeReticulumService: Decrypted delivery identity key into memory (${key.size} bytes)",
+                )
+                key
+            },
+            onFailure = { error ->
+                android.util.Log.e(
+                    "ColumbaApplication",
+                    "initializeReticulumService: Could not decrypt identity key: $error",
+                )
+                null
+            },
+        )
     }
 
     /** Helper to restore peer identities in background after Reticulum initialization. */

@@ -6,6 +6,7 @@ import network.columba.app.BuildConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 data class SystemInfo(
     val appVersion: String,
@@ -34,8 +35,12 @@ object DeviceInfoUtil {
         bleReticulumVersion: String?,
         lxstVersion: String? = null,
     ): SystemInfo {
+        // Format in UTC so the rendered string stays consistent across device time zones —
+        // otherwise the same BuildConfig.BUILD_TIMESTAMP renders differently per locale and
+        // breaks the reproducible-build story at the UI layer.
         val buildDate =
-            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+            SimpleDateFormat("yyyy-MM-dd HH:mm 'UTC'", Locale.US)
+                .apply { timeZone = TimeZone.getTimeZone("UTC") }
                 .format(Date(BuildConfig.BUILD_TIMESTAMP))
 
         return SystemInfo(

@@ -5,11 +5,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import network.columba.app.data.db.entity.LocalIdentityEntity
-import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.InterfaceConfigManager
-import network.columba.app.util.Base32
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +15,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.util.Base32
 import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 
@@ -191,10 +191,10 @@ class IdentityManagerViewModel
                         }
                     }
 
-                    // Note: InterfaceConfigManager.applyInterfaceChanges() will use
-                    // ensureIdentityFileExists() to verify/recover the identity file
-                    // and pass the correct identity_<hash> path to Python.
-                    // No need to copy to default_identity anymore.
+                    // InterfaceConfigManager.applyInterfaceChanges() will decrypt the
+                    // active identity's Keystore-wrapped key in memory and hand it to
+                    // the native stack via ReticulumConfig.deliveryIdentityKey — the
+                    // plaintext never touches disk.
 
                     identityRepository
                         .switchActiveIdentity(identityHash)
@@ -519,9 +519,10 @@ class IdentityManagerViewModel
                 try {
                     _uiState.value = IdentityManagerUiState.Loading("Exporting identity...")
 
-                    val fileData = withContext(Dispatchers.IO) {
-                        reticulumProtocol.exportIdentityFile(identityHash, filePath)
-                    }
+                    val fileData =
+                        withContext(Dispatchers.IO) {
+                            reticulumProtocol.exportIdentityFile(identityHash, filePath)
+                        }
 
                     if (fileData.isEmpty()) {
                         _uiState.value =

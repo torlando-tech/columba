@@ -191,8 +191,10 @@ class DeviceInfoUtilTest {
                 bleReticulumVersion = null,
             )
 
-        // Build date should match pattern YYYY-MM-DD HH:mm
-        assertTrue(info.buildDate.matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}")))
+        // Build date should match pattern YYYY-MM-DD HH:mm <timezone>
+        // Timezone is fixed to UTC by DeviceInfoUtil so the rendered string stays stable
+        // across locales for reproducible-build verification.
+        assertTrue(info.buildDate.matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} UTC")))
     }
 
     // ========== formatForBugReport Tests ==========

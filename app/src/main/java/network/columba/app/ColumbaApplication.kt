@@ -176,10 +176,25 @@ class ColumbaApplication : Application() {
         // weight. Best-effort zero-overwrite + delete — true secure erase isn't achievable
         // on wear-levelled / journalled storage, but we remove the dangling-reference risk.
         applicationScope.launch(Dispatchers.IO) {
-            try {
-                identityRepository.runEncryptionMigration()
-            } catch (e: Exception) {
-                android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
+            // Gate the scrub on full migration success. If migration throws, returns
+            // Result.failure, or reports any per-identity failureCount > 0, the on-disk
+            // identity_<hash> files are still the only copy of the key for at least one
+            // identity — deleting them here would permanently destroy it on upgraders
+            // hitting a transient Keystore or DB error on first boot.
+            val migrationSucceeded =
+                try {
+                    val result = identityRepository.runEncryptionMigration()
+                    result.isSuccess && (result.getOrNull()?.failureCount ?: 1) == 0
+                } catch (e: Exception) {
+                    android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
+                    false
+                }
+            if (!migrationSucceeded) {
+                android.util.Log.w(
+                    "ColumbaApplication",
+                    "Skipping stale identity file scrub - encryption migration did not fully succeed",
+                )
+                return@launch
             }
             // Skip scrub if the active identity requires a password — in that case
             // ColumbaApplication can't decrypt the key at startup (no UI prompt yet),

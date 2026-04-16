@@ -233,11 +233,10 @@ class OnboardingViewModelTest {
         }
 
     @Test
-    fun `upgrade check failure still dismisses loading and does not mark onboarding complete`() =
+    fun `onboarding status read failure still dismisses loading and does not mark onboarding complete`() =
         runTest {
-            // Given: DataStore returns false and identity check throws
-            coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } throws RuntimeException("DB error")
+            // Given: DataStore read throws (Keystore/DB/etc. error)
+            coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } throws RuntimeException("DataStore error")
 
             // When: ViewModel is created
             val viewModel = createViewModel()

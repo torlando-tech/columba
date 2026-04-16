@@ -288,11 +288,26 @@ class NativeReticulumProtocol(
                 // Preferred path: caller decrypted the key in memory (e.g. from an
                 // Android Keystore-wrapped blob) and handed us raw bytes. Avoids
                 // ever writing the plaintext key to disk.
-                config.deliveryIdentityKey != null ->
-                    NativeIdentity.fromBytes(config.deliveryIdentityKey!!) ?: NativeIdentity.create()
+                config.deliveryIdentityKey != null -> {
+                    val loaded = NativeIdentity.fromBytes(config.deliveryIdentityKey!!)
+                    if (loaded == null) {
+                        // Malformed bytes, wrong length, etc. Silently falling through
+                        // would start Reticulum with a brand-new ephemeral identity
+                        // while Room still has the original marked active — messages
+                        // would appear to come from an identity the user never saw.
+                        // Log loudly so the mismatch is at least observable.
+                        Log.e(TAG, "NativeIdentity.fromBytes returned null for deliveryIdentityKey - creating fresh identity instead")
+                    }
+                    loaded ?: NativeIdentity.create()
+                }
                 // Legacy path: load from a plaintext file on disk.
-                config.identityFilePath != null ->
-                    NativeIdentity.fromFile(config.identityFilePath!!) ?: NativeIdentity.create()
+                config.identityFilePath != null -> {
+                    val loaded = NativeIdentity.fromFile(config.identityFilePath!!)
+                    if (loaded == null) {
+                        Log.e(TAG, "NativeIdentity.fromFile returned null for ${config.identityFilePath} - creating fresh identity instead")
+                    }
+                    loaded ?: NativeIdentity.create()
+                }
                 // No identity provided — create a fresh one.
                 else -> NativeIdentity.create()
             }

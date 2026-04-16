@@ -1,9 +1,0 @@
-[submodule "LXST-kt"]
-	path = LXST-kt
-	url = https://github.com/torlando-tech/LXST-kt.git
-[submodule "reticulum-kt"]
-	path = reticulum-kt
-	url = https://github.com/torlando-tech/reticulum-kt.git
-[submodule "lxmf-kt"]
-	path = lxmf-kt
-	url = https://github.com/torlando-tech/LXMF-kt.git

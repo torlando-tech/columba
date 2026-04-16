@@ -47,7 +47,7 @@ android {
 
 dependencies {
     // LXST module (telephony, codecs, audio pipeline)
-    api("tech.torlando:lxst")
+    api(libs.lxst.kt)
 
     // Hilt
     implementation(libs.hilt)
@@ -65,10 +65,10 @@ dependencies {
     implementation(libs.msgpack)
 
     // Native Reticulum/LXMF Kotlin stack (migration from Python/Chaquopy)
-    api("network.reticulum:rns-core")
-    api("network.reticulum:rns-interfaces")
-    api("network.reticulum:rns-android")
-    api("network.reticulum.lxmf:lxmf-core")
+    api(libs.rns.core)
+    api(libs.rns.interfaces)
+    api(libs.rns.android)
+    api(libs.lxmf.kt)
 
     // Serialization (for firmware manifest JSON parsing)
     implementation(libs.serialization.json)

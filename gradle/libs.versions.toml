@@ -18,7 +18,21 @@ detekt = "1.23.7"
 serialization = "1.10.0"
 coil = "2.7.0"
 
+# JitPack-published libraries (formerly git submodules)
+reticulumKt = "v0.0.3"
+lxmfKt = "v0.0.3"
+lxstKt = "v0.0.2"
+
 [libraries]
+# JitPack-published Reticulum/LXMF/LXST stack (migrated from git submodules)
+# Note: lxmfKt and lxstKt use JitPack's single-module root-coord collapse
+# (coord = repo name, not repo/module path), while reticulum-kt has 3 modules.
+rns-core = { module = "com.github.torlando-tech.reticulum-kt:rns-core", version.ref = "reticulumKt" }
+rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interfaces", version.ref = "reticulumKt" }
+rns-android = { module = "com.github.torlando-tech.reticulum-kt:rns-android", version.ref = "reticulumKt" }
+lxmf-kt = { module = "com.github.torlando-tech:LXMF-kt", version.ref = "lxmfKt" }
+lxst-kt = { module = "com.github.torlando-tech:LXST-kt", version.ref = "lxstKt" }
+
 # Compose
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }

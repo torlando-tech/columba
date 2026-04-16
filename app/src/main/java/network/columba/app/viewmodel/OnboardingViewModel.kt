@@ -4,6 +4,12 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
@@ -13,12 +19,6 @@ import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 import network.columba.app.ui.screens.onboarding.OnboardingState
 import network.columba.app.util.BatteryOptimizationManager
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -48,22 +48,18 @@ class OnboardingViewModel
 
         /**
          * Check if onboarding has already been completed.
+         *
+         * Trust the persisted flag alone. A previous heuristic treated "any active
+         * identity exists" as evidence of a pre-onboarding upgrade and auto-marked
+         * onboarding complete, but the native stack now auto-creates an identity
+         * on cold start so that signal fires on fresh installs too and skips the
+         * welcome flow. Users upgrading from the brief pre-onboarding window will
+         * see onboarding once and can Skip to keep their data.
          */
         private fun checkOnboardingStatus() {
             viewModelScope.launch {
                 try {
                     val hasCompleted = settingsRepository.hasCompletedOnboardingFlow.first()
-                    if (!hasCompleted) {
-                        // Check if this is an upgrade from a pre-onboarding version:
-                        // existing identity means user already set up the app
-                        val existingIdentity = identityRepository.getActiveIdentitySync()
-                        if (existingIdentity != null) {
-                            Log.d(TAG, "Existing identity found - marking onboarding complete (upgrade detected)")
-                            settingsRepository.markOnboardingCompleted()
-                            _state.value = _state.value.copy(isLoading = false, hasCompletedOnboarding = true)
-                            return@launch
-                        }
-                    }
                     _state.value =
                         _state.value.copy(
                             isLoading = false,

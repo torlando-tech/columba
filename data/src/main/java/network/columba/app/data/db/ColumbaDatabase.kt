@@ -48,7 +48,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         BlockedPeerEntity::class,
         InterfaceFirstSeenEntity::class,
     ],
-    version = 44,
+    version = 1,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {

@@ -3,15 +3,14 @@ package network.columba.app.data.database
 import android.content.Context
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.CoroutineScope
 import network.columba.app.data.config.ConfigFileParser
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.reticulum.model.InterfaceConfig
 import network.columba.app.reticulum.model.toJsonString
 import network.columba.app.reticulum.model.typeName
-import kotlinx.coroutines.CoroutineScope
 import java.io.File
 import javax.inject.Provider
 
@@ -20,137 +19,11 @@ import javax.inject.Provider
  */
 @Database(
     entities = [InterfaceEntity::class],
-    version = 5,
+    version = 1,
     exportSchema = true,
 )
 abstract class InterfaceDatabase : RoomDatabase() {
     abstract fun interfaceDao(): InterfaceDao
-
-    companion object {
-        /**
-         * Migration from version 1 to version 2.
-         * Adds the BetweenTheBorders testnet interface and renames the existing testnet interface.
-         */
-        val MIGRATION_1_2 =
-            object : Migration(1, 2) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    // Rename the existing "testnet" interface to "RNS Testnet Dublin"
-                    db.execSQL(
-                        """
-                    UPDATE interfaces
-                    SET name = 'RNS Testnet Dublin', displayOrder = 2
-                    WHERE name = 'testnet' AND type = 'TCPClient'
-                """,
-                    )
-
-                    // Update displayOrder for existing interfaces to make room
-                    db.execSQL(
-                        """
-                    UPDATE interfaces
-                    SET displayOrder = displayOrder + 1
-                    WHERE displayOrder >= 2 AND name != 'RNS Testnet Dublin'
-                """,
-                    )
-
-                    // Insert the BetweenTheBorders interface if it doesn't already exist
-                    // First check if it exists
-                    val cursor = db.query("SELECT COUNT(*) FROM interfaces WHERE name = 'RNS Testnet BetweenTheBorders'")
-                    cursor.moveToFirst()
-                    val count = cursor.getInt(0)
-                    cursor.close()
-
-                    if (count == 0) {
-                        db.execSQL(
-                            """
-                        INSERT INTO interfaces (name, type, enabled, configJson, displayOrder)
-                        VALUES (?, ?, ?, ?, ?)
-                    """,
-                            arrayOf<Any>(
-                                "RNS Testnet BetweenTheBorders",
-                                "TCPClient",
-                                // enabled=true
-                                1,
-                                """{"target_host":"reticulum.betweentheborders.com","target_port":4242,"kiss_framing":false,"mode":"full"}""",
-                                3,
-                            ),
-                        )
-                    }
-                }
-            }
-
-        /**
-         * Migration from version 2 to version 3.
-         * Replaces Dublin testnet with Sideband public server and removes BetweenTheBorders testnet.
-         */
-        val MIGRATION_2_3 =
-            object : Migration(2, 3) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    // Update Dublin testnet to Sideband server
-                    db.execSQL(
-                        """
-                        UPDATE interfaces
-                        SET name = 'Sideband Server',
-                            configJson = '{"target_host":"sideband.connect.reticulum.network","target_port":4965,"kiss_framing":false,"mode":"full"}'
-                        WHERE name = 'RNS Testnet Dublin' AND type = 'TCPClient'
-                    """,
-                    )
-
-                    // Remove BetweenTheBorders testnet
-                    db.execSQL(
-                        """
-                        DELETE FROM interfaces
-                        WHERE name = 'RNS Testnet BetweenTheBorders' AND type = 'TCPClient'
-                    """,
-                    )
-                }
-            }
-
-        /**
-         * Migration from version 3 to version 4.
-         * Removes legacy discovery_port (48555) and data_port (49555) from AutoInterface configs.
-         * These ports were from early development; removing them lets RNS use proper defaults.
-         */
-        val MIGRATION_3_4 =
-            object : Migration(3, 4) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    // Remove legacy port settings from AutoInterface entries
-                    // The ports were added during development and should be null to use RNS defaults
-                    // Uses string REPLACE since SQLite JSON functions require API 34+
-                    db.execSQL(
-                        """
-                        UPDATE interfaces
-                        SET configJson = REPLACE(REPLACE(configJson,
-                            ',"discovery_port":48555', ''),
-                            ',"data_port":49555', '')
-                        WHERE type = 'AutoInterface'
-                          AND configJson LIKE '%"discovery_port":48555%'
-                          AND configJson LIKE '%"data_port":49555%'
-                    """,
-                    )
-                }
-            }
-
-        /**
-         * Migration from version 4 to version 5.
-         * Replaces decommissioned Sideband server with Beleth RNS Hub bootstrap server.
-         * The Sideband server at sideband.connect.reticulum.network:4965 is no longer operational.
-         */
-        val MIGRATION_4_5 =
-            object : Migration(4, 5) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    // Update Sideband server to Beleth RNS Hub with bootstrap mode enabled
-                    db.execSQL(
-                        """
-                        UPDATE interfaces
-                        SET name = 'Beleth RNS Hub',
-                            configJson = '{"target_host":"rns.beleth.net","target_port":4242,"kiss_framing":false,"mode":"full","bootstrap_only":true}'
-                        WHERE type = 'TCPClient'
-                          AND (name = 'Sideband Server' OR configJson LIKE '%sideband.connect.reticulum.network%')
-                    """,
-                    )
-                }
-            }
-    }
 
     /**
      * Callback to populate the database with default data on creation.

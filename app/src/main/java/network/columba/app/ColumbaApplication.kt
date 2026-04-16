@@ -181,6 +181,18 @@ class ColumbaApplication : Application() {
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
             }
+            // Skip scrub if the active identity requires a password — in that case
+            // ColumbaApplication can't decrypt the key at startup (no UI prompt yet),
+            // so the on-disk identity file is still the only usable fallback for
+            // handing the identity to the native stack. Deleting it silently rotates
+            // the user onto a fresh ephemeral identity.
+            if (anyActiveIdentityRequiresPassword()) {
+                android.util.Log.w(
+                    "ColumbaApplication",
+                    "Skipping stale identity file scrub - active identity is password-protected",
+                )
+                return@launch
+            }
             try {
                 val reticulumDir = java.io.File(filesDir, "reticulum")
                 val staleIdentityFiles =
@@ -360,6 +372,23 @@ class ColumbaApplication : Application() {
                 val startupConfig = startupConfigLoader.loadConfig()
                 val enabledInterfaces = startupConfig.interfaces
                 val activeIdentity = startupConfig.identity
+
+                // Password-protected identity: we can't decrypt the key without a
+                // password prompt. Bailing out here keeps the existing identity file
+                // usable as a future unlock-flow input rather than silently booting
+                // a fresh ephemeral identity that severs contact with the user's
+                // peers. TODO: wire an unlock screen that resumes this init path.
+                if (activeIdentity != null &&
+                    identityRepository.requiresPassword(activeIdentity.identityHash)
+                ) {
+                    android.util.Log.w(
+                        "ColumbaApplication",
+                        "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected - " +
+                            "skipping auto-init until an unlock flow provides the password",
+                    )
+                    return@launch
+                }
+
                 val preferOwnInstance = startupConfig.preferOwn
                 val rpcKey = startupConfig.rpcKey
                 val transportNodeEnabled = startupConfig.transport
@@ -653,6 +682,18 @@ class ColumbaApplication : Application() {
             val startupConfig = startupConfigLoader.loadConfig()
             val enabledInterfaces = startupConfig.interfaces
             val activeIdentity = startupConfig.identity
+
+            if (activeIdentity != null &&
+                identityRepository.requiresPassword(activeIdentity.identityHash)
+            ) {
+                android.util.Log.w(
+                    "ColumbaApplication",
+                    "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
+                        "is password-protected - skipping init until an unlock flow provides the password",
+                )
+                return
+            }
+
             val preferOwnInstance = startupConfig.preferOwn
             val rpcKey = startupConfig.rpcKey
             val transportNodeEnabled = startupConfig.transport
@@ -711,6 +752,21 @@ class ColumbaApplication : Application() {
         } catch (e: Exception) {
             android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error during initialization", e)
         }
+    }
+
+    /**
+     * True when the currently active identity is password-protected. Used to gate
+     * both the stale-file scrub and Reticulum auto-init: without a password prompt
+     * we can't decrypt the key, and deleting the on-disk file would silently rotate
+     * the user onto a fresh ephemeral identity.
+     */
+    private suspend fun anyActiveIdentityRequiresPassword(): Boolean {
+        val active =
+            runCatching { identityRepository.getActiveIdentitySync() }.getOrNull()
+                ?: return false
+        return runCatching {
+            identityRepository.requiresPassword(active.identityHash)
+        }.getOrDefault(false)
     }
 
     /**

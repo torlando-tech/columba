@@ -37,9 +37,10 @@ object DeviceInfoUtil {
     ): SystemInfo {
         // Format in UTC so the rendered string stays consistent across device time zones —
         // otherwise the same BuildConfig.BUILD_TIMESTAMP renders differently per locale and
-        // breaks the reproducible-build story at the UI layer.
+        // breaks the reproducible-build story at the UI layer. The `zzz` pattern derives the
+        // suffix from the timeZone below, so format and configuration can't drift.
         val buildDate =
-            SimpleDateFormat("yyyy-MM-dd HH:mm 'UTC'", Locale.US)
+            SimpleDateFormat("yyyy-MM-dd HH:mm zzz", Locale.US)
                 .apply { timeZone = TimeZone.getTimeZone("UTC") }
                 .format(Date(BuildConfig.BUILD_TIMESTAMP))
 

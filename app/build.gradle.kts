@@ -95,6 +95,10 @@ fun getReproducibleBuildTimestamp(): Long {
             .trim()
             .toLong() * 1000L
     } catch (_: Exception) {
+        println(
+            "Warning: could not read git commit timestamp; BUILD_TIMESTAMP will be 0 " +
+                "(renders as 1970-01-01 on the About screen). Set SOURCE_DATE_EPOCH to override.",
+        )
         0L
     }
 }

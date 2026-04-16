@@ -74,7 +74,7 @@ fun WelcomePage(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .scale(2.3f),
+                        .scale(1.55f),
             )
         }
 

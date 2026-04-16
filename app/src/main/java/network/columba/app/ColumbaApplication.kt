@@ -399,35 +399,8 @@ class ColumbaApplication : Application() {
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
                 android.util.Log.d("ColumbaApplication", "Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount")
 
-                // Decrypt the active identity's private key into memory so we can hand
-                // it to the native stack without ever writing plaintext to disk.
-                // Failure to decrypt falls through to `deliveryIdentityKey = null`,
-                // in which case the native stack creates a fresh identity.
-                var deliveryKey: ByteArray? = null
                 val displayName = activeIdentity?.displayName
-                if (activeIdentity != null) {
-                    android.util.Log.d(
-                        "ColumbaApplication",
-                        "Active identity: ${activeIdentity.displayName} " +
-                            "(${activeIdentity.identityHash.take(8)}...)",
-                    )
-                    val keyResult = identityKeyProvider.getDecryptedKeyData(activeIdentity.identityHash)
-                    if (keyResult.isSuccess) {
-                        deliveryKey = keyResult.getOrNull()
-                        android.util.Log.d(
-                            "ColumbaApplication",
-                            "Decrypted delivery identity key into memory (${deliveryKey?.size ?: 0} bytes)",
-                        )
-                    } else {
-                        android.util.Log.e(
-                            "ColumbaApplication",
-                            "Could not decrypt identity key: ${keyResult.exceptionOrNull()}",
-                        )
-                    }
-                    android.util.Log.d("ColumbaApplication", "Display name: $displayName")
-                } else {
-                    android.util.Log.d("ColumbaApplication", "No active identity found, native stack will create default")
-                }
+                val deliveryKey = decryptDeliveryKey(activeIdentity)
 
                 // Auto-initialize Reticulum with config from database
                 android.util.Log.d("ColumbaApplication", "Auto-initializing Reticulum...")

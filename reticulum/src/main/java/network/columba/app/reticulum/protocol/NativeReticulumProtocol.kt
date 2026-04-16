@@ -549,6 +549,11 @@ class NativeReticulumProtocol(
                 reticulum = null
                 deliveryIdentity = null
                 deliveryDestination = null
+                // Drop the ReticulumConfig reference so the delivery-identity key bytes
+                // it carries (and any copies via setBatteryProfile) become GC-eligible.
+                // True in-memory zeroing isn't achievable on the JVM, but releasing the
+                // strong reference matches the key lifecycle care elsewhere in this flow.
+                lastConfig = null
                 Transport.customJobIntervalMs = null
                 Transport.customTablesCullIntervalMs = null
                 Transport.customAnnouncesCheckIntervalMs = null

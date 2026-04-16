@@ -1883,7 +1883,7 @@ class NativeReticulumProtocol(
 
     override suspend fun getBleReticulumVersion(): String? = null
 
-    override suspend fun getLxstVersion(): String? = "LXST-kt 0.0.1"
+    override suspend fun getLxstVersion(): String? = "LXST-kt 0.0.3"
 
     // ==================== Blocking & Transport ====================
 

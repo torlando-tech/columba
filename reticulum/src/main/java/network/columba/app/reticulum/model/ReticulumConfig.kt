@@ -4,6 +4,16 @@ data class ReticulumConfig(
     val storagePath: String,
     val enabledInterfaces: List<InterfaceConfig>,
     val identityFilePath: String? = null,
+    /**
+     * Raw 64-byte delivery-identity private key (X25519_prv || Ed25519_prv) kept in
+     * memory for the lifetime of this init. When non-null, the native stack constructs
+     * the delivery identity via `NativeIdentity.fromBytes(deliveryIdentityKey)` and
+     * never writes or reads `identityFilePath`. Callers that hold the key encrypted
+     * at rest (e.g. Android Keystore-wrapped in the app's DB) should pass the
+     * decrypted bytes here and leave `identityFilePath` null so the plaintext key
+     * does not touch disk.
+     */
+    val deliveryIdentityKey: ByteArray? = null,
     val displayName: String? = null,
     val logLevel: LogLevel = LogLevel.INFO,
     val allowAnonymous: Boolean = false,

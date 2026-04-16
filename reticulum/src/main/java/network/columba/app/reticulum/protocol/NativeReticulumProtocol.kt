@@ -2,6 +2,18 @@ package network.columba.app.reticulum.protocol
 
 import android.util.Log
 import androidx.room.Room
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.reticulum.model.AnnounceEvent
 import network.columba.app.reticulum.model.BatteryProfile
 import network.columba.app.reticulum.model.DestinationType
@@ -15,18 +27,6 @@ import network.columba.app.reticulum.model.PacketReceipt
 import network.columba.app.reticulum.model.PacketType
 import network.columba.app.reticulum.model.ReceivedPacket
 import network.columba.app.reticulum.model.ReticulumConfig
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import network.reticulum.Reticulum
 import network.reticulum.common.DestinationDirection
 import network.reticulum.lxmf.LXMFConstants
@@ -284,10 +284,17 @@ class NativeReticulumProtocol(
 
     private fun initializeRouter(config: ReticulumConfig): NativeIdentity {
         val identity =
-            if (config.identityFilePath != null) {
-                NativeIdentity.fromFile(config.identityFilePath!!) ?: NativeIdentity.create()
-            } else {
-                NativeIdentity.create()
+            when {
+                // Preferred path: caller decrypted the key in memory (e.g. from an
+                // Android Keystore-wrapped blob) and handed us raw bytes. Avoids
+                // ever writing the plaintext key to disk.
+                config.deliveryIdentityKey != null ->
+                    NativeIdentity.fromBytes(config.deliveryIdentityKey!!) ?: NativeIdentity.create()
+                // Legacy path: load from a plaintext file on disk.
+                config.identityFilePath != null ->
+                    NativeIdentity.fromFile(config.identityFilePath!!) ?: NativeIdentity.create()
+                // No identity provided — create a fresh one.
+                else -> NativeIdentity.create()
             }
         deliveryIdentity = identity
 
@@ -414,11 +421,17 @@ class NativeReticulumProtocol(
 
                 initializePersistentStores(config.storagePath)
 
-                // Start Reticulum
+                // Start Reticulum with a fresh in-memory transport identity so the
+                // node-level RPC private key never touches disk. Transport identity
+                // continuity across app restarts isn't load-bearing on a phone client
+                // (unlike a fixed-location relay where established paths matter).
+                // Passing an override also triggers reticulum-kt to scrub and delete
+                // any stale $storagePath/transport_identity left from a prior run.
                 reticulum =
                     Reticulum.start(
                         configDir = config.storagePath,
                         enableTransport = config.enableTransport,
+                        transportIdentity = NativeIdentity.create(),
                     )
 
                 val identity = initializeRouter(config)

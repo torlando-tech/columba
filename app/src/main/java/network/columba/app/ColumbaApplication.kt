@@ -2,6 +2,14 @@ package network.columba.app
 
 import android.app.Application
 import android.os.StrictMode
+import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
@@ -19,14 +27,6 @@ import network.columba.app.startup.ServiceIdentityVerifier
 import network.columba.app.startup.StartupConfigLoader
 import network.columba.app.util.CrashReportManager
 import network.columba.app.util.HexUtils.hexStringToByteArray
-import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -78,6 +78,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var identityRepository: IdentityRepository
+
+    @Inject
+    lateinit var identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
@@ -168,6 +171,29 @@ class ColumbaApplication : Application() {
                 identityRepository.runEncryptionMigration()
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
+            }
+        }
+
+        // Scrub any stale plaintext identity_<hash> files left on disk from the previous
+        // file-backed flow. The native stack now gets the key in memory via
+        // ReticulumConfig.deliveryIdentityKey; the disk copies are dead weight and a
+        // forensic liability. Best-effort zero-overwrite + delete — true secure erase
+        // isn't achievable on wear-levelled / journalled storage, but we remove the
+        // dangling-reference risk.
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                val reticulumDir = java.io.File(filesDir, "reticulum")
+                val staleIdentityFiles =
+                    reticulumDir.listFiles { f -> f.isFile && f.name.startsWith("identity_") }
+                        ?: return@launch
+                staleIdentityFiles.forEach { f ->
+                    runCatching { f.writeBytes(ByteArray(f.length().toInt())) }
+                    if (f.delete()) {
+                        android.util.Log.i("ColumbaApplication", "Removed stale identity file: ${f.name}")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("ColumbaApplication", "Stale identity file cleanup failed: ${e.message}")
             }
         }
 
@@ -344,8 +370,11 @@ class ColumbaApplication : Application() {
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
                 android.util.Log.d("ColumbaApplication", "Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount")
 
-                // Ensure identity file exists (recover from keyData if missing)
-                var identityPath: String? = null
+                // Decrypt the active identity's private key into memory so we can hand
+                // it to the native stack without ever writing plaintext to disk.
+                // Failure to decrypt falls through to `deliveryIdentityKey = null`,
+                // in which case the native stack creates a fresh identity.
+                var deliveryKey: ByteArray? = null
                 val displayName = activeIdentity?.displayName
                 if (activeIdentity != null) {
                     android.util.Log.d(
@@ -353,16 +382,18 @@ class ColumbaApplication : Application() {
                         "Active identity: ${activeIdentity.displayName} " +
                             "(${activeIdentity.identityHash.take(8)}...)",
                     )
-                    val fileResult = identityRepository.ensureIdentityFileExists(activeIdentity)
-                    if (fileResult.isSuccess) {
-                        identityPath = fileResult.getOrNull()
-                        android.util.Log.d("ColumbaApplication", "Identity file verified/recovered: $identityPath")
+                    val keyResult = identityKeyProvider.getDecryptedKeyData(activeIdentity.identityHash)
+                    if (keyResult.isSuccess) {
+                        deliveryKey = keyResult.getOrNull()
+                        android.util.Log.d(
+                            "ColumbaApplication",
+                            "Decrypted delivery identity key into memory (${deliveryKey?.size ?: 0} bytes)",
+                        )
                     } else {
                         android.util.Log.e(
                             "ColumbaApplication",
-                            "Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
+                            "Could not decrypt identity key: ${keyResult.exceptionOrNull()}",
                         )
-                        // identityPath remains null — native stack will use its in-memory identity
                     }
                     android.util.Log.d("ColumbaApplication", "Display name: $displayName")
                 } else {
@@ -375,7 +406,7 @@ class ColumbaApplication : Application() {
                     ReticulumConfig(
                         storagePath = filesDir.absolutePath + "/reticulum",
                         enabledInterfaces = enabledInterfaces,
-                        identityFilePath = identityPath,
+                        deliveryIdentityKey = deliveryKey,
                         displayName = displayName,
                         logLevel = LogLevel.DEBUG,
                         allowAnonymous = false,
@@ -633,8 +664,9 @@ class ColumbaApplication : Application() {
                 "initializeReticulumService: Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount",
             )
 
-            // Ensure identity file exists (recover from keyData if missing)
-            var identityPath: String? = null
+            // Decrypt the active identity's private key into memory so we can hand
+            // it to the native stack without ever writing plaintext to disk.
+            var deliveryKey: ByteArray? = null
             val displayName = activeIdentity?.displayName
             if (activeIdentity != null) {
                 android.util.Log.d(
@@ -642,18 +674,24 @@ class ColumbaApplication : Application() {
                     "initializeReticulumService: Active identity: ${activeIdentity.displayName} " +
                         "(${activeIdentity.identityHash.take(8)}...)",
                 )
-                val fileResult = identityRepository.ensureIdentityFileExists(activeIdentity)
-                if (fileResult.isSuccess) {
-                    identityPath = fileResult.getOrNull()
-                    android.util.Log.d("ColumbaApplication", "initializeReticulumService: Identity file verified/recovered: $identityPath")
+                val keyResult = identityKeyProvider.getDecryptedKeyData(activeIdentity.identityHash)
+                if (keyResult.isSuccess) {
+                    deliveryKey = keyResult.getOrNull()
+                    android.util.Log.d(
+                        "ColumbaApplication",
+                        "initializeReticulumService: Decrypted delivery identity key into memory (${deliveryKey?.size ?: 0} bytes)",
+                    )
                 } else {
                     android.util.Log.e(
                         "ColumbaApplication",
-                        "initializeReticulumService: Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
+                        "initializeReticulumService: Could not decrypt identity key: ${keyResult.exceptionOrNull()}",
                     )
                 }
             } else {
-                android.util.Log.d("ColumbaApplication", "initializeReticulumService: No active identity found, native stack will create default")
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "initializeReticulumService: No active identity found, native stack will create default",
+                )
             }
 
             // Initialize Reticulum with config from database
@@ -662,7 +700,7 @@ class ColumbaApplication : Application() {
                 ReticulumConfig(
                     storagePath = filesDir.absolutePath + "/reticulum",
                     enabledInterfaces = enabledInterfaces,
-                    identityFilePath = identityPath,
+                    deliveryIdentityKey = deliveryKey,
                     displayName = displayName,
                     logLevel = LogLevel.DEBUG,
                     allowAnonymous = false,

@@ -6,6 +6,13 @@ import android.content.Intent
 import android.os.Process
 import android.util.Log
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
@@ -15,13 +22,6 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.reticulum.model.LogLevel
 import network.columba.app.reticulum.model.ReticulumConfig
 import network.columba.app.reticulum.protocol.ReticulumProtocol
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.yield
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -205,9 +205,7 @@ class InterfaceConfigManager
                     // Step 8: Bind to the new service
                     Log.d(TAG, "Step 8: Binding to new service instance...")
                     reticulumProtocol.bindService()
-                    // Phase 2, Task 2.3: bindService() now waits for explicit readiness signal
-                    // No more arbitrary delay needed - service notifies when ready for IPC calls
-                    Log.d(TAG, "✓ Bound to new service and ready for IPC")
+                    Log.d(TAG, "✓ Bound to new service")
 
                     // Step 9: Initialize Reticulum with new config
                     Log.d(TAG, "Step 9: Initializing Reticulum with new configuration...")

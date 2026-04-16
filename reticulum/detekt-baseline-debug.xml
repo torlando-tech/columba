@@ -9,7 +9,6 @@
     <ID>CyclomaticComplexMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>InjectDispatcher:KotlinBLEBridge.kt$KotlinBLEBridge$Default</ID>
     <ID>InjectDispatcher:KotlinRNodeBridge.kt$KotlinRNodeBridge$IO</ID>
-    <ID>InjectDispatcher:KotlinReticulumBridge.kt$KotlinReticulumBridge$IO</ID>
     <ID>LargeClass:BleGattClient.kt$BleGattClient</ID>
     <ID>LargeClass:BleGattServer.kt$BleGattServer</ID>
     <ID>LargeClass:KotlinBLEBridge.kt$KotlinBLEBridge</ID>

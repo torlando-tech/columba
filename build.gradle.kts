@@ -5,7 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.20" apply false
     id("com.google.dagger.hilt.android") version "2.59.2" apply false
     id("com.google.devtools.ksp") version "2.3.6" apply false
-    id("com.chaquo.python") version "17.0.0" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20" apply false
     id("io.sentry.android.gradle") version "6.1.0" apply false
     id("app.cash.paparazzi") version "1.3.5" apply false

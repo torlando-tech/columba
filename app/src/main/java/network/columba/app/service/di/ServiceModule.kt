@@ -5,7 +5,6 @@ import kotlinx.coroutines.CoroutineScope
 import network.columba.app.service.binder.ReticulumServiceBinder
 import network.columba.app.service.manager.BleCoordinator
 import network.columba.app.service.manager.LockManager
-import network.columba.app.service.manager.MaintenanceManager
 import network.columba.app.service.manager.NetworkChangeManager
 import network.columba.app.service.manager.ServiceNotificationManager
 import network.columba.app.service.persistence.ServicePersistenceManager
@@ -26,7 +25,6 @@ object ServiceModule {
     data class ServiceManagers(
         val state: ServiceState,
         val lockManager: LockManager,
-        val maintenanceManager: MaintenanceManager,
         val networkChangeManager: NetworkChangeManager,
         val notificationManager: ServiceNotificationManager,
         val bleCoordinator: BleCoordinator,
@@ -47,22 +45,17 @@ object ServiceModule {
         scope: CoroutineScope,
         onNetworkChanged: () -> Unit = {},
     ): ServiceManagers {
-        // Phase 1: Foundation (no dependencies)
         val state = ServiceState()
         val lockManager = LockManager(context)
-        val maintenanceManager = MaintenanceManager(lockManager, scope)
         val notificationManager = ServiceNotificationManager(context, state)
         val bleCoordinator = BleCoordinator(context)
         val settingsAccessor = ServiceSettingsAccessor(context)
         val persistenceManager = ServicePersistenceManager(context, scope, settingsAccessor)
-
-        // Network change monitoring (depends on lockManager)
         val networkChangeManager = NetworkChangeManager(context, lockManager, onNetworkChanged)
 
         return ServiceManagers(
             state = state,
             lockManager = lockManager,
-            maintenanceManager = maintenanceManager,
             networkChangeManager = networkChangeManager,
             notificationManager = notificationManager,
             bleCoordinator = bleCoordinator,

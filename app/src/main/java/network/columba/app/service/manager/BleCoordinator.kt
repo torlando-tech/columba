@@ -12,40 +12,17 @@ import org.json.JSONObject
  * This is a thin wrapper around KotlinBLEBridge singleton that provides
  * a clean interface for service operations.
  */
-class BleCoordinator(private val context: Context) {
+class BleCoordinator(
+    private val context: Context,
+) {
     companion object {
         private const val TAG = "BleCoordinator"
-    }
-
-    // Callback broadcaster for sending events to UI clients
-    private var callbackBroadcaster: CallbackBroadcaster? = null
-
-    // Connection change listener for event-driven updates
-    private val connectionChangeListener =
-        object : KotlinBLEBridge.ConnectionChangeListener {
-            override fun onConnectionsChanged(connectionDetailsJson: String) {
-                Log.d(TAG, "BLE connections changed, broadcasting to clients")
-                callbackBroadcaster?.broadcastBleConnectionChange(connectionDetailsJson)
-            }
-        }
-
-    /**
-     * Set the callback broadcaster for IPC event broadcasting.
-     * Should be called during service initialization.
-     */
-    fun setCallbackBroadcaster(broadcaster: CallbackBroadcaster) {
-        callbackBroadcaster = broadcaster
-        // Register our listener with the BLE bridge
-        getBridge().addConnectionChangeListener(connectionChangeListener)
-        Log.d(TAG, "Callback broadcaster set and connection listener registered")
     }
 
     /**
      * Clean up resources when service is destroyed.
      */
     fun cleanup() {
-        getBridge().removeConnectionChangeListener(connectionChangeListener)
-        callbackBroadcaster = null
         Log.d(TAG, "BleCoordinator cleanup complete")
     }
 
@@ -104,8 +81,8 @@ class BleCoordinator(private val context: Context) {
      *
      * @return JSON string containing array of connection details
      */
-    fun getConnectionDetailsJson(): String {
-        return try {
+    fun getConnectionDetailsJson(): String =
+        try {
             Log.d(TAG, "Getting BLE connection details")
             val details = getBridge().getConnectionDetailsSync()
             Log.d(TAG, "Found ${details.size} BLE connections")
@@ -133,5 +110,4 @@ class BleCoordinator(private val context: Context) {
             Log.e(TAG, "Error getting BLE connection details", e)
             "[]" // Return empty array on error
         }
-    }
 }

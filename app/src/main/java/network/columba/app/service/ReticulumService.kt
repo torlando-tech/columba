@@ -5,8 +5,6 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import androidx.core.content.ContextCompat
-import network.columba.app.service.binder.ReticulumServiceBinder
-import network.columba.app.service.di.ServiceModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,18 +12,18 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import network.columba.app.service.binder.ReticulumServiceBinder
+import network.columba.app.service.di.ServiceModule
 
 /**
- * Background service that hosts the Python Reticulum instance.
- * Runs as a foreground service to ensure reliability and proper threading for socket I/O.
- *
- * This solves the Chaquopy threading limitation where background threads for socket I/O
- * don't work reliably in the main app process.
+ * Background service that hosts the native Reticulum stack.
+ * Runs as a foreground service for OOM protection and reliable BLE/socket I/O
+ * while the main UI process may come and go.
  *
  * Architecture:
- * - This class is a thin lifecycle shell (~150 lines vs original 1,762)
+ * - This class is a thin lifecycle shell
  * - All business logic is delegated to specialized managers via ServiceModule
- * - AIDL implementation is in ReticulumServiceBinder
+ * - Binder is a plain android.os.Binder liveness handle (no cross-process protocol calls)
  * - State is managed in ServiceState
  */
 class ReticulumService : Service() {
@@ -48,7 +46,7 @@ class ReticulumService : Service() {
     // Managers container (initialized in onCreate)
     private lateinit var managers: ServiceModule.ServiceManagers
 
-    // AIDL binder (initialized in onCreate)
+    // Local binder returned from onBind() — liveness handle only, no protocol calls
     private lateinit var binder: ReticulumServiceBinder
 
     override fun onCreate() {
@@ -123,16 +121,13 @@ class ReticulumService : Service() {
         // Clean up stale announces (>30 days old) on each service lifecycle
         managers.persistenceManager.cleanupStaleAnnounces()
 
-        // Create binder with callbacks
+        // Create binder returned from onBind(). No cross-process protocol calls flow
+        // through here anymore — it's just a liveness handle for bindService consumers.
         binder =
             ServiceModule.createBinder(
                 managers = managers,
                 onShutdown = {
                     Log.d(TAG, "Reticulum shutdown complete")
-                },
-                onForceExit = {
-                    Log.i(TAG, "Exiting process now...")
-                    System.exit(0)
                 },
             )
     }
@@ -182,17 +177,13 @@ class ReticulumService : Service() {
                 // Shutdown and stop service
                 Log.d(TAG, "Received ACTION_STOP - forcing process exit")
 
-                // Remove notification FIRST — binder.shutdown()'s async Python cleanup
-                // can crash the process, so ensure the notification is gone before that.
+                // Remove notification before anything else so System.exit(0) can't leave a
+                // lingering entry in the shade.
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
 
-                if (::managers.isInitialized) managers.state.isPythonShutdownStarted.set(true)
-
-                // Stop BLE immediately on Main thread before process exit.
-                // The normal Python shutdown path (ReticulumWrapper.shutdown() → BLEInterface.detach()
-                // → AndroidBLEDriver.stop() → KotlinBLEBridge.stop()) won't complete because
-                // System.exit(0) kills the process before async cleanup finishes.
+                // Stop BLE immediately on the Main thread before process exit, since
+                // System.exit(0) will kill the process before any async cleanup runs.
                 if (::managers.isInitialized) {
                     try {
                         managers.bleCoordinator.stopImmediate()
@@ -239,9 +230,6 @@ class ReticulumService : Service() {
         // Start as foreground when first client binds
         managers.notificationManager.startForeground(this)
 
-        // Mark service as bound (broadcaster will notify readiness callback)
-        managers.broadcaster.setServiceBound(true)
-
         return binder
     }
 
@@ -249,7 +237,6 @@ class ReticulumService : Service() {
         Log.d(TAG, "Service rebound")
         if (::managers.isInitialized) {
             managers.notificationManager.startForeground(this)
-            managers.broadcaster.setServiceBound(true)
         }
     }
 
@@ -272,17 +259,11 @@ class ReticulumService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
 
-        // Set kill switch to prevent SIGSEGV from late Python calls
-        if (::managers.isInitialized) {
-            managers.state.isPythonShutdownStarted.set(true)
-        }
-
         // Clean up all resources (if initialized)
         if (::managers.isInitialized) {
             managers.notificationManager.resetSyncNotification()
             managers.networkChangeManager.stop()
             managers.lockManager.releaseAll()
-            managers.broadcaster.kill()
             // Safety net: stop BLE if not already stopped by ACTION_STOP
             managers.bleCoordinator.stopImmediate()
         }

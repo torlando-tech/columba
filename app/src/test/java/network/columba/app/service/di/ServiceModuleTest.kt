@@ -1,12 +1,12 @@
 package network.columba.app.service.di
 
 import android.content.Context
-import network.columba.app.service.manager.MaintenanceManager
 import io.mockk.clearAllMocks
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import network.columba.app.service.manager.MaintenanceManager
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Before
@@ -62,7 +62,6 @@ class ServiceModuleTest {
         assertNotNull("lockManager should not be null", managers.lockManager)
         assertNotNull("maintenanceManager should not be null", managers.maintenanceManager)
         assertNotNull("notificationManager should not be null", managers.notificationManager)
-        assertNotNull("broadcaster should not be null", managers.broadcaster)
         assertNotNull("bleCoordinator should not be null", managers.bleCoordinator)
         assertNotNull("persistenceManager should not be null", managers.persistenceManager)
         assertNotNull("settingsAccessor should not be null", managers.settingsAccessor)
@@ -87,7 +86,6 @@ class ServiceModuleTest {
             ServiceModule.createBinder(
                 managers = managers,
                 onShutdown = {},
-                onForceExit = {},
             )
 
         // Binder should be created without throwing
@@ -103,7 +101,6 @@ class ServiceModuleTest {
             ServiceModule.createBinder(
                 managers = managers,
                 onShutdown = {},
-                onForceExit = {},
             )
 
         assertNotNull(binder)

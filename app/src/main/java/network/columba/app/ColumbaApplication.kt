@@ -2,6 +2,14 @@ package network.columba.app
 
 import android.app.Application
 import android.os.StrictMode
+import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
@@ -19,14 +27,6 @@ import network.columba.app.startup.ServiceIdentityVerifier
 import network.columba.app.startup.StartupConfigLoader
 import network.columba.app.util.CrashReportManager
 import network.columba.app.util.HexUtils.hexStringToByteArray
-import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -78,6 +78,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var identityRepository: IdentityRepository
+
+    @Inject
+    lateinit var identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
@@ -162,12 +165,62 @@ class ColumbaApplication : Application() {
                 .cleanupAllTempFiles(this@ColumbaApplication)
         }
 
-        // Migrate unencrypted identity keys to encrypted storage (one-time, idempotent)
+        // Migrate unencrypted identity keys to encrypted storage (one-time, idempotent),
+        // then scrub any stale plaintext identity_<hash> files. The migration reads those
+        // same files for upgraders whose keys were only on disk, so the scrub MUST run
+        // after the migration completes — otherwise a lost race deletes the only copy of
+        // the private key and the identity is permanently gone.
+        //
+        // The scrub itself removes forensic liability: the native stack now gets the key
+        // in memory via ReticulumConfig.deliveryIdentityKey; the disk copies are dead
+        // weight. Best-effort zero-overwrite + delete — true secure erase isn't achievable
+        // on wear-levelled / journalled storage, but we remove the dangling-reference risk.
         applicationScope.launch(Dispatchers.IO) {
+            // Gate the scrub on full migration success. If migration throws, returns
+            // Result.failure, or reports any per-identity failureCount > 0, the on-disk
+            // identity_<hash> files are still the only copy of the key for at least one
+            // identity — deleting them here would permanently destroy it on upgraders
+            // hitting a transient Keystore or DB error on first boot.
+            val migrationSucceeded =
+                try {
+                    val result = identityRepository.runEncryptionMigration()
+                    result.isSuccess && (result.getOrNull()?.failureCount ?: 1) == 0
+                } catch (e: Exception) {
+                    android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
+                    false
+                }
+            if (!migrationSucceeded) {
+                android.util.Log.w(
+                    "ColumbaApplication",
+                    "Skipping stale identity file scrub - encryption migration did not fully succeed",
+                )
+                return@launch
+            }
+            // Skip scrub if the active identity requires a password — in that case
+            // ColumbaApplication can't decrypt the key at startup (no UI prompt yet),
+            // so the on-disk identity file is still the only usable fallback for
+            // handing the identity to the native stack. Deleting it silently rotates
+            // the user onto a fresh ephemeral identity.
+            if (anyActiveIdentityRequiresPassword()) {
+                android.util.Log.w(
+                    "ColumbaApplication",
+                    "Skipping stale identity file scrub - active identity is password-protected",
+                )
+                return@launch
+            }
             try {
-                identityRepository.runEncryptionMigration()
+                val reticulumDir = java.io.File(filesDir, "reticulum")
+                val staleIdentityFiles =
+                    reticulumDir.listFiles { f -> f.isFile && f.name.startsWith("identity_") }
+                        ?: return@launch
+                staleIdentityFiles.forEach { f ->
+                    runCatching { f.writeBytes(ByteArray(f.length().toInt())) }
+                    if (f.delete()) {
+                        android.util.Log.i("ColumbaApplication", "Removed stale identity file: ${f.name}")
+                    }
+                }
             } catch (e: Exception) {
-                android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
+                android.util.Log.w("ColumbaApplication", "Stale identity file cleanup failed: ${e.message}")
             }
         }
 
@@ -334,6 +387,29 @@ class ColumbaApplication : Application() {
                 val startupConfig = startupConfigLoader.loadConfig()
                 val enabledInterfaces = startupConfig.interfaces
                 val activeIdentity = startupConfig.identity
+
+                // Password-protected identity: we can't decrypt the key without a
+                // password prompt. Bailing out here keeps the existing identity file
+                // usable as a future unlock-flow input rather than silently booting
+                // a fresh ephemeral identity that severs contact with the user's
+                // peers. TODO: wire an unlock screen that resumes this init path.
+                // Fail safe on a DB/Keystore error: a thrown requiresPassword would
+                // otherwise escape to the outer catch and get logged as "Failed to bind
+                // to ReticulumService" — the real failure is a DB query, and we want to
+                // skip init in that case rather than power on with the wrong identity.
+                if (activeIdentity != null &&
+                    runCatching {
+                        identityRepository.requiresPassword(activeIdentity.identityHash)
+                    }.getOrDefault(true)
+                ) {
+                    android.util.Log.w(
+                        "ColumbaApplication",
+                        "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected " +
+                            "(or password status unreadable) - skipping auto-init until unlock",
+                    )
+                    return@launch
+                }
+
                 val preferOwnInstance = startupConfig.preferOwn
                 val rpcKey = startupConfig.rpcKey
                 val transportNodeEnabled = startupConfig.transport
@@ -344,29 +420,23 @@ class ColumbaApplication : Application() {
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
                 android.util.Log.d("ColumbaApplication", "Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount")
 
-                // Ensure identity file exists (recover from keyData if missing)
-                var identityPath: String? = null
                 val displayName = activeIdentity?.displayName
-                if (activeIdentity != null) {
-                    android.util.Log.d(
+                val deliveryKey = decryptDeliveryKey(activeIdentity)
+
+                // Bail before Reticulum init if we have an active identity in Room but
+                // couldn't produce its key bytes. Proceeding would start the native stack
+                // with NativeIdentity.create() (a fresh ephemeral identity) while Room
+                // still has the original active — the mismatch is invisible post-init
+                // because the service check only asserts `existingActive != null`. Most
+                // common cause: first-launch race where decryptDeliveryKey runs before
+                // runEncryptionMigration has populated the Keystore-wrapped blob.
+                if (activeIdentity != null && deliveryKey == null) {
+                    android.util.Log.e(
                         "ColumbaApplication",
-                        "Active identity: ${activeIdentity.displayName} " +
-                            "(${activeIdentity.identityHash.take(8)}...)",
+                        "Active identity ${activeIdentity.identityHash.take(8)}... present but key decryption " +
+                            "returned null - skipping init to avoid silently substituting a fresh identity",
                     )
-                    val fileResult = identityRepository.ensureIdentityFileExists(activeIdentity)
-                    if (fileResult.isSuccess) {
-                        identityPath = fileResult.getOrNull()
-                        android.util.Log.d("ColumbaApplication", "Identity file verified/recovered: $identityPath")
-                    } else {
-                        android.util.Log.e(
-                            "ColumbaApplication",
-                            "Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
-                        )
-                        // identityPath remains null — native stack will use its in-memory identity
-                    }
-                    android.util.Log.d("ColumbaApplication", "Display name: $displayName")
-                } else {
-                    android.util.Log.d("ColumbaApplication", "No active identity found, native stack will create default")
+                    return@launch
                 }
 
                 // Auto-initialize Reticulum with config from database
@@ -375,7 +445,7 @@ class ColumbaApplication : Application() {
                     ReticulumConfig(
                         storagePath = filesDir.absolutePath + "/reticulum",
                         enabledInterfaces = enabledInterfaces,
-                        identityFilePath = identityPath,
+                        deliveryIdentityKey = deliveryKey,
                         displayName = displayName,
                         logLevel = LogLevel.DEBUG,
                         allowAnonymous = false,
@@ -622,6 +692,20 @@ class ColumbaApplication : Application() {
             val startupConfig = startupConfigLoader.loadConfig()
             val enabledInterfaces = startupConfig.interfaces
             val activeIdentity = startupConfig.identity
+
+            if (activeIdentity != null &&
+                runCatching {
+                    identityRepository.requiresPassword(activeIdentity.identityHash)
+                }.getOrDefault(true)
+            ) {
+                android.util.Log.w(
+                    "ColumbaApplication",
+                    "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
+                        "is password-protected (or password status unreadable) - skipping init until unlock",
+                )
+                return
+            }
+
             val preferOwnInstance = startupConfig.preferOwn
             val rpcKey = startupConfig.rpcKey
             val transportNodeEnabled = startupConfig.transport
@@ -633,27 +717,19 @@ class ColumbaApplication : Application() {
                 "initializeReticulumService: Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount",
             )
 
-            // Ensure identity file exists (recover from keyData if missing)
-            var identityPath: String? = null
             val displayName = activeIdentity?.displayName
-            if (activeIdentity != null) {
-                android.util.Log.d(
+            val deliveryKey = decryptDeliveryKey(activeIdentity)
+
+            // Same guard as the cold-start path: don't init with a null key when an
+            // active identity exists, or the native stack silently substitutes a fresh
+            // ephemeral identity.
+            if (activeIdentity != null && deliveryKey == null) {
+                android.util.Log.e(
                     "ColumbaApplication",
-                    "initializeReticulumService: Active identity: ${activeIdentity.displayName} " +
-                        "(${activeIdentity.identityHash.take(8)}...)",
+                    "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
+                        "present but key decryption returned null - skipping init",
                 )
-                val fileResult = identityRepository.ensureIdentityFileExists(activeIdentity)
-                if (fileResult.isSuccess) {
-                    identityPath = fileResult.getOrNull()
-                    android.util.Log.d("ColumbaApplication", "initializeReticulumService: Identity file verified/recovered: $identityPath")
-                } else {
-                    android.util.Log.e(
-                        "ColumbaApplication",
-                        "initializeReticulumService: Could not ensure identity file exists: ${fileResult.exceptionOrNull()}",
-                    )
-                }
-            } else {
-                android.util.Log.d("ColumbaApplication", "initializeReticulumService: No active identity found, native stack will create default")
+                return
             }
 
             // Initialize Reticulum with config from database
@@ -662,7 +738,7 @@ class ColumbaApplication : Application() {
                 ReticulumConfig(
                     storagePath = filesDir.absolutePath + "/reticulum",
                     enabledInterfaces = enabledInterfaces,
-                    identityFilePath = identityPath,
+                    deliveryIdentityKey = deliveryKey,
                     displayName = displayName,
                     logLevel = LogLevel.DEBUG,
                     allowAnonymous = false,
@@ -700,6 +776,64 @@ class ColumbaApplication : Application() {
         } catch (e: Exception) {
             android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error during initialization", e)
         }
+    }
+
+    /**
+     * True when the currently active identity is password-protected. Used to gate
+     * both the stale-file scrub and Reticulum auto-init: without a password prompt
+     * we can't decrypt the key, and deleting the on-disk file would silently rotate
+     * the user onto a fresh ephemeral identity.
+     */
+    private suspend fun anyActiveIdentityRequiresPassword(): Boolean {
+        // Fail safe: if we can't read the active identity or its password status, assume
+        // yes. The caller uses this to decide whether to delete on-disk key files; a
+        // transient DB/Keystore error shouldn't let the scrub proceed and potentially
+        // destroy the only copy of a password-protected identity.
+        val active =
+            runCatching { identityRepository.getActiveIdentitySync() }
+                .getOrElse { return true }
+                ?: return false
+        return runCatching {
+            identityRepository.requiresPassword(active.identityHash)
+        }.getOrDefault(true)
+    }
+
+    /**
+     * Decrypt the active identity's private key into memory so it can be handed
+     * to the native stack without ever writing plaintext to disk. Returns null
+     * when no active identity exists (native stack will create a fresh one) or
+     * when decryption fails (caller falls back to the same path).
+     */
+    private suspend fun decryptDeliveryKey(activeIdentity: network.columba.app.data.db.entity.LocalIdentityEntity?): ByteArray? {
+        if (activeIdentity == null) {
+            android.util.Log.d(
+                "ColumbaApplication",
+                "decryptDeliveryKey: No active identity found, native stack will create default",
+            )
+            return null
+        }
+        android.util.Log.d(
+            "ColumbaApplication",
+            "decryptDeliveryKey: Active identity: ${activeIdentity.displayName} " +
+                "(${activeIdentity.identityHash.take(8)}...)",
+        )
+        val keyResult = identityKeyProvider.getDecryptedKeyData(activeIdentity.identityHash)
+        return keyResult.fold(
+            onSuccess = { key ->
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "decryptDeliveryKey: Decrypted delivery identity key into memory (${key.size} bytes)",
+                )
+                key
+            },
+            onFailure = { error ->
+                android.util.Log.e(
+                    "ColumbaApplication",
+                    "decryptDeliveryKey: Could not decrypt identity key: $error",
+                )
+                null
+            },
+        )
     }
 
     /** Helper to restore peer identities in background after Reticulum initialization. */

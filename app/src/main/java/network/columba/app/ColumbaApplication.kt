@@ -165,22 +165,22 @@ class ColumbaApplication : Application() {
                 .cleanupAllTempFiles(this@ColumbaApplication)
         }
 
-        // Migrate unencrypted identity keys to encrypted storage (one-time, idempotent)
+        // Migrate unencrypted identity keys to encrypted storage (one-time, idempotent),
+        // then scrub any stale plaintext identity_<hash> files. The migration reads those
+        // same files for upgraders whose keys were only on disk, so the scrub MUST run
+        // after the migration completes — otherwise a lost race deletes the only copy of
+        // the private key and the identity is permanently gone.
+        //
+        // The scrub itself removes forensic liability: the native stack now gets the key
+        // in memory via ReticulumConfig.deliveryIdentityKey; the disk copies are dead
+        // weight. Best-effort zero-overwrite + delete — true secure erase isn't achievable
+        // on wear-levelled / journalled storage, but we remove the dangling-reference risk.
         applicationScope.launch(Dispatchers.IO) {
             try {
                 identityRepository.runEncryptionMigration()
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Identity key encryption migration failed", e)
             }
-        }
-
-        // Scrub any stale plaintext identity_<hash> files left on disk from the previous
-        // file-backed flow. The native stack now gets the key in memory via
-        // ReticulumConfig.deliveryIdentityKey; the disk copies are dead weight and a
-        // forensic liability. Best-effort zero-overwrite + delete — true secure erase
-        // isn't achievable on wear-levelled / journalled storage, but we remove the
-        // dangling-reference risk.
-        applicationScope.launch(Dispatchers.IO) {
             try {
                 val reticulumDir = java.io.File(filesDir, "reticulum")
                 val staleIdentityFiles =

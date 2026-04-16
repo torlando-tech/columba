@@ -75,7 +75,60 @@ data class ReticulumConfig(
      * providing spam prevention. Range: 8-20, default: 14.
      */
     val requiredDiscoveryValue: Int = 14,
-)
+) {
+    // Data-class-generated equals/hashCode use reference equality for ByteArray, so
+    // two configs with identical key bytes would otherwise never compare equal. Override
+    // to use contentEquals/contentHashCode for the key field; everything else is handled
+    // by the standard == on each property.
+    @Suppress("CyclomaticComplexMethod") // Field-by-field equality: one branch per property
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ReticulumConfig) return false
+        return storagePath == other.storagePath &&
+            enabledInterfaces == other.enabledInterfaces &&
+            identityFilePath == other.identityFilePath &&
+            deliveryIdentityKey.contentEqualsNullable(other.deliveryIdentityKey) &&
+            displayName == other.displayName &&
+            logLevel == other.logLevel &&
+            allowAnonymous == other.allowAnonymous &&
+            batteryProfile == other.batteryProfile &&
+            preferOwnInstance == other.preferOwnInstance &&
+            rpcKey == other.rpcKey &&
+            enableTransport == other.enableTransport &&
+            discoverInterfaces == other.discoverInterfaces &&
+            autoconnectDiscoveredInterfaces == other.autoconnectDiscoveredInterfaces &&
+            autoconnectIfacOnly == other.autoconnectIfacOnly &&
+            interfaceDiscoverySources == other.interfaceDiscoverySources &&
+            requiredDiscoveryValue == other.requiredDiscoveryValue
+    }
+
+    override fun hashCode(): Int {
+        var result = storagePath.hashCode()
+        result = 31 * result + enabledInterfaces.hashCode()
+        result = 31 * result + (identityFilePath?.hashCode() ?: 0)
+        result = 31 * result + (deliveryIdentityKey?.contentHashCode() ?: 0)
+        result = 31 * result + (displayName?.hashCode() ?: 0)
+        result = 31 * result + logLevel.hashCode()
+        result = 31 * result + allowAnonymous.hashCode()
+        result = 31 * result + batteryProfile.hashCode()
+        result = 31 * result + preferOwnInstance.hashCode()
+        result = 31 * result + (rpcKey?.hashCode() ?: 0)
+        result = 31 * result + enableTransport.hashCode()
+        result = 31 * result + discoverInterfaces.hashCode()
+        result = 31 * result + autoconnectDiscoveredInterfaces
+        result = 31 * result + autoconnectIfacOnly.hashCode()
+        result = 31 * result + (interfaceDiscoverySources?.hashCode() ?: 0)
+        result = 31 * result + requiredDiscoveryValue
+        return result
+    }
+
+    private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean =
+        when {
+            this == null && other == null -> true
+            this == null || other == null -> false
+            else -> contentEquals(other)
+        }
+}
 
 /**
  * Sealed class representing different Reticulum network interface types.

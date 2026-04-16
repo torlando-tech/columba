@@ -423,6 +423,22 @@ class ColumbaApplication : Application() {
                 val displayName = activeIdentity?.displayName
                 val deliveryKey = decryptDeliveryKey(activeIdentity)
 
+                // Bail before Reticulum init if we have an active identity in Room but
+                // couldn't produce its key bytes. Proceeding would start the native stack
+                // with NativeIdentity.create() (a fresh ephemeral identity) while Room
+                // still has the original active — the mismatch is invisible post-init
+                // because the service check only asserts `existingActive != null`. Most
+                // common cause: first-launch race where decryptDeliveryKey runs before
+                // runEncryptionMigration has populated the Keystore-wrapped blob.
+                if (activeIdentity != null && deliveryKey == null) {
+                    android.util.Log.e(
+                        "ColumbaApplication",
+                        "Active identity ${activeIdentity.identityHash.take(8)}... present but key decryption " +
+                            "returned null - skipping init to avoid silently substituting a fresh identity",
+                    )
+                    return@launch
+                }
+
                 // Auto-initialize Reticulum with config from database
                 android.util.Log.d("ColumbaApplication", "Auto-initializing Reticulum...")
                 val config =
@@ -703,6 +719,18 @@ class ColumbaApplication : Application() {
 
             val displayName = activeIdentity?.displayName
             val deliveryKey = decryptDeliveryKey(activeIdentity)
+
+            // Same guard as the cold-start path: don't init with a null key when an
+            // active identity exists, or the native stack silently substitutes a fresh
+            // ephemeral identity.
+            if (activeIdentity != null && deliveryKey == null) {
+                android.util.Log.e(
+                    "ColumbaApplication",
+                    "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
+                        "present but key decryption returned null - skipping init",
+                )
+                return
+            }
 
             // Initialize Reticulum with config from database
             android.util.Log.d("ColumbaApplication", "initializeReticulumService: Initializing Reticulum...")

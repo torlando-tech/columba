@@ -5,8 +5,6 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import androidx.core.content.ContextCompat
-import network.columba.app.service.binder.ReticulumServiceBinder
-import network.columba.app.service.di.ServiceModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +12,8 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import network.columba.app.service.binder.ReticulumServiceBinder
+import network.columba.app.service.di.ServiceModule
 
 /**
  * Background service that hosts the Python Reticulum instance.
@@ -123,16 +123,13 @@ class ReticulumService : Service() {
         // Clean up stale announces (>30 days old) on each service lifecycle
         managers.persistenceManager.cleanupStaleAnnounces()
 
-        // Create binder with callbacks
+        // Create binder returned from onBind(). No cross-process protocol calls flow
+        // through here anymore — it's just a liveness handle for bindService consumers.
         binder =
             ServiceModule.createBinder(
                 managers = managers,
                 onShutdown = {
                     Log.d(TAG, "Reticulum shutdown complete")
-                },
-                onForceExit = {
-                    Log.i(TAG, "Exiting process now...")
-                    System.exit(0)
                 },
             )
     }
@@ -239,9 +236,6 @@ class ReticulumService : Service() {
         // Start as foreground when first client binds
         managers.notificationManager.startForeground(this)
 
-        // Mark service as bound (broadcaster will notify readiness callback)
-        managers.broadcaster.setServiceBound(true)
-
         return binder
     }
 
@@ -249,7 +243,6 @@ class ReticulumService : Service() {
         Log.d(TAG, "Service rebound")
         if (::managers.isInitialized) {
             managers.notificationManager.startForeground(this)
-            managers.broadcaster.setServiceBound(true)
         }
     }
 
@@ -282,7 +275,6 @@ class ReticulumService : Service() {
             managers.notificationManager.resetSyncNotification()
             managers.networkChangeManager.stop()
             managers.lockManager.releaseAll()
-            managers.broadcaster.kill()
             // Safety net: stop BLE if not already stopped by ACTION_STOP
             managers.bleCoordinator.stopImmediate()
         }

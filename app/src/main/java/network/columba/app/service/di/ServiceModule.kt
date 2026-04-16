@@ -1,9 +1,9 @@
 package network.columba.app.service.di
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
 import network.columba.app.service.binder.ReticulumServiceBinder
 import network.columba.app.service.manager.BleCoordinator
-import network.columba.app.service.manager.CallbackBroadcaster
 import network.columba.app.service.manager.LockManager
 import network.columba.app.service.manager.MaintenanceManager
 import network.columba.app.service.manager.NetworkChangeManager
@@ -11,7 +11,6 @@ import network.columba.app.service.manager.ServiceNotificationManager
 import network.columba.app.service.persistence.ServicePersistenceManager
 import network.columba.app.service.persistence.ServiceSettingsAccessor
 import network.columba.app.service.state.ServiceState
-import kotlinx.coroutines.CoroutineScope
 
 /**
  * Manual dependency injection module for ReticulumService.
@@ -30,7 +29,6 @@ object ServiceModule {
         val maintenanceManager: MaintenanceManager,
         val networkChangeManager: NetworkChangeManager,
         val notificationManager: ServiceNotificationManager,
-        val broadcaster: CallbackBroadcaster,
         val bleCoordinator: BleCoordinator,
         val persistenceManager: ServicePersistenceManager,
         val settingsAccessor: ServiceSettingsAccessor,
@@ -54,7 +52,6 @@ object ServiceModule {
         val lockManager = LockManager(context)
         val maintenanceManager = MaintenanceManager(lockManager, scope)
         val notificationManager = ServiceNotificationManager(context, state)
-        val broadcaster = CallbackBroadcaster()
         val bleCoordinator = BleCoordinator(context)
         val settingsAccessor = ServiceSettingsAccessor(context)
         val persistenceManager = ServicePersistenceManager(context, scope, settingsAccessor)
@@ -68,7 +65,6 @@ object ServiceModule {
             maintenanceManager = maintenanceManager,
             networkChangeManager = networkChangeManager,
             notificationManager = notificationManager,
-            broadcaster = broadcaster,
             bleCoordinator = bleCoordinator,
             persistenceManager = persistenceManager,
             settingsAccessor = settingsAccessor,
@@ -76,17 +72,14 @@ object ServiceModule {
     }
 
     /**
-     * Create the AIDL binder with all dependencies wired.
+     * Create the local binder returned from ReticulumService.onBind().
      */
     fun createBinder(
         managers: ServiceManagers,
         onShutdown: () -> Unit,
-        onForceExit: () -> Unit,
     ): ReticulumServiceBinder =
         ReticulumServiceBinder(
             state = managers.state,
-            broadcaster = managers.broadcaster,
             onShutdown = onShutdown,
-            onForceExit = onForceExit,
         )
 }

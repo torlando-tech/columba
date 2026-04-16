@@ -205,7 +205,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-        aidl = true // Enable AIDL support for IPC
     }
 
     composeOptions {

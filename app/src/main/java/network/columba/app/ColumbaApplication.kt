@@ -749,12 +749,17 @@ class ColumbaApplication : Application() {
      * the user onto a fresh ephemeral identity.
      */
     private suspend fun anyActiveIdentityRequiresPassword(): Boolean {
+        // Fail safe: if we can't read the active identity or its password status, assume
+        // yes. The caller uses this to decide whether to delete on-disk key files; a
+        // transient DB/Keystore error shouldn't let the scrub proceed and potentially
+        // destroy the only copy of a password-protected identity.
         val active =
-            runCatching { identityRepository.getActiveIdentitySync() }.getOrNull()
+            runCatching { identityRepository.getActiveIdentitySync() }
+                .getOrElse { return true }
                 ?: return false
         return runCatching {
             identityRepository.requiresPassword(active.identityHash)
-        }.getOrDefault(false)
+        }.getOrDefault(true)
     }
 
     /**

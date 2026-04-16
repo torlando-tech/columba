@@ -450,6 +450,10 @@ class NativeReticulumProtocol(
                     )
 
                 val identity = initializeRouter(config)
+                // Key bytes are now inside NativeIdentity; drop them from the cached
+                // config so each setBatteryProfile copy doesn't carry the key for the
+                // session. Shortens the in-memory lifetime of the raw key material.
+                lastConfig = lastConfig?.copy(deliveryIdentityKey = null)
 
                 // Create and register network interfaces from config
                 NativeInterfaceFactory.appContext = appContext

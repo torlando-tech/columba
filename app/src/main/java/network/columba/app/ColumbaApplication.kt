@@ -767,13 +767,13 @@ class ColumbaApplication : Application() {
         if (activeIdentity == null) {
             android.util.Log.d(
                 "ColumbaApplication",
-                "initializeReticulumService: No active identity found, native stack will create default",
+                "decryptDeliveryKey: No active identity found, native stack will create default",
             )
             return null
         }
         android.util.Log.d(
             "ColumbaApplication",
-            "initializeReticulumService: Active identity: ${activeIdentity.displayName} " +
+            "decryptDeliveryKey: Active identity: ${activeIdentity.displayName} " +
                 "(${activeIdentity.identityHash.take(8)}...)",
         )
         val keyResult = identityKeyProvider.getDecryptedKeyData(activeIdentity.identityHash)
@@ -781,14 +781,14 @@ class ColumbaApplication : Application() {
             onSuccess = { key ->
                 android.util.Log.d(
                     "ColumbaApplication",
-                    "initializeReticulumService: Decrypted delivery identity key into memory (${key.size} bytes)",
+                    "decryptDeliveryKey: Decrypted delivery identity key into memory (${key.size} bytes)",
                 )
                 key
             },
             onFailure = { error ->
                 android.util.Log.e(
                     "ColumbaApplication",
-                    "initializeReticulumService: Could not decrypt identity key: $error",
+                    "decryptDeliveryKey: Could not decrypt identity key: $error",
                 )
                 null
             },

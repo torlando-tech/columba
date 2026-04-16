@@ -360,6 +360,22 @@ class ColumbaApplication : Application() {
                 val startupConfig = startupConfigLoader.loadConfig()
                 val enabledInterfaces = startupConfig.interfaces
                 val activeIdentity = startupConfig.identity
+
+                // Fresh install: no identity AND onboarding not yet completed.
+                // Defer Reticulum init so the native stack doesn't auto-create an
+                // "Anonymous Peer" identity that then masks the onboarding flow
+                // (OnboardingViewModel treats any pre-existing identity as an upgrade).
+                // Onboarding completion calls InterfaceConfigManager.applyInterfaceChanges(),
+                // which will start the service with the user's chosen settings.
+                if (activeIdentity == null &&
+                    !settingsRepository.hasCompletedOnboardingFlow.first()
+                ) {
+                    android.util.Log.d(
+                        "ColumbaApplication",
+                        "Fresh install - deferring Reticulum init until onboarding completes",
+                    )
+                    return@launch
+                }
                 val preferOwnInstance = startupConfig.preferOwn
                 val rpcKey = startupConfig.rpcKey
                 val transportNodeEnabled = startupConfig.transport

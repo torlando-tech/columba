@@ -215,6 +215,20 @@ class InterfaceConfigManager
                     // ColumbaApplication uses on cold start. Writing the raw key to
                     // files/reticulum/identity_<hash> here would recreate the plaintext
                     // file on every interface toggle, defeating the on-disk scrub.
+                    //
+                    // The is_applying_config flag was set synchronously in Step 3 to keep
+                    // ColumbaApplication.onCreate from racing us to reinitialize. Bailing
+                    // here without clearing it would leave the flag set for the rest of
+                    // this process — stale-flag detection on the next cold start would
+                    // eventually catch it, but a second apply attempt in the same session
+                    // would see the flag and short-circuit instead of actually running.
+                    val clearApplyFlag: () -> Unit = {
+                        context
+                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("is_applying_config", false)
+                            .commit()
+                    }
                     val activeIdentity = identityRepository.getActiveIdentitySync()
                     if (activeIdentity != null &&
                         runCatching {
@@ -226,6 +240,7 @@ class InterfaceConfigManager
                             "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected " +
                                 "(or password status unreadable) - skipping apply until unlock",
                         )
+                        clearApplyFlag()
                         error("Active identity requires unlock before interface config can apply")
                     }
                     val deliveryKey =
@@ -243,6 +258,7 @@ class InterfaceConfigManager
                             "Active identity ${activeIdentity.identityHash.take(8)}... present but key decryption " +
                                 "returned null - refusing to restart with an ephemeral identity",
                         )
+                        clearApplyFlag()
                         error("Active identity key unavailable; aborting apply")
                     }
                     val displayName = activeIdentity?.displayName

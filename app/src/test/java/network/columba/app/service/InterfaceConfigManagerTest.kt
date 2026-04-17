@@ -193,6 +193,9 @@ class InterfaceConfigManagerTest {
             assertTrue("Should fail when identity requires password", result.isFailure)
             // Service must not be reinitialized without a key.
             coVerify(exactly = 0) { reticulumProtocol.initialize(any()) }
+            // is_applying_config must be cleared so a follow-up apply in the same
+            // session doesn't short-circuit on a stale flag.
+            verify { sharedPrefsEditor.putBoolean("is_applying_config", false) }
         }
 
     @Test
@@ -219,6 +222,7 @@ class InterfaceConfigManagerTest {
             // Refusing to start with a null key protects against silently rotating
             // onto a fresh ephemeral identity.
             coVerify(exactly = 0) { reticulumProtocol.initialize(any()) }
+            verify { sharedPrefsEditor.putBoolean("is_applying_config", false) }
         }
 
     // ========== Manager Lifecycle Tests ==========

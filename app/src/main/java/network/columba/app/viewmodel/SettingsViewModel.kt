@@ -458,6 +458,7 @@ class SettingsViewModel
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
                             bleReticulumVersion = _state.value.bleReticulumVersion,
+                            lxstVersion = _state.value.lxstVersion,
                             // Preserve card expansion states
                             cardExpansionStates = _state.value.cardExpansionStates,
                             // Preserve update checker state from loadUpdateSettings()

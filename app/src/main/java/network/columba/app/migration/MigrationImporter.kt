@@ -740,13 +740,6 @@ class MigrationImporter
                 )
             database.localIdentityDao().insert(entity)
 
-            // Write key file directly for Python/RNS compatibility
-            try {
-                File(filePath).writeBytes(keyData)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to write identity file to $filePath", e)
-            }
-
             return true
         }
 

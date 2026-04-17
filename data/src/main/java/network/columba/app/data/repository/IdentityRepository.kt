@@ -4,16 +4,16 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.IdentityKeyMigrator
 import network.columba.app.data.crypto.IdentityKeyProvider
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.entity.LocalIdentityEntity
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -326,7 +326,8 @@ class IdentityRepository
 
                     // Try to recover from the stored filePath (e.g. default_identity)
                     val storedFile = File(identity.filePath)
-                    if (storedFile.exists() && storedFile.length() == 64L &&
+                    if (storedFile.exists() &&
+                        storedFile.length() == 64L &&
                         storedFile.absolutePath != canonicalPath.absolutePath
                     ) {
                         Log.i(TAG, "Found identity file at stored path for $hashPrefix..., copying to canonical")
@@ -377,7 +378,10 @@ class IdentityRepository
         /**
          * Update the database filePath if it differs from the canonical path.
          */
-        private suspend fun updateFilePathIfNeeded(identity: LocalIdentityEntity, canonicalPath: File) {
+        private suspend fun updateFilePathIfNeeded(
+            identity: LocalIdentityEntity,
+            canonicalPath: File,
+        ) {
             if (identity.filePath != canonicalPath.absolutePath) {
                 Log.i(TAG, "Updating filePath for ${identity.identityHash.take(8)}...")
                 identityDao.updateFilePath(identity.identityHash, canonicalPath.absolutePath)
@@ -556,6 +560,36 @@ class IdentityRepository
         // ==================== Key Encryption Management ====================
 
         /**
+         * Re-wrap a raw identity key with the current device Keystore key and
+         * overwrite `encryptedKeyData` on the matching identity row.
+         *
+         * Used by the identity-unlock flow after an Auto Backup restore on a
+         * new device — the Keystore-wrapped blob survived the restore but the
+         * Keystore AES key that produced it did not (Keystore keys don't cross
+         * the uninstall boundary). The user re-imports their `.identity` file,
+         * we parse the raw 64 bytes out of it, and this method rewrites the
+         * row so the next `decryptDeliveryKey` call succeeds.
+         */
+        suspend fun rewrapKeyWithDeviceKey(
+            identityHash: String,
+            keyData: ByteArray,
+        ): Result<Unit> =
+            withContext(ioDispatcher) {
+                try {
+                    val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
+                    identityDao.updateEncryptedKeyData(
+                        identityHash = identityHash,
+                        encryptedKeyData = encrypted,
+                        version = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                    )
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to re-wrap key for ${identityHash.take(8)}...", e)
+                    Result.failure(e)
+                }
+            }
+
+        /**
          * Run the encryption migration for all unencrypted identities.
          * This should be called during app initialization.
          */
@@ -563,15 +597,16 @@ class IdentityRepository
             withContext(ioDispatcher) {
                 Log.i(TAG, "Running identity key encryption migration...")
                 val result = keyMigrator.migrateUnencryptedIdentities()
-                result.onSuccess { migrationResult ->
-                    Log.i(
-                        TAG,
-                        "Encryption migration completed: ${migrationResult.successCount} succeeded, " +
-                            "${migrationResult.failureCount} failed",
-                    )
-                }.onFailure { e ->
-                    Log.e(TAG, "Encryption migration failed", e)
-                }
+                result
+                    .onSuccess { migrationResult ->
+                        Log.i(
+                            TAG,
+                            "Encryption migration completed: ${migrationResult.successCount} succeeded, " +
+                                "${migrationResult.failureCount} failed",
+                        )
+                    }.onFailure { e ->
+                        Log.e(TAG, "Encryption migration failed", e)
+                    }
                 result
             }
 

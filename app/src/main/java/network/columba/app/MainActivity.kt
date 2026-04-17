@@ -65,6 +65,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -113,9 +116,6 @@ import network.columba.app.viewmodel.OnboardingViewModel
 import network.columba.app.viewmodel.SettingsViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
-import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
 import javax.inject.Inject
@@ -540,6 +540,8 @@ sealed class Screen(
 ) {
     object Welcome : Screen("welcome", "Welcome", Icons.Default.Sensors)
 
+    object IdentityUnlock : Screen("identity_unlock", "Restore Identity", Icons.Default.Sensors)
+
     object Chats : Screen("chats", "Chats", Icons.Default.Chat)
 
     object Announces : Screen("announce_stream", "Announces", Icons.Default.Sensors)
@@ -608,29 +610,35 @@ fun ColumbaNavigation(
     // Access OnboardingViewModel to check onboarding status
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val onboardingState by onboardingViewModel.state.collectAsState()
+    val needsIdentityUnlock by onboardingViewModel.needsIdentityUnlock.collectAsState()
 
-    // Determine start destination based on onboarding status
+    // Determine start destination based on onboarding + unlock status
     // IMPORTANT: Use remember to compute this only once. Without remember,
     // the startDestination would be recalculated when onboardingState loads
     // asynchronously from DataStore, which causes NavHost to reset to the
     // new startDestination and discard any pending navigation.
     val startDestination =
         remember {
-            if (onboardingState.hasCompletedOnboarding) {
-                Screen.Chats.route
-            } else {
-                Screen.Welcome.route
+            when {
+                onboardingState.hasCompletedOnboarding && needsIdentityUnlock -> Screen.IdentityUnlock.route
+                onboardingState.hasCompletedOnboarding -> Screen.Chats.route
+                else -> Screen.Welcome.route
             }
         }
 
     // Handle edge case: user completed onboarding but we started at Welcome
     // because onboardingState was still loading when startDestination was computed
-    LaunchedEffect(onboardingState.hasCompletedOnboarding) {
+    LaunchedEffect(onboardingState.hasCompletedOnboarding, needsIdentityUnlock) {
         val currentRoute = navController.currentDestination?.route
-        if (onboardingState.hasCompletedOnboarding &&
-            currentRoute == Screen.Welcome.route &&
-            pendingNavigation.value == null
-        ) {
+        if (!onboardingState.hasCompletedOnboarding) return@LaunchedEffect
+        if (needsIdentityUnlock && currentRoute != Screen.IdentityUnlock.route) {
+            Log.d("ColumbaNavigation", "Redirecting to IdentityUnlock (key decryption failed)")
+            navController.navigate(Screen.IdentityUnlock.route) {
+                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+            }
+            return@LaunchedEffect
+        }
+        if (currentRoute == Screen.Welcome.route && pendingNavigation.value == null) {
             Log.d("ColumbaNavigation", "Redirecting to Chats (onboarding already completed)")
             navController.navigate(Screen.Chats.route) {
                 popUpTo(Screen.Welcome.route) { inclusive = true }
@@ -1067,6 +1075,16 @@ fun ColumbaNavigation(
                                 },
                                 onImportData = {
                                     navController.navigate("migration")
+                                },
+                            )
+                        }
+
+                        composable(Screen.IdentityUnlock.route) {
+                            network.columba.app.ui.screens.IdentityUnlockScreen(
+                                onResolved = {
+                                    navController.navigate(Screen.Chats.route) {
+                                        popUpTo(Screen.IdentityUnlock.route) { inclusive = true }
+                                    }
                                 },
                             )
                         }

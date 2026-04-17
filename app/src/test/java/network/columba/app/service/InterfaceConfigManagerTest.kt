@@ -170,6 +170,57 @@ class InterfaceConfigManagerTest {
         clearAllMocks()
     }
 
+    // ========== Identity Bail-Out Tests ==========
+
+    @Test
+    fun `applyInterfaceChanges - bails when active identity is password-protected`() =
+        runTest {
+            val identity =
+                network.columba.app.data.db.entity.LocalIdentityEntity(
+                    identityHash = "aabbccdd",
+                    displayName = "Test",
+                    destinationHash = "11223344",
+                    filePath = "",
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns identity
+            coEvery { identityRepository.requiresPassword("aabbccdd") } returns true
+
+            val result = manager.applyInterfaceChanges()
+
+            assertTrue("Should fail when identity requires password", result.isFailure)
+            // Service must not be reinitialized without a key.
+            coVerify(exactly = 0) { reticulumProtocol.initialize(any()) }
+        }
+
+    @Test
+    fun `applyInterfaceChanges - bails when active identity key cannot be decrypted`() =
+        runTest {
+            val identity =
+                network.columba.app.data.db.entity.LocalIdentityEntity(
+                    identityHash = "aabbccdd",
+                    displayName = "Test",
+                    destinationHash = "11223344",
+                    filePath = "",
+                    createdTimestamp = 0L,
+                    lastUsedTimestamp = 0L,
+                    isActive = true,
+                )
+            coEvery { identityRepository.getActiveIdentitySync() } returns identity
+            coEvery { identityRepository.requiresPassword("aabbccdd") } returns false
+            coEvery { identityKeyProvider.getDecryptedKeyData("aabbccdd", any()) } returns
+                Result.failure(IllegalStateException("Keystore unavailable"))
+
+            val result = manager.applyInterfaceChanges()
+
+            assertTrue("Should fail when key decryption returns failure", result.isFailure)
+            // Refusing to start with a null key protects against silently rotating
+            // onto a fresh ephemeral identity.
+            coVerify(exactly = 0) { reticulumProtocol.initialize(any()) }
+        }
+
     // ========== Manager Lifecycle Tests ==========
 
     @Test

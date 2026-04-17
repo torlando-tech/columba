@@ -7,4 +7,6 @@
     <include domain="database" path="." />
     <include domain="sharedpref" path="." />
     <include domain="file" path="." />
+    <!-- Transient plaintext identity files; scrubbed on cold boot. -->
+    <exclude domain="file" path="reticulum/identities" />
 </full-backup-content>

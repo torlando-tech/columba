@@ -3,22 +3,6 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import network.columba.app.data.model.EnrichedContact
-import network.columba.app.data.model.ImageCompressionPreset
-import network.columba.app.data.repository.ContactRepository
-import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.map.MapTileSourceManager
-import network.columba.app.repository.InterfaceRepository
-import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.AvailableRelaysState
-import network.columba.app.service.PropagationNodeManager
-import network.columba.app.service.RelayInfo
-import network.columba.app.service.TelemetryCollectorManager
-import network.columba.app.ui.theme.AppTheme
-import network.columba.app.ui.theme.PresetTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
@@ -35,6 +19,22 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import network.columba.app.data.model.EnrichedContact
+import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.data.repository.ContactRepository
+import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.map.MapTileSourceManager
+import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.reticulum.model.BatteryProfile
+import network.columba.app.reticulum.model.NetworkStatus
+import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.service.AvailableRelaysState
+import network.columba.app.service.PropagationNodeManager
+import network.columba.app.service.RelayInfo
+import network.columba.app.service.TelemetryCollectorManager
+import network.columba.app.ui.theme.AppTheme
+import network.columba.app.ui.theme.PresetTheme
 import javax.inject.Inject
 
 /**
@@ -458,6 +458,7 @@ class SettingsViewModel
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
                             bleReticulumVersion = _state.value.bleReticulumVersion,
+                            lxstVersion = _state.value.lxstVersion,
                             // Preserve card expansion states
                             cardExpansionStates = _state.value.cardExpansionStates,
                             // Preserve update checker state from loadUpdateSettings()
@@ -537,10 +538,17 @@ class SettingsViewModel
                     previousState.wasUsingSharedInstance
                 }
 
+            // Preserve protocol versions — they're populated asynchronously by
+            // fetchProtocolVersions() and aren't part of the settings flow's shape,
+            // so they'd revert to null on every settings emission without this.
             _state.value =
                 newState.copy(
                     sharedInstanceOnline = initializedOnline,
                     wasUsingSharedInstance = wasUsingShared,
+                    reticulumVersion = previousState.reticulumVersion,
+                    lxmfVersion = previousState.lxmfVersion,
+                    bleReticulumVersion = previousState.bleReticulumVersion,
+                    lxstVersion = previousState.lxstVersion,
                 )
             Log.d(
                 TAG,

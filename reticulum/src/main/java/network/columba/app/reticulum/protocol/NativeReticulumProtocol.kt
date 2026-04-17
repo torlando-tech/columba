@@ -35,6 +35,7 @@ import network.reticulum.lxmf.LXMessage
 import network.reticulum.transport.Transport
 import org.json.JSONObject
 import org.msgpack.core.MessagePack
+import tech.torlando.columba.reticulum.BuildConfig
 import network.columba.app.reticulum.model.Destination as ColumbaDestination
 import network.columba.app.reticulum.model.Identity as ColumbaIdentity
 import network.columba.app.reticulum.model.Link as ColumbaLink
@@ -1877,13 +1878,13 @@ class NativeReticulumProtocol(
 
     // ==================== Version Info ====================
 
-    override suspend fun getReticulumVersion(): String? = "Reticulum-kt 0.1.0"
+    override suspend fun getReticulumVersion(): String? = "Reticulum-kt ${BuildConfig.RNS_KT_VERSION}"
 
-    override suspend fun getLxmfVersion(): String? = "LXMF-kt 0.1.0"
+    override suspend fun getLxmfVersion(): String? = "LXMF-kt ${BuildConfig.LXMF_KT_VERSION}"
 
     override suspend fun getBleReticulumVersion(): String? = null
 
-    override suspend fun getLxstVersion(): String? = "LXST-kt 0.0.1"
+    override suspend fun getLxstVersion(): String? = "LXST-kt ${BuildConfig.LXST_KT_VERSION}"
 
     // ==================== Blocking & Transport ====================
 

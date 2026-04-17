@@ -19,6 +19,12 @@ android {
             // armeabi-v7a restored: pycodec2 removed in favor of LXST (Kotlin/C++)
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
+
+        // Expose the pinned library versions to Kotlin source so NativeReticulumProtocol
+        // can report them to the About card without hardcoding (and drifting from reality).
+        buildConfigField("String", "RNS_KT_VERSION", "\"${libs.versions.reticulumKt.get().removePrefix("v")}\"")
+        buildConfigField("String", "LXMF_KT_VERSION", "\"${libs.versions.lxmfKt.get().removePrefix("v")}\"")
+        buildConfigField("String", "LXST_KT_VERSION", "\"${libs.versions.lxstKt.get().removePrefix("v")}\"")
     }
 
     compileOptions {
@@ -34,7 +40,7 @@ android {
 
     buildFeatures {
         aidl = true
-        buildConfig = false
+        buildConfig = true
     }
 
     testOptions {

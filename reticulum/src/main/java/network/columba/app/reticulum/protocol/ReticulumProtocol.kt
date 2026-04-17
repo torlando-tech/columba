@@ -1,5 +1,10 @@
 package network.columba.app.reticulum.protocol
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import network.columba.app.reticulum.model.AnnounceEvent
 import network.columba.app.reticulum.model.Destination
 import network.columba.app.reticulum.model.DestinationType
@@ -14,11 +19,6 @@ import network.columba.app.reticulum.model.PacketReceipt
 import network.columba.app.reticulum.model.PacketType
 import network.columba.app.reticulum.model.ReceivedPacket
 import network.columba.app.reticulum.model.ReticulumConfig
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Clean abstraction layer for Reticulum Network Stack.
@@ -45,10 +45,16 @@ interface ReticulumProtocol {
 
     suspend fun recallIdentity(hash: ByteArray): Identity?
 
-    // Multi-identity management
+    // Multi-identity management.
+    //
+    // These methods never write plaintext private keys to the app's internal
+    // filesystem. `createIdentityWithName` and `importIdentityFile` return the
+    // raw 64-byte key via the `key_data` map entry; callers are expected to
+    // hand it to `IdentityKeyProvider` which wraps it with the Android
+    // Keystore before writing to Room. `exportIdentityFile` takes the already-
+    // decrypted bytes and writes to a user-chosen `filePath` (typically a SAF
+    // URI-backed scratch file) for the user to share via the system chooser.
     suspend fun createIdentityWithName(displayName: String): Map<String, Any>
-
-    suspend fun deleteIdentityFile(identityHash: String): Map<String, Any>
 
     suspend fun importIdentityFile(
         fileData: ByteArray,
@@ -56,15 +62,9 @@ interface ReticulumProtocol {
     ): Map<String, Any>
 
     suspend fun exportIdentityFile(
-        identityHash: String,
-        filePath: String,
-    ): ByteArray
-
-    suspend fun recoverIdentityFile(
-        identityHash: String,
         keyData: ByteArray,
         filePath: String,
-    ): Map<String, Any>
+    ): ByteArray
 
     // Destination management
     suspend fun createDestination(

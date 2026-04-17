@@ -15,30 +15,25 @@
   - Cache: EXCLUDED (Android default)
 
   The files/reticulum/ exclusion that earlier versions needed is gone:
-  the in-memory-identity refactor (PR #785) stopped writing plaintext
-  identity keys, reticulum-kt v0.0.5 moved RNS routing state to Room,
-  and v0.0.6 moved LXMF delivery-destination ratchets to Room.
+  - the in-memory-identity refactor (PR #785) stopped writing delivery
+    identity files,
+  - reticulum-kt v0.0.5 moved RNS routing state to Room,
+  - reticulum-kt v0.0.6 moved LXMF delivery-destination ratchets to Room,
+  - the createIdentityWithName / importIdentityFile / recoverIdentityFile
+    refactor eliminated the last plaintext-file writers.
 
-  The one remaining exclusion is `reticulum/identities/`. Those files
-  are written only by user-initiated create/import/recover flows and
-  deleted by the cold-start scrub on the next boot, but a scheduled
-  backup landing in that window would otherwise capture the plaintext
-  key. Android 9+ cloud backups are encrypted, but this defends against
-  unencrypted ADB/local backups as well.
+  Nothing in files/reticulum/ contains user secrets anymore.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
         <include domain="file" path="." />
-        <!-- Transient plaintext identity files; scrubbed on cold boot. -->
-        <exclude domain="file" path="reticulum/identities" />
     </cloud-backup>
 
     <device-transfer>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
         <include domain="file" path="." />
-        <exclude domain="file" path="reticulum/identities" />
     </device-transfer>
 </data-extraction-rules>

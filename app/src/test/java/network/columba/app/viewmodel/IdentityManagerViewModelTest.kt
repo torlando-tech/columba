@@ -5,10 +5,6 @@ import android.content.Context
 import android.net.Uri
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import network.columba.app.data.db.entity.LocalIdentityEntity
-import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,6 +20,10 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
+import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.service.InterfaceConfigManager
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -45,6 +45,7 @@ class IdentityManagerViewModelTest {
 
     private lateinit var mockContext: Context
     private lateinit var mockRepository: IdentityRepository
+    private lateinit var mockKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider
     private lateinit var mockProtocol: ReticulumProtocol
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
     private val testDispatcher = StandardTestDispatcher()
@@ -56,6 +57,7 @@ class IdentityManagerViewModelTest {
 
         mockContext = mockk(relaxed = true) // Android framework class
         mockRepository = mockk()
+        mockKeyProvider = mockk()
         mockProtocol = mockk()
         mockInterfaceConfigManager = mockk()
 
@@ -65,6 +67,10 @@ class IdentityManagerViewModelTest {
 
         // Default stub for InterfaceConfigManager
         coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+
+        // Default stub: any identity's Keystore-wrapped key decrypts cleanly.
+        coEvery { mockKeyProvider.getDecryptedKeyData(any(), any()) } returns
+            Result.success("stub_key_data".toByteArray())
     }
 
     @After
@@ -78,7 +84,13 @@ class IdentityManagerViewModelTest {
      * This ensures coroutines are properly tracked by the test infrastructure.
      */
     private fun createTestViewModel(): IdentityManagerViewModel =
-        IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+        IdentityManagerViewModel(
+            mockContext,
+            mockRepository,
+            mockKeyProvider,
+            mockProtocol,
+            mockInterfaceConfigManager,
+        )
 
     // ========== Helper Functions ==========
 
@@ -341,9 +353,8 @@ class IdentityManagerViewModelTest {
             // Given
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockKeyProvider, mockProtocol, mockInterfaceConfigManager)
 
-            coEvery { mockProtocol.deleteIdentityFile("id1") } returns mapOf("success" to true)
             coEvery { mockRepository.deleteIdentity("id1") } returns Result.success(Unit)
 
             viewModel.uiState.test {
@@ -367,7 +378,7 @@ class IdentityManagerViewModelTest {
             // Given - trying to delete the active identity
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "id1", isActive = true))
-            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockKeyProvider, mockProtocol, mockInterfaceConfigManager)
 
             // WhileSubscribed requires active collector - subscribe to activeIdentity to start the flow
             val identityJob =
@@ -401,34 +412,9 @@ class IdentityManagerViewModelTest {
             identityJob.cancel()
         }
 
-    @Test
-    fun deleteIdentity_pythonError_transitionsToErrorState() =
-        runTest {
-            // Given
-            every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
-            every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
-
-            coEvery { mockProtocol.deleteIdentityFile("id1") } returns
-                mapOf(
-                    "success" to false,
-                    "error" to "File not found",
-                )
-
-            viewModel.uiState.test {
-                assertTrue(awaitItem() is IdentityManagerUiState.Idle)
-
-                // When
-                viewModel.deleteIdentity("id1")
-                testDispatcher.scheduler.advanceUntilIdle()
-
-                // Then
-                assertTrue(awaitItem() is IdentityManagerUiState.Loading)
-                val errorState = awaitItem()
-                assertTrue(errorState is IdentityManagerUiState.Error)
-                assertTrue((errorState as IdentityManagerUiState.Error).message.contains("File not found"))
-            }
-        }
+    // deleteIdentity_pythonError_transitionsToErrorState was removed along with
+    // the ReticulumProtocol.deleteIdentityFile API: delivery keys live Keystore-
+    // wrapped in Room now, no file to delete.
 
     @Test
     fun deleteIdentity_databaseError_transitionsToErrorState() =
@@ -436,9 +422,8 @@ class IdentityManagerViewModelTest {
             // Given
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockKeyProvider, mockProtocol, mockInterfaceConfigManager)
 
-            coEvery { mockProtocol.deleteIdentityFile("id1") } returns mapOf("success" to true)
             coEvery { mockRepository.deleteIdentity("id1") } returns
                 Result.failure(
                     RuntimeException("DB error"),
@@ -621,7 +606,7 @@ class IdentityManagerViewModelTest {
             val fileData = "identity_data".toByteArray()
             val mockUri = mockk<Uri>()
 
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns fileData
             coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(mockUri)
 
             viewModel.uiState.test {
@@ -645,7 +630,7 @@ class IdentityManagerViewModelTest {
             val viewModel = createTestViewModel()
 
             // Given
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns byteArrayOf()
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns byteArrayOf()
 
             viewModel.uiState.test {
                 assertTrue(awaitItem() is IdentityManagerUiState.Idle)
@@ -658,7 +643,7 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Failed to read identity file", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals("Failed to export identity", (errorState as IdentityManagerUiState.Error).message)
             }
         }
 
@@ -669,7 +654,7 @@ class IdentityManagerViewModelTest {
 
             // Given
             val fileData = "identity_data".toByteArray()
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns fileData
             coEvery { mockRepository.exportIdentity("id1", fileData) } returns
                 Result.failure(
                     RuntimeException("FileProvider error"),
@@ -875,7 +860,7 @@ class IdentityManagerViewModelTest {
 
             // Given
             val fileData = ByteArray(64) { it.toByte() }
-            coEvery { mockProtocol.exportIdentityFile("id1", "/test/path") } returns fileData
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), "/test/path") } returns fileData
 
             viewModel.uiState.test {
                 assertTrue(awaitItem() is IdentityManagerUiState.Idle)
@@ -904,7 +889,7 @@ class IdentityManagerViewModelTest {
             val viewModel = createTestViewModel()
 
             // Given
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns byteArrayOf()
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns byteArrayOf()
 
             viewModel.uiState.test {
                 assertTrue(awaitItem() is IdentityManagerUiState.Idle)
@@ -917,7 +902,7 @@ class IdentityManagerViewModelTest {
                 assertTrue(awaitItem() is IdentityManagerUiState.Loading)
                 val errorState = awaitItem()
                 assertTrue(errorState is IdentityManagerUiState.Error)
-                assertEquals("Failed to read identity file", (errorState as IdentityManagerUiState.Error).message)
+                assertEquals("Failed to export identity", (errorState as IdentityManagerUiState.Error).message)
             }
         }
 
@@ -1093,7 +1078,7 @@ class IdentityManagerViewModelTest {
             val fileData = "identity_data".toByteArray()
             val mockUri = mockk<Uri>()
 
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns fileData
             coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(mockUri)
 
             // When
@@ -1119,7 +1104,7 @@ class IdentityManagerViewModelTest {
             val destinationUri = mockk<Uri>()
             val mockContentResolver = mockk<ContentResolver>()
 
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns fileData
             coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(sourceUri)
 
             viewModel.exportIdentity("id1", "/test/path")
@@ -1159,7 +1144,7 @@ class IdentityManagerViewModelTest {
             val destinationUri = mockk<Uri>()
             val mockContentResolver = mockk<ContentResolver>()
 
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns fileData
             coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(sourceUri)
 
             viewModel.exportIdentity("id1", "/test/path")
@@ -1213,7 +1198,7 @@ class IdentityManagerViewModelTest {
             val secondDestinationUri = mockk<Uri>()
             val mockContentResolver = mockk<ContentResolver>()
 
-            coEvery { mockProtocol.exportIdentityFile("id1", any()) } returns fileData
+            coEvery { mockProtocol.exportIdentityFile(any<ByteArray>(), any()) } returns fileData
             coEvery { mockRepository.exportIdentity("id1", fileData) } returns Result.success(sourceUri)
 
             viewModel.exportIdentity("id1", "/test/path")
@@ -1306,9 +1291,8 @@ class IdentityManagerViewModelTest {
             // Given
             every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
             every { mockRepository.activeIdentity } returns MutableStateFlow(createTestIdentity(hash = "active", isActive = true))
-            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockProtocol, mockInterfaceConfigManager)
+            val viewModel = IdentityManagerViewModel(mockContext, mockRepository, mockKeyProvider, mockProtocol, mockInterfaceConfigManager)
 
-            coEvery { mockProtocol.deleteIdentityFile("id_to_delete") } returns mapOf("success" to true)
             coEvery { mockRepository.deleteIdentity(any()) } returns Result.success(Unit)
 
             // When
@@ -1316,7 +1300,6 @@ class IdentityManagerViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
 
             // Then - verify the calls were made and assert final state
-            coVerify { mockProtocol.deleteIdentityFile("id_to_delete") }
             coVerify { mockRepository.deleteIdentity("id_to_delete") }
             viewModel.uiState.test {
                 val state = awaitItem()

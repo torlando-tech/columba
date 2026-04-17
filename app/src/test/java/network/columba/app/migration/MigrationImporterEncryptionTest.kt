@@ -3,7 +3,6 @@ package network.columba.app.migration
 import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
-import network.columba.app.data.crypto.IdentityKeyEncryptor
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
@@ -45,7 +44,6 @@ class MigrationImporterEncryptionTest {
                 context = context,
                 database = mockk(),
                 interfaceDatabase = mockk(),
-                reticulumProtocol = mockk(),
                 settingsRepository = mockk(),
                 propagationNodeManager = mockk(),
                 keyEncryptor = mockk(),

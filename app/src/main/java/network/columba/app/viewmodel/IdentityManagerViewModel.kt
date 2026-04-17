@@ -5,11 +5,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import network.columba.app.data.db.entity.LocalIdentityEntity
-import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.InterfaceConfigManager
-import network.columba.app.util.Base32
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +15,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.util.Base32
 import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 
@@ -35,6 +35,7 @@ class IdentityManagerViewModel
     constructor(
         @ApplicationContext private val context: Context,
         private val identityRepository: IdentityRepository,
+        private val identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider,
         private val reticulumProtocol: ReticulumProtocol,
         private val interfaceConfigManager: InterfaceConfigManager,
     ) : ViewModel() {
@@ -148,53 +149,17 @@ class IdentityManagerViewModel
          * If the identity file is missing but keyData is available in the database,
          * it will be recovered automatically.
          */
-        @Suppress("LongMethod") // Identity switch requires coordinated file and service operations
         fun switchToIdentity(identityHash: String) {
             viewModelScope.launch {
                 try {
                     _uiState.value = IdentityManagerUiState.Loading("Switching identity...")
 
-                    // Check if identity file exists and recover if needed
-                    val identity = identityRepository.getIdentity(identityHash)
-                    if (identity != null) {
-                        val identityFile = java.io.File(identity.filePath)
-                        val keyDataBackup = identity.keyData
-                        if (!identityFile.exists() && keyDataBackup != null) {
-                            Log.d(TAG, "Identity file missing, attempting recovery from backup keyData...")
-                            _uiState.value = IdentityManagerUiState.Loading("Recovering identity file...")
-
-                            val recoveryResult =
-                                reticulumProtocol.recoverIdentityFile(
-                                    identityHash = identityHash,
-                                    keyData = keyDataBackup,
-                                    filePath = identity.filePath,
-                                )
-
-                            val success = recoveryResult["success"] as? Boolean ?: false
-                            if (!success) {
-                                val error = recoveryResult["error"] as? String ?: "Unknown recovery error"
-                                Log.e(TAG, "Failed to recover identity file: $error")
-                                _uiState.value =
-                                    IdentityManagerUiState.Error(
-                                        "Failed to recover identity file: $error",
-                                    )
-                                return@launch
-                            }
-                            Log.d(TAG, "Identity file recovered successfully")
-                        } else if (!identityFile.exists()) {
-                            Log.e(TAG, "Identity file missing and no backup keyData available")
-                            _uiState.value =
-                                IdentityManagerUiState.Error(
-                                    "Identity file is missing and cannot be recovered",
-                                )
-                            return@launch
-                        }
-                    }
-
-                    // Note: InterfaceConfigManager.applyInterfaceChanges() will use
-                    // ensureIdentityFileExists() to verify/recover the identity file
-                    // and pass the correct identity_<hash> path to Python.
-                    // No need to copy to default_identity anymore.
+                    // The identity's private key lives Keystore-wrapped in Room
+                    // (LocalIdentityEntity.keyData / encryptedKeyData).
+                    // InterfaceConfigManager.applyInterfaceChanges decrypts it
+                    // on-demand and passes it to the native stack via
+                    // ReticulumConfig.deliveryIdentityKey — no plaintext file
+                    // has to exist on disk, so no recovery step here.
 
                     identityRepository
                         .switchActiveIdentity(identityHash)
@@ -249,16 +214,10 @@ class IdentityManagerViewModel
                         return@launch
                     }
 
-                    // Delete identity file via Python service
-                    val deleteResult = reticulumProtocol.deleteIdentityFile(identityHash)
-
-                    if (deleteResult["success"] != true) {
-                        val error = deleteResult["error"] as? String ?: "Unknown error"
-                        _uiState.value = IdentityManagerUiState.Error("Failed to delete identity file: $error")
-                        return@launch
-                    }
-
-                    // Delete from database (cascade delete will remove associated data)
+                    // Delete from database (cascade delete will remove associated data).
+                    // No disk-side cleanup: delivery keys live in Room now, not in
+                    // reticulum/identities/ — stale legacy files (if any) are scrubbed
+                    // at cold-start in ColumbaApplication.
                     identityRepository
                         .deleteIdentity(identityHash)
                         .onSuccess {
@@ -399,11 +358,21 @@ class IdentityManagerViewModel
                 try {
                     _uiState.value = IdentityManagerUiState.Loading("Exporting identity...")
 
-                    // Export via Python service
-                    val fileData = reticulumProtocol.exportIdentityFile(identityHash, filePath)
+                    // Decrypt the Keystore-wrapped key, hand it to the native
+                    // protocol which just writes it to the user-chosen scratch
+                    // path. No plaintext file touches reticulum/identities/.
+                    val keyData =
+                        identityKeyProvider.getDecryptedKeyData(identityHash).getOrElse { error ->
+                            _uiState.value =
+                                IdentityManagerUiState.Error(
+                                    "Failed to decrypt identity key: ${error.message}",
+                                )
+                            return@launch
+                        }
+                    val fileData = reticulumProtocol.exportIdentityFile(keyData, filePath)
 
                     if (fileData.isEmpty()) {
-                        _uiState.value = IdentityManagerUiState.Error("Failed to read identity file")
+                        _uiState.value = IdentityManagerUiState.Error("Failed to export identity")
                         return@launch
                     }
 
@@ -519,13 +488,22 @@ class IdentityManagerViewModel
                 try {
                     _uiState.value = IdentityManagerUiState.Loading("Exporting identity...")
 
-                    val fileData = withContext(Dispatchers.IO) {
-                        reticulumProtocol.exportIdentityFile(identityHash, filePath)
-                    }
+                    val keyData =
+                        identityKeyProvider.getDecryptedKeyData(identityHash).getOrElse { error ->
+                            _uiState.value =
+                                IdentityManagerUiState.Error(
+                                    "Failed to decrypt identity key: ${error.message}",
+                                )
+                            return@launch
+                        }
+                    val fileData =
+                        withContext(Dispatchers.IO) {
+                            reticulumProtocol.exportIdentityFile(keyData, filePath)
+                        }
 
                     if (fileData.isEmpty()) {
                         _uiState.value =
-                            IdentityManagerUiState.Error("Failed to read identity file")
+                            IdentityManagerUiState.Error("Failed to export identity")
                         return@launch
                     }
 

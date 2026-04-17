@@ -115,8 +115,14 @@ class IdentityManagerViewModelTest {
         mapOf(
             "identity_hash" to identityHash,
             "destination_hash" to destinationHash,
-            "file_path" to "/data/identity_$identityHash",
+            // Empty file_path = "no plaintext key on disk"; see
+            // NativeReticulumProtocol.buildIdentityResult.
+            "file_path" to "",
             "display_name" to "Test",
+            // key_data is the 64-byte raw private key the protocol hands
+            // to the caller for Keystore-wrapping. Must be non-null here so
+            // tests exercise the in-memory create/import path.
+            "key_data" to ByteArray(64) { it.toByte() },
         )
 
     private fun mockPythonError(): Map<String, Any> =
@@ -193,7 +199,7 @@ class IdentityManagerViewModelTest {
             // Given
             val pythonResult = mockPythonCreateSuccess()
             coEvery { mockProtocol.createIdentityWithName("Work") } returns pythonResult
-            coEvery { mockRepository.createIdentity(any(), any(), any(), any()) } returns
+            coEvery { mockRepository.createIdentity(any(), any(), any(), any(), any()) } returns
                 Result.success(
                     createTestIdentity(),
                 )
@@ -271,7 +277,7 @@ class IdentityManagerViewModelTest {
 
             // Given
             coEvery { mockProtocol.createIdentityWithName(any()) } returns mockPythonCreateSuccess()
-            coEvery { mockRepository.createIdentity(any(), any(), any(), any()) } returns
+            coEvery { mockRepository.createIdentity(any(), any(), any(), any(), any()) } returns
                 Result.failure(
                     RuntimeException("DB error"),
                 )
@@ -1268,7 +1274,7 @@ class IdentityManagerViewModelTest {
 
             // Given
             coEvery { mockProtocol.createIdentityWithName("My Work Identity") } returns mockPythonCreateSuccess()
-            coEvery { mockRepository.createIdentity(any(), any(), any(), any()) } returns
+            coEvery { mockRepository.createIdentity(any(), any(), any(), any(), any()) } returns
                 Result.success(
                     createTestIdentity(),
                 )

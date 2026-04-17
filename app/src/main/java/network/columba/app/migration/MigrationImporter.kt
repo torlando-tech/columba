@@ -5,6 +5,11 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.room.withTransaction
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.WrongPasswordException
 import network.columba.app.data.database.InterfaceDatabase
@@ -21,13 +26,7 @@ import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.util.HashUtils
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.PropagationNodeManager
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -49,7 +48,6 @@ class MigrationImporter
         @ApplicationContext private val context: Context,
         private val database: ColumbaDatabase,
         private val interfaceDatabase: InterfaceDatabase,
-        private val reticulumProtocol: ReticulumProtocol,
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
         private val keyEncryptor: IdentityKeyEncryptor,
@@ -706,30 +704,10 @@ class MigrationImporter
                 return false
             }
 
-            // Create the identity file path
-            val identityDir = File(context.filesDir, "reticulum")
-            identityDir.mkdirs()
-            val filePath = File(identityDir, "identity_${identityExport.identityHash}").absolutePath
-
-            // Try to recover/import the identity via Reticulum
-            try {
-                val result =
-                    reticulumProtocol.recoverIdentityFile(
-                        identityExport.identityHash,
-                        keyData,
-                        filePath,
-                    )
-                val success = result["success"] as? Boolean ?: false
-                if (!success) {
-                    Log.w(
-                        TAG,
-                        "Reticulum failed to recover identity: ${result["error"]}",
-                    )
-                    // Fall back to direct database insert
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Reticulum recovery failed, using direct insert", e)
-            }
+            // No disk-side write here anymore: delivery keys live Keystore-
+            // wrapped in Room (imported below). The native stack reads them
+            // via ReticulumConfig.deliveryIdentityKey at init time.
+            val filePath = ""
 
             // Encrypt the key data with device key for secure storage
             val (encryptedKeyData, keyVersion) =
@@ -761,13 +739,6 @@ class MigrationImporter
                     iconBackgroundColor = identityExport.iconBackgroundColor,
                 )
             database.localIdentityDao().insert(entity)
-
-            // Write key file directly for Python/RNS compatibility
-            try {
-                File(filePath).writeBytes(keyData)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to write identity file to $filePath", e)
-            }
 
             return true
         }

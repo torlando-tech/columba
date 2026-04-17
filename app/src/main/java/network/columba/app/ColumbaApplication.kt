@@ -210,13 +210,15 @@ class ColumbaApplication : Application() {
             }
             try {
                 val reticulumDir = java.io.File(filesDir, "reticulum")
-                // Two layouts to scrub:
-                //   - reticulum/identity_<hash>  (legacy NativeReticulumProtocol layout)
-                //   - reticulum/identities/<hash> (current layout — NativeReticulumProtocol's
-                //     create/import/recover APIs still write here between user action and
-                //     the next cold boot, so this is the catch-up cleanup)
-                // The reticulum-kt FileMigrator handles the LXMF per-destination ratchet
-                // directory (reticulum/lxmf/ratchets/) upstream.
+                // Both layouts are now write-free in normal operation — the
+                // createIdentityWithName / importIdentityFile refactor returns
+                // the key via ReticulumConfig.deliveryIdentityKey in memory.
+                // These scrub passes exist purely to clean up stale files left
+                // by earlier builds on upgrade:
+                //   - reticulum/identity_<hash>   (pre-#785 flat layout)
+                //   - reticulum/identities/<hash> (post-#785, pre-this-refactor)
+                // The reticulum-kt FileMigrator handles the LXMF per-destination
+                // ratchet directory (reticulum/lxmf/ratchets/) upstream.
                 val staleIdentityFiles =
                     (reticulumDir.listFiles { f -> f.isFile && f.name.startsWith("identity_") } ?: emptyArray()) +
                         (java.io.File(reticulumDir, "identities").listFiles { f -> f.isFile } ?: emptyArray())

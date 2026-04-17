@@ -924,26 +924,7 @@ class NativeReticulumProtocol(
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> =
         withContext(Dispatchers.IO) {
             val identity = NativeIdentity.create()
-            val hexHash = identity.hexHash
-            val path = "$storagePath/identities/$hexHash"
-            java.io
-                .File(path)
-                .parentFile
-                ?.mkdirs()
-            identity.toFile(path)
-            mapOf(
-                "success" to true,
-                "identity_hash" to hexHash,
-                "display_name" to displayName,
-                "public_key" to identity.getPublicKey(),
-            )
-        }
-
-    override suspend fun deleteIdentityFile(identityHash: String): Map<String, Any> =
-        withContext(Dispatchers.IO) {
-            val path = "$storagePath/identities/$identityHash"
-            val deleted = java.io.File(path).delete()
-            mapOf("success" to deleted)
+            buildIdentityResult(identity, displayName)
         }
 
     override suspend fun importIdentityFile(
@@ -954,51 +935,60 @@ class NativeReticulumProtocol(
             val identity =
                 NativeIdentity.fromBytes(fileData)
                     ?: return@withContext mapOf("success" to false, "error" to "Invalid identity data")
-            val hexHash = identity.hexHash
-            val path = "$storagePath/identities/$hexHash"
-            java.io
-                .File(path)
-                .parentFile
-                ?.mkdirs()
-            identity.toFile(path)
-            mapOf(
-                "success" to true,
-                "identity_hash" to hexHash,
-                "display_name" to displayName,
-                "public_key" to identity.getPublicKey(),
-            )
+            buildIdentityResult(identity, displayName)
         }
 
     override suspend fun exportIdentityFile(
-        identityHash: String,
+        keyData: ByteArray,
         filePath: String,
     ): ByteArray =
         withContext(Dispatchers.IO) {
-            val path = "$storagePath/identities/$identityHash"
-            val file = java.io.File(path)
-            if (!file.exists()) throw java.io.FileNotFoundException("Identity file not found: $identityHash")
-            val data = file.readBytes()
-            // Also write to the export path
-            java.io.File(filePath).writeBytes(data)
-            data
+            // Caller already holds the decrypted 64-byte key from the Keystore-
+            // wrapped DB blob. We just write it to the user-chosen export path.
+            // Parent dir is expected to exist (typically a cache dir or SAF
+            // scratch file); if it doesn't, let the IOException propagate.
+            java.io.File(filePath).writeBytes(keyData)
+            keyData
         }
 
-    override suspend fun recoverIdentityFile(
-        identityHash: String,
-        keyData: ByteArray,
-        filePath: String,
-    ): Map<String, Any> =
-        withContext(Dispatchers.IO) {
-            val identity =
-                NativeIdentity.fromBytes(keyData)
-                    ?: return@withContext mapOf("success" to false, "error" to "Invalid key data")
-            identity.toFile(filePath)
-            mapOf(
-                "success" to true,
-                "identity_hash" to identity.hexHash,
-                "public_key" to identity.getPublicKey(),
+    /**
+     * Assemble the map returned by create/import. We do not write the private
+     * key to `$storagePath/identities/` — callers hand the raw bytes to
+     * `IdentityKeyProvider` which Keystore-wraps them before persistence, and
+     * the app layer passes `deliveryIdentityKey` in-memory to the native stack
+     * via `ReticulumConfig`.
+     *
+     * The LXMF delivery destination hash is computed locally from the identity
+     * without going through the live router, so identities can be created /
+     * imported regardless of whether the service is up or which identity is
+     * currently active.
+     */
+    private fun buildIdentityResult(
+        identity: NativeIdentity,
+        displayName: String,
+    ): Map<String, Any> {
+        val deliveryDest =
+            NativeDestination.create(
+                identity = identity,
+                direction = network.reticulum.common.DestinationDirection.IN,
+                type = NativeDestinationType.SINGLE,
+                appName = "lxmf",
+                "delivery",
             )
-        }
+        return mapOf(
+            "success" to true,
+            "identity_hash" to identity.hexHash,
+            "destination_hash" to deliveryDest.hexHash,
+            "display_name" to displayName,
+            "public_key" to identity.getPublicKey(),
+            "key_data" to identity.getPrivateKey(),
+            // Empty path signals "no file on disk" to legacy callers that still
+            // read `filePath` from LocalIdentityEntity — the key lives in Room
+            // now (encrypted via Android Keystore) and is fetched through
+            // IdentityKeyProvider.
+            "file_path" to "",
+        )
+    }
 
     // ==================== Phase 2: Message Sending ====================
 

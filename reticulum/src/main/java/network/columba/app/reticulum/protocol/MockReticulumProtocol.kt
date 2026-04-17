@@ -1,5 +1,11 @@
 package network.columba.app.reticulum.protocol
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import network.columba.app.reticulum.model.AnnounceEvent
 import network.columba.app.reticulum.model.Destination
 import network.columba.app.reticulum.model.DestinationType
@@ -14,12 +20,6 @@ import network.columba.app.reticulum.model.PacketReceipt
 import network.columba.app.reticulum.model.PacketType
 import network.columba.app.reticulum.model.ReceivedPacket
 import network.columba.app.reticulum.model.ReticulumConfig
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flow
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -72,68 +72,42 @@ class MockReticulumProtocol : ReticulumProtocol {
     override suspend fun recallIdentity(hash: ByteArray): Identity? = null
 
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> {
-        // Mock implementation - generate a fake identity
-        val identityHash =
-            ByteArray(16)
-                .apply { random.nextBytes(this) }
-                .joinToString("") { "%02x".format(it) }
-        val destinationHash =
-            ByteArray(16)
-                .apply { random.nextBytes(this) }
-                .joinToString("") { "%02x".format(it) }
-
+        val identityHash = randomHex(16)
+        val destinationHash = randomHex(16)
         return mapOf(
+            "success" to true,
             "identity_hash" to identityHash,
             "destination_hash" to destinationHash,
-            "file_path" to "/mock/identities/$identityHash.identity",
+            "display_name" to displayName,
+            "public_key" to ByteArray(64).apply { random.nextBytes(this) },
+            "key_data" to ByteArray(64).apply { random.nextBytes(this) },
+            "file_path" to "",
         )
-    }
-
-    override suspend fun deleteIdentityFile(identityHash: String): Map<String, Any> {
-        // Mock implementation - always succeed
-        return mapOf("success" to true)
     }
 
     override suspend fun importIdentityFile(
         fileData: ByteArray,
         displayName: String,
     ): Map<String, Any> {
-        // Mock implementation - generate a fake identity
-        val identityHash =
-            ByteArray(16)
-                .apply { random.nextBytes(this) }
-                .joinToString("") { "%02x".format(it) }
-        val destinationHash =
-            ByteArray(16)
-                .apply { random.nextBytes(this) }
-                .joinToString("") { "%02x".format(it) }
-
+        val identityHash = randomHex(16)
+        val destinationHash = randomHex(16)
         return mapOf(
+            "success" to true,
             "identity_hash" to identityHash,
             "destination_hash" to destinationHash,
-            "file_path" to "/mock/identities/$identityHash.identity",
+            "display_name" to displayName,
+            "public_key" to ByteArray(64).apply { random.nextBytes(this) },
+            "key_data" to fileData.copyOf(),
+            "file_path" to "",
         )
     }
 
     override suspend fun exportIdentityFile(
-        identityHash: String,
-        filePath: String,
-    ): ByteArray {
-        // Mock implementation - return fake identity data
-        return ByteArray(256).apply { random.nextBytes(this) }
-    }
-
-    override suspend fun recoverIdentityFile(
-        identityHash: String,
         keyData: ByteArray,
         filePath: String,
-    ): Map<String, Any> {
-        // Mock implementation - pretend recovery succeeded
-        return mapOf(
-            "success" to true,
-            "file_path" to filePath,
-        )
-    }
+    ): ByteArray = keyData.copyOf()
+
+    private fun randomHex(bytes: Int): String = ByteArray(bytes).apply { random.nextBytes(this) }.joinToString("") { "%02x".format(it) }
 
     override suspend fun createDestination(
         identity: Identity,

@@ -355,6 +355,7 @@ class NativeReticulumProtocol(
                     "reticulum.db",
                 ).addMigrations(
                     network.reticulum.android.db.ReticulumDatabase.MIGRATION_1_2,
+                    network.reticulum.android.db.ReticulumDatabase.MIGRATION_2_3,
                 ).build()
 
         val executor =
@@ -380,6 +381,9 @@ class NativeReticulumProtocol(
         Transport.discoveryStore =
             network.reticulum.android.db.store
                 .RoomDiscoveryStore(db.discoveredInterfaceDao(), executor)
+        Transport.destinationRatchetStore =
+            network.reticulum.android.db.store
+                .RoomDestinationRatchetStore(db.destinationRatchetDao(), executor)
         network.reticulum.identity.Identity.identityStore =
             network.reticulum.android.db.store.RoomIdentityStore(
                 db.knownDestinationDao(),
@@ -389,9 +393,10 @@ class NativeReticulumProtocol(
 
         network.reticulum.android.db
             .FileMigrator(
-                db,
-                "$configDir/storage",
-                "$configDir/cache",
+                db = db,
+                storagePath = "$configDir/storage",
+                cachePath = "$configDir/cache",
+                lxmfRatchetsPath = "$configDir/lxmf/ratchets",
             ).migrateIfNeeded()
 
         Log.i(TAG, "Native Reticulum Room stores initialized")
@@ -403,6 +408,7 @@ class NativeReticulumProtocol(
         Transport.tunnelStore = null
         Transport.announceStore = null
         Transport.discoveryStore = null
+        Transport.destinationRatchetStore = null
         network.reticulum.identity.Identity.identityStore = null
 
         reticulumDbWriteExecutor?.let { executor ->

@@ -46,6 +46,7 @@ class InterfaceConfigManager
         private val reticulumProtocol: ReticulumProtocol,
         private val interfaceRepository: InterfaceRepository,
         private val identityRepository: IdentityRepository,
+        private val identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider,
         private val conversationRepository: ConversationRepository,
         private val messageCollector: MessageCollector,
         private val database: ColumbaDatabase,
@@ -210,20 +211,42 @@ class InterfaceConfigManager
                     // Step 9: Initialize Reticulum with new config
                     Log.d(TAG, "Step 9: Initializing Reticulum with new configuration...")
 
-                    // Load active identity and ensure its file exists (recover from keyData if needed)
+                    // Load active identity and decrypt its key in memory — same pattern
+                    // ColumbaApplication uses on cold start. Writing the raw key to
+                    // files/reticulum/identity_<hash> here would recreate the plaintext
+                    // file on every interface toggle, defeating the on-disk scrub.
                     val activeIdentity = identityRepository.getActiveIdentitySync()
-                    val identityPath =
+                    if (activeIdentity != null &&
+                        runCatching {
+                            identityRepository.requiresPassword(activeIdentity.identityHash)
+                        }.getOrDefault(true)
+                    ) {
+                        Log.w(
+                            TAG,
+                            "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected " +
+                                "(or password status unreadable) - skipping apply until unlock",
+                        )
+                        error("Active identity requires unlock before interface config can apply")
+                    }
+                    val deliveryKey =
                         if (activeIdentity != null) {
-                            identityRepository
-                                .ensureIdentityFileExists(activeIdentity)
-                                .onFailure { error ->
-                                    Log.e(TAG, "Failed to ensure identity file exists: ${error.message}")
-                                }.getOrNull()
+                            identityKeyProvider
+                                .getDecryptedKeyData(activeIdentity.identityHash)
+                                .onFailure { Log.e(TAG, "Could not decrypt identity key: $it") }
+                                .getOrNull()
                         } else {
                             null
                         }
+                    if (activeIdentity != null && deliveryKey == null) {
+                        Log.e(
+                            TAG,
+                            "Active identity ${activeIdentity.identityHash.take(8)}... present but key decryption " +
+                                "returned null - refusing to restart with an ephemeral identity",
+                        )
+                        error("Active identity key unavailable; aborting apply")
+                    }
                     val displayName = activeIdentity?.displayName
-                    Log.d(TAG, "Active identity: ${if (activeIdentity != null) "set" else "none"}, verified path: $identityPath")
+                    Log.d(TAG, "Active identity: ${if (activeIdentity != null) "set (in-memory key)" else "none"}")
 
                     // Load shared instance preferences
                     val preferOwnInstance = settingsRepository.preferOwnInstanceFlow.first()
@@ -259,7 +282,7 @@ class InterfaceConfigManager
                         ReticulumConfig(
                             storagePath = context.filesDir.absolutePath + "/reticulum",
                             enabledInterfaces = enabledInterfaces,
-                            identityFilePath = identityPath,
+                            deliveryIdentityKey = deliveryKey,
                             displayName = displayName,
                             logLevel = LogLevel.DEBUG,
                             allowAnonymous = false,

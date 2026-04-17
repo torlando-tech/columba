@@ -3,15 +3,6 @@ package network.columba.app.service
 import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
-import network.columba.app.data.db.ColumbaDatabase
-import network.columba.app.data.db.dao.AnnounceDao
-import network.columba.app.data.db.entity.AnnounceEntity
-import network.columba.app.data.repository.ConversationRepository
-import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.repository.InterfaceRepository
-import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.protocol.ReticulumProtocol
 import io.mockk.Ordering
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -31,6 +22,15 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.data.db.dao.AnnounceDao
+import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.repository.ConversationRepository
+import network.columba.app.data.repository.IdentityRepository
+import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.reticulum.model.BatteryProfile
+import network.columba.app.reticulum.protocol.ReticulumProtocol
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -52,6 +52,7 @@ class InterfaceConfigManagerTest {
     private lateinit var reticulumProtocol: ReticulumProtocol
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var identityRepository: IdentityRepository
+    private lateinit var identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var messageCollector: MessageCollector
     private lateinit var database: ColumbaDatabase
@@ -75,6 +76,7 @@ class InterfaceConfigManagerTest {
         reticulumProtocol = mockk()
         interfaceRepository = mockk()
         identityRepository = mockk()
+        identityKeyProvider = mockk()
         conversationRepository = mockk()
         messageCollector = mockk()
         database = mockk()
@@ -150,6 +152,7 @@ class InterfaceConfigManagerTest {
                 reticulumProtocol = reticulumProtocol,
                 interfaceRepository = interfaceRepository,
                 identityRepository = identityRepository,
+                identityKeyProvider = identityKeyProvider,
                 conversationRepository = conversationRepository,
                 messageCollector = messageCollector,
                 database = database,
@@ -378,6 +381,7 @@ class InterfaceConfigManagerTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
+                    identityKeyProvider = identityKeyProvider,
                     conversationRepository = conversationRepository,
                     messageCollector = messageCollector,
                     database = database,
@@ -442,6 +446,7 @@ class InterfaceConfigManagerTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
+                    identityKeyProvider = identityKeyProvider,
                     conversationRepository = conversationRepository,
                     messageCollector = messageCollector,
                     database = database,
@@ -485,6 +490,7 @@ class InterfaceConfigManagerTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
+                    identityKeyProvider = identityKeyProvider,
                     conversationRepository = conversationRepository,
                     messageCollector = messageCollector,
                     database = database,
@@ -522,6 +528,7 @@ class InterfaceConfigManagerTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
+                    identityKeyProvider = identityKeyProvider,
                     conversationRepository = conversationRepository,
                     messageCollector = messageCollector,
                     database = database,
@@ -560,6 +567,7 @@ class InterfaceConfigManagerTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
+                    identityKeyProvider = identityKeyProvider,
                     conversationRepository = conversationRepository,
                     messageCollector = messageCollector,
                     database = database,
@@ -615,6 +623,7 @@ class InterfaceConfigManagerTest {
                     reticulumProtocol = serviceProtocol,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
+                    identityKeyProvider = identityKeyProvider,
                     conversationRepository = conversationRepository,
                     messageCollector = messageCollector,
                     database = database,

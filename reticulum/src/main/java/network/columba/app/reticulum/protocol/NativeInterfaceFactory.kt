@@ -260,6 +260,7 @@ internal object NativeInterfaceFactory {
                     useKissFraming = config.kissFraming,
                     keepAlive = false, // Disable for mobile battery
                     ifacNetname = config.networkName,
+                    ifacNetkey = config.passphrase,
                 )
 
             is InterfaceConfig.UDP ->

@@ -23,23 +23,22 @@ object ServiceDatabaseProvider {
      * Gets the database instance for the service process.
      * Creates it lazily on first access with thread-safe double-checked locking.
      */
-    fun getDatabase(context: Context): ColumbaDatabase {
-        return INSTANCE ?: synchronized(this) {
+    fun getDatabase(context: Context): ColumbaDatabase =
+        INSTANCE ?: synchronized(this) {
             INSTANCE ?: createDatabase(context).also { INSTANCE = it }
         }
-    }
 
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization
-    private fun createDatabase(context: Context): ColumbaDatabase {
-        return Room.databaseBuilder(
-            context.applicationContext,
-            ColumbaDatabase::class.java,
-            DatabaseModule.DATABASE_NAME,
-        )
-            .addMigrations(*DatabaseModule.ALL_MIGRATIONS)
+    private fun createDatabase(context: Context): ColumbaDatabase =
+        Room
+            .databaseBuilder(
+                context.applicationContext,
+                ColumbaDatabase::class.java,
+                DatabaseModule.DATABASE_NAME,
+            ).addMigrations(*DatabaseModule.ALL_MIGRATIONS)
             .enableMultiInstanceInvalidation()
+            .addCallback(DatabaseModule.DURABILITY_CALLBACK)
             .build()
-    }
 
     /**
      * Closes the database connection.

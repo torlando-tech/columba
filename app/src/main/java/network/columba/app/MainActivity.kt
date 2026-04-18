@@ -630,12 +630,18 @@ fun ColumbaNavigation(
     }
 
     // If `needsIdentityUnlock` flips after the NavHost has already started (e.g.
-    // a later identity decryption failure), redirect to the unlock screen.
+    // a later identity decryption failure), redirect to the unlock screen. The
+    // currentDestination null-check gates on the NavHost actually having called
+    // setGraph() — without it we can fire in the recomposition window between
+    // `startDestination` resolving and the NavHost branch materializing, and
+    // `navController.graph` throws IllegalStateException. In that window the
+    // first LaunchedEffect has already picked IdentityUnlock as the start
+    // destination, so no redirect is needed here.
     LaunchedEffect(onboardingState.hasCompletedOnboarding, needsIdentityUnlock) {
         if (startDestination == null) return@LaunchedEffect
-        val currentRoute = navController.currentDestination?.route
+        val currentDestination = navController.currentDestination ?: return@LaunchedEffect
         if (!onboardingState.hasCompletedOnboarding) return@LaunchedEffect
-        if (needsIdentityUnlock && currentRoute != Screen.IdentityUnlock.route) {
+        if (needsIdentityUnlock && currentDestination.route != Screen.IdentityUnlock.route) {
             Log.d("ColumbaNavigation", "Redirecting to IdentityUnlock (key decryption failed)")
             navController.navigate(Screen.IdentityUnlock.route) {
                 popUpTo(navController.graph.startDestinationId) { inclusive = true }

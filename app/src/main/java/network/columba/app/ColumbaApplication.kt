@@ -448,8 +448,15 @@ class ColumbaApplication : Application() {
                         "Active identity ${activeIdentity.identityHash.take(8)}... present but key decryption " +
                             "returned null - skipping init to avoid silently substituting a fresh identity",
                     )
+                    // Raise the unlock flag so the UI routes to IdentityUnlockScreen
+                    // instead of showing a broken chats tab. Most common cause is an
+                    // Auto Backup restore on a new device — the encrypted key blob
+                    // came back but the Keystore AES key that produced it didn't.
+                    settingsRepository.setNeedsIdentityUnlock(true)
                     return@launch
                 }
+                // Clear any stale flag from a previous failed boot.
+                settingsRepository.setNeedsIdentityUnlock(false)
 
                 // Auto-initialize Reticulum with config from database
                 android.util.Log.d("ColumbaApplication", "Auto-initializing Reticulum...")
@@ -741,8 +748,10 @@ class ColumbaApplication : Application() {
                     "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
                         "present but key decryption returned null - skipping init",
                 )
+                settingsRepository.setNeedsIdentityUnlock(true)
                 return
             }
+            settingsRepository.setNeedsIdentityUnlock(false)
 
             // Initialize Reticulum with config from database
             android.util.Log.d("ColumbaApplication", "initializeReticulumService: Initializing Reticulum...")

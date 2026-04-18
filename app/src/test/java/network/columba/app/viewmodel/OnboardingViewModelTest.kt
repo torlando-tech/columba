@@ -60,6 +60,7 @@ class OnboardingViewModelTest {
 
         // Default stubs for SettingsRepository
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
+        coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
 
         // Default stubs for IdentityRepository

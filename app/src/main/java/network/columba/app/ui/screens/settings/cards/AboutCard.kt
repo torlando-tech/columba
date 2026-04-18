@@ -158,7 +158,7 @@ fun AboutCard(
                 )
                 TextButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/torlando-tech/columba/blob/main/LICENSE"))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/torlando-tech/columba/blob/main/LICENSE.md"))
                         context.startActivity(intent)
                     },
                 ) {

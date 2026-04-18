@@ -1,6 +1,7 @@
 package com.lxmf.messenger.data.di
 
 import android.content.Context
+import android.util.Log
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
@@ -1722,7 +1723,13 @@ object DatabaseModule {
     val DURABILITY_CALLBACK: RoomDatabase.Callback =
         object : RoomDatabase.Callback() {
             private fun applyPragmas(db: SupportSQLiteDatabase) {
-                db.execSQL("PRAGMA journal_mode=WAL")
+                // journal_mode returns the resulting mode as a row; use query() so a
+                // silent failure (e.g. filesystem that doesn't support WAL) is detectable.
+                db.query("PRAGMA journal_mode=WAL").use { cursor ->
+                    if (cursor.moveToFirst() && !cursor.getString(0).equals("wal", ignoreCase = true)) {
+                        Log.e("Columba/DB", "journal_mode=WAL not activated; mode=${cursor.getString(0)}")
+                    }
+                }
                 db.execSQL("PRAGMA synchronous=FULL")
                 db.execSQL("PRAGMA wal_autocheckpoint=100")
                 db.execSQL("PRAGMA busy_timeout=5000")

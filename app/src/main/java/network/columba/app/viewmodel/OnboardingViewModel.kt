@@ -6,9 +6,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.data.repository.IdentityRepository
@@ -41,6 +43,20 @@ class OnboardingViewModel
 
         private val _state = MutableStateFlow(OnboardingState())
         val state: StateFlow<OnboardingState> = _state.asStateFlow()
+
+        /**
+         * True when the active identity's Keystore-wrapped key blob survived a
+         * backup restore but the Keystore AES key that produced it did not
+         * (Keystore keys are app-UID-bound and don't cross uninstall). Navigation
+         * routes to IdentityUnlockScreen so the user can re-import their identity
+         * file rather than landing on a chats tab that can't send anything.
+         */
+        val needsIdentityUnlock: StateFlow<Boolean> =
+            settingsRepository.needsIdentityUnlockFlow.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = false,
+            )
 
         init {
             checkOnboardingStatus()

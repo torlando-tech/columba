@@ -18,13 +18,6 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import network.columba.app.data.model.ImageCompressionPreset
-import network.columba.app.data.repository.CustomThemeRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.service.persistence.ServiceSettingsAccessor
-import network.columba.app.ui.theme.AppTheme
-import network.columba.app.ui.theme.CustomTheme
-import network.columba.app.ui.theme.PresetTheme
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -34,6 +27,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.data.repository.CustomThemeRepository
+import network.columba.app.reticulum.model.BatteryProfile
+import network.columba.app.service.persistence.ServiceSettingsAccessor
+import network.columba.app.ui.theme.AppTheme
+import network.columba.app.ui.theme.CustomTheme
+import network.columba.app.ui.theme.PresetTheme
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -71,6 +71,7 @@ class SettingsRepository
 
             // Onboarding preferences
             val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
+            val NEEDS_IDENTITY_UNLOCK = booleanPreferencesKey("needs_identity_unlock")
 
             // Auto-announce preferences
             val AUTO_ANNOUNCE_ENABLED = booleanPreferencesKey("auto_announce_enabled")
@@ -435,6 +436,42 @@ class SettingsRepository
         suspend fun markOnboardingCompleted() {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] = true
+            }
+        }
+
+        /**
+         * Reset onboarding completion so the user is routed back to the welcome
+         * flow. Called from the identity-unlock "start fresh" path after we've
+         * deleted the undecryptable identity row — the user needs to re-create
+         * an identity from scratch, which onboarding handles.
+         */
+        suspend fun clearOnboardingCompleted() {
+            context.dataStore.edit { preferences ->
+                preferences.remove(PreferencesKeys.HAS_COMPLETED_ONBOARDING)
+            }
+        }
+
+        /**
+         * True when the active identity's encrypted key blob couldn't be unwrapped
+         * by the device Keystore — typically because the user restored a backup
+         * on a new device. The Keystore-wrapped `encryptedKeyData` survived in
+         * Room, but the Keystore AES key that produced it did not (Keystore keys
+         * are app-UID-bound and don't cross uninstall). UI routes to the
+         * identity-unlock screen so the user can re-import their identity file.
+         */
+        val needsIdentityUnlockFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.NEEDS_IDENTITY_UNLOCK] ?: false
+                }.distinctUntilChanged()
+
+        suspend fun setNeedsIdentityUnlock(value: Boolean) {
+            context.dataStore.edit { preferences ->
+                if (value) {
+                    preferences[PreferencesKeys.NEEDS_IDENTITY_UNLOCK] = true
+                } else {
+                    preferences.remove(PreferencesKeys.NEEDS_IDENTITY_UNLOCK)
+                }
             }
         }
 

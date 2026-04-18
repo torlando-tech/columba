@@ -949,11 +949,13 @@ class NativeReticulumProtocol(
         filePath: String,
     ): ByteArray =
         withContext(Dispatchers.IO) {
-            // Caller already holds the decrypted 64-byte key from the Keystore-
-            // wrapped DB blob. We just write it to the user-chosen export path.
-            // Parent dir is expected to exist (typically a cache dir or SAF
-            // scratch file); if it doesn't, let the IOException propagate.
-            java.io.File(filePath).writeBytes(keyData)
+            // Caller holds the decrypted 64-byte key from the Keystore-wrapped
+            // DB blob and wraps it into a FileProvider cache file itself. Since
+            // natively-created identities store `filePath = ""` (no plaintext
+            // file on disk), writing here would ENOENT — and the caller doesn't
+            // need us to, the bytes it gets back are what it serves to the
+            // share sheet. `filePath` is kept on the interface for the handful
+            // of remaining callers that still pass a real path.
             keyData
         }
 

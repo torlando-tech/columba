@@ -22,7 +22,7 @@ tech-stack:
 
 key-files:
   created: [".planning/phases/01-performance-fix/01-MONITORING-VERIFICATION.md"]
-  modified: ["app/src/main/java/com/lxmf/messenger/ColumbaApplication.kt", "app/src/main/java/com/lxmf/messenger/MainActivity.kt", "app/build.gradle.kts"]
+  modified: ["app/src/main/java/network.columba.app/ColumbaApplication.kt", "app/src/main/java/network.columba.app/MainActivity.kt", "app/build.gradle.kts"]
 
 key-decisions:
   - "Disabled Sentry in debug builds to avoid noise during development"
@@ -68,8 +68,8 @@ Each task was committed atomically:
 3. **Task 3: Create monitoring verification report** - `63900626` (docs)
 
 ## Files Created/Modified
-- `app/src/main/java/com/lxmf/messenger/ColumbaApplication.kt` - Added initializeSentry() method with performance config
-- `app/src/main/java/com/lxmf/messenger/MainActivity.kt` - JankStats initialization and lifecycle management
+- `app/src/main/java/network.columba.app/ColumbaApplication.kt` - Added initializeSentry() method with performance config
+- `app/src/main/java/network.columba.app/MainActivity.kt` - JankStats initialization and lifecycle management
 - `app/build.gradle.kts` - Added androidx.metrics:metrics-performance dependency
 - `.planning/phases/01-performance-fix/01-MONITORING-VERIFICATION.md` - Verification documentation
 

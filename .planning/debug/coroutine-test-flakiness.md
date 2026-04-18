@@ -70,4 +70,4 @@ fix: Move ViewModel instantiation inside each test's runTest block. Create helpe
 verification: Run full test suite 10+ times - should pass consistently. Individual tests should still pass. No UncaughtExceptionsBeforeTest errors.
 
 files_changed:
-- app/src/test/java/com/lxmf/messenger/viewmodel/RNodeWizardViewModelTest.kt
+- app/src/test/java/network.columba.app/viewmodel/RNodeWizardViewModelTest.kt

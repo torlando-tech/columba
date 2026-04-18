@@ -2,10 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-sdk tools:overrideLibrary="network.reticulum.android" />
+
     <application>
         <!-- Test host for Compose instrumented tests (no launcher icon) -->
         <activity
-            android:name="com.lxmf.messenger.test.TestHostActivity"
+            android:name="network.columba.app.test.TestHostActivity"
             android:exported="true" />
 
         <!-- Disable LeakCanary's "Leaks" launcher icon -->

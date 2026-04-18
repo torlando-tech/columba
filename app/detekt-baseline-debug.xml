@@ -89,7 +89,7 @@
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun createNewIdentity(displayName: String)</ID>
     <ID>ThrowsCount:IdentityManagerViewModel.kt$IdentityManagerViewModel$fun importIdentity( fileUri: Uri, displayName: String, )</ID>
     <ID>ThrowsCount:InterfaceRepository.kt$InterfaceRepository$fun entityToConfig(entity: InterfaceEntity): InterfaceConfig</ID>
-    <ID>ThrowsCount:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$suspend fun getLxmfDestination(): Result&lt;com.lxmf.messenger.reticulum.model.Destination&gt;</ID>
+    <ID>ThrowsCount:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$suspend fun getLxmfDestination(): Result&lt;network.columba.app.reticulum.model.Destination&gt;</ID>
     <ID>ThrowsCount:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$suspend fun getLxmfIdentity(): Result&lt;Identity&gt;</ID>
     <ID>TooGenericExceptionThrown:AnnounceStreamViewModel.kt$AnnounceStreamViewModel$throw RuntimeException("Service error: ${status.message}")</ID>
     <ID>TooGenericExceptionThrown:DebugViewModel.kt$DebugViewModel$throw RuntimeException("Could not get LXMF destination")</ID>
@@ -145,7 +145,7 @@
     <ID>UnsafeCallOnNullableType:ThemeEditorViewModel.kt$ThemeEditorViewModel$_state.value.themeId!!</ID>
     <ID>UnusedParameter:ContactsScreen.kt$contactName: String</ID>
     <ID>UnusedParameter:ContactsScreen.kt$onNavigateToConversation: (destinationHash: String) -&gt; Unit = {}</ID>
-    <ID>UnusedParameter:DebugViewModel.kt$DebugViewModel$identity: com.lxmf.messenger.reticulum.model.Identity</ID>
+    <ID>UnusedParameter:DebugViewModel.kt$DebugViewModel$identity: network.columba.app.reticulum.model.Identity</ID>
     <ID>UnusedParameter:FrequencySlotStep.kt$bandwidth: Int</ID>
     <ID>UnusedParameter:IdentityManagerViewModel.kt$IdentityManagerViewModel$identityHash: String</ID>
     <ID>UnusedParameter:IdentityScreen.kt$identityHash: String?</ID>
@@ -160,16 +160,16 @@
     <ID>UnusedPrivateMember:ServiceReticulumProtocol.kt$ServiceReticulumProtocol$private fun ByteArray.toHexString(): String</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$private val settingsRepository: SettingsRepository</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val destHash = _publicKey.value ?: return null</ID>
-    <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val isReady = status is com.lxmf.messenger.reticulum.model.NetworkStatus.READY</ID>
-    <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val statusString = when (status) { is com.lxmf.messenger.reticulum.model.NetworkStatus.READY -&gt; "READY" is com.lxmf.messenger.reticulum.model.NetworkStatus.INITIALIZING -&gt; "INITIALIZING" is com.lxmf.messenger.reticulum.model.NetworkStatus.SHUTDOWN -&gt; "SHUTDOWN" is com.lxmf.messenger.reticulum.model.NetworkStatus.ERROR -&gt; "ERROR: ${status.message}" else -&gt; status.toString() }</ID>
+    <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val isReady = status is network.columba.app.reticulum.model.NetworkStatus.READY</ID>
+    <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel$val statusString = when (status) { is network.columba.app.reticulum.model.NetworkStatus.READY -&gt; "READY" is network.columba.app.reticulum.model.NetworkStatus.INITIALIZING -&gt; "INITIALIZING" is network.columba.app.reticulum.model.NetworkStatus.SHUTDOWN -&gt; "SHUTDOWN" is network.columba.app.reticulum.model.NetworkStatus.ERROR -&gt; "ERROR: ${status.message}" else -&gt; status.toString() }</ID>
     <ID>UnusedPrivateProperty:DebugViewModel.kt$DebugViewModel.Companion$private const val DEFAULT_IDENTITY_FILE = "default_identity"</ID>
     <ID>UnusedPrivateProperty:IdentityScreen.kt$val context = LocalContext.current</ID>
     <ID>UnusedPrivateProperty:InterfaceConfigManager.kt$InterfaceConfigManager$val serviceConnection = (reticulumProtocol as ServiceReticulumProtocol)</ID>
     <ID>UnusedPrivateProperty:InterfaceDatabase.kt$InterfaceDatabase.Callback$private val applicationScope: CoroutineScope</ID>
     <ID>UnusedPrivateProperty:InterfaceDatabase.kt$InterfaceDatabase.Callback$private val database: Provider&lt;InterfaceDatabase&gt;</ID>
     <ID>UnusedPrivateProperty:InterfaceManagementScreen.kt$var expanded by remember { mutableStateOf(false) }</ID>
-    <ID>UnusedPrivateProperty:NotificationHelper.kt$NotificationHelper.Companion$private const val ACTION_MARK_READ = "com.lxmf.messenger.ACTION_MARK_READ"</ID>
-    <ID>UnusedPrivateProperty:NotificationHelper.kt$NotificationHelper.Companion$private const val ACTION_REPLY = "com.lxmf.messenger.ACTION_REPLY"</ID>
+    <ID>UnusedPrivateProperty:NotificationHelper.kt$NotificationHelper.Companion$private const val ACTION_MARK_READ = "network.columba.app.ACTION_MARK_READ"</ID>
+    <ID>UnusedPrivateProperty:NotificationHelper.kt$NotificationHelper.Companion$private const val ACTION_REPLY = "network.columba.app.ACTION_REPLY"</ID>
     <ID>UnusedPrivateProperty:PythonWrapperManager.kt$PythonWrapperManager$private val scope: CoroutineScope</ID>
     <ID>UnusedPrivateProperty:QrScannerScreen.kt$var showPermissionRationale by remember { mutableStateOf(false) }</ID>
     <ID>UnusedPrivateProperty:ThemeEditorViewModel.kt$ThemeEditorViewModel.Companion$private const val TAG = "ThemeEditorViewModel"</ID>

@@ -1,16 +1,15 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
     id("com.google.devtools.ksp")
     kotlin("plugin.parcelize")
     kotlin("plugin.serialization")
     id("com.google.dagger.hilt.android")
-    id("com.chaquo.python")
+
 }
 
 android {
     namespace = "tech.torlando.columba.reticulum"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
@@ -20,6 +19,12 @@ android {
             // armeabi-v7a restored: pycodec2 removed in favor of LXST (Kotlin/C++)
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
+
+        // Expose the pinned library versions to Kotlin source so NativeReticulumProtocol
+        // can report them to the About card without hardcoding (and drifting from reality).
+        buildConfigField("String", "RNS_KT_VERSION", "\"${libs.versions.reticulumKt.get().removePrefix("v")}\"")
+        buildConfigField("String", "LXMF_KT_VERSION", "\"${libs.versions.lxmfKt.get().removePrefix("v")}\"")
+        buildConfigField("String", "LXST_KT_VERSION", "\"${libs.versions.lxstKt.get().removePrefix("v")}\"")
     }
 
     compileOptions {
@@ -35,7 +40,7 @@ android {
 
     buildFeatures {
         aidl = true
-        buildConfig = false
+        buildConfig = true
     }
 
     testOptions {
@@ -46,16 +51,9 @@ android {
     }
 }
 
-chaquopy {
-    defaultConfig {
-        version = "3.11"
-        buildPython("python3.11")
-    }
-}
-
 dependencies {
     // LXST module (telephony, codecs, audio pipeline)
-    api("tech.torlando:lxst")
+    api(libs.lxst.kt)
 
     // Hilt
     implementation(libs.hilt)
@@ -72,11 +70,20 @@ dependencies {
     // MessagePack
     implementation(libs.msgpack)
 
+    // Native Reticulum/LXMF Kotlin stack (migration from Python/Chaquopy)
+    api(libs.rns.core)
+    api(libs.rns.interfaces)
+    api(libs.rns.android)
+    api(libs.lxmf.kt)
+
     // Serialization (for firmware manifest JSON parsing)
     implementation(libs.serialization.json)
 
+    // Room runtime (needed for native process access to Reticulum Room stores)
+    implementation(libs.room)
+
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
-    implementation("io.sentry:sentry-android:8.29.0")
+    implementation("io.sentry:sentry-android:8.31.0")
 
     // Testing
     testImplementation(libs.junit)

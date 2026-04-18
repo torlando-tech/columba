@@ -3,35 +3,37 @@
   Backup configuration for Columba
 
   SECURITY POLICY:
-  - Database (contacts, messages, announces): BACKED UP
-  - Identity files (private keys): EXCLUDED (manual export required)
-  - Shared preferences: BACKED UP
-  - Cache: EXCLUDED
+  - Room databases (columba_database, interface_database, reticulum.db): BACKED UP
+    * columba_database: identities (Keystore-wrapped private keys),
+      conversations, messages, contacts, settings.
+    * interface_database: user-configured RNS interfaces.
+    * reticulum.db: RNS routing state (paths, announces, packet
+      hashlist, tunnels, known destinations, identity ratchets,
+      destination ratchets for LXMF forward secrecy).
+  - SharedPreferences: BACKED UP
+  - Files under files/: BACKED UP (no sensitive state lives here anymore)
+  - Cache: EXCLUDED (Android default)
 
-  This follows security best practices by requiring users to manually
-  export/import their Reticulum identity keys while preserving their
-  data (contacts, messages, etc.) on reinstall.
+  The files/reticulum/ exclusion that earlier versions needed is gone:
+  - the in-memory-identity refactor (PR #785) stopped writing delivery
+    identity files,
+  - reticulum-kt v0.0.5 moved RNS routing state to Room,
+  - reticulum-kt v0.0.6 moved LXMF delivery-destination ratchets to Room,
+  - the createIdentityWithName / importIdentityFile / recoverIdentityFile
+    refactor eliminated the last plaintext-file writers.
+
+  Nothing in files/reticulum/ contains user secrets anymore.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Include database and shared preferences -->
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
-
-        <!-- Include files, but exclude identity files (contain private keys) -->
         <include domain="file" path="." />
-        <exclude domain="file" path="reticulum/" />
-        <exclude domain="file" path=".reticulum/" />
     </cloud-backup>
 
-    <!-- Device-to-device transfer has same rules as cloud backup -->
     <device-transfer>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
-
-        <!-- Include files, but exclude identity files (contain private keys) -->
         <include domain="file" path="." />
-        <exclude domain="file" path="reticulum/" />
-        <exclude domain="file" path=".reticulum/" />
     </device-transfer>
 </data-extraction-rules>

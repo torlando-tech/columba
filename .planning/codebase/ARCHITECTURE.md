@@ -18,49 +18,49 @@
 
 **UI Layer:**
 - Purpose: Compose-based user interface, Material Design 3 themes
-- Location: `app/src/main/java/com/lxmf/messenger/ui/`
+- Location: `app/src/main/java/network.columba.app/ui/`
 - Contains: Screens, Components, Theme definitions, UI models, Utilities
 - Depends on: ViewModels, Repositories, Domain models, Utilities
 - Used by: MainActivity (entry point)
 
 **ViewModel Layer:**
 - Purpose: State management, business logic orchestration, screen-specific state
-- Location: `app/src/main/java/com/lxmf/messenger/viewmodel/`
+- Location: `app/src/main/java/network.columba.app/viewmodel/`
 - Contains: ViewModel classes for each major screen/feature
 - Depends on: Repositories, use case logic, Coroutines
 - Used by: UI Layer (Composables)
 
 **Repository Layer:**
 - Purpose: Data access abstraction, combining database and service sources
-- Location: `data/src/main/java/com/lxmf/messenger/data/repository/` and `app/src/main/java/com/lxmf/messenger/repository/`
+- Location: `data/src/main/java/network.columba.app/data/repository/` and `app/src/main/java/network.columba.app/repository/`
 - Contains: Repository implementations for conversations, contacts, settings, identities
 - Depends on: DAOs, Services, DataStore, External protocols
 - Used by: ViewModels, Service managers
 
 **Service Layer (Background Process):**
 - Purpose: Long-running Reticulum networking service in separate `:reticulum` process
-- Location: `app/src/main/java/com/lxmf/messenger/service/`
+- Location: `app/src/main/java/network.columba.app/service/`
 - Contains: ReticulumService (lifecycle shell), ServiceModule (DI), managers, state
 - Depends on: ReticulumProtocol, Database, Python/Chaquopy
 - Used by: Main app process via AIDL binder
 
 **Data/Database Layer:**
 - Purpose: Persistent data storage using Room ORM
-- Location: `data/src/main/java/com/lxmf/messenger/data/db/`
+- Location: `data/src/main/java/network.columba.app/data/db/`
 - Contains: Database schema, DAOs, Entities, Migrations
 - Depends on: Room, SQLite
 - Used by: Repositories, Service managers
 
 **Reticulum Protocol Layer:**
 - Purpose: Network stack abstraction for mesh networking protocol
-- Location: `reticulum/src/main/java/com/lxmf/messenger/reticulum/`
+- Location: `reticulum/src/main/java/network.columba.app/reticulum/`
 - Contains: Protocol interface, ServiceReticulumProtocol (service-based), BLE bridge, RNode USB
 - Depends on: Python/Chaquopy (via Chaquopy), Android APIs, Coroutines
 - Used by: Service managers, ViewModels
 
 **Domain/Shared Models:**
 - Purpose: Core data models and business logic
-- Location: `reticulum/src/main/java/com/lxmf/messenger/reticulum/model/` and `app/src/main/java/com/lxmf/messenger/data/model/`
+- Location: `reticulum/src/main/java/network.columba.app/reticulum/model/` and `app/src/main/java/network.columba.app/data/model/`
 - Contains: Identity, Destination, Link, Message, AnnounceEvent, configuration models
 - Depends on: Nothing (pure data)
 - Used by: All layers
@@ -108,13 +108,13 @@
 
 **ReticulumProtocol (Interface):**
 - Purpose: Network stack contract enabling implementation swapping
-- Examples: `reticulum/src/main/java/com/lxmf/messenger/reticulum/protocol/ReticulumProtocol.kt`
+- Examples: `reticulum/src/main/java/network.columba.app/reticulum/protocol/ReticulumProtocol.kt`
 - Pattern: Strategy pattern with async/suspend functions for non-blocking ops
 - Implementations: `ServiceReticulumProtocol` (production), `MockReticulumProtocol` (testing)
 
 **ReticulumServiceBinder (AIDL):**
 - Purpose: IPC interface for main app to call service functions
-- Examples: `app/src/main/java/com/lxmf/messenger/service/binder/ReticulumServiceBinder.kt`
+- Examples: `app/src/main/java/network.columba.app/service/binder/ReticulumServiceBinder.kt`
 - Pattern: Adapter pattern converting AIDL calls to internal manager methods
 - Converts Python results to Kotlin types via `PythonResultConverter`
 
@@ -134,27 +134,27 @@
 - Purpose: Type-safe database queries
 - Examples: `ConversationDao`, `MessageDao`, `PeerIdentityDao`
 - Pattern: Room @Dao annotated interfaces returning Flow<> for reactive queries
-- One DAO per entity type in `data/src/main/java/com/lxmf/messenger/data/db/dao/`
+- One DAO per entity type in `data/src/main/java/network.columba.app/data/db/dao/`
 
 ## Entry Points
 
 **MainActivity:**
-- Location: `app/src/main/java/com/lxmf/messenger/MainActivity.kt`
+- Location: `app/src/main/java/network.columba.app/MainActivity.kt`
 - Triggers: Intent.ACTION_MAIN, deep links (lxma://), USB device attached, BROADCAST_ACTION
 - Responsibilities: Set up Compose UI, handle permissions, route based on onboarding state, manage navigation
 
 **ColumbaApplication:**
-- Location: `app/src/main/java/com/lxmf/messenger/ColumbaApplication.kt`
+- Location: `app/src/main/java/network.columba.app/ColumbaApplication.kt`
 - Triggers: App process startup (before any activity)
 - Responsibilities: Hilt DI initialization, start core managers (MessageCollector, AutoAnnounce, Migration), error reporting (Sentry)
 
 **ReticulumService:**
-- Location: `app/src/main/java/com/lxmf/messenger/service/ReticulumService.kt`
+- Location: `app/src/main/java/network.columba.app/service/ReticulumService.kt`
 - Triggers: MainActivity.startService() or system launch in background
 - Responsibilities: Foreground service lifecycle, initialize managers via ServiceModule, expose AIDL binder, monitor health
 
 **RNodeCompanionService:**
-- Location: `app/src/main/java/com/lxmf/messenger/service/RNodeCompanionService.kt`
+- Location: `app/src/main/java/network.columba.app/service/RNodeCompanionService.kt`
 - Triggers: Companion Device Manager (Android 12+) when RNode in range
 - Responsibilities: Register Columba as companion app for RNode devices
 
@@ -182,7 +182,7 @@
 **Validation:**
 - Approach: Input validation in ViewModels before repository calls
 - Domain validation in repositories (e.g., identity hash format)
-- Location: `app/src/main/java/com/lxmf/messenger/util/validation/`
+- Location: `app/src/main/java/network.columba.app/util/validation/`
 
 **Authentication:**
 - Approach: Identity-based mesh protocol (LXMF/Reticulum), not traditional login

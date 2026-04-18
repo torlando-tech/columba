@@ -3,12 +3,11 @@ import java.util.Base64
 
 plugins {
     id("com.android.application")
-    kotlin("android")
     kotlin("plugin.compose")
     kotlin("plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-    id("com.chaquo.python")
+
     id("io.sentry.android.gradle")
 }
 
@@ -74,21 +73,51 @@ fun getGitCommitHash(): String {
     }
 }
 
+/**
+ * Return a deterministic build timestamp (epoch millis).
+ *
+ * In order:
+ *   1. `SOURCE_DATE_EPOCH` env var (the standard reproducible-build convention) if set.
+ *   2. The HEAD commit's committer timestamp via `git log -1 --format=%ct`.
+ *   3. 0L as a last-resort fallback so the build still succeeds outside a git tree.
+ *
+ * Using the commit timestamp (not System.currentTimeMillis()) means two builds from the
+ * same commit produce the same BuildConfig.BUILD_TIMESTAMP, which keeps the APK byte-for-
+ * byte reproducible.
+ */
+fun getReproducibleBuildTimestamp(): Long {
+    System.getenv("SOURCE_DATE_EPOCH")?.toLongOrNull()?.let { return it * 1000L }
+    return try {
+        providers.exec {
+            commandLine("git", "log", "-1", "--format=%ct")
+        }.standardOutput.asText
+            .get()
+            .trim()
+            .toLong() * 1000L
+    } catch (_: Exception) {
+        println(
+            "Warning: could not read git commit timestamp; BUILD_TIMESTAMP will be 0 " +
+                "(renders as 1970-01-01 on the About screen). Set SOURCE_DATE_EPOCH to override.",
+        )
+        0L
+    }
+}
+
 val (versionCodeValue, versionNameValue) = getVersionFromTag()
 
 android {
-    namespace = "com.lxmf.messenger"
-    compileSdk = 35
+    namespace = "network.columba.app"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.lxmf.messenger"
+        applicationId = "network.columba.app"
         minSdk = 24
         targetSdk = 35
         versionCode = versionCodeValue
         versionName = versionNameValue
 
         buildConfigField("String", "GIT_COMMIT_HASH", "\"${getGitCommitHash()}\"")
-        buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
+        buildConfigField("long", "BUILD_TIMESTAMP", "${getReproducibleBuildTimestamp()}L")
         buildConfigField("String", "COPYRIGHT_YEAR", "\"2026\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -206,7 +235,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-        aidl = true // Enable AIDL support for IPC
     }
 
     composeOptions {
@@ -326,41 +354,10 @@ sentry {
     }
 }
 
-chaquopy {
-    defaultConfig {
-        version = "3.11"
-        buildPython("python3.11")
-
-        pip {
-            // Install ble-reticulum from GitHub
-            install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
-
-            // Install requirements from requirements.txt
-            install("-r", "../python/requirements.txt")
-        }
-
-        // Include Python source files (needed for pkgutil.get_data() to deploy BLE interface)
-        pyc {
-            // Disabled: .pyc compilation requires buildPython 3.11 on the build host.
-            // Re-enable once all contributor environments have python3.11 available.
-            src = false
-        }
-
-        // Extract package files so .py sources are accessible at runtime
-        extractPackages("ble_reticulum", "ble_modules")
-    }
-
-    sourceSets {
-        getByName("main") {
-            srcDir("../python")
-        }
-    }
-}
-
 dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
-    implementation("tech.torlando:lxst")
+    implementation(libs.lxst.kt)
     implementation(project(":reticulum"))
     implementation(project(":micron"))
 
@@ -411,7 +408,7 @@ dependencies {
 
     // Crash Reporting - GlitchTip (Sentry-compatible)
     // Phase 4 Task 4.2: Production Observability
-    implementation("io.sentry:sentry-android:8.29.0")
+    implementation("io.sentry:sentry-android:8.31.0")
 
     // Performance Monitoring - JankStats for frame monitoring
     // Phase 1 Plan 01-03: Frame tracking integration with Sentry
@@ -438,7 +435,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.2.0")
 
     // Memory leak detection
-    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.13")
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 
     // Testing
     testImplementation(libs.junit)
@@ -452,7 +449,7 @@ dependencies {
     testImplementation(libs.compose.test)
     testImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation(libs.paging.testing)
-    testImplementation("androidx.test:core:1.5.0")
+    testImplementation(libs.test.core)
     testImplementation("androidx.test.ext:junit:1.1.5")
     testImplementation("org.json:json:20231013") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)

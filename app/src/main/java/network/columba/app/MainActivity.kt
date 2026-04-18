@@ -1089,6 +1089,13 @@ fun ColumbaNavigation(
                             composable(Screen.IdentityUnlock.route) {
                                 network.columba.app.ui.screens.IdentityUnlockScreen(
                                     onResolved = {
+                                        // ColumbaApplication bailed out of Reticulum init when
+                                        // the key decrypt failed at cold-start. Now that the
+                                        // re-wrap put a usable encryptedKeyData back on the row,
+                                        // kick the service so the native stack comes up with
+                                        // the restored identity — otherwise the user lands on
+                                        // Chats with read-only history and sends silently fail.
+                                        settingsViewModel.restartService()
                                         navController.navigate(Screen.Chats.route) {
                                             popUpTo(Screen.IdentityUnlock.route) { inclusive = true }
                                         }

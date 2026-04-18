@@ -171,7 +171,19 @@ class IdentityUnlockViewModel
                     )
                 result
                     .onSuccess {
-                        identityRepository.switchActiveIdentity(current.importedHash)
+                        // If switch fails the new row exists but isActive=0,
+                        // so the next boot sees no active identity and Chats
+                        // silently breaks. Surface the failure and leave the
+                        // unlock flag set so we route back here next launch.
+                        val switched =
+                            identityRepository.switchActiveIdentity(current.importedHash)
+                        switched.onFailure { e ->
+                            _uiState.value =
+                                IdentityUnlockUiState.Error(
+                                    "Couldn't activate imported identity: ${e.message}",
+                                )
+                            return@launch
+                        }
                         settingsRepository.setNeedsIdentityUnlock(false)
                         _uiState.value = IdentityUnlockUiState.Restored
                     }.onFailure { e ->

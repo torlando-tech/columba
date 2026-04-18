@@ -2,6 +2,8 @@ package network.columba.app.data.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,6 +34,28 @@ import javax.inject.Singleton
 object DatabaseModule {
     const val DATABASE_NAME = "columba_database"
 
+    /**
+     * Harden SQLite against process-kill-induced corruption.
+     *
+     * Background: the app runs two processes (main + `:reticulum`) that both open this
+     * Room DB. If either is OOM-killed mid-write, the default `synchronous=NORMAL` in
+     * WAL mode only fsyncs on checkpoint, which on some kernels/filesystems (f2fs on
+     * older Android kernels) can leave torn WAL pages and produce `SQLITE_CORRUPT` on
+     * next read. `synchronous=FULL` fsyncs on every commit, closing that window.
+     *
+     * Applied from both [provideColumbaDatabase] and the `:reticulum` process's
+     * `ServiceDatabaseProvider` so both processes agree on journal mode and durability.
+     */
+    val DURABILITY_CALLBACK: RoomDatabase.Callback =
+        object : RoomDatabase.Callback() {
+            override fun onOpen(db: SupportSQLiteDatabase) {
+                db.execSQL("PRAGMA journal_mode=WAL")
+                db.execSQL("PRAGMA synchronous=FULL")
+                db.execSQL("PRAGMA wal_autocheckpoint=100")
+                db.execSQL("PRAGMA busy_timeout=5000")
+            }
+        }
+
     @Provides
     @Singleton
     fun provideColumbaDatabase(
@@ -45,6 +69,7 @@ object DatabaseModule {
             ).fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
+            .addCallback(DURABILITY_CALLBACK)
             .build()
 
     @Provides

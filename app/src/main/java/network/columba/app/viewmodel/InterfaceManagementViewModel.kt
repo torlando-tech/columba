@@ -4,16 +4,8 @@ import android.bluetooth.BluetoothAdapter
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import network.columba.app.data.database.entity.InterfaceEntity
-import network.columba.app.data.model.BleConnectionsState
-import network.columba.app.data.repository.BleStatusRepository
-import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.InterfaceConfigManager
-import network.columba.app.util.validation.InputValidator
-import network.columba.app.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +16,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.data.database.entity.InterfaceEntity
+import network.columba.app.data.model.BleConnectionsState
+import network.columba.app.data.repository.BleStatusRepository
+import network.columba.app.repository.InterfaceRepository
+import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.util.validation.InputValidator
+import network.columba.app.util.validation.ValidationResult
 import org.json.JSONObject
 import javax.inject.Inject
 
@@ -1045,6 +1046,12 @@ class InterfaceManagementViewModel
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)
                         fetchInterfaceStatus()
+                    } catch (e: CancellationException) {
+                        // Quick successive toggles cancel the in-flight sync so the
+                        // next one wins. That's by design, not a failure — rethrow
+                        // so the coroutine honours cancellation instead of flipping
+                        // the "Failed to Apply Changes" banner on.
+                        throw e
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to sync native interfaces: ${e.message}", e)
                         // Hot-reload failed and the caller has already shown a success toast for

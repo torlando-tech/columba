@@ -216,16 +216,19 @@ class IdentityUnlockViewModel
         }
 
         private fun restartApp() {
+            // Target MainActivity by explicit ComponentName, not
+            // `getLaunchIntentForPackage`. Debug builds add TestHostActivity as
+            // a MAIN/LAUNCHER for instrumented tests, and the package manager
+            // is free to resolve either — we'd land on an empty test harness
+            // roughly half the time otherwise.
             val launchIntent =
-                context.packageManager.getLaunchIntentForPackage(context.packageName)
-            if (launchIntent == null) {
-                Log.w(TAG, "No launch intent for ${context.packageName}; can't restart cleanly")
-                return
-            }
-            launchIntent.addFlags(
-                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                    android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK,
-            )
+                android.content.Intent().apply {
+                    setClassName(context, "network.columba.app.MainActivity")
+                    addFlags(
+                        android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK,
+                    )
+                }
             context.startActivity(launchIntent)
             Log.d(TAG, "Killing process to complete Start Fresh clean slate")
             android.os.Process.killProcess(android.os.Process.myPid())

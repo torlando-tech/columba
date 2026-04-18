@@ -100,6 +100,14 @@ class IdentityUnlockViewModel
                             return@launch
                         }
 
+                val destHash =
+                    parse["destination_hash"] as? String
+                        ?: run {
+                            _uiState.value =
+                                IdentityUnlockUiState.Error("No destination hash in parse result")
+                            return@launch
+                        }
+
                 if (importedHash != active.identityHash) {
                     Log.w(
                         TAG,
@@ -111,6 +119,7 @@ class IdentityUnlockViewModel
                             importedHash = importedHash,
                             activeHash = active.identityHash,
                             keyData = keyData,
+                            destHash = destHash,
                         )
                     return@launch
                 }
@@ -133,9 +142,12 @@ class IdentityUnlockViewModel
             viewModelScope.launch {
                 _uiState.value = IdentityUnlockUiState.Loading("Replacing identity...")
 
-                // Derive destination hash fresh from the imported identity — the
-                // protocol already computed it during parse, but we re-parse here
-                // so we don't need to carry it through HashMismatch state.
+                // `importedHash`, `keyData`, and `destHash` are all carried
+                // through `HashMismatch` from the initial parse — no need to
+                // re-invoke the protocol here. Re-parsing with the already-
+                // extracted 64-byte `keyData` would fail anyway since
+                // `importIdentityFile` expects raw file bytes, not pre-parsed
+                // key material.
                 val active = identityRepository.getActiveIdentitySync()
                 if (active != null) {
                     identityRepository
@@ -149,21 +161,11 @@ class IdentityUnlockViewModel
                         }
                 }
 
-                val parse =
-                    reticulumProtocol.importIdentityFile(current.keyData, active?.displayName ?: "")
-                val destHash =
-                    parse["destination_hash"] as? String
-                        ?: run {
-                            _uiState.value =
-                                IdentityUnlockUiState.Error("Couldn't compute destination hash")
-                            return@launch
-                        }
-
                 val result =
                     identityRepository.createIdentity(
                         identityHash = current.importedHash,
                         displayName = active?.displayName ?: "Imported Identity",
-                        destinationHash = destHash,
+                        destinationHash = current.destHash,
                         filePath = "",
                         keyData = current.keyData,
                     )
@@ -188,6 +190,19 @@ class IdentityUnlockViewModel
         }
 
         /**
+         * Reset from a terminal `Error` state back to `Idle` so the user can
+         * retry. `cancelHashMismatch` only handles the mismatch-confirm path;
+         * without this, the "Try again" button in `ErrorBlock` was a no-op
+         * once an import failed — leaving the user stuck on the error message
+         * with no way to start over.
+         */
+        fun dismissError() {
+            if (_uiState.value is IdentityUnlockUiState.Error) {
+                _uiState.value = IdentityUnlockUiState.Idle
+            }
+        }
+
+        /**
          * Delete the undecryptable identity and restart the process. The running
          * ReticulumService still holds the old identity in native memory, and
          * the app's auto-create-identity path only fires during cold startup
@@ -207,7 +222,21 @@ class IdentityUnlockViewModel
             viewModelScope.launch {
                 _uiState.value = IdentityUnlockUiState.Loading("Starting fresh...")
                 val active = identityRepository.getActiveIdentitySync()
-                active?.let { identityRepository.deleteIdentity(it.identityHash) }
+                if (active != null) {
+                    identityRepository
+                        .deleteIdentity(active.identityHash)
+                        .onFailure { e ->
+                            // If the row deletion fails and we press on to the
+                            // restart, the undecryptable identity stays active
+                            // and the next launch routes right back to this
+                            // screen — a silent infinite loop for the user.
+                            _uiState.value =
+                                IdentityUnlockUiState.Error(
+                                    "Couldn't remove old identity: ${e.message}",
+                                )
+                            return@launch
+                        }
+                }
                 settingsRepository.clearOnboardingCompleted()
                 settingsRepository.setNeedsIdentityUnlock(false)
                 _uiState.value = IdentityUnlockUiState.StartedFresh
@@ -266,16 +295,24 @@ sealed class IdentityUnlockUiState {
         val importedHash: String,
         val activeHash: String,
         val keyData: ByteArray,
+        val destHash: String,
     ) : IdentityUnlockUiState() {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (other !is HashMismatch) return false
             return importedHash == other.importedHash &&
                 activeHash == other.activeHash &&
-                keyData.contentEquals(other.keyData)
+                keyData.contentEquals(other.keyData) &&
+                destHash == other.destHash
         }
 
-        override fun hashCode(): Int = importedHash.hashCode()
+        override fun hashCode(): Int {
+            var result = importedHash.hashCode()
+            result = 31 * result + activeHash.hashCode()
+            result = 31 * result + keyData.contentHashCode()
+            result = 31 * result + destHash.hashCode()
+            return result
+        }
     }
 
     object Restored : IdentityUnlockUiState()

@@ -1712,15 +1712,25 @@ object DatabaseModule {
      *
      * Applied from both [provideColumbaDatabase] and the `:reticulum` process's
      * `ServiceDatabaseProvider` so both processes agree on journal mode and durability.
+     *
+     * Note: `onOpen` fires after Room has already run any pending migrations, so the
+     * migration window itself still runs at `synchronous=NORMAL`. That's a narrow
+     * residual risk (migrations execute once per schema bump, for seconds) accepted
+     * for this patch; a full fix would require a custom `SupportSQLiteOpenHelper.Factory`.
+     * `onCreate` is also overridden so first-install schema creation is durable.
      */
     val DURABILITY_CALLBACK: RoomDatabase.Callback =
         object : RoomDatabase.Callback() {
-            override fun onOpen(db: SupportSQLiteDatabase) {
+            private fun applyPragmas(db: SupportSQLiteDatabase) {
                 db.execSQL("PRAGMA journal_mode=WAL")
                 db.execSQL("PRAGMA synchronous=FULL")
                 db.execSQL("PRAGMA wal_autocheckpoint=100")
                 db.execSQL("PRAGMA busy_timeout=5000")
             }
+
+            override fun onCreate(db: SupportSQLiteDatabase) = applyPragmas(db)
+
+            override fun onOpen(db: SupportSQLiteDatabase) = applyPragmas(db)
         }
 
     @Suppress("SpreadOperator") // Spread is required by Room API; called once at initialization

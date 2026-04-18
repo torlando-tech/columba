@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -1045,7 +1046,7 @@ class InterfaceManagementViewModel
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)
                         fetchInterfaceStatus()
-                    } catch (e: kotlinx.coroutines.CancellationException) {
+                    } catch (e: CancellationException) {
                         // Quick successive toggles cancel the in-flight sync so the
                         // next one wins. That's by design, not a failure — rethrow
                         // so the coroutine honours cancellation instead of flipping

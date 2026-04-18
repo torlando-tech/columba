@@ -22,6 +22,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -612,36 +613,32 @@ fun ColumbaNavigation(
     val onboardingState by onboardingViewModel.state.collectAsState()
     val needsIdentityUnlock by onboardingViewModel.needsIdentityUnlock.collectAsState()
 
-    // Determine start destination based on onboarding + unlock status
-    // IMPORTANT: Use remember to compute this only once. Without remember,
-    // the startDestination would be recalculated when onboardingState loads
-    // asynchronously from DataStore, which causes NavHost to reset to the
-    // new startDestination and discard any pending navigation.
-    val startDestination =
-        remember {
+    // Determine start destination based on onboarding + unlock status.
+    // Held null until onboardingState finishes loading from DataStore, then
+    // latched to the resolved route. The NavHost isn't rendered until this
+    // is non-null, so the splash screen covers the async load and the user
+    // never sees the Welcome wizard flash for a frame before the redirect.
+    var startDestination by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(onboardingState.isLoading, onboardingState.hasCompletedOnboarding, needsIdentityUnlock) {
+        if (onboardingState.isLoading || startDestination != null) return@LaunchedEffect
+        startDestination =
             when {
                 onboardingState.hasCompletedOnboarding && needsIdentityUnlock -> Screen.IdentityUnlock.route
                 onboardingState.hasCompletedOnboarding -> Screen.Chats.route
                 else -> Screen.Welcome.route
             }
-        }
+    }
 
-    // Handle edge case: user completed onboarding but we started at Welcome
-    // because onboardingState was still loading when startDestination was computed
+    // If `needsIdentityUnlock` flips after the NavHost has already started (e.g.
+    // a later identity decryption failure), redirect to the unlock screen.
     LaunchedEffect(onboardingState.hasCompletedOnboarding, needsIdentityUnlock) {
+        if (startDestination == null) return@LaunchedEffect
         val currentRoute = navController.currentDestination?.route
         if (!onboardingState.hasCompletedOnboarding) return@LaunchedEffect
         if (needsIdentityUnlock && currentRoute != Screen.IdentityUnlock.route) {
             Log.d("ColumbaNavigation", "Redirecting to IdentityUnlock (key decryption failed)")
             navController.navigate(Screen.IdentityUnlock.route) {
                 popUpTo(navController.graph.startDestinationId) { inclusive = true }
-            }
-            return@LaunchedEffect
-        }
-        if (currentRoute == Screen.Welcome.route && pendingNavigation.value == null) {
-            Log.d("ColumbaNavigation", "Redirecting to Chats (onboarding already completed)")
-            navController.navigate(Screen.Chats.route) {
-                popUpTo(Screen.Welcome.route) { inclusive = true }
             }
         }
     }
@@ -1053,1099 +1050,1104 @@ fun ColumbaNavigation(
                         onReconnect = { settingsViewModel.restartService() },
                         hasCompletedOnboarding = onboardingState.hasCompletedOnboarding,
                     )
-                    NavHost(
-                        modifier = Modifier.weight(1f),
-                        navController = navController,
-                        startDestination = startDestination,
-                        enterTransition = { fadeIn(tween(150)) },
-                        exitTransition = { fadeOut(tween(75)) },
-                        popEnterTransition = { fadeIn(tween(150)) },
-                        popExitTransition = { fadeOut(tween(75)) },
-                    ) {
-                        composable(Screen.Welcome.route) {
-                            OnboardingPagerScreen(
-                                onOnboardingComplete = { navigateToRNodeWizard ->
-                                    navController.navigate(Screen.Chats.route) {
-                                        popUpTo(Screen.Welcome.route) { inclusive = true }
-                                    }
-                                    // Navigate to RNode wizard if LoRa Radio was selected
-                                    if (navigateToRNodeWizard) {
-                                        navController.navigate("rnode_wizard")
-                                    }
-                                },
-                                onImportData = {
-                                    navController.navigate("migration")
-                                },
-                            )
-                        }
-
-                        composable(Screen.IdentityUnlock.route) {
-                            network.columba.app.ui.screens.IdentityUnlockScreen(
-                                onResolved = {
-                                    navController.navigate(Screen.Chats.route) {
-                                        popUpTo(Screen.IdentityUnlock.route) { inclusive = true }
-                                    }
-                                },
-                            )
-                        }
-
-                        composable(Screen.Chats.route) {
-                            DoubleBackToExitHandler(Screen.Chats.route)
-                            ChatsScreen(
-                                onChatClick = { destinationHash, peerName ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    val encodedName = Uri.encode(peerName)
-                                    navController.navigate("messaging/$encodedHash/$encodedName")
-                                },
-                                onViewPeerDetails = { peerHash ->
-                                    val encodedHash = Uri.encode(peerHash)
-                                    navController.navigate("announce_detail/$encodedHash")
-                                },
-                                onLocateOnMap = { peerHash ->
-                                    mapViewModel.focusOnContact(peerHash)
-                                    navController.navigate(Screen.Map.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
+                    val resolvedStartDestination = startDestination
+                    if (resolvedStartDestination == null) {
+                        Box(modifier = Modifier.weight(1f))
+                    } else {
+                        NavHost(
+                            modifier = Modifier.weight(1f),
+                            navController = navController,
+                            startDestination = resolvedStartDestination,
+                            enterTransition = { fadeIn(tween(150)) },
+                            exitTransition = { fadeOut(tween(75)) },
+                            popEnterTransition = { fadeIn(tween(150)) },
+                            popExitTransition = { fadeOut(tween(75)) },
+                        ) {
+                            composable(Screen.Welcome.route) {
+                                OnboardingPagerScreen(
+                                    onOnboardingComplete = { navigateToRNodeWizard ->
+                                        navController.navigate(Screen.Chats.route) {
+                                            popUpTo(Screen.Welcome.route) { inclusive = true }
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                onNavigateToQrScanner = {
-                                    navController.navigate("qr_scanner")
-                                },
-                                settingsViewModel = settingsViewModel,
-                            )
-                        }
-
-                        composable(
-                            route = "${Screen.Announces.route}?filterType={filterType}",
-                            arguments =
-                                listOf(
-                                    navArgument("filterType") {
-                                        type = NavType.StringType
-                                        nullable = true
-                                        defaultValue = null
-                                    },
-                                ),
-                        ) { backStackEntry ->
-                            val filterType = backStackEntry.arguments?.getString("filterType")
-                            AnnounceStreamScreen(
-                                initialFilterType = filterType,
-                                onPeerClick = { destinationHash, _ ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    navController.navigate("announce_detail/$encodedHash")
-                                },
-                                onStartChat = { destinationHash, peerName ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    val encodedName = Uri.encode(peerName)
-                                    navController.navigate("messaging/$encodedHash/$encodedName")
-                                },
-                            )
-                        }
-
-                        composable(Screen.Contacts.route) {
-                            DoubleBackToExitHandler(Screen.Contacts.route)
-                            val contactsViewModel: ContactsViewModel = hiltViewModel()
-                            ContactsScreen(
-                                onContactClick = { destinationHash, displayName ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    navController.navigate("announce_detail/$encodedHash")
-                                },
-                                onViewPeerDetails = { destinationHash ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    navController.navigate("announce_detail/$encodedHash")
-                                },
-                                onLocateOnMap = { peerHash ->
-                                    mapViewModel.focusOnContact(peerHash)
-                                    navController.navigate(Screen.Map.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
+                                        // Navigate to RNode wizard if LoRa Radio was selected
+                                        if (navigateToRNodeWizard) {
+                                            navController.navigate("rnode_wizard")
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                onNavigateToQrScanner = {
-                                    navController.navigate("qr_scanner")
-                                },
-                                pendingDeepLinkContact = pendingContactAdd,
-                                onDeepLinkContactProcessed = {
-                                    pendingContactAdd = null
-                                },
-                                onNavigateToConversation = { destinationHash ->
-                                    val contacts = contactsViewModel.contacts.value
-                                    val contact = contacts.find { it.destinationHash == destinationHash }
-                                    val peerName = contact?.displayName ?: destinationHash.take(16)
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    val encodedName = Uri.encode(peerName)
-                                    navController.navigate("messaging/$encodedHash/$encodedName")
-                                },
-                                onStartChat = { destinationHash, peerName ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    val encodedName = Uri.encode(peerName)
-                                    navController.navigate("messaging/$encodedHash/$encodedName")
-                                },
-                            )
-                        }
-
-                        composable(Screen.Map.route) {
-                            DoubleBackToExitHandler(Screen.Map.route)
-                            MapScreen(
-                                viewModel = mapViewModel,
-                                onNavigateToConversation = { destinationHash ->
-                                    // Navigate to messaging screen with the contact
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    // Use a placeholder name - the messaging screen will fetch the actual name
-                                    navController.navigate("messaging/$encodedHash/Contact")
-                                },
-                                onNavigateToOfflineMaps = {
-                                    navController.navigate("offline_maps")
-                                },
-                                onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
-                                    navController.navigate(
-                                        "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
-                                            "&loraBandwidth=${bandwidth ?: -1}" +
-                                            "&loraSf=${sf ?: -1}" +
-                                            "&loraCr=${cr ?: -1}",
-                                    )
-                                },
-                                permissionSheetDismissed = mapPermissionSheetDismissed,
-                                onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
-                                permissionCardDismissed = mapPermissionCardDismissed,
-                                onPermissionCardDismissed = { mapPermissionCardDismissed = true },
-                            )
-                        }
-
-                        // Map with focus location (for discovered interfaces)
-                        composable(
-                            route =
-                                "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
-                                    "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +
-                                    "&sf={sf}&cr={cr}&modulation={modulation}&status={status}&lastHeard={lastHeard}&hops={hops}",
-                            arguments =
-                                listOf(
-                                    navArgument("lat") {
-                                        type = NavType.FloatType
-                                        defaultValue = 0f
                                     },
-                                    navArgument("lon") {
-                                        type = NavType.FloatType
-                                        defaultValue = 0f
+                                    onImportData = {
+                                        navController.navigate("migration")
                                     },
-                                    navArgument("label") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                    navArgument("type") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                    navArgument("height") {
-                                        type = NavType.FloatType
-                                        defaultValue = Float.NaN
-                                    },
-                                    navArgument("reachableOn") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                    navArgument("port") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("frequency") {
-                                        type = NavType.LongType
-                                        defaultValue = -1L
-                                    },
-                                    navArgument("bandwidth") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("sf") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("cr") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("modulation") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                    navArgument("status") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                    navArgument("lastHeard") {
-                                        type = NavType.LongType
-                                        defaultValue = -1L
-                                    },
-                                    navArgument("hops") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                ),
-                        ) { backStackEntry ->
-                            val lat = backStackEntry.arguments?.getFloat("lat")?.toDouble()
-                            val lon = backStackEntry.arguments?.getFloat("lon")?.toDouble()
-                            val label = backStackEntry.arguments?.getString("label")
-                            val type = backStackEntry.arguments?.getString("type")
-                            val height = backStackEntry.arguments?.getFloat("height")?.toDouble()
-                            val reachableOn = backStackEntry.arguments?.getString("reachableOn")
-                            val port = backStackEntry.arguments?.getInt("port")
-                            val frequency = backStackEntry.arguments?.getLong("frequency")
-                            val bandwidth = backStackEntry.arguments?.getInt("bandwidth")
-                            val sf = backStackEntry.arguments?.getInt("sf")
-                            val cr = backStackEntry.arguments?.getInt("cr")
-                            val modulation = backStackEntry.arguments?.getString("modulation")
-                            val status = backStackEntry.arguments?.getString("status")
-                            val lastHeard = backStackEntry.arguments?.getLong("lastHeard")
-                            val hops = backStackEntry.arguments?.getInt("hops")
-
-                            // Build FocusInterfaceDetails if we have valid lat/lon
-                            val focusDetails =
-                                buildFocusInterfaceDetails(
-                                    lat = lat,
-                                    lon = lon,
-                                    label = label,
-                                    type = type,
-                                    height = height,
-                                    reachableOn = reachableOn,
-                                    port = port,
-                                    frequency = frequency,
-                                    bandwidth = bandwidth,
-                                    sf = sf,
-                                    cr = cr,
-                                    modulation = modulation,
-                                    status = status,
-                                    lastHeard = lastHeard,
-                                    hops = hops,
                                 )
+                            }
 
-                            MapScreen(
-                                viewModel = mapViewModel,
-                                onNavigateToConversation = { destinationHash ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    navController.navigate("messaging/$encodedHash/Contact")
-                                },
-                                onNavigateToOfflineMaps = {
-                                    navController.navigate("offline_maps")
-                                },
-                                onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
-                                    navController.navigate(
-                                        "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
-                                            "&loraBandwidth=${bandwidth ?: -1}" +
-                                            "&loraSf=${sf ?: -1}" +
-                                            "&loraCr=${cr ?: -1}",
+                            composable(Screen.IdentityUnlock.route) {
+                                network.columba.app.ui.screens.IdentityUnlockScreen(
+                                    onResolved = {
+                                        navController.navigate(Screen.Chats.route) {
+                                            popUpTo(Screen.IdentityUnlock.route) { inclusive = true }
+                                        }
+                                    },
+                                )
+                            }
+
+                            composable(Screen.Chats.route) {
+                                DoubleBackToExitHandler(Screen.Chats.route)
+                                ChatsScreen(
+                                    onChatClick = { destinationHash, peerName ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        val encodedName = Uri.encode(peerName)
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
+                                    },
+                                    onViewPeerDetails = { peerHash ->
+                                        val encodedHash = Uri.encode(peerHash)
+                                        navController.navigate("announce_detail/$encodedHash")
+                                    },
+                                    onLocateOnMap = { peerHash ->
+                                        mapViewModel.focusOnContact(peerHash)
+                                        navController.navigate(Screen.Map.route) {
+                                            popUpTo(navController.graph.startDestinationId) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    onNavigateToQrScanner = {
+                                        navController.navigate("qr_scanner")
+                                    },
+                                    settingsViewModel = settingsViewModel,
+                                )
+                            }
+
+                            composable(
+                                route = "${Screen.Announces.route}?filterType={filterType}",
+                                arguments =
+                                    listOf(
+                                        navArgument("filterType") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val filterType = backStackEntry.arguments?.getString("filterType")
+                                AnnounceStreamScreen(
+                                    initialFilterType = filterType,
+                                    onPeerClick = { destinationHash, _ ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("announce_detail/$encodedHash")
+                                    },
+                                    onStartChat = { destinationHash, peerName ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        val encodedName = Uri.encode(peerName)
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
+                                    },
+                                )
+                            }
+
+                            composable(Screen.Contacts.route) {
+                                DoubleBackToExitHandler(Screen.Contacts.route)
+                                val contactsViewModel: ContactsViewModel = hiltViewModel()
+                                ContactsScreen(
+                                    onContactClick = { destinationHash, displayName ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("announce_detail/$encodedHash")
+                                    },
+                                    onViewPeerDetails = { destinationHash ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("announce_detail/$encodedHash")
+                                    },
+                                    onLocateOnMap = { peerHash ->
+                                        mapViewModel.focusOnContact(peerHash)
+                                        navController.navigate(Screen.Map.route) {
+                                            popUpTo(navController.graph.startDestinationId) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    onNavigateToQrScanner = {
+                                        navController.navigate("qr_scanner")
+                                    },
+                                    pendingDeepLinkContact = pendingContactAdd,
+                                    onDeepLinkContactProcessed = {
+                                        pendingContactAdd = null
+                                    },
+                                    onNavigateToConversation = { destinationHash ->
+                                        val contacts = contactsViewModel.contacts.value
+                                        val contact = contacts.find { it.destinationHash == destinationHash }
+                                        val peerName = contact?.displayName ?: destinationHash.take(16)
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        val encodedName = Uri.encode(peerName)
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
+                                    },
+                                    onStartChat = { destinationHash, peerName ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        val encodedName = Uri.encode(peerName)
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
+                                    },
+                                )
+                            }
+
+                            composable(Screen.Map.route) {
+                                DoubleBackToExitHandler(Screen.Map.route)
+                                MapScreen(
+                                    viewModel = mapViewModel,
+                                    onNavigateToConversation = { destinationHash ->
+                                        // Navigate to messaging screen with the contact
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        // Use a placeholder name - the messaging screen will fetch the actual name
+                                        navController.navigate("messaging/$encodedHash/Contact")
+                                    },
+                                    onNavigateToOfflineMaps = {
+                                        navController.navigate("offline_maps")
+                                    },
+                                    onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                        navController.navigate(
+                                            "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                                "&loraBandwidth=${bandwidth ?: -1}" +
+                                                "&loraSf=${sf ?: -1}" +
+                                                "&loraCr=${cr ?: -1}",
+                                        )
+                                    },
+                                    permissionSheetDismissed = mapPermissionSheetDismissed,
+                                    onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
+                                    permissionCardDismissed = mapPermissionCardDismissed,
+                                    onPermissionCardDismissed = { mapPermissionCardDismissed = true },
+                                )
+                            }
+
+                            // Map with focus location (for discovered interfaces)
+                            composable(
+                                route =
+                                    "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
+                                        "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +
+                                        "&sf={sf}&cr={cr}&modulation={modulation}&status={status}&lastHeard={lastHeard}&hops={hops}",
+                                arguments =
+                                    listOf(
+                                        navArgument("lat") {
+                                            type = NavType.FloatType
+                                            defaultValue = 0f
+                                        },
+                                        navArgument("lon") {
+                                            type = NavType.FloatType
+                                            defaultValue = 0f
+                                        },
+                                        navArgument("label") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("type") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("height") {
+                                            type = NavType.FloatType
+                                            defaultValue = Float.NaN
+                                        },
+                                        navArgument("reachableOn") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("port") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("frequency") {
+                                            type = NavType.LongType
+                                            defaultValue = -1L
+                                        },
+                                        navArgument("bandwidth") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("sf") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("cr") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("modulation") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("status") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("lastHeard") {
+                                            type = NavType.LongType
+                                            defaultValue = -1L
+                                        },
+                                        navArgument("hops") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val lat = backStackEntry.arguments?.getFloat("lat")?.toDouble()
+                                val lon = backStackEntry.arguments?.getFloat("lon")?.toDouble()
+                                val label = backStackEntry.arguments?.getString("label")
+                                val type = backStackEntry.arguments?.getString("type")
+                                val height = backStackEntry.arguments?.getFloat("height")?.toDouble()
+                                val reachableOn = backStackEntry.arguments?.getString("reachableOn")
+                                val port = backStackEntry.arguments?.getInt("port")
+                                val frequency = backStackEntry.arguments?.getLong("frequency")
+                                val bandwidth = backStackEntry.arguments?.getInt("bandwidth")
+                                val sf = backStackEntry.arguments?.getInt("sf")
+                                val cr = backStackEntry.arguments?.getInt("cr")
+                                val modulation = backStackEntry.arguments?.getString("modulation")
+                                val status = backStackEntry.arguments?.getString("status")
+                                val lastHeard = backStackEntry.arguments?.getLong("lastHeard")
+                                val hops = backStackEntry.arguments?.getInt("hops")
+
+                                // Build FocusInterfaceDetails if we have valid lat/lon
+                                val focusDetails =
+                                    buildFocusInterfaceDetails(
+                                        lat = lat,
+                                        lon = lon,
+                                        label = label,
+                                        type = type,
+                                        height = height,
+                                        reachableOn = reachableOn,
+                                        port = port,
+                                        frequency = frequency,
+                                        bandwidth = bandwidth,
+                                        sf = sf,
+                                        cr = cr,
+                                        modulation = modulation,
+                                        status = status,
+                                        lastHeard = lastHeard,
+                                        hops = hops,
                                     )
-                                },
-                                focusLatitude = if (lat != 0.0) lat else null,
-                                focusLongitude = if (lon != 0.0) lon else null,
-                                focusLabel = label?.ifEmpty { null },
-                                focusInterfaceDetails = focusDetails,
-                                permissionSheetDismissed = mapPermissionSheetDismissed,
-                                onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
-                                permissionCardDismissed = mapPermissionCardDismissed,
-                                onPermissionCardDismissed = { mapPermissionCardDismissed = true },
-                            )
-                        }
 
-                        composable(Screen.Identity.route) {
-                            IdentityScreen(
-                                onBackClick = { navController.popBackStack() },
-                                settingsViewModel = settingsViewModel,
-                                onNavigateToBleStatus = {
-                                    navController.navigate("ble_connection_status")
-                                },
-                                onNavigateToInterfaceStats = { interfaceId ->
-                                    navController.navigate("interface_stats/$interfaceId")
-                                },
-                                onNavigateToInterfaceManagement = {
-                                    navController.navigate("interface_management")
-                                },
-                            )
-                        }
-
-                        composable(Screen.Settings.route) {
-                            DoubleBackToExitHandler(Screen.Settings.route)
-                            SettingsScreen(
-                                viewModel = settingsViewModel,
-                                crashReportManager = crashReportManager,
-                                onNavigateToInterfaces = {
-                                    navController.navigate("interface_management")
-                                },
-                                onNavigateToIdentity = {
-                                    navController.navigate("my_identity")
-                                },
-                                onNavigateToNetworkStatus = {
-                                    navController.navigate("network_status")
-                                },
-                                onNavigateToIdentityManager = {
-                                    navController.navigate("identity_manager")
-                                },
-                                onNavigateToNotifications = {
-                                    navController.navigate("notification_settings")
-                                },
-                                onNavigateToCustomThemes = {
-                                    navController.navigate("theme_management")
-                                },
-                                onNavigateToMigration = {
-                                    navController.navigate("migration")
-                                },
-                                onNavigateToApkSharing = {
-                                    navController.navigate("apk_sharing")
-                                },
-                                onNavigateToAnnounces = { filterType ->
-                                    selectedTab = 1 // Announces tab
-                                    val route =
-                                        if (filterType != null) {
-                                            "${Screen.Announces.route}?filterType=$filterType"
-                                        } else {
-                                            Screen.Announces.route
-                                        }
-                                    navController.navigate(route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = false // Don't restore state so filter applies
-                                    }
-                                },
-                                onNavigateToFlasher = {
-                                    navController.navigate("rnode_flasher")
-                                },
-                                onNavigateToBlockedUsers = {
-                                    navController.navigate("blocked_users")
-                                },
-                            )
-                        }
-
-                        composable(
-                            route =
-                                "usb_device_action" +
-                                    "?usbDeviceId={usbDeviceId}" +
-                                    "&usbVendorId={usbVendorId}" +
-                                    "&usbProductId={usbProductId}" +
-                                    "&usbDeviceName={usbDeviceName}",
-                            arguments =
-                                listOf(
-                                    navArgument("usbDeviceId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
+                                MapScreen(
+                                    viewModel = mapViewModel,
+                                    onNavigateToConversation = { destinationHash ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("messaging/$encodedHash/Contact")
                                     },
-                                    navArgument("usbVendorId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
+                                    onNavigateToOfflineMaps = {
+                                        navController.navigate("offline_maps")
                                     },
-                                    navArgument("usbProductId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
+                                    onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                        navController.navigate(
+                                            "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                                "&loraBandwidth=${bandwidth ?: -1}" +
+                                                "&loraSf=${sf ?: -1}" +
+                                                "&loraCr=${cr ?: -1}",
+                                        )
                                     },
-                                    navArgument("usbDeviceName") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                        nullable = true
-                                    },
-                                ),
-                        ) { backStackEntry ->
-                            val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
-                            val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
-                            val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
-                            val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName") ?: "USB Device"
-
-                            // State for disable transport operation
-                            val context = androidx.compose.ui.platform.LocalContext.current
-                            val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-                            var isDisablingTransport by androidx.compose.runtime.remember {
-                                androidx.compose.runtime.mutableStateOf(false)
-                            }
-                            var disableTransportResult: Boolean? by androidx.compose.runtime.remember {
-                                androidx.compose.runtime.mutableStateOf(null)
+                                    focusLatitude = if (lat != 0.0) lat else null,
+                                    focusLongitude = if (lon != 0.0) lon else null,
+                                    focusLabel = label?.ifEmpty { null },
+                                    focusInterfaceDetails = focusDetails,
+                                    permissionSheetDismissed = mapPermissionSheetDismissed,
+                                    onPermissionSheetDismissed = { mapPermissionSheetDismissed = true },
+                                    permissionCardDismissed = mapPermissionCardDismissed,
+                                    onPermissionCardDismissed = { mapPermissionCardDismissed = true },
+                                )
                             }
 
-                            network.columba.app.ui.screens.UsbDeviceActionScreen(
-                                deviceName = usbDeviceName,
-                                onNavigateBack = { navController.popBackStack() },
-                                onFlashFirmware = {
-                                    val route =
-                                        "rnode_flasher" +
-                                            "?usbDeviceId=$usbDeviceId" +
-                                            "&usbVendorId=$usbVendorId" +
-                                            "&usbProductId=$usbProductId" +
-                                            "&usbDeviceName=${Uri.encode(usbDeviceName)}"
-                                    navController.navigate(route) {
-                                        popUpTo("usb_device_action") { inclusive = true }
-                                    }
-                                },
-                                onConfigureRNode = {
-                                    val route =
-                                        "rnode_wizard?connectionType=usb" +
-                                            "&usbDeviceId=$usbDeviceId" +
-                                            "&usbVendorId=$usbVendorId" +
-                                            "&usbProductId=$usbProductId" +
-                                            "&usbDeviceName=${Uri.encode(usbDeviceName)}"
-                                    navController.navigate(route) {
-                                        popUpTo("usb_device_action") { inclusive = true }
-                                    }
-                                },
-                                onConfigureTransport = {
-                                    val route =
-                                        "rnode_wizard?connectionType=usb" +
-                                            "&transportMode=true" +
-                                            "&usbDeviceId=$usbDeviceId" +
-                                            "&usbVendorId=$usbVendorId" +
-                                            "&usbProductId=$usbProductId" +
-                                            "&usbDeviceName=${Uri.encode(usbDeviceName)}"
-                                    navController.navigate(route) {
-                                        popUpTo("usb_device_action") { inclusive = true }
-                                    }
-                                },
-                                onDisableTransport = {
-                                    isDisablingTransport = true
-                                    coroutineScope.launch {
-                                        val flasher =
-                                            network.columba.app.reticulum.flasher
-                                                .RNodeFlasher(context)
-                                        val success = flasher.tncModeController.disableTncMode(usbDeviceId)
-                                        isDisablingTransport = false
-                                        disableTransportResult = success
-                                    }
-                                },
-                                isDisablingTransport = isDisablingTransport,
-                                disableTransportResult = disableTransportResult,
-                                onDismissDisableResult = { disableTransportResult = null },
-                            )
-                        }
+                            composable(Screen.Identity.route) {
+                                IdentityScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    settingsViewModel = settingsViewModel,
+                                    onNavigateToBleStatus = {
+                                        navController.navigate("ble_connection_status")
+                                    },
+                                    onNavigateToInterfaceStats = { interfaceId ->
+                                        navController.navigate("interface_stats/$interfaceId")
+                                    },
+                                    onNavigateToInterfaceManagement = {
+                                        navController.navigate("interface_management")
+                                    },
+                                )
+                            }
 
-                        composable(
-                            route =
-                                "rnode_flasher?skipDetection={skipDetection}&tncConfigOnly={tncConfigOnly}" +
-                                    "&usbDeviceId={usbDeviceId}" +
-                                    "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
-                            arguments =
-                                listOf(
-                                    navArgument("skipDetection") {
-                                        type = NavType.BoolType
-                                        defaultValue = false
+                            composable(Screen.Settings.route) {
+                                DoubleBackToExitHandler(Screen.Settings.route)
+                                SettingsScreen(
+                                    viewModel = settingsViewModel,
+                                    crashReportManager = crashReportManager,
+                                    onNavigateToInterfaces = {
+                                        navController.navigate("interface_management")
                                     },
-                                    navArgument("tncConfigOnly") {
-                                        type = NavType.BoolType
-                                        defaultValue = false
+                                    onNavigateToIdentity = {
+                                        navController.navigate("my_identity")
                                     },
-                                    navArgument("usbDeviceId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
+                                    onNavigateToNetworkStatus = {
+                                        navController.navigate("network_status")
                                     },
-                                    navArgument("usbVendorId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
+                                    onNavigateToIdentityManager = {
+                                        navController.navigate("identity_manager")
                                     },
-                                    navArgument("usbProductId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
+                                    onNavigateToNotifications = {
+                                        navController.navigate("notification_settings")
                                     },
-                                    navArgument("usbDeviceName") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                        nullable = true
+                                    onNavigateToCustomThemes = {
+                                        navController.navigate("theme_management")
                                     },
-                                ),
-                        ) { backStackEntry ->
-                            val skipDetection = backStackEntry.arguments?.getBoolean("skipDetection") ?: false
-                            val tncConfigOnly = backStackEntry.arguments?.getBoolean("tncConfigOnly") ?: false
-                            val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
-                            RNodeFlasherScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onComplete = { navController.popBackStack() },
-                                onNavigateToRNodeWizard = {
-                                    navController.navigate("rnode_wizard")
-                                },
-                                skipDetection = skipDetection,
-                                tncConfigOnly = tncConfigOnly,
-                                preselectedUsbDeviceId = if (usbDeviceId > 0) usbDeviceId else null,
-                            )
-                        }
+                                    onNavigateToMigration = {
+                                        navController.navigate("migration")
+                                    },
+                                    onNavigateToApkSharing = {
+                                        navController.navigate("apk_sharing")
+                                    },
+                                    onNavigateToAnnounces = { filterType ->
+                                        selectedTab = 1 // Announces tab
+                                        val route =
+                                            if (filterType != null) {
+                                                "${Screen.Announces.route}?filterType=$filterType"
+                                            } else {
+                                                Screen.Announces.route
+                                            }
+                                        navController.navigate(route) {
+                                            popUpTo(navController.graph.startDestinationId) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = false // Don't restore state so filter applies
+                                        }
+                                    },
+                                    onNavigateToFlasher = {
+                                        navController.navigate("rnode_flasher")
+                                    },
+                                    onNavigateToBlockedUsers = {
+                                        navController.navigate("blocked_users")
+                                    },
+                                )
+                            }
 
-                        composable("interface_management") {
-                            InterfaceManagementScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onNavigateToRNodeWizard = { interfaceId ->
-                                    if (interfaceId != null) {
-                                        navController.navigate("rnode_wizard?interfaceId=$interfaceId")
-                                    } else {
+                            composable(
+                                route =
+                                    "usb_device_action" +
+                                        "?usbDeviceId={usbDeviceId}" +
+                                        "&usbVendorId={usbVendorId}" +
+                                        "&usbProductId={usbProductId}" +
+                                        "&usbDeviceName={usbDeviceName}",
+                                arguments =
+                                    listOf(
+                                        navArgument("usbDeviceId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbVendorId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbProductId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbDeviceName") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                            nullable = true
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
+                                val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
+                                val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
+                                val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName") ?: "USB Device"
+
+                                // State for disable transport operation
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+                                var isDisablingTransport by androidx.compose.runtime.remember {
+                                    androidx.compose.runtime.mutableStateOf(false)
+                                }
+                                var disableTransportResult: Boolean? by androidx.compose.runtime.remember {
+                                    androidx.compose.runtime.mutableStateOf(null)
+                                }
+
+                                network.columba.app.ui.screens.UsbDeviceActionScreen(
+                                    deviceName = usbDeviceName,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onFlashFirmware = {
+                                        val route =
+                                            "rnode_flasher" +
+                                                "?usbDeviceId=$usbDeviceId" +
+                                                "&usbVendorId=$usbVendorId" +
+                                                "&usbProductId=$usbProductId" +
+                                                "&usbDeviceName=${Uri.encode(usbDeviceName)}"
+                                        navController.navigate(route) {
+                                            popUpTo("usb_device_action") { inclusive = true }
+                                        }
+                                    },
+                                    onConfigureRNode = {
+                                        val route =
+                                            "rnode_wizard?connectionType=usb" +
+                                                "&usbDeviceId=$usbDeviceId" +
+                                                "&usbVendorId=$usbVendorId" +
+                                                "&usbProductId=$usbProductId" +
+                                                "&usbDeviceName=${Uri.encode(usbDeviceName)}"
+                                        navController.navigate(route) {
+                                            popUpTo("usb_device_action") { inclusive = true }
+                                        }
+                                    },
+                                    onConfigureTransport = {
+                                        val route =
+                                            "rnode_wizard?connectionType=usb" +
+                                                "&transportMode=true" +
+                                                "&usbDeviceId=$usbDeviceId" +
+                                                "&usbVendorId=$usbVendorId" +
+                                                "&usbProductId=$usbProductId" +
+                                                "&usbDeviceName=${Uri.encode(usbDeviceName)}"
+                                        navController.navigate(route) {
+                                            popUpTo("usb_device_action") { inclusive = true }
+                                        }
+                                    },
+                                    onDisableTransport = {
+                                        isDisablingTransport = true
+                                        coroutineScope.launch {
+                                            val flasher =
+                                                network.columba.app.reticulum.flasher
+                                                    .RNodeFlasher(context)
+                                            val success = flasher.tncModeController.disableTncMode(usbDeviceId)
+                                            isDisablingTransport = false
+                                            disableTransportResult = success
+                                        }
+                                    },
+                                    isDisablingTransport = isDisablingTransport,
+                                    disableTransportResult = disableTransportResult,
+                                    onDismissDisableResult = { disableTransportResult = null },
+                                )
+                            }
+
+                            composable(
+                                route =
+                                    "rnode_flasher?skipDetection={skipDetection}&tncConfigOnly={tncConfigOnly}" +
+                                        "&usbDeviceId={usbDeviceId}" +
+                                        "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
+                                arguments =
+                                    listOf(
+                                        navArgument("skipDetection") {
+                                            type = NavType.BoolType
+                                            defaultValue = false
+                                        },
+                                        navArgument("tncConfigOnly") {
+                                            type = NavType.BoolType
+                                            defaultValue = false
+                                        },
+                                        navArgument("usbDeviceId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbVendorId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbProductId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbDeviceName") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                            nullable = true
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val skipDetection = backStackEntry.arguments?.getBoolean("skipDetection") ?: false
+                                val tncConfigOnly = backStackEntry.arguments?.getBoolean("tncConfigOnly") ?: false
+                                val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
+                                RNodeFlasherScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onComplete = { navController.popBackStack() },
+                                    onNavigateToRNodeWizard = {
                                         navController.navigate("rnode_wizard")
-                                    }
-                                },
-                                onNavigateToTcpClientWizard = {
-                                    navController.navigate("tcp_client_wizard")
-                                },
-                                onNavigateToInterfaceStats = { interfaceId ->
-                                    navController.navigate("interface_stats/$interfaceId")
-                                },
-                                onNavigateToDiscoveredInterfaces = {
-                                    navController.navigate("discovered_interfaces")
-                                },
-                            )
-                        }
+                                    },
+                                    skipDetection = skipDetection,
+                                    tncConfigOnly = tncConfigOnly,
+                                    preselectedUsbDeviceId = if (usbDeviceId > 0) usbDeviceId else null,
+                                )
+                            }
 
-                        composable("discovered_interfaces") {
-                            DiscoveredInterfacesScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onNavigateToTcpClientWizard = { host, port, name, ifacNet, ifacKey ->
-                                    val encodedHost = Uri.encode(host)
-                                    val encodedName = Uri.encode(name)
-                                    val ifacNetParam =
-                                        if (!ifacNet.isNullOrEmpty()) "&ifacNetname=${Uri.encode(ifacNet)}" else ""
-                                    val ifacKeyParam =
-                                        if (!ifacKey.isNullOrEmpty()) "&ifacNetkey=${Uri.encode(ifacKey)}" else ""
-                                    navController.navigate(
-                                        "tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName" +
-                                            ifacNetParam + ifacKeyParam,
-                                    )
-                                },
-                                onNavigateToMapWithInterface = { details ->
-                                    val encodedLabel = Uri.encode(details.name)
-                                    val encodedType = Uri.encode(details.type)
-                                    val encodedReachableOn = Uri.encode(details.reachableOn ?: "")
-                                    val encodedModulation = Uri.encode(details.modulation ?: "")
-                                    val encodedStatus = Uri.encode(details.status ?: "")
-                                    navController.navigate(
-                                        "map_focus?lat=${details.latitude}&lon=${details.longitude}" +
-                                            "&label=$encodedLabel&type=$encodedType" +
-                                            "&height=${details.height ?: Float.NaN}" +
-                                            "&reachableOn=$encodedReachableOn&port=${details.port ?: -1}" +
-                                            "&frequency=${details.frequency ?: -1L}&bandwidth=${details.bandwidth ?: -1}" +
-                                            "&sf=${details.spreadingFactor ?: -1}&cr=${details.codingRate ?: -1}" +
-                                            "&modulation=$encodedModulation&status=$encodedStatus" +
-                                            "&lastHeard=${details.lastHeard ?: -1L}&hops=${details.hops ?: -1}",
-                                    )
-                                },
-                                onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
-                                    navController.navigate(
-                                        "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
-                                            "&loraBandwidth=${bandwidth ?: -1}" +
-                                            "&loraSf=${sf ?: -1}" +
-                                            "&loraCr=${cr ?: -1}",
-                                    )
-                                },
-                            )
-                        }
+                            composable("interface_management") {
+                                InterfaceManagementScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToRNodeWizard = { interfaceId ->
+                                        if (interfaceId != null) {
+                                            navController.navigate("rnode_wizard?interfaceId=$interfaceId")
+                                        } else {
+                                            navController.navigate("rnode_wizard")
+                                        }
+                                    },
+                                    onNavigateToTcpClientWizard = {
+                                        navController.navigate("tcp_client_wizard")
+                                    },
+                                    onNavigateToInterfaceStats = { interfaceId ->
+                                        navController.navigate("interface_stats/$interfaceId")
+                                    },
+                                    onNavigateToDiscoveredInterfaces = {
+                                        navController.navigate("discovered_interfaces")
+                                    },
+                                )
+                            }
 
-                        composable(
-                            route =
-                                "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}" +
-                                    "&ifacNetname={ifacNetname}&ifacNetkey={ifacNetkey}",
-                            arguments =
-                                listOf(
-                                    navArgument("interfaceId") {
-                                        type = NavType.LongType
-                                        defaultValue = -1L
+                            composable("discovered_interfaces") {
+                                DiscoveredInterfacesScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToTcpClientWizard = { host, port, name, ifacNet, ifacKey ->
+                                        val encodedHost = Uri.encode(host)
+                                        val encodedName = Uri.encode(name)
+                                        val ifacNetParam =
+                                            if (!ifacNet.isNullOrEmpty()) "&ifacNetname=${Uri.encode(ifacNet)}" else ""
+                                        val ifacKeyParam =
+                                            if (!ifacKey.isNullOrEmpty()) "&ifacNetkey=${Uri.encode(ifacKey)}" else ""
+                                        navController.navigate(
+                                            "tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName" +
+                                                ifacNetParam + ifacKeyParam,
+                                        )
                                     },
-                                    navArgument("host") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
+                                    onNavigateToMapWithInterface = { details ->
+                                        val encodedLabel = Uri.encode(details.name)
+                                        val encodedType = Uri.encode(details.type)
+                                        val encodedReachableOn = Uri.encode(details.reachableOn ?: "")
+                                        val encodedModulation = Uri.encode(details.modulation ?: "")
+                                        val encodedStatus = Uri.encode(details.status ?: "")
+                                        navController.navigate(
+                                            "map_focus?lat=${details.latitude}&lon=${details.longitude}" +
+                                                "&label=$encodedLabel&type=$encodedType" +
+                                                "&height=${details.height ?: Float.NaN}" +
+                                                "&reachableOn=$encodedReachableOn&port=${details.port ?: -1}" +
+                                                "&frequency=${details.frequency ?: -1L}&bandwidth=${details.bandwidth ?: -1}" +
+                                                "&sf=${details.spreadingFactor ?: -1}&cr=${details.codingRate ?: -1}" +
+                                                "&modulation=$encodedModulation&status=$encodedStatus" +
+                                                "&lastHeard=${details.lastHeard ?: -1L}&hops=${details.hops ?: -1}",
+                                        )
                                     },
-                                    navArgument("port") {
-                                        type = NavType.IntType
-                                        defaultValue = 0
+                                    onNavigateToRNodeWizardWithParams = { frequency, bandwidth, sf, cr ->
+                                        navController.navigate(
+                                            "rnode_wizard?loraFrequency=${frequency ?: -1L}" +
+                                                "&loraBandwidth=${bandwidth ?: -1}" +
+                                                "&loraSf=${sf ?: -1}" +
+                                                "&loraCr=${cr ?: -1}",
+                                        )
                                     },
-                                    navArgument("name") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                    navArgument("ifacNetname") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                    navArgument("ifacNetkey") {
-                                        type = NavType.StringType
-                                        defaultValue = ""
-                                    },
-                                ),
-                        ) { backStackEntry ->
-                            val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
-                            val host = backStackEntry.arguments?.getString("host") ?: ""
-                            val port = backStackEntry.arguments?.getInt("port") ?: 0
-                            val name = backStackEntry.arguments?.getString("name") ?: ""
-                            val ifacNetname = backStackEntry.arguments?.getString("ifacNetname") ?: ""
-                            val ifacNetkey = backStackEntry.arguments?.getString("ifacNetkey") ?: ""
-                            TcpClientWizardScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onComplete = {
-                                    navController.navigate("interface_management") {
-                                        popUpTo("interface_management") { inclusive = true }
-                                    }
-                                },
-                                interfaceId = if (interfaceId > 0) interfaceId else null,
-                                initialHost = host.ifEmpty { null },
-                                initialPort = if (port > 0) port else null,
-                                initialName = name.ifEmpty { null },
-                                initialIfacNetname = ifacNetname.ifEmpty { null },
-                                initialIfacNetkey = ifacNetkey.ifEmpty { null },
-                            )
-                        }
+                                )
+                            }
 
-                        composable(
-                            route =
-                                "rnode_wizard?interfaceId={interfaceId}" +
-                                    "&connectionType={connectionType}" +
-                                    "&transportMode={transportMode}" +
-                                    "&usbDeviceId={usbDeviceId}" +
-                                    "&usbVendorId={usbVendorId}" +
-                                    "&usbProductId={usbProductId}" +
-                                    "&usbDeviceName={usbDeviceName}" +
-                                    "&loraFrequency={loraFrequency}" +
-                                    "&loraBandwidth={loraBandwidth}" +
-                                    "&loraSf={loraSf}" +
-                                    "&loraCr={loraCr}",
-                            arguments =
-                                listOf(
-                                    navArgument("interfaceId") {
-                                        type = NavType.LongType
-                                        defaultValue = -1L
-                                    },
-                                    navArgument("connectionType") {
-                                        type = NavType.StringType
-                                        nullable = true
-                                        defaultValue = null
-                                    },
-                                    navArgument("transportMode") {
-                                        type = NavType.BoolType
-                                        defaultValue = false
-                                    },
-                                    navArgument("usbDeviceId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("usbVendorId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("usbProductId") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("usbDeviceName") {
-                                        type = NavType.StringType
-                                        nullable = true
-                                        defaultValue = null
-                                    },
-                                    navArgument("loraFrequency") {
-                                        type = NavType.LongType
-                                        defaultValue = -1L
-                                    },
-                                    navArgument("loraBandwidth") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("loraSf") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                    navArgument("loraCr") {
-                                        type = NavType.IntType
-                                        defaultValue = -1
-                                    },
-                                ),
-                        ) { backStackEntry ->
-                            val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
-                            val connectionType = backStackEntry.arguments?.getString("connectionType")
-                            val transportMode = backStackEntry.arguments?.getBoolean("transportMode") ?: false
-                            val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
-                            val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
-                            val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
-                            val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName")
-                            val loraFrequency = backStackEntry.arguments?.getLong("loraFrequency") ?: -1L
-                            val loraBandwidth = backStackEntry.arguments?.getInt("loraBandwidth") ?: -1
-                            val loraSf = backStackEntry.arguments?.getInt("loraSf") ?: -1
-                            val loraCr = backStackEntry.arguments?.getInt("loraCr") ?: -1
-                            network.columba.app.ui.screens.rnode.RNodeWizardScreen(
-                                editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
-                                preselectedConnectionType = connectionType,
-                                preselectedUsbDeviceId = if (usbDeviceId >= 0) usbDeviceId else null,
-                                preselectedUsbVendorId = if (usbVendorId >= 0) usbVendorId else null,
-                                preselectedUsbProductId = if (usbProductId >= 0) usbProductId else null,
-                                preselectedUsbDeviceName = usbDeviceName,
-                                preselectedLoraFrequency = if (loraFrequency > 0) loraFrequency else null,
-                                preselectedLoraBandwidth = if (loraBandwidth > 0) loraBandwidth else null,
-                                preselectedLoraSf = if (loraSf > 0) loraSf else null,
-                                preselectedLoraCr = if (loraCr > 0) loraCr else null,
-                                transportMode = transportMode,
-                                onNavigateBack = { navController.popBackStack() },
-                                onComplete = {
-                                    if (transportMode) {
-                                        navController.popBackStack()
-                                    } else {
+                            composable(
+                                route =
+                                    "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}" +
+                                        "&ifacNetname={ifacNetname}&ifacNetkey={ifacNetkey}",
+                                arguments =
+                                    listOf(
+                                        navArgument("interfaceId") {
+                                            type = NavType.LongType
+                                            defaultValue = -1L
+                                        },
+                                        navArgument("host") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("port") {
+                                            type = NavType.IntType
+                                            defaultValue = 0
+                                        },
+                                        navArgument("name") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("ifacNetname") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("ifacNetkey") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                                val host = backStackEntry.arguments?.getString("host") ?: ""
+                                val port = backStackEntry.arguments?.getInt("port") ?: 0
+                                val name = backStackEntry.arguments?.getString("name") ?: ""
+                                val ifacNetname = backStackEntry.arguments?.getString("ifacNetname") ?: ""
+                                val ifacNetkey = backStackEntry.arguments?.getString("ifacNetkey") ?: ""
+                                TcpClientWizardScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onComplete = {
                                         navController.navigate("interface_management") {
                                             popUpTo("interface_management") { inclusive = true }
                                         }
-                                    }
-                                },
-                            )
-                        }
-
-                        composable(
-                            route = "interface_stats/{interfaceId}",
-                            arguments =
-                                listOf(
-                                    navArgument("interfaceId") {
-                                        type = NavType.LongType
                                     },
-                                ),
-                        ) { backStackEntry ->
-                            network.columba.app.ui.screens.InterfaceStatsScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onNavigateToEdit = { interfaceId, interfaceType ->
-                                    // Route to appropriate wizard based on interface type
-                                    val route =
-                                        when (interfaceType) {
-                                            "TCPClient" -> "tcp_client_wizard?interfaceId=$interfaceId"
-                                            "RNode" -> "rnode_wizard?interfaceId=$interfaceId"
-                                            else -> "rnode_wizard?interfaceId=$interfaceId"
+                                    interfaceId = if (interfaceId > 0) interfaceId else null,
+                                    initialHost = host.ifEmpty { null },
+                                    initialPort = if (port > 0) port else null,
+                                    initialName = name.ifEmpty { null },
+                                    initialIfacNetname = ifacNetname.ifEmpty { null },
+                                    initialIfacNetkey = ifacNetkey.ifEmpty { null },
+                                )
+                            }
+
+                            composable(
+                                route =
+                                    "rnode_wizard?interfaceId={interfaceId}" +
+                                        "&connectionType={connectionType}" +
+                                        "&transportMode={transportMode}" +
+                                        "&usbDeviceId={usbDeviceId}" +
+                                        "&usbVendorId={usbVendorId}" +
+                                        "&usbProductId={usbProductId}" +
+                                        "&usbDeviceName={usbDeviceName}" +
+                                        "&loraFrequency={loraFrequency}" +
+                                        "&loraBandwidth={loraBandwidth}" +
+                                        "&loraSf={loraSf}" +
+                                        "&loraCr={loraCr}",
+                                arguments =
+                                    listOf(
+                                        navArgument("interfaceId") {
+                                            type = NavType.LongType
+                                            defaultValue = -1L
+                                        },
+                                        navArgument("connectionType") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
+                                        navArgument("transportMode") {
+                                            type = NavType.BoolType
+                                            defaultValue = false
+                                        },
+                                        navArgument("usbDeviceId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbVendorId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbProductId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("usbDeviceName") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
+                                        navArgument("loraFrequency") {
+                                            type = NavType.LongType
+                                            defaultValue = -1L
+                                        },
+                                        navArgument("loraBandwidth") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("loraSf") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                        navArgument("loraCr") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                                val connectionType = backStackEntry.arguments?.getString("connectionType")
+                                val transportMode = backStackEntry.arguments?.getBoolean("transportMode") ?: false
+                                val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
+                                val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
+                                val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
+                                val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName")
+                                val loraFrequency = backStackEntry.arguments?.getLong("loraFrequency") ?: -1L
+                                val loraBandwidth = backStackEntry.arguments?.getInt("loraBandwidth") ?: -1
+                                val loraSf = backStackEntry.arguments?.getInt("loraSf") ?: -1
+                                val loraCr = backStackEntry.arguments?.getInt("loraCr") ?: -1
+                                network.columba.app.ui.screens.rnode.RNodeWizardScreen(
+                                    editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
+                                    preselectedConnectionType = connectionType,
+                                    preselectedUsbDeviceId = if (usbDeviceId >= 0) usbDeviceId else null,
+                                    preselectedUsbVendorId = if (usbVendorId >= 0) usbVendorId else null,
+                                    preselectedUsbProductId = if (usbProductId >= 0) usbProductId else null,
+                                    preselectedUsbDeviceName = usbDeviceName,
+                                    preselectedLoraFrequency = if (loraFrequency > 0) loraFrequency else null,
+                                    preselectedLoraBandwidth = if (loraBandwidth > 0) loraBandwidth else null,
+                                    preselectedLoraSf = if (loraSf > 0) loraSf else null,
+                                    preselectedLoraCr = if (loraCr > 0) loraCr else null,
+                                    transportMode = transportMode,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onComplete = {
+                                        if (transportMode) {
+                                            navController.popBackStack()
+                                        } else {
+                                            navController.navigate("interface_management") {
+                                                popUpTo("interface_management") { inclusive = true }
+                                            }
                                         }
-                                    navController.navigate(route)
-                                },
-                            )
-                        }
-
-                        composable("notification_settings") {
-                            NotificationSettingsScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                            )
-                        }
-
-                        composable("blocked_users") {
-                            BlockedUsersScreen(
-                                onBackClick = { navController.popBackStack() },
-                            )
-                        }
-
-                        composable("theme_management") {
-                            ThemeManagementScreen(
-                                onBackClick = { navController.popBackStack() },
-                                onCreateTheme = {
-                                    navController.navigate("theme_editor")
-                                },
-                                onEditTheme = { themeId ->
-                                    navController.navigate("theme_editor/$themeId")
-                                },
-                                onApplyTheme = { themeId ->
-                                    settingsViewModel.applyCustomTheme(themeId)
-                                },
-                            )
-                        }
-
-                        composable("theme_editor") {
-                            ThemeEditorScreen(
-                                themeId = null,
-                                onBackClick = { navController.popBackStack() },
-                                onSave = { navController.popBackStack() },
-                            )
-                        }
-
-                        composable(
-                            route = "theme_editor/{themeId}",
-                            arguments =
-                                listOf(
-                                    navArgument("themeId") { type = NavType.LongType },
-                                ),
-                        ) { backStackEntry ->
-                            val themeId = backStackEntry.arguments?.getLong("themeId")
-
-                            ThemeEditorScreen(
-                                themeId = themeId,
-                                onBackClick = { navController.popBackStack() },
-                                onSave = { navController.popBackStack() },
-                            )
-                        }
-
-                        composable("ble_connection_status") {
-                            BleConnectionStatusScreen(
-                                onBackClick = { navController.popBackStack() },
-                            )
-                        }
-
-                        composable(
-                            "identity_manager?base32Key={base32Key}",
-                            arguments =
-                                listOf(
-                                    navArgument("base32Key") {
-                                        type = NavType.StringType
-                                        nullable = true
-                                        defaultValue = null
                                     },
-                                ),
-                        ) { backStackEntry ->
-                            val base32Key = backStackEntry.arguments?.getString("base32Key")
-                            IdentityManagerScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                prefilledBase32Key = base32Key,
-                            )
-                        }
+                                )
+                            }
 
-                        composable("migration") {
-                            MigrationScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onImportComplete = {
-                                    // Service restart is handled by MigrationViewModel,
-                                    // just navigate to chats after import completes
-                                    navController.navigate("chats") {
-                                        popUpTo(0) { inclusive = true }
-                                    }
-                                },
-                            )
-                        }
+                            composable(
+                                route = "interface_stats/{interfaceId}",
+                                arguments =
+                                    listOf(
+                                        navArgument("interfaceId") {
+                                            type = NavType.LongType
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                network.columba.app.ui.screens.InterfaceStatsScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToEdit = { interfaceId, interfaceType ->
+                                        // Route to appropriate wizard based on interface type
+                                        val route =
+                                            when (interfaceType) {
+                                                "TCPClient" -> "tcp_client_wizard?interfaceId=$interfaceId"
+                                                "RNode" -> "rnode_wizard?interfaceId=$interfaceId"
+                                                else -> "rnode_wizard?interfaceId=$interfaceId"
+                                            }
+                                        navController.navigate(route)
+                                    },
+                                )
+                            }
 
-                        composable("apk_sharing") {
-                            ApkSharingScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                            )
-                        }
+                            composable("notification_settings") {
+                                NotificationSettingsScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                )
+                            }
 
-                        composable("my_identity") {
-                            MyIdentityScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                settingsViewModel = settingsViewModel,
-                                onNavigateToIdentityManager = {
-                                    navController.navigate("identity_manager")
-                                },
-                            )
-                        }
+                            composable("blocked_users") {
+                                BlockedUsersScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                )
+                            }
 
-                        composable("network_status") {
-                            IdentityScreen(
-                                onBackClick = { navController.popBackStack() },
-                                settingsViewModel = settingsViewModel,
-                                onNavigateToBleStatus = {
-                                    navController.navigate("ble_connection_status")
-                                },
-                                onNavigateToInterfaceStats = { interfaceId ->
-                                    navController.navigate("interface_stats/$interfaceId")
-                                },
-                                onNavigateToInterfaceManagement = {
-                                    navController.navigate("interface_management")
-                                },
-                            )
-                        }
+                            composable("theme_management") {
+                                ThemeManagementScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    onCreateTheme = {
+                                        navController.navigate("theme_editor")
+                                    },
+                                    onEditTheme = { themeId ->
+                                        navController.navigate("theme_editor/$themeId")
+                                    },
+                                    onApplyTheme = { themeId ->
+                                        settingsViewModel.applyCustomTheme(themeId)
+                                    },
+                                )
+                            }
 
-                        composable("qr_scanner") {
-                            val contactsViewModel: ContactsViewModel = hiltViewModel()
-                            QrScannerScreen(
-                                onBackClick = { navController.popBackStack() },
-                                onQrScanned = { qrData ->
-                                    // Contact addition now handled by confirmation dialog
-                                },
-                                onNavigateToConversation = { destinationHash ->
-                                    // Contact already exists - navigate to conversation
-                                    val contacts = contactsViewModel.contacts.value
-                                    val contact = contacts.find { it.destinationHash == destinationHash }
-                                    val peerName = contact?.displayName ?: destinationHash.take(16)
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    val encodedName = Uri.encode(peerName)
-                                    navController.navigate("messaging/$encodedHash/$encodedName")
-                                },
-                                contactsViewModel = contactsViewModel,
-                            )
-                        }
+                            composable("theme_editor") {
+                                ThemeEditorScreen(
+                                    themeId = null,
+                                    onBackClick = { navController.popBackStack() },
+                                    onSave = { navController.popBackStack() },
+                                )
+                            }
 
-                        composable(
-                            route = "messaging/{destinationHash}/{peerName}",
-                            arguments =
-                                listOf(
-                                    navArgument("destinationHash") { type = NavType.StringType },
-                                    navArgument("peerName") { type = NavType.StringType },
-                                ),
-                        ) { backStackEntry ->
-                            val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
-                            val peerName = backStackEntry.arguments?.getString("peerName").orEmpty()
+                            composable(
+                                route = "theme_editor/{themeId}",
+                                arguments =
+                                    listOf(
+                                        navArgument("themeId") { type = NavType.LongType },
+                                    ),
+                            ) { backStackEntry ->
+                                val themeId = backStackEntry.arguments?.getLong("themeId")
 
-                            MessagingScreen(
-                                destinationHash = destinationHash,
-                                peerName = peerName,
-                                onBackClick = { navController.popBackStack() },
-                                onPeerClick = {
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    navController.navigate("announce_detail/$encodedHash")
-                                },
-                                onViewMessageDetails = { messageId ->
-                                    val encodedId = Uri.encode(messageId)
-                                    navController.navigate("message_detail/$encodedId")
-                                },
-                                onVoiceCall = { profileCode ->
-                                    val encodedHash = Uri.encode(destinationHash)
-                                    navController.navigate("voice_call/$encodedHash?profileCode=$profileCode")
-                                },
-                                onLocateOnMap = { peerHash ->
-                                    mapViewModel.focusOnContact(peerHash)
-                                    navController.navigate(Screen.Map.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
+                                ThemeEditorScreen(
+                                    themeId = themeId,
+                                    onBackClick = { navController.popBackStack() },
+                                    onSave = { navController.popBackStack() },
+                                )
+                            }
+
+                            composable("ble_connection_status") {
+                                BleConnectionStatusScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                )
+                            }
+
+                            composable(
+                                "identity_manager?base32Key={base32Key}",
+                                arguments =
+                                    listOf(
+                                        navArgument("base32Key") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val base32Key = backStackEntry.arguments?.getString("base32Key")
+                                IdentityManagerScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    prefilledBase32Key = base32Key,
+                                )
+                            }
+
+                            composable("migration") {
+                                MigrationScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onImportComplete = {
+                                        // Service restart is handled by MigrationViewModel,
+                                        // just navigate to chats after import completes
+                                        navController.navigate("chats") {
+                                            popUpTo(0) { inclusive = true }
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                            )
-                        }
+                                    },
+                                )
+                            }
 
-                        composable(
-                            route = "message_detail/{messageId}",
-                            arguments =
-                                listOf(
-                                    navArgument("messageId") { type = NavType.StringType },
-                                ),
-                        ) { backStackEntry ->
-                            val messageId = backStackEntry.arguments?.getString("messageId").orEmpty()
+                            composable("apk_sharing") {
+                                ApkSharingScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                )
+                            }
 
-                            MessageDetailScreen(
-                                messageId = messageId,
-                                onBackClick = { navController.popBackStack() },
-                            )
-                        }
+                            composable("my_identity") {
+                                MyIdentityScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    settingsViewModel = settingsViewModel,
+                                    onNavigateToIdentityManager = {
+                                        navController.navigate("identity_manager")
+                                    },
+                                )
+                            }
 
-                        composable(
-                            route = "announce_detail/{destinationHash}",
-                            arguments =
-                                listOf(
-                                    navArgument("destinationHash") { type = NavType.StringType },
-                                ),
-                        ) { backStackEntry ->
-                            val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+                            composable("network_status") {
+                                IdentityScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    settingsViewModel = settingsViewModel,
+                                    onNavigateToBleStatus = {
+                                        navController.navigate("ble_connection_status")
+                                    },
+                                    onNavigateToInterfaceStats = { interfaceId ->
+                                        navController.navigate("interface_stats/$interfaceId")
+                                    },
+                                    onNavigateToInterfaceManagement = {
+                                        navController.navigate("interface_management")
+                                    },
+                                )
+                            }
 
-                            AnnounceDetailScreen(
-                                destinationHash = destinationHash,
-                                onBackClick = { navController.popBackStack() },
-                                onViewAnnounce = { hash ->
-                                    navController.navigate("announce_detail/${Uri.encode(hash)}")
-                                },
-                                onStartChat = { destHash, peerName ->
-                                    // Navigate back to chats tab
-                                    selectedTab = 0
-                                    navController.navigate(Screen.Chats.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
+                            composable("qr_scanner") {
+                                val contactsViewModel: ContactsViewModel = hiltViewModel()
+                                QrScannerScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    onQrScanned = { qrData ->
+                                        // Contact addition now handled by confirmation dialog
+                                    },
+                                    onNavigateToConversation = { destinationHash ->
+                                        // Contact already exists - navigate to conversation
+                                        val contacts = contactsViewModel.contacts.value
+                                        val contact = contacts.find { it.destinationHash == destinationHash }
+                                        val peerName = contact?.displayName ?: destinationHash.take(16)
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        val encodedName = Uri.encode(peerName)
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
+                                    },
+                                    contactsViewModel = contactsViewModel,
+                                )
+                            }
+
+                            composable(
+                                route = "messaging/{destinationHash}/{peerName}",
+                                arguments =
+                                    listOf(
+                                        navArgument("destinationHash") { type = NavType.StringType },
+                                        navArgument("peerName") { type = NavType.StringType },
+                                    ),
+                            ) { backStackEntry ->
+                                val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+                                val peerName = backStackEntry.arguments?.getString("peerName").orEmpty()
+
+                                MessagingScreen(
+                                    destinationHash = destinationHash,
+                                    peerName = peerName,
+                                    onBackClick = { navController.popBackStack() },
+                                    onPeerClick = {
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("announce_detail/$encodedHash")
+                                    },
+                                    onViewMessageDetails = { messageId ->
+                                        val encodedId = Uri.encode(messageId)
+                                        navController.navigate("message_detail/$encodedId")
+                                    },
+                                    onVoiceCall = { profileCode ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("voice_call/$encodedHash?profileCode=$profileCode")
+                                    },
+                                    onLocateOnMap = { peerHash ->
+                                        mapViewModel.focusOnContact(peerHash)
+                                        navController.navigate(Screen.Map.route) {
+                                            popUpTo(navController.graph.startDestinationId) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                    // Then navigate to the messaging screen
-                                    val encodedHash = Uri.encode(destHash)
-                                    val encodedName = Uri.encode(peerName)
-                                    navController.navigate("messaging/$encodedHash/$encodedName")
-                                },
-                                onBrowseNode = { destHash ->
-                                    navController.navigate("nomadnet_browser/$destHash")
-                                },
-                            )
-                        }
-
-                        // NomadNet Browser screen
-                        composable(
-                            route = "nomadnet_browser/{destinationHash}?path={path}",
-                            arguments =
-                                listOf(
-                                    navArgument("destinationHash") { type = NavType.StringType },
-                                    navArgument("path") {
-                                        type = NavType.StringType
-                                        defaultValue = "/page/index.mu"
                                     },
-                                ),
-                        ) { backStackEntry ->
-                            val destHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
-                            val path = backStackEntry.arguments?.getString("path") ?: "/page/index.mu"
-                            NomadNetBrowserScreen(
-                                destinationHash = destHash,
-                                initialPath = path,
-                                onBackClick = { navController.popBackStack() },
-                                onOpenConversation = { conversationHash ->
-                                    val encodedHash = Uri.encode(conversationHash)
-                                    val encodedName = Uri.encode(conversationHash.take(12))
-                                    navController.navigate("messaging/$encodedHash/$encodedName")
-                                },
-                            )
-                        }
+                                )
+                            }
 
-                        // Offline Maps management screen
-                        composable("offline_maps") {
-                            OfflineMapsScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onNavigateToDownload = { navController.navigate("offline_map_download") },
-                                onNavigateToUpdate = { regionId ->
-                                    navController.navigate("offline_map_download?updateRegionId=$regionId")
-                                },
-                            )
-                        }
+                            composable(
+                                route = "message_detail/{messageId}",
+                                arguments =
+                                    listOf(
+                                        navArgument("messageId") { type = NavType.StringType },
+                                    ),
+                            ) { backStackEntry ->
+                                val messageId = backStackEntry.arguments?.getString("messageId").orEmpty()
 
-                        // Offline Map download wizard (with optional update parameter)
-                        composable(
-                            route = "offline_map_download?updateRegionId={updateRegionId}",
-                            arguments =
-                                listOf(
-                                    navArgument("updateRegionId") {
-                                        type = NavType.LongType
-                                        defaultValue = -1L
+                                MessageDetailScreen(
+                                    messageId = messageId,
+                                    onBackClick = { navController.popBackStack() },
+                                )
+                            }
+
+                            composable(
+                                route = "announce_detail/{destinationHash}",
+                                arguments =
+                                    listOf(
+                                        navArgument("destinationHash") { type = NavType.StringType },
+                                    ),
+                            ) { backStackEntry ->
+                                val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+
+                                AnnounceDetailScreen(
+                                    destinationHash = destinationHash,
+                                    onBackClick = { navController.popBackStack() },
+                                    onViewAnnounce = { hash ->
+                                        navController.navigate("announce_detail/${Uri.encode(hash)}")
                                     },
-                                ),
-                        ) { backStackEntry ->
-                            val updateRegionId = backStackEntry.arguments?.getLong("updateRegionId") ?: -1L
-                            OfflineMapDownloadScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onDownloadComplete = { navController.popBackStack() },
-                                updateRegionId = if (updateRegionId > 0) updateRegionId else null,
-                            )
-                        }
-
-                        // Voice Call Screen (outgoing/active call)
-                        composable(
-                            route = "voice_call/{destinationHash}?autoAnswer={autoAnswer}&profileCode={profileCode}",
-                            arguments =
-                                listOf(
-                                    navArgument("destinationHash") { type = NavType.StringType },
-                                    navArgument("autoAnswer") {
-                                        type = NavType.BoolType
-                                        defaultValue = false
+                                    onStartChat = { destHash, peerName ->
+                                        // Navigate back to chats tab
+                                        selectedTab = 0
+                                        navController.navigate(Screen.Chats.route) {
+                                            popUpTo(navController.graph.startDestinationId) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                        // Then navigate to the messaging screen
+                                        val encodedHash = Uri.encode(destHash)
+                                        val encodedName = Uri.encode(peerName)
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
                                     },
-                                    navArgument("profileCode") {
-                                        type = NavType.IntType
-                                        defaultValue = -1 // -1 means use default
+                                    onBrowseNode = { destHash ->
+                                        navController.navigate("nomadnet_browser/$destHash")
                                     },
-                                ),
-                        ) { backStackEntry ->
-                            val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
-                            val autoAnswer = backStackEntry.arguments?.getBoolean("autoAnswer") ?: false
-                            val profileCodeArg = backStackEntry.arguments?.getInt("profileCode") ?: -1
-                            val profileCode = if (profileCodeArg == -1) null else profileCodeArg
+                                )
+                            }
 
-                            VoiceCallScreen(
-                                destinationHash = destinationHash,
-                                onEndCall = exitCallFlow,
-                                autoAnswer = autoAnswer,
-                                profileCode = profileCode,
-                            )
-                        }
+                            // NomadNet Browser screen
+                            composable(
+                                route = "nomadnet_browser/{destinationHash}?path={path}",
+                                arguments =
+                                    listOf(
+                                        navArgument("destinationHash") { type = NavType.StringType },
+                                        navArgument("path") {
+                                            type = NavType.StringType
+                                            defaultValue = "/page/index.mu"
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val destHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+                                val path = backStackEntry.arguments?.getString("path") ?: "/page/index.mu"
+                                NomadNetBrowserScreen(
+                                    destinationHash = destHash,
+                                    initialPath = path,
+                                    onBackClick = { navController.popBackStack() },
+                                    onOpenConversation = { conversationHash ->
+                                        val encodedHash = Uri.encode(conversationHash)
+                                        val encodedName = Uri.encode(conversationHash.take(12))
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
+                                    },
+                                )
+                            }
 
-                        // Incoming Call Screen
-                        composable(
-                            route = "incoming_call/{identityHash}",
-                            arguments =
-                                listOf(
-                                    navArgument("identityHash") { type = NavType.StringType },
-                                ),
-                        ) { backStackEntry ->
-                            val identityHash = backStackEntry.arguments?.getString("identityHash").orEmpty()
+                            // Offline Maps management screen
+                            composable("offline_maps") {
+                                OfflineMapsScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateToDownload = { navController.navigate("offline_map_download") },
+                                    onNavigateToUpdate = { regionId ->
+                                        navController.navigate("offline_map_download?updateRegionId=$regionId")
+                                    },
+                                )
+                            }
 
-                            IncomingCallScreen(
-                                identityHash = identityHash,
-                                onCallAnswered = {
-                                    // Navigate to voice call screen when answered
-                                    val encodedHash = Uri.encode(identityHash)
-                                    navController.navigate("voice_call/$encodedHash") {
-                                        popUpTo("incoming_call/$identityHash") { inclusive = true }
-                                    }
-                                },
-                                onCallDeclined = exitCallFlow,
-                            )
+                            // Offline Map download wizard (with optional update parameter)
+                            composable(
+                                route = "offline_map_download?updateRegionId={updateRegionId}",
+                                arguments =
+                                    listOf(
+                                        navArgument("updateRegionId") {
+                                            type = NavType.LongType
+                                            defaultValue = -1L
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val updateRegionId = backStackEntry.arguments?.getLong("updateRegionId") ?: -1L
+                                OfflineMapDownloadScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onDownloadComplete = { navController.popBackStack() },
+                                    updateRegionId = if (updateRegionId > 0) updateRegionId else null,
+                                )
+                            }
+
+                            // Voice Call Screen (outgoing/active call)
+                            composable(
+                                route = "voice_call/{destinationHash}?autoAnswer={autoAnswer}&profileCode={profileCode}",
+                                arguments =
+                                    listOf(
+                                        navArgument("destinationHash") { type = NavType.StringType },
+                                        navArgument("autoAnswer") {
+                                            type = NavType.BoolType
+                                            defaultValue = false
+                                        },
+                                        navArgument("profileCode") {
+                                            type = NavType.IntType
+                                            defaultValue = -1 // -1 means use default
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
+                                val autoAnswer = backStackEntry.arguments?.getBoolean("autoAnswer") ?: false
+                                val profileCodeArg = backStackEntry.arguments?.getInt("profileCode") ?: -1
+                                val profileCode = if (profileCodeArg == -1) null else profileCodeArg
+
+                                VoiceCallScreen(
+                                    destinationHash = destinationHash,
+                                    onEndCall = exitCallFlow,
+                                    autoAnswer = autoAnswer,
+                                    profileCode = profileCode,
+                                )
+                            }
+
+                            // Incoming Call Screen
+                            composable(
+                                route = "incoming_call/{identityHash}",
+                                arguments =
+                                    listOf(
+                                        navArgument("identityHash") { type = NavType.StringType },
+                                    ),
+                            ) { backStackEntry ->
+                                val identityHash = backStackEntry.arguments?.getString("identityHash").orEmpty()
+
+                                IncomingCallScreen(
+                                    identityHash = identityHash,
+                                    onCallAnswered = {
+                                        // Navigate to voice call screen when answered
+                                        val encodedHash = Uri.encode(identityHash)
+                                        navController.navigate("voice_call/$encodedHash") {
+                                            popUpTo("incoming_call/$identityHash") { inclusive = true }
+                                        }
+                                    },
+                                    onCallDeclined = exitCallFlow,
+                                )
+                            }
                         }
                     }
                 }

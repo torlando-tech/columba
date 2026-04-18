@@ -56,16 +56,24 @@ object DatabaseModule {
     val DURABILITY_CALLBACK: RoomDatabase.Callback =
         object : RoomDatabase.Callback() {
             private fun applyPragmas(db: SupportSQLiteDatabase) {
-                // journal_mode returns the resulting mode as a row; use query() so a
-                // silent failure (e.g. filesystem that doesn't support WAL) is detectable.
+                // All four PRAGMAs return a result row (either the new value or the
+                // activated mode). Android's SupportSQLiteDatabase rejects execSQL for
+                // any statement that produces rows, so everything must go through
+                // query() and close the cursor even if we don't care about the value.
                 db.query("PRAGMA journal_mode=WAL").use { cursor ->
                     if (cursor.moveToFirst() && !cursor.getString(0).equals("wal", ignoreCase = true)) {
                         Log.e("Columba/DB", "journal_mode=WAL not activated; mode=${cursor.getString(0)}")
                     }
                 }
-                db.execSQL("PRAGMA synchronous=FULL")
-                db.execSQL("PRAGMA wal_autocheckpoint=100")
-                db.execSQL("PRAGMA busy_timeout=5000")
+                db.query("PRAGMA synchronous=FULL").use {
+                    /* drain row */ it.moveToFirst()
+                }
+                db.query("PRAGMA wal_autocheckpoint=100").use {
+                    /* drain row */ it.moveToFirst()
+                }
+                db.query("PRAGMA busy_timeout=5000").use {
+                    /* drain row */ it.moveToFirst()
+                }
             }
 
             override fun onCreate(db: SupportSQLiteDatabase) = applyPragmas(db)

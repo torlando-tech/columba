@@ -32,6 +32,7 @@ object ServiceDatabaseProvider {
             ).fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
+            .addCallback(DatabaseModule.DURABILITY_CALLBACK)
             .build()
 
     fun close() {

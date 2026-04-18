@@ -188,10 +188,20 @@ class IdentityUnlockViewModel
         }
 
         /**
-         * Delete the undecryptable identity and send the user back through
-         * onboarding to create a new one. Messages and contacts tied to the old
-         * identity hash remain in Room but are effectively orphaned — the user
-         * can see their history but won't be able to continue any conversation.
+         * Delete the undecryptable identity and restart the process. The running
+         * ReticulumService still holds the old identity in native memory, and
+         * the app's auto-create-identity path only fires during cold startup
+         * (`ColumbaApplication.onCreate` → `reticulumProtocol.initialize`). If
+         * we tried to navigate to onboarding in-process, OnboardingViewModel's
+         * `completeOnboarding` would find no active identity in Room and the
+         * user's chosen display name would silently drop on the floor. Killing
+         * the process gives the next launch a clean slate: no active identity,
+         * no onboarding flag, native stack creates a fresh identity, the
+         * auto-create path persists it to Room, and onboarding runs normally.
+         *
+         * Messages and contacts tied to the old identity hash are still in Room
+         * after the row is deleted, but the UI filters conversations by active
+         * identity — they won't render and the user effectively starts empty.
          */
         fun startFresh() {
             viewModelScope.launch {
@@ -201,7 +211,24 @@ class IdentityUnlockViewModel
                 settingsRepository.clearOnboardingCompleted()
                 settingsRepository.setNeedsIdentityUnlock(false)
                 _uiState.value = IdentityUnlockUiState.StartedFresh
+                restartApp()
             }
+        }
+
+        private fun restartApp() {
+            val launchIntent =
+                context.packageManager.getLaunchIntentForPackage(context.packageName)
+            if (launchIntent == null) {
+                Log.w(TAG, "No launch intent for ${context.packageName}; can't restart cleanly")
+                return
+            }
+            launchIntent.addFlags(
+                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                    android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK,
+            )
+            context.startActivity(launchIntent)
+            Log.d(TAG, "Killing process to complete Start Fresh clean slate")
+            android.os.Process.killProcess(android.os.Process.myPid())
         }
 
         private suspend fun completeRewrap(

@@ -211,9 +211,10 @@ fun IdentityUnlockScreen(
             text = {
                 Text(
                     "This removes your old identity and takes you through onboarding to create " +
-                        "a new one. Your restored messages and contacts will remain visible, but " +
-                        "you won't be able to continue any existing conversations — the peers on " +
-                        "the other side won't recognize the new identity.",
+                        "a new one. Your restored messages and contacts were tied to the old " +
+                        "identity, so they'll disappear from the app — and peers on the other " +
+                        "side of any existing conversations won't recognize the new identity. " +
+                        "The app will restart to finish setting up.",
                 )
             },
             confirmButton = {

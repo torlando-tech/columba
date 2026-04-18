@@ -2,10 +2,10 @@ package network.columba.app.reticulum.protocol
 
 import android.content.Context
 import android.util.Log
-import network.columba.app.reticulum.model.InterfaceConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import network.columba.app.reticulum.model.InterfaceConfig
 import network.reticulum.interfaces.auto.AutoInterface
 import network.reticulum.interfaces.tcp.TCPClientInterface
 import network.reticulum.interfaces.udp.UDPInterface

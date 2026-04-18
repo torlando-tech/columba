@@ -2,9 +2,9 @@ package network.columba.app.reticulum.protocol
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import network.columba.app.reticulum.model.InterfaceConfig
 import network.columba.app.reticulum.usb.KotlinUSBBridge
-import kotlinx.coroutines.CoroutineScope
 import network.reticulum.transport.Transport
 
 internal object RNodeConnectionHelper {

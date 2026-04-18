@@ -5,14 +5,16 @@
     <uses-sdk tools:overrideLibrary="network.reticulum.android" />
 
     <application>
+        <!-- Test host for Compose instrumented tests (no launcher icon) -->
         <activity
             android:name="network.columba.app.test.TestHostActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="true" />
+
+        <!-- Disable LeakCanary's "Leaks" launcher icon -->
+        <activity
+            android:name="leakcanary.internal.activity.LeakLauncherActivity"
+            android:enabled="false"
+            tools:replace="android:enabled" />
     </application>
 
 </manifest>

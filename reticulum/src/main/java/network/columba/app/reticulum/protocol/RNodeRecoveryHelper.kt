@@ -1,11 +1,11 @@
 package network.columba.app.reticulum.protocol
 
 import android.util.Log
-import network.columba.app.reticulum.model.InterfaceConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import network.columba.app.reticulum.model.InterfaceConfig
 
 internal object RNodeRecoveryHelper {
     private const val TAG = "NativeInterfaceFactory"

@@ -1,7 +1,6 @@
 package network.columba.app.di
 
 import android.content.Context
-import network.columba.app.reticulum.protocol.ReticulumProtocol
 import io.mockk.clearAllMocks
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +8,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import network.columba.app.reticulum.protocol.ReticulumProtocol
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue

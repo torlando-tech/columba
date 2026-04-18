@@ -72,7 +72,12 @@ fun IdentityUnlockScreen(
     var showExplainer by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
-        if (uiState is IdentityUnlockUiState.Restored || uiState is IdentityUnlockUiState.StartedFresh) {
+        // `StartedFresh` deliberately isn't handled here: the ViewModel kills
+        // the process immediately after emitting it, so any in-process
+        // navigation would race the shutdown and misroute to Chats with no
+        // active identity. The next cold launch lands on the onboarding flow
+        // because Start Fresh also cleared `HAS_COMPLETED_ONBOARDING`.
+        if (uiState is IdentityUnlockUiState.Restored) {
             onResolved()
         }
     }
@@ -138,7 +143,7 @@ fun IdentityUnlockScreen(
                 }
                 is IdentityUnlockUiState.Error -> {
                     ErrorBlock(state.message) {
-                        viewModel.cancelHashMismatch() // resets to Idle
+                        viewModel.dismissError()
                     }
                 }
                 is IdentityUnlockUiState.HashMismatch -> {

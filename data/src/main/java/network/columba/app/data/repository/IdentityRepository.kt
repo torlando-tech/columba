@@ -576,6 +576,18 @@ class IdentityRepository
         ): Result<Unit> =
             withContext(ioDispatcher) {
                 try {
+                    // Enforce the same 64-byte contract createIdentity holds
+                    // itself to. If a caller ever hands us a mis-sized blob
+                    // we'd happily encrypt it and write a row that later
+                    // fails mysteriously deep inside the native stack; better
+                    // to fail loud at the boundary.
+                    if (keyData.size != 64) {
+                        return@withContext Result.failure(
+                            IllegalArgumentException(
+                                "Identity key must be 64 bytes (got ${keyData.size})",
+                            ),
+                        )
+                    }
                     val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
                     identityDao.updateEncryptedKeyData(
                         identityHash = identityHash,

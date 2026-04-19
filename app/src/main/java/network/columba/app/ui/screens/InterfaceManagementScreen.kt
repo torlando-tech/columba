@@ -11,7 +11,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,12 +72,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.delay
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.reticulum.ble.util.BlePermissionManager
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
 import network.columba.app.viewmodel.InterfaceManagementViewModel
-import kotlinx.coroutines.delay
 
 /**
  * Screen for managing Reticulum network interfaces.
@@ -281,6 +283,7 @@ fun InterfaceManagementScreen(
                                     InterfaceCard(
                                         interfaceEntity = iface,
                                         onClick = { onNavigateToInterfaceStats(iface.id) },
+                                        onLongClick = { interfaceToDelete = iface },
                                         onToggle = { enabled ->
                                             val hasPermissions = BlePermissionManager.hasAllPermissions(context)
                                             viewModel.toggleInterface(iface.id, enabled, hasPermissions)
@@ -454,10 +457,12 @@ fun InterfaceManagementScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InterfaceCard(
     interfaceEntity: InterfaceEntity,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     onToggle: (Boolean) -> Unit,
     bluetoothState: Int,
     blePermissionsGranted: Boolean,
@@ -475,7 +480,14 @@ fun InterfaceCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+                .then(
+                    when {
+                        onClick != null && onLongClick != null ->
+                            Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                        onClick != null -> Modifier.clickable(onClick = onClick)
+                        else -> Modifier
+                    },
+                ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {

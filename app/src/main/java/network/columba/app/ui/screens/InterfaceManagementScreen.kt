@@ -285,6 +285,7 @@ fun InterfaceManagementScreen(
                                     InterfaceCard(
                                         interfaceEntity = iface,
                                         onClick = { onNavigateToInterfaceStats(iface.id) },
+                                        onClickLabel = stringResource(R.string.view_interface_details),
                                         onLongClick = { interfaceToDelete = iface },
                                         onLongClickLabel = stringResource(R.string.delete_interface),
                                         onToggle = { enabled ->
@@ -465,6 +466,7 @@ fun InterfaceManagementScreen(
 fun InterfaceCard(
     interfaceEntity: InterfaceEntity,
     onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
     onLongClickLabel: String? = null,
     onToggle: (Boolean) -> Unit,
@@ -488,13 +490,16 @@ fun InterfaceCard(
                     when {
                         onClick != null && onLongClick != null ->
                             Modifier.combinedClickable(
+                                onClickLabel = onClickLabel,
                                 onClick = onClick,
                                 onLongClick = onLongClick,
                                 onLongClickLabel = onLongClickLabel,
                             )
-                        onClick != null -> Modifier.clickable(onClick = onClick)
+                        onClick != null ->
+                            Modifier.clickable(onClickLabel = onClickLabel, onClick = onClick)
                         onLongClick != null ->
                             Modifier.combinedClickable(
+                                onClickLabel = onClickLabel,
                                 onClick = {},
                                 onLongClick = onLongClick,
                                 onLongClickLabel = onLongClickLabel,

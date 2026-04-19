@@ -22,4 +22,8 @@
     <string name="offline_banner_reconnecting">Reconnecting\u2026</string>
     <string name="offline_banner_reconnect">Reconnect</string>
     <string name="offline_banner_reconnecting_description">Reconnecting in progress</string>
+
+    <!-- Network Interfaces screen -->
+    <string name="delete_interface">Delete interface</string>
+    <string name="view_interface_details">View interface details</string>
 </resources>

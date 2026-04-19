@@ -27,7 +27,7 @@ internal object RNodeRecoveryHelper {
             while (isActive) {
                 if (runningInterfaces[config.name] !== iface || iface.detached.get()) return@launch
 
-                if (iface.online.get()) {
+                if (iface.online.value) {
                     wasOnline = true
                 } else if (wasOnline) {
                     Log.w(TAG, "RNode interface ${config.name} went offline; starting recovery")
@@ -58,7 +58,7 @@ internal object RNodeRecoveryHelper {
                 try {
                     while (isActive) {
                         val current = runningInterfaces[config.name]
-                        if (current?.online?.get() == true) return@launch
+                        if (current?.online?.value == true) return@launch
 
                         if (current != null) {
                             onStopInterface(config.name)
@@ -70,7 +70,7 @@ internal object RNodeRecoveryHelper {
                         var waitedMs = 0L
                         while (waitedMs < RNODE_RECOVERY_ATTEMPT_WINDOW_MS && isActive) {
                             val iface = runningInterfaces[config.name]
-                            if (iface?.online?.get() == true) return@launch
+                            if (iface?.online?.value == true) return@launch
                             kotlinx.coroutines.delay(500)
                             waitedMs += 500
                         }

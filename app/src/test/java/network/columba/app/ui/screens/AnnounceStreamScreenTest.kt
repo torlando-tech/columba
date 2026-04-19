@@ -247,20 +247,27 @@ class AnnounceStreamScreenTest {
                 showAudioAnnounces = false,
             )
         var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
         every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
 
         composeTestRule.setContent {
             AnnounceStreamScreen(viewModel = mockViewModel)
         }
 
         // Tapping the only active chip would leave no aspect selected;
-        // the component should snap to all-types instead of producing an empty filter.
+        // the component should snap to ALL (node types + audio) instead of producing an empty filter.
         composeTestRule.onNodeWithText("Peers").performClick()
 
         assertEquals(
-            "Deselecting the last active aspect should snap to all types, not empty",
+            "Deselecting the last active aspect should snap to all node types, not empty",
             setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
             capturedTypes,
+        )
+        assertEquals(
+            "Snap-back should also re-enable showAudioAnnounces to match All-chip semantics",
+            true,
+            capturedShowAudio,
         )
     }
 

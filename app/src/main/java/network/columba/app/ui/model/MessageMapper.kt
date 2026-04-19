@@ -534,9 +534,18 @@ private fun parseFileAttachments(fieldsJson: String?): List<FileAttachmentUi> {
 /**
  * Parse a JSONArray of file attachments into FileAttachmentUi objects.
  *
- * Expected format: [{"filename": "doc.pdf", "size": 12345, "data": "hex..."}, ...]
+ * Two element formats are accepted:
+ *  1. Object: {"filename": "doc.pdf", "size": 12345, "data": "hex..."}
+ *     or {"filename": "...", "size": ..., "_data_ref": "/path"} — used by
+ *     Columba's on-disk optimized storage.
+ *  2. Positional array (LXMF wire format from Sideband and other apps):
+ *     [filename_string, data_hex_string] — 2-element tuple.
+ *     Sideband serializes FIELD_FILE_ATTACHMENTS this way, so an inbound
+ *     image-only message from Sideband hits this branch. Without it,
+ *     `getJSONObject(i)` throws typeMismatch, the attachment is dropped
+ *     silently, and the chat bubble renders empty.
  *
- * @param attachmentsArray JSONArray containing file attachment objects
+ * @param attachmentsArray JSONArray containing file attachment entries
  * @return List of FileAttachmentUi with metadata
  */
 private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAttachmentUi> {
@@ -544,19 +553,17 @@ private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAtt
 
     for (i in 0 until attachmentsArray.length()) {
         try {
-            val attachment = attachmentsArray.getJSONObject(i)
-            val filename = attachment.optString("filename", "unknown")
-            val sizeBytes = attachment.optInt("size", 0)
-            val mimeType = FileUtils.getMimeTypeFromFilename(filename)
-
-            result.add(
-                FileAttachmentUi(
-                    filename = filename,
-                    sizeBytes = sizeBytes,
-                    mimeType = mimeType,
-                    index = i,
-                ),
-            )
+            val entry = attachmentsArray.opt(i) ?: continue
+            val parsed =
+                when (entry) {
+                    is JSONObject -> parseObjectAttachment(entry, i)
+                    is JSONArray -> parsePositionalAttachment(entry, i)
+                    else -> {
+                        Log.w(TAG, "Unknown file attachment entry type at $i: ${entry::class.java.simpleName}")
+                        null
+                    }
+                }
+            if (parsed != null) result.add(parsed)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse file attachment at index $i", e)
             // Skip this attachment and continue with the rest
@@ -564,6 +571,42 @@ private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAtt
     }
 
     return result
+}
+
+private fun parseObjectAttachment(
+    attachment: JSONObject,
+    index: Int,
+): FileAttachmentUi {
+    val filename = attachment.optString("filename", "unknown")
+    val sizeBytes = attachment.optInt("size", 0)
+    return FileAttachmentUi(
+        filename = filename,
+        sizeBytes = sizeBytes,
+        mimeType = FileUtils.getMimeTypeFromFilename(filename),
+        index = index,
+    )
+}
+
+private fun parsePositionalAttachment(
+    entry: JSONArray,
+    index: Int,
+): FileAttachmentUi? {
+    if (entry.length() < 2) {
+        Log.w(TAG, "Positional file attachment at $index has ${entry.length()} elements, expected >= 2")
+        return null
+    }
+    val filename = entry.optString(0, "unknown").ifEmpty { "unknown" }
+    // Data is hex-encoded; each byte is 2 hex chars. If a size field is
+    // provided as element [2] prefer it, otherwise infer from the hex
+    // length — matches the observed Sideband wire payload exactly.
+    val dataHexLen = entry.optString(1).length
+    val sizeBytes = entry.optInt(2, dataHexLen / 2)
+    return FileAttachmentUi(
+        filename = filename,
+        sizeBytes = sizeBytes,
+        mimeType = FileUtils.getMimeTypeFromFilename(filename),
+        index = index,
+    )
 }
 
 /**

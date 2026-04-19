@@ -869,6 +869,75 @@ class MessageMapperTest {
     }
 
     @Test
+    fun `toMessageUi parses positional wire format from Sideband`() {
+        // Sideband (and the LXMF reference implementation) serializes
+        // FIELD_FILE_ATTACHMENTS as a list of [filename, data_bytes]
+        // tuples. After Columba's hex-serialization step the JSON looks
+        // like [[filename_str, data_hex_str], ...]. Before the wire-
+        // format-aware fix this path threw typeMismatch on getJSONObject
+        // and the attachment was dropped silently -> empty bubble.
+        val dataHex = "ffd8ffe100104a46494600010101" // 14 bytes -> 28 hex chars
+        val fieldsJson = """{"5": [["photo.jpg", "$dataHex"]]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertTrue(
+            "File attachment from positional wire format was not detected",
+            result.hasFileAttachments,
+        )
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("photo.jpg", result.fileAttachments[0].filename)
+        assertEquals("image/jpeg", result.fileAttachments[0].mimeType)
+        assertEquals(0, result.fileAttachments[0].index)
+        // Size is inferred from hex length when no explicit size field.
+        assertEquals(dataHex.length / 2, result.fileAttachments[0].sizeBytes)
+    }
+
+    @Test
+    fun `toMessageUi accepts explicit size in positional wire format`() {
+        // Optional third element, if present, overrides the inferred size.
+        val fieldsJson = """{"5": [["doc.pdf", "0102", 9999]]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals(9999, result.fileAttachments[0].sizeBytes)
+    }
+
+    @Test
+    fun `toMessageUi parses mixed object and positional entries`() {
+        // Defensive: the parser accepts a JSONArray whose entries mix
+        // both shapes (e.g. if a future stored-format migration is
+        // partial). Each entry is parsed independently.
+        val fieldsJson = """{"5": [
+            {"filename": "a.txt", "data": "4142", "size": 2},
+            ["b.bin", "4344"]
+        ]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(2, result.fileAttachments.size)
+        assertEquals("a.txt", result.fileAttachments[0].filename)
+        assertEquals("b.bin", result.fileAttachments[1].filename)
+    }
+
+    @Test
+    fun `toMessageUi skips malformed positional entry with too few elements`() {
+        val fieldsJson = """{"5": [["lonely_filename_no_data"]]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        // The inner array is short, so it's skipped; but hasFileAttachments
+        // still reflects "field 5 is present" for routing purposes.
+        assertTrue(result.hasFileAttachments)
+        assertTrue(result.fileAttachments.isEmpty())
+    }
+
+    @Test
     fun `toMessageUi sets hasFileAttachments true for per-file data reference`() {
         // New format: metadata inline with per-file _data_ref for file data
         val fieldsJson = """{"5": [{"filename": "doc.pdf", "size": 1024, "_data_ref": "/data/attachments/doc.pdf.dat"}]}"""

@@ -994,7 +994,6 @@ private fun getLocalIpAddress(): Pair<String?, Boolean> {
  * no useful detail beyond the type label itself — the caller drops the line
  * in that case to avoid visual repetition.
  */
-@Composable
 private fun getInterfaceDescription(interfaceEntity: InterfaceEntity): String {
     val json =
         try {
@@ -1041,7 +1040,7 @@ private fun getInterfaceDescription(interfaceEntity: InterfaceEntity): String {
         "AndroidBLE" -> {
             val deviceName = json.optString("device_name", "")
             val maxConns = json.optInt("max_connections", 7)
-            if (deviceName.isNotBlank()) "'$deviceName' · max $maxConns" else "max $maxConns peers"
+            if (deviceName.isNotBlank()) "'$deviceName' · max $maxConns peers" else "max $maxConns peers"
         }
         else -> ""
     }

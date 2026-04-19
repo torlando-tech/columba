@@ -69,10 +69,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
+import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.reticulum.ble.util.BlePermissionManager
 import network.columba.app.ui.components.BlePermissionBottomSheet
@@ -284,7 +286,7 @@ fun InterfaceManagementScreen(
                                         interfaceEntity = iface,
                                         onClick = { onNavigateToInterfaceStats(iface.id) },
                                         onLongClick = { interfaceToDelete = iface },
-                                        onLongClickLabel = "Delete interface",
+                                        onLongClickLabel = stringResource(R.string.delete_interface),
                                         onToggle = { enabled ->
                                             val hasPermissions = BlePermissionManager.hasAllPermissions(context)
                                             viewModel.toggleInterface(iface.id, enabled, hasPermissions)

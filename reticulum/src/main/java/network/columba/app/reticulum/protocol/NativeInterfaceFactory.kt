@@ -4,6 +4,10 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import network.columba.app.reticulum.model.InterfaceConfig
 import network.reticulum.interfaces.auto.AutoInterface
@@ -15,12 +19,24 @@ import network.reticulum.transport.Transport
  * Creates and registers reticulum-kt network interfaces from Columba [InterfaceConfig] objects.
  * Matches Carina's InterfaceManager pattern: diff-based sync, async BLE startup.
  */
+@Suppress("TooManyFunctions") // cohesive interface-lifecycle helpers; splitting would obscure coordination
 internal object NativeInterfaceFactory {
     private const val TAG = "NativeInterfaceFactory"
 
     /** Running interfaces keyed by config name. */
     private val runningInterfaces = java.util.concurrent.ConcurrentHashMap<String, network.reticulum.interfaces.Interface>()
     private val rnodeRecoveryJobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+
+    /**
+     * Per-interface collector jobs watching [network.reticulum.interfaces.Interface.online].
+     * reticulum-kt v0.0.9+ exposes `online` as a `StateFlow<Boolean>`; some
+     * interface types (notably [network.reticulum.interfaces.rnode.RNodeInterface])
+     * don't flip online until their handshake completes 3-5s after
+     * registration. Without an observer the Columba UI caches the initial
+     * `false` value forever. This map keeps the collector jobs alive for
+     * the lifetime of the interface and lets us cancel them in [stopInterface].
+     */
+    private val onlineObservers = java.util.concurrent.ConcurrentHashMap<String, Job>()
     private val listeners = java.util.concurrent.CopyOnWriteArraySet<() -> Unit>()
 
     /** App context for BLE driver construction. */
@@ -109,8 +125,46 @@ internal object NativeInterfaceFactory {
             MulticastLockHelper.acquire(appContext)
         }
 
-        Log.i(TAG, "Started interface: $name (online=${iface.online.get()})")
+        observeOnlineState(name, iface)
+
+        Log.i(TAG, "Started interface: $name (online=${iface.online.value})")
         notifyListeners()
+    }
+
+    /**
+     * Collect the interface's online StateFlow and re-notify listeners on
+     * every distinct transition. The initial value was already surfaced via
+     * the [notifyListeners] call in [registerAndTrack] (which emits a
+     * snapshot with `online=${iface.online.value}`), so we drop(1) to
+     * avoid a duplicate no-op notify for the initial replay StateFlow
+     * hands out on subscribe. StateFlow itself guarantees structural-equality
+     * deduplication at the emitter, so no explicit distinctUntilChanged() is
+     * needed here.
+     */
+    private fun observeOnlineState(
+        name: String,
+        iface: network.reticulum.interfaces.Interface,
+    ) {
+        val collectorScope = scope ?: return
+        // Atomically replace any previous collector under the same key.
+        // runningInterfaces is the source of truth for "this interface is
+        // currently managed"; stopInterface() removes it BEFORE
+        // onlineObservers, so a racing teardown that won the
+        // runningInterfaces lock first will leave us with an absent key —
+        // we detect that here and refuse to install the collector,
+        // preventing an orphaned observer from surviving teardown.
+        onlineObservers.compute(name) { _, previous ->
+            previous?.cancel()
+            if (!runningInterfaces.containsKey(name)) {
+                return@compute null
+            }
+            iface.online
+                .drop(1)
+                .onEach { online ->
+                    Log.d(TAG, "Interface $name online → $online")
+                    notifyListeners()
+                }.launchIn(collectorScope)
+        }
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -173,7 +227,13 @@ internal object NativeInterfaceFactory {
 
     private fun stopInterface(name: String) {
         rnodeRecoveryJobs.remove(name)?.cancel()
-        val iface = runningInterfaces.remove(name) ?: return
+        // Remove from runningInterfaces BEFORE onlineObservers so that a
+        // concurrent observeOnlineState() still sitting in its compute
+        // block sees the interface as unmanaged and bails out instead of
+        // leaving an orphaned collector behind.
+        val iface = runningInterfaces.remove(name)
+        onlineObservers.remove(name)?.cancel()
+        if (iface == null) return
         try {
             val ref =
                 network.reticulum.interfaces.InterfaceAdapter

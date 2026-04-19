@@ -221,6 +221,8 @@ class AnnounceStreamScreenTest {
     @Test
     fun filterChips_tappingAspect_callsViewModel() {
         val mockViewModel = createMockAnnounceStreamViewModel()
+        var capturedTypes: Set<NodeType>? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
 
         composeTestRule.setContent {
             AnnounceStreamScreen(viewModel = mockViewModel)
@@ -229,11 +231,19 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithText("Sites").performClick()
 
         verify { mockViewModel.updateSelectedNodeTypes(match { it.contains(NodeType.NODE) }) }
+        assertTrue(
+            "updateSelectedNodeTypes should have been called with a set containing NODE",
+            capturedTypes?.contains(NodeType.NODE) == true,
+        )
     }
 
     @Test
     fun filterChips_tappingInterface_callsViewModel() {
         val mockViewModel = createMockAnnounceStreamViewModel()
+        var capturedInterfaces: Set<InterfaceType>? = null
+        every {
+            mockViewModel.updateSelectedInterfaceTypes(any())
+        } answers { capturedInterfaces = firstArg() }
 
         composeTestRule.setContent {
             AnnounceStreamScreen(viewModel = mockViewModel)
@@ -242,6 +252,10 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithText("TCP").performClick()
 
         verify { mockViewModel.updateSelectedInterfaceTypes(setOf(InterfaceType.TCP_CLIENT)) }
+        assertTrue(
+            "updateSelectedInterfaceTypes should have been called with TCP_CLIENT",
+            capturedInterfaces == setOf(InterfaceType.TCP_CLIENT),
+        )
     }
 
     // ========== Test Helpers ==========

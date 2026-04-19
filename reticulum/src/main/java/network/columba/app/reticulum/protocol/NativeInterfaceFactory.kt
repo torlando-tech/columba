@@ -145,16 +145,20 @@ internal object NativeInterfaceFactory {
         iface: network.reticulum.interfaces.Interface,
     ) {
         val collectorScope = scope ?: return
-        // Replace any previous collector (restartInterface() can re-register under the same name).
-        onlineObservers.remove(name)?.cancel()
-        val job =
+        // Atomically replace any previous collector under the same key
+        // (restartInterface() re-registers under the same name, and
+        // ConcurrentHashMap#compute serialises with concurrent remove()s
+        // in stopInterface() so a racing teardown either cancels the
+        // freshly-launched job or runs entirely before it is stored).
+        onlineObservers.compute(name) { _, previous ->
+            previous?.cancel()
             iface.online
                 .drop(1)
                 .onEach { online ->
                     Log.d(TAG, "Interface $name online → $online")
                     notifyListeners()
                 }.launchIn(collectorScope)
-        onlineObservers[name] = job
+        }
     }
 
     @Suppress("TooGenericExceptionCaught")

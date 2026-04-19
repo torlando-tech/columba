@@ -284,6 +284,7 @@ fun InterfaceManagementScreen(
                                         interfaceEntity = iface,
                                         onClick = { onNavigateToInterfaceStats(iface.id) },
                                         onLongClick = { interfaceToDelete = iface },
+                                        onLongClickLabel = "Delete interface",
                                         onToggle = { enabled ->
                                             val hasPermissions = BlePermissionManager.hasAllPermissions(context)
                                             viewModel.toggleInterface(iface.id, enabled, hasPermissions)
@@ -463,6 +464,7 @@ fun InterfaceCard(
     interfaceEntity: InterfaceEntity,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     onToggle: (Boolean) -> Unit,
     bluetoothState: Int,
     blePermissionsGranted: Boolean,
@@ -486,14 +488,14 @@ fun InterfaceCard(
                             Modifier.combinedClickable(
                                 onClick = onClick,
                                 onLongClick = onLongClick,
-                                onLongClickLabel = "Delete interface",
+                                onLongClickLabel = onLongClickLabel,
                             )
                         onClick != null -> Modifier.clickable(onClick = onClick)
                         onLongClick != null ->
                             Modifier.combinedClickable(
                                 onClick = {},
                                 onLongClick = onLongClick,
-                                onLongClickLabel = "Delete interface",
+                                onLongClickLabel = onLongClickLabel,
                             )
                         else -> Modifier
                     },

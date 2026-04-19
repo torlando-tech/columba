@@ -19,7 +19,7 @@ serialization = "1.10.0"
 coil = "2.7.0"
 
 # JitPack-published libraries (formerly git submodules)
-reticulumKt = "v0.0.7"
+reticulumKt = "v0.0.8"
 lxmfKt = "v0.0.4"
 lxstKt = "v0.0.3"
 

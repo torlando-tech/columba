@@ -60,13 +60,31 @@ object DatabaseModule {
                 // activated mode). Android's SupportSQLiteDatabase rejects execSQL for
                 // any statement that produces rows, so everything must go through
                 // query() and close the cursor even if we don't care about the value.
-                db.query("PRAGMA journal_mode=WAL").use { cursor ->
-                    if (cursor.moveToFirst() && !cursor.getString(0).equals("wal", ignoreCase = true)) {
-                        Log.e("Columba/DB", "journal_mode=WAL not activated; mode=${cursor.getString(0)}")
+                //
+                // SQLite does not allow PRAGMA journal_mode or PRAGMA synchronous to be
+                // changed while a transaction is active (it raises SQLITE_ERROR: "Safety
+                // level may not be changed inside a transaction"). Room's InvalidationTracker
+                // can invoke onCreate() from within an internal transaction, so we guard
+                // these two PRAGMAs with an inTransaction() check. onOpen() is typically
+                // called outside of a transaction in current Room versions, so the skipped
+                // PRAGMAs get applied on the next open. The guard is also our defense if
+                // a future Room version ever calls onOpen() transactionally — we'd just
+                // log the skip instead of crashing.
+                if (!db.inTransaction()) {
+                    db.query("PRAGMA journal_mode=WAL").use { cursor ->
+                        if (cursor.moveToFirst() && !cursor.getString(0).equals("wal", ignoreCase = true)) {
+                            Log.e("Columba/DB", "journal_mode=WAL not activated; mode=${cursor.getString(0)}")
+                        }
                     }
-                }
-                db.query("PRAGMA synchronous=FULL").use {
-                    /* drain row */ it.moveToFirst()
+                    db.query("PRAGMA synchronous=FULL").use {
+                        /* drain row */ it.moveToFirst()
+                    }
+                } else {
+                    Log.d(
+                        "Columba/DB",
+                        "applyPragmas: inside transaction, skipping journal_mode and synchronous " +
+                            "(will retry on next transaction-free callback)",
+                    )
                 }
                 db.query("PRAGMA wal_autocheckpoint=100").use {
                     /* drain row */ it.moveToFirst()

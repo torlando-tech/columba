@@ -1063,6 +1063,38 @@ class MessageMapperTest {
     }
 
     @Test
+    fun `loadFileAttachmentData decodes positional wire format`() {
+        // Sideband-style [filename, data_hex] wire format — same path
+        // parseFileAttachmentsArray now recognizes.
+        val fieldsJson = """{"5": [["hello.txt", "48656c6c6f"]]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNotNull(
+            "Positional file attachment data should decode, not return null",
+            result,
+        )
+        assertEquals("Hello", String(result!!))
+    }
+
+    @Test
+    fun `loadFileAttachmentData returns null for positional entry with too few elements`() {
+        val fieldsJson = """{"5": [["lonely"]]}"""
+        val result = loadFileAttachmentData(fieldsJson, 0)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `loadFileAttachmentMetadata extracts filename from positional wire format`() {
+        val fieldsJson = """{"5": [["photo.jpg", "ffd8ff"]]}"""
+        val result = loadFileAttachmentMetadata(fieldsJson, 0)
+
+        assertNotNull(result)
+        assertEquals("photo.jpg", result!!.filename)
+        assertEquals("image/jpeg", result.mimeType)
+    }
+
+    @Test
     fun `loadFileAttachmentData returns correct attachment from multiple`() {
         val fieldsJson = """{"5": [
             {"filename": "first.txt", "data": "4f6e65", "size": 3},

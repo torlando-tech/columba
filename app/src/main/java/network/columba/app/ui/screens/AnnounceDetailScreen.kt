@@ -258,8 +258,6 @@ fun AnnounceDetailScreen(
 
                 // Show "Set as My Relay" button for propagation nodes
                 if (announceNonNull.nodeType == "PROPAGATION_NODE") {
-                    val isCurrentRelay by viewModel.isMyRelayFlow(destinationHash).collectAsState(initial = false)
-
                     Button(
                         onClick = {
                             viewModel.setAsMyRelay(announceNonNull.destinationHash)
@@ -272,13 +270,13 @@ fun AnnounceDetailScreen(
                         colors =
                             ButtonDefaults.buttonColors(
                                 containerColor =
-                                    if (isCurrentRelay) {
+                                    if (isMyRelay) {
                                         MaterialTheme.colorScheme.tertiary
                                     } else {
                                         MaterialTheme.colorScheme.secondary
                                     },
                             ),
-                        enabled = !isCurrentRelay,
+                        enabled = !isMyRelay,
                     ) {
                         Icon(
                             imageVector = Icons.Default.Hub,
@@ -287,7 +285,7 @@ fun AnnounceDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isCurrentRelay) "Current Relay" else "Set as My Relay",
+                            text = if (isMyRelay) "Current Relay" else "Set as My Relay",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )

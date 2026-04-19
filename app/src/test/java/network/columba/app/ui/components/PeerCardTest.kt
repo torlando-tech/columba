@@ -396,8 +396,9 @@ class PeerCardTest {
             )
         }
 
-        // Then - should display "Site" as default (else branch)
-        composeTestRule.onNodeWithText("Site").assertIsDisplayed()
+        // Then - unknown node types fall through to "Node" (protocol default),
+        // not "Site" (which is reserved for known NomadNet nodes).
+        composeTestRule.onNodeWithText("Node").assertIsDisplayed()
     }
 
     // ========== Signal Strength Indicator Tests ==========

@@ -303,7 +303,9 @@ fun NodeTypeBadge(nodeType: String) {
             "PEER" -> "Peer" to MaterialTheme.colorScheme.primary
             "PROPAGATION_NODE" -> "Relay" to MaterialTheme.colorScheme.secondary
             "PHONE" -> "Phone" to MaterialTheme.colorScheme.error
-            else -> "Site" to MaterialTheme.colorScheme.tertiary
+            // Unknown/future node types: keep protocol terminology rather than
+            // silently aliasing to "Site", which is reserved for NomadNet nodes.
+            else -> "Node" to MaterialTheme.colorScheme.tertiary
         }
 
     Surface(

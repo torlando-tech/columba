@@ -38,13 +38,15 @@ private val INTERFACE_OPTIONS: List<Pair<InterfaceType, String>> =
 
 /**
  * Two always-visible rows of filter chips for the announce stream:
- *   1. Aspect: All / Peers / Nodes / Relays / Audio
+ *   1. Aspect: All / Peers / Sites / Relays / Audio
  *   2. Interface: All / Local / TCP / Bluetooth / RNode / Other
  *
  * The "All" chip in each row represents "no filter active". Tapping it clears
  * the row; tapping any other chip deselects All. Note the two rows use different
  * underlying semantics (aspect = positive include, interface = restrict), but
- * both surface the same "All = unfiltered" UX.
+ * both surface the same "All = unfiltered" UX. The aspect row prevents the user
+ * from deselecting every chip (would otherwise produce a blank list with no
+ * selected indicator) — the final tap snaps back to All.
  */
 @Composable
 fun AnnounceFilterChips(
@@ -168,6 +170,13 @@ private fun toggleAspect(
     onShowAudioChange: (Boolean) -> Unit,
 ) {
     val isActive = active.contains(aspect)
+    // If this tap would leave no aspect chip selected, snap back to All instead
+    // of producing a blank list with no visual indicator of what's filtering it.
+    if (isActive && active.size == 1) {
+        onNodeTypesChange(setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE))
+        onShowAudioChange(true)
+        return
+    }
     when (aspect) {
         AspectChip.PEER -> onNodeTypesChange(selectedNodeTypes.withToggled(NodeType.PEER, !isActive))
         AspectChip.NODE -> onNodeTypesChange(selectedNodeTypes.withToggled(NodeType.NODE, !isActive))

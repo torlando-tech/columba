@@ -20,6 +20,7 @@ import network.columba.app.data.repository.Announce
 import network.columba.app.reticulum.model.NodeType
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.AnnounceStreamViewModel
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -234,6 +235,32 @@ class AnnounceStreamScreenTest {
         assertTrue(
             "updateSelectedNodeTypes should have been called with a set containing NODE",
             capturedTypes?.contains(NodeType.NODE) == true,
+        )
+    }
+
+    @Test
+    fun filterChips_deselectingLastAspect_snapsBackToAll() {
+        // Single aspect selected: PEER only, audio off → activeAspects = {PEER}.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedNodeTypes = setOf(NodeType.PEER),
+                showAudioAnnounces = false,
+            )
+        var capturedTypes: Set<NodeType>? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        // Tapping the only active chip would leave no aspect selected;
+        // the component should snap to all-types instead of producing an empty filter.
+        composeTestRule.onNodeWithText("Peers").performClick()
+
+        assertEquals(
+            "Deselecting the last active aspect should snap to all types, not empty",
+            setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
+            capturedTypes,
         )
     }
 

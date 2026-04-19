@@ -1805,7 +1805,7 @@ class NativeReticulumProtocol(
             try {
                 callManager?.hangup()
             } catch (e: Exception) {
-                Log.w(TAG, "Ignored error hanging up call: ${e.message}")
+                Log.w(TAG, "Ignored error hanging up call: $e")
             }
         }
     }
@@ -1815,7 +1815,7 @@ class NativeReticulumProtocol(
             try {
                 callManager?.muteMicrophone(muted)
             } catch (e: Exception) {
-                Log.w(TAG, "Ignored error setting call muted=$muted: ${e.message}")
+                Log.w(TAG, "Ignored error setting call muted=$muted: $e")
             }
         }
     }
@@ -1825,7 +1825,7 @@ class NativeReticulumProtocol(
             try {
                 callManager?.setSpeaker(speakerOn)
             } catch (e: Exception) {
-                Log.w(TAG, "Ignored error setting speaker=$speakerOn: ${e.message}")
+                Log.w(TAG, "Ignored error setting speaker=$speakerOn: $e")
             }
         }
     }

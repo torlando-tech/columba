@@ -19,6 +19,7 @@ import network.reticulum.transport.Transport
  * Creates and registers reticulum-kt network interfaces from Columba [InterfaceConfig] objects.
  * Matches Carina's InterfaceManager pattern: diff-based sync, async BLE startup.
  */
+@Suppress("TooManyFunctions") // cohesive interface-lifecycle helpers; splitting would obscure coordination
 internal object NativeInterfaceFactory {
     private const val TAG = "NativeInterfaceFactory"
 
@@ -145,13 +146,18 @@ internal object NativeInterfaceFactory {
         iface: network.reticulum.interfaces.Interface,
     ) {
         val collectorScope = scope ?: return
-        // Atomically replace any previous collector under the same key
-        // (restartInterface() re-registers under the same name, and
-        // ConcurrentHashMap#compute serialises with concurrent remove()s
-        // in stopInterface() so a racing teardown either cancels the
-        // freshly-launched job or runs entirely before it is stored).
+        // Atomically replace any previous collector under the same key.
+        // runningInterfaces is the source of truth for "this interface is
+        // currently managed"; stopInterface() removes it BEFORE
+        // onlineObservers, so a racing teardown that won the
+        // runningInterfaces lock first will leave us with an absent key —
+        // we detect that here and refuse to install the collector,
+        // preventing an orphaned observer from surviving teardown.
         onlineObservers.compute(name) { _, previous ->
             previous?.cancel()
+            if (!runningInterfaces.containsKey(name)) {
+                return@compute null
+            }
             iface.online
                 .drop(1)
                 .onEach { online ->
@@ -221,8 +227,13 @@ internal object NativeInterfaceFactory {
 
     private fun stopInterface(name: String) {
         rnodeRecoveryJobs.remove(name)?.cancel()
+        // Remove from runningInterfaces BEFORE onlineObservers so that a
+        // concurrent observeOnlineState() still sitting in its compute
+        // block sees the interface as unmanaged and bails out instead of
+        // leaving an orphaned collector behind.
+        val iface = runningInterfaces.remove(name)
         onlineObservers.remove(name)?.cancel()
-        val iface = runningInterfaces.remove(name) ?: return
+        if (iface == null) return
         try {
             val ref =
                 network.reticulum.interfaces.InterfaceAdapter

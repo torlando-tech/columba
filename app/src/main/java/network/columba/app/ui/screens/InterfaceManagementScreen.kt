@@ -483,8 +483,18 @@ fun InterfaceCard(
                 .then(
                     when {
                         onClick != null && onLongClick != null ->
-                            Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                            Modifier.combinedClickable(
+                                onClick = onClick,
+                                onLongClick = onLongClick,
+                                onLongClickLabel = "Delete interface",
+                            )
                         onClick != null -> Modifier.clickable(onClick = onClick)
+                        onLongClick != null ->
+                            Modifier.combinedClickable(
+                                onClick = {},
+                                onLongClick = onLongClick,
+                                onLongClickLabel = "Delete interface",
+                            )
                         else -> Modifier
                     },
                 ),

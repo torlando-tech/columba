@@ -39,6 +39,17 @@ internal class NativeTelemetryHandler(
     ): Boolean {
         val fields = message.fields
         val hasTextContent = message.content.isNotBlank()
+        // Image / file / audio attachments are user-visible content too —
+        // a message that's "only telemetry + image" should still render in
+        // the chat UI. Before this check was added, Sideband's habit of
+        // auto-attaching telemetry to every outbound message caused
+        // image-only / file-only / audio-only messages to be classified
+        // as isLocationOnlyMessage and silently dropped from chat emission.
+        val hasAttachmentContent =
+            fields.containsKey(LXMFConstants.FIELD_IMAGE) ||
+                fields.containsKey(LXMFConstants.FIELD_FILE_ATTACHMENTS) ||
+                fields.containsKey(LXMFConstants.FIELD_AUDIO)
+        val hasChatContent = hasTextContent || hasAttachmentContent
         var isLocationOnlyMessage = false
         var locationEvent: JSONObject? = null
 
@@ -46,7 +57,7 @@ internal class NativeTelemetryHandler(
 
         val telemetryStream = fields[LXMFConstants.FIELD_TELEMETRY_STREAM] as? List<*>
         if (telemetryStream != null) {
-            if (!hasTextContent) isLocationOnlyMessage = true
+            if (!hasChatContent) isLocationOnlyMessage = true
             val streamEntries =
                 telemetryStream
                     .mapNotNull { it as? List<*> }
@@ -61,7 +72,7 @@ internal class NativeTelemetryHandler(
         }
 
         if (locationEvent != null) {
-            if (!hasTextContent) {
+            if (!hasChatContent) {
                 isLocationOnlyMessage = true
             }
             locationEvent.put("source_hash", message.sourceHash.toHex())

@@ -1791,23 +1791,31 @@ class NativeReticulumProtocol(
         }
 
     override suspend fun answerCall(): Result<Unit> =
-        runCatching {
-            val mgr =
-                callManager
-                    ?: error("Call manager not initialized")
-            mgr.answer()
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val mgr =
+                    callManager
+                        ?: error("Call manager not initialized")
+                mgr.answer()
+            }
         }
 
     override suspend fun hangupCall() {
-        callManager?.hangup()
+        withContext(Dispatchers.IO) {
+            callManager?.hangup()
+        }
     }
 
     override suspend fun setCallMuted(muted: Boolean) {
-        callManager?.muteMicrophone(muted)
+        withContext(Dispatchers.IO) {
+            callManager?.muteMicrophone(muted)
+        }
     }
 
     override suspend fun setCallSpeaker(speakerOn: Boolean) {
-        callManager?.setSpeaker(speakerOn)
+        withContext(Dispatchers.IO) {
+            callManager?.setSpeaker(speakerOn)
+        }
     }
 
     override suspend fun getCallState(): Result<VoiceCallState> =

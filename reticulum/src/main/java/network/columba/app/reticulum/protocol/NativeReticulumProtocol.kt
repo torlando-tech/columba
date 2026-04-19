@@ -1802,19 +1802,31 @@ class NativeReticulumProtocol(
 
     override suspend fun hangupCall() {
         withContext(Dispatchers.IO) {
-            callManager?.hangup()
+            try {
+                callManager?.hangup()
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error hanging up call: ${e.message}")
+            }
         }
     }
 
     override suspend fun setCallMuted(muted: Boolean) {
         withContext(Dispatchers.IO) {
-            callManager?.muteMicrophone(muted)
+            try {
+                callManager?.muteMicrophone(muted)
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error setting call muted=$muted: ${e.message}")
+            }
         }
     }
 
     override suspend fun setCallSpeaker(speakerOn: Boolean) {
         withContext(Dispatchers.IO) {
-            callManager?.setSpeaker(speakerOn)
+            try {
+                callManager?.setSpeaker(speakerOn)
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error setting speaker=$speakerOn: ${e.message}")
+            }
         }
     }
 

@@ -358,7 +358,7 @@ fun AnnounceDetailScreen(
                     }
                 }
 
-                // Show "Browse Node" button for NomadNet content nodes
+                // Show "Browse Site" button for NomadNet content nodes
                 if (announceNonNull.aspect == "nomadnetwork.node") {
                     Button(
                         onClick = {
@@ -381,7 +381,7 @@ fun AnnounceDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Browse Node",
+                            text = "Browse Site",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )

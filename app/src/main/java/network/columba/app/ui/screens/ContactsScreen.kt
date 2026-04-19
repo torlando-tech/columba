@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
@@ -96,6 +95,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -103,6 +103,8 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import network.columba.app.R
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.ui.components.AddContactConfirmationDialog
@@ -113,14 +115,11 @@ import network.columba.app.util.formatRelativeTime
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.util.validation.ValidationResult
-import androidx.compose.ui.res.stringResource
-import network.columba.app.R
 import network.columba.app.viewmodel.AddContactResult
 import network.columba.app.viewmodel.AnnounceStreamViewModel
 import network.columba.app.viewmodel.ContactsViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
-import kotlinx.coroutines.launch
 
 private const val TAG = "ContactsScreen"
 
@@ -158,15 +157,11 @@ fun ContactsScreen(
         .rememberSaveable { mutableStateOf(ContactsTab.MY_CONTACTS) }
 
     // Network tab state
-    val selectedNodeTypes by announceViewModel.selectedNodeTypes.collectAsState()
-    val showAudioAnnounces by announceViewModel.showAudioAnnounces.collectAsState()
-    val selectedInterfaceTypes by announceViewModel.selectedInterfaceTypes.collectAsState()
     val announceSearchQuery by announceViewModel.searchQuery.collectAsState()
     val announceCount by announceViewModel.announceCount.collectAsState()
     val isAnnouncing by announceViewModel.isAnnouncing.collectAsState()
     val announceSuccess by announceViewModel.announceSuccess.collectAsState()
     val announceError by announceViewModel.announceError.collectAsState()
-    var showNodeTypeFilterDialog by remember { mutableStateOf(false) }
     var showNetworkOverflowMenu by remember { mutableStateOf(false) }
     var showClearAllAnnouncesDialog by remember { mutableStateOf(false) }
 
@@ -285,13 +280,6 @@ fun ContactsScreen(
                                         contentDescription = "Announce now",
                                     )
                                 }
-                            }
-                            // Filter button
-                            IconButton(onClick = { showNodeTypeFilterDialog = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.FilterList,
-                                    contentDescription = "Filter node types",
-                                )
                             }
                             // Overflow menu
                             Box {
@@ -878,22 +866,6 @@ fun ContactsScreen(
             },
             onRemoveContact = {
                 viewModel.deleteContact(pendingContact.destinationHash)
-            },
-        )
-    }
-
-    // Node type filter dialog (for Network tab)
-    if (showNodeTypeFilterDialog) {
-        NodeTypeFilterDialog(
-            selectedTypes = selectedNodeTypes,
-            showAudio = showAudioAnnounces,
-            selectedInterfaceTypes = selectedInterfaceTypes,
-            onDismiss = { showNodeTypeFilterDialog = false },
-            onConfirm = { newSelection, newShowAudio, newInterfaceTypes ->
-                announceViewModel.updateSelectedNodeTypes(newSelection)
-                announceViewModel.updateShowAudioAnnounces(newShowAudio)
-                announceViewModel.updateSelectedInterfaceTypes(newInterfaceTypes)
-                showNodeTypeFilterDialog = false
             },
         )
     }

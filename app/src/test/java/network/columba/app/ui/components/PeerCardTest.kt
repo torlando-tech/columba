@@ -396,8 +396,8 @@ class PeerCardTest {
             )
         }
 
-        // Then - should display "Node" as default (else branch)
-        composeTestRule.onNodeWithText("Node").assertIsDisplayed()
+        // Then - should display "Site" as default (else branch)
+        composeTestRule.onNodeWithText("Site").assertIsDisplayed()
     }
 
     // ========== Signal Strength Indicator Tests ==========

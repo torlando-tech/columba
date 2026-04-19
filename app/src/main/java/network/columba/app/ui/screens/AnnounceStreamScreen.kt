@@ -1,7 +1,6 @@
 package network.columba.app.ui.screens
 
 import android.widget.Toast
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,22 +9,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
@@ -34,8 +29,6 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -68,16 +61,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
-import network.columba.app.data.model.InterfaceType
+import kotlinx.coroutines.launch
 import network.columba.app.data.repository.Announce
 import network.columba.app.reticulum.model.NodeType
+import network.columba.app.ui.components.AnnounceFilterChips
 import network.columba.app.ui.components.NodeTypeBadge
 import network.columba.app.ui.components.OtherBadge
 import network.columba.app.ui.components.PeerCard
 import network.columba.app.ui.components.SearchableTopAppBar
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.viewmodel.AnnounceStreamViewModel
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,9 +107,6 @@ fun AnnounceStreamScreen(
     // Context menu state
     var showContextMenu by remember { mutableStateOf(false) }
     var contextMenuAnnounce by remember { mutableStateOf<Announce?>(null) }
-
-    // Filter dialog state
-    var showFilterDialog by remember { mutableStateOf(false) }
 
     // Delete dialog state
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -191,14 +181,6 @@ fun AnnounceStreamScreen(
                             )
                         }
                     }
-                    // Filter button
-                    IconButton(onClick = { showFilterDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = "Filter node types",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
                     // Overflow menu
                     Box {
                         IconButton(onClick = { showOverflowMenu = true }) {
@@ -237,131 +219,126 @@ fun AnnounceStreamScreen(
             )
         },
     ) { paddingValues ->
-        Box(
-            modifier = Modifier.fillMaxSize(),
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .consumeWindowInsets(paddingValues),
         ) {
-            if (pagingItems.itemCount == 0) {
-                EmptyAnnounceState(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
-                )
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                            .consumeWindowInsets(paddingValues)
-                            .simpleVerticalScrollbar(listState),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(
-                        count = pagingItems.itemCount,
-                        key = pagingItems.stableKey(),
-                    ) { index ->
-                        val announce = pagingItems[index]
-                        if (announce != null) {
-                            Box {
-                                AnnounceCard(
-                                    announce = announce,
-                                    onClick = {
-                                        onPeerClick(announce.destinationHash, announce.peerName)
-                                    },
-                                    onFavoriteClick = {
-                                        viewModel.toggleContact(announce.destinationHash)
-                                    },
-                                    onLongPress = {
-                                        contextMenuAnnounce = announce
-                                        showContextMenu = true
-                                    },
-                                )
-
-                                // Show context menu for this announce
-                                if (showContextMenu && contextMenuAnnounce == announce) {
-                                    PeerContextMenu(
-                                        expanded = true,
-                                        onDismiss = { showContextMenu = false },
+            AnnounceFilterChips(
+                selectedNodeTypes = selectedNodeTypes,
+                showAudio = showAudioAnnounces,
+                selectedInterfaceTypes = selectedInterfaceTypes,
+                onNodeTypesChange = viewModel::updateSelectedNodeTypes,
+                onShowAudioChange = viewModel::updateShowAudioAnnounces,
+                onInterfaceTypesChange = viewModel::updateSelectedInterfaceTypes,
+            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (pagingItems.itemCount == 0) {
+                    EmptyAnnounceState(
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .simpleVerticalScrollbar(listState),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            count = pagingItems.itemCount,
+                            key = pagingItems.stableKey(),
+                        ) { index ->
+                            val announce = pagingItems[index]
+                            if (announce != null) {
+                                Box {
+                                    AnnounceCard(
                                         announce = announce,
-                                        onToggleFavorite = {
-                                            viewModel.toggleContact(announce.destinationHash)
-                                        },
-                                        onStartChat = {
-                                            onStartChat(announce.destinationHash, announce.peerName)
-                                        },
-                                        onViewDetails = {
+                                        onClick = {
                                             onPeerClick(announce.destinationHash, announce.peerName)
                                         },
-                                        onDeleteAnnounce = {
-                                            announceToDelete = announce
-                                            showDeleteDialog = true
+                                        onFavoriteClick = {
+                                            viewModel.toggleContact(announce.destinationHash)
+                                        },
+                                        onLongPress = {
+                                            contextMenuAnnounce = announce
+                                            showContextMenu = true
                                         },
                                     )
+
+                                    // Show context menu for this announce
+                                    if (showContextMenu && contextMenuAnnounce == announce) {
+                                        PeerContextMenu(
+                                            expanded = true,
+                                            onDismiss = { showContextMenu = false },
+                                            announce = announce,
+                                            onToggleFavorite = {
+                                                viewModel.toggleContact(announce.destinationHash)
+                                            },
+                                            onStartChat = {
+                                                onStartChat(announce.destinationHash, announce.peerName)
+                                            },
+                                            onViewDetails = {
+                                                onPeerClick(announce.destinationHash, announce.peerName)
+                                            },
+                                            onDeleteAnnounce = {
+                                                announceToDelete = announce
+                                                showDeleteDialog = true
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
+
+                        // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
+                        item {
+                            Spacer(modifier = Modifier.height(100.dp))
+                        }
                     }
 
-                    // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
-                    item {
-                        Spacer(modifier = Modifier.height(100.dp))
-                    }
-                }
-
-                // New announces indicator button
-                if (newAnnouncesCount > 0) {
-                    FloatingActionButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                listState.animateScrollToItem(0)
-                                newAnnouncesCount = 0
-                            }
-                        },
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = paddingValues.calculateTopPadding() + 8.dp),
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                    // New announces indicator button
+                    if (newAnnouncesCount > 0) {
+                        FloatingActionButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(0)
+                                    newAnnouncesCount = 0
+                                }
+                            },
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 8.dp),
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Scroll to top",
-                            )
-                            Text(
-                                text = "$newAnnouncesCount",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowUp,
+                                    contentDescription = "Scroll to top",
+                                )
+                                Text(
+                                    text = "$newAnnouncesCount",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    // Show filter dialog
-    if (showFilterDialog) {
-        NodeTypeFilterDialog(
-            selectedTypes = selectedNodeTypes,
-            showAudio = showAudioAnnounces,
-            selectedInterfaceTypes = selectedInterfaceTypes,
-            onDismiss = { showFilterDialog = false },
-            onConfirm = { newSelection, newShowAudio, newInterfaceTypes ->
-                viewModel.updateSelectedNodeTypes(newSelection)
-                viewModel.updateShowAudioAnnounces(newShowAudio)
-                viewModel.updateSelectedInterfaceTypes(newInterfaceTypes)
-                showFilterDialog = false
-            },
-        )
     }
 
     // Delete announce confirmation dialog
@@ -393,230 +370,6 @@ fun AnnounceStreamScreen(
             },
         )
     }
-}
-
-@Composable
-fun NodeTypeFilterDialog(
-    selectedTypes: Set<NodeType>,
-    showAudio: Boolean,
-    selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
-    onDismiss: () -> Unit,
-    onConfirm: (Set<NodeType>, Boolean, Set<InterfaceType>) -> Unit,
-) {
-    var tempSelection by remember { mutableStateOf(selectedTypes) }
-    var tempShowAudio by remember { mutableStateOf(showAudio) }
-    var tempInterfaceSelection by remember { mutableStateOf(selectedInterfaceTypes) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Filter Announces",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "Node Types",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-
-                // Checkbox for each node type (PHONE is shown via the audio toggle, not here)
-                NodeType.entries.filter { it != NodeType.PHONE }.forEach { nodeType ->
-                    val (displayName, description) =
-                        when (nodeType) {
-                            NodeType.NODE -> "Node" to "Nomadnet nodes"
-                            NodeType.PEER -> "Peer" to "Nodes you can message with"
-                            NodeType.PROPAGATION_NODE -> "Relay" to "Relay/repeater nodes for signal propagation"
-                            NodeType.PHONE -> error("PHONE filtered above")
-                        }
-
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    tempSelection =
-                                        if (tempSelection.contains(nodeType)) {
-                                            tempSelection - nodeType
-                                        } else {
-                                            tempSelection + nodeType
-                                        }
-                                }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Checkbox(
-                            checked = tempSelection.contains(nodeType),
-                            onCheckedChange = { isChecked ->
-                                tempSelection =
-                                    if (isChecked) {
-                                        tempSelection + nodeType
-                                    } else {
-                                        tempSelection - nodeType
-                                    }
-                            },
-                            colors =
-                                CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.tertiary,
-                                    checkmarkColor = MaterialTheme.colorScheme.onTertiary,
-                                ),
-                        )
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
-                // Audio announces filter
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                tempShowAudio = !tempShowAudio
-                            }.padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Checkbox(
-                        checked = tempShowAudio,
-                        onCheckedChange = { tempShowAudio = it },
-                        colors =
-                            CheckboxDefaults.colors(
-                                checkedColor = MaterialTheme.colorScheme.error,
-                                checkmarkColor = MaterialTheme.colorScheme.onError,
-                            ),
-                    )
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Audio",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = "Show audio call announces",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Interface type filter section
-                Text(
-                    text = "Interface",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-
-                Text(
-                    text = "Filter by receiving interface (none selected = show all):",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Filterable interface types (exclude UNKNOWN for cleaner UX)
-                val interfaceTypes =
-                    listOf(
-                        InterfaceType.AUTO_INTERFACE to ("Local" to "AutoInterface (IPv6 link-local)"),
-                        InterfaceType.TCP_CLIENT to ("TCP" to "TCP connections (backbone links)"),
-                        InterfaceType.ANDROID_BLE to ("Bluetooth" to "Bluetooth Low Energy"),
-                        InterfaceType.RNODE to ("RNode" to "RNode radio interface"),
-                        InterfaceType.UNKNOWN to ("Other" to "Unknown or unrecognized interfaces"),
-                    )
-
-                interfaceTypes.forEach { (interfaceType, nameDesc) ->
-                    val (displayName, description) = nameDesc
-
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    tempInterfaceSelection =
-                                        if (tempInterfaceSelection.contains(interfaceType)) {
-                                            tempInterfaceSelection - interfaceType
-                                        } else {
-                                            tempInterfaceSelection + interfaceType
-                                        }
-                                }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Checkbox(
-                            checked = tempInterfaceSelection.contains(interfaceType),
-                            onCheckedChange = { isChecked ->
-                                tempInterfaceSelection =
-                                    if (isChecked) {
-                                        tempInterfaceSelection + interfaceType
-                                    } else {
-                                        tempInterfaceSelection - interfaceType
-                                    }
-                            },
-                            colors =
-                                CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.secondary,
-                                    checkmarkColor = MaterialTheme.colorScheme.onSecondary,
-                                ),
-                        )
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(tempSelection, tempShowAudio, tempInterfaceSelection) },
-            ) {
-                Text("Apply")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
 }
 
 @androidx.compose.runtime.Stable
@@ -754,6 +507,9 @@ fun AnnounceStreamContent(
     modifier: Modifier = Modifier,
 ) {
     val pagingItems = viewModel.announces.collectAsLazyPagingItems()
+    val selectedNodeTypes by viewModel.selectedNodeTypes.collectAsState()
+    val showAudioAnnounces by viewModel.showAudioAnnounces.collectAsState()
+    val selectedInterfaceTypes by viewModel.selectedInterfaceTypes.collectAsState()
 
     // Context menu state
     var showContextMenu by remember { mutableStateOf(false) }
@@ -809,78 +565,88 @@ fun AnnounceStreamContent(
     // This prevents flickering when new announces arrive and trigger a refresh
     val isLoading = pagingItems.loadState.refresh is androidx.paging.LoadState.Loading
 
-    when {
-        isLoading && pagingItems.itemCount == 0 -> {
-            LoadingNetworkState(modifier = modifier.fillMaxSize())
-        }
-        !isLoading && pagingItems.itemCount == 0 -> {
-            EmptyAnnounceState(modifier = modifier.fillMaxSize())
-        }
-        else -> {
-            LazyColumn(
-                state = listState,
-                modifier =
-                    modifier
-                        .fillMaxSize()
-                        .simpleVerticalScrollbar(listState),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(
-                    count = pagingItems.itemCount,
-                    key = pagingItems.stableKey(),
-                ) { index ->
-                    val announce = pagingItems[index]
-                    if (announce != null) {
-                        Box {
-                            AnnounceCard(
-                                announce = announce,
-                                onClick = {
-                                    onPeerClick(announce.destinationHash, announce.peerName)
-                                },
-                                onFavoriteClick = {
-                                    viewModel.toggleContact(announce.destinationHash)
-                                },
-                                onLongPress = {
-                                    contextMenuAnnounce = announce
-                                    showContextMenu = true
-                                },
-                            )
-
-                            // Show context menu for this announce
-                            if (showContextMenu && contextMenuAnnounce == announce) {
-                                PeerContextMenu(
-                                    expanded = true,
-                                    onDismiss = { showContextMenu = false },
+    Column(modifier = modifier.fillMaxSize()) {
+        AnnounceFilterChips(
+            selectedNodeTypes = selectedNodeTypes,
+            showAudio = showAudioAnnounces,
+            selectedInterfaceTypes = selectedInterfaceTypes,
+            onNodeTypesChange = viewModel::updateSelectedNodeTypes,
+            onShowAudioChange = viewModel::updateShowAudioAnnounces,
+            onInterfaceTypesChange = viewModel::updateSelectedInterfaceTypes,
+        )
+        when {
+            isLoading && pagingItems.itemCount == 0 -> {
+                LoadingNetworkState(modifier = Modifier.fillMaxSize())
+            }
+            !isLoading && pagingItems.itemCount == 0 -> {
+                EmptyAnnounceState(modifier = Modifier.fillMaxSize())
+            }
+            else -> {
+                LazyColumn(
+                    state = listState,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .simpleVerticalScrollbar(listState),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(
+                        count = pagingItems.itemCount,
+                        key = pagingItems.stableKey(),
+                    ) { index ->
+                        val announce = pagingItems[index]
+                        if (announce != null) {
+                            Box {
+                                AnnounceCard(
                                     announce = announce,
-                                    onToggleFavorite = {
-                                        viewModel.toggleContact(announce.destinationHash)
-                                    },
-                                    onStartChat = {
-                                        onStartChat(announce.destinationHash, announce.peerName)
-                                    },
-                                    onViewDetails = {
+                                    onClick = {
                                         onPeerClick(announce.destinationHash, announce.peerName)
                                     },
-                                    onDeleteAnnounce = {
-                                        announceToDelete = announce
-                                        showDeleteDialog = true
+                                    onFavoriteClick = {
+                                        viewModel.toggleContact(announce.destinationHash)
+                                    },
+                                    onLongPress = {
+                                        contextMenuAnnounce = announce
+                                        showContextMenu = true
                                     },
                                 )
+
+                                // Show context menu for this announce
+                                if (showContextMenu && contextMenuAnnounce == announce) {
+                                    PeerContextMenu(
+                                        expanded = true,
+                                        onDismiss = { showContextMenu = false },
+                                        announce = announce,
+                                        onToggleFavorite = {
+                                            viewModel.toggleContact(announce.destinationHash)
+                                        },
+                                        onStartChat = {
+                                            onStartChat(announce.destinationHash, announce.peerName)
+                                        },
+                                        onViewDetails = {
+                                            onPeerClick(announce.destinationHash, announce.peerName)
+                                        },
+                                        onDeleteAnnounce = {
+                                            announceToDelete = announce
+                                            showDeleteDialog = true
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                // Bottom spacing for navigation bar
-                item {
-                    Spacer(modifier = Modifier.height(100.dp))
+                    // Bottom spacing for navigation bar
+                    item {
+                        Spacer(modifier = Modifier.height(100.dp))
+                    }
                 }
             }
         }
     }
 
-    // Delete announce confirmation dialog
+    // Delete announce confirmation dialog (sibling of Column — outside filter chip surface)
     val announceForDelete = announceToDelete
     if (showDeleteDialog && announceForDelete != null) {
         DeleteAnnounceDialog(

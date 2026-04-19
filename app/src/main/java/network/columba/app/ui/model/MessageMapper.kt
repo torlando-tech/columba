@@ -534,9 +534,18 @@ private fun parseFileAttachments(fieldsJson: String?): List<FileAttachmentUi> {
 /**
  * Parse a JSONArray of file attachments into FileAttachmentUi objects.
  *
- * Expected format: [{"filename": "doc.pdf", "size": 12345, "data": "hex..."}, ...]
+ * Two element formats are accepted:
+ *  1. Object: {"filename": "doc.pdf", "size": 12345, "data": "hex..."}
+ *     or {"filename": "...", "size": ..., "_data_ref": "/path"} — used by
+ *     Columba's on-disk optimized storage.
+ *  2. Positional array (LXMF wire format from Sideband and other apps):
+ *     [filename_string, data_hex_string] — 2-element tuple.
+ *     Sideband serializes FIELD_FILE_ATTACHMENTS this way, so an inbound
+ *     image-only message from Sideband hits this branch. Without it,
+ *     `getJSONObject(i)` throws typeMismatch, the attachment is dropped
+ *     silently, and the chat bubble renders empty.
  *
- * @param attachmentsArray JSONArray containing file attachment objects
+ * @param attachmentsArray JSONArray containing file attachment entries
  * @return List of FileAttachmentUi with metadata
  */
 private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAttachmentUi> {
@@ -544,19 +553,17 @@ private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAtt
 
     for (i in 0 until attachmentsArray.length()) {
         try {
-            val attachment = attachmentsArray.getJSONObject(i)
-            val filename = attachment.optString("filename", "unknown")
-            val sizeBytes = attachment.optInt("size", 0)
-            val mimeType = FileUtils.getMimeTypeFromFilename(filename)
-
-            result.add(
-                FileAttachmentUi(
-                    filename = filename,
-                    sizeBytes = sizeBytes,
-                    mimeType = mimeType,
-                    index = i,
-                ),
-            )
+            val entry = attachmentsArray.opt(i) ?: continue
+            val parsed =
+                when (entry) {
+                    is JSONObject -> parseObjectAttachment(entry, i)
+                    is JSONArray -> parsePositionalAttachment(entry, i)
+                    else -> {
+                        Log.w(TAG, "Unknown file attachment entry type at $i: ${entry::class.java.simpleName}")
+                        null
+                    }
+                }
+            if (parsed != null) result.add(parsed)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse file attachment at index $i", e)
             // Skip this attachment and continue with the rest
@@ -564,6 +571,42 @@ private fun parseFileAttachmentsArray(attachmentsArray: JSONArray): List<FileAtt
     }
 
     return result
+}
+
+private fun parseObjectAttachment(
+    attachment: JSONObject,
+    index: Int,
+): FileAttachmentUi {
+    val filename = attachment.optString("filename", "unknown")
+    val sizeBytes = attachment.optInt("size", 0)
+    return FileAttachmentUi(
+        filename = filename,
+        sizeBytes = sizeBytes,
+        mimeType = FileUtils.getMimeTypeFromFilename(filename),
+        index = index,
+    )
+}
+
+private fun parsePositionalAttachment(
+    entry: JSONArray,
+    index: Int,
+): FileAttachmentUi? {
+    if (entry.length() < 2) {
+        Log.w(TAG, "Positional file attachment at $index has ${entry.length()} elements, expected >= 2")
+        return null
+    }
+    val filename = entry.optString(0, "unknown").ifEmpty { "unknown" }
+    // Data is hex-encoded; each byte is 2 hex chars. If a size field is
+    // provided as element [2] prefer it, otherwise infer from the hex
+    // length — matches the observed Sideband wire payload exactly.
+    val dataHexLen = entry.optString(1).length
+    val sizeBytes = entry.optInt(2, dataHexLen / 2)
+    return FileAttachmentUi(
+        filename = filename,
+        sizeBytes = sizeBytes,
+        mimeType = FileUtils.getMimeTypeFromFilename(filename),
+        index = index,
+    )
 }
 
 /**
@@ -579,9 +622,12 @@ private const val BINARY_REF_KEY = "_binary_ref"
 /**
  * Load file attachment data by index.
  *
- * Supports two formats:
- * 1. Inline data from Sideband: {"data": "hex..."}
- * 2. Optimized format: {"_data_ref": "/path/to/5_0"} (per-file disk storage)
+ * Supports three formats:
+ * 1. Object with inline hex: {"data": "hex..."}
+ * 2. Object with on-disk ref: {"_data_ref": "/path/to/5_0"} (Columba's
+ *    optimized per-file storage) or {"_binary_ref": "..."}.
+ * 3. LXMF positional wire format (from Sideband and the reference
+ *    LXMF lib): [filename, data_hex_string]. The hex is at element [1].
  *
  * IMPORTANT: This performs disk I/O and may return large byte arrays.
  * Must be called from a background thread.
@@ -606,40 +652,71 @@ fun loadFileAttachmentData(
             return null
         }
 
-        val attachment = attachmentsArray.getJSONObject(index)
-
-        // Binary format: raw binary data on disk (large attachments from Python staging)
-        if (attachment.has(BINARY_REF_KEY)) {
-            val filePath = attachment.getString(BINARY_REF_KEY)
-            return loadBinaryFromDisk(filePath)?.also {
-                Log.d(TAG, "Loaded file attachment at index $index from binary ref (${it.size} bytes)")
+        // Dispatch on entry shape — positional wire format vs. object
+        // format. Must match parseFileAttachmentsArray.
+        when (val entry = attachmentsArray.opt(index)) {
+            is JSONObject -> loadFileAttachmentDataFromObject(entry, index)
+            is JSONArray -> loadFileAttachmentDataFromPositional(entry, index)
+            else -> {
+                Log.w(TAG, "File attachment at $index has unexpected type: ${entry?.javaClass?.simpleName}")
+                null
             }
         }
-
-        // Optimized format: hex data stored per-file on disk
-        if (attachment.has(DATA_REF_KEY)) {
-            val filePath = attachment.getString(DATA_REF_KEY)
-            val hexData = loadAttachmentFromDisk(filePath) ?: return null
-            return hexStringToByteArray(hexData).also {
-                Log.d(TAG, "Loaded file attachment at index $index from disk (${it.size} bytes)")
-            }
-        }
-
-        // Inline data format (from Sideband or small files)
-        val hexData = attachment.optString("data", "")
-        if (hexData.isEmpty()) {
-            Log.w(TAG, "File attachment at index $index has no data")
-            return null
-        }
-
-        // Convert hex string to bytes efficiently (avoid chunked/map overhead for large files)
-        hexStringToByteArray(hexData)
-            .also {
-                Log.d(TAG, "Loaded file attachment at index $index inline (${it.size} bytes)")
-            }
     } catch (e: Exception) {
         Log.e(TAG, "Failed to load file attachment data at index $index", e)
         null
+    }
+}
+
+@Suppress("ReturnCount")
+private fun loadFileAttachmentDataFromObject(
+    attachment: JSONObject,
+    index: Int,
+): ByteArray? {
+    // Binary format: raw binary data on disk (large attachments from Python staging)
+    if (attachment.has(BINARY_REF_KEY)) {
+        val filePath = attachment.getString(BINARY_REF_KEY)
+        return loadBinaryFromDisk(filePath)?.also {
+            Log.d(TAG, "Loaded file attachment at index $index from binary ref (${it.size} bytes)")
+        }
+    }
+
+    // Optimized format: hex data stored per-file on disk
+    if (attachment.has(DATA_REF_KEY)) {
+        val filePath = attachment.getString(DATA_REF_KEY)
+        val hexData = loadAttachmentFromDisk(filePath) ?: return null
+        return hexStringToByteArray(hexData).also {
+            Log.d(TAG, "Loaded file attachment at index $index from disk (${it.size} bytes)")
+        }
+    }
+
+    // Inline data format (from Sideband-style objects or small files)
+    val hexData = attachment.optString("data", "")
+    if (hexData.isEmpty()) {
+        Log.w(TAG, "File attachment at index $index has no data")
+        return null
+    }
+
+    return hexStringToByteArray(hexData).also {
+        Log.d(TAG, "Loaded file attachment at index $index inline (${it.size} bytes)")
+    }
+}
+
+private fun loadFileAttachmentDataFromPositional(
+    entry: JSONArray,
+    index: Int,
+): ByteArray? {
+    if (entry.length() < 2) {
+        Log.w(TAG, "Positional file attachment at $index has ${entry.length()} elements, need >= 2")
+        return null
+    }
+    val hexData = entry.optString(1, "")
+    if (hexData.isEmpty()) {
+        Log.w(TAG, "Positional file attachment at $index has empty data")
+        return null
+    }
+    return hexStringToByteArray(hexData).also {
+        Log.d(TAG, "Loaded positional file attachment at index $index (${it.size} bytes)")
     }
 }
 
@@ -675,8 +752,20 @@ fun loadFileAttachmentMetadata(
             return null
         }
 
-        val attachment = attachmentsArray.getJSONObject(index)
-        val filename = attachment.optString("filename", "unknown")
+        // Must handle both shapes that parseFileAttachmentsArray accepts.
+        // Anything else (e.g. a bare string) is treated as malformed and
+        // returns null — same as pre-fix behavior.
+        val filename =
+            when (val entry = attachmentsArray.opt(index)) {
+                is JSONObject -> entry.optString("filename", "unknown")
+                is JSONArray ->
+                    if (entry.length() >= 1) {
+                        entry.optString(0, "unknown").ifEmpty { "unknown" }
+                    } else {
+                        return null
+                    }
+                else -> return null
+            }
         val mimeType = FileUtils.getMimeTypeFromFilename(filename)
 
         FileAttachmentInfo(filename = filename, mimeType = mimeType)

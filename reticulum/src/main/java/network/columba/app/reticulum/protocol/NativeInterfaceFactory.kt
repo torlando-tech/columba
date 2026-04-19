@@ -5,7 +5,6 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -137,8 +136,9 @@ internal object NativeInterfaceFactory {
      * the [notifyListeners] call in [registerAndTrack] (which emits a
      * snapshot with `online=${iface.online.value}`), so we drop(1) to
      * avoid a duplicate no-op notify for the initial replay StateFlow
-     * hands out on subscribe. [distinctUntilChanged] then coalesces any
-     * redundant writes from the subclass implementation.
+     * hands out on subscribe. StateFlow itself guarantees structural-equality
+     * deduplication at the emitter, so no explicit distinctUntilChanged() is
+     * needed here.
      */
     private fun observeOnlineState(
         name: String,
@@ -150,7 +150,6 @@ internal object NativeInterfaceFactory {
         val job =
             iface.online
                 .drop(1)
-                .distinctUntilChanged()
                 .onEach { online ->
                     Log.d(TAG, "Interface $name online → $online")
                     notifyListeners()

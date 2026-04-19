@@ -48,7 +48,10 @@ class NativeTelemetryHandlerTest {
         content: String = "",
         fields: Map<Int, Any> = emptyMap(),
     ): LXMessage {
-        val message = mockk<LXMessage>(relaxed = true)
+        // Strict mock (no relaxed = true, per NoRelaxedMocks detekt rule):
+        // handleIncomingTelemetry only reads these three fields off the
+        // message, so stub exactly those and nothing more.
+        val message = mockk<LXMessage>()
         every { message.content } returns content
         every { message.fields } returns fields.toMutableMap()
         every { message.sourceHash } returns ByteArray(16) { it.toByte() }
@@ -132,18 +135,44 @@ class NativeTelemetryHandlerTest {
         // A FIELD_TELEMETRY entry carrying a location record is the other
         // classification path that can flip isLocationOnlyMessage to true;
         // make sure it also respects attachment content.
-        val telemetryBlob = ByteArray(16) { it.toByte() }
+        //
+        // `unpackLocationTelemetryField` accepts either msgpack bytes or a
+        // JSON string. We use the JSON-string branch so this test exercises
+        // a *real* location-payload path — a short arbitrary ByteArray would
+        // fail to parse as msgpack, leaving locationEvent = null and the
+        // assertFalse passing even without the fix (i.e. not actually pinning
+        // the guarded behavior).
+        val locationJson = """{"latitude":37.7749,"longitude":-122.4194,"altitude":15.0}"""
         val message =
             mockMessage(
                 content = "",
                 fields =
                     mapOf(
-                        LXMFConstants.FIELD_TELEMETRY to telemetryBlob,
+                        LXMFConstants.FIELD_TELEMETRY to locationJson,
                         LXMFConstants.FIELD_IMAGE to listOf("webp", ByteArray(100)),
                     ),
             )
         assertFalse(
             "Message with image + telemetry (location payload) was dropped",
+            handler.handleIncomingTelemetry(message, timestamp = 0L),
+        )
+    }
+
+    @Test
+    fun `empty content plus FIELD_TELEMETRY location alone is location-only`() {
+        // Companion to the test above: prove the FIELD_TELEMETRY path
+        // DOES flip isLocationOnly in the absence of attachments. Catches
+        // regressions where a future refactor leaves the location branch
+        // permanently unreachable.
+        val locationJson = """{"latitude":37.7749,"longitude":-122.4194}"""
+        val message =
+            mockMessage(
+                content = "",
+                fields = mapOf(LXMFConstants.FIELD_TELEMETRY to locationJson),
+            )
+        assertTrue(
+            "Location-only message (FIELD_TELEMETRY with location, no text, no attachment) " +
+                "was not classified as location-only — the classification path is broken",
             handler.handleIncomingTelemetry(message, timestamp = 0L),
         )
     }

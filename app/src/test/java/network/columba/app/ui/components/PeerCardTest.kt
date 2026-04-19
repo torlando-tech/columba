@@ -396,7 +396,8 @@ class PeerCardTest {
             )
         }
 
-        // Then - should display "Node" as default (else branch)
+        // Then - unknown node types fall through to "Node" (protocol default),
+        // not "Site" (which is reserved for known NomadNet nodes).
         composeTestRule.onNodeWithText("Node").assertIsDisplayed()
     }
 

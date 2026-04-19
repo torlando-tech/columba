@@ -43,13 +43,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshLimited
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.util.formatTimeSince
-import kotlinx.coroutines.delay
 
 /**
  * Shared peer card component used by both AnnounceStreamScreen and SavedPeersScreen.
@@ -299,10 +299,12 @@ fun InterfaceTypeIcon(
 fun NodeTypeBadge(nodeType: String) {
     val (text, color) =
         when (nodeType) {
-            "NODE" -> "Node" to MaterialTheme.colorScheme.tertiary
+            "NODE" -> "Site" to MaterialTheme.colorScheme.tertiary
             "PEER" -> "Peer" to MaterialTheme.colorScheme.primary
             "PROPAGATION_NODE" -> "Relay" to MaterialTheme.colorScheme.secondary
             "PHONE" -> "Phone" to MaterialTheme.colorScheme.error
+            // Unknown/future node types: keep protocol terminology rather than
+            // silently aliasing to "Site", which is reserved for NomadNet nodes.
             else -> "Node" to MaterialTheme.colorScheme.tertiary
         }
 

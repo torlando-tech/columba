@@ -8,11 +8,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.paging.PagingData
-import network.columba.app.data.model.InterfaceType
-import network.columba.app.data.repository.Announce
-import network.columba.app.reticulum.model.NodeType
-import network.columba.app.test.RegisterComponentActivityRule
-import network.columba.app.viewmodel.AnnounceStreamViewModel
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -20,6 +15,12 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import network.columba.app.data.model.InterfaceType
+import network.columba.app.data.repository.Announce
+import network.columba.app.reticulum.model.NodeType
+import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.viewmodel.AnnounceStreamViewModel
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -77,17 +78,6 @@ class AnnounceStreamScreenTest {
         }
 
         composeTestRule.onNodeWithContentDescription("Announce now").assertIsDisplayed()
-    }
-
-    @Test
-    fun announceStreamScreen_displaysFilterButton() {
-        val mockViewModel = createMockAnnounceStreamViewModel()
-
-        composeTestRule.setContent {
-            AnnounceStreamScreen(viewModel = mockViewModel)
-        }
-
-        composeTestRule.onNodeWithContentDescription("Filter node types").assertIsDisplayed()
     }
 
     // ========== Announce Button Tests ==========
@@ -197,72 +187,109 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithText("Listening for announces...").assertIsDisplayed()
     }
 
-    // ========== Filter Dialog Tests ==========
+    // ========== Filter Chip Tests ==========
 
     @Test
-    fun filterButton_click_opensFilterDialog() {
+    fun filterChips_alwaysVisibleAboveList() {
         val mockViewModel = createMockAnnounceStreamViewModel()
 
         composeTestRule.setContent {
             AnnounceStreamScreen(viewModel = mockViewModel)
         }
 
-        // Click filter button
-        composeTestRule.onNodeWithContentDescription("Filter node types").performClick()
-
-        // Filter dialog should appear
-        composeTestRule.onNodeWithText("Filter Announces").assertIsDisplayed()
+        // Chip rows should render without any interaction — aspect row labels.
+        composeTestRule.onNodeWithText("Peers").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sites").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Relays").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Audio").assertIsDisplayed()
     }
 
     @Test
-    fun filterDialog_displaysNodeTypeOptions() {
+    fun filterChips_displayInterfaceOptions() {
         val mockViewModel = createMockAnnounceStreamViewModel()
 
         composeTestRule.setContent {
             AnnounceStreamScreen(viewModel = mockViewModel)
         }
 
-        // Open filter dialog
-        composeTestRule.onNodeWithContentDescription("Filter node types").performClick()
-
-        // Verify node type options are displayed
-        composeTestRule.onNodeWithText("Node").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Peer").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Relay").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Local").assertIsDisplayed()
+        composeTestRule.onNodeWithText("TCP").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Bluetooth").assertIsDisplayed()
+        composeTestRule.onNodeWithText("RNode").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Other").assertIsDisplayed()
     }
 
     @Test
-    fun nodeTypeFilterDialog_standalone_displaysCorrectly() {
+    fun filterChips_tappingAspect_callsViewModel() {
+        val mockViewModel = createMockAnnounceStreamViewModel()
+        var capturedTypes: Set<NodeType>? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+
         composeTestRule.setContent {
-            NodeTypeFilterDialog(
-                selectedTypes = setOf(NodeType.PEER),
-                showAudio = true,
-                onDismiss = {},
-                onConfirm = { _, _, _ -> },
-            )
+            AnnounceStreamScreen(viewModel = mockViewModel)
         }
 
-        composeTestRule.onNodeWithText("Filter Announces").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Node Types").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Node").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Peer").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Relay").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sites").performClick()
+
+        verify { mockViewModel.updateSelectedNodeTypes(match { it.contains(NodeType.NODE) }) }
+        assertTrue(
+            "updateSelectedNodeTypes should have been called with a set containing NODE",
+            capturedTypes?.contains(NodeType.NODE) == true,
+        )
     }
 
     @Test
-    fun nodeTypeFilterDialog_displaysAudioOption() {
-        composeTestRule.setContent {
-            NodeTypeFilterDialog(
-                selectedTypes = setOf(NodeType.PEER),
-                showAudio = true,
-                onDismiss = {},
-                onConfirm = { _, _, _ -> },
+    fun filterChips_deselectingLastAspect_snapsBackToAll() {
+        // Single aspect selected: PEER only, audio off → activeAspects = {PEER}.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedNodeTypes = setOf(NodeType.PEER),
+                showAudioAnnounces = false,
             )
+        var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
         }
 
-        // Audio option may require scrolling, so check existence rather than displayed
-        composeTestRule.onNodeWithText("Audio").assertExists()
-        composeTestRule.onNodeWithText("Show audio call announces").assertExists()
+        // Tapping the only active chip would leave no aspect selected;
+        // the component should snap to ALL (node types + audio) instead of producing an empty filter.
+        composeTestRule.onNodeWithText("Peers").performClick()
+
+        assertEquals(
+            "Deselecting the last active aspect should snap to all node types, not empty",
+            setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
+            capturedTypes,
+        )
+        assertEquals(
+            "Snap-back should also re-enable showAudioAnnounces to match All-chip semantics",
+            true,
+            capturedShowAudio,
+        )
+    }
+
+    @Test
+    fun filterChips_tappingInterface_callsViewModel() {
+        val mockViewModel = createMockAnnounceStreamViewModel()
+        var capturedInterfaces: Set<InterfaceType>? = null
+        every {
+            mockViewModel.updateSelectedInterfaceTypes(any())
+        } answers { capturedInterfaces = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("TCP").performClick()
+
+        verify { mockViewModel.updateSelectedInterfaceTypes(setOf(InterfaceType.TCP_CLIENT)) }
+        assertTrue(
+            "updateSelectedInterfaceTypes should have been called with TCP_CLIENT",
+            capturedInterfaces == setOf(InterfaceType.TCP_CLIENT),
+        )
     }
 
     // ========== Test Helpers ==========

@@ -65,9 +65,11 @@ object DatabaseModule {
                 // changed while a transaction is active (it raises SQLITE_ERROR: "Safety
                 // level may not be changed inside a transaction"). Room's InvalidationTracker
                 // can invoke onCreate() from within an internal transaction, so we guard
-                // these two PRAGMAs with an inTransaction() check. onOpen() is always called
-                // outside of a transaction, so the PRAGMAs will always be applied on
-                // subsequent database opens, even if they were skipped during onCreate().
+                // these two PRAGMAs with an inTransaction() check. onOpen() is typically
+                // called outside of a transaction in current Room versions, so the skipped
+                // PRAGMAs get applied on the next open. The guard is also our defense if
+                // a future Room version ever calls onOpen() transactionally — we'd just
+                // log the skip instead of crashing.
                 if (!db.inTransaction()) {
                     db.query("PRAGMA journal_mode=WAL").use { cursor ->
                         if (cursor.moveToFirst() && !cursor.getString(0).equals("wal", ignoreCase = true)) {
@@ -77,6 +79,12 @@ object DatabaseModule {
                     db.query("PRAGMA synchronous=FULL").use {
                         /* drain row */ it.moveToFirst()
                     }
+                } else {
+                    Log.d(
+                        "Columba/DB",
+                        "applyPragmas: inside transaction, skipping journal_mode and synchronous " +
+                            "(will retry on next transaction-free callback)",
+                    )
                 }
                 db.query("PRAGMA wal_autocheckpoint=100").use {
                     /* drain row */ it.moveToFirst()

@@ -13,7 +13,7 @@ internal object RNodeConnectionHelper {
     suspend fun startRNodeInterface(
         config: InterfaceConfig.RNode,
         appContext: Context?,
-        scope: CoroutineScope?,
+        scope: CoroutineScope,
         onRegisterAndTrack: (String, network.reticulum.interfaces.Interface) -> Unit,
         onMonitorLifecycle: (InterfaceConfig.RNode, network.reticulum.interfaces.rnode.RNodeInterface) -> Unit,
         onEnsureRecovery: (InterfaceConfig.RNode) -> Unit,
@@ -49,6 +49,12 @@ internal object RNodeConnectionHelper {
                     activityKeepaliveMs = if (config.connectionMode == "tcp") 3_500L else null,
                     framebufferLineDelayMs = if (config.connectionMode == "tcp") 15L else 0L,
                     framebufferEnableDelayMs = if (config.connectionMode == "tcp") 50L else 0L,
+                    // Safe to pass the factory's process-lifetime scope directly (unlike
+                    // AndroidBLEDriver, which cancels its scope in shutdown()). RNodeInterface
+                    // derives an internal ioScope with a child SupervisorJob tied to this
+                    // parent, and its detach() cancels only that ioScope — the factory's root
+                    // scope is never touched. If that invariant ever changes upstream, wrap
+                    // this in a dedicated child scope the way startBleInterface does.
                     parentScope = scope,
                     displayImageData =
                         if (config.enableFramebuffer) {

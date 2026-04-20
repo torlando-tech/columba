@@ -823,35 +823,51 @@ class NativeReticulumProtocol(
                 return@launch
             }
 
-            // Resolve the receiving interface hash (annotated by LXMF-kt v0.0.5+
-            // on the delivering packet) to a human-readable interface name
-            // via the Transport's interface table. Falls back to null when
-            // the interface is gone (e.g., was removed mid-delivery) or for
-            // propagation-fetched messages (LXMF-kt intentionally leaves it
-            // null on those — see LXMF-kt#9).
-            val receivingInterfaceName =
-                message.receivingInterfaceHash?.let { hash ->
-                    Transport.getInterfaces().firstOrNull { it.hash.contentEquals(hash) }?.name
-                }
-
-            val received =
-                ReceivedMessage(
-                    messageHash = message.hash?.let { it.joinToString("") { b -> "%02x".format(b) } } ?: "",
+            _messages.tryEmit(
+                buildReceivedMessage(
+                    message = message,
                     content = content,
                     sourceHash = sourceHash,
-                    destinationHash = destHash,
+                    destHash = destHash,
                     timestamp = timestamp,
                     fieldsJson = fieldsJson,
-                    publicKey = null, // Will be populated by recall if needed
                     iconAppearance = iconAppearance,
-                    receivedHopCount = message.receivedHopCount,
-                    receivedInterface = receivingInterfaceName,
-                    receivedRssi = message.receivedRssi,
-                    receivedSnr = message.receivedSnr,
-                )
-
-            _messages.tryEmit(received)
+                ),
+            )
         }
+    }
+
+    private fun buildReceivedMessage(
+        message: LXMessage,
+        content: String,
+        sourceHash: ByteArray,
+        destHash: ByteArray,
+        timestamp: Long,
+        fieldsJson: String?,
+        iconAppearance: IconAppearance?,
+    ): ReceivedMessage {
+        // Resolve the receiving interface hash (annotated by LXMF-kt v0.0.5+ on the
+        // delivering packet) to a human-readable interface name via the Transport's
+        // interface table. Falls back to null when the interface is gone or for
+        // propagation-fetched messages (LXMF-kt leaves it null there — see LXMF-kt#9).
+        val receivingInterfaceName =
+            message.receivingInterfaceHash?.let { hash ->
+                Transport.getInterfaces().firstOrNull { it.hash.contentEquals(hash) }?.name
+            }
+        return ReceivedMessage(
+            messageHash = message.hash?.let { it.joinToString("") { b -> "%02x".format(b) } } ?: "",
+            content = content,
+            sourceHash = sourceHash,
+            destinationHash = destHash,
+            timestamp = timestamp,
+            fieldsJson = fieldsJson,
+            publicKey = null,
+            iconAppearance = iconAppearance,
+            receivedHopCount = message.receivedHopCount,
+            receivedInterface = receivingInterfaceName,
+            receivedRssi = message.receivedRssi,
+            receivedSnr = message.receivedSnr,
+        )
     }
 
     override val locationTelemetryFlow = _locationTelemetryFlow.asSharedFlow()

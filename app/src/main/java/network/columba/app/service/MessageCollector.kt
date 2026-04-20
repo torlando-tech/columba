@@ -1,6 +1,12 @@
 package network.columba.app.service
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.db.entity.PeerIconEntity
@@ -12,12 +18,6 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.util.PeerNameResolver
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -217,6 +217,9 @@ class MessageCollector
                                 // Routing info (hop count and receiving interface)
                                 receivedHopCount = receivedMessage.receivedHopCount,
                                 receivedInterface = receivedMessage.receivedInterface,
+                                // Signal quality metrics (RNode/BLE; null on TCP/Auto/propagated)
+                                receivedRssi = receivedMessage.receivedRssi,
+                                receivedSnr = receivedMessage.receivedSnr,
                                 // Local reception time for sort ordering
                                 receivedAt = now,
                             )

@@ -994,6 +994,7 @@ private fun getLocalIpAddress(): Pair<String?, Boolean> {
  * no useful detail beyond the type label itself — the caller drops the line
  * in that case to avoid visual repetition.
  */
+@Suppress("CyclomaticComplexMethod") // flat when-per-type; splitting would scatter related JSON-parsing logic
 private fun getInterfaceDescription(interfaceEntity: InterfaceEntity): String {
     val json =
         try {

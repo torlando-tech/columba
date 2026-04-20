@@ -544,11 +544,14 @@ fun InterfaceCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    text = getInterfaceDescription(interfaceEntity),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                val description = getInterfaceDescription(interfaceEntity)
+                if (description.isNotEmpty()) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // Error / permission prompt
                 val needsPermission = !blePermissionsGranted && interfaceEntity.isBleInterface()
                 if (needsPermission) {
@@ -986,25 +989,61 @@ private fun getLocalIpAddress(): Pair<String?, Boolean> {
 }
 
 /**
- * Get interface description including type and relevant details.
+ * Returns ONLY the per-type detail (host:port, connection method, etc.) that
+ * goes on a line below the type label. Returns the empty string when there's
+ * no useful detail beyond the type label itself — the caller drops the line
+ * in that case to avoid visual repetition.
  */
-@Composable
+@Suppress("CyclomaticComplexMethod") // flat when-per-type; splitting would scatter related JSON-parsing logic
 private fun getInterfaceDescription(interfaceEntity: InterfaceEntity): String {
-    val typeLabel = getInterfaceTypeLabel(interfaceEntity.type)
+    val json =
+        try {
+            org.json.JSONObject(interfaceEntity.configJson)
+        } catch (_: Exception) {
+            return ""
+        }
     return when (interfaceEntity.type) {
+        "AutoInterface" -> {
+            val groupId = json.optString("group_id", "")
+            val scope = json.optString("discovery_scope", "link")
+            if (groupId.isNotBlank()) groupId else "scope: $scope"
+        }
+        "TCPClient" -> {
+            val host = json.optString("target_host", "")
+            val port = json.optInt("target_port", 4242)
+            if (host.isNotBlank()) "$host:$port" else ""
+        }
         "TCPServer" -> {
-            try {
-                val json = org.json.JSONObject(interfaceEntity.configJson)
-                val listenPort = json.optInt("listen_port", 4242)
-                val (localIp, isYggdrasil) = getLocalIpAddress()
-                val networkType = if (isYggdrasil) " (Yggdrasil)" else ""
-                val addressDisplay = formatAddressWithPort(localIp, listenPort, isYggdrasil)
-                "$typeLabel$networkType · $addressDisplay"
-            } catch (e: Exception) {
-                typeLabel
+            val listenPort = json.optInt("listen_port", 4242)
+            val (localIp, isYggdrasil) = getLocalIpAddress()
+            val networkPrefix = if (isYggdrasil) "Yggdrasil · " else ""
+            val addressDisplay = formatAddressWithPort(localIp, listenPort, isYggdrasil)
+            "$networkPrefix$addressDisplay"
+        }
+        "RNode" -> {
+            val connectionMode = json.optString("connection_mode", "classic")
+            val deviceName = json.optString("target_device_name", "")
+            val tcpHost = json.optString("tcp_host", "")
+            val tcpPort = json.optInt("tcp_port", 7633)
+            when (connectionMode) {
+                "ble" -> if (deviceName.isNotBlank()) "BLE · $deviceName" else "BLE"
+                "classic" -> if (deviceName.isNotBlank()) "Bluetooth · $deviceName" else "Bluetooth"
+                "tcp" -> if (tcpHost.isNotBlank()) "WiFi · $tcpHost:$tcpPort" else "WiFi"
+                "usb" -> "USB"
+                else -> ""
             }
         }
-        else -> typeLabel
+        "UDP" -> {
+            val listenIp = json.optString("listen_ip", "0.0.0.0")
+            val listenPort = json.optInt("listen_port", 4242)
+            "$listenIp:$listenPort"
+        }
+        "AndroidBLE" -> {
+            val deviceName = json.optString("device_name", "")
+            val maxConns = json.optInt("max_connections", 7)
+            if (deviceName.isNotBlank()) "'$deviceName' · max $maxConns peers" else "max $maxConns peers"
+        }
+        else -> ""
     }
 }
 

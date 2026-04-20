@@ -61,7 +61,7 @@ internal object NativeInterfaceFactory {
      * cancel siblings. No callsite cancels this scope; per-interface
      * cleanup flows through each interface's own stop() method.
      */
-    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
      * Diff-based sync: compare running interfaces with desired config.
@@ -201,11 +201,18 @@ internal object NativeInterfaceFactory {
                     ctx.getSystemService(Context.BLUETOOTH_SERVICE)
                         as android.bluetooth.BluetoothManager
 
+                // Give the driver its own scope rather than the factory's. BLEInterface.detach()
+                // calls driver.shutdown(), which internally cancels whatever scope it was
+                // constructed with. Sharing the factory's process-lifetime scope here would let
+                // a single BLE interface stop nuke the factory's ability to start any future
+                // interface — exactly the cancelled-scope bug this PR set out to eliminate.
+                val driverScope =
+                    CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 val driver =
                     network.reticulum.android.ble.AndroidBLEDriver(
                         context = ctx,
                         bluetoothManager = bluetoothManager,
-                        scope = scope,
+                        scope = driverScope,
                     )
                 driver.setTransportIdentity(identityHash)
 

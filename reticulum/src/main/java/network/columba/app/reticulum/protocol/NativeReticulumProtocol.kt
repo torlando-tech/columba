@@ -462,9 +462,12 @@ class NativeReticulumProtocol(
                 // session. Shortens the in-memory lifetime of the raw key material.
                 lastConfig = lastConfig?.copy(deliveryIdentityKey = null)
 
-                // Create and register network interfaces from config
+                // Create and register network interfaces from config.
+                // The factory owns its own process-lifetime scope internally;
+                // we no longer assign one here (previously led to a stale
+                // cancelled scope between shutdown → next initialize cycles,
+                // silently dropping subsequent interface-toggle attempts).
                 NativeInterfaceFactory.appContext = appContext
-                NativeInterfaceFactory.scope = scope
                 NativeInterfaceFactory.addListener(interfaceFactoryListener)
                 NativeInterfaceFactory.syncInterfaces(config.enabledInterfaces)
 

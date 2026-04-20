@@ -5,6 +5,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -42,8 +43,25 @@ internal object NativeInterfaceFactory {
     /** App context for BLE driver construction. */
     var appContext: Context? = null
 
-    /** Coroutine scope for async interface startup (BLE, RNode). */
-    var scope: CoroutineScope? = null
+    /**
+     * Process-lifetime coroutine scope for async interface startup (BLE,
+     * RNode) and per-interface online-state observers. Owned by the factory
+     * itself — not assigned externally — so the scope never ends up in a
+     * null-or-cancelled state between protocol init cycles.
+     *
+     * Previously this was a nullable `var` assigned by
+     * [NativeReticulumProtocol.initialize]; if the protocol was shut down
+     * (which cancels the protocol's scope) without clearing this reference,
+     * subsequent interface-toggle attempts would silently no-op because
+     * `cancelledScope.launch(...)` returns a pre-cancelled Job. The
+     * concrete symptom: user toggles a saved RNode interface, factory
+     * logs "Sync complete: started 1", but nothing downstream ever runs.
+     *
+     * `SupervisorJob` ensures a single interface's startup failure doesn't
+     * cancel siblings. No callsite cancels this scope; per-interface
+     * cleanup flows through each interface's own stop() method.
+     */
+    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
      * Diff-based sync: compare running interfaces with desired config.
@@ -145,7 +163,6 @@ internal object NativeInterfaceFactory {
         name: String,
         iface: network.reticulum.interfaces.Interface,
     ) {
-        val collectorScope = scope ?: return
         // Atomically replace any previous collector under the same key.
         // runningInterfaces is the source of truth for "this interface is
         // currently managed"; stopInterface() removes it BEFORE
@@ -163,19 +180,18 @@ internal object NativeInterfaceFactory {
                 .onEach { online ->
                     Log.d(TAG, "Interface $name online → $online")
                     notifyListeners()
-                }.launchIn(collectorScope)
+                }.launchIn(scope)
         }
     }
 
     @Suppress("TooGenericExceptionCaught")
     private fun startBleInterface(config: InterfaceConfig.AndroidBLE) {
         val ctx = appContext
-        val parentScope = scope
-        if (ctx == null || parentScope == null) {
-            Log.e(TAG, "Cannot start BLE interface: appContext or scope not set")
+        if (ctx == null) {
+            Log.e(TAG, "Cannot start BLE interface: appContext not set")
             return
         }
-        parentScope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
                 val identityHash =
                     Transport.identity?.hash
@@ -189,7 +205,7 @@ internal object NativeInterfaceFactory {
                     network.reticulum.android.ble.AndroidBLEDriver(
                         context = ctx,
                         bluetoothManager = bluetoothManager,
-                        scope = parentScope,
+                        scope = scope,
                     )
                 driver.setTransportIdentity(identityHash)
 
@@ -338,7 +354,7 @@ internal object NativeInterfaceFactory {
             }
 
             is InterfaceConfig.RNode -> {
-                scope?.launch(Dispatchers.IO) {
+                scope.launch(Dispatchers.IO) {
                     startRNodeInterface(config)
                 }
                 null

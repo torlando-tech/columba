@@ -338,8 +338,19 @@ internal object NativeInterfaceFactory {
             }
 
             is InterfaceConfig.RNode -> {
-                scope?.launch(Dispatchers.IO) {
-                    startRNodeInterface(config)
+                // Explicit null-check mirrors the pattern in [startBleInterface]:
+                // a silent `scope?.launch` drops the RNode startup whenever the
+                // factory's scope hasn't been re-seated (e.g., across a service
+                // rebind), leaving the UI's "Sync complete: started 1" log
+                // misleading the user into thinking the interface is coming up
+                // when it never will.
+                val parentScope = scope
+                if (parentScope == null) {
+                    Log.e(TAG, "Cannot start RNode interface ${config.name}: factory scope not initialized")
+                } else {
+                    parentScope.launch(Dispatchers.IO) {
+                        startRNodeInterface(config)
+                    }
                 }
                 null
             }

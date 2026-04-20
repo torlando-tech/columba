@@ -13,7 +13,7 @@ internal object RNodeConnectionHelper {
     suspend fun startRNodeInterface(
         config: InterfaceConfig.RNode,
         appContext: Context?,
-        scope: CoroutineScope?,
+        scope: CoroutineScope,
         onRegisterAndTrack: (String, network.reticulum.interfaces.Interface) -> Unit,
         onMonitorLifecycle: (InterfaceConfig.RNode, network.reticulum.interfaces.rnode.RNodeInterface) -> Unit,
         onEnsureRecovery: (InterfaceConfig.RNode) -> Unit,

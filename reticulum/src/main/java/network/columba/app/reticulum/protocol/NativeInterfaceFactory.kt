@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -192,6 +193,16 @@ internal object NativeInterfaceFactory {
             return
         }
         scope.launch(Dispatchers.IO) {
+            // Give the driver its own scope rather than the factory's.
+            // BLEInterface.detach() calls driver.shutdown(), which internally
+            // cancels whatever scope it was constructed with. Sharing the
+            // factory's process-lifetime scope here would let a single BLE
+            // interface stop nuke the factory's ability to start any future
+            // interface — the cancelled-scope bug this PR set out to
+            // eliminate. Declared outside the try so a thrown exception can
+            // still cancel it and release the driver's aggregator coroutines.
+            val driverScope =
+                CoroutineScope(SupervisorJob() + Dispatchers.Default)
             try {
                 val identityHash =
                     Transport.identity?.hash
@@ -201,13 +212,6 @@ internal object NativeInterfaceFactory {
                     ctx.getSystemService(Context.BLUETOOTH_SERVICE)
                         as android.bluetooth.BluetoothManager
 
-                // Give the driver its own scope rather than the factory's. BLEInterface.detach()
-                // calls driver.shutdown(), which internally cancels whatever scope it was
-                // constructed with. Sharing the factory's process-lifetime scope here would let
-                // a single BLE interface stop nuke the factory's ability to start any future
-                // interface — exactly the cancelled-scope bug this PR set out to eliminate.
-                val driverScope =
-                    CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 val driver =
                     network.reticulum.android.ble.AndroidBLEDriver(
                         context = ctx,
@@ -233,6 +237,12 @@ internal object NativeInterfaceFactory {
                 registerAndTrack(config.name, iface)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start BLE interface ${config.name}: ${e.message}", e)
+                // AndroidBLEDriver launches event-aggregator coroutines from
+                // its init{} block, so the scope holds live work as soon as
+                // the driver is constructed. Cancel it on the failure path to
+                // avoid orphaning those jobs when stopInterface won't run
+                // (nothing is tracked in runningInterfaces).
+                driverScope.cancel()
             }
         }
     }

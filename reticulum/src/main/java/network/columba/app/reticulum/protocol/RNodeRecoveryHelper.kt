@@ -16,13 +16,12 @@ internal object RNodeRecoveryHelper {
     fun monitorLifecycle(
         config: InterfaceConfig.RNode,
         iface: network.reticulum.interfaces.rnode.RNodeInterface,
-        scope: CoroutineScope?,
+        scope: CoroutineScope,
         runningInterfaces: java.util.concurrent.ConcurrentHashMap<String, network.reticulum.interfaces.Interface>,
         onNotifyListeners: () -> Unit,
         onEnsureRecovery: (InterfaceConfig.RNode) -> Unit,
     ) {
-        val parentScope = scope ?: return
-        parentScope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             var wasOnline = false
             while (isActive) {
                 if (runningInterfaces[config.name] !== iface || iface.detached.get()) return@launch
@@ -43,18 +42,17 @@ internal object RNodeRecoveryHelper {
 
     fun ensureRecovery(
         config: InterfaceConfig.RNode,
-        scope: CoroutineScope?,
+        scope: CoroutineScope,
         rnodeRecoveryJobs: java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>,
         runningInterfaces: java.util.concurrent.ConcurrentHashMap<String, network.reticulum.interfaces.Interface>,
         onStopInterface: (String) -> Unit,
         onStartInterface: (InterfaceConfig) -> Unit,
     ) {
-        val parentScope = scope ?: return
         val existing = rnodeRecoveryJobs[config.name]
         if (existing != null && existing.isActive) return
 
         val job =
-            parentScope.launch(Dispatchers.IO) {
+            scope.launch(Dispatchers.IO) {
                 try {
                     while (isActive) {
                         val current = runningInterfaces[config.name]

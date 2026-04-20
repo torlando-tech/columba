@@ -5,6 +5,11 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
 import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import network.columba.app.data.db.dao.ConversationDao
 import network.columba.app.data.db.dao.DraftDao
 import network.columba.app.data.db.dao.LocalIdentityDao
@@ -17,11 +22,6 @@ import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.model.EnrichedConversation
 import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.data.util.TextSanitizer
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -320,6 +320,14 @@ class ConversationRepository
                         deliveryMethod = message.deliveryMethod,
                         errorMessage = message.errorMessage,
                         replyToMessageId = message.replyToMessageId, // Reply reference
+                        // Received-side routing / signal metadata. Previously these
+                        // were dropped here, which meant the message-details screen
+                        // never rendered RSSI/SNR/hopcount/receiving-interface even
+                        // when the upstream producer populated them.
+                        receivedHopCount = message.receivedHopCount,
+                        receivedInterface = message.receivedInterface,
+                        receivedRssi = message.receivedRssi,
+                        receivedSnr = message.receivedSnr,
                         receivedAt = message.receivedAt,
                         sentInterface = message.sentInterface,
                     )

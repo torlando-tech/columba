@@ -1012,7 +1012,16 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         listenIp = state.listenIp.trim(),
                         listenPort = state.listenPort.toIntOrNull() ?: 4242,
-                        mode = state.mode,
+                        // `InterfaceConfigState.mode` defaults to "roaming" (shared
+                        // BLE-biased default) while `InterfaceConfig.TCPServer.mode`
+                        // defaults to "full". The current dialog's InterfaceModeSelector
+                        // surfaces the picker so the user can correct it, but the
+                        // upcoming unified-ifac-ui wizard should be careful not to
+                        // silently hand "roaming" through to a server that is meant
+                        // to forward traffic. `ifEmpty { "full" }` is a belt-and-
+                        // braces guard for the case where the wizard clears the
+                        // field entirely rather than surfacing the picker.
+                        mode = state.mode.ifEmpty { "full" },
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.trim().ifEmpty { null },
                     )

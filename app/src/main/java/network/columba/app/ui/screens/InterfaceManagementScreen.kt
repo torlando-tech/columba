@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -76,9 +77,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.reticulum.ble.util.BlePermissionManager
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
+import network.columba.app.ui.components.interfaceTypeIconData
 import network.columba.app.viewmodel.InterfaceManagementViewModel
 
 /**
@@ -514,18 +517,14 @@ fun InterfaceCard(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Type icon with online status color
+            // Type icon with online status color. Reuses the canonical
+            // interface-type → icon mapping shared with announce cards
+            // (see PeerCard.interfaceTypeIconData) so there's one source of truth.
+            val typeLabel = getInterfaceTypeLabel(interfaceEntity.type)
+            val iconData = interfaceTypeIconData(InterfaceType.fromInterfaceName(interfaceEntity.type))
             Icon(
-                imageVector =
-                    when (interfaceEntity.type) {
-                        "AutoInterface" -> Icons.Default.Settings
-                        "TCPClient" -> Icons.Default.CheckCircle
-                        "TCPServer" -> Icons.Default.CheckCircle
-                        "RNode" -> Icons.Default.Settings
-                        "AndroidBLE" -> Icons.Default.Settings
-                        else -> Icons.Default.Settings
-                    },
-                contentDescription = null,
+                imageVector = iconData?.imageVector ?: Icons.Default.SettingsInputAntenna,
+                contentDescription = "$typeLabel interface",
                 tint = statusColor,
                 modifier = Modifier.size(32.dp),
             )
@@ -540,7 +539,7 @@ fun InterfaceCard(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = getInterfaceTypeLabel(interfaceEntity.type),
+                    text = typeLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

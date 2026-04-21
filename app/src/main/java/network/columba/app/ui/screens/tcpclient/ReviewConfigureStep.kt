@@ -14,13 +14,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -31,9 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import network.columba.app.ui.components.IfacConfigCard
 import network.columba.app.viewmodel.TcpClientWizardViewModel
 
 /**
@@ -126,63 +121,14 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
 
         // IFAC (network_name + passphrase). Auto-filled when reached from a
         // discovered interface that published IFAC; otherwise optional user input.
-        Card(
-            colors =
-                CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "IFAC (Network Access)",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Leave blank unless the remote interface requires an IFAC network " +
-                        "name and passphrase. Auto-filled when adding from a discovered interface.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = state.networkName,
-                    onValueChange = { viewModel.setNetworkName(it) },
-                    label = { Text("Network Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = state.passphrase,
-                    onValueChange = { viewModel.setPassphrase(it) },
-                    label = { Text("Passphrase") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation =
-                        if (state.passphraseVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { viewModel.togglePassphraseVisibility() }) {
-                            Icon(
-                                imageVector =
-                                    if (state.passphraseVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription =
-                                    if (state.passphraseVisible) "Hide passphrase" else "Show passphrase",
-                            )
-                        }
-                    },
-                )
-            }
-        }
+        IfacConfigCard(
+            networkName = state.networkName,
+            passphrase = state.passphrase,
+            passphraseVisible = state.passphraseVisible,
+            onNetworkNameChange = { viewModel.setNetworkName(it) },
+            onPassphraseChange = { viewModel.setPassphrase(it) },
+            onPassphraseVisibilityToggle = { viewModel.togglePassphraseVisibility() },
+        )
 
         Spacer(Modifier.height(16.dp))
 

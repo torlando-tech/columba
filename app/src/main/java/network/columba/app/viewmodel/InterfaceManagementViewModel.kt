@@ -933,6 +933,8 @@ class InterfaceManagementViewModel
                         listenIp = config.listenIp,
                         listenPort = config.listenPort.toString(),
                         mode = config.mode,
+                        networkName = config.networkName.orEmpty(),
+                        passphrase = config.passphrase.orEmpty(),
                     )
 
                 else -> InterfaceConfigState() // Default for unsupported types
@@ -1011,6 +1013,8 @@ class InterfaceManagementViewModel
                         listenIp = state.listenIp.trim(),
                         listenPort = state.listenPort.toIntOrNull() ?: 4242,
                         mode = state.mode,
+                        networkName = state.networkName.trim().ifEmpty { null },
+                        passphrase = state.passphrase.trim().ifEmpty { null },
                     )
 
                 else -> throw IllegalArgumentException("Unsupported interface type: ${state.type}")

@@ -1591,8 +1591,12 @@ fun ColumbaNavigation(
                                             navController.navigate("rnode_wizard")
                                         }
                                     },
-                                    onNavigateToTcpClientWizard = {
-                                        navController.navigate("tcp_client_wizard")
+                                    onNavigateToTcpClientWizard = { interfaceId ->
+                                        if (interfaceId != null) {
+                                            navController.navigate("tcp_client_wizard?interfaceId=$interfaceId")
+                                        } else {
+                                            navController.navigate("tcp_client_wizard")
+                                        }
                                     },
                                     onNavigateToInterfaceStats = { interfaceId ->
                                         navController.navigate("interface_stats/$interfaceId")

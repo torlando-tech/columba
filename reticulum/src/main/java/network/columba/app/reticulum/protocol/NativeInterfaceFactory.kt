@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import network.columba.app.reticulum.model.InterfaceConfig
 import network.reticulum.interfaces.auto.AutoInterface
 import network.reticulum.interfaces.tcp.TCPClientInterface
+import network.reticulum.interfaces.tcp.TCPServerInterface
 import network.reticulum.interfaces.udp.UDPInterface
 import network.reticulum.transport.Transport
 
@@ -383,15 +384,53 @@ internal object NativeInterfaceFactory {
                     forwardPort = config.forwardPort,
                 )
 
-            is InterfaceConfig.TCPServer -> {
-                // TCPServerInterface exists in reticulum-kt and accepts ifacNetname /
-                // ifacNetkey, but Columba's native factory does not yet wire TCPServer
-                // end-to-end (no tests, no lifecycle integration). The UI still
-                // captures IFAC credentials on TCPServer configs so they survive a
-                // round-trip through the DB when native support lands.
-                Log.w(TAG, "TCPServer not yet supported in native stack")
-                null
-            }
+            is InterfaceConfig.TCPServer ->
+                TCPServerInterface(
+                    name = config.name,
+                    bindAddress = config.listenIp,
+                    bindPort = config.listenPort,
+                    ifacNetname = config.networkName,
+                    ifacNetkey = config.passphrase,
+                ).apply {
+                    // Register each spawned child interface with Transport BEFORE
+                    // start() opens the accept loop, so the first incoming
+                    // connection can't race us into a silent-drop: Python RNS
+                    // does the same at RNS/Interfaces/TCPInterface.py:623
+                    // (Transport.interfaces.append(spawned_interface)), and
+                    // reticulum-kt PR #47 spawned-without-register bug
+                    // manifested as path responses dropped in
+                    // Transport.kt:3632-3658. See also: the conformance-bridge
+                    // reference implementation in WireTcp.kt:198-210.
+                    onClientConnected = { spawnedChild ->
+                        runCatching {
+                            Transport.registerInterface(
+                                network.reticulum.interfaces.InterfaceAdapter
+                                    .getOrCreate(spawnedChild),
+                            )
+                        }.onFailure { e ->
+                            Log.e(
+                                TAG,
+                                "Failed to register spawned client ${spawnedChild.name} " +
+                                    "for server ${config.name}: ${e.message}",
+                                e,
+                            )
+                        }
+                        Log.i(
+                            TAG,
+                            "TCPServer ${config.name}: client connected (${spawnedChild.name})",
+                        )
+                    }
+                    // TCPServerInterface.clientDisconnected already deregisters
+                    // via Transport; this callback is purely for surface-level
+                    // logging so a silent child-leak doesn't masquerade as
+                    // "server healthy" in the UI.
+                    onClientDisconnected = { spawnedChild ->
+                        Log.i(
+                            TAG,
+                            "TCPServer ${config.name}: client disconnected (${spawnedChild.name})",
+                        )
+                    }
+                }
 
             is InterfaceConfig.RNode -> {
                 scope.launch(Dispatchers.IO) {

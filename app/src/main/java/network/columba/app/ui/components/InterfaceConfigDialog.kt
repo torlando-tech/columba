@@ -14,8 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
@@ -24,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -42,13 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import network.columba.app.reticulum.ble.model.BlePowerPreset
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.viewmodel.InterfaceConfigState
-import kotlinx.coroutines.launch
 
 /**
  * Dialog for adding or editing a Reticulum network interface configuration.
@@ -318,7 +313,16 @@ fun TCPClientFields(
         supportingText = configState.targetPortError?.let { { Text(it) } },
     )
 
-    IfacFields(configState, onConfigUpdate)
+    IfacConfigCard(
+        networkName = configState.networkName,
+        passphrase = configState.passphrase,
+        passphraseVisible = configState.passphraseVisible,
+        onNetworkNameChange = { onConfigUpdate(configState.copy(networkName = it)) },
+        onPassphraseChange = { onConfigUpdate(configState.copy(passphrase = it)) },
+        onPassphraseVisibilityToggle = {
+            onConfigUpdate(configState.copy(passphraseVisible = !configState.passphraseVisible))
+        },
+    )
 
     Divider()
 
@@ -395,93 +399,28 @@ fun TCPClientFields(
     }
 }
 
-/**
- * Shared IFAC (Interface Access Code) fields for network_name and passphrase.
- * Used by both TCP Client and RNode interface configurations.
- */
-@Composable
-fun IfacFields(
-    configState: InterfaceConfigState,
-    onConfigUpdate: (InterfaceConfigState) -> Unit,
-) {
-    // Network Name (IFAC)
-    OutlinedTextField(
-        value = configState.networkName,
-        onValueChange = { onConfigUpdate(configState.copy(networkName = it)) },
-        label = { Text("Network Name") },
-        placeholder = { Text("Optional") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        supportingText = {
-            Text(
-                "Optional: Sets the virtual network name for this segment. " +
-                    "This allows multiple separate networks to exist on the same " +
-                    "physical channel or medium.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-    )
-
-    // Passphrase (IFAC)
-    OutlinedTextField(
-        value = configState.passphrase,
-        onValueChange = { onConfigUpdate(configState.copy(passphrase = it)) },
-        label = { Text("Passphrase") },
-        placeholder = { Text("Optional") },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        visualTransformation =
-            if (configState.passphraseVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-        trailingIcon = {
-            IconButton(
-                onClick = {
-                    onConfigUpdate(configState.copy(passphraseVisible = !configState.passphraseVisible))
-                },
-            ) {
-                Icon(
-                    imageVector =
-                        if (configState.passphraseVisible) {
-                            Icons.Default.VisibilityOff
-                        } else {
-                            Icons.Default.Visibility
-                        },
-                    contentDescription =
-                        if (configState.passphraseVisible) {
-                            "Hide passphrase"
-                        } else {
-                            "Show passphrase"
-                        },
-                )
-            }
-        },
-        supportingText = {
-            Text(
-                "Optional: Sets an authentication passphrase on the interface. " +
-                    "This can be used in conjunction with Network Name, or alone.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-    )
-}
-
 @Composable
 fun RNodeFields(
     configState: InterfaceConfigState,
     onConfigUpdate: (InterfaceConfigState) -> Unit,
 ) {
-    Text(
-        "RNode IFAC Authentication",
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
+    // RNode dialog has no per-interface settings beyond IFAC (radio config
+    // lives in the full RNode wizard); the shared IFAC card already owns its
+    // own header and explanation so we let it stand alone here.
+    IfacConfigCard(
+        networkName = configState.networkName,
+        passphrase = configState.passphrase,
+        passphraseVisible = configState.passphraseVisible,
+        onNetworkNameChange = { onConfigUpdate(configState.copy(networkName = it)) },
+        onPassphraseChange = { onConfigUpdate(configState.copy(passphrase = it)) },
+        onPassphraseVisibilityToggle = {
+            onConfigUpdate(configState.copy(passphraseVisible = !configState.passphraseVisible))
+        },
+        description =
+            "Leave blank unless the RNode network requires an IFAC " +
+                "network name and passphrase. Only interfaces with " +
+                "matching credentials can communicate.",
     )
-
-    IfacFields(configState, onConfigUpdate)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -850,5 +789,20 @@ fun TCPServerFields(
                 )
             }
         },
+    )
+
+    IfacConfigCard(
+        networkName = configState.networkName,
+        passphrase = configState.passphrase,
+        passphraseVisible = configState.passphraseVisible,
+        onNetworkNameChange = { onConfigUpdate(configState.copy(networkName = it)) },
+        onPassphraseChange = { onConfigUpdate(configState.copy(passphrase = it)) },
+        onPassphraseVisibilityToggle = {
+            onConfigUpdate(configState.copy(passphraseVisible = !configState.passphraseVisible))
+        },
+        description =
+            "Leave blank unless inbound clients must authenticate with an " +
+                "IFAC network name and passphrase. Only clients with matching " +
+                "credentials will be able to connect.",
     )
 }

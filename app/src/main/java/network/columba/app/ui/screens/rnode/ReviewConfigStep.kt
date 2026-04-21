@@ -23,8 +23,6 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Usb
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
@@ -34,7 +32,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
@@ -50,10 +47,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.FrequencySlotCalculator
+import network.columba.app.ui.components.IfacConfigCard
 import network.columba.app.viewmodel.RNodeWizardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -520,66 +516,20 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
                     Spacer(Modifier.height(16.dp))
 
-                    // IFAC Authentication header
-                    Text(
-                        "IFAC Authentication",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = state.networkName,
-                        onValueChange = { viewModel.updateNetworkName(it) },
-                        label = { Text("Network Name") },
-                        placeholder = { Text("Optional") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = {
-                            Text(
-                                "Sets the virtual network name for this segment. " +
-                                    "Only interfaces with matching credentials can communicate.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        },
-                    )
-
-                    OutlinedTextField(
-                        value = state.passphrase,
-                        onValueChange = { viewModel.updatePassphrase(it) },
-                        label = { Text("Passphrase") },
-                        placeholder = { Text("Optional") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        visualTransformation =
-                            if (state.passphraseVisible) {
-                                VisualTransformation.None
-                            } else {
-                                PasswordVisualTransformation()
-                            },
-                        trailingIcon = {
-                            IconButton(onClick = { viewModel.togglePassphraseVisible() }) {
-                                Icon(
-                                    imageVector =
-                                        if (state.passphraseVisible) {
-                                            Icons.Default.VisibilityOff
-                                        } else {
-                                            Icons.Default.Visibility
-                                        },
-                                    contentDescription =
-                                        if (state.passphraseVisible) "Hide passphrase" else "Show passphrase",
-                                )
-                            }
-                        },
-                        supportingText = {
-                            Text(
-                                "Sets an authentication passphrase. " +
-                                    "Can be used with Network Name, or alone.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        },
+                    // IFAC (network_name + passphrase). Shared card matches the
+                    // TCP Client wizard and interface-config dialog for a
+                    // consistent "enter network access credentials" UI.
+                    IfacConfigCard(
+                        networkName = state.networkName,
+                        passphrase = state.passphrase,
+                        passphraseVisible = state.passphraseVisible,
+                        onNetworkNameChange = { viewModel.updateNetworkName(it) },
+                        onPassphraseChange = { viewModel.updatePassphrase(it) },
+                        onPassphraseVisibilityToggle = { viewModel.togglePassphraseVisible() },
+                        description =
+                            "Leave blank unless the RNode network requires an IFAC " +
+                                "network name and passphrase. Only interfaces with " +
+                                "matching credentials can communicate.",
                     )
 
                     Spacer(Modifier.height(16.dp))

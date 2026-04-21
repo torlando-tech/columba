@@ -384,6 +384,11 @@ internal object NativeInterfaceFactory {
                 )
 
             is InterfaceConfig.TCPServer -> {
+                // TCPServerInterface exists in reticulum-kt and accepts ifacNetname /
+                // ifacNetkey, but Columba's native factory does not yet wire TCPServer
+                // end-to-end (no tests, no lifecycle integration). The UI still
+                // captures IFAC credentials on TCPServer configs so they survive a
+                // round-trip through the DB when native support lands.
                 Log.w(TAG, "TCPServer not yet supported in native stack")
                 null
             }

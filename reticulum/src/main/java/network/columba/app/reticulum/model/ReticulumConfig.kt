@@ -321,6 +321,8 @@ sealed class InterfaceConfig {
      * @param listenIp IP address to bind to (0.0.0.0 for all interfaces)
      * @param listenPort TCP port to listen on
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     * @param networkName Optional IFAC network name for cryptographic authentication
+     * @param passphrase Optional IFAC passphrase for cryptographic authentication
      */
     data class TCPServer(
         override val name: String = "TCP Server",
@@ -328,6 +330,8 @@ sealed class InterfaceConfig {
         val listenIp: String = "0.0.0.0",
         val listenPort: Int = 4242,
         val mode: String = "full",
+        val networkName: String? = null,
+        val passphrase: String? = null,
     ) : InterfaceConfig()
 }
 

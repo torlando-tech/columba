@@ -1,6 +1,8 @@
 package network.columba.app.repository
 
 import android.util.Log
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.reticulum.model.InterfaceConfig
@@ -8,8 +10,6 @@ import network.columba.app.reticulum.model.toJsonString
 import network.columba.app.reticulum.model.typeName
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import org.json.JSONException
 import org.json.JSONObject
 import javax.inject.Inject
@@ -430,6 +430,8 @@ class InterfaceRepository
                             listenIp = listenIp,
                             listenPort = listenPort,
                             mode = json.optString("mode", "full"),
+                            networkName = json.optString("network_name", "").ifEmpty { null },
+                            passphrase = json.optString("passphrase", "").ifEmpty { null },
                         )
                     }
 

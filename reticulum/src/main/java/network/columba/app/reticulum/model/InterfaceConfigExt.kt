@@ -88,6 +88,8 @@ fun InterfaceConfig.toJsonString(): String =
                     put("listen_ip", listenIp)
                     put("listen_port", listenPort)
                     put("mode", mode)
+                    networkName?.let { put("network_name", it) }
+                    passphrase?.let { put("passphrase", it) }
                 }.toString()
     }
 

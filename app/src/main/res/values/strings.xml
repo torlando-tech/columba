@@ -26,4 +26,6 @@
     <!-- Network Interfaces screen -->
     <string name="delete_interface">Delete interface</string>
     <string name="view_interface_details">View interface details</string>
+    <string name="interface_actions">Interface actions</string>
+    <string name="edit_interface">Edit interface</string>
 </resources>

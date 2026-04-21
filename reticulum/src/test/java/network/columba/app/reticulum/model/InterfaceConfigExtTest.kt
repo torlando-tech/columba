@@ -280,6 +280,44 @@ class InterfaceConfigExtTest {
         assertEquals("full", json.getString("mode"))
     }
 
+    @Test
+    fun `TCPServer toJsonString includes IFAC fields when set`() {
+        val config =
+            InterfaceConfig.TCPServer(
+                name = "Secure Server",
+                enabled = true,
+                listenIp = "0.0.0.0",
+                listenPort = 4242,
+                mode = "full",
+                networkName = "my-net",
+                passphrase = "top-secret",
+            )
+
+        val json = JSONObject(config.toJsonString())
+
+        assertEquals("my-net", json.getString("network_name"))
+        assertEquals("top-secret", json.getString("passphrase"))
+    }
+
+    @Test
+    fun `TCPServer toJsonString omits null IFAC fields for backwards compat`() {
+        val config =
+            InterfaceConfig.TCPServer(
+                name = "Legacy Server",
+                enabled = true,
+                networkName = null,
+                passphrase = null,
+            )
+
+        val json = JSONObject(config.toJsonString())
+
+        // Existing entities persisted before IFAC was added must round-trip
+        // cleanly — they should neither emit null strings nor synthesise
+        // empty placeholders.
+        assertFalse(json.has("network_name"))
+        assertFalse(json.has("passphrase"))
+    }
+
     // ========== typeName Tests ==========
 
     @Test

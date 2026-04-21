@@ -1,21 +1,11 @@
+@file:Suppress("InjectDispatcher")
+
 package network.columba.app.viewmodel
 
 import android.location.Location
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
-import network.columba.app.data.db.dao.AnnounceDao
-import network.columba.app.data.db.dao.ReceivedLocationDao
-import network.columba.app.data.db.entity.ReceivedLocationEntity
-import network.columba.app.data.model.MapAnnounceLookup
-import network.columba.app.data.repository.ContactRepository
-import network.columba.app.data.repository.OfflineMapRegionRepository
-import network.columba.app.map.MapStyleResult
-import network.columba.app.map.MapTileSourceManager
-import network.columba.app.repository.SettingsRepository
-import network.columba.app.service.LocationSharingManager
-import network.columba.app.service.TelemetryCollectorManager
-import network.columba.app.test.TestFactories
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -32,6 +22,18 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.data.db.dao.AnnounceDao
+import network.columba.app.data.db.dao.ReceivedLocationDao
+import network.columba.app.data.db.entity.ReceivedLocationEntity
+import network.columba.app.data.model.MapAnnounceLookup
+import network.columba.app.data.repository.ContactRepository
+import network.columba.app.data.repository.OfflineMapRegionRepository
+import network.columba.app.map.MapStyleResult
+import network.columba.app.map.MapTileSourceManager
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.service.LocationSharingManager
+import network.columba.app.service.TelemetryCollectorManager
+import network.columba.app.test.TestFactories
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -77,6 +79,8 @@ class MapViewModelTest {
         Dispatchers.setMain(testDispatcher)
         // Disable periodic refresh to prevent infinite loops in tests
         MapViewModel.enablePeriodicRefresh = false
+        // Route IO-dispatched work to the test dispatcher so runTest can drive it
+        MapViewModel.ioDispatcher = testDispatcher
 
         savedStateHandle = SavedStateHandle()
         contactRepository = mockk()
@@ -123,6 +127,8 @@ class MapViewModelTest {
         Dispatchers.resetMain()
         // Re-enable periodic refresh for other tests
         MapViewModel.enablePeriodicRefresh = true
+        // Restore IO dispatcher for other tests
+        MapViewModel.ioDispatcher = Dispatchers.IO
         clearAllMocks()
     }
 

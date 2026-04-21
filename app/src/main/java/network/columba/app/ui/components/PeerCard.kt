@@ -263,6 +263,36 @@ fun SignalStrengthIndicator(
 }
 
 /**
+ * Icon + accessibility label pair for an interface type. Returned by [interfaceTypeIconData]
+ * so callers that need full control over Icon sizing/tinting can render their own Icon composable.
+ */
+data class InterfaceTypeIconData(
+    val imageVector: ImageVector,
+    val contentDescription: String,
+)
+
+/**
+ * Canonical mapping from [InterfaceType] to icon + accessibility label. This is the single
+ * source of truth for "interface type → icon" used by both the announce overlay ([InterfaceTypeIcon])
+ * and the Interface Management screen. Returns `null` for [InterfaceType.UNKNOWN] so announce-card
+ * callers can short-circuit; screens that must always render an icon should fall back to a neutral
+ * glyph when they see `null`.
+ */
+@Composable
+fun interfaceTypeIconData(type: InterfaceType): InterfaceTypeIconData? =
+    when (type) {
+        InterfaceType.AUTO_INTERFACE -> InterfaceTypeIconData(Icons.Default.Wifi, "WiFi")
+        InterfaceType.TCP_CLIENT -> InterfaceTypeIconData(Icons.Default.Public, "Internet")
+        InterfaceType.ANDROID_BLE -> InterfaceTypeIconData(Icons.Default.Bluetooth, "Bluetooth")
+        InterfaceType.RNODE ->
+            InterfaceTypeIconData(
+                ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna),
+                "LoRa/RNode",
+            )
+        InterfaceType.UNKNOWN -> null
+    }
+
+/**
  * Displays an icon representing the network interface type through which an announce was received.
  * Returns early (renders nothing) for unknown or null interface types.
  */
@@ -276,20 +306,11 @@ fun InterfaceTypeIcon(
             runCatching { InterfaceType.valueOf(it) }.getOrNull()
         } ?: return
 
-    if (type == InterfaceType.UNKNOWN) return
-
-    val (icon, contentDescription) =
-        when (type) {
-            InterfaceType.AUTO_INTERFACE -> Icons.Default.Wifi to "WiFi"
-            InterfaceType.TCP_CLIENT -> Icons.Default.Public to "Internet"
-            InterfaceType.ANDROID_BLE -> Icons.Default.Bluetooth to "Bluetooth"
-            InterfaceType.RNODE -> ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna) to "LoRa/RNode"
-            InterfaceType.UNKNOWN -> return
-        }
+    val data = interfaceTypeIconData(type) ?: return
 
     Icon(
-        imageVector = icon,
-        contentDescription = contentDescription,
+        imageVector = data.imageVector,
+        contentDescription = data.contentDescription,
         modifier = modifier.size(18.dp),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
     )

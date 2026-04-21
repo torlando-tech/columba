@@ -1014,18 +1014,32 @@ class InterfaceManagementViewModel
                         listenPort = state.listenPort.toIntOrNull() ?: 4242,
                         // `InterfaceConfigState.mode` defaults to "roaming" (shared
                         // BLE-biased default) while `InterfaceConfig.TCPServer.mode`
-                        // defaults to "full". The current dialog's InterfaceModeSelector
-                        // surfaces the picker so the user can correct it; `ifEmpty`
-                        // here only covers the case where a wizard clears the field
-                        // entirely.
+                        // defaults to "full". A forwarding server silently
+                        // advertising itself as roaming would mis-signal path
+                        // reachability to peers, which is the common failure mode
+                        // we're guarding against.
                         //
-                        // TODO(unified-ifac-ui): the upcoming TCPServer wizard must
-                        // either (a) initialise `InterfaceConfigState.mode` to "full"
-                        // when the selected type is TCPServer, or (b) always surface
-                        // the mode picker. A server silently defaulting to
-                        // "roaming" would advertise path reachability to peers in
-                        // a way that contradicts its forward-traffic role.
-                        mode = state.mode.ifEmpty { "full" },
+                        // Trade-off: coercing "roaming" → "full" here also
+                        // overrides a user who explicitly picks "roaming" in the
+                        // current dialog's mode dropdown. That's acceptable for
+                        // this PR because (a) TCPServer + roaming is a very
+                        // unusual combination — a server by definition has a
+                        // stable listen address — and (b) until the unified-ifac-ui
+                        // wizard lands, the current dialog surfaces "Roaming" as
+                        // the pre-selected default, so every new TCPServer would
+                        // otherwise be saved as roaming unless the user actively
+                        // opens the picker.
+                        //
+                        // TODO(unified-ifac-ui): once the wizard initialises
+                        // state.mode to "full" on TCPServer type-selection,
+                        // remove this coercion so power users can still pick
+                        // roaming semantics explicitly if they need them.
+                        mode =
+                            if (state.mode.isEmpty() || state.mode == "roaming") {
+                                "full"
+                            } else {
+                                state.mode
+                            },
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.trim().ifEmpty { null },
                     )

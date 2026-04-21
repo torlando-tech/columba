@@ -419,6 +419,12 @@ internal object NativeInterfaceFactory {
                             TAG,
                             "TCPServer ${config.name}: client connected (${spawnedChild.name})",
                         )
+                        // Parity with registerAndTrack: surface the new sub-interface
+                        // to the UI immediately instead of waiting for the next
+                        // debugInfoFlow poll. Without this the InterfaceList card
+                        // for a TCP server lags by a second or two on every client
+                        // connect/disconnect pair.
+                        notifyListeners()
                     }
                     // TCPServerInterface.clientDisconnected already deregisters
                     // via Transport; this callback is purely for surface-level
@@ -429,6 +435,7 @@ internal object NativeInterfaceFactory {
                             TAG,
                             "TCPServer ${config.name}: client disconnected (${spawnedChild.name})",
                         )
+                        notifyListeners()
                     }
                 }
 

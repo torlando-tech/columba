@@ -317,12 +317,11 @@ fun InterfaceManagementScreen(
                                             expanded = contextMenuInterface?.id == iface.id,
                                             onDismiss = { contextMenuInterface = null },
                                             onEdit = {
-                                                val target = iface
                                                 contextMenuInterface = null
-                                                when (target.type) {
-                                                    "RNode" -> onNavigateToRNodeWizard(target.id)
-                                                    "TCPClient" -> onNavigateToTcpClientWizard(target.id)
-                                                    else -> viewModel.showEditDialog(target)
+                                                when (iface.type) {
+                                                    "RNode" -> onNavigateToRNodeWizard(iface.id)
+                                                    "TCPClient" -> onNavigateToTcpClientWizard(iface.id)
+                                                    else -> viewModel.showEditDialog(iface)
                                                 }
                                             },
                                             onDelete = {

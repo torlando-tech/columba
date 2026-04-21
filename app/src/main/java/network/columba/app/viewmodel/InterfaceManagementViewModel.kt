@@ -1015,12 +1015,16 @@ class InterfaceManagementViewModel
                         // `InterfaceConfigState.mode` defaults to "roaming" (shared
                         // BLE-biased default) while `InterfaceConfig.TCPServer.mode`
                         // defaults to "full". The current dialog's InterfaceModeSelector
-                        // surfaces the picker so the user can correct it, but the
-                        // upcoming unified-ifac-ui wizard should be careful not to
-                        // silently hand "roaming" through to a server that is meant
-                        // to forward traffic. `ifEmpty { "full" }` is a belt-and-
-                        // braces guard for the case where the wizard clears the
-                        // field entirely rather than surfacing the picker.
+                        // surfaces the picker so the user can correct it; `ifEmpty`
+                        // here only covers the case where a wizard clears the field
+                        // entirely.
+                        //
+                        // TODO(unified-ifac-ui): the upcoming TCPServer wizard must
+                        // either (a) initialise `InterfaceConfigState.mode` to "full"
+                        // when the selected type is TCPServer, or (b) always surface
+                        // the mode picker. A server silently defaulting to
+                        // "roaming" would advertise path reachability to peers in
+                        // a way that contradicts its forward-traffic role.
                         mode = state.mode.ifEmpty { "full" },
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.trim().ifEmpty { null },

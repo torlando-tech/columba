@@ -6,6 +6,21 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.model.EnrichedContact
@@ -21,18 +36,6 @@ import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.model.SharingDuration
 import network.columba.app.ui.util.InterfaceCategory
 import network.columba.app.ui.util.categorizeInterface
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -209,6 +212,16 @@ class MapViewModel
              * @suppress VisibleForTesting
              */
             internal var enablePeriodicRefresh = true
+
+            /**
+             * Dispatcher used for Room-backed calls reached via
+             * [ReticulumProtocol.getDiscoveredInterfaces] and the first-seen DAO.
+             *
+             * Made internal var to allow injecting a test dispatcher (same pattern as
+             * [DiscoveredInterfacesViewModel] and [InterfaceManagementViewModel]).
+             */
+            @Suppress("InjectDispatcher")
+            internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
             /**
              * Parse appearance JSON from telemetry into icon fields.
@@ -655,56 +668,63 @@ class MapViewModel
                 }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         private suspend fun loadInterfaceMarkers() {
+            // Dispatch to IO because ReticulumProtocol.getDiscoveredInterfaces() reaches
+            // Transport.listDiscoveredInterfaces() -> RoomDiscoveryStore.loadAllDiscovered(),
+            // which performs a synchronous (non-suspend) Room read and throws
+            // IllegalStateException if invoked on the main thread. The first-seen DAO
+            // calls below also hit Room, so we run the whole block off-main.
             try {
-                val discovered = reticulumProtocol.getDiscoveredInterfaces()
-                val withLocation = discovered.filter { it.hasLocation }
-
-                // Compute IDs once and persist first-seen timestamps
-                // (INSERT OR IGNORE preserves originals)
-                val now = System.currentTimeMillis() / 1000
-                val withId =
-                    withLocation.map { iface ->
-                        val id = "${iface.name}\u0000${iface.type}\u0000${iface.reachableOn ?: ""}"
-                        interfaceFirstSeenDao.insertIfNotExists(
-                            network.columba.app.data.db.entity
-                                .InterfaceFirstSeenEntity(id, now),
-                        )
-                        id to iface
-                    }
-
-                // Batch-fetch first-seen timestamps
-                val ids = withId.map { it.first }
-                val firstSeenMap =
-                    if (ids.isNotEmpty()) {
-                        interfaceFirstSeenDao
-                            .getFirstSeenBatch(ids)
-                            .associate { it.interfaceId to it.firstSeenTimestamp }
-                    } else {
-                        emptyMap()
-                    }
-
                 val markers =
-                    withId.map { (id, iface) ->
-                        InterfaceMarker(
-                            id = id,
-                            name = iface.name,
-                            type = iface.type,
-                            category = categorizeInterface(iface.type, iface.reachableOn),
-                            latitude = iface.latitude!!,
-                            longitude = iface.longitude!!,
-                            height = iface.height,
-                            frequency = iface.frequency,
-                            bandwidth = iface.bandwidth,
-                            spreadingFactor = iface.spreadingFactor,
-                            codingRate = iface.codingRate,
-                            modulation = iface.modulation,
-                            reachableOn = iface.reachableOn,
-                            port = iface.port,
-                            status = iface.status,
-                            lastHeard = iface.lastHeard,
-                            hops = iface.hops,
-                            firstSeen = firstSeenMap[id],
-                        )
+                    withContext(ioDispatcher) {
+                        val discovered = reticulumProtocol.getDiscoveredInterfaces()
+                        val withLocation = discovered.filter { it.hasLocation }
+
+                        // Compute IDs once and persist first-seen timestamps
+                        // (INSERT OR IGNORE preserves originals)
+                        val now = System.currentTimeMillis() / 1000
+                        val withId =
+                            withLocation.map { iface ->
+                                val id = "${iface.name}\u0000${iface.type}\u0000${iface.reachableOn ?: ""}"
+                                interfaceFirstSeenDao.insertIfNotExists(
+                                    network.columba.app.data.db.entity
+                                        .InterfaceFirstSeenEntity(id, now),
+                                )
+                                id to iface
+                            }
+
+                        // Batch-fetch first-seen timestamps
+                        val ids = withId.map { it.first }
+                        val firstSeenMap =
+                            if (ids.isNotEmpty()) {
+                                interfaceFirstSeenDao
+                                    .getFirstSeenBatch(ids)
+                                    .associate { it.interfaceId to it.firstSeenTimestamp }
+                            } else {
+                                emptyMap()
+                            }
+
+                        withId.map { (id, iface) ->
+                            InterfaceMarker(
+                                id = id,
+                                name = iface.name,
+                                type = iface.type,
+                                category = categorizeInterface(iface.type, iface.reachableOn),
+                                latitude = iface.latitude!!,
+                                longitude = iface.longitude!!,
+                                height = iface.height,
+                                frequency = iface.frequency,
+                                bandwidth = iface.bandwidth,
+                                spreadingFactor = iface.spreadingFactor,
+                                codingRate = iface.codingRate,
+                                modulation = iface.modulation,
+                                reachableOn = iface.reachableOn,
+                                port = iface.port,
+                                status = iface.status,
+                                lastHeard = iface.lastHeard,
+                                hops = iface.hops,
+                                firstSeen = firstSeenMap[id],
+                            )
+                        }
                     }
                 _state.update { it.copy(interfaceMarkers = markers) }
             } catch (e: Exception) {

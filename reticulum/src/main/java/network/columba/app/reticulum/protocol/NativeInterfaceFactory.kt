@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -152,13 +151,33 @@ internal object NativeInterfaceFactory {
 
     /**
      * Collect the interface's online StateFlow and re-notify listeners on
-     * every distinct transition. The initial value was already surfaced via
-     * the [notifyListeners] call in [registerAndTrack] (which emits a
-     * snapshot with `online=${iface.online.value}`), so we drop(1) to
-     * avoid a duplicate no-op notify for the initial replay StateFlow
-     * hands out on subscribe. StateFlow itself guarantees structural-equality
-     * deduplication at the emitter, so no explicit distinctUntilChanged() is
-     * needed here.
+     * every distinct transition.
+     *
+     * Previously used `.drop(1)` to skip the initial replay value StateFlow
+     * hands out on subscribe, on the assumption that the initial value was
+     * already surfaced via the [notifyListeners] call at the bottom of
+     * [registerAndTrack]. That assumption broke when the interface
+     * transitions online *before* the collector can subscribe:
+     *
+     *   1. [startInterface] calls [iface.start()] (line 125).
+     *   2. For RNode over a warm USB connection, KISS handshake completes
+     *      in well under a second, transitioning `iface.online` false→true.
+     *   3. [registerAndTrack] runs, captures `online=true` in its
+     *      [notifyListeners] snapshot.
+     *   4. [observeOnlineState] subscribes — StateFlow replays the CURRENT
+     *      value (`true`). With `.drop(1)` that emission is swallowed as
+     *      "the initial value". There is no subsequent change, so the
+     *      collector never fires again.
+     *   5. Later, [notifyListeners] is called for unrelated reasons (e.g.
+     *      user toggles another interface) but the interface-list-UI caches
+     *      the first snapshot and never re-reads — the RNode card stays
+     *      "offline" until the app restarts.
+     *
+     * The fix is to remove the drop: the StateFlow's initial replay is now
+     * propagated as one extra [notifyListeners] call (idempotent — same
+     * snapshot as the one emitted at the bottom of [registerAndTrack]),
+     * which closes the window where a fast transition between start() and
+     * subscribe can strand the UI in the wrong state.
      */
     private fun observeOnlineState(
         name: String,
@@ -177,7 +196,6 @@ internal object NativeInterfaceFactory {
                 return@compute null
             }
             iface.online
-                .drop(1)
                 .onEach { online ->
                     Log.d(TAG, "Interface $name online → $online")
                     notifyListeners()

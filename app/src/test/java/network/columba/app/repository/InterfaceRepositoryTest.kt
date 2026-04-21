@@ -1,9 +1,6 @@
 package network.columba.app.repository
 
 import app.cash.turbine.test
-import network.columba.app.data.database.dao.InterfaceDao
-import network.columba.app.data.database.entity.InterfaceEntity
-import network.columba.app.reticulum.model.InterfaceConfig
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -14,6 +11,9 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.data.database.dao.InterfaceDao
+import network.columba.app.data.database.entity.InterfaceEntity
+import network.columba.app.reticulum.model.InterfaceConfig
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -944,6 +944,66 @@ class InterfaceRepositoryTest {
                 assertEquals("192.168.1.1", config.listenIp)
                 assertEquals(8080, config.listenPort)
                 assertEquals("gateway", config.mode)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces deserializes TCPServer IFAC fields`() =
+        runTest {
+            val withIfac =
+                InterfaceEntity(
+                    id = 1,
+                    name = "IFAC Server",
+                    type = "TCPServer",
+                    enabled = true,
+                    configJson =
+                        """{"listen_ip":"0.0.0.0","listen_port":4242,"mode":"full",""" +
+                            """"network_name":"testnet","passphrase":"secret"}""",
+                    displayOrder = 0,
+                )
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(withIfac))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.TCPServer
+                assertEquals("testnet", config.networkName)
+                assertEquals("secret", config.passphrase)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `enabledInterfaces reads null TCPServer IFAC fields when omitted`() =
+        runTest {
+            val withoutIfac =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Plain Server",
+                    type = "TCPServer",
+                    enabled = true,
+                    configJson = """{"listen_ip":"0.0.0.0","listen_port":4242,"mode":"full"}""",
+                    displayOrder = 0,
+                )
+
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(withoutIfac))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.TCPServer
+                assertEquals(null, config.networkName)
+                assertEquals(null, config.passphrase)
 
                 cancelAndIgnoreRemainingEvents()
             }

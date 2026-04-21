@@ -1012,7 +1012,34 @@ class InterfaceManagementViewModel
                         enabled = state.enabled,
                         listenIp = state.listenIp.trim(),
                         listenPort = state.listenPort.toIntOrNull() ?: 4242,
-                        mode = state.mode,
+                        // `InterfaceConfigState.mode` defaults to "roaming" (shared
+                        // BLE-biased default) while `InterfaceConfig.TCPServer.mode`
+                        // defaults to "full". A forwarding server silently
+                        // advertising itself as roaming would mis-signal path
+                        // reachability to peers, which is the common failure mode
+                        // we're guarding against.
+                        //
+                        // Trade-off: coercing "roaming" → "full" here also
+                        // overrides a user who explicitly picks "roaming" in the
+                        // current dialog's mode dropdown. That's acceptable for
+                        // this PR because (a) TCPServer + roaming is a very
+                        // unusual combination — a server by definition has a
+                        // stable listen address — and (b) until the unified-ifac-ui
+                        // wizard lands, the current dialog surfaces "Roaming" as
+                        // the pre-selected default, so every new TCPServer would
+                        // otherwise be saved as roaming unless the user actively
+                        // opens the picker.
+                        //
+                        // TODO(unified-ifac-ui): once the wizard initialises
+                        // state.mode to "full" on TCPServer type-selection,
+                        // remove this coercion so power users can still pick
+                        // roaming semantics explicitly if they need them.
+                        mode =
+                            if (state.mode.isEmpty() || state.mode == "roaming") {
+                                "full"
+                            } else {
+                                state.mode
+                            },
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.trim().ifEmpty { null },
                     )

@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -44,8 +46,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -89,7 +94,7 @@ import network.columba.app.viewmodel.InterfaceManagementViewModel
 fun InterfaceManagementScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
-    onNavigateToTcpClientWizard: () -> Unit = {},
+    onNavigateToTcpClientWizard: (interfaceId: Long?) -> Unit = {},
     onNavigateToInterfaceStats: (interfaceId: Long) -> Unit = {},
     onNavigateToDiscoveredInterfaces: () -> Unit = {},
     viewModel: InterfaceManagementViewModel = hiltViewModel(),
@@ -100,6 +105,9 @@ fun InterfaceManagementScreen(
 
     // State for delete confirmation dialog
     var interfaceToDelete by remember { mutableStateOf<InterfaceEntity?>(null) }
+
+    // State for long-press context menu (Edit / Delete)
+    var contextMenuInterface by remember { mutableStateOf<InterfaceEntity?>(null) }
 
     // State for error dialog
     var errorDialogInterface by remember { mutableStateOf<InterfaceEntity?>(null) }
@@ -282,28 +290,47 @@ fun InterfaceManagementScreen(
                                     }
 
                                 item(key = "iface_${iface.id}") {
-                                    InterfaceCard(
-                                        interfaceEntity = iface,
-                                        onClick = { onNavigateToInterfaceStats(iface.id) },
-                                        onClickLabel = stringResource(R.string.view_interface_details),
-                                        onLongClick = { interfaceToDelete = iface },
-                                        onLongClickLabel = stringResource(R.string.delete_interface),
-                                        onToggle = { enabled ->
-                                            val hasPermissions = BlePermissionManager.hasAllPermissions(context)
-                                            viewModel.toggleInterface(iface.id, enabled, hasPermissions)
-                                        },
-                                        bluetoothState = state.bluetoothState,
-                                        blePermissionsGranted = state.blePermissionsGranted,
-                                        isOnline = isOnline,
-                                        peerCount = spawnedPeers.size,
-                                        onErrorClick = { errorDialogInterface = iface },
-                                        onRequestPermissions =
-                                            if (iface.isBleInterface()) {
-                                                { permissionLauncher.launch(BlePermissionManager.getRequiredPermissions().toTypedArray()) }
-                                            } else {
-                                                null
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        InterfaceCard(
+                                            interfaceEntity = iface,
+                                            onClick = { onNavigateToInterfaceStats(iface.id) },
+                                            onClickLabel = stringResource(R.string.view_interface_details),
+                                            onLongClick = { contextMenuInterface = iface },
+                                            onLongClickLabel = stringResource(R.string.interface_actions),
+                                            onToggle = { enabled ->
+                                                val hasPermissions = BlePermissionManager.hasAllPermissions(context)
+                                                viewModel.toggleInterface(iface.id, enabled, hasPermissions)
                                             },
-                                    )
+                                            bluetoothState = state.bluetoothState,
+                                            blePermissionsGranted = state.blePermissionsGranted,
+                                            isOnline = isOnline,
+                                            peerCount = spawnedPeers.size,
+                                            onErrorClick = { errorDialogInterface = iface },
+                                            onRequestPermissions =
+                                                if (iface.isBleInterface()) {
+                                                    { permissionLauncher.launch(BlePermissionManager.getRequiredPermissions().toTypedArray()) }
+                                                } else {
+                                                    null
+                                                },
+                                        )
+                                        InterfaceCardContextMenu(
+                                            expanded = contextMenuInterface?.id == iface.id,
+                                            onDismiss = { contextMenuInterface = null },
+                                            onEdit = {
+                                                val target = iface
+                                                contextMenuInterface = null
+                                                when (target.type) {
+                                                    "RNode" -> onNavigateToRNodeWizard(target.id)
+                                                    "TCPClient" -> onNavigateToTcpClientWizard(target.id)
+                                                    else -> viewModel.showEditDialog(target)
+                                                }
+                                            },
+                                            onDelete = {
+                                                interfaceToDelete = iface
+                                                contextMenuInterface = null
+                                            },
+                                        )
+                                    }
                                 }
 
                                 // Spawned sub-interfaces indented below parent
@@ -443,7 +470,7 @@ fun InterfaceManagementScreen(
                 showTypeSelector = false
                 when (type) {
                     "RNode" -> onNavigateToRNodeWizard(null)
-                    "TCPClient" -> onNavigateToTcpClientWizard()
+                    "TCPClient" -> onNavigateToTcpClientWizard(null)
                     "TCPServer" -> {
                         viewModel.showAddDialog()
                         viewModel.updateConfigState {
@@ -691,6 +718,55 @@ fun EmptyInterfacesView() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/**
+ * DropdownMenu shown on long-press of an [InterfaceCard], offering Edit / Delete.
+ * Anchored to the card via its parent Box; the caller controls [expanded].
+ */
+@Composable
+fun InterfaceCardContextMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 3.dp,
+    ) {
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                )
+            },
+            text = { Text(stringResource(R.string.edit_interface)) },
+            onClick = onEdit,
+        )
+
+        HorizontalDivider()
+
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.delete_interface),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            },
+            onClick = onDelete,
+        )
     }
 }
 

@@ -5,8 +5,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import network.columba.app.data.model.MapStylePreference
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.util.InterfaceCategory
 import org.junit.Assert.assertEquals
@@ -26,21 +28,40 @@ class MapLayersSheetContentTest {
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
-    @Test
-    fun rendersHeaderAndOneChipPerProvidedCategory() {
+    private fun render(
+        categories: List<InterfaceCategory> = listOf(InterfaceCategory.TCP),
+        filterEnabled: Map<InterfaceCategory, Boolean> = mapOf(InterfaceCategory.TCP to true),
+        onToggle: (InterfaceCategory) -> Unit = {},
+        stylePreference: MapStylePreference = MapStylePreference.AUTO,
+        onStylePreferenceChange: (MapStylePreference) -> Unit = {},
+    ) {
         composeRule.setContent {
             MapLayersSheetContent(
-                categories = listOf(InterfaceCategory.TCP, InterfaceCategory.BLUETOOTH, InterfaceCategory.LORA),
-                filterEnabled =
-                    mapOf(
-                        InterfaceCategory.TCP to true,
-                        InterfaceCategory.BLUETOOTH to true,
-                        InterfaceCategory.LORA to true,
-                    ),
-                onToggle = {},
+                categories = categories,
+                filterEnabled = filterEnabled,
+                onToggle = onToggle,
+                stylePreference = stylePreference,
+                onStylePreferenceChange = onStylePreferenceChange,
             )
         }
+    }
 
+    @Test
+    fun rendersStylePickerAndOneChipPerProvidedCategory() {
+        render(
+            categories = listOf(InterfaceCategory.TCP, InterfaceCategory.BLUETOOTH, InterfaceCategory.LORA),
+            filterEnabled =
+                mapOf(
+                    InterfaceCategory.TCP to true,
+                    InterfaceCategory.BLUETOOTH to true,
+                    InterfaceCategory.LORA to true,
+                ),
+        )
+
+        composeRule.onNodeWithText("Map style").assertIsDisplayed()
+        composeRule.onNodeWithText("Auto").assertIsDisplayed()
+        composeRule.onNodeWithText("Light").assertIsDisplayed()
+        composeRule.onNodeWithText("Dark").assertIsDisplayed()
         composeRule.onNodeWithText("Show on map").assertIsDisplayed()
         composeRule.onNodeWithText("TCP/IP").assertIsDisplayed()
         composeRule.onNodeWithText("Bluetooth").assertIsDisplayed()
@@ -48,18 +69,51 @@ class MapLayersSheetContentTest {
     }
 
     @Test
+    fun hidesInterfaceChipsSectionWhenNoCategories() {
+        render(categories = emptyList(), filterEnabled = emptyMap())
+
+        // Style picker still shown
+        composeRule.onNodeWithText("Map style").assertIsDisplayed()
+        composeRule.onNodeWithText("Auto").assertIsDisplayed()
+        // "Show on map" header should NOT be displayed when there are no categories
+        composeRule
+            .onAllNodesWithText("Show on map")
+            .fetchSemanticsNodes()
+            .let { assertEquals(0, it.size) }
+    }
+
+    @Test
+    fun stylePickerSelectedReflectsPreference() {
+        render(stylePreference = MapStylePreference.DARK)
+
+        composeRule.onNodeWithText("Dark").assertIsSelected()
+        composeRule.onNodeWithText("Auto").assertIsNotSelected()
+        composeRule.onNodeWithText("Light").assertIsNotSelected()
+    }
+
+    @Test
+    fun clickingStylePickerInvokesCallback() {
+        val changes = mutableListOf<MapStylePreference>()
+        render(
+            stylePreference = MapStylePreference.AUTO,
+            onStylePreferenceChange = { changes += it },
+        )
+
+        composeRule.onNodeWithText("Dark").performClick()
+
+        assertEquals(listOf(MapStylePreference.DARK), changes)
+    }
+
+    @Test
     fun chipSelectedStateReflectsFilterEnabledMap() {
-        composeRule.setContent {
-            MapLayersSheetContent(
-                categories = listOf(InterfaceCategory.TCP, InterfaceCategory.BLUETOOTH),
-                filterEnabled =
-                    mapOf(
-                        InterfaceCategory.TCP to true,
-                        InterfaceCategory.BLUETOOTH to false,
-                    ),
-                onToggle = {},
-            )
-        }
+        render(
+            categories = listOf(InterfaceCategory.TCP, InterfaceCategory.BLUETOOTH),
+            filterEnabled =
+                mapOf(
+                    InterfaceCategory.TCP to true,
+                    InterfaceCategory.BLUETOOTH to false,
+                ),
+        )
 
         composeRule.onNodeWithText("TCP/IP").assertIsSelected()
         composeRule.onNodeWithText("Bluetooth").assertIsNotSelected()
@@ -67,14 +121,10 @@ class MapLayersSheetContentTest {
 
     @Test
     fun categoryMissingFromMapDefaultsToSelected() {
-        composeRule.setContent {
-            MapLayersSheetContent(
-                categories = listOf(InterfaceCategory.TCP),
-                // Empty map — chip should still render as selected via ?: true fallback
-                filterEnabled = emptyMap(),
-                onToggle = {},
-            )
-        }
+        render(
+            categories = listOf(InterfaceCategory.TCP),
+            filterEnabled = emptyMap(),
+        )
 
         composeRule.onNodeWithText("TCP/IP").assertIsSelected()
     }
@@ -82,17 +132,15 @@ class MapLayersSheetContentTest {
     @Test
     fun clickingChipInvokesOnToggleWithThatCategory() {
         val toggled = mutableListOf<InterfaceCategory>()
-        composeRule.setContent {
-            MapLayersSheetContent(
-                categories = listOf(InterfaceCategory.TCP, InterfaceCategory.LORA),
-                filterEnabled =
-                    mapOf(
-                        InterfaceCategory.TCP to true,
-                        InterfaceCategory.LORA to true,
-                    ),
-                onToggle = { toggled += it },
-            )
-        }
+        render(
+            categories = listOf(InterfaceCategory.TCP, InterfaceCategory.LORA),
+            filterEnabled =
+                mapOf(
+                    InterfaceCategory.TCP to true,
+                    InterfaceCategory.LORA to true,
+                ),
+            onToggle = { toggled += it },
+        )
 
         composeRule.onNodeWithText("LoRa Radio").performClick()
 

@@ -56,4 +56,4 @@ verification:
   - This prevents discovery_timeout by avoiding CDM's secondary scan when device may have stopped advertising
   - Manual testing required: Run app, scan for RNode, click discovered device - should select immediately without timeout
 files_changed:
-  - app/src/main/java/com/lxmf/messenger/viewmodel/RNodeWizardViewModel.kt
+  - app/src/main/java/network.columba.app/viewmodel/RNodeWizardViewModel.kt

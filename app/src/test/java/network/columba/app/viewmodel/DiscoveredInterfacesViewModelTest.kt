@@ -1,0 +1,1350 @@
+@file:Suppress("InjectDispatcher")
+
+package network.columba.app.viewmodel
+
+import android.util.Log
+import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import app.cash.turbine.test
+import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.SettingsRepository
+import network.columba.app.reticulum.protocol.DiscoveredInterface
+import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.service.InterfaceConfigManager
+import io.mockk.clearAllMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+
+/**
+ * Unit tests for DiscoveredInterfacesViewModel.
+ *
+ * Tests cover:
+ * - Initial state
+ * - Loading discovered interfaces
+ * - autoconnectedEndpoints state management
+ * - isAutoconnected() helper function
+ * - Discovery settings loading
+ * - Error handling
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class DiscoveredInterfacesViewModelTest {
+    @get:Rule
+    val instantExecutorRule = InstantTaskExecutorRule()
+
+    private val testDispatcher = StandardTestDispatcher()
+
+    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var interfaceRepository: InterfaceRepository
+    private lateinit var interfaceConfigManager: InterfaceConfigManager
+    private lateinit var viewModel: DiscoveredInterfacesViewModel
+
+    private val bootstrapNamesFlow = MutableStateFlow<List<String>>(emptyList())
+
+    @Before
+    fun setup() {
+        Dispatchers.setMain(testDispatcher)
+
+        // Mock Android Log to prevent "not mocked" errors
+        mockkStatic(Log::class)
+        every { Log.d(any(), any()) } returns 0
+        every { Log.e(any(), any()) } returns 0
+        every { Log.e(any(), any(), any()) } returns 0
+        every { Log.i(any(), any()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
+
+        // Set test dispatcher for ViewModel
+        DiscoveredInterfacesViewModel.ioDispatcher = testDispatcher
+
+        // Relaxed mocks for protocol/infrastructure classes with many methods
+        @Suppress("NoRelaxedMocks") // Protocol classes have many methods; explicit stubs provided for tested methods
+        reticulumProtocol = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Repository has many settings methods; explicit stubs provided for tested methods
+        settingsRepository = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Repository has many interface methods; explicit stubs provided for tested methods
+        interfaceRepository = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Manager has many config methods; explicit stubs provided for tested methods
+        interfaceConfigManager = mockk(relaxed = true)
+
+        // Default mock responses
+        coEvery { reticulumProtocol.isDiscoveryEnabled() } returns false
+        coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns emptyList()
+        coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns emptySet()
+        coEvery { reticulumProtocol.setDiscoveryEnabled(any()) } returns Unit
+        coEvery { reticulumProtocol.setAutoconnectLimit(any()) } returns Unit
+        coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+        coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+        coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+        coEvery { settingsRepository.saveAutoconnectIfacOnly(any()) } returns Unit
+        coEvery { reticulumProtocol.setAutoconnectIfacOnly(any()) } returns Unit
+        every { interfaceRepository.bootstrapInterfaceNames } returns bootstrapNamesFlow
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+        unmockkStatic(Log::class)
+        clearAllMocks()
+        // Reset dispatcher
+        DiscoveredInterfacesViewModel.ioDispatcher = Dispatchers.IO
+    }
+
+    private fun createViewModel(): DiscoveredInterfacesViewModel =
+        DiscoveredInterfacesViewModel(
+            reticulumProtocol,
+            settingsRepository,
+            interfaceRepository,
+        )
+
+    /**
+     * Legacy helper retained for older tests; direct native hot-apply no longer uses it.
+     */
+    private fun mockApplyInterfaceChangesSuccess() {
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
+            firstArg<(() -> Unit)?>()?.invoke()
+            Result.success(Unit)
+        }
+    }
+
+    // ========== Initial State Tests ==========
+
+    @Test
+    fun `state - initial state has empty interfaces list`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val initial = awaitItem()
+                assertTrue(initial.interfaces.isEmpty())
+                assertTrue(initial.isLoading)
+            }
+        }
+
+    @Test
+    fun `state - initial state has empty autoconnectedEndpoints`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                val initial = awaitItem()
+                assertTrue(initial.autoconnectedEndpoints.isEmpty())
+            }
+        }
+
+    // ========== autoconnectedEndpoints State Tests ==========
+
+    @Test
+    fun `autoconnectedEndpoints - loads from protocol`() =
+        runTest {
+            // Given
+            val endpoints = setOf("192.168.1.1:4242", "10.0.0.100:5353")
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns endpoints
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(endpoints, state.autoconnectedEndpoints)
+            }
+        }
+
+    @Test
+    fun `autoconnectedEndpoints - handles protocol error gracefully`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } throws RuntimeException("Protocol error")
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.autoconnectedEndpoints.isEmpty())
+                assertTrue(state.errorMessage?.contains("Failed to load") == true)
+            }
+        }
+
+    @Test
+    fun `autoconnectedEndpoints - updates on reload`() =
+        runTest {
+            // Given: Initial empty endpoints
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns emptySet()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When: Endpoints become available
+            val newEndpoints = setOf("192.168.1.1:4242")
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns newEndpoints
+            viewModel.loadDiscoveredInterfaces()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(newEndpoints, state.autoconnectedEndpoints)
+            }
+        }
+
+    // ========== isAutoconnected() Helper Tests ==========
+
+    @Test
+    fun `isAutoconnected - returns false when endpoints empty`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns emptySet()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.1.1",
+                    port = 4242,
+                )
+
+            // Then
+            assertFalse(viewModel.isAutoconnected(iface))
+        }
+
+    @Test
+    fun `isAutoconnected - returns false when interface has no host`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns setOf("192.168.1.1:4242")
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = null,
+                    port = 4242,
+                )
+
+            // Then
+            assertFalse(viewModel.isAutoconnected(iface))
+        }
+
+    @Test
+    fun `isAutoconnected - returns false when interface has no port`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns setOf("192.168.1.1:4242")
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.1.1",
+                    port = null,
+                )
+
+            // Then
+            assertFalse(viewModel.isAutoconnected(iface))
+        }
+
+    @Test
+    fun `isAutoconnected - returns false when endpoint not in set`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns setOf("192.168.1.1:4242")
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When: Different IP address
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.2.2",
+                    port = 4242,
+                )
+
+            // Then
+            assertFalse(viewModel.isAutoconnected(iface))
+        }
+
+    @Test
+    fun `isAutoconnected - returns true when endpoint matches`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns setOf("192.168.1.1:4242")
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            val iface =
+                createTestDiscoveredInterface(
+                    reachableOn = "192.168.1.1",
+                    port = 4242,
+                )
+
+            // Then
+            assertTrue(viewModel.isAutoconnected(iface))
+        }
+
+    @Test
+    fun `isAutoconnected - matches multiple endpoints correctly`() =
+        runTest {
+            // Given
+            val endpoints = setOf("192.168.1.1:4242", "10.0.0.100:5353", "200:abcd::1:4242")
+            coEvery { reticulumProtocol.getAutoconnectedEndpoints() } returns endpoints
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When/Then: Match first endpoint
+            val iface1 = createTestDiscoveredInterface(reachableOn = "192.168.1.1", port = 4242)
+            assertTrue(viewModel.isAutoconnected(iface1))
+
+            // When/Then: Match second endpoint
+            val iface2 = createTestDiscoveredInterface(reachableOn = "10.0.0.100", port = 5353)
+            assertTrue(viewModel.isAutoconnected(iface2))
+
+            // When/Then: Match IPv6 endpoint
+            val iface3 = createTestDiscoveredInterface(reachableOn = "200:abcd::1", port = 4242)
+            assertTrue(viewModel.isAutoconnected(iface3))
+
+            // When/Then: No match
+            val iface4 = createTestDiscoveredInterface(reachableOn = "192.168.3.3", port = 4242)
+            assertFalse(viewModel.isAutoconnected(iface4))
+        }
+
+    // ========== Discovery Settings Tests ==========
+
+    @Test
+    fun `loadDiscoverySettings - loads setting enabled state`() =
+        runTest {
+            // Given
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns true
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.discoverInterfacesEnabled)
+                assertEquals(5, state.autoconnectCount)
+            }
+        }
+
+    @Test
+    fun `loadDiscoverySettings - loads bootstrap interface names`() =
+        runTest {
+            // Given
+            val bootstrapNames = listOf("TCPClient1", "TCPClient2")
+            bootstrapNamesFlow.value = bootstrapNames
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(bootstrapNames, state.bootstrapInterfaceNames)
+            }
+        }
+
+    @Test
+    fun `isDiscoveryEnabled - loads from protocol`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.isDiscoveryEnabled() } returns true
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.isDiscoveryEnabled)
+            }
+        }
+
+    // ========== loadDiscoveredInterfaces Tests ==========
+
+    @Test
+    fun `loadDiscoveredInterfaces - updates interfaces list`() =
+        runTest {
+            // Given
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Interface1"),
+                    createTestDiscoveredInterface(name = "Interface2"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(2, state.interfaces.size)
+                assertFalse(state.isLoading)
+            }
+        }
+
+    @Test
+    fun `loadDiscoveredInterfaces - calculates status counts`() =
+        runTest {
+            // Given
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Available1", status = "available"),
+                    createTestDiscoveredInterface(name = "Available2", status = "available"),
+                    createTestDiscoveredInterface(name = "Unknown1", status = "unknown"),
+                    createTestDiscoveredInterface(name = "Stale1", status = "stale"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(2, state.availableCount)
+                assertEquals(1, state.unknownCount)
+                assertEquals(1, state.staleCount)
+            }
+        }
+
+    @Test
+    fun `loadDiscoveredInterfaces - sets error message on failure`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } throws RuntimeException("Network error")
+
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertTrue(state.errorMessage?.contains("Failed to load discovered interfaces") == true)
+                assertFalse(state.isLoading)
+            }
+        }
+
+    // ========== setUserLocation Tests ==========
+
+    @Test
+    fun `setUserLocation - updates state with coordinates`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setUserLocation(45.0, -122.0)
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(45.0, state.userLatitude)
+                assertEquals(-122.0, state.userLongitude)
+            }
+        }
+
+    // ========== calculateDistance Tests ==========
+
+    @Test
+    fun `calculateDistance - returns null when user location not set`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val iface =
+                createTestDiscoveredInterface(
+                    latitude = 45.5,
+                    longitude = -122.5,
+                )
+
+            // Then
+            assertNull(viewModel.calculateDistance(iface))
+        }
+
+    @Test
+    fun `calculateDistance - returns null when interface location not set`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0)
+
+            val iface =
+                createTestDiscoveredInterface(
+                    latitude = null,
+                    longitude = null,
+                )
+
+            // Then
+            assertNull(viewModel.calculateDistance(iface))
+        }
+
+    @Test
+    fun `calculateDistance - returns distance when both locations set`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0)
+
+            val iface =
+                createTestDiscoveredInterface(
+                    latitude = 45.5,
+                    longitude = -122.5,
+                )
+
+            // Then
+            val distance = viewModel.calculateDistance(iface)
+            assertTrue(distance != null && distance > 0)
+        }
+
+    // ========== clearError Tests ==========
+
+    @Test
+    fun `clearError - sets error message to null`() =
+        runTest {
+            // Given: Start with an error
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } throws RuntimeException("Error")
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.clearError()
+
+            // Then
+            viewModel.state.test {
+                val state = awaitItem()
+                assertNull(state.errorMessage)
+            }
+        }
+
+    // ========== setAutoconnectCount Tests ==========
+
+    @Test
+    fun `setAutoconnectCount - updates state with new count`() =
+        runTest {
+            // Given
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `setAutoconnectCount - clamps value to minimum of 0`() =
+        runTest {
+            // Given
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(-5)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `setAutoconnectCount - clamps value to maximum of 10`() =
+        runTest {
+            // Given
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(15)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(10, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `setAutoconnectCount - saves to settings repository`() =
+        runTest {
+            // Given
+            mockApplyInterfaceChangesSuccess()
+            coEvery { settingsRepository.saveAutoconnectDiscoveredCount(any()) } returns Unit
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(7)
+            advanceUntilIdle()
+
+            // Then: State reflects the new count AND repository was called
+            assertEquals(7, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(7) }
+        }
+
+    @Test
+    fun `setAutoconnectCount - applies limit directly without service restart`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then
+            assertFalse(viewModel.state.value.isRestarting)
+            coVerify { reticulumProtocol.setAutoconnectLimit(5) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        }
+
+    @Test
+    fun `setAutoconnectCount - clears isRestarting after completion`() =
+        runTest {
+            // Given
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then: isRestarting should be false after completion
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `setAutoconnectCount - sets error message on hot-apply failure`() =
+        runTest {
+            // Given
+            coEvery { reticulumProtocol.setAutoconnectLimit(any()) } throws RuntimeException("Hot update failed")
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.state.value.errorMessage
+                    ?.contains("Failed to update autoconnect count") == true,
+            )
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    // ========== toggleDiscovery Tests ==========
+
+    @Test
+    fun `toggleDiscovery - when enabling and autoconnect is never configured defaults to 3`() =
+        runTest {
+            // Given: Discovery disabled, autoconnect never configured (-1 sentinel)
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns -1
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state (-1 coerced to 0 for UI display)
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to enable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: Should use default of 3
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(3, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(3) }
+        }
+
+    @Test
+    fun `toggleDiscovery - when enabling preserves explicit 0 setting`() =
+        runTest {
+            // Given: Discovery disabled, but user explicitly set autoconnect to 0 for debugging
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to enable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: Should preserve 0 (user's explicit debugging choice)
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(0) }
+        }
+
+    @Test
+    fun `toggleDiscovery - when enabling preserves existing autoconnect count`() =
+        runTest {
+            // Given: Discovery disabled, but autoconnect count was previously set to 5
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to enable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: Should preserve the 5
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(5) }
+        }
+
+    @Test
+    fun `toggleDiscovery - when disabling sets UI autoconnect to 0 but preserves saved preference`() =
+        runTest {
+            // Given: Discovery enabled with autoconnect at 5
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns true
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Verify initial state
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+
+            // When: Toggle to disable
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: UI shows 0, but we do NOT save 0 to repository (preserving user's preference)
+            assertFalse(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(0, viewModel.state.value.autoconnectCount)
+            // Verify saveAutoconnectDiscoveredCount was NOT called when disabling
+            coVerify(exactly = 0) { settingsRepository.saveAutoconnectDiscoveredCount(0) }
+        }
+
+    @Test
+    fun `toggleDiscovery - preserves user preference through disable and re-enable cycle`() =
+        runTest {
+            // Given: Discovery enabled with autoconnect at 5
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns true
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 5
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+
+            // When: Disable discovery
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            assertEquals(0, viewModel.state.value.autoconnectCount) // UI shows 0
+
+            // And: Re-enable discovery
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: User's preference of 5 is restored (read from repository)
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            assertEquals(5, viewModel.state.value.autoconnectCount)
+        }
+
+    @Test
+    fun `toggleDiscovery - saves enabled state to settings repository`() =
+        runTest {
+            // Given
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then: State reflects enabled AND repository was called
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            coVerify { settingsRepository.saveDiscoverInterfacesEnabled(true) }
+        }
+
+    @Test
+    fun `toggleDiscovery - applies setting directly without service restart`() =
+        runTest {
+            // Given
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then
+            assertFalse(viewModel.state.value.isRestarting)
+            coVerify { reticulumProtocol.setDiscoveryEnabled(true) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        }
+
+    @Test
+    fun `toggleDiscovery - sets error message on direct apply failure`() =
+        runTest {
+            // Given
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { reticulumProtocol.setDiscoveryEnabled(any()) } throws RuntimeException("Service error")
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.state.value.errorMessage
+                    ?.contains("Failed to update discovery settings") == true,
+            )
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    // ========== Sort Mode Tests ==========
+
+    @Test
+    fun `sortMode - initial state is AVAILABILITY_AND_QUALITY`() =
+        runTest {
+            // When
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode - changes sort mode to PROXIMITY when user location available`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0) // Required for PROXIMITY mode
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode - changes sort mode back to AVAILABILITY_AND_QUALITY`() =
+        runTest {
+            // Given
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(45.0, -122.0) // Required for PROXIMITY mode
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY)
+
+            // Then - use .value for synchronous state checks
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - sorts interfaces by distance when user location available`() =
+        runTest {
+            // Given: User at origin (0,0), interfaces at various distances
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Far", latitude = 10.0, longitude = 10.0), // ~1570 km
+                    createTestDiscoveredInterface(name = "Near", latitude = 1.0, longitude = 1.0), // ~157 km
+                    createTestDiscoveredInterface(name = "Medium", latitude = 5.0, longitude = 5.0), // ~786 km
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Should be sorted nearest first - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Medium", state.interfaces[1].name)
+            assertEquals("Far", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - ignored when user location not available`() =
+        runTest {
+            // Given: Interfaces with location but NO user location
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "First", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Second", latitude = 1.0, longitude = 1.0),
+                    createTestDiscoveredInterface(name = "Third", latitude = 5.0, longitude = 5.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            // Note: NOT setting user location
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Sort mode should remain AVAILABILITY_AND_QUALITY (request ignored)
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+            assertEquals("Third", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - places interfaces without location at end`() =
+        runTest {
+            // Given: Mix of interfaces with and without location
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "NoLocation1", latitude = null, longitude = null),
+                    createTestDiscoveredInterface(name = "HasLocation", latitude = 1.0, longitude = 1.0),
+                    createTestDiscoveredInterface(name = "NoLocation2", latitude = null, longitude = null),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Interface with location first, then those without (in original order)
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("HasLocation", state.interfaces[0].name)
+            assertEquals("NoLocation1", state.interfaces[1].name)
+            assertEquals("NoLocation2", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setSortMode AVAILABILITY_AND_QUALITY - preserves original order from Python`() =
+        runTest {
+            // Given: Interfaces in Python's sorted order (status_code desc, stamp_value desc)
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "First", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Second", latitude = 1.0, longitude = 1.0),
+                    createTestDiscoveredInterface(name = "Third", latitude = 5.0, longitude = 5.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When: Explicitly set to AVAILABILITY_AND_QUALITY (the default)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY)
+
+            // Then: Order should match original from Python - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(3, state.interfaces.size)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+            assertEquals("Third", state.interfaces[2].name)
+        }
+
+    @Test
+    fun `setUserLocation - re-sorts interfaces when in PROXIMITY mode`() =
+        runTest {
+            // Given: Interfaces loaded, PROXIMITY mode set, then location updated
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Far", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Near", latitude = 1.0, longitude = 1.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Set location first, then change to proximity mode
+            viewModel.setUserLocation(0.0, 0.0)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Verify sorted by distance - use .value for synchronous state checks
+            var state = viewModel.state.value
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Far", state.interfaces[1].name)
+
+            // When: User moves to new location (closer to "Far" interface)
+            viewModel.setUserLocation(9.0, 9.0)
+
+            // Then: Should re-sort with new distances
+            state = viewModel.state.value
+            assertEquals("Far", state.interfaces[0].name) // Now closer
+            assertEquals("Near", state.interfaces[1].name) // Now farther
+        }
+
+    @Test
+    fun `setUserLocation - does NOT re-sort when in AVAILABILITY_AND_QUALITY mode`() =
+        runTest {
+            // Given: Interfaces in specific order
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "First", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Second", latitude = 1.0, longitude = 1.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When: Set user location while in AVAILABILITY_AND_QUALITY mode (default)
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // Then: Order should remain unchanged - use .value for synchronous state checks
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, state.sortMode)
+            assertEquals("First", state.interfaces[0].name)
+            assertEquals("Second", state.interfaces[1].name)
+        }
+
+    @Test
+    fun `loadDiscoveredInterfaces - applies current sort mode`() =
+        runTest {
+            // Given: Initial load with default sort mode
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Far", latitude = 10.0, longitude = 10.0),
+                    createTestDiscoveredInterface(name = "Near", latitude = 1.0, longitude = 1.0),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Set user location and switch to PROXIMITY mode
+            viewModel.setUserLocation(0.0, 0.0)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Verify initial sort - use .value for synchronous state checks
+            assertEquals(
+                "Near",
+                viewModel.state.value.interfaces[0]
+                    .name,
+            )
+
+            // When: Reload interfaces (simulating refresh)
+            viewModel.loadDiscoveredInterfaces()
+            advanceUntilIdle()
+
+            // Then: New data should still be sorted by proximity
+            val state = viewModel.state.value
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
+            assertEquals("Near", state.interfaces[0].name)
+            assertEquals("Far", state.interfaces[1].name)
+        }
+
+    @Test
+    fun `loadDiscoveredInterfaces - resets sortMode to QUALITY if location unavailable`() =
+        runTest {
+            // Given: User had PROXIMITY mode with location
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Interface1"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Set location and PROXIMITY mode
+            viewModel.setUserLocation(0.0, 0.0)
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, viewModel.state.value.sortMode)
+
+            // Simulate location becoming unavailable via reflection (edge case)
+            val fieldState = DiscoveredInterfacesViewModel::class.java.getDeclaredField("_state")
+            fieldState.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val mutableState = fieldState.get(viewModel) as MutableStateFlow<DiscoveredInterfacesState>
+            mutableState.value = mutableState.value.copy(userLatitude = null, userLongitude = null)
+
+            // When: Reload interfaces while in PROXIMITY mode but no location
+            viewModel.loadDiscoveredInterfaces()
+            advanceUntilIdle()
+
+            // Then: sortMode should be reset to AVAILABILITY_AND_QUALITY
+            assertEquals(DiscoveredInterfacesSortMode.AVAILABILITY_AND_QUALITY, viewModel.state.value.sortMode)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - handles empty interfaces list`() =
+        runTest {
+            // Given: No interfaces
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns emptyList()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Should not crash, empty list should remain empty
+            val state = viewModel.state.value
+            assertTrue(state.interfaces.isEmpty())
+            assertEquals(DiscoveredInterfacesSortMode.PROXIMITY, state.sortMode)
+        }
+
+    @Test
+    fun `setSortMode PROXIMITY - handles all interfaces without location`() =
+        runTest {
+            // Given: All interfaces missing location data
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "NoLoc1", latitude = null, longitude = null),
+                    createTestDiscoveredInterface(name = "NoLoc2", latitude = null, longitude = null),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setUserLocation(0.0, 0.0)
+
+            // When
+            viewModel.setSortMode(DiscoveredInterfacesSortMode.PROXIMITY)
+
+            // Then: Order should be preserved (all go to "without location" group)
+            val state = viewModel.state.value
+            assertEquals(2, state.interfaces.size)
+            assertEquals("NoLoc1", state.interfaces[0].name)
+            assertEquals("NoLoc2", state.interfaces[1].name)
+        }
+
+    // ========== Search + Filter Tests ==========
+
+    @Test
+    fun `setSearchQuery filters by name case-insensitively`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Columba Node Alpha", reachableOn = "10.0.0.1"),
+                    createTestDiscoveredInterface(name = "Some Other Interface", reachableOn = "10.0.0.2"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setSearchQuery("columba")
+
+            val state = viewModel.state.value
+            assertEquals("columba", state.searchQuery)
+            assertEquals(1, state.interfaces.size)
+            assertEquals("Columba Node Alpha", state.interfaces[0].name)
+        }
+
+    @Test
+    fun `setSearchQuery also matches host and ifac network name`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "Node A", reachableOn = "mesh.example.com"),
+                    createTestDiscoveredInterface(name = "Node B", reachableOn = "10.0.0.2", ifacNetname = "community-mesh"),
+                    createTestDiscoveredInterface(name = "Node C", reachableOn = "10.0.0.3"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setSearchQuery("mesh")
+
+            val names =
+                viewModel.state.value.interfaces
+                    .map { it.name }
+                    .toSet()
+            assertEquals(setOf("Node A", "Node B"), names)
+        }
+
+    @Test
+    fun `toggleTypeFilter restricts to selected types`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "TCP-1", type = "TCPServerInterface"),
+                    createTestDiscoveredInterface(name = "Radio-1", type = "RNodeInterface"),
+                    createTestDiscoveredInterface(name = "I2P-1", type = "I2PInterface"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.toggleTypeFilter(DiscoveredInterfaceTypeFilter.TCP)
+
+            assertEquals(
+                listOf("TCP-1"),
+                viewModel.state.value.interfaces
+                    .map { it.name },
+            )
+
+            viewModel.toggleTypeFilter(DiscoveredInterfaceTypeFilter.RADIO)
+
+            val names =
+                viewModel.state.value.interfaces
+                    .map { it.name }
+                    .toSet()
+            assertEquals(setOf("TCP-1", "Radio-1"), names)
+        }
+
+    @Test
+    fun `clearFilters resets search and type filters`() =
+        runTest {
+            val interfaces =
+                listOf(
+                    createTestDiscoveredInterface(name = "TCP-1", type = "TCPServerInterface"),
+                    createTestDiscoveredInterface(name = "Radio-1", type = "RNodeInterface"),
+                )
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } returns interfaces
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setSearchQuery("TCP")
+            viewModel.toggleTypeFilter(DiscoveredInterfaceTypeFilter.TCP)
+            assertEquals(1, viewModel.state.value.interfaces.size)
+
+            viewModel.clearFilters()
+
+            val state = viewModel.state.value
+            assertEquals("", state.searchQuery)
+            assertTrue(state.typeFilters.isEmpty())
+            assertEquals(2, state.interfaces.size)
+        }
+
+    // ========== Autoconnect IFAC-only toggle ==========
+
+    @Test
+    fun `loadDiscoverySettings pushes persisted IFAC-only value to protocol`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns true
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(true) }
+        }
+
+    @Test
+    fun `toggleAutoconnectIfacOnly flips state, persists, and forwards to protocol`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            assertFalse(viewModel.state.value.autoconnectIfacOnly)
+
+            viewModel.toggleAutoconnectIfacOnly()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { settingsRepository.saveAutoconnectIfacOnly(true) }
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(true) }
+
+            viewModel.toggleAutoconnectIfacOnly()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { settingsRepository.saveAutoconnectIfacOnly(false) }
+            coVerify { reticulumProtocol.setAutoconnectIfacOnly(false) }
+        }
+
+    // ========== Helper Functions ==========
+
+    @Suppress("LongParameterList")
+    private fun createTestDiscoveredInterface(
+        name: String = "TestInterface",
+        type: String = "TCPServerInterface",
+        status: String = "available",
+        reachableOn: String? = "192.168.1.1",
+        port: Int? = 4242,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        ifacNetname: String? = null,
+        ifacNetkey: String? = null,
+    ): DiscoveredInterface =
+        DiscoveredInterface(
+            name = name,
+            type = type,
+            transportId = "test_transport_id",
+            networkId = "test_network_id",
+            status = status,
+            statusCode =
+                when (status) {
+                    "available" -> 1000
+                    "unknown" -> 100
+                    else -> 0
+                },
+            lastHeard = System.currentTimeMillis() / 1000,
+            heardCount = 1,
+            hops = 1,
+            stampValue = 0,
+            reachableOn = reachableOn,
+            port = port,
+            frequency = null,
+            bandwidth = null,
+            spreadingFactor = null,
+            codingRate = null,
+            modulation = null,
+            channel = null,
+            latitude = latitude,
+            longitude = longitude,
+            height = null,
+            ifacNetname = ifacNetname,
+            ifacNetkey = ifacNetkey,
+        )
+}

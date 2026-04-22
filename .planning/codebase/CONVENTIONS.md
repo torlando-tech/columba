@@ -62,7 +62,7 @@
 2. Blank line
 3. Standard library imports (e.g., `java.*`, `kotlin.*`)
 4. Third-party imports (Android framework, Dagger, kotlinx, etc.)
-5. Project-local imports (`com.lxmf.messenger.*`)
+5. Project-local imports (`network.columba.app.*`)
 6. Blank line
 7. Code
 
@@ -70,14 +70,14 @@
 
 Example from `BleStatusRepository.kt`:
 ```kotlin
-package com.lxmf.messenger.data.repository
+package network.columba.app.data.repository
 
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.util.Log
-import com.lxmf.messenger.data.model.BleConnectionInfo
-import com.lxmf.messenger.data.model.BleConnectionsState
-import com.lxmf.messenger.reticulum.protocol.ReticulumProtocol
+import network.columba.app.data.model.BleConnectionInfo
+import network.columba.app.data.model.BleConnectionsState
+import network.columba.app.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray

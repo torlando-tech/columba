@@ -16,7 +16,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Fetch all history for version tagging
-          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -24,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -38,6 +37,7 @@ jobs:
           echo "Building version: $VERSION from tag: $TAG_NAME"
 
       - name: Build Release APK
+        timeout-minutes: 20
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -121,7 +121,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             columba-*.apk

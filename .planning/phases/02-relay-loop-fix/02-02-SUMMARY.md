@@ -28,7 +28,7 @@ tech-stack:
 key-files:
   created: []
   modified:
-    - app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt
+    - app/src/main/java/network.columba.app/service/PropagationNodeManager.kt
 
 key-decisions:
   - "3+ selections in 60 seconds triggers loop detection warning"
@@ -76,7 +76,7 @@ Each task was committed atomically:
 
 ## Files Created/Modified
 
-- `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` - Added loop detection, exponential backoff, and Sentry diagnostics for relay selection
+- `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` - Added loop detection, exponential backoff, and Sentry diagnostics for relay selection
 
 ## Decisions Made
 

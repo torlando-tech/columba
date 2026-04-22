@@ -29,8 +29,8 @@ score: 4/4 must-haves verified
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `app/src/main/java/com/lxmf/messenger/reticulum/protocol/ServiceReticulumProtocol.kt` | Main-safe IPC wrapper methods with `withContext(Dispatchers.IO)` | VERIFIED | 2882 lines, contains `suspend fun getLxmfIdentity()` (line 1915), `suspend fun getLxmfDestination()` (line 1884), both wrapped with `withContext(Dispatchers.IO)` (lines 1885, 1916) |
-| `app/src/main/java/com/lxmf/messenger/viewmodel/DebugViewModel.kt` | Non-blocking ViewModel initialization | VERIFIED | 611 lines, `getOrCreateIdentity()` (line 415) and `getOrCreateDestination()` (line 447) are suspend functions, called from coroutine context (viewModelScope.launch) |
+| `app/src/main/java/network.columba.app/reticulum/protocol/ServiceReticulumProtocol.kt` | Main-safe IPC wrapper methods with `withContext(Dispatchers.IO)` | VERIFIED | 2882 lines, contains `suspend fun getLxmfIdentity()` (line 1915), `suspend fun getLxmfDestination()` (line 1884), both wrapped with `withContext(Dispatchers.IO)` (lines 1885, 1916) |
+| `app/src/main/java/network.columba.app/viewmodel/DebugViewModel.kt` | Non-blocking ViewModel initialization | VERIFIED | 611 lines, `getOrCreateIdentity()` (line 415) and `getOrCreateDestination()` (line 447) are suspend functions, called from coroutine context (viewModelScope.launch) |
 
 ### Artifact Three-Level Verification
 
@@ -104,7 +104,7 @@ BUILD SUCCESSFUL in 6s
 ## Test Verification
 
 ```
-$ ./gradlew :app:testSentryDebugUnitTest --tests "com.lxmf.messenger.viewmodel.DebugViewModel*"
+$ ./gradlew :app:testSentryDebugUnitTest --tests "network.columba.app.viewmodel.DebugViewModel*"
 BUILD SUCCESSFUL in 10s
 All DebugViewModel tests PASSED (35+ tests)
 ```
@@ -117,7 +117,7 @@ $ grep -n "suspend fun getLxmfIdentity" ServiceReticulumProtocol.kt
 1915:    suspend fun getLxmfIdentity(): Result<Identity> =
 
 $ grep -n "suspend fun getLxmfDestination" ServiceReticulumProtocol.kt
-1884:    suspend fun getLxmfDestination(): Result<com.lxmf.messenger.reticulum.model.Destination> =
+1884:    suspend fun getLxmfDestination(): Result<network.columba.app.reticulum.model.Destination> =
 
 # IO dispatcher wrapping exists
 $ grep -n "withContext(Dispatchers.IO)" ServiceReticulumProtocol.kt
@@ -126,10 +126,10 @@ $ grep -n "withContext(Dispatchers.IO)" ServiceReticulumProtocol.kt
 
 # DebugViewModel suspend functions exist
 $ grep -n "private suspend fun getOrCreateIdentity" DebugViewModel.kt
-415:        private suspend fun getOrCreateIdentity(): com.lxmf.messenger.reticulum.model.Identity {
+415:        private suspend fun getOrCreateIdentity(): network.columba.app.reticulum.model.Identity {
 
 $ grep -n "private suspend fun getOrCreateDestination" DebugViewModel.kt  
-447:        private suspend fun getOrCreateDestination(identity: com.lxmf.messenger.reticulum.model.Destination): com.lxmf.messenger.reticulum.model.Destination {
+447:        private suspend fun getOrCreateDestination(identity: network.columba.app.reticulum.model.Destination): network.columba.app.reticulum.model.Destination {
 
 # Test mocks use coEvery for suspend functions
 $ grep -n "coEvery.*getLxmfIdentity\|coEvery.*getLxmfDestination" DebugViewModelEventDrivenTest.kt

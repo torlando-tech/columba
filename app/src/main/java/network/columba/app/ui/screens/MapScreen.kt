@@ -47,10 +47,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -1260,7 +1262,15 @@ fun MapScreen(
             title = {},
             actions = {
                 if (availableCategories.isNotEmpty()) {
-                    IconButton(onClick = { showLayersSheet = true }) {
+                    FilledIconButton(
+                        onClick = { showLayersSheet = true },
+                        colors =
+                            IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.Black.copy(alpha = 0.45f),
+                                contentColor = Color.White,
+                            ),
+                        modifier = Modifier.padding(end = 8.dp),
+                    ) {
                         BadgedBox(
                             badge = {
                                 if (anyLayerHidden) {
@@ -1273,7 +1283,6 @@ fun MapScreen(
                             Icon(
                                 imageVector = Icons.Default.Layers,
                                 contentDescription = "Map layers",
-                                tint = Color.White,
                             )
                         }
                     }

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.data.model.MapStylePreference
 import network.columba.app.data.repository.CustomThemeRepository
 import network.columba.app.reticulum.model.BatteryProfile
 import network.columba.app.service.persistence.ServiceSettingsAccessor
@@ -1296,21 +1297,18 @@ class SettingsRepository
          * Flow of the user's map base-style preference (AUTO / LIGHT / DARK).
          * AUTO binds to the system day/night theme at render time.
          */
-        val mapStylePreferenceFlow: Flow<network.columba.app.data.model.MapStylePreference> =
+        val mapStylePreferenceFlow: Flow<MapStylePreference> =
             context.dataStore.data
                 .map { preferences ->
                     preferences[PreferencesKeys.MAP_STYLE_PREFERENCE]
-                        ?.let {
-                            network.columba.app.data.model.MapStylePreference
-                                .fromName(it)
-                        }
-                        ?: network.columba.app.data.model.MapStylePreference.DEFAULT
+                        ?.let { MapStylePreference.fromName(it) }
+                        ?: MapStylePreference.DEFAULT
                 }.distinctUntilChanged()
 
         /**
          * Save the map base-style preference.
          */
-        suspend fun saveMapStylePreference(preference: network.columba.app.data.model.MapStylePreference) {
+        suspend fun saveMapStylePreference(preference: MapStylePreference) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.MAP_STYLE_PREFERENCE] = preference.name
             }

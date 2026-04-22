@@ -201,7 +201,8 @@ class IdentityResolutionManager
 
                 Log.d(TAG, "Startup sweep: requesting paths for ${recentPeerHashes.size} recent conversation(s)")
 
-                for (peerHash in recentPeerHashes) {
+                val lastIndex = recentPeerHashes.lastIndex
+                for ((index, peerHash) in recentPeerHashes.withIndex()) {
                     try {
                         val destHashBytes =
                             peerHash
@@ -216,7 +217,10 @@ class IdentityResolutionManager
 
                         Log.d(TAG, "Startup sweep: requesting path for ${peerHash.take(8)}...")
                         reticulumProtocol.requestPath(destHashBytes)
-                        delay(PATH_REQUEST_STAGGER_MS)
+                        // Skip stagger after the final request — no further requests need spacing.
+                        if (index != lastIndex) {
+                            delay(PATH_REQUEST_STAGGER_MS)
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Startup sweep: error for ${peerHash.take(8)}...", e)
                     }

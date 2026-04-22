@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -77,6 +79,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -98,6 +101,7 @@ import network.columba.app.ui.components.ContactLocationBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ShareLocationBottomSheet
 import network.columba.app.ui.components.SharingStatusChip
+import network.columba.app.ui.util.InterfaceCategory
 import network.columba.app.ui.util.MarkerBitmapFactory
 import network.columba.app.ui.util.ScreenMarker
 import network.columba.app.ui.util.ScreenToLatLng
@@ -1253,7 +1257,7 @@ fun MapScreen(
         // TopAppBar overlays map (transparent background)
         val availableCategories =
             remember(state.interfaceMarkers) {
-                network.columba.app.ui.util.InterfaceCategory.entries
+                InterfaceCategory.entries
                     .filter { cat -> state.interfaceMarkers.any { it.category == cat } }
             }
         val anyLayerHidden =
@@ -1313,19 +1317,25 @@ fun MapScreen(
         }
 
         // Layers bottom sheet — interface-type filter toggles
+        // Close the sheet if the underlying markers vanish so it doesn't reopen
+        // silently the next time a marker appears.
+        LaunchedEffect(availableCategories.isEmpty()) {
+            if (availableCategories.isEmpty() && showLayersSheet) {
+                showLayersSheet = false
+            }
+        }
         if (showLayersSheet && availableCategories.isNotEmpty()) {
             ModalBottomSheet(
                 onDismissRequest = { showLayersSheet = false },
                 sheetState = layersSheetState,
             ) {
+                // ModalBottomSheet already applies navigation-bar insets via its
+                // contentWindowInsets — don't double-pad the content here.
                 MapLayersSheetContent(
                     categories = availableCategories,
                     filterEnabled = state.interfaceFilterEnabled,
                     onToggle = { viewModel.toggleInterfaceFilter(it) },
-                    modifier =
-                        Modifier
-                            .navigationBarsPadding()
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
         }
@@ -1660,11 +1670,12 @@ private fun FocusInterfaceBottomSheet(
  * Content for the map layers bottom sheet — interface-type filter toggles.
  * Extracted for testability since ModalBottomSheet is difficult to test in Robolectric.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MapLayersSheetContent(
-    categories: List<network.columba.app.ui.util.InterfaceCategory>,
-    filterEnabled: Map<network.columba.app.ui.util.InterfaceCategory, Boolean>,
-    onToggle: (network.columba.app.ui.util.InterfaceCategory) -> Unit,
+    categories: List<InterfaceCategory>,
+    filterEnabled: Map<InterfaceCategory, Boolean>,
+    onToggle: (InterfaceCategory) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -1673,7 +1684,7 @@ internal fun MapLayersSheetContent(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 12.dp),
         )
-        androidx.compose.foundation.layout.FlowRow(
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -1684,9 +1695,7 @@ internal fun MapLayersSheetContent(
                     label = { Text(category.defaultText) },
                     leadingIcon = {
                         Icon(
-                            painter =
-                                androidx.compose.ui.res
-                                    .painterResource(category.markerIconResId),
+                            painter = painterResource(category.markerIconResId),
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )

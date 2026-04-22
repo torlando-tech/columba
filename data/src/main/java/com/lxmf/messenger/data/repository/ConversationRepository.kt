@@ -144,7 +144,8 @@ class ConversationRepository
         }
 
         /**
-         * Get the peer hashes of the N most recent conversations (by last message time).
+         * Get peer hashes of the N most recent conversations by last message time.
+         * Used by IdentityResolutionManager for scoped startup path requests.
          */
         suspend fun getRecentPeerHashes(limit: Int): List<String> {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
@@ -745,15 +746,6 @@ class ConversationRepository
                     ),
                 )
             }
-        }
-
-        /**
-         * Get peer hashes of the N most recent conversations.
-         * Used by IdentityResolutionManager for scoped startup path requests.
-         */
-        suspend fun getRecentPeerHashes(limit: Int): List<String> {
-            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return emptyList()
-            return conversationDao.getRecentPeerHashes(activeIdentity.identityHash, limit)
         }
 
         /**

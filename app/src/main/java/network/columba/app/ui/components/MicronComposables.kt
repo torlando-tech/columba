@@ -1,6 +1,7 @@
 package network.columba.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -322,7 +323,27 @@ private fun MicronLineComposable(
                             )
                         }
                     }
-                    else -> { /* skip links/dividers/linebreaks in form line */ }
+                    is MicronElement.Link -> {
+                        // Render the link as a clickable Text that carries any form-field
+                        // names declared after the destination (e.g. `[Send Message`:/page`a|b]
+                        // where a & b name the fields to submit). Without this branch, links
+                        // on the same line as form fields were silently dropped — the canonical
+                        // "Send Message" affordance on pages like fr33n0w/thechatroom vanished.
+                        Text(
+                            text = element.label,
+                            color = Color(0xFF6699FF),
+                            fontFamily = fontFamily,
+                            textDecoration = TextDecoration.Underline,
+                            modifier =
+                                Modifier
+                                    .defaultMinSize(minHeight = MIN_LINK_HEIGHT_DP.dp)
+                                    .padding(vertical = 4.dp)
+                                    .clickable {
+                                        onLinkClick(element.destination, element.fieldNames)
+                                    },
+                        )
+                    }
+                    else -> { /* skip dividers/linebreaks/partials in form line */ }
                 }
             }
         }

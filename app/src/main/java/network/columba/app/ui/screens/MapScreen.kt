@@ -98,6 +98,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import network.columba.app.data.model.MapStylePreference
 import network.columba.app.map.MapStyleResult
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.ui.components.ContactLocationBottomSheet
@@ -1675,8 +1676,8 @@ internal fun MapLayersSheetContent(
     categories: List<InterfaceCategory>,
     filterEnabled: Map<InterfaceCategory, Boolean>,
     onToggle: (InterfaceCategory) -> Unit,
-    stylePreference: network.columba.app.data.model.MapStylePreference,
-    onStylePreferenceChange: (network.columba.app.data.model.MapStylePreference) -> Unit,
+    stylePreference: MapStylePreference,
+    onStylePreferenceChange: (MapStylePreference) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -1691,7 +1692,7 @@ internal fun MapLayersSheetContent(
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
         ) {
-            val options = network.columba.app.data.model.MapStylePreference.entries
+            val options = MapStylePreference.entries
             options.forEachIndexed { index, option ->
                 SegmentedButton(
                     selected = option == stylePreference,

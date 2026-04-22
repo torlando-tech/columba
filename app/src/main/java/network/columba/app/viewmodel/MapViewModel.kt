@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.model.EnrichedContact
+import network.columba.app.data.model.MapStylePreference
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.OfflineMapRegionRepository
 import network.columba.app.map.MapStyleResult
@@ -661,15 +662,18 @@ class MapViewModel
 
         // ==================== Map style preference ====================
 
-        val mapStylePreference: StateFlow<network.columba.app.data.model.MapStylePreference> =
+        val mapStylePreference: StateFlow<MapStylePreference> =
             settingsRepository.mapStylePreferenceFlow.stateIn(
                 viewModelScope,
                 SharingStarted.Eagerly,
-                network.columba.app.data.model.MapStylePreference.DEFAULT,
+                MapStylePreference.DEFAULT,
             )
 
-        fun setMapStylePreference(preference: network.columba.app.data.model.MapStylePreference) {
-            viewModelScope.launch { settingsRepository.saveMapStylePreference(preference) }
+        fun setMapStylePreference(preference: MapStylePreference) {
+            viewModelScope.launch {
+                settingsRepository.saveMapStylePreference(preference)
+                refreshMapStyle()
+            }
         }
 
         val filteredInterfaceMarkers: StateFlow<List<InterfaceMarker>> =

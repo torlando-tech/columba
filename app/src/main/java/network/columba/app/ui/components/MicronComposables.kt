@@ -1,5 +1,9 @@
 package network.columba.app.ui.components
 
+import android.content.Intent
+import android.util.Log
+import android.util.Patterns
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
@@ -50,6 +55,7 @@ import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronLine
 import network.columba.app.micron.MicronStyle
 import network.columba.app.nomadnet.PartialManager
+import network.columba.app.ui.screens.toBrowsableUri
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.RenderingMode
 
 /** JetBrains Mono NL — block elements (▄ █ etc.) have the same advance width as ASCII. */
@@ -329,8 +335,15 @@ private fun MicronLineComposable(
         return
     }
 
-    // Build AnnotatedString for text-only lines (with links)
-    val hasLinks = line.elements.any { it is MicronElement.Link }
+    // Build AnnotatedString for text-only lines (with Micron links AND bare http/https URLs
+    // that we auto-linkify). Bare URLs are common on pages like the fr33n0w/thechatroom
+    // README that just prints "https://github.com/…" without wrapping it in `[…`…] syntax.
+    val hasInteractiveContent =
+        line.elements.any { el ->
+            el is MicronElement.Link ||
+                (el is MicronElement.Text && Patterns.WEB_URL.matcher(el.content).find())
+        }
+    val context = LocalContext.current
     val annotatedString = buildMicronAnnotatedString(line.elements, defaultFg)
 
     val headingBg =
@@ -351,7 +364,7 @@ private fun MicronLineComposable(
             .padding(start = indentPadding)
             .then(if (headingBg != null) Modifier.background(headingBg) else Modifier)
             .then(
-                if (hasLinks && !isScrollMode) {
+                if (hasInteractiveContent && !isScrollMode) {
                     Modifier.defaultMinSize(minHeight = MIN_LINK_HEIGHT_DP.dp)
                 } else {
                     Modifier
@@ -386,23 +399,36 @@ private fun MicronLineComposable(
             )
         }
 
-    if (hasLinks) {
+    if (hasInteractiveContent) {
         ClickableText(
             text = annotatedString,
             modifier = lineModifier,
             softWrap = !isScrollMode,
             style = textStyle,
             onClick = { offset ->
-                annotatedString
-                    .getStringAnnotations("link", offset, offset)
-                    .firstOrNull()
-                    ?.let { annotation ->
-                        // Parse annotation: "destination\u001Ffield1\u001Ffield2"
-                        val parts = annotation.item.split("\u001F")
-                        val destination = parts[0]
-                        val fieldNames = parts.drop(1)
-                        onLinkClick(destination, fieldNames)
+                // Micron navigation links take precedence over autolinked URLs in case both
+                // annotations happen to overlap (e.g. if a Link label contains a URL).
+                val micronLink =
+                    annotatedString
+                        .getStringAnnotations("link", offset, offset)
+                        .firstOrNull()
+                if (micronLink != null) {
+                    val parts = micronLink.item.split("\u001F")
+                    onLinkClick(parts[0], parts.drop(1))
+                    return@ClickableText
+                }
+                val webLink =
+                    annotatedString
+                        .getStringAnnotations("weblink", offset, offset)
+                        .firstOrNull()
+                if (webLink != null) {
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, toBrowsableUri(webLink.item)))
+                    } catch (e: Exception) {
+                        Log.w("MicronComposables", "Unable to open link: ${webLink.item}", e)
+                        Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
                     }
+                }
             },
         )
     } else {
@@ -424,9 +450,7 @@ private fun buildMicronAnnotatedString(
             when (element) {
                 is MicronElement.Text -> {
                     if (element.content.isNotEmpty()) {
-                        withStyle(element.style.toSpanStyle(defaultFg)) {
-                            append(element.content)
-                        }
+                        appendTextWithAutolinkedUrls(element.content, element.style.toSpanStyle(defaultFg))
                     }
                 }
                 is MicronElement.Link -> {
@@ -459,6 +483,41 @@ private fun buildMicronAnnotatedString(
             }
         }
     }
+
+/**
+ * Append [text] to the receiver, styling bare http/https URLs as clickable links and tagging
+ * them with a `"weblink"` string annotation that the caller can intercept for `Intent.ACTION_VIEW`.
+ * Non-URL spans get [baseStyle]; URL spans get [baseStyle] overridden with link-blue +
+ * underline. Uses `android.util.Patterns.WEB_URL` (same matcher as `LinkifiedMessageText` in
+ * the messaging screen, so behaviour matches what users already see in chat).
+ */
+private fun androidx.compose.ui.text.AnnotatedString.Builder.appendTextWithAutolinkedUrls(
+    text: String,
+    baseStyle: SpanStyle,
+) {
+    val matcher = Patterns.WEB_URL.matcher(text)
+    var cursor = 0
+    while (matcher.find()) {
+        val start = matcher.start()
+        val end = matcher.end()
+        if (start > cursor) {
+            withStyle(baseStyle) { append(text.substring(cursor, start)) }
+        }
+        val url = text.substring(start, end)
+        val linkSpan =
+            baseStyle.copy(
+                color = Color(0xFF6699FF),
+                textDecoration = TextDecoration.Underline,
+            )
+        pushStringAnnotation("weblink", url)
+        withStyle(linkSpan) { append(url) }
+        pop()
+        cursor = end
+    }
+    if (cursor < text.length) {
+        withStyle(baseStyle) { append(text.substring(cursor)) }
+    }
+}
 
 private fun MicronStyle.toSpanStyle(defaultFg: Color): SpanStyle =
     SpanStyle(

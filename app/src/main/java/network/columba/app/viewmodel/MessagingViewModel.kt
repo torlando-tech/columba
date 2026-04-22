@@ -114,23 +114,20 @@ class MessagingViewModel
         private val _currentConversation = MutableStateFlow<String?>(null)
         private var currentPeerName: String = "Unknown"
 
-        // Refresh trigger for forcing PagingData refresh when delivery status updates
-        // Room's automatic invalidation sometimes doesn't trigger UI refresh with cachedIn()
-        private val _messagesRefreshTrigger = MutableStateFlow(0)
-
         // Messages automatically update when conversation changes OR database changes
         // Uses Paging3 for efficient infinite scroll: loads 30 messages initially,
         // then loads more in background as user scrolls up
         // PERFORMANCE: toMessageUi() is now fast (cache lookup only, no disk I/O)
         // Image decoding happens asynchronously via loadImageAsync()
-        // Combined with refresh trigger to force refresh on delivery status updates
+        // Room's PagingSource auto-invalidates on DB writes (delivery status, new messages)
+        // so no manual refresh trigger is needed — and adding one destroys all loaded pages,
+        // causing scroll position to jump when the user is reading old messages.
         val messages: Flow<PagingData<MessageUi>> =
             kotlinx.coroutines.flow
                 .combine(
                     _currentConversation,
-                    _messagesRefreshTrigger,
                     settingsRepository.sortMessagesBySentTime,
-                ) { peerHash, _, sortBySent -> peerHash to sortBySent }
+                ) { peerHash, sortBySent -> peerHash to sortBySent }
                 .flatMapLatest { (peerHash, sortBySent) ->
                     Log.d(TAG, "Flow: Switching to conversation $peerHash (sortBySent=$sortBySent)")
                     if (peerHash != null) {
@@ -893,9 +890,6 @@ class MessagingViewModel
                         enrichSentInterfaceOnDelivery(message, update.messageHash)
                     }
 
-                    // Trigger refresh to ensure UI updates (Room invalidation doesn't always propagate with cachedIn)
-                    _messagesRefreshTrigger.value++
-
                     Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
@@ -1121,15 +1115,6 @@ class MessagingViewModel
                     Log.e(TAG, "Error marking conversation as read", e)
                 }
             }
-        }
-
-        /**
-         * Refresh the messages list to update relative timestamps.
-         * Called when the app resumes from background to ensure timestamps like
-         * "Just now" are recalculated based on the current time.
-         */
-        fun refreshTimestamps() {
-            _messagesRefreshTrigger.value++
         }
 
         @Suppress("LongMethod", "ComplexCondition")

@@ -153,6 +153,10 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.R
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
@@ -191,10 +195,6 @@ import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -538,10 +538,11 @@ fun MessagingScreen(
         }
     }
 
+    // Compose-level clock for refreshing relative timestamps ("Just now" → "5 min ago").
+    // Reading this state in the item composable triggers recomposition of visible items only —
+    // unlike the old _messagesRefreshTrigger / viewModel.refreshTimestamps() approach, this
+    // does NOT recreate PagingData, so scroll position is preserved while reading old messages.
     val timestampTick = rememberLifecycleTickerMillis(periodMs = 30_000L)
-    LaunchedEffect(timestampTick) {
-        viewModel.refreshTimestamps()
-    }
 
     // Image picker launcher - uses adaptive compression with warning dialog
     val imageLauncher =
@@ -1198,6 +1199,7 @@ fun MessagingScreen(
                                             syncProgress = syncProgress,
                                             isImageLoading = needsImageLoading,
                                             fontScale = messageFontScale,
+                                            timestampTick = timestampTick,
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1672,6 +1674,7 @@ fun MessageBubble(
     syncProgress: SyncProgress = SyncProgress.Idle,
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
+    @Suppress("UNUSED_PARAMETER") timestampTick: Long = 0L,
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },

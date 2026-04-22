@@ -1,11 +1,6 @@
 package network.columba.app.nomadnet
 
 import android.util.Log
-import network.columba.app.micron.MicronDocument
-import network.columba.app.micron.MicronElement
-import network.columba.app.micron.MicronParser
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.util.DestinationHashValidator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +12,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import network.columba.app.micron.MicronDocument
+import network.columba.app.micron.MicronElement
+import network.columba.app.micron.MicronParser
+import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.util.DestinationHashValidator
 import org.json.JSONObject
 
 /**

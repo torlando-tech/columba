@@ -4,8 +4,6 @@
 package network.columba.app.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
-import network.columba.app.nomadnet.NomadNetPageCache
-import network.columba.app.reticulum.protocol.ReticulumProtocol
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -23,6 +21,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.reticulum.protocol.ReticulumProtocol
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

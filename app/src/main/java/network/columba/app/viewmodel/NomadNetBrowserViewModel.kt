@@ -3,11 +3,6 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import network.columba.app.micron.MicronDocument
-import network.columba.app.micron.MicronParser
-import network.columba.app.nomadnet.NomadNetPageCache
-import network.columba.app.nomadnet.PartialManager
-import network.columba.app.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +14,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import network.columba.app.micron.MicronDocument
+import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.nomadnet.PartialManager
+import network.columba.app.reticulum.protocol.ReticulumProtocol
 import org.json.JSONObject
 import javax.inject.Inject
 

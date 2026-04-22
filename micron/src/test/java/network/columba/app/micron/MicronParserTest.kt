@@ -907,7 +907,11 @@ class MicronParserTest {
     @Test
     fun `D1 - backtick bracket still parses as link`() {
         val doc = MicronParser.parse("`[Home`/page/index.mu]")
-        val link = doc.lines[0].elements.filterIsInstance<MicronElement.Link>().first()
+        val link =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Link>()
+                .first()
         assertEquals("Home", link.label)
         assertEquals("/page/index.mu", link.destination)
     }
@@ -915,7 +919,11 @@ class MicronParserTest {
     @Test
     fun `D1 - backtick angle bracket still parses as field`() {
         val doc = MicronParser.parse("`<|username`john>")
-        val field = doc.lines[0].elements.filterIsInstance<MicronElement.Field>().first()
+        val field =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Field>()
+                .first()
         assertEquals("username", field.name)
         assertEquals("john", field.defaultValue)
     }
@@ -1011,7 +1019,11 @@ class MicronParserTest {
         val doc = MicronParser.parse(">`<|username`john>")
         // Should NOT be a heading — the > should be stripped
         assertFalse(doc.lines[0].isHeading)
-        val field = doc.lines[0].elements.filterIsInstance<MicronElement.Field>().first()
+        val field =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Field>()
+                .first()
         assertEquals("username", field.name)
     }
 

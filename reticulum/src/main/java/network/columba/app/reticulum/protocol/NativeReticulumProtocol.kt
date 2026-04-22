@@ -574,6 +574,11 @@ class NativeReticulumProtocol(
                 NativeInterfaceFactory.shutdownAll()
                 Reticulum.stop()
                 closePersistentStores()
+                // stop() cancels only processingJob and deliberately keeps the
+                // process-lifetime SupervisorJob scope alive (LXMF-kt v0.0.7 fix
+                // for the processingScope silent-drop bug on restart). close()
+                // is the explicit teardown path for that scope on final shutdown.
+                router?.close()
                 router = null
                 reticulum = null
                 deliveryIdentity = null

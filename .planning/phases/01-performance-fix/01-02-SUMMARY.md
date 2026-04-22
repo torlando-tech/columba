@@ -19,9 +19,9 @@ tech-stack:
 key-files:
   created: []
   modified:
-    - data/src/main/java/com/lxmf/messenger/data/repository/AnnounceRepository.kt
+    - data/src/main/java/network.columba.app/data/repository/AnnounceRepository.kt
     - data/build.gradle.kts
-    - app/src/main/java/com/lxmf/messenger/viewmodel/AnnounceStreamViewModel.kt
+    - app/src/main/java/network.columba.app/viewmodel/AnnounceStreamViewModel.kt
 decisions:
   - what: "Add Compose runtime dependency to data module"
     why: "Need @Stable annotation on Announce data class used in UI"
@@ -95,7 +95,7 @@ This optimization reduces recomposition overhead when:
 - **Found during:** Task 1 (applying threading fix)
 - **Issue:** Added `withContext(Dispatchers.IO)` but imports didn't include Dispatchers
 - **Fix:** Added `import kotlinx.coroutines.Dispatchers` and `import kotlinx.coroutines.withContext`
-- **Files modified:** app/src/main/java/com/lxmf/messenger/viewmodel/AnnounceStreamViewModel.kt
+- **Files modified:** app/src/main/java/network.columba.app/viewmodel/AnnounceStreamViewModel.kt
 - **Commit:** beb42595
 
 **[Rule 2 - Missing Critical] Compose runtime dependency**
@@ -142,14 +142,14 @@ beb42595 perf(01-02): move Python/database queries to IO dispatcher
 
 ## Files Modified
 
-**data/src/main/java/com/lxmf/messenger/data/repository/AnnounceRepository.kt**
+**data/src/main/java/network.columba.app/data/repository/AnnounceRepository.kt**
 - Added `@androidx.compose.runtime.Stable` annotation to Announce data class
 - Tells Compose the class is stable for smart recomposition
 
 **data/build.gradle.kts**
 - Added Compose runtime dependency for @Stable annotation
 
-**app/src/main/java/com/lxmf/messenger/viewmodel/AnnounceStreamViewModel.kt**
+**app/src/main/java/network.columba.app/viewmodel/AnnounceStreamViewModel.kt**
 - Wrapped `reticulumProtocol.getPathTableHashes()` in `withContext(Dispatchers.IO)`
 - Added missing Dispatchers and withContext imports
 

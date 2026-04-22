@@ -93,5 +93,5 @@ Used LocalLifecycleOwner.current.lifecycle.currentState.isAtLeast(Lifecycle.Stat
 verification: Build compiles successfully. Manual testing needed to verify fix works in production scenario.
 
 files_changed:
-- /home/tyler/repos/public/columba-347/app/src/main/java/com/lxmf/messenger/MainActivity.kt
-- /home/tyler/repos/public/columba-347/app/src/main/java/com/lxmf/messenger/ui/screens/SettingsScreen.kt
+- /home/tyler/repos/public/columba-347/app/src/main/java/network.columba.app/MainActivity.kt
+- /home/tyler/repos/public/columba-347/app/src/main/java/network.columba.app/ui/screens/SettingsScreen.kt

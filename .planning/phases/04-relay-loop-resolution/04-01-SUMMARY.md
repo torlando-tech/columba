@@ -21,8 +21,8 @@ tech-stack:
 key-files:
   created: []
   modified:
-    - "app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt"
-    - "app/src/test/java/com/lxmf/messenger/service/PropagationNodeManagerTest.kt"
+    - "app/src/main/java/network.columba.app/service/PropagationNodeManager.kt"
+    - "app/src/test/java/network.columba.app/service/PropagationNodeManagerTest.kt"
 
 key-decisions:
   - "Use WhileSubscribed(5000L) per Android documentation - 5s timeout survives screen rotation"
@@ -64,8 +64,8 @@ Each task was committed atomically:
 3. **Task 3: Verify loop detection instrumentation intact** - No commit (verification only)
 
 ## Files Created/Modified
-- `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` - Changed SharingStarted.Eagerly to WhileSubscribed(5000L) for currentRelayState, currentRelay, availableRelaysState
-- `app/src/test/java/com/lxmf/messenger/service/PropagationNodeManagerTest.kt` - Fixed 4 tests to use Turbine pattern for WhileSubscribed StateFlows
+- `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` - Changed SharingStarted.Eagerly to WhileSubscribed(5000L) for currentRelayState, currentRelay, availableRelaysState
+- `app/src/test/java/network.columba.app/service/PropagationNodeManagerTest.kt` - Fixed 4 tests to use Turbine pattern for WhileSubscribed StateFlows
 
 ## Decisions Made
 - **5000L timeout**: Standard Android recommendation - survives configuration changes (screen rotation typically <2s) without restarting upstream unnecessarily

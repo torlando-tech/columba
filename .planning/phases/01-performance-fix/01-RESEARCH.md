@@ -282,7 +282,7 @@ class DiscoveredInterfacesScrollBenchmark {
     @Test
     fun scrollDiscoveredInterfaces() {
         benchmarkRule.measureRepeated(
-            packageName = "com.lxmf.messenger",
+            packageName = "network.columba.app",
             metrics = listOf(FrameTimingMetric()),
             compilationMode = CompilationMode.None(), // Test without AOT
             startupMode = StartupMode.WARM,

@@ -1,13 +1,12 @@
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("app.cash.paparazzi")
 }
 
 android {
-    namespace = "com.lxmf.messenger.screenshot"
-    compileSdk = 35
+    namespace = "network.columba.app.screenshot"
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24

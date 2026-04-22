@@ -1,13 +1,12 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
 }
 
 android {
     namespace = "tech.torlando.columba.data"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
@@ -57,7 +56,7 @@ dependencies {
     implementation(libs.paging.runtime)
 
     // Compose runtime (for @Stable annotation on data classes used in Compose UI)
-    implementation("androidx.compose.runtime:runtime:1.10.4")
+    implementation("androidx.compose.runtime:runtime:1.10.6")
 
     // Testing
     testImplementation(libs.junit)
@@ -65,11 +64,11 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
-    testImplementation("androidx.test:core:1.5.0")
+    testImplementation(libs.test.core)
     testImplementation(libs.turbine)
     testImplementation("org.json:json:20240303") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
-    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation(libs.test.core)
     androidTestImplementation("androidx.test:runner:1.5.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation(libs.coroutines.test)

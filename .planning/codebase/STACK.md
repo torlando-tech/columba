@@ -126,8 +126,8 @@
 - Compose compiler extension: 1.7.5
 
 **Android Configuration:**
-- Namespace: `com.lxmf.messenger`
-- Application ID: `com.lxmf.messenger`
+- Namespace: `network.columba.app`
+- Application ID: `network.columba.app`
 - Supported ABIs: arm64-v8a (64-bit only, x86_64 disabled due to pycodec2 wheel resolution)
 - Features: Compose enabled, AIDL enabled, BuildConfig enabled
 - Resources: R class namespacing enabled, AndroidX enabled

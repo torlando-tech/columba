@@ -1,4 +1,6 @@
-<img src="./columba-icon.svg" width="200" height="200" alt="alt text" />
+<p align="center">
+  <img src="./columba-icon.svg" width="200" height="200" alt="alt text" />
+</p>
 
 # Columba
 
@@ -15,6 +17,7 @@ Built with a native Android interface and Material Design 3, Columba brings mesh
 - **Stay private** - End-to-end encryption with no accounts, no tracking, and no central servers
 - **Share location** - Share your location securely with others, viewable from a dedicated map
 - **Download maps for offline use** - Download or import map files. Supports vector and raster, in MBTiles format
+- **Browse NomadNetwork** - Access nomadnet pages over Reticulum networks
 - **Build your network** - Help relay traffic for others and expand the mesh
 - **Keep your identity** - Generate your messaging identity right on your device
 - **Manage multiple identities** - Easily swap between multiple identities
@@ -39,3 +42,10 @@ Want to learn more? Visit [Reticulum's documentation](https://reticulum.network/
 ## Why "Columba"
 
 Columba, latin for "dove," is a [constellation](https://en.wikipedia.org/wiki/Columba_(constellation)) in the southern sky depicting a dove. Doves are commonly a symbol of peace and hope, and have been used as messengers throughout history. 
+
+## Stats
+
+![Total Downloads](https://img.shields.io/github/downloads/torlando-tech/columba/total?label=total%20downloads) ![Latest](https://img.shields.io/github/downloads/torlando-tech/columba/latest/total?label=latest%20downloads) ![Pre-release](https://img.shields.io/github/downloads-pre/torlando-tech/columba/latest/total?label=pre-release%20downloads)  
+
+
+[![Star History Chart](https://api.star-history.com/svg?repos=torlando-tech/columba&type=Date)](https://star-history.com/#torlando-tech/columba&Date)

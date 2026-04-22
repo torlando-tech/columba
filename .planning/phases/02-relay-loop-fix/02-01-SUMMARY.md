@@ -24,7 +24,7 @@ tech-stack:
 key-files:
   created: []
   modified:
-    - app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt
+    - app/src/main/java/network.columba.app/service/PropagationNodeManager.kt
 
 key-decisions:
   - "Use 1000ms debounce to batch rapid Room invalidation triggers"
@@ -69,7 +69,7 @@ Each task was committed atomically:
 
 ## Files Created/Modified
 
-- `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` - Added state machine to prevent relay selection feedback loop
+- `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` - Added state machine to prevent relay selection feedback loop
 
 ## Decisions Made
 

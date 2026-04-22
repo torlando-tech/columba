@@ -8,7 +8,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-APP_PACKAGE="com.lxmf.messenger"
+APP_PACKAGE="network.columba.app"
 MAIN_ACTIVITY="${APP_PACKAGE}.MainActivity"
 APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
 

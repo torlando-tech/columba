@@ -31,8 +31,8 @@
 ## Test File Organization
 
 **Location:**
-- **Unit tests**: `app/src/test/java/com/lxmf/messenger/{feature}/` (co-located by feature)
-- **Instrumentation tests**: `app/src/androidTest/java/com/lxmf/messenger/{feature}/`
+- **Unit tests**: `app/src/test/java/network.columba.app/{feature}/` (co-located by feature)
+- **Instrumentation tests**: `app/src/androidTest/java/network.columba.app/{feature}/`
 - Tests live in same package structure as production code
 
 **Naming:**
@@ -43,7 +43,7 @@
 **Structure:**
 ```
 app/src/
-├── test/java/com/lxmf/messenger/            # Unit tests
+├── test/java/network.columba.app/            # Unit tests
 │   ├── data/
 │   │   ├── MessageOrderingTest.kt
 │   │   ├── model/
@@ -53,7 +53,7 @@ app/src/
 │   ├── service/
 │   ├── util/
 │   └── viewmodel/
-├── androidTest/java/com/lxmf/messenger/     # Integration/instrumentation tests
+├── androidTest/java/network.columba.app/     # Integration/instrumentation tests
 │   ├── data/database/
 │   │   └── InterfaceDatabaseRaceConditionTest.kt
 │   ├── initialization/

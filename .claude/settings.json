@@ -10,17 +10,7 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/ktlint-format.sh"
-          }
-        ]
-      }
-    ]
+    "PostToolUse": []
   },
   "statusLine": {
     "type": "command",

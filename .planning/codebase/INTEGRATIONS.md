@@ -21,7 +21,7 @@
 - What it's used for: Direct BLE communication between Android devices, no WiFi required
 - SDK/Client: Fork at `github.com/torlando-tech/ble-reticulum@main`
 - Auth: Device pairing via Bluetooth link negotiation
-- Integration: Python library + KotlinBLEBridge at `reticulum/src/main/java/com/lxmf/messenger/reticulum/ble/bridge/KotlinBLEBridge.kt`
+- Integration: Python library + KotlinBLEBridge at `reticulum/src/main/java/network.columba.app/reticulum/ble/bridge/KotlinBLEBridge.kt`
 
 **LXST (Voice Calls):**
 - Service: Long-Range eXtensible Telephony - Voice communication over Reticulum
@@ -35,13 +35,13 @@
 - What it's used for: GPS location acquisition for location sharing feature and map centering
 - Client: `com.google.android.gms:play-services-location:21.2.0`
 - Request type: LocationRequest with configured priority and interval
-- Usage: `LocationSharingManager` (`app/src/main/java/com/lxmf/messenger/service/LocationSharingManager.kt`) and `TelemetryCollectorManager` manage requests
+- Usage: `LocationSharingManager` (`app/src/main/java/network.columba.app/service/LocationSharingManager.kt`) and `TelemetryCollectorManager` manage requests
 
 **Maps:**
 - Service: MapLibre GL Android (OpenFreeMap tiles)
 - What it's used for: Offline-capable map display with peer locations, offline map regions downloadable
 - Client: `org.maplibre.gl:android-sdk:11.5.2`
-- Usage: `MapScreen` at `app/src/main/java/com/lxmf/messenger/ui/screens/MapScreen.kt`
+- Usage: `MapScreen` at `app/src/main/java/network.columba.app/ui/screens/MapScreen.kt`
 - HTTP Control: `MAP_SOURCE_HTTP_ENABLED` setting controls HTTP tile fetching (default: enabled)
 - Tiles: OpenFreeMap provides tiles over HTTP/HTTPS
 
@@ -60,8 +60,8 @@
 - Compiler: KSP-based code generation
 
 **Primary Database Entities:**
-- `InterfaceDatabase` at `app/src/main/java/com/lxmf/messenger/data/database/InterfaceDatabase.kt` - Reticulum interface configs
-- Core entities in `data/src/main/java/com/lxmf/messenger/data/db/entity/`:
+- `InterfaceDatabase` at `app/src/main/java/network.columba.app/data/database/InterfaceDatabase.kt` - Reticulum interface configs
+- Core entities in `data/src/main/java/network.columba.app/data/db/entity/`:
   - `ContactEntity` - Peer contacts
   - `ConversationEntity` - Message threads
   - `MessageEntity` - Individual messages

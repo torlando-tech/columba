@@ -1,19 +1,27 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    id("com.android.application") version "8.13.0" apply false
-    id("com.android.library") version "8.13.0" apply false
-    id("org.jetbrains.kotlin.android") version "2.3.0" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.3.10" apply false
-    id("com.google.dagger.hilt.android") version "2.57.2" apply false
+    id("com.android.application") version "9.1.0" apply false
+    id("com.android.library") version "9.1.0" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.20" apply false
+    id("com.google.dagger.hilt.android") version "2.59.2" apply false
     id("com.google.devtools.ksp") version "2.3.6" apply false
-    id("com.chaquo.python") version "17.0.0" apply false
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.10" apply false
-    id("io.sentry.android.gradle") version "5.3.0" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20" apply false
+    id("io.sentry.android.gradle") version "6.1.0" apply false
     id("app.cash.paparazzi") version "1.3.5" apply false
     id("jacoco")
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("de.aaschmid.cpd") version "3.5"
+}
+
+// Reproducible archives across all subprojects (including detekt-rules):
+// strip per-file timestamps and sort entries by name so ZIP/JAR/APK outputs are
+// byte-identical for the same inputs.
+allprojects {
+    tasks.withType<AbstractArchiveTask>().configureEach {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
 }
 
 // Apply JaCoCo, ktlint, and detekt to all subprojects (except detekt-rules)

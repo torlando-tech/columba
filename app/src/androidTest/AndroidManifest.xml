@@ -9,12 +9,12 @@
     <application>
         <!-- Test Activity for instrumented UI tests -->
         <activity
-            android:name="com.lxmf.messenger.test.TestActivity"
+            android:name="network.columba.app.test.TestActivity"
             android:exported="false" />
     </application>
 
     <instrumentation
         android:name="androidx.test.runner.AndroidJUnitRunner"
-        android:targetPackage="com.lxmf.messenger" />
+        android:targetPackage="network.columba.app" />
 
 </manifest>

@@ -3,9 +3,9 @@ created: 2026-01-25T09:48
 title: Make discovered interfaces page event-driven (real-time updates)
 area: ui
 files:
-  - app/src/main/java/com/lxmf/messenger/ui/announce/AnnounceStreamScreen.kt
-  - app/src/main/java/com/lxmf/messenger/viewmodel/AnnounceStreamViewModel.kt
-  - app/src/main/java/com/lxmf/messenger/ui/settings/NetworkInterfacesScreen.kt
+  - app/src/main/java/network.columba.app/ui/announce/AnnounceStreamScreen.kt
+  - app/src/main/java/network.columba.app/viewmodel/AnnounceStreamViewModel.kt
+  - app/src/main/java/network.columba.app/ui/settings/NetworkInterfacesScreen.kt
 ---
 
 ## Problem

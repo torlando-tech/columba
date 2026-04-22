@@ -25,12 +25,12 @@ tech-stack:
 key-files:
   created:
     - "python/memory_profiler.py"
-    - "app/src/main/java/com/lxmf/messenger/service/manager/MemoryProfilerManager.kt"
+    - "app/src/main/java/network.columba.app/service/manager/MemoryProfilerManager.kt"
   modified:
     - "python/reticulum_wrapper.py"
     - "app/build.gradle.kts"
-    - "app/src/main/java/com/lxmf/messenger/service/di/ServiceModule.kt"
-    - "app/src/main/java/com/lxmf/messenger/service/binder/ReticulumServiceBinder.kt"
+    - "app/src/main/java/network.columba.app/service/di/ServiceModule.kt"
+    - "app/src/main/java/network.columba.app/service/binder/ReticulumServiceBinder.kt"
 
 decisions:
   - decision: "Use tracemalloc instead of memory_profiler"
@@ -200,7 +200,7 @@ Result: Release builds have literally zero runtime cost.
 
 ✅ **BuildConfig flag verified:**
 ```java
-// From app/build/generated/source/buildConfig/sentry/debug/com/lxmf/messenger/BuildConfig.java
+// From app/build/generated/source/buildConfig/sentry/debug/network.columba.app/BuildConfig.java
 public static final Boolean ENABLE_MEMORY_PROFILING = true;
 ```
 
@@ -233,14 +233,14 @@ None. Ready for 05-02 (memory leak investigation).
 ### Created (2 files)
 
 - `python/memory_profiler.py` (198 lines) - tracemalloc profiling module
-- `app/src/main/java/com/lxmf/messenger/service/manager/MemoryProfilerManager.kt` (160 lines) - Kotlin profiling coordinator
+- `app/src/main/java/network.columba.app/service/manager/MemoryProfilerManager.kt` (160 lines) - Kotlin profiling coordinator
 
 ### Modified (4 files)
 
 - `python/reticulum_wrapper.py` - Added enable_memory_profiling(), disable_memory_profiling(), get_memory_profile() methods
 - `app/build.gradle.kts` - Added ENABLE_MEMORY_PROFILING build flag
-- `app/src/main/java/com/lxmf/messenger/service/di/ServiceModule.kt` - Integrated MemoryProfilerManager into DI
-- `app/src/main/java/com/lxmf/messenger/service/binder/ReticulumServiceBinder.kt` - Start/stop profiling lifecycle
+- `app/src/main/java/network.columba.app/service/di/ServiceModule.kt` - Integrated MemoryProfilerManager into DI
+- `app/src/main/java/network.columba.app/service/binder/ReticulumServiceBinder.kt` - Start/stop profiling lifecycle
 
 ## Success Criteria
 

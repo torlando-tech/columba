@@ -49,7 +49,7 @@ Detect input format in the Add Contact Manually dialog and handle accordingly:
 
 ### 1. Data Model Changes
 
-**File:** `data/src/main/java/com/lxmf/messenger/data/db/entity/ContactEntity.kt`
+**File:** `data/src/main/java/network.columba.app/data/db/entity/ContactEntity.kt`
 
 #### Add ContactStatus Enum
 
@@ -116,7 +116,7 @@ val MIGRATION_X_Y = object : Migration(X, Y) {
 
 ### 2. Validation Changes
 
-**File:** `app/src/main/java/com/lxmf/messenger/util/validation/InputValidator.kt`
+**File:** `app/src/main/java/network.columba.app/util/validation/InputValidator.kt`
 
 #### Add IdentityInput Sealed Class
 
@@ -206,7 +206,7 @@ fun parseIdentityInput(input: String): ValidationResult<IdentityInput> {
 
 ### 3. Repository Changes
 
-**File:** `data/src/main/java/com/lxmf/messenger/data/repository/ContactRepository.kt`
+**File:** `data/src/main/java/network.columba.app/data/repository/ContactRepository.kt`
 
 #### Add New Methods
 
@@ -329,7 +329,7 @@ interface ContactDao {
 
 ### 4. ViewModel Changes
 
-**File:** `app/src/main/java/com/lxmf/messenger/viewmodel/ContactsViewModel.kt`
+**File:** `app/src/main/java/network.columba.app/viewmodel/ContactsViewModel.kt`
 
 #### Add Result Sealed Class
 
@@ -460,7 +460,7 @@ suspend fun retryIdentityResolution(destinationHash: String) {
 
 ### 5. Reticulum Service Integration
 
-**File:** `reticulum/src/main/java/com/lxmf/messenger/reticulum/ReticulumService.kt`
+**File:** `reticulum/src/main/java/network.columba.app/reticulum/ReticulumService.kt`
 
 #### Add Identity Resolution Methods
 
@@ -534,7 +534,7 @@ data class Identity(
 
 ### 6. UI Changes
 
-**File:** `app/src/main/java/com/lxmf/messenger/ui/screens/ContactsScreen.kt`
+**File:** `app/src/main/java/network.columba.app/ui/screens/ContactsScreen.kt`
 
 #### 6.1 Update ManualEntryDialog
 
@@ -944,10 +944,10 @@ fun PendingContactBottomSheet(
 
 ### 7. Background Identity Resolution
 
-**File:** `app/src/main/java/com/lxmf/messenger/service/IdentityResolutionWorker.kt` (new file)
+**File:** `app/src/main/java/network.columba.app/service/IdentityResolutionWorker.kt` (new file)
 
 ```kotlin
-package com.lxmf.messenger.service
+package network.columba.app.service
 
 import android.content.Context
 import android.util.Log
@@ -955,9 +955,9 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import com.lxmf.messenger.data.db.entity.ContactStatus
-import com.lxmf.messenger.data.repository.ContactRepository
-import com.lxmf.messenger.reticulum.ReticulumService
+import network.columba.app.data.db.entity.ContactStatus
+import network.columba.app.data.repository.ContactRepository
+import network.columba.app.reticulum.ReticulumService
 import java.util.concurrent.TimeUnit
 
 /**
@@ -1091,7 +1091,7 @@ class IdentityResolutionWorker @AssistedInject constructor(
 
 ### 8. Application Initialization
 
-**File:** `app/src/main/java/com/lxmf/messenger/ColumbaApplication.kt`
+**File:** `app/src/main/java/network.columba.app/ColumbaApplication.kt`
 
 Add worker scheduling in `onCreate()`:
 

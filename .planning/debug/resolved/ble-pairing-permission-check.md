@@ -65,4 +65,4 @@ verification:
 - Code review confirms permission check now occurs before BT operations
 
 files_changed:
-- app/src/main/java/com/lxmf/messenger/ui/screens/rnode/DeviceDiscoveryStep.kt
+- app/src/main/java/network.columba.app/ui/screens/rnode/DeviceDiscoveryStep.kt

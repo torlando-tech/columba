@@ -1,0 +1,120 @@
+package network.columba.app.util
+
+import android.content.Context
+import android.os.Build
+import network.columba.app.BuildConfig
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
+data class SystemInfo(
+    val appVersion: String,
+    val appBuildCode: Int,
+    val buildType: String,
+    val gitCommitHash: String,
+    val buildDate: String,
+    val androidVersion: String,
+    val apiLevel: Int,
+    val deviceModel: String,
+    val manufacturer: String,
+    val identityHash: String?,
+    val reticulumVersion: String?,
+    val lxmfVersion: String?,
+    val bleReticulumVersion: String?,
+    val lxstVersion: String? = null,
+)
+
+object DeviceInfoUtil {
+    @Suppress("UnusedParameter") // Context reserved for future use
+    fun getSystemInfo(
+        context: Context,
+        identityHash: String?,
+        reticulumVersion: String?,
+        lxmfVersion: String?,
+        bleReticulumVersion: String?,
+        lxstVersion: String? = null,
+    ): SystemInfo {
+        // Format in UTC so the rendered string stays consistent across device time zones —
+        // otherwise the same BuildConfig.BUILD_TIMESTAMP renders differently per locale and
+        // breaks the reproducible-build story at the UI layer. The `zzz` pattern derives the
+        // suffix from the timeZone below, so format and configuration can't drift.
+        val buildDate =
+            SimpleDateFormat("yyyy-MM-dd HH:mm zzz", Locale.US)
+                .apply { timeZone = TimeZone.getTimeZone("UTC") }
+                .format(Date(BuildConfig.BUILD_TIMESTAMP))
+
+        return SystemInfo(
+            appVersion = BuildConfig.VERSION_NAME,
+            appBuildCode = BuildConfig.VERSION_CODE,
+            buildType = BuildConfig.BUILD_TYPE,
+            gitCommitHash = BuildConfig.GIT_COMMIT_HASH,
+            buildDate = buildDate,
+            androidVersion = Build.VERSION.RELEASE,
+            apiLevel = Build.VERSION.SDK_INT,
+            deviceModel = Build.MODEL,
+            manufacturer = Build.MANUFACTURER,
+            identityHash = identityHash,
+            reticulumVersion = reticulumVersion,
+            lxmfVersion = lxmfVersion,
+            bleReticulumVersion = bleReticulumVersion,
+            lxstVersion = lxstVersion,
+        )
+    }
+
+    fun formatForClipboard(info: SystemInfo): String =
+        buildString {
+            appendLine("Columba ${info.appVersion} (${info.appBuildCode})")
+            appendLine("Build: ${info.gitCommitHash} (${info.buildDate})")
+            appendLine("Android ${info.androidVersion} (API ${info.apiLevel})")
+            appendLine("Device: ${info.deviceModel} by ${info.manufacturer}")
+            if (info.identityHash != null) {
+                appendLine("Identity: ${info.identityHash}")
+            }
+            if (info.reticulumVersion != null) {
+                appendLine("Reticulum: ${info.reticulumVersion}")
+            }
+            if (info.lxmfVersion != null) {
+                appendLine("LXMF: ${info.lxmfVersion}")
+            }
+            if (info.bleReticulumVersion != null) {
+                appendLine("BLE-Reticulum: ${info.bleReticulumVersion}")
+            }
+        }.trim()
+
+    /**
+     * Format system information as Markdown for GitHub bug reports.
+     *
+     * Note: Identity hash is truncated to 8 characters for privacy.
+     */
+    fun formatForBugReport(info: SystemInfo): String =
+        buildString {
+            appendLine("### System Information")
+            appendLine("- **Columba**: ${info.appVersion} (${info.appBuildCode})")
+            appendLine("- **Build**: ${info.gitCommitHash} (${info.buildDate})")
+            appendLine("- **Build Type**: ${info.buildType}")
+            appendLine("- **Android**: ${info.androidVersion} (API ${info.apiLevel})")
+            appendLine("- **Device**: ${info.deviceModel} by ${info.manufacturer}")
+            if (info.identityHash != null) {
+                // Truncate identity hash for privacy
+                val truncatedHash =
+                    if (info.identityHash.length > 8) {
+                        "${info.identityHash.take(8)}..."
+                    } else {
+                        info.identityHash
+                    }
+                appendLine("- **Identity**: $truncatedHash")
+            }
+            appendLine()
+            appendLine("### Protocol Versions")
+            if (info.reticulumVersion != null) {
+                appendLine("- **Reticulum**: ${info.reticulumVersion}")
+            }
+            if (info.lxmfVersion != null) {
+                appendLine("- **LXMF**: ${info.lxmfVersion}")
+            }
+            if (info.bleReticulumVersion != null) {
+                appendLine("- **BLE-Reticulum**: ${info.bleReticulumVersion}")
+            }
+        }.trim()
+}

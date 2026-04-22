@@ -3,7 +3,7 @@ created: 2026-01-25T21:30
 title: Refactor PropagationNodeManager to extract components
 area: architecture
 files:
-  - app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt:130
+  - app/src/main/java/network.columba.app/service/PropagationNodeManager.kt:130
 ---
 
 ## Problem

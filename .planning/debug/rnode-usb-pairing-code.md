@@ -99,4 +99,4 @@ fix: Change initiateAutoPairingWithPin() to use Classic Bluetooth discovery inst
 
 verification:
 files_changed:
-  - app/src/main/java/com/lxmf/messenger/viewmodel/RNodeWizardViewModel.kt
+  - app/src/main/java/network.columba.app/viewmodel/RNodeWizardViewModel.kt

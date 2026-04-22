@@ -28,7 +28,7 @@ Create new `:micron` module (pure Kotlin, no Android deps):
 columba/
 ├── micron/
 │   ├── build.gradle.kts
-│   └── src/main/java/com/lxmf/messenger/micron/
+│   └── src/main/java/network.columba.app/micron/
 │       ├── MicronParser.kt      # Main parser (~900 lines ported from JS)
 │       ├── MicronState.kt       # Parser state machine
 │       ├── MicronElement.kt     # Sealed class hierarchy for parsed elements
@@ -209,6 +209,6 @@ if (message.parsedContent != null) {
 ## Reference
 
 - **JS Parser:** `micron-parser-js/js/micron-parser.js` (907 lines)
-- **Columba MessageMapper:** `app/src/main/java/com/lxmf/messenger/ui/model/MessageMapper.kt`
-- **Columba MessageUi:** `app/src/main/java/com/lxmf/messenger/ui/model/MessageUi.kt`
-- **Columba MessagingScreen:** `app/src/main/java/com/lxmf/messenger/ui/screens/MessagingScreen.kt:434`
+- **Columba MessageMapper:** `app/src/main/java/network.columba.app/ui/model/MessageMapper.kt`
+- **Columba MessageUi:** `app/src/main/java/network.columba.app/ui/model/MessageUi.kt`
+- **Columba MessagingScreen:** `app/src/main/java/network.columba.app/ui/screens/MessagingScreen.kt:434`

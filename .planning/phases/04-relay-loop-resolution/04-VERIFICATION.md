@@ -10,7 +10,7 @@ must_haves:
     - "Relay selection behavior unchanged when UI is actively observing"
     - "Loop detection logging remains in place for production monitoring"
   artifacts:
-    - path: "app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt"
+    - path: "app/src/main/java/network.columba.app/service/PropagationNodeManager.kt"
       provides: "StateFlow configuration for relay state management"
       contains: "SharingStarted.WhileSubscribed(5000L)"
   key_links:
@@ -52,8 +52,8 @@ must_haves:
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `app/src/main/java/com/lxmf/messenger/service/PropagationNodeManager.kt` | StateFlow config with WhileSubscribed | VERIFIED | 1187 lines, substantive implementation, no stubs |
-| `app/src/test/java/com/lxmf/messenger/service/PropagationNodeManagerTest.kt` | Unit tests | VERIFIED | 2990 lines, 96 @Test methods, 4 tests updated for WhileSubscribed |
+| `app/src/main/java/network.columba.app/service/PropagationNodeManager.kt` | StateFlow config with WhileSubscribed | VERIFIED | 1187 lines, substantive implementation, no stubs |
+| `app/src/test/java/network.columba.app/service/PropagationNodeManagerTest.kt` | Unit tests | VERIFIED | 2990 lines, 96 @Test methods, 4 tests updated for WhileSubscribed |
 
 ### Key Link Verification
 

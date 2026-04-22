@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Radio
@@ -37,6 +40,8 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShareLocation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,10 +49,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -72,6 +79,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -93,6 +101,7 @@ import network.columba.app.ui.components.ContactLocationBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ShareLocationBottomSheet
 import network.columba.app.ui.components.SharingStatusChip
+import network.columba.app.ui.util.InterfaceCategory
 import network.columba.app.ui.util.MarkerBitmapFactory
 import network.columba.app.ui.util.ScreenMarker
 import network.columba.app.ui.util.ScreenToLatLng
@@ -226,6 +235,8 @@ fun MapScreen(
     val permissionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val shareLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val contactLocationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val layersSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showLayersSheet by remember { mutableStateOf(false) }
 
     // Map state
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -1226,17 +1237,17 @@ fun MapScreen(
             Log.d("MapScreen", "Added focus marker at $focusLatitude, $focusLongitude for $focusLabel")
         }
 
-        // Gradient scrim behind TopAppBar for readability
+        // Gradient scrim behind TopAppBar actions for legibility against variable map backgrounds
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(120.dp)
+                    .height(80.dp)
                     .background(
                         Brush.verticalGradient(
                             colors =
                                 listOf(
-                                    Color.Black.copy(alpha = 0.4f),
+                                    Color.Black.copy(alpha = 0.35f),
                                     Color.Transparent,
                                 ),
                         ),
@@ -1244,12 +1255,42 @@ fun MapScreen(
         )
 
         // TopAppBar overlays map (transparent background)
+        val availableCategories =
+            remember(state.interfaceMarkers) {
+                InterfaceCategory.entries
+                    .filter { cat -> state.interfaceMarkers.any { it.category == cat } }
+            }
+        val anyLayerHidden =
+            availableCategories.any { state.interfaceFilterEnabled[it] == false }
         TopAppBar(
-            title = {
-                Text(
-                    text = "Map",
-                    color = Color.White,
-                )
+            title = {},
+            actions = {
+                if (availableCategories.isNotEmpty()) {
+                    FilledIconButton(
+                        onClick = { showLayersSheet = true },
+                        colors =
+                            IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.Black.copy(alpha = 0.45f),
+                                contentColor = Color.White,
+                            ),
+                        modifier = Modifier.padding(end = 8.dp),
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (anyLayerHidden) {
+                                    Badge(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Layers,
+                                contentDescription = "Map layers",
+                            )
+                        }
+                    }
+                }
             },
             colors =
                 TopAppBarDefaults.topAppBarColors(
@@ -1275,40 +1316,27 @@ fun MapScreen(
             )
         }
 
-        // Interface type filter chips (shown when interface markers exist)
-        if (state.interfaceMarkers.isNotEmpty()) {
-            Row(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(top = 64.dp, start = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+        // Layers bottom sheet — interface-type filter toggles
+        // Close the sheet if the underlying markers vanish so it doesn't reopen
+        // silently the next time a marker appears.
+        LaunchedEffect(availableCategories.isEmpty()) {
+            if (availableCategories.isEmpty() && showLayersSheet) {
+                showLayersSheet = false
+            }
+        }
+        if (showLayersSheet && availableCategories.isNotEmpty()) {
+            ModalBottomSheet(
+                onDismissRequest = { showLayersSheet = false },
+                sheetState = layersSheetState,
             ) {
-                network.columba.app.ui.util.InterfaceCategory.entries
-                    .filter { cat -> state.interfaceMarkers.any { it.category == cat } }
-                    .forEach { category ->
-                        FilterChip(
-                            selected = state.interfaceFilterEnabled[category] ?: true,
-                            onClick = { viewModel.toggleInterfaceFilter(category) },
-                            label = {
-                                Text(
-                                    category.defaultText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    painter =
-                                        androidx.compose.ui.res
-                                            .painterResource(category.markerIconResId),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            },
-                            modifier = Modifier.height(32.dp),
-                        )
-                    }
+                // ModalBottomSheet already applies navigation-bar insets via its
+                // contentWindowInsets — don't double-pad the content here.
+                MapLayersSheetContent(
+                    categories = availableCategories,
+                    filterEnabled = state.interfaceFilterEnabled,
+                    onToggle = { viewModel.toggleInterfaceFilter(it) },
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
             }
         }
 
@@ -1635,6 +1663,46 @@ private fun FocusInterfaceBottomSheet(
             onCopyLoraParams = onCopyLoraParams,
             onUseForNewRNode = onUseForNewRNode,
         )
+    }
+}
+
+/**
+ * Content for the map layers bottom sheet — interface-type filter toggles.
+ * Extracted for testability since ModalBottomSheet is difficult to test in Robolectric.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun MapLayersSheetContent(
+    categories: List<InterfaceCategory>,
+    filterEnabled: Map<InterfaceCategory, Boolean>,
+    onToggle: (InterfaceCategory) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = "Show on map",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            categories.forEach { category ->
+                FilterChip(
+                    selected = filterEnabled[category] ?: true,
+                    onClick = { onToggle(category) },
+                    label = { Text(category.defaultText) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(category.markerIconResId),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                )
+            }
+        }
     }
 }
 

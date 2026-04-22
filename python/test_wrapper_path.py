@@ -122,34 +122,44 @@ class TestRequestPath(unittest.TestCase):
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')
     def test_request_path_calls_rns_transport(self, mock_rns):
-        """Test that request_path calls RNS.Transport.request_path"""
-        # Mock RNS.Transport.request_path
+        """Test that request_path calls RNS.Transport.request_path when no path exists"""
+        # _request_path_if_needed checks has_path first; return False so the request fires
+        mock_rns.Transport.has_path = Mock(return_value=False)
         mock_rns.Transport.request_path = Mock()
 
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.reticulum = Mock()  # Must be truthy for _request_path_if_needed to proceed
 
         test_dest_hash = b'test_destination_hash'
         result = wrapper.request_path(test_dest_hash)
 
-        # Verify RNS.Transport.request_path was called
+        # Verify RNS.Transport.request_path was called through _request_path_if_needed
         mock_rns.Transport.request_path.assert_called_once_with(test_dest_hash)
         self.assertTrue(result['success'], "request_path should return success")
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')
     def test_request_path_handles_exception(self, mock_rns):
-        """Test that request_path handles exceptions gracefully"""
-        # Mock RNS.Transport.request_path to raise an exception
+        """Test that request_path handles exceptions gracefully.
+
+        _request_path_if_needed catches Transport.request_path exceptions
+        internally (logging them), so request_path still returns success.
+        """
+        # has_path must return False so the Transport.request_path call fires
+        mock_rns.Transport.has_path = Mock(return_value=False)
         mock_rns.Transport.request_path = Mock(side_effect=Exception("Network error"))
 
         wrapper = reticulum_wrapper.ReticulumWrapper(self.temp_dir)
+        wrapper.reticulum = Mock()  # Must be truthy for _request_path_if_needed to proceed
 
         test_dest_hash = b'test_destination_hash'
         result = wrapper.request_path(test_dest_hash)
 
-        self.assertFalse(result['success'], "request_path should return failure on exception")
-        self.assertIn('error', result, "Should include error message")
-        self.assertEqual(result['error'], "Network error")
+        # The exception is caught inside _request_path_if_needed and logged,
+        # so request_path still returns success
+        self.assertTrue(result['success'],
+                        "request_path should return success (exception is caught internally)")
+        mock_rns.Transport.request_path.assert_called_once_with(test_dest_hash)
 
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
     @patch('reticulum_wrapper.RNS')

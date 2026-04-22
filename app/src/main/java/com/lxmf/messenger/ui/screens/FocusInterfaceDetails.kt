@@ -87,4 +87,5 @@ data class FocusInterfaceDetails(
     val status: String? = null,
     val lastHeard: Long? = null,
     val hops: Int? = null,
+    val firstSeen: Long? = null,
 )

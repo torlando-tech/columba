@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 1
 
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v5
+        uses: gradle/actions/wrapper-validation@v6
 
   lint:
     name: Code Quality (ktlint + detekt + CPD)
@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -169,7 +169,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -185,6 +185,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build release APK
+        timeout-minutes: 20
         run: ./gradlew :app:assembleSentryRelease --stacktrace --max-workers=2
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
@@ -253,7 +254,7 @@ jobs:
             --cov-report=xml:coverage-python.xml
 
       - name: Upload Python coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./python/coverage-python.xml
@@ -289,7 +290,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -373,7 +374,7 @@ jobs:
             **/build/reports/tests/
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./**/build/reports/jacoco/**/*.xml
@@ -406,7 +407,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -467,7 +468,7 @@ jobs:
             **/build/reports/tests/
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./**/build/reports/jacoco/**/*.xml
@@ -492,7 +493,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 

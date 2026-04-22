@@ -1221,8 +1221,8 @@ class TestOnLxmfDeliveryFieldCommands(unittest.TestCase):
         # Verify _send_telemetry_stream_response was NOT called
         self.wrapper._send_telemetry_stream_response.assert_not_called()
 
-    def test_handles_field_commands_with_identity_retry(self):
-        """Should retry sending when identity is not immediately recalled."""
+    def test_skips_telemetry_response_when_identity_not_found(self):
+        """Should skip telemetry response when identity is not recalled (no retry thread)."""
         commands = [{reticulum_wrapper.COMMAND_TELEMETRY_REQUEST: [0, True]}]
         fields = {reticulum_wrapper.FIELD_COMMANDS: commands}
         mock_message = self._create_mock_lxmf_message(fields=fields)
@@ -1230,29 +1230,16 @@ class TestOnLxmfDeliveryFieldCommands(unittest.TestCase):
         # Add requester to allowed list (source_hash is "a" * 32)
         self.wrapper.telemetry_allowed_requesters = {"a" * 32}
 
-        # First recall returns None, then returns identity on retry
-        mock_identity = MagicMock()
-        reticulum_wrapper.RNS.Identity.recall.side_effect = [None, mock_identity]
+        # Identity recall returns None — path will be requested but response skipped
+        reticulum_wrapper.RNS.Identity.recall.return_value = None
 
         # Spy on _send_telemetry_stream_response
         self.wrapper._send_telemetry_stream_response = MagicMock()
 
-        # Patch threading and time.sleep to execute immediately
-        with unittest.mock.patch('threading.Thread') as mock_thread:
-            # Capture and execute the thread target immediately
-            def run_target(*args, **kwargs):
-                target = kwargs.get('target')
-                if target:
-                    # Patch time.sleep inside the target
-                    with unittest.mock.patch('time.sleep'):
-                        target()
-                return MagicMock()
-            mock_thread.side_effect = run_target
+        self.wrapper._on_lxmf_delivery(mock_message)
 
-            self.wrapper._on_lxmf_delivery(mock_message)
-
-        # Verify _send_telemetry_stream_response was called after retry
-        self.wrapper._send_telemetry_stream_response.assert_called()
+        # Verify _send_telemetry_stream_response was NOT called (identity unknown)
+        self.wrapper._send_telemetry_stream_response.assert_not_called()
 
     def test_ignores_non_collector_request(self):
         """Should ignore telemetry requests with is_collector_request=False."""

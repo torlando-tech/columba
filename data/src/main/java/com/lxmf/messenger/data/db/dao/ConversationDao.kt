@@ -164,6 +164,19 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE identityHash = :identityHash")
     suspend fun getAllConversationsList(identityHash: String): List<ConversationEntity>
 
+    @Query(
+        """
+        SELECT peerHash FROM conversations
+        WHERE identityHash = :identityHash
+        ORDER BY lastMessageTimestamp DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun getRecentPeerHashes(
+        identityHash: String,
+        limit: Int,
+    ): List<String>
+
     /**
      * Get peer hashes of the N most recent conversations by last message time.
      * Used for scoped startup path requests (avoids flooding the network).

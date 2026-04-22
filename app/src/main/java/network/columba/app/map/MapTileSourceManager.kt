@@ -81,7 +81,7 @@ class MapTileSourceManager
         companion object {
             private const val TAG = "MapTileSourceManager"
             const val DEFAULT_STYLE_URL_LIGHT = "https://tiles.openfreemap.org/styles/liberty"
-            const val DEFAULT_STYLE_URL_DARK = "https://tiles.openfreemap.org/styles/dark-matter"
+            const val DEFAULT_STYLE_URL_DARK = "https://tiles.openfreemap.org/styles/dark"
 
             // Preserved for callers that don't care about dark/light (e.g. offline downloader).
             // OpenFreeMap serves the same vector tiles under both styles, so an offline region

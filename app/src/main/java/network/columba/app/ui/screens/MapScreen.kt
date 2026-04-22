@@ -58,6 +58,9 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -1265,30 +1268,30 @@ fun MapScreen(
         TopAppBar(
             title = {},
             actions = {
-                if (availableCategories.isNotEmpty()) {
-                    FilledIconButton(
-                        onClick = { showLayersSheet = true },
-                        colors =
-                            IconButtonDefaults.filledIconButtonColors(
-                                containerColor = Color.Black.copy(alpha = 0.45f),
-                                contentColor = Color.White,
-                            ),
-                        modifier = Modifier.padding(end = 8.dp),
+                // Layers icon is always shown — even without discovered interfaces,
+                // users may want to pick a map style (Auto / Light / Dark).
+                FilledIconButton(
+                    onClick = { showLayersSheet = true },
+                    colors =
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.45f),
+                            contentColor = Color.White,
+                        ),
+                    modifier = Modifier.padding(end = 8.dp),
+                ) {
+                    BadgedBox(
+                        badge = {
+                            if (anyLayerHidden) {
+                                Badge(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        },
                     ) {
-                        BadgedBox(
-                            badge = {
-                                if (anyLayerHidden) {
-                                    Badge(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Layers,
-                                contentDescription = "Map layers",
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Layers,
+                            contentDescription = "Map layers",
+                        )
                     }
                 }
             },
@@ -1316,15 +1319,9 @@ fun MapScreen(
             )
         }
 
-        // Layers bottom sheet — interface-type filter toggles
-        // Close the sheet if the underlying markers vanish so it doesn't reopen
-        // silently the next time a marker appears.
-        LaunchedEffect(availableCategories.isEmpty()) {
-            if (availableCategories.isEmpty() && showLayersSheet) {
-                showLayersSheet = false
-            }
-        }
-        if (showLayersSheet && availableCategories.isNotEmpty()) {
+        // Layers bottom sheet — map style picker + interface-type filter toggles
+        val stylePreference by viewModel.mapStylePreference.collectAsState()
+        if (showLayersSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showLayersSheet = false },
                 sheetState = layersSheetState,
@@ -1335,6 +1332,8 @@ fun MapScreen(
                     categories = availableCategories,
                     filterEnabled = state.interfaceFilterEnabled,
                     onToggle = { viewModel.toggleInterfaceFilter(it) },
+                    stylePreference = stylePreference,
+                    onStylePreferenceChange = { viewModel.setMapStylePreference(it) },
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
@@ -1670,37 +1669,67 @@ private fun FocusInterfaceBottomSheet(
  * Content for the map layers bottom sheet — interface-type filter toggles.
  * Extracted for testability since ModalBottomSheet is difficult to test in Robolectric.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun MapLayersSheetContent(
     categories: List<InterfaceCategory>,
     filterEnabled: Map<InterfaceCategory, Boolean>,
     onToggle: (InterfaceCategory) -> Unit,
+    stylePreference: network.columba.app.data.model.MapStylePreference,
+    onStylePreferenceChange: (network.columba.app.data.model.MapStylePreference) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
         Text(
-            text = "Show on map",
+            text = "Map style",
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 12.dp),
+            modifier = Modifier.padding(bottom = 8.dp),
         )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        SingleChoiceSegmentedButtonRow(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
         ) {
-            categories.forEach { category ->
-                FilterChip(
-                    selected = filterEnabled[category] ?: true,
-                    onClick = { onToggle(category) },
-                    label = { Text(category.defaultText) },
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(category.markerIconResId),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
+            val options = network.columba.app.data.model.MapStylePreference.entries
+            options.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = option == stylePreference,
+                    onClick = { onStylePreferenceChange(option) },
+                    shape =
+                        SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = options.size,
+                        ),
+                    label = { Text(option.displayName) },
                 )
+            }
+        }
+
+        if (categories.isNotEmpty()) {
+            Text(
+                text = "Show on map",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                categories.forEach { category ->
+                    FilterChip(
+                        selected = filterEnabled[category] ?: true,
+                        onClick = { onToggle(category) },
+                        label = { Text(category.defaultText) },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(category.markerIconResId),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                    )
+                }
             }
         }
     }

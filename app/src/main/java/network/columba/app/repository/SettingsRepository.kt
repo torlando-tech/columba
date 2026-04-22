@@ -128,6 +128,7 @@ class SettingsRepository
             val MAP_SOURCE_HTTP_ENABLED = booleanPreferencesKey("map_source_http_enabled")
             val MAP_SOURCE_RMSP_ENABLED = booleanPreferencesKey("map_source_rmsp_enabled")
             val MAP_MARKER_DECLUTTER_ENABLED = booleanPreferencesKey("map_marker_declutter_enabled")
+            val MAP_STYLE_PREFERENCE = stringPreferencesKey("map_style_preference")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
             // Privacy preferences
@@ -1290,6 +1291,30 @@ class SettingsRepository
                 .map { preferences ->
                     preferences[PreferencesKeys.MAP_SOURCE_HTTP_ENABLED] ?: true
                 }.distinctUntilChanged()
+
+        /**
+         * Flow of the user's map base-style preference (AUTO / LIGHT / DARK).
+         * AUTO binds to the system day/night theme at render time.
+         */
+        val mapStylePreferenceFlow: Flow<network.columba.app.data.model.MapStylePreference> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.MAP_STYLE_PREFERENCE]
+                        ?.let {
+                            network.columba.app.data.model.MapStylePreference
+                                .fromName(it)
+                        }
+                        ?: network.columba.app.data.model.MapStylePreference.DEFAULT
+                }.distinctUntilChanged()
+
+        /**
+         * Save the map base-style preference.
+         */
+        suspend fun saveMapStylePreference(preference: network.columba.app.data.model.MapStylePreference) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MAP_STYLE_PREFERENCE] = preference.name
+            }
+        }
 
         /**
          * Flow of the map marker declutter enabled setting.

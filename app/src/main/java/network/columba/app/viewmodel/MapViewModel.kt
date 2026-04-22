@@ -659,6 +659,19 @@ class MapViewModel
             }
         }
 
+        // ==================== Map style preference ====================
+
+        val mapStylePreference: StateFlow<network.columba.app.data.model.MapStylePreference> =
+            settingsRepository.mapStylePreferenceFlow.stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                network.columba.app.data.model.MapStylePreference.DEFAULT,
+            )
+
+        fun setMapStylePreference(preference: network.columba.app.data.model.MapStylePreference) {
+            viewModelScope.launch { settingsRepository.saveMapStylePreference(preference) }
+        }
+
         val filteredInterfaceMarkers: StateFlow<List<InterfaceMarker>> =
             _state
                 .map { s ->

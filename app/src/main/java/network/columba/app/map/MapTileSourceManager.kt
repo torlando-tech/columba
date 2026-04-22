@@ -1,17 +1,19 @@
 package network.columba.app.map
 
 import android.content.Context
+import android.content.res.Configuration
 import android.util.Log
-import network.columba.app.data.repository.OfflineMapRegion
-import network.columba.app.data.repository.OfflineMapRegionRepository
-import network.columba.app.data.repository.RmspServer
-import network.columba.app.data.repository.RmspServerRepository
-import network.columba.app.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import network.columba.app.data.model.MapStylePreference
+import network.columba.app.data.repository.OfflineMapRegion
+import network.columba.app.data.repository.OfflineMapRegionRepository
+import network.columba.app.data.repository.RmspServer
+import network.columba.app.data.repository.RmspServerRepository
+import network.columba.app.repository.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,8 +80,34 @@ class MapTileSourceManager
     ) {
         companion object {
             private const val TAG = "MapTileSourceManager"
-            const val DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
+            const val DEFAULT_STYLE_URL_LIGHT = "https://tiles.openfreemap.org/styles/liberty"
+            const val DEFAULT_STYLE_URL_DARK = "https://tiles.openfreemap.org/styles/dark-matter"
+
+            // Preserved for callers that don't care about dark/light (e.g. offline downloader).
+            // OpenFreeMap serves the same vector tiles under both styles, so an offline region
+            // downloaded against the light URL renders correctly under either style.
+            const val DEFAULT_STYLE_URL = DEFAULT_STYLE_URL_LIGHT
         }
+
+        /**
+         * Resolve the base-style URL for online rendering, honouring the user's
+         * MapStylePreference and (for AUTO) the system day/night theme.
+         */
+        private suspend fun resolveOnlineStyleUrl(): String {
+            val preference =
+                runCatching { settingsRepository.mapStylePreferenceFlow.first() }
+                    .getOrElse { MapStylePreference.DEFAULT }
+            return when (preference) {
+                MapStylePreference.LIGHT -> DEFAULT_STYLE_URL_LIGHT
+                MapStylePreference.DARK -> DEFAULT_STYLE_URL_DARK
+                MapStylePreference.AUTO ->
+                    if (isSystemInNightMode()) DEFAULT_STYLE_URL_DARK else DEFAULT_STYLE_URL_LIGHT
+            }
+        }
+
+        private fun isSystemInNightMode(): Boolean =
+            (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
 
         /**
          * Flow of HTTP enabled setting from SettingsRepository.
@@ -140,7 +168,7 @@ class MapTileSourceManager
             return when {
                 httpEnabled -> {
                     Log.d(TAG, "Using HTTP source")
-                    MapStyleResult.Online(DEFAULT_STYLE_URL)
+                    MapStyleResult.Online(resolveOnlineStyleUrl())
                 }
                 hasOffline -> {
                     // Get all completed regions with MBTiles files
@@ -176,7 +204,7 @@ class MapTileSourceManager
                         } else {
                             Log.w(TAG, "Offline regions exist but no cached style found — falling back to HTTP style URL")
                             // Tiles work until TileJSON cache expires (~24h); prompt re-download but don't block immediately
-                            MapStyleResult.Offline(DEFAULT_STYLE_URL)
+                            MapStyleResult.Offline(resolveOnlineStyleUrl())
                         }
                     }
                 }

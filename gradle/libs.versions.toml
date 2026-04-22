@@ -1,8 +1,8 @@
 [versions]
-kotlin = "2.3.0"
+kotlin = "2.3.20"
 compose = "1.7.5"
-composeBom = "2026.02.01"
-hilt = "2.57.2"
+composeBom = "2026.03.01"
+hilt = "2.59.2"
 room = "2.8.4"
 coroutines = "1.10.2"
 lifecycle = "2.10.0"
@@ -12,11 +12,11 @@ msgpack = "0.9.10"
 dataStore = "1.1.1"
 paging = "3.3.6"
 zxing = "3.5.3"
-cameraX = "1.5.2"
+cameraX = "1.5.3"
 ktlint = "12.1.1"
 detekt = "1.23.7"
 serialization = "1.10.0"
-coil = "2.6.0"
+coil = "2.7.0"
 
 [libraries]
 # Compose
@@ -86,8 +86,8 @@ mockk-android = { module = "io.mockk:mockk-android", version = "1.14.9" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 arch-core-testing = { module = "androidx.arch.core:core-testing", version = "2.2.0" }
 robolectric = { module = "org.robolectric:robolectric", version = "4.16" }
-test-core = { module = "androidx.test:core", version = "1.6.1" }
+test-core = { module = "androidx.test:core", version = "1.7.0" }
 junit-android = { module = "androidx.test.ext:junit", version = "1.2.1" }
 espresso = { module = "androidx.test.espresso:espresso-core", version = "3.6.1" }
-test-orchestrator = { module = "androidx.test:orchestrator", version = "1.4.2" }
+test-orchestrator = { module = "androidx.test:orchestrator", version = "1.6.1" }
 test-services = { module = "androidx.test.services:test-services", version = "1.6.0" }

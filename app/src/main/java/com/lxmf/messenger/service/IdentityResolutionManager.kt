@@ -17,11 +17,15 @@ import javax.inject.Singleton
 /**
  * Manages background identity resolution for pending contacts.
  *
- * This manager periodically:
- * 1. Checks pending contacts against Reticulum's identity cache
- * 2. Marks contacts as UNRESOLVED after 24 hours
- * 3. Persists transport data (paths) for crash resilience
- * 4. Requests paths for the 3 most recent chat recipients at startup
+ * This manager:
+ * 1. Requests paths for the 3 most recent conversations at startup (staggered, capped)
+ * 2. Periodically checks pending contacts against Reticulum's identity cache (no network requests)
+ * 3. Marks contacts as UNRESOLVED after 24 hours
+ * 4. Persists transport data (paths) for crash resilience
+ *
+ * Proactive path requests are intentionally limited to the startup sweep to avoid flooding
+ * the Reticulum network and contending the Python GIL during the critical post-launch window.
+ * Other contacts resolve lazily when the user opens their conversation.
  */
 @Singleton
 class IdentityResolutionManager
@@ -34,8 +38,8 @@ class IdentityResolutionManager
         companion object {
             private const val TAG = "IdentityResolutionMgr"
 
-            // Check interval: 15 minutes
-            private const val CHECK_INTERVAL_MS = 15 * 60 * 1000L
+            // Check interval: 3 hours
+            private const val CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000L
 
             // Resolution timeout: 24 hours
             private const val RESOLUTION_TIMEOUT_MS = 24 * 60 * 60 * 1000L
@@ -142,6 +146,9 @@ class IdentityResolutionManager
                                 publicKey = identity.publicKey,
                             )
                         } else {
+                            // Identity not yet in Reticulum cache — wait until the user opens
+                            // the conversation to avoid flooding the network with path requests
+                            // on every periodic check.
                             Log.d(TAG, "Identity not yet resolved for ${contact.destinationHash.take(8)}...")
                         }
                     } catch (e: Exception) {
@@ -170,13 +177,7 @@ class IdentityResolutionManager
                         .map { it.toInt(16).toByte() }
                         .toByteArray()
 
-                if (reticulumProtocol.hasPath(destHashBytes)) {
-                    Log.d(TAG, "Path already exists for ${destinationHash.take(8)}..., skipping request")
-                    return
-                }
-
-                Log.d(TAG, "Requesting path for ${destinationHash.take(8)}...")
-                reticulumProtocol.requestPath(destHashBytes)
+                requestPathIfNeeded(destHashBytes, destinationHash)
             } catch (e: Exception) {
                 Log.e(TAG, "Error requesting path for ${destinationHash.take(8)}...", e)
             }
@@ -237,13 +238,33 @@ class IdentityResolutionManager
         suspend fun retryResolution(destinationHash: String) {
             Log.d(TAG, "Retry resolution for ${destinationHash.take(8)}...")
 
-            // Request path on network
-            val destHashBytes =
-                destinationHash
-                    .chunked(2)
-                    .map { it.toInt(16).toByte() }
-                    .toByteArray()
+            try {
+                val destHashBytes =
+                    destinationHash
+                        .chunked(2)
+                        .map { it.toInt(16).toByte() }
+                        .toByteArray()
 
+                requestPathIfNeeded(destHashBytes, destinationHash)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in retryResolution for ${destinationHash.take(8)}...", e)
+            }
+        }
+
+        /**
+         * Central path request method — checks hasPath before requesting.
+         * All path requests in this class must go through here.
+         */
+        private suspend fun requestPathIfNeeded(
+            destHashBytes: ByteArray,
+            displayHash: String,
+        ) {
+            if (reticulumProtocol.hasPath(destHashBytes)) {
+                Log.d(TAG, "Path exists for ${displayHash.take(8)}..., skipping request")
+                return
+            }
+
+            Log.d(TAG, "Requesting path for ${displayHash.take(8)}...")
             reticulumProtocol.requestPath(destHashBytes)
         }
     }

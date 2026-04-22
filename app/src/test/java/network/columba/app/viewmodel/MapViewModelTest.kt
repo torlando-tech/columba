@@ -106,6 +106,8 @@ class MapViewModelTest {
         every { locationSharingManager.stopSharing(any()) } just Runs
         every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)
         every { settingsRepository.mapMarkerDeclutterEnabledFlow } returns flowOf(true)
+        every { settingsRepository.mapStylePreferenceFlow } returns
+            flowOf(network.columba.app.data.model.MapStylePreference.AUTO)
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
         coEvery { settingsRepository.markLocationPermissionSheetDismissed() } just Runs
         coEvery { settingsRepository.setHttpEnabledForDownload(any()) } just Runs

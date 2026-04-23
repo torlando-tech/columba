@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -861,13 +863,18 @@ internal fun DiscoveredInterfaceCard(
                 )
             }
 
-            // IFAC network name (when broadcast by the discovery announce).
-            // Note: only the network *name* is transmitted — the IFAC passphrase/key is
-            // never broadcast by Python RNS for security reasons, so users still need to
-            // obtain that out-of-band before connecting.
+            // IFAC values broadcast by the discovery announce. Per RNS/Discovery.py:157-159,
+            // publishers opt in via `discovery_publish_ifac = true`, which causes BOTH the
+            // network name AND the passphrase (IFAC_NETKEY) to be included in the announce
+            // info dict. The announce can additionally be encrypted via `discovery_encrypt`
+            // + a shared network identity so only authorized receivers recover the payload.
+            //
+            // We display both when present. The passphrase is masked by default with a
+            // reveal toggle — it's a shared network secret and on-screen masking prevents
+            // shoulder-surfing leaks during the mere act of reviewing discovered networks.
+            val clipboardManager = LocalClipboardManager.current
+            val cardContext = LocalContext.current
             iface.networkName?.takeIf { it.isNotBlank() }?.let { networkName ->
-                val clipboardManager = LocalClipboardManager.current
-                val context = LocalContext.current
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -883,7 +890,7 @@ internal fun DiscoveredInterfaceCard(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(networkName))
                             Toast
-                                .makeText(context, "Network name copied", Toast.LENGTH_SHORT)
+                                .makeText(cardContext, "Network name copied", Toast.LENGTH_SHORT)
                                 .show()
                         },
                         modifier = Modifier.size(24.dp),
@@ -891,6 +898,56 @@ internal fun DiscoveredInterfaceCard(
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "Copy network name",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            iface.passphrase?.takeIf { it.isNotBlank() }?.let { passphrase ->
+                var passphraseRevealed by remember(iface.transportId) { mutableStateOf(false) }
+                // A Bullet-char mask long enough to hide length info but short enough to fit.
+                val maskedDisplay = "•".repeat(passphrase.length.coerceAtMost(8))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "passphrase: ${if (passphraseRevealed) passphrase else maskedDisplay}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    IconButton(
+                        onClick = { passphraseRevealed = !passphraseRevealed },
+                        modifier = Modifier.size(24.dp),
+                    ) {
+                        Icon(
+                            imageVector =
+                                if (passphraseRevealed) {
+                                    Icons.Default.VisibilityOff
+                                } else {
+                                    Icons.Default.Visibility
+                                },
+                            contentDescription =
+                                if (passphraseRevealed) "Hide passphrase" else "Reveal passphrase",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(passphrase))
+                            Toast
+                                .makeText(cardContext, "Passphrase copied", Toast.LENGTH_SHORT)
+                                .show()
+                        },
+                        modifier = Modifier.size(24.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy passphrase",
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

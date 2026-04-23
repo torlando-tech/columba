@@ -861,6 +861,43 @@ internal fun DiscoveredInterfaceCard(
                 )
             }
 
+            // IFAC network name (when broadcast by the discovery announce).
+            // Note: only the network *name* is transmitted — the IFAC passphrase/key is
+            // never broadcast by Python RNS for security reasons, so users still need to
+            // obtain that out-of-band before connecting.
+            iface.networkName?.takeIf { it.isNotBlank() }?.let { networkName ->
+                val clipboardManager = LocalClipboardManager.current
+                val context = LocalContext.current
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "network: $networkName",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(networkName))
+                            Toast
+                                .makeText(context, "Network name copied", Toast.LENGTH_SHORT)
+                                .show()
+                        },
+                        modifier = Modifier.size(24.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy network name",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
                 color = MaterialTheme.colorScheme.outlineVariant,

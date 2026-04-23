@@ -127,8 +127,8 @@ class TcpClientWizardViewModel
             host: String,
             port: Int,
             name: String,
-            networkName: String,
-            passphrase: String,
+            networkName: String = "",
+            passphrase: String = "",
         ) {
             // Check if this matches a community server
             val matchingServer =

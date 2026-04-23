@@ -18,11 +18,14 @@ import javax.inject.Singleton
  * Manages background identity resolution for pending contacts.
  *
  * This manager:
- * 1. Requests paths for the 3 most recent conversations at startup
- * 2. Periodically checks pending contacts (every 3h, gives up after 24h)
- * 3. Persists transport data for crash resilience
+ * 1. Requests paths for the 3 most recent conversations at startup (staggered, capped)
+ * 2. Periodically checks pending contacts against Reticulum's identity cache (no network requests)
+ * 3. Marks contacts as UNRESOLVED after 24 hours
+ * 4. Persists transport data (paths) for crash resilience
  *
- * All path requests go through [requestPathIfNeeded] which checks hasPath first.
+ * Proactive path requests are intentionally limited to the startup sweep to avoid flooding
+ * the Reticulum network and contending the Python GIL during the critical post-launch window.
+ * Other contacts resolve lazily when the user opens their conversation.
  */
 @Singleton
 class IdentityResolutionManager
@@ -47,7 +50,7 @@ class IdentityResolutionManager
             // Delay before startup sweep to let Reticulum initialize
             private const val STARTUP_SWEEP_DELAY_MS = 5_000L
 
-            // Number of recent conversations to request paths for at startup
+            // Max recent conversations to request paths for at startup
             private const val STARTUP_SWEEP_LIMIT = 3
         }
 
@@ -78,7 +81,9 @@ class IdentityResolutionManager
                     }
                 }
 
-            // One-shot startup sweep: request paths for 3 most recent conversations
+            // One-shot startup sweep: request paths for the 3 most recent chat recipients only.
+            // Requesting paths for ALL contacts floods the Reticulum network and contends
+            // the Python GIL during the startup window when the user is most likely to send.
             startupSweepJob =
                 scope.launch(Dispatchers.IO) {
                     delay(STARTUP_SWEEP_DELAY_MS)
@@ -141,8 +146,10 @@ class IdentityResolutionManager
                                 publicKey = identity.publicKey,
                             )
                         } else {
-                            // Not in cache, request path (guarded) to trigger network search
-                            requestPathIfNeeded(destHashBytes, contact.destinationHash)
+                            // Identity not yet in Reticulum cache — wait until the user opens
+                            // the conversation to avoid flooding the network with path requests
+                            // on every periodic check.
+                            Log.d(TAG, "Identity not yet resolved for ${contact.destinationHash.take(8)}...")
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing contact ${contact.destinationHash.take(8)}...", e)
@@ -177,8 +184,11 @@ class IdentityResolutionManager
         }
 
         /**
-         * Request paths for the N most recent conversations.
-         * Called once at startup to ensure the most relevant peers are reachable.
+         * Request paths for the most recent conversation recipients only.
+         *
+         * Limited to [STARTUP_SWEEP_LIMIT] peers to avoid flooding the Reticulum network
+         * and contending the Python GIL during the critical post-startup window.
+         * Other contacts will resolve lazily when the user opens their conversation.
          */
         private suspend fun requestPathsForRecentConversations() {
             try {
@@ -191,7 +201,8 @@ class IdentityResolutionManager
 
                 Log.d(TAG, "Startup sweep: requesting paths for ${recentPeerHashes.size} recent conversation(s)")
 
-                for (peerHash in recentPeerHashes) {
+                val lastIndex = recentPeerHashes.lastIndex
+                for ((index, peerHash) in recentPeerHashes.withIndex()) {
                     try {
                         val destHashBytes =
                             peerHash
@@ -199,11 +210,20 @@ class IdentityResolutionManager
                                 .map { it.toInt(16).toByte() }
                                 .toByteArray()
 
-                        requestPathIfNeeded(destHashBytes, peerHash)
+                        if (reticulumProtocol.hasPath(destHashBytes)) {
+                            Log.d(TAG, "Startup sweep: path exists for ${peerHash.take(8)}..., skipping")
+                            continue
+                        }
+
+                        Log.d(TAG, "Startup sweep: requesting path for ${peerHash.take(8)}...")
+                        reticulumProtocol.requestPath(destHashBytes)
+                        // Skip stagger after the final request — no further requests need spacing.
+                        if (index != lastIndex) {
+                            delay(PATH_REQUEST_STAGGER_MS)
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Startup sweep: error for ${peerHash.take(8)}...", e)
                     }
-                    delay(PATH_REQUEST_STAGGER_MS)
                 }
 
                 Log.d(TAG, "Startup sweep complete")

@@ -146,8 +146,16 @@ class BleGattServer(
                 characteristic: BluetoothGattCharacteristic,
             ) {
                 Log.d(TAG, "onCharacteristicReadRequest: device=${device.address}, char=${characteristic.uuid}")
+                // Note: callback-supplied `offset` is intentionally NOT propagated into the
+                // suspend handler. On some older Android devices (Redmi Note 5A / Android
+                // 7.1.2) the BLE stack delivers a null-boxed Integer through Parcel IPC, and
+                // capturing it into the coroutine continuation caused an NPE inside
+                // $handleCharacteristicReadRequest$2.invokeSuspend when the continuation
+                // unboxes the captured Integer. Columba does not use prepared writes or
+                // long-read fragmentation so offset is always 0 in practice. See Sentry
+                // COLUMBA-6Q.
                 scope.launch {
-                    handleCharacteristicReadRequest(device, requestId, offset, characteristic)
+                    handleCharacteristicReadRequest(device, requestId, characteristic)
                 }
             }
 
@@ -161,6 +169,8 @@ class BleGattServer(
                 value: ByteArray,
             ) {
                 Log.d(TAG, "onCharacteristicWriteRequest: device=${device.address}, char=${characteristic.uuid}, size=${value.size}")
+                // See note in onCharacteristicReadRequest — offset is not forwarded to avoid
+                // the Parcel-IPC null-unbox crash in the coroutine continuation (COLUMBA-6Q).
                 scope.launch {
                     handleCharacteristicWriteRequest(
                         device,
@@ -168,7 +178,6 @@ class BleGattServer(
                         characteristic,
                         preparedWrite,
                         responseNeeded,
-                        offset,
                         value,
                     )
                 }
@@ -181,8 +190,9 @@ class BleGattServer(
                 descriptor: BluetoothGattDescriptor,
             ) {
                 Log.d(TAG, "onDescriptorReadRequest: device=${device.address}, desc=${descriptor.uuid}")
+                // See note in onCharacteristicReadRequest (COLUMBA-6Q).
                 scope.launch {
-                    handleDescriptorReadRequest(device, requestId, offset, descriptor)
+                    handleDescriptorReadRequest(device, requestId, descriptor)
                 }
             }
 
@@ -196,6 +206,7 @@ class BleGattServer(
                 value: ByteArray,
             ) {
                 Log.d(TAG, "onDescriptorWriteRequest: device=${device.address}, desc=${descriptor.uuid}")
+                // See note in onCharacteristicReadRequest (COLUMBA-6Q).
                 scope.launch {
                     handleDescriptorWriteRequest(
                         device,
@@ -203,7 +214,6 @@ class BleGattServer(
                         descriptor,
                         preparedWrite,
                         responseNeeded,
-                        offset,
                         value,
                     )
                 }
@@ -660,7 +670,6 @@ class BleGattServer(
     private suspend fun handleCharacteristicReadRequest(
         device: BluetoothDevice,
         requestId: Int,
-        offset: Int,
         characteristic: BluetoothGattCharacteristic,
     ) = withContext(Dispatchers.Main) {
         try {
@@ -676,7 +685,7 @@ class BleGattServer(
                         device,
                         requestId,
                         BluetoothGatt.GATT_SUCCESS,
-                        offset,
+                        0,
                         ByteArray(0),
                     )
                 }
@@ -689,7 +698,7 @@ class BleGattServer(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
-                            offset,
+                            0,
                             identity,
                         )
                     } else {
@@ -698,7 +707,7 @@ class BleGattServer(
                             device,
                             requestId,
                             BluetoothGatt.GATT_FAILURE,
-                            offset,
+                            0,
                             null,
                         )
                     }
@@ -709,7 +718,7 @@ class BleGattServer(
                         device,
                         requestId,
                         BluetoothGatt.GATT_FAILURE,
-                        offset,
+                        0,
                         null,
                     )
                 }
@@ -725,7 +734,6 @@ class BleGattServer(
         characteristic: BluetoothGattCharacteristic,
         preparedWrite: Boolean,
         responseNeeded: Boolean,
-        offset: Int,
         value: ByteArray,
     ) = withContext(Dispatchers.Main) {
         try {
@@ -773,7 +781,7 @@ class BleGattServer(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
-                            offset,
+                            0,
                             value,
                         )
                     }
@@ -822,7 +830,7 @@ class BleGattServer(
                             device,
                             requestId,
                             BluetoothGatt.GATT_FAILURE,
-                            offset,
+                            0,
                             null,
                         )
                     }
@@ -836,7 +844,6 @@ class BleGattServer(
     private suspend fun handleDescriptorReadRequest(
         device: BluetoothDevice,
         requestId: Int,
-        offset: Int,
         descriptor: BluetoothGattDescriptor,
     ) = withContext(Dispatchers.Main) {
         try {
@@ -852,7 +859,7 @@ class BleGattServer(
                         device,
                         requestId,
                         BluetoothGatt.GATT_SUCCESS,
-                        offset,
+                        0,
                         value,
                     )
                 }
@@ -862,7 +869,7 @@ class BleGattServer(
                         device,
                         requestId,
                         BluetoothGatt.GATT_FAILURE,
-                        offset,
+                        0,
                         null,
                     )
                 }
@@ -878,7 +885,6 @@ class BleGattServer(
         descriptor: BluetoothGattDescriptor,
         preparedWrite: Boolean,
         responseNeeded: Boolean,
-        offset: Int,
         value: ByteArray,
     ) = withContext(Dispatchers.Main) {
         try {
@@ -901,7 +907,7 @@ class BleGattServer(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
-                            offset,
+                            0,
                             value,
                         )
                     }
@@ -915,7 +921,7 @@ class BleGattServer(
                             device,
                             requestId,
                             BluetoothGatt.GATT_FAILURE,
-                            offset,
+                            0,
                             null,
                         )
                     }

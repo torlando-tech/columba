@@ -1,13 +1,15 @@
 # Python dependencies for Reticulum integration
 # These will be installed by Chaquopy when building the Android app
 
-# RNS 1.1.3 with socket leak fix and RPC exception handling
-# Fork patches:
+# RNS 1.1.9 with the same two fork patches rebased cleanly:
 # - TCPInterface/BackboneInterface: Close socket on connection failure
 #   to prevent resource leak (~780 leaked sockets/hour during reconnects)
 # - Link.py: Catch exceptions in __update_phy_stats() to prevent crashes
 #   when connecting to shared instance with mismatched RPC keys
-rns @ git+https://github.com/torlando-tech/Reticulum@fix/socket-leak-1.1.3
+# Bumping from 1.1.3 → 1.1.9 also pulls in 49 upstream commits including
+# the K8-authored IFAC autoconnect fix (866e63f) that's relevant to #844's
+# discovered-interface passphrase plumbing.
+rns @ git+https://github.com/torlando-tech/Reticulum@fix/socket-leak-1.1.9
 
 # LXMF from fork with external stamp generator + receiving interface capture
 # Patches:

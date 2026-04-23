@@ -1699,67 +1699,15 @@ class ReticulumWrapper:
                 log_error("ReticulumWrapper", "initialize", "Already initialized")
                 return {"success": False, "error": "Already initialized"}
 
-            # CRITICAL: Deploy RNS patches BEFORE importing RNS
-            # This ensures Python loads patched code instead of cached buggy code
+            # RNS fork patches (context managers in Destination.py and __init__.py) now live
+            # directly on the torlando-tech/Reticulum `fix/socket-leak-1.1.9` branch pinned
+            # in python/requirements.txt. The previous runtime-overlay scheme that copied
+            # files from python/patches/RNS/ over the pip-installed RNS module has been
+            # removed — it silently went stale across upstream bumps.
             global RETICULUM_AVAILABLE, RNS, LXMF
 
             if not RETICULUM_AVAILABLE:
-                log_info("ReticulumWrapper", "initialize", "Deploying RNS patches BEFORE first import")
-                try:
-                    import pkgutil
-                    # Find RNS location WITHOUT importing it
-                    rns_spec = importlib.util.find_spec("RNS")
-                    if rns_spec and rns_spec.origin:
-                        rns_module_path = os.path.dirname(rns_spec.origin)
-                        log_debug("ReticulumWrapper", "initialize", f"RNS module path: {rns_module_path}")
-
-                        # CRITICAL: Delete Python bytecode cache before deploying patches
-                        # Python may use cached .pyc files instead of our patched .py files
-                        pycache_dir = os.path.join(rns_module_path, '__pycache__')
-                        if os.path.isdir(pycache_dir):
-                            log_info("ReticulumWrapper", "initialize", "Clearing Python bytecode cache (__pycache__)")
-                            shutil.rmtree(pycache_dir, ignore_errors=True)
-
-                        # Also delete any standalone .pyc files
-                        for pyc_file in ['Destination.pyc', '__init__.pyc']:
-                            pyc_path = os.path.join(rns_module_path, pyc_file)
-                            if os.path.exists(pyc_path):
-                                os.remove(pyc_path)
-                                log_debug("ReticulumWrapper", "initialize", f"Deleted {pyc_file}")
-
-                        # Deploy patches - list of (resource_path, dest_subpath) tuples
-                        patch_files = [
-                            ('Destination.py', 'Destination.py'),
-                            ('__init__.py', '__init__.py'),
-                        ]
-                        patches_applied = 0
-
-                        for resource_subpath, dest_subpath in patch_files:
-                            try:
-                                patch_resource_path = f"patches/RNS/{resource_subpath}"
-                                patch_data = pkgutil.get_data(__name__.split('.')[0], patch_resource_path)
-
-                                if patch_data:
-                                    patch_dest = os.path.join(rns_module_path, dest_subpath)
-                                    # Ensure parent directory exists
-                                    os.makedirs(os.path.dirname(patch_dest), exist_ok=True)
-                                    with open(patch_dest, 'wb') as dest:
-                                        dest.write(patch_data)
-
-                                    log_info("ReticulumWrapper", "initialize", f"✓ Applied patch: {dest_subpath}")
-                                    patches_applied += 1
-                            except Exception as e:
-                                log_warning("ReticulumWrapper", "initialize", f"Failed to apply patch {dest_subpath}: {e}")
-
-                        if patches_applied > 0:
-                            log_info("ReticulumWrapper", "initialize", f"Successfully applied {patches_applied} RNS patch(es)")
-                except Exception as e:
-                    log_error("ReticulumWrapper", "initialize", f"ERROR deploying RNS patches: {e}")
-                    import traceback
-                    log_error("ReticulumWrapper", "initialize", f"Traceback: {traceback.format_exc()}")
-
-                # NOW import RNS and LXMF for the first time (will load patched code)
-                log_info("ReticulumWrapper", "initialize", "Importing RNS and LXMF (will use patched code)")
+                log_info("ReticulumWrapper", "initialize", "Importing RNS and LXMF")
                 try:
                     import RNS as _RNS
                     import LXMF as _LXMF

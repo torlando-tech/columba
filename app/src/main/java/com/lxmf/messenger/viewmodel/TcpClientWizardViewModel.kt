@@ -237,14 +237,14 @@ class TcpClientWizardViewModel
         }
 
         /**
-         * Update interface name field.
+         * Update IFAC network name field.
          */
         fun updateNetworkName(value: String) {
             _state.update { it.copy(networkName = value) }
         }
 
         /**
-         * Update interface name field.
+         * Update IFAC passphrase field.
          */
         fun updatePassphrase(value: String) {
             _state.update { it.copy(passphrase = value) }
@@ -358,8 +358,8 @@ class TcpClientWizardViewModel
                             enabled = true,
                             targetHost = currentState.targetHost.trim(),
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
-                            networkName = currentState.networkName,
-                            passphrase = currentState.passphrase,
+                            networkName = currentState.networkName.trim().ifEmpty { null },
+                            passphrase = currentState.passphrase.ifEmpty { null },
                             kissFraming = false,
                             mode = "full",
                             bootstrapOnly = currentState.bootstrapOnly,

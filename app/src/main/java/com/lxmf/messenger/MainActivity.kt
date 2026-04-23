@@ -1576,8 +1576,8 @@ fun ColumbaNavigation(
                                 onNavigateToTcpClientWizard = { host, port, name, networkName, passphrase ->
                                     val encodedHost = Uri.encode(host)
                                     val encodedName = Uri.encode(name)
-                                    val encodedNetworkName = Uri.encode(networkName)
-                                    val encodedPassphrase = Uri.encode(passphrase)
+                                    val encodedNetworkName = Uri.encode(networkName.orEmpty())
+                                    val encodedPassphrase = Uri.encode(passphrase.orEmpty())
                                     navController.navigate(
                                         "tcp_client_wizard?host=$encodedHost&port=$port&name=$encodedName&networkName=$encodedNetworkName&passphrase=$encodedPassphrase",
                                     )

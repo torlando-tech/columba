@@ -424,10 +424,15 @@ class LocationSharingManager
                 scope.launch {
                     try {
                         if (useGms) {
+                            // Active location-sharing requires real GPS accuracy: BALANCED_POWER
+                            // (WiFi/cell) was leaving recipients with 1–5 km errors, which makes
+                            // the feature useless. The session is user-initiated and time-bounded
+                            // (UI shows a duration), so the higher GPS draw is acceptable here —
+                            // unlike background telemetry where continuous tracking is the cost.
                             val locationRequest =
                                 LocationRequest
                                     .Builder(
-                                        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                        Priority.PRIORITY_HIGH_ACCURACY,
                                         LOCATION_UPDATE_INTERVAL_MS,
                                     ).apply {
                                         setMinUpdateIntervalMillis(LOCATION_MIN_UPDATE_INTERVAL_MS)

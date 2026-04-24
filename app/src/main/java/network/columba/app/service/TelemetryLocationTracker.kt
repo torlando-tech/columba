@@ -4,7 +4,9 @@ import android.content.Context
 import android.location.Location
 import android.location.LocationListener
 import android.util.Log
+import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -35,7 +37,10 @@ internal class TelemetryLocationTracker(
         private const val TRACKING_LEAD_TIME_MS = 30_000L // start tracking 30s before send
         private const val TRACKING_MIN_INTERVAL_MS = 60_000L // 1 min floor
         private const val MAX_ONE_SHOT_FIX_AGE_MS = 5 * 60 * 1000L // reject OS-cached fixes older than 5 min
-        private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 20_000L
+        private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 30_000L // cold GPS lock can take 20–30s
+        // Reject fallback fixes coarser than this; better to send nothing than a position
+        // several km off. WiFi/cell-only fixes indoors are typically 1000–5000 m.
+        private const val MAX_ACCEPTABLE_FIX_ACCURACY_M = 200f
     }
 
     @Volatile private var locationTrackingActive = false
@@ -103,31 +108,54 @@ internal class TelemetryLocationTracker(
     /**
      * Return a recent valid location suitable for telemetry.
      *
-     * Returns the cached location if fresh enough, otherwise performs
-     * a one-shot HIGH_ACCURACY fix as fallback.
+     * Tries a one-shot HIGH_ACCURACY GPS fix first (per send → ~10s GPS hot,
+     * negligible battery cost vs. continuous tracking). Falls back to the
+     * BALANCED_POWER (WiFi/cell) cache if the one-shot times out — typical in
+     * Doze with cold GPS or indoors. The cache is the safety net; preferring
+     * it would yield ~1–5 km accuracy and make the position effectively useless.
      */
     suspend fun getTelemetryLocation(): Location? {
         if (!locationTrackingActive) return null
 
-        val tracked = latestTrackedLocation
-        if (tracked != null && isLocationRecent(tracked)) {
-            return tracked
-        }
-
-        // Cache stale or empty — try a one-shot fix
         val current =
             withTimeoutOrNull(ONE_SHOT_LOCATION_TIMEOUT_MS) {
                 getCurrentLocation()
             }
 
-        if (current == null) {
-            Log.w(TAG, "Timed out waiting for one-shot location (${ONE_SHOT_LOCATION_TIMEOUT_MS}ms)")
-        } else if (!isFixFresh(current)) {
-            Log.w(TAG, "One-shot fix is stale (age=${System.currentTimeMillis() - current.time}ms), rejecting")
-        } else {
+        if (current != null && isFixFresh(current)) {
+            Log.d(
+                TAG,
+                "One-shot fix accepted: provider=${current.provider} acc=${current.accuracy}m " +
+                    "age=${System.currentTimeMillis() - current.time}ms",
+            )
             cacheTrackedLocation(current)
+            return current
         }
-        return current?.takeIf { isFixFresh(it) }
+
+        if (current == null) {
+            Log.w(TAG, "One-shot HIGH_ACCURACY timed out (${ONE_SHOT_LOCATION_TIMEOUT_MS}ms), falling back to tracker cache")
+        } else {
+            Log.w(TAG, "One-shot fix stale (age=${System.currentTimeMillis() - current.time}ms), falling back to tracker cache")
+        }
+
+        val tracked = latestTrackedLocation
+        if (tracked == null || !isLocationRecent(tracked)) return null
+
+        if (tracked.accuracy > MAX_ACCEPTABLE_FIX_ACCURACY_M) {
+            Log.w(
+                TAG,
+                "Tracker cache rejected (acc=${tracked.accuracy}m > ${MAX_ACCEPTABLE_FIX_ACCURACY_M}m); " +
+                    "skipping send rather than reporting a position several km off",
+            )
+            return null
+        }
+
+        Log.d(
+            TAG,
+            "Tracker cache fallback accepted: provider=${tracked.provider} acc=${tracked.accuracy}m " +
+                "age=${System.currentTimeMillis() - tracked.time}ms",
+        )
+        return tracked
     }
 
     // ------------------------------------------------------------------
@@ -216,9 +244,21 @@ internal class TelemetryLocationTracker(
 
                 if (continuation.isActive) {
                     try {
+                        // maxUpdateAgeMillis=0 forces a fresh fix and rejects the OS location
+                        // cache. Without it, GMS can return a 5–10s-old network fix labelled
+                        // as HIGH_ACCURACY — which indoors can be several km off while still
+                        // reporting a plausible accuracy value.
+                        val request =
+                            CurrentLocationRequest
+                                .Builder()
+                                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                                .setMaxUpdateAgeMillis(0L)
+                                .setDurationMillis(ONE_SHOT_LOCATION_TIMEOUT_MS)
+                                .setGranularity(Granularity.GRANULARITY_FINE)
+                                .build()
                         fusedLocationClient!!
                             .getCurrentLocation(
-                                Priority.PRIORITY_HIGH_ACCURACY,
+                                request,
                                 cancellationTokenSource.token,
                             ).addOnSuccessListener { location ->
                                 if (continuation.isActive) {

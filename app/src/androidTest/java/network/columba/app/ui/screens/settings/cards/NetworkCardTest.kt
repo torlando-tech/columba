@@ -81,70 +81,8 @@ class NetworkCardTest {
             ).assertIsDisplayed()
     }
 
-    // ========== Transport Node Toggle Tests ==========
-
-    @Test
-    fun transportNodeToggle_defaultEnabled() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = true,
-            )
-        }
-        composeTestRule.waitForIdle()
-
-        // Then
-        composeTestRule.onNodeWithText("Transport Node").assertIsDisplayed()
-        // Switch should be checked when enabled
-    }
-
-    @Test
-    fun transportNodeToggle_displaysDescription() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-            )
-        }
-        composeTestRule.waitForIdle()
-
-        // Then
-        composeTestRule
-            .onNodeWithText(
-                "Forward traffic for the mesh network. When disabled, this device will only handle its own traffic and won't relay messages for other peers.",
-            ).assertIsDisplayed()
-    }
-
-    @Test
-    fun transportNodeToggle_callsCallback_whenToggled() {
-        // Given
-        var toggledValue: Boolean? = null
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = true,
-                onTransportNodeToggle = { toggledValue = it },
-            )
-        }
-        composeTestRule.waitForIdle()
-
-        // When - Click on the Transport Node row to toggle
-        composeTestRule.onNodeWithText("Transport Node").performClick()
-
-        // Then - Callback should be invoked
-        // Note: The exact value depends on Switch behavior; we verify callback was called
-        assertTrue("Toggle callback should be called", toggledValue != null)
-    }
+    // Transport Node tests moved to AdvancedCardTest (androidTest). The toggle now
+    // lives on the Advanced settings card between RNode Flasher and About.
 
     // ========== Button Tests ==========
 
@@ -323,44 +261,6 @@ class NetworkCardTest {
         composeTestRule.onNodeWithText("View Network Status").assertIsEnabled()
     }
 
-    // ========== Transport Node State Tests ==========
-
-    @Test
-    fun transportNodeToggle_showsEnabledState() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = true,
-            )
-        }
-        composeTestRule.waitForIdle()
-
-        // Then - Transport Node label should be visible
-        composeTestRule.onNodeWithText("Transport Node").assertIsDisplayed()
-    }
-
-    @Test
-    fun transportNodeToggle_showsDisabledState() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = false,
-            )
-        }
-        composeTestRule.waitForIdle()
-
-        // Then - Transport Node label should still be visible
-        composeTestRule.onNodeWithText("Transport Node").assertIsDisplayed()
-    }
-
     @Test
     fun networkCard_withAllDefaultValues_displaysCorrectly() {
         // When - Use all defaults
@@ -374,9 +274,9 @@ class NetworkCardTest {
         }
         composeTestRule.waitForIdle()
 
-        // Then - All key elements should be displayed
+        // Then - All key elements should be displayed (Transport Node is no longer
+        // on this card — see AdvancedCardTest).
         composeTestRule.onNodeWithText("Network").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Transport Node").assertIsDisplayed()
         composeTestRule.onNodeWithText("View Network Status").assertIsDisplayed()
         composeTestRule.onNodeWithText("Manage Interfaces").assertIsDisplayed()
     }

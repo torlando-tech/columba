@@ -40,14 +40,6 @@ fun AdvancedCard(
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
     ) {
-        Text(
-            text =
-                "Power-user toggles. Leave these at their defaults unless you know what each " +
-                    "one does — changes here can affect how this device participates in the mesh.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         // Transport Node toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -77,7 +69,12 @@ fun AdvancedCard(
         Text(
             text =
                 "Forward traffic for the mesh network. When disabled, this device will only " +
-                    "handle its own traffic and won't relay messages for other peers.",
+                    "handle its own traffic and won't relay messages for other peers. " +
+                    "It's generally not recommended for mobile devices to be transport nodes. " +
+                    "They are less likely to maintain a fixed position in the network, and thus " +
+                    "can negatively impact multihop routing. Enabling this will increase data " +
+                    "usage and battery drain. However, in a BLE-only mesh, it's required for " +
+                    "multi-hop messaging.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

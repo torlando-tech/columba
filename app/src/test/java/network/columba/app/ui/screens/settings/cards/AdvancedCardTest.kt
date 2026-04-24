@@ -62,7 +62,13 @@ class AdvancedCardTest {
         }
         composeTestRule
             .onNodeWithText(
-                "Forward traffic for the mesh network. When disabled, this device will only handle its own traffic and won't relay messages for other peers.",
+                "Forward traffic for the mesh network. When disabled, this device will only " +
+                    "handle its own traffic and won't relay messages for other peers. " +
+                    "It's generally not recommended for mobile devices to be transport nodes. " +
+                    "They are less likely to maintain a fixed position in the network, and thus " +
+                    "can negatively impact multihop routing. Enabling this will increase data " +
+                    "usage and battery drain. However, in a BLE-only mesh, it's required for " +
+                    "multi-hop messaging.",
             ).assertIsDisplayed()
     }
 

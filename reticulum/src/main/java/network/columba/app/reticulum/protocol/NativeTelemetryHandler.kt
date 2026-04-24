@@ -30,7 +30,10 @@ internal class NativeTelemetryHandler(
         val timestampSeconds: Long,
         val packedTelemetry: ByteArray,
         val appearanceField: List<Any>? = null,
-        val receivedAtMillis: Long = System.currentTimeMillis(),
+        // Stored in SECONDS (Sideband/Python `time.time()` convention) so that the
+        // `entry.receivedAtSeconds >= timebaseSeconds` filter interops with peers that
+        // send timebase in seconds. Mismatched units cause the filter to always reject.
+        val receivedAtSeconds: Long = System.currentTimeMillis() / 1000L,
     )
 
     fun handleIncomingTelemetry(
@@ -147,7 +150,8 @@ internal class NativeTelemetryHandler(
                 ?.takeIf { telemetryCollectorEnabledProvider() }
                 ?: return
         var hasTelemetryRequest = false
-        var timebaseMillis: Long? = null
+        // Sideband/Python convention: timebase is Unix epoch SECONDS.
+        var timebaseSeconds: Long? = null
 
         commandList.forEach { entry ->
             when (entry) {
@@ -157,12 +161,12 @@ internal class NativeTelemetryHandler(
                             hasTelemetryRequest = true
                         }
                         entry["cmd"] == "set_timebase" -> {
-                            timebaseMillis = (entry["timebase"] as? Number)?.toLong()
+                            timebaseSeconds = (entry["timebase"] as? Number)?.toLong()
                         }
                         entry.keys.any { (it as? Number)?.toInt() == 0x01 } -> {
                             hasTelemetryRequest = true
                             val args = entry.entries.firstOrNull { (it.key as? Number)?.toInt() == 0x01 }?.value as? List<*>
-                            timebaseMillis = (args?.getOrNull(0) as? Number)?.toLong()
+                            timebaseSeconds = (args?.getOrNull(0) as? Number)?.toLong()
                         }
                     }
                 }
@@ -179,7 +183,7 @@ internal class NativeTelemetryHandler(
 
         val entriesToSend =
             storedTelemetry
-                .filterValues { entry -> timebaseMillis == null || entry.receivedAtMillis >= timebaseMillis!! }
+                .filterValues { entry -> timebaseSeconds == null || entry.receivedAtSeconds >= timebaseSeconds!! }
                 .map { (sourceHashHex, entry) ->
                     val row = mutableListOf<Any>(sourceHashHex.hexToBytes(), entry.timestampSeconds, entry.packedTelemetry)
                     entry.appearanceField?.let { row.add(it) }
@@ -316,7 +320,7 @@ internal class NativeTelemetryHandler(
                 timestampSeconds = timestampSeconds,
                 packedTelemetry = packedTelemetry,
                 appearanceField = appearanceField,
-                receivedAtMillis = System.currentTimeMillis(),
+                receivedAtSeconds = System.currentTimeMillis() / 1000L,
             )
         Log.d(TAG, "Stored telemetry for collector from ${sourceHashHex.take(16)}")
     }

@@ -809,9 +809,12 @@ class TelemetryCollectorManager
                 // Convert collector hash to bytes
                 val collectorBytes = collectorHash.hexToByteArray()
 
-                // Use last request time as timebase (request telemetry since last request)
-                // Pass null for first request to get all available telemetry
-                val timebase = _lastRequestTime.value
+                // Use last request time as timebase (request telemetry since last request).
+                // Sideband/Python collectors expect timebase in SECONDS (time.time() convention)
+                // and store received_at in seconds. Sending millis here causes the collector's
+                // `received_at >= timebase` filter to always be false → 0 entries returned.
+                // Pass null for first request to get all available telemetry.
+                val timebase = _lastRequestTime.value?.let { it / 1000L }
 
                 // Send telemetry request via protocol
                 val result =

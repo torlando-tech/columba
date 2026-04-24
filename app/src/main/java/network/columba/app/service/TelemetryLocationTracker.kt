@@ -38,9 +38,11 @@ internal class TelemetryLocationTracker(
         private const val TRACKING_MIN_INTERVAL_MS = 60_000L // 1 min floor
         private const val MAX_ONE_SHOT_FIX_AGE_MS = 5 * 60 * 1000L // reject OS-cached fixes older than 5 min
         private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 30_000L // cold GPS lock can take 20–30s
-        // Reject fallback fixes coarser than this; better to send nothing than a position
-        // several km off. WiFi/cell-only fixes indoors are typically 1000–5000 m.
-        private const val MAX_ACCEPTABLE_FIX_ACCURACY_M = 200f
+        // Reject background-cycle fallback fixes coarser than this; better to send nothing
+        // periodically than to spam recipients with a position several km off. Manual sends
+        // bypass this — when the user explicitly hits "send", they want SOMETHING.
+        // 500 m fits typical outdoor WiFi/cell fixes; pure indoor cell-only is often 1–5 km.
+        private const val MAX_PERIODIC_FALLBACK_ACCURACY_M = 500f
     }
 
     @Volatile private var locationTrackingActive = false
@@ -111,10 +113,13 @@ internal class TelemetryLocationTracker(
      * Tries a one-shot HIGH_ACCURACY GPS fix first (per send → ~10s GPS hot,
      * negligible battery cost vs. continuous tracking). Falls back to the
      * BALANCED_POWER (WiFi/cell) cache if the one-shot times out — typical in
-     * Doze with cold GPS or indoors. The cache is the safety net; preferring
-     * it would yield ~1–5 km accuracy and make the position effectively useless.
+     * Doze with cold GPS or indoors.
+     *
+     * @param allowAnyAccuracy when true, accept the tracker fallback regardless
+     *   of accuracy. Pass true for user-initiated sends ("send now"); pass false
+     *   for periodic background cycles where a 5 km fix would just spam peers.
      */
-    suspend fun getTelemetryLocation(): Location? {
+    suspend fun getTelemetryLocation(allowAnyAccuracy: Boolean = false): Location? {
         if (!locationTrackingActive) return null
 
         val current =
@@ -141,18 +146,20 @@ internal class TelemetryLocationTracker(
         val tracked = latestTrackedLocation
         if (tracked == null || !isLocationRecent(tracked)) return null
 
-        if (tracked.accuracy > MAX_ACCEPTABLE_FIX_ACCURACY_M) {
+        if (!allowAnyAccuracy && tracked.accuracy > MAX_PERIODIC_FALLBACK_ACCURACY_M) {
             Log.w(
                 TAG,
-                "Tracker cache rejected (acc=${tracked.accuracy}m > ${MAX_ACCEPTABLE_FIX_ACCURACY_M}m); " +
-                    "skipping send rather than reporting a position several km off",
+                "Periodic send: tracker cache rejected (acc=${tracked.accuracy}m > " +
+                    "${MAX_PERIODIC_FALLBACK_ACCURACY_M}m); skipping rather than spamming peers " +
+                    "with a position several km off (manual send would override)",
             )
             return null
         }
 
         Log.d(
             TAG,
-            "Tracker cache fallback accepted: provider=${tracked.provider} acc=${tracked.accuracy}m " +
+            "Tracker cache fallback accepted (allowAnyAccuracy=$allowAnyAccuracy): " +
+                "provider=${tracked.provider} acc=${tracked.accuracy}m " +
                 "age=${System.currentTimeMillis() - tracked.time}ms",
         )
         return tracked

@@ -527,7 +527,9 @@ class TelemetryCollectorManager
                 return TelemetrySendResult.NetworkNotReady
             }
 
-            return sendTelemetryToCollector(collector)
+            // User explicitly hit "send now" — accept any accuracy (even coarse cell-only),
+            // bypassing the periodic-cycle accuracy threshold.
+            return sendTelemetryToCollector(collector, allowAnyAccuracy = true)
         }
 
         /**
@@ -695,7 +697,10 @@ class TelemetryCollectorManager
          * Send telemetry to the specified collector.
          */
         @Suppress("ReturnCount") // Early returns for validation are clearer than nested conditions
-        private suspend fun sendTelemetryToCollector(collectorHash: String): TelemetrySendResult {
+        private suspend fun sendTelemetryToCollector(
+            collectorHash: String,
+            allowAnyAccuracy: Boolean = false,
+        ): TelemetrySendResult {
             if (_isSending.value) {
                 Log.d(TAG, "Already sending, skipping")
                 return TelemetrySendResult.Error("Already sending")
@@ -705,7 +710,7 @@ class TelemetryCollectorManager
 
             try {
                 // Use continuously tracked location when available; otherwise try a fresh one-shot fix.
-                val location = locationTracker.getTelemetryLocation()
+                val location = locationTracker.getTelemetryLocation(allowAnyAccuracy = allowAnyAccuracy)
                 if (location == null) {
                     Log.w(TAG, "No recent valid location available")
                     return TelemetrySendResult.NoLocationAvailable

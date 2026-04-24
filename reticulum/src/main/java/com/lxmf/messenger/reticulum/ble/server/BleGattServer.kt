@@ -741,6 +741,19 @@ class BleGattServer(
                 return@withContext
             }
 
+            // Columba does not support prepared writes. Since we hardcode offset=0 in
+            // every sendResponse (see COLUMBA-6Q fix above), a misbehaving client that
+            // issues ATT_PREPARE_WRITE_REQ at a non-zero offset would get back a response
+            // with an offset that doesn't match its request, which could confuse it into
+            // believing data was accepted at position 0. Reject such requests outright.
+            if (preparedWrite) {
+                Log.w(TAG, "Rejecting unsupported prepared characteristic write from ${device.address}")
+                if (responseNeeded) {
+                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED, 0, null)
+                }
+                return@withContext
+            }
+
             when (characteristic.uuid) {
                 BleConstants.CHARACTERISTIC_RX_UUID -> {
                     // RX characteristic write - data received from central
@@ -889,6 +902,16 @@ class BleGattServer(
     ) = withContext(Dispatchers.Main) {
         try {
             if (!hasConnectPermission()) {
+                return@withContext
+            }
+
+            // Reject prepared descriptor writes for the same reason as the characteristic
+            // path — see comment in handleCharacteristicWriteRequest.
+            if (preparedWrite) {
+                Log.w(TAG, "Rejecting unsupported prepared descriptor write from ${device.address}")
+                if (responseNeeded) {
+                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED, 0, null)
+                }
                 return@withContext
             }
 

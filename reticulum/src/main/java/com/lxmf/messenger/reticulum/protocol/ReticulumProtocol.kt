@@ -628,6 +628,10 @@ data class DiscoveredInterface(
     val latitude: Double?,
     val longitude: Double?,
     val height: Double?, // Altitude in meters
+    // IFAC fields (default null for backwards compatibility with existing test
+    // constructors that pre-date the IFAC discovery work in this PR)
+    val networkName: String? = null, // IFAC network name (broadcast by RNS when peer sets discovery_publish_ifac)
+    val passphrase: String? = null, // IFAC passphrase (broadcast alongside netname, per RNS/Discovery.py:159)
 ) {
     /**
      * Returns true if this is a TCP-based interface.
@@ -671,6 +675,8 @@ data class DiscoveredInterface(
                 type = item.optString("type", "Unknown"),
                 transportId = item.optString("transport_id", "").ifEmpty { null },
                 networkId = item.optString("network_id", "").ifEmpty { null },
+                networkName = item.optString("network_name", "").ifEmpty { null },
+                passphrase = item.optString("passphrase", "").ifEmpty { null },
                 // Status information
                 status = item.optString("status", "unknown"),
                 statusCode = item.optInt("status_code", STATUS_UNKNOWN),

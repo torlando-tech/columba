@@ -43,6 +43,8 @@ data class TcpClientWizardState(
     val interfaceName: String = "",
     val targetHost: String = "",
     val targetPort: String = "",
+    val networkName: String = "",
+    val passphrase: String = "",
     // RNS 1.1.x Bootstrap Interface option
     val bootstrapOnly: Boolean = false,
     // SOCKS5 proxy (Tor/Orbot) settings
@@ -102,6 +104,8 @@ class TcpClientWizardViewModel
                             interfaceName = config.name,
                             targetHost = config.targetHost,
                             targetPort = config.targetPort.toString(),
+                            networkName = config.networkName ?: "",
+                            passphrase = config.passphrase ?: "",
                             bootstrapOnly = config.bootstrapOnly,
                             socksProxyEnabled = config.socksProxyEnabled,
                             socksProxyHost = config.socksProxyHost,
@@ -123,6 +127,8 @@ class TcpClientWizardViewModel
             host: String,
             port: Int,
             name: String,
+            networkName: String = "",
+            passphrase: String = "",
         ) {
             // Check if this matches a community server
             val matchingServer =
@@ -138,6 +144,8 @@ class TcpClientWizardViewModel
                     interfaceName = name,
                     targetHost = host,
                     targetPort = port.toString(),
+                    networkName = networkName,
+                    passphrase = passphrase,
                     bootstrapOnly = matchingServer?.isBootstrap ?: false,
                     // Auto-enable SOCKS proxy for .onion addresses
                     socksProxyEnabled = isOnion,
@@ -226,6 +234,20 @@ class TcpClientWizardViewModel
          */
         fun updateTargetPort(value: String) {
             _state.update { it.copy(targetPort = value) }
+        }
+
+        /**
+         * Update IFAC network name field.
+         */
+        fun updateNetworkName(value: String) {
+            _state.update { it.copy(networkName = value) }
+        }
+
+        /**
+         * Update IFAC passphrase field.
+         */
+        fun updatePassphrase(value: String) {
+            _state.update { it.copy(passphrase = value) }
         }
 
         /**
@@ -336,6 +358,8 @@ class TcpClientWizardViewModel
                             enabled = true,
                             targetHost = currentState.targetHost.trim(),
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
+                            networkName = currentState.networkName.trim().ifEmpty { null },
+                            passphrase = currentState.passphrase.ifEmpty { null },
                             kissFraming = false,
                             mode = "full",
                             bootstrapOnly = currentState.bootstrapOnly,

@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.lxmf.messenger.viewmodel.TcpClientWizardViewModel
 
@@ -116,6 +117,30 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // IFAC Network Name
+        OutlinedTextField(
+            value = state.networkName,
+            onValueChange = { viewModel.updateNetworkName(it) },
+            label = { Text("IFAC Network Name") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // IFAC Passphrase — masked; shared network secret
+        OutlinedTextField(
+            value = state.passphrase,
+            onValueChange = { viewModel.updatePassphrase(it) },
+            label = { Text("IFAC Passphrase") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         )
 
         Spacer(Modifier.height(24.dp))

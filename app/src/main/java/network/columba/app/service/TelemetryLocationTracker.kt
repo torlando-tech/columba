@@ -16,11 +16,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /**
- * Manages continuous location tracking for telemetry background sends.
+ * Provides location fixes for telemetry background sends.
  *
- * Keeps a recent cached location fix so that periodic telemetry sends
- * can obtain a position even when the app is in the background and no
- * other app is requesting location updates.
+ * Uses low-power continuous tracking (BALANCED_POWER_ACCURACY = WiFi/cell)
+ * at an interval derived from the send interval to keep a cached position
+ * available. Falls back to a one-shot HIGH_ACCURACY fix when the cache is stale.
+ *
+ * This avoids the ~29 mAh/h cost of continuous HIGH_ACCURACY GPS while
+ * still working reliably in Doze (one-shot cold GPS can timeout in Doze).
  */
 internal class TelemetryLocationTracker(
     private val context: Context,
@@ -29,13 +32,14 @@ internal class TelemetryLocationTracker(
 ) {
     companion object {
         private const val TAG = "TelemetryLocationTracker"
-        private const val TRACKING_UPDATE_INTERVAL_MS = 30_000L
-        private const val TRACKING_MIN_UPDATE_INTERVAL_MS = 15_000L
-        private const val MAX_TRACKED_LOCATION_AGE_MS = 5 * 60 * 1000L
+        private const val TRACKING_LEAD_TIME_MS = 30_000L // start tracking 30s before send
+        private const val TRACKING_MIN_INTERVAL_MS = 60_000L // 1 min floor
+        private const val MAX_ONE_SHOT_FIX_AGE_MS = 5 * 60 * 1000L // reject OS-cached fixes older than 5 min
         private const val ONE_SHOT_LOCATION_TIMEOUT_MS = 20_000L
     }
 
     @Volatile private var locationTrackingActive = false
+    @Volatile private var currentTrackingIntervalMs = 0L
     @Volatile private var gmsLocationTrackingCallback: LocationCallback? = null
     @Volatile private var platformLocationTrackingListener: LocationListener? = null
     @Volatile private var latestTrackedLocation: Location? = null
@@ -43,11 +47,25 @@ internal class TelemetryLocationTracker(
 
     val isTracking: Boolean get() = locationTrackingActive
 
+    /** Set the active flag without starting continuous tracking. For tests only. */
+    @androidx.annotation.VisibleForTesting
+    internal fun activateForTest() {
+        locationTrackingActive = true
+    }
+
     /**
      * Start or stop tracking based on whether it [shouldTrack].
+     * @param sendIntervalMs the telemetry send interval — tracking interval is derived from it
      */
-    fun update(shouldTrack: Boolean) {
+    fun update(shouldTrack: Boolean, sendIntervalMs: Long = 0L) {
+        val desiredInterval = maxOf(sendIntervalMs - TRACKING_LEAD_TIME_MS, TRACKING_MIN_INTERVAL_MS)
         if (shouldTrack && !locationTrackingActive) {
+            currentTrackingIntervalMs = desiredInterval
+            start()
+        } else if (shouldTrack && locationTrackingActive && desiredInterval != currentTrackingIntervalMs) {
+            // Interval changed — restart with new interval
+            stop()
+            currentTrackingIntervalMs = desiredInterval
             start()
         } else if (!shouldTrack && locationTrackingActive) {
             stop()
@@ -85,18 +103,18 @@ internal class TelemetryLocationTracker(
     /**
      * Return a recent valid location suitable for telemetry.
      *
-     * Prefers the continuously tracked location if it is less than [MAX_TRACKED_LOCATION_AGE_MS]
-     * old, otherwise falls back to a one-shot location request with a timeout.
+     * Returns the cached location if fresh enough, otherwise performs
+     * a one-shot HIGH_ACCURACY fix as fallback.
      */
     suspend fun getTelemetryLocation(): Location? {
+        if (!locationTrackingActive) return null
+
         val tracked = latestTrackedLocation
-        if (tracked != null) {
-            if (isLocationRecent(tracked)) {
-                return tracked
-            }
-            Log.w(TAG, "Tracked location is stale (${getTrackedLocationAgeMs(tracked)} ms), refreshing")
+        if (tracked != null && isLocationRecent(tracked)) {
+            return tracked
         }
 
+        // Cache stale or empty — try a one-shot fix
         val current =
             withTimeoutOrNull(ONE_SHOT_LOCATION_TIMEOUT_MS) {
                 getCurrentLocation()
@@ -104,17 +122,12 @@ internal class TelemetryLocationTracker(
 
         if (current == null) {
             Log.w(TAG, "Timed out waiting for one-shot location (${ONE_SHOT_LOCATION_TIMEOUT_MS}ms)")
-            return null
-        }
-
-        cacheTrackedLocation(current)
-
-        return if (isLocationRecent(current)) {
-            current
+        } else if (!isFixFresh(current)) {
+            Log.w(TAG, "One-shot fix is stale (age=${System.currentTimeMillis() - current.time}ms), rejecting")
         } else {
-            Log.w(TAG, "Current location is stale (${getTrackedLocationAgeMs(current)} ms), rejecting")
-            null
+            cacheTrackedLocation(current)
         }
+        return current?.takeIf { isFixFresh(it) }
     }
 
     // ------------------------------------------------------------------
@@ -130,28 +143,27 @@ internal class TelemetryLocationTracker(
                 val callback =
                     object : LocationCallback() {
                         override fun onLocationResult(result: LocationResult) {
-                            val location = result.lastLocation ?: return
-                            cacheTrackedLocation(location)
+                            result.lastLocation?.let { cacheTrackedLocation(it) }
                         }
                     }
 
                 val request =
                     LocationRequest
-                        .Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, TRACKING_UPDATE_INTERVAL_MS)
-                        .setMinUpdateIntervalMillis(TRACKING_MIN_UPDATE_INTERVAL_MS)
+                        .Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, currentTrackingIntervalMs)
+                        .setMinUpdateIntervalMillis(TRACKING_MIN_INTERVAL_MS)
                         .build()
 
                 fusedLocationClient!!.requestLocationUpdates(request, callback, context.mainLooper)
                 gmsLocationTrackingCallback = callback
             } else {
                 platformLocationTrackingListener =
-                    LocationCompat.requestLocationUpdates(context, TRACKING_UPDATE_INTERVAL_MS) { location ->
+                    LocationCompat.requestLocationUpdates(context, currentTrackingIntervalMs) { location ->
                         cacheTrackedLocation(location)
                     }
             }
 
             locationTrackingActive = true
-            Log.d(TAG, "Location tracking started for telemetry")
+            Log.d(TAG, "Location tracking started (BALANCED_POWER, interval=${currentTrackingIntervalMs}ms)")
         } catch (e: SecurityException) {
             Log.w(TAG, "Unable to start telemetry location tracking (permission missing)", e)
         } catch (e: Exception) {
@@ -162,6 +174,14 @@ internal class TelemetryLocationTracker(
     private fun cacheTrackedLocation(location: Location) {
         latestTrackedLocation = location
         latestTrackedLocationRecordedAtMs = System.currentTimeMillis()
+    }
+
+    /** Check if a fix from the OS is recent enough based on its capture time. */
+    private fun isFixFresh(location: Location): Boolean {
+        // location.time == 0 means the provider didn't set a timestamp (common in test/mock);
+        // treat as fresh since we just received it from the OS
+        if (location.time <= 0) return true
+        return System.currentTimeMillis() - location.time <= MAX_ONE_SHOT_FIX_AGE_MS
     }
 
     private fun getTrackedLocationAgeMs(location: Location): Long {
@@ -175,11 +195,14 @@ internal class TelemetryLocationTracker(
         }
     }
 
-    private fun isLocationRecent(location: Location): Boolean =
-        getTrackedLocationAgeMs(location) <= MAX_TRACKED_LOCATION_AGE_MS
+    private fun isLocationRecent(location: Location): Boolean {
+        // Cache TTL = tracking interval + buffer (roughly matches the send interval)
+        val maxAge = currentTrackingIntervalMs + TRACKING_LEAD_TIME_MS + TRACKING_LEAD_TIME_MS
+        return getTrackedLocationAgeMs(location) <= maxAge
+    }
 
     /**
-     * Get the current device location via a one-shot request.
+     * Get the current device location via a one-shot request (HIGH_ACCURACY fallback).
      */
     @Suppress("MissingPermission")
     private suspend fun getCurrentLocation(): Location? =
@@ -215,8 +238,11 @@ internal class TelemetryLocationTracker(
                     }
                 }
             } else {
+                val signal = android.os.CancellationSignal()
+                continuation.invokeOnCancellation { signal.cancel() }
+
                 if (continuation.isActive) {
-                    LocationCompat.getCurrentLocation(context) { location ->
+                    LocationCompat.getCurrentLocation(context, signal) { location ->
                         if (continuation.isActive) {
                             continuation.resume(location)
                         }

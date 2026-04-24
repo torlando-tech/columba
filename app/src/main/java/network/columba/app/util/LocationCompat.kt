@@ -98,6 +98,7 @@ object LocationCompat {
     @SuppressLint("MissingPermission")
     fun getCurrentLocation(
         context: Context,
+        cancellationSignal: android.os.CancellationSignal? = null,
         onResult: (Location?) -> Unit,
     ) {
         val locationManager =
@@ -120,7 +121,7 @@ object LocationCompat {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 locationManager.getCurrentLocation(
                     provider,
-                    null, // CancellationSignal
+                    cancellationSignal,
                     context.mainExecutor,
                 ) { location ->
                     onResult(location)
@@ -131,13 +132,12 @@ object LocationCompat {
                 // is obtained (e.g., poor signal indoors), which would leave callers
                 // stuck waiting forever.
                 val handler = Handler(Looper.getMainLooper())
-                var resultDelivered = false
+                val resultDelivered = java.util.concurrent.atomic.AtomicBoolean(false)
 
                 val listener =
                     object : LocationListener {
                         override fun onLocationChanged(location: Location) {
-                            if (!resultDelivered) {
-                                resultDelivered = true
+                            if (resultDelivered.compareAndSet(false, true)) {
                                 handler.removeCallbacksAndMessages(this)
                                 locationManager.removeUpdates(this)
                                 onResult(location)
@@ -154,8 +154,7 @@ object LocationCompat {
                         override fun onProviderEnabled(provider: String) = Unit
 
                         override fun onProviderDisabled(provider: String) {
-                            if (!resultDelivered) {
-                                resultDelivered = true
+                            if (resultDelivered.compareAndSet(false, true)) {
                                 handler.removeCallbacksAndMessages(this)
                                 locationManager.removeUpdates(this)
                                 onResult(getLastKnownLocation(context))
@@ -170,11 +169,19 @@ object LocationCompat {
                     Looper.getMainLooper(),
                 )
 
+                // Cancel the request if the caller signals cancellation
+                cancellationSignal?.setOnCancelListener {
+                    if (resultDelivered.compareAndSet(false, true)) {
+                        handler.removeCallbacksAndMessages(listener)
+                        locationManager.removeUpdates(listener)
+                        onResult(null)
+                    }
+                }
+
                 // Safety timeout: fall back to last known location
                 handler.postAtTime(
                     {
-                        if (!resultDelivered) {
-                            resultDelivered = true
+                        if (resultDelivered.compareAndSet(false, true)) {
                             locationManager.removeUpdates(listener)
                             Log.d(TAG, "Single location request timed out, falling back to last known")
                             onResult(getLastKnownLocation(context))

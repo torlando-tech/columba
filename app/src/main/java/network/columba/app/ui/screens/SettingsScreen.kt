@@ -49,10 +49,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.launch
 import network.columba.app.ui.components.BackgroundLocationPermissionBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ServiceRestartBanner
 import network.columba.app.ui.screens.settings.cards.AboutCard
+import network.columba.app.ui.screens.settings.cards.AdvancedCard
 import network.columba.app.ui.screens.settings.cards.AutoAnnounceCard
 import network.columba.app.ui.screens.settings.cards.BatteryOptimizationCard
 import network.columba.app.ui.screens.settings.cards.DataMigrationCard
@@ -81,7 +83,6 @@ import network.columba.app.viewmodel.BlockedUsersViewModel
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.SettingsCardId
 import network.columba.app.viewmodel.SettingsViewModel
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -266,8 +267,6 @@ fun SettingsScreen(
                     onManageInterfaces = onNavigateToInterfaces,
                     isSharedInstance = state.isSharedInstance,
                     sharedInstanceOnline = state.sharedInstanceOnline,
-                    transportNodeEnabled = state.transportNodeEnabled,
-                    onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
                 )
 
                 IdentityCard(
@@ -503,6 +502,13 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.RNODE_FLASHER.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.RNODE_FLASHER, it) },
                     onOpenFlasher = onNavigateToFlasher,
+                )
+
+                AdvancedCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.ADVANCED.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.ADVANCED, it) },
+                    transportNodeEnabled = state.transportNodeEnabled,
+                    onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
                 )
 
                 // About section

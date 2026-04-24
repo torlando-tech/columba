@@ -1,29 +1,21 @@
 package network.columba.app.ui.screens.settings.cards
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import network.columba.app.ui.components.CollapsibleSettingsCard
 
@@ -39,8 +31,6 @@ import network.columba.app.ui.components.CollapsibleSettingsCard
  * @param sharedInstanceOnline Whether the shared instance is currently reachable.
  *                             When false and isSharedInstance is true, Columba has
  *                             switched to its own instance and interfaces can be managed.
- * @param transportNodeEnabled Whether transport node mode is enabled (forwards mesh traffic)
- * @param onTransportNodeToggle Callback when transport node toggle is changed
  */
 @Composable
 fun NetworkCard(
@@ -50,8 +40,6 @@ fun NetworkCard(
     onManageInterfaces: () -> Unit,
     isSharedInstance: Boolean = false,
     sharedInstanceOnline: Boolean = true,
-    transportNodeEnabled: Boolean = true,
-    onTransportNodeToggle: (Boolean) -> Unit = {},
 ) {
     // Interface management is only disabled when actively using a shared instance
     // If shared instance went offline, we're now using our own instance
@@ -85,45 +73,6 @@ fun NetworkCard(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
-        )
-
-        // Transport Node toggle row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Hub,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "Transport Node",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-            Switch(
-                checked = transportNodeEnabled,
-                onCheckedChange = onTransportNodeToggle,
-            )
-        }
-        Text(
-            text =
-                "Forward traffic for the mesh network. When disabled, this device will only " +
-                    "handle its own traffic and won't relay messages for other peers.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 4.dp),
-            color = MaterialTheme.colorScheme.outlineVariant,
         )
 
         // Primary action - View Network Status (always enabled)

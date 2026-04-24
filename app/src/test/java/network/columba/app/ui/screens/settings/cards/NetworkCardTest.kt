@@ -4,9 +4,6 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertIsOff
-import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -66,9 +63,10 @@ class NetworkCardTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(
-            "Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -85,125 +83,15 @@ class NetworkCardTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText(
-            "Configure how your device connects to the Reticulum network. " +
-                "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Configure how your device connects to the Reticulum network. " +
+                    "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces.",
+            ).assertIsDisplayed()
     }
 
-    // ========== Transport Node Toggle Tests ==========
-
-    @Test
-    fun transportNodeToggle_displaysLabel() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-            )
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("Transport Node").assertIsDisplayed()
-    }
-
-    @Test
-    fun transportNodeToggle_displaysDescription() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-            )
-        }
-
-        // Then
-        composeTestRule.onNodeWithText(
-            "Forward traffic for the mesh network. When disabled, this device will only handle its own traffic and won't relay messages for other peers.",
-        ).assertIsDisplayed()
-    }
-
-    @Test
-    fun transportNodeToggle_isOn_whenEnabled() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = true,
-            )
-        }
-
-        // Then - Switch should be checked
-        composeTestRule.onNode(isToggleable()).assertIsOn()
-    }
-
-    @Test
-    fun transportNodeToggle_isOff_whenDisabled() {
-        // When
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = false,
-            )
-        }
-
-        // Then - Switch should be unchecked
-        composeTestRule.onNode(isToggleable()).assertIsOff()
-    }
-
-    @Test
-    fun transportNodeToggle_callsCallback_withFalse_whenTurningOff() {
-        // Given
-        var receivedValue: Boolean? = null
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = true,
-                onTransportNodeToggle = { receivedValue = it },
-            )
-        }
-
-        // When - Click the switch to turn it off
-        composeTestRule.onNode(isToggleable()).performClick()
-
-        // Then - Callback should receive false
-        assertEquals(false, receivedValue)
-    }
-
-    @Test
-    fun transportNodeToggle_callsCallback_withTrue_whenTurningOn() {
-        // Given
-        var receivedValue: Boolean? = null
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = false,
-                onTransportNodeToggle = { receivedValue = it },
-            )
-        }
-
-        // When - Click the switch to turn it on
-        composeTestRule.onNode(isToggleable()).performClick()
-
-        // Then - Callback should receive true
-        assertEquals(true, receivedValue)
-    }
+    // Transport Node toggle tests moved to AdvancedCardTest — the toggle now lives
+    // on the Advanced settings card between RNode Flasher and About.
 
     // ========== View Network Status Button Tests ==========
 
@@ -385,9 +273,10 @@ class NetworkCardTest {
         }
 
         // Then - Should display disabled message
-        composeTestRule.onNodeWithText(
-            "Interface management is disabled while using a shared system instance.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Interface management is disabled while using a shared system instance.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -405,10 +294,11 @@ class NetworkCardTest {
         }
 
         // Then - Should display normal interface description
-        composeTestRule.onNodeWithText(
-            "Configure how your device connects to the Reticulum network. " +
-                "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces.",
-        ).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Configure how your device connects to the Reticulum network. " +
+                    "Add TCP connections, auto-discovery, LoRa (via RNode), or BLE interfaces.",
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -447,28 +337,11 @@ class NetworkCardTest {
             )
         }
 
-        // Then - All key elements should be displayed
+        // Then - All key elements should be displayed (Transport Node was moved
+        // to AdvancedCard and its assertion lives in AdvancedCardTest now).
         composeTestRule.onNodeWithText("Network").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Transport Node").assertIsDisplayed()
         composeTestRule.onNodeWithText("View Network Status").assertIsDisplayed()
         composeTestRule.onNodeWithText("Manage Interfaces").assertIsDisplayed()
-    }
-
-    @Test
-    fun networkCard_defaultTransportNodeEnabled_isTrue() {
-        // When - Default value
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                // transportNodeEnabled defaults to true
-            )
-        }
-
-        // Then - Switch should be on by default
-        composeTestRule.onNode(isToggleable()).assertIsOn()
     }
 
     // ========== Callback Invocation Count Tests ==========
@@ -511,27 +384,5 @@ class NetworkCardTest {
 
         // Then
         assertEquals("Callback should be called exactly once", 1, clickCount)
-    }
-
-    @Test
-    fun transportNodeToggle_callbackCalledOnce() {
-        // Given
-        var callCount = 0
-        composeTestRule.setContent {
-            NetworkCard(
-                isExpanded = true,
-                onExpandedChange = {},
-                onViewStatus = {},
-                onManageInterfaces = {},
-                transportNodeEnabled = true,
-                onTransportNodeToggle = { callCount++ },
-            )
-        }
-
-        // When
-        composeTestRule.onNode(isToggleable()).performClick()
-
-        // Then
-        assertEquals("Callback should be called exactly once", 1, callCount)
     }
 }

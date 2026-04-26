@@ -6155,6 +6155,11 @@ class ReticulumWrapper:
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return True  # Mock mode
 
+        # Chaquopy hands Java byte arrays to Python as jarray('B'), which is
+        # unhashable. RNS.Transport.has_path uses dest_hash as a dict key.
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
+
         return RNS.Transport.has_path(dest_hash)
 
     def _request_path_if_needed(self, dest_hash: bytes) -> bool:
@@ -6166,6 +6171,9 @@ class ReticulumWrapper:
         """
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return True
+
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
 
         if RNS.Transport.has_path(dest_hash):
             return True
@@ -6186,6 +6194,9 @@ class ReticulumWrapper:
         """
         if not RETICULUM_AVAILABLE:
             return {"success": True}
+
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
 
         self._request_path_if_needed(dest_hash)
         return {"success": True}

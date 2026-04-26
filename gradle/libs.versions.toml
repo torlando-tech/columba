@@ -17,6 +17,7 @@ ktlint = "12.1.1"
 detekt = "1.23.7"
 serialization = "1.10.0"
 coil = "2.7.0"
+desugarJdkLibs = "2.1.5"
 
 # JitPack-published libraries (formerly git submodules)
 reticulumKt = "v0.0.16"
@@ -32,6 +33,12 @@ rns-interfaces = { module = "com.github.torlando-tech.reticulum-kt:rns-interface
 rns-android = { module = "com.github.torlando-tech.reticulum-kt:rns-android", version.ref = "reticulumKt" }
 lxmf-kt = { module = "com.github.torlando-tech:LXMF-kt", version.ref = "lxmfKt" }
 lxst-kt = { module = "com.github.torlando-tech:LXST-kt", version.ref = "lxstKt" }
+
+# Java 8+ API desugaring — required because reticulum-kt's public API references
+# java.time.LocalDateTime, which only exists on API 26+. Without this, any device
+# on API 24/25 (Android 7.x) crashes with NoClassDefFoundError the first time
+# Transport.registerDestination is reached. See Sentry COLUMBA-8M.
+android-desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 
 # Compose
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }

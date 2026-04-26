@@ -6217,6 +6217,9 @@ class ReticulumWrapper:
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return 3  # Mock value
 
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
+
         try:
             if RNS.Transport.has_path(dest_hash):
                 return RNS.Transport.hops_to(dest_hash)

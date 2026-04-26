@@ -574,9 +574,18 @@ class PythonWrapperManager(
                     callBridge = callBridge,
                 )
 
-            // Set up Python -> Kotlin callback for state events
+            // Set up Python -> Kotlin callback for state events.
+            // Wrap as java.util.function.BiConsumer to expose a single SAM to Chaquopy.
+            // Bare Kotlin method references implement Function2 + KotlinGenericDeclaration
+            // (+ KFunction, KCallable), and Chaquopy's get_sam aborts with
+            // "implements multiple functional interfaces" when Python invokes them —
+            // same trap fixed in setStampGeneratorCallback.
             try {
-                callManager.callAttr("set_kotlin_telephone_callback", ::handlePythonTelephoneEvent)
+                val telephoneCallback =
+                    java.util.function.BiConsumer<String, Map<String, Any?>> { event, data ->
+                        handlePythonTelephoneEvent(event, data)
+                    }
+                callManager.callAttr("set_kotlin_telephone_callback", telephoneCallback)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to set Kotlin telephone callback: ${e.message}")
                 // Non-fatal - Telephone can still work without this callback

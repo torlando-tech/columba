@@ -5830,12 +5830,15 @@ class ReticulumWrapper:
                         continue
 
                     # Directly populate Identity.known_destinations
-                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    # Format: [timestamp, packet_hash, public_key, app_data, last_used]
+                    # last_used field added in RNS b5658c4 (1.1.9+); access at [4]
+                    # raises IndexError if omitted.
                     RNS.Identity.known_destinations[dest_hash] = [
                         time.time(),  # timestamp
                         None,         # packet_hash (not needed for recall)
                         public_key,   # public key bytes
-                        None          # app_data
+                        None,         # app_data
+                        0             # last_used (0 = never used)
                     ]
 
                     # Also store in local identities cache for wrapper lookups
@@ -5924,12 +5927,15 @@ class ReticulumWrapper:
                     dest_hash = RNS.Identity.full_hash(addr_hash_material)[:RNS.Reticulum.TRUNCATED_HASHLENGTH // 8]
 
                     # Directly populate Identity.known_destinations
-                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    # Format: [timestamp, packet_hash, public_key, app_data, last_used]
+                    # last_used field added in RNS b5658c4 (1.1.9+); access at [4]
+                    # raises IndexError if omitted.
                     RNS.Identity.known_destinations[dest_hash] = [
                         time.time(),  # timestamp
                         None,         # packet_hash (not needed for recall)
                         public_key,   # public key bytes
-                        None          # app_data
+                        None,         # app_data
+                        0             # last_used (0 = never used)
                     ]
 
                     # Also store in local identities cache for wrapper lookups
@@ -6149,6 +6155,11 @@ class ReticulumWrapper:
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return True  # Mock mode
 
+        # Chaquopy hands Java byte arrays to Python as jarray('B'), which is
+        # unhashable. RNS.Transport.has_path uses dest_hash as a dict key.
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
+
         return RNS.Transport.has_path(dest_hash)
 
     def _request_path_if_needed(self, dest_hash: bytes) -> bool:
@@ -6160,6 +6171,9 @@ class ReticulumWrapper:
         """
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return True
+
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
 
         if RNS.Transport.has_path(dest_hash):
             return True
@@ -6181,6 +6195,9 @@ class ReticulumWrapper:
         if not RETICULUM_AVAILABLE:
             return {"success": True}
 
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
+
         self._request_path_if_needed(dest_hash)
         return {"success": True}
 
@@ -6199,6 +6216,9 @@ class ReticulumWrapper:
         """Get hop count to destination"""
         if not RETICULUM_AVAILABLE or not self.reticulum:
             return 3  # Mock value
+
+        if hasattr(dest_hash, '__iter__') and not isinstance(dest_hash, (bytes, bytearray)):
+            dest_hash = bytes(dest_hash)
 
         try:
             if RNS.Transport.has_path(dest_hash):

@@ -574,9 +574,18 @@ class PythonWrapperManager(
                     callBridge = callBridge,
                 )
 
-            // Set up Python -> Kotlin callback for state events
+            // Set up Python -> Kotlin callback for state events.
+            // Wrap as java.util.function.BiConsumer to expose a single SAM to Chaquopy.
+            // Bare Kotlin method references implement Function2 + KotlinGenericDeclaration
+            // (+ KFunction, KCallable), and Chaquopy's get_sam aborts with
+            // "implements multiple functional interfaces" when Python invokes them —
+            // same trap fixed in setStampGeneratorCallback.
             try {
-                callManager.callAttr("set_kotlin_telephone_callback", ::handlePythonTelephoneEvent)
+                val telephoneCallback =
+                    java.util.function.BiConsumer<String, Map<String, Any?>> { event, data ->
+                        handlePythonTelephoneEvent(event, data)
+                    }
+                callManager.callAttr("set_kotlin_telephone_callback", telephoneCallback)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to set Kotlin telephone callback: ${e.message}")
                 // Non-fatal - Telephone can still work without this callback
@@ -655,8 +664,15 @@ class PythonWrapperManager(
         stampGeneratorInstance = stampGenerator
         withWrapper { wrapper ->
             try {
-                // Pass static method reference to avoid lambda type erasure issues with R8
-                wrapper.callAttr("set_stamp_generator_callback", ::generateStampForPython)
+                // Wrap as java.util.function.BiFunction to expose a single SAM to Chaquopy.
+                // A Kotlin bound method reference implements Function2 + KotlinGenericDeclaration
+                // (+ KFunction, KCallable, ...), and Chaquopy's get_sam aborts with
+                // "implements multiple functional interfaces" when Python invokes it.
+                val callback =
+                    java.util.function.BiFunction<ByteArray, Int, PyObject> { workblock, stampCost ->
+                        generateStampForPython(workblock, stampCost)
+                    }
+                wrapper.callAttr("set_stamp_generator_callback", callback)
                 Log.d(TAG, "Native stamp generator callback registered with Python")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to set stamp generator callback: ${e.message}", e)

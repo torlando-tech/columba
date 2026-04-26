@@ -5830,12 +5830,15 @@ class ReticulumWrapper:
                         continue
 
                     # Directly populate Identity.known_destinations
-                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    # Format: [timestamp, packet_hash, public_key, app_data, last_used]
+                    # last_used field added in RNS b5658c4 (1.1.9+); access at [4]
+                    # raises IndexError if omitted.
                     RNS.Identity.known_destinations[dest_hash] = [
                         time.time(),  # timestamp
                         None,         # packet_hash (not needed for recall)
                         public_key,   # public key bytes
-                        None          # app_data
+                        None,         # app_data
+                        0             # last_used (0 = never used)
                     ]
 
                     # Also store in local identities cache for wrapper lookups
@@ -5924,12 +5927,15 @@ class ReticulumWrapper:
                     dest_hash = RNS.Identity.full_hash(addr_hash_material)[:RNS.Reticulum.TRUNCATED_HASHLENGTH // 8]
 
                     # Directly populate Identity.known_destinations
-                    # Format: [timestamp, packet_hash, public_key, app_data]
+                    # Format: [timestamp, packet_hash, public_key, app_data, last_used]
+                    # last_used field added in RNS b5658c4 (1.1.9+); access at [4]
+                    # raises IndexError if omitted.
                     RNS.Identity.known_destinations[dest_hash] = [
                         time.time(),  # timestamp
                         None,         # packet_hash (not needed for recall)
                         public_key,   # public key bytes
-                        None          # app_data
+                        None,         # app_data
+                        0             # last_used (0 = never used)
                     ]
 
                     # Also store in local identities cache for wrapper lookups

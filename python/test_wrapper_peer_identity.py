@@ -1100,10 +1100,14 @@ class TestBulkRestoreAnnounceIdentities(unittest.TestCase):
         dest_hash_1 = bytes.fromhex("aabbccdd" * 4)
         self.assertIn(dest_hash_1, mock_rns.Identity.known_destinations)
         entry = mock_rns.Identity.known_destinations[dest_hash_1]
-        self.assertEqual(len(entry), 4)  # [time, packet_hash, public_key, app_data]
+        # 5-element format: [time, packet_hash, public_key, app_data, last_used]
+        # last_used (index 4) added by RNS b5658c4 (1.1.9+); a 4-element entry
+        # would crash _used_destination_data with IndexError on every recall.
+        self.assertEqual(len(entry), 5)
         self.assertEqual(entry[2], public_key_1)  # public key at index 2
         self.assertIsNone(entry[1])  # packet_hash is None
         self.assertIsNone(entry[3])  # app_data is None
+        self.assertEqual(entry[4], 0)  # last_used = 0 (never used)
 
     @patch('reticulum_wrapper.RNS')
     @patch('reticulum_wrapper.RETICULUM_AVAILABLE', True)
@@ -1665,11 +1669,13 @@ class TestBulkRestoreEquivalence(unittest.TestCase):
         dest_hash = bytes.fromhex("aabbccdd" * 4)
         entry = mock_rns.Identity.known_destinations[dest_hash]
 
-        # Format should be: [timestamp, packet_hash, public_key, app_data]
+        # Format should be: [timestamp, packet_hash, public_key, app_data, last_used]
+        self.assertEqual(len(entry), 5)
         self.assertIsInstance(entry[0], float)  # timestamp
         self.assertIsNone(entry[1])  # packet_hash
         self.assertEqual(entry[2], public_key)  # public_key
         self.assertIsNone(entry[3])  # app_data
+        self.assertEqual(entry[4], 0)  # last_used = 0 (never used)
 
 
 if __name__ == '__main__':

@@ -126,6 +126,8 @@ columba:
   active: true
   BleLoggingTag:
     active: true
+  DiscardedConcurrencyReturn:
+    active: true
   NoRelaxedMocks:
     active: true
   NoVerifyOnlyTests:

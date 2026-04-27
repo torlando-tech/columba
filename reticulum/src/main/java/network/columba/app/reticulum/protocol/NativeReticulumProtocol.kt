@@ -414,6 +414,10 @@ class NativeReticulumProtocol(
         reticulumDbWriteExecutor?.let { executor ->
             executor.shutdown()
             try {
+                // TODO(#857): the boolean return is being discarded. Fixed in PR #857
+                // (NativeReticulumProtocol shutdown race) — once that lands, this
+                // @Suppress can be removed (the call gets wrapped in `if (!...)`).
+                @Suppress("DiscardedConcurrencyReturn")
                 executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()

@@ -411,12 +411,34 @@ class NativeReticulumProtocol(
         Transport.destinationRatchetStore = null
         network.reticulum.identity.Identity.identityStore = null
 
+        // Drain the DB writer before closing the database. Reticulum.stop()'s
+        // final flush calls packetHashStore.saveAll(), which posts a deleteByGeneration
+        // and N chunked insertAll(500) writes onto this single-thread executor. With a
+        // large hashlist those transactions can take well past 5s to drain. Previously
+        // we ignored awaitTermination's boolean — so on slow drains, reticulumDatabase
+        // .close() ran while a worker was mid-endTransaction, and Room's
+        // SQLiteClosable.acquireReference threw IllegalStateException
+        // ("attempt to re-open an already-closed object"). See Sentry COLUMBA-8R.
         reticulumDbWriteExecutor?.let { executor ->
             executor.shutdown()
             try {
-                executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
+                if (!executor.awaitTermination(15, java.util.concurrent.TimeUnit.SECONDS)) {
+                    Log.w(
+                        TAG,
+                        "DB write executor did not drain within 15s; forcing shutdownNow. " +
+                            "Some persisted writes may be lost.",
+                    )
+                    executor.shutdownNow()
+                    if (!executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                        Log.e(TAG, "DB write executor still running after shutdownNow + 5s wait; closing DB anyway")
+                    }
+                }
             } catch (_: InterruptedException) {
+                // Best-effort: re-assert interrupt and abandon the wait. We still
+                // proceed to close — leaving a half-drained executor + open DB across
+                // shutdown is worse than losing the in-flight writes.
                 Thread.currentThread().interrupt()
+                executor.shutdownNow()
             }
         }
         reticulumDbWriteExecutor = null

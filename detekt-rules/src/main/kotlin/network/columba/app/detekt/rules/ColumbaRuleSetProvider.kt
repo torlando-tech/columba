@@ -15,6 +15,7 @@ class ColumbaRuleSetProvider : RuleSetProvider {
             ruleSetId,
             listOf(
                 BleLoggingTagRule(config),
+                DiscardedConcurrencyReturnRule(config),
                 NoRelaxedMocksRule(config),
                 NoVerifyOnlyTestsRule(config),
                 StateFlowPollingLoopRule(config),

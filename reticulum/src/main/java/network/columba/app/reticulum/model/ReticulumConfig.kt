@@ -310,6 +310,11 @@ sealed class InterfaceConfig {
         val bleDiscoveryIntervalIdleMs: Long = 30000L,
         val bleScanDurationMs: Long = 10000L,
         val bleAdvertisingRefreshIntervalMs: Long = 60_000L,
+        /**
+         * BLE PHY codec. One of: "PHY_1M", "PHY_2M", "CODED_S2", "CODED_S8".
+         * Defaults to standard 1M PHY. Use "CODED_S8" for long-range (Bluetooth 5+).
+         */
+        val bleCodec: String = "PHY_1M",
     ) : InterfaceConfig()
 
     /**

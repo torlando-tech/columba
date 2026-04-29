@@ -724,6 +724,40 @@ fun AndroidBLEFields(
         steps = 26,
         enabled = isCustom,
     )
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    Text(
+        "PHY Codec",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+
+    val codecs = listOf("PHY_1M", "PHY_2M", "CODED_S2", "CODED_S8")
+    val codecLabels = listOf("1M", "2M", "S=2", "S=8")
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        codecs.forEachIndexed { index, codec ->
+            SegmentedButton(
+                selected = configState.bleCodec == codec,
+                onClick = { onConfigUpdate(configState.copy(bleCodec = codec)) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = codecs.size),
+                icon = {},
+                label = { Text(codecLabels[index], maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+            )
+        }
+    }
+
+    Text(
+        when (configState.bleCodec) {
+            "PHY_1M" -> "1 Mbps — standard range and throughput (default)"
+            "PHY_2M" -> "2 Mbps — higher throughput, similar range"
+            "CODED_S2" -> "Coded PHY S=2 — 500 Kbps, ~2× range (Bluetooth 5+)"
+            "CODED_S8" -> "Coded PHY S=8 — 125 Kbps, ~4× range (long range, Bluetooth 5+)"
+            else -> ""
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

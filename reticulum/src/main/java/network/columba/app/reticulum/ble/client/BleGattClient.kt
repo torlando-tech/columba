@@ -16,6 +16,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
+import network.columba.app.reticulum.ble.model.BleCodec
 import network.columba.app.reticulum.ble.model.BleConstants
 import network.columba.app.reticulum.ble.util.BleOperationQueue
 import kotlinx.coroutines.CoroutineScope
@@ -100,6 +101,10 @@ class BleGattClient(
     // Local transport identity (16 bytes, set by Python bridge)
     @Volatile
     private var transportIdentityHash: ByteArray? = null
+
+    // Preferred PHY codec (configurable via KotlinBLEBridge.configureCodec)
+    @Volatile
+    var preferredCodec: BleCodec = BleCodec.PHY_1M
 
     // Callbacks
     var onConnected: ((String, Int) -> Unit)? = null // address, mtu
@@ -458,6 +463,9 @@ class BleGattClient(
                     }
                 }
 
+                // Apply preferred PHY codec (Bluetooth 5+ feature, API 26+)
+                applyPreferredPhy(gatt, address)
+
                 // Small delay to let BLE stack apply parameters
                 delay(100)
 
@@ -508,6 +516,44 @@ class BleGattClient(
             else -> {
                 Log.w(TAG, "Connection state change for $address: status=$status, state=$newState")
             }
+        }
+    }
+
+    /**
+     * Request preferred PHY on this GATT connection based on [preferredCodec].
+     * No-op on devices below API 26 or on hardware that doesn't support the requested PHY.
+     */
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+    private fun applyPreferredPhyApi26(
+        gatt: BluetoothGatt,
+        address: String,
+    ) {
+        val (txPhy, rxPhy, phyOptions) =
+            when (preferredCodec) {
+                BleCodec.PHY_1M -> Triple(BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_OPTION_NO_PREFERRED)
+                BleCodec.PHY_2M -> Triple(BluetoothDevice.PHY_LE_2M_MASK, BluetoothDevice.PHY_LE_2M_MASK, BluetoothDevice.PHY_OPTION_NO_PREFERRED)
+                BleCodec.CODED_S2 -> Triple(BluetoothDevice.PHY_LE_CODED_MASK, BluetoothDevice.PHY_LE_CODED_MASK, BluetoothDevice.PHY_OPTION_S2)
+                BleCodec.CODED_S8 -> Triple(BluetoothDevice.PHY_LE_CODED_MASK, BluetoothDevice.PHY_LE_CODED_MASK, BluetoothDevice.PHY_OPTION_S8)
+            }
+        gatt.setPreferredPhy(txPhy, rxPhy, phyOptions)
+        Log.d(TAG, "Requested PHY ${preferredCodec.displayName} for $address")
+    }
+
+    private fun applyPreferredPhy(
+        gatt: BluetoothGatt,
+        address: String,
+    ) {
+        if (preferredCodec == BleCodec.PHY_1M) return // Default PHY — no explicit request needed
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            Log.d(TAG, "PHY selection requires API 26+, skipping for $address")
+            return
+        }
+        try {
+            applyPreferredPhyApi26(gatt, address)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Permission denied setting preferred PHY for $address", e)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set preferred PHY for $address", e)
         }
     }
 

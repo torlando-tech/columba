@@ -4,6 +4,14 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import network.columba.app.reticulum.ble.client.BleGattClient
 import network.columba.app.reticulum.ble.client.BleScanner
 import network.columba.app.reticulum.ble.model.BleConnectionState
@@ -13,14 +21,6 @@ import network.columba.app.reticulum.ble.server.BleAdvertiser
 import network.columba.app.reticulum.ble.server.BleGattServer
 import network.columba.app.reticulum.ble.util.BleOperationQueue
 import network.columba.app.reticulum.ble.util.BlePairingHandler
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -740,8 +740,12 @@ class BleConnectionManager(
 
             Log.d(TAG, "Received ${fragment.size} byte fragment from $address")
 
-            // Queue fragment for Python/Reticulum (Python BLEInterface handles reassembly)
-            incomingPacketQueue.offer(BlePacket(address, fragment))
+            // Queue fragment for Python/Reticulum (Python BLEInterface handles reassembly).
+            // Use add() rather than offer() — the queue is an unbounded
+            // ConcurrentLinkedQueue, so offer() always returns true and the boolean
+            // is meaningless. add() is the semantically clearer API for unbounded
+            // queues and avoids tripping the DiscardedConcurrencyReturn detekt rule.
+            incomingPacketQueue.add(BlePacket(address, fragment))
             Log.d(TAG, "Fragment queued for Python (queue size: ${incomingPacketQueue.size})")
 
             // Also invoke callback for BleTestScreen

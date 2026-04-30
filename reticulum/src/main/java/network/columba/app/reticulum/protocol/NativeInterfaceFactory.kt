@@ -10,6 +10,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import network.columba.app.reticulum.ble.bridge.KotlinBLEBridge
 import network.columba.app.reticulum.model.InterfaceConfig
 import network.reticulum.interfaces.auto.AutoInterface
 import network.reticulum.interfaces.tcp.TCPClientInterface
@@ -238,6 +239,10 @@ internal object NativeInterfaceFactory {
                         scope = driverScope,
                     )
                 driver.setTransportIdentity(identityHash)
+
+                // Apply PHY codec before the interface starts so the preference is
+                // in place when applyPreferredPhy() runs on the first GATT connection.
+                KotlinBLEBridge.getInstance(ctx).configureCodec(config.bleCodec)
 
                 val iface =
                     network.reticulum.interfaces.ble.BLEInterface(

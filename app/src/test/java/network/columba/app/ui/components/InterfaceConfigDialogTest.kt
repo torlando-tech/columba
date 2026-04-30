@@ -284,4 +284,105 @@ class InterfaceConfigDialogTest {
 
         composeTestRule.onNodeWithText("8080").assertIsDisplayed()
     }
+
+    // ========== AndroidBLEFields PHY Codec UI (item 7) ==========
+
+    @Test
+    fun `AndroidBLEFields renders PHY Codec section header`() {
+        val configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "PHY_1M")
+
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = configState, onConfigUpdate = {})
+        }
+
+        composeTestRule.onNodeWithText("PHY Codec").assertIsDisplayed()
+    }
+
+    @Test
+    fun `AndroidBLEFields renders all four PHY selector buttons`() {
+        val configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "PHY_1M")
+
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = configState, onConfigUpdate = {})
+        }
+
+        composeTestRule.onNodeWithText("1M").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2M").assertIsDisplayed()
+        composeTestRule.onNodeWithText("S=2").assertIsDisplayed()
+        composeTestRule.onNodeWithText("S=8").assertIsDisplayed()
+    }
+
+    @Test
+    fun `AndroidBLEFields shows 1M description when PHY_1M is selected`() {
+        val configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "PHY_1M")
+
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = configState, onConfigUpdate = {})
+        }
+
+        composeTestRule.onNodeWithText("1 Mbps — standard range and throughput (default)")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `AndroidBLEFields shows CODED_S8 description when S=8 is selected`() {
+        val configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "CODED_S8")
+
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = configState, onConfigUpdate = {})
+        }
+
+        composeTestRule.onNodeWithText("Coded PHY S=8 — 125 Kbps, ~4× range, FEC (Bluetooth 5+)")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `AndroidBLEFields shows battery warning when S=8 is selected`() {
+        val configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "CODED_S8")
+
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = configState, onConfigUpdate = {})
+        }
+
+        composeTestRule.onNodeWithText(
+            "Higher TX power per packet, but FEC avoids retransmissions. " +
+                "At poor signal (rubble, walls), net battery draw can be lower than 1M.",
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun `AndroidBLEFields does not show battery warning for PHY_1M`() {
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "PHY_1M"), onConfigUpdate = {})
+        }
+        composeTestRule
+            .onNodeWithText(
+                "Higher TX power per packet, but FEC avoids retransmissions. " +
+                    "At poor signal (rubble, walls), net battery draw can be lower than 1M.",
+            ).assertDoesNotExist()
+    }
+
+    @Test
+    fun `AndroidBLEFields does not show battery warning for PHY_2M`() {
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "PHY_2M"), onConfigUpdate = {})
+        }
+        composeTestRule
+            .onNodeWithText(
+                "Higher TX power per packet, but FEC avoids retransmissions. " +
+                    "At poor signal (rubble, walls), net battery draw can be lower than 1M.",
+            ).assertDoesNotExist()
+    }
+
+    @Test
+    fun `AndroidBLEFields does not show battery warning for CODED_S2`() {
+        composeTestRule.setContent {
+            AndroidBLEFields(configState = InterfaceConfigState(type = "AndroidBLE", bleCodec = "CODED_S2"), onConfigUpdate = {})
+        }
+        composeTestRule
+            .onNodeWithText(
+                "Higher TX power per packet, but FEC avoids retransmissions. " +
+                    "At poor signal (rubble, walls), net battery draw can be lower than 1M.",
+            ).assertDoesNotExist()
+    }
 }

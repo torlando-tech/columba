@@ -355,4 +355,36 @@ class InterfaceConfigExtTest {
         val config = InterfaceConfig.TCPServer()
         assertEquals("TCPServer", config.typeName)
     }
+
+    // ========== AndroidBLE ble_codec serialization (items 5–6) ==========
+
+    @Test
+    fun `AndroidBLE toJsonString includes ble_codec field`() {
+        val config = InterfaceConfig.AndroidBLE(bleCodec = "PHY_1M")
+        val json = JSONObject(config.toJsonString())
+        assertTrue("ble_codec must be present in serialized JSON", json.has("ble_codec"))
+    }
+
+    @Test
+    fun `AndroidBLE toJsonString serializes PHY_1M default`() {
+        val config = InterfaceConfig.AndroidBLE()
+        val json = JSONObject(config.toJsonString())
+        assertEquals("PHY_1M", json.getString("ble_codec"))
+    }
+
+    @Test
+    fun `AndroidBLE toJsonString round-trips CODED_S8`() {
+        val config = InterfaceConfig.AndroidBLE(bleCodec = "CODED_S8")
+        val json = JSONObject(config.toJsonString())
+        assertEquals("CODED_S8", json.getString("ble_codec"))
+    }
+
+    @Test
+    fun `AndroidBLE toJsonString round-trips all four codec values`() {
+        listOf("PHY_1M", "PHY_2M", "CODED_S2", "CODED_S8").forEach { codec ->
+            val config = InterfaceConfig.AndroidBLE(bleCodec = codec)
+            val json = JSONObject(config.toJsonString())
+            assertEquals("ble_codec should round-trip for $codec", codec, json.getString("ble_codec"))
+        }
+    }
 }

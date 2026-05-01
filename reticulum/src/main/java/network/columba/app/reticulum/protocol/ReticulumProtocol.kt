@@ -718,6 +718,18 @@ data class ReceivedMessage(
     // Signal quality metrics (from RNode/BLE - null for TCP/AutoInterface)
     val receivedRssi: Int? = null,
     val receivedSnr: Float? = null,
+    // Whether the LXMF signature was verified against the source identity.
+    // True for messages from senders whose announce we've previously seen.
+    // False for senders we don't yet have an identity record for — these
+    // messages should be displayed with an "unverified sender" warning
+    // in the UI to prevent the signature-forgery class of attacks where
+    // an attacker generates a fresh identity hash and claims any source.
+    // See LXMF-kt's LXMessageDelivery sealed type for the upstream
+    // contract this field surfaces. Null for legacy code paths that
+    // don't propagate the flag (e.g. older message-injection helpers
+    // exercised in tests) — UI should treat null as a non-warning state
+    // matching the historical behavior, NOT as "unverified".
+    val signatureVerified: Boolean? = null,
 )
 
 /**

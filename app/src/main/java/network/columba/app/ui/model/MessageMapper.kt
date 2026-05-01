@@ -78,6 +78,7 @@ fun Message.toMessageUi(): MessageUi {
         receivedSnr = receivedSnr,
         receivedAt = receivedAt,
         sentInterface = sentInterface,
+        signatureVerified = signatureVerified,
     )
 }
 

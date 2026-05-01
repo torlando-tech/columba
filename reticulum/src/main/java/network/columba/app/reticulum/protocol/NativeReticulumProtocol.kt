@@ -32,6 +32,7 @@ import network.reticulum.common.DestinationDirection
 import network.reticulum.lxmf.LXMFConstants
 import network.reticulum.lxmf.LXMRouter
 import network.reticulum.lxmf.LXMessage
+import network.reticulum.lxmf.LXMessageDelivery
 import network.reticulum.transport.Transport
 import org.json.JSONObject
 import org.msgpack.core.MessagePack
@@ -326,8 +327,29 @@ class NativeReticulumProtocol(
                 displayName = config.displayName,
             )
 
-        router!!.registerDeliveryCallback { message ->
-            handleIncomingMessage(message)
+        // LXMF-kt requires us to handle both branches of the sealed
+        // LXMessageDelivery sum — the kotlin compiler enforces this.
+        // SIGNATURE_INVALID is dropped at the LXMF-kt router layer (see
+        // its port-deviations.md), so the Unverified branch only carries
+        // SOURCE_UNKNOWN cases. We follow Sideband's user-facing pattern:
+        // ingest both with the verification state so the UI can render
+        // a "this sender is unverified" warning chip on Unverified
+        // bubbles. Dropping unverified entirely would lose legitimate
+        // first-contact messages from peers whose announce hasn't yet
+        // propagated to us.
+        router!!.registerDeliveryCallback { delivery ->
+            when (delivery) {
+                is LXMessageDelivery.Verified ->
+                    handleIncomingMessage(delivery.message, signatureVerified = true)
+                is LXMessageDelivery.Unverified -> {
+                    Log.w(
+                        TAG,
+                        "Unverified inbound message from ${delivery.message.sourceHash.toHex()} " +
+                            "(${delivery.reason}) — ingesting with warning per Sideband-style policy",
+                    )
+                    handleIncomingMessage(delivery.message, signatureVerified = false)
+                }
+            }
         }
 
         router!!.registerFailedDeliveryCallback { message ->
@@ -753,7 +775,10 @@ class NativeReticulumProtocol(
 
     // ==================== Phase 1: Message Reception ====================
 
-    private fun handleIncomingMessage(message: LXMessage) {
+    private fun handleIncomingMessage(
+        message: LXMessage,
+        signatureVerified: Boolean,
+    ) {
         scope.launch {
             val sourceHash = message.sourceHash
             val destHash = message.destinationHash
@@ -841,6 +866,7 @@ class NativeReticulumProtocol(
                     timestamp = timestamp,
                     fieldsJson = fieldsJson,
                     iconAppearance = iconAppearance,
+                    signatureVerified = signatureVerified,
                 ),
             )
         }
@@ -854,6 +880,7 @@ class NativeReticulumProtocol(
         timestamp: Long,
         fieldsJson: String?,
         iconAppearance: IconAppearance?,
+        signatureVerified: Boolean,
     ): ReceivedMessage {
         // Resolve the receiving interface hash (annotated by LXMF-kt v0.0.5+ on the
         // delivering packet) to a human-readable interface name via the Transport's
@@ -876,6 +903,7 @@ class NativeReticulumProtocol(
             receivedInterface = receivingInterfaceName,
             receivedRssi = message.receivedRssi,
             receivedSnr = message.receivedSnr,
+            signatureVerified = signatureVerified,
         )
     }
 

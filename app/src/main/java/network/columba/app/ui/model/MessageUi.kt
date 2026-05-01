@@ -129,6 +129,27 @@ data class MessageUi(
      * Null for received messages or messages sent before this feature was added.
      */
     val sentInterface: String? = null,
+    /**
+     * Whether the LXMF signature was verified against the sender's known
+     * identity at receive time.
+     *
+     * - true  = signature checked against a known source identity, valid
+     * - false = sender identity was unknown to our RNS at receive time
+     *           (UnverifiedReason.SOURCE_UNKNOWN in LXMF-kt). Could be a
+     *           legitimate first-contact, or an attacker who generated
+     *           a fresh identity hash and forged a packet claiming to
+     *           be from anyone. UI MUST render an "unverified sender"
+     *           warning chip on these bubbles.
+     * - null  = sent messages (signing is local — implicitly verified),
+     *           legacy messages from before this column existed, or
+     *           messages from code paths that don't propagate the
+     *           flag. UI treats null as "no warning" to preserve the
+     *           historical display for legacy rows.
+     *
+     * SIGNATURE_INVALID never reaches this field — LXMF-kt drops those
+     * at the router layer.
+     */
+    val signatureVerified: Boolean? = null,
 ) {
     /**
      * Whether this message should be displayed as a standalone media item without a bubble.

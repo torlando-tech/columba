@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -192,7 +194,34 @@ fun MessageDetailScreen(
                         )
                     }
                 } else {
-                    // Received message info: hop count and receiving interface
+                    // Received message info: signature + hop count + interface
+
+                    // Signature verification card. Only emitted for received
+                    // messages (sent messages are signed locally — implicitly
+                    // verified). Renders only when the field is non-null:
+                    // null means "legacy row from before this column existed"
+                    // and we don't claim verification status either way for
+                    // those (matches the bubble-warning behavior in
+                    // MessagingScreen — see UnverifiedSenderChip).
+                    msg.signatureVerified?.let { verified ->
+                        if (verified) {
+                            MessageInfoCard(
+                                icon = Icons.Default.VerifiedUser,
+                                title = "Signature",
+                                content = "Verified",
+                                subtitle = "The sender's identity was confirmed against their announce.",
+                            )
+                        } else {
+                            MessageInfoCard(
+                                icon = Icons.Default.Warning,
+                                iconTint = MaterialTheme.colorScheme.error,
+                                title = "Signature",
+                                content = "Unverified",
+                                subtitle = "The sender's identity was unknown to your node when this message arrived. The message could be legitimate (their announce hasn't reached you yet) or a forgery from anyone who knows your address. Treat with caution.",
+                                contentColor = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
 
                     // Hop count card (only if available)
                     msg.receivedHopCount?.let { hops ->

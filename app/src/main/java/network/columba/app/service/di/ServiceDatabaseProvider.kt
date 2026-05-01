@@ -3,6 +3,7 @@ package network.columba.app.service.di
 import android.content.Context
 import androidx.room.Room
 import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.data.db.migrations.ALL_MIGRATIONS
 import network.columba.app.data.di.DatabaseModule
 
 /**
@@ -29,7 +30,11 @@ object ServiceDatabaseProvider {
                 context.applicationContext,
                 ColumbaDatabase::class.java,
                 DatabaseModule.DATABASE_NAME,
-            ).fallbackToDestructiveMigration()
+            ).addMigrations(*ALL_MIGRATIONS)
+            // Destructive fallback as last resort. ALL_MIGRATIONS handles
+            // every documented version step; the fallback only fires if a
+            // future schema bump is shipped without a migration entry.
+            .fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .addCallback(DatabaseModule.DURABILITY_CALLBACK)

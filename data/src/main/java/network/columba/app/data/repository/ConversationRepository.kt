@@ -62,6 +62,11 @@ data class Message(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
+    // For received messages: whether the LXMF signature was verified
+    // against the sender's known identity. False = potential forgery
+    // (sender identity unknown to us — see MessageEntity for full
+    // semantics). Null for sent messages and legacy/pre-feature paths.
+    val signatureVerified: Boolean? = null,
 )
 
 /**
@@ -330,6 +335,7 @@ class ConversationRepository
                         receivedSnr = message.receivedSnr,
                         receivedAt = message.receivedAt,
                         sentInterface = message.sentInterface,
+                        signatureVerified = message.signatureVerified,
                     )
                 messageDao.insertMessage(messageEntity)
 
@@ -599,6 +605,7 @@ class ConversationRepository
                 receivedInterface = receivedInterface,
                 receivedAt = receivedAt,
                 sentInterface = sentInterface,
+                signatureVerified = signatureVerified,
             )
 
         /**

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -102,20 +104,22 @@ fun MicronPageContent(
     val squareLineHeightSp =
         if (renderingMode == RenderingMode.MONOSPACE_SCROLL) measuredLineHeightSp else TextUnit.Unspecified
 
-    Column(modifier = containerModifier) {
-        for ((lineIndex, line) in document.lines.withIndex()) {
-            MicronLineComposable(
-                line = line,
-                lineIndex = lineIndex + lineIndexOffset,
-                formFields = formFields,
-                defaultFg = defaultFg,
-                renderingMode = renderingMode,
-                onLinkClick = onLinkClick,
-                onFieldUpdate = onFieldUpdate,
-                minLineWidth = minLineWidth,
-                partialStates = partialStates,
-                squareLineHeightSp = squareLineHeightSp,
-            )
+    SelectionContainer(modifier = Modifier.testTag("micron-selection-container")) {
+        Column(modifier = containerModifier) {
+            for ((lineIndex, line) in document.lines.withIndex()) {
+                MicronLineComposable(
+                    line = line,
+                    lineIndex = lineIndex + lineIndexOffset,
+                    formFields = formFields,
+                    defaultFg = defaultFg,
+                    renderingMode = renderingMode,
+                    onLinkClick = onLinkClick,
+                    onFieldUpdate = onFieldUpdate,
+                    minLineWidth = minLineWidth,
+                    partialStates = partialStates,
+                    squareLineHeightSp = squareLineHeightSp,
+                )
+            }
         }
     }
 }

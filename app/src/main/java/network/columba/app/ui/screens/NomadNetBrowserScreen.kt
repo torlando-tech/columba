@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -378,26 +379,10 @@ fun NomadNetBrowserScreen(
                                 )
                             }
                             HorizontalDivider()
-                            DropdownMenuItem(
-                                text = {
-                                    Text(if (isIdentified) "Identified" else "Identify to node")
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Fingerprint,
-                                        contentDescription = null,
-                                        tint =
-                                            if (isIdentified) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
-                                            },
-                                    )
-                                },
-                                enabled = !isIdentified && !identifyInProgress,
-                                onClick = {
+                            BrowserCloseSiteMenuItem(
+                                onCloseSite = {
                                     showMenu = false
-                                    showIdentifyConfirm = true
+                                    onBackClick()
                                 },
                             )
                         }
@@ -711,3 +696,17 @@ private fun formatFileSize(bytes: Long): String =
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
     }
+
+@Composable
+internal fun BrowserCloseSiteMenuItem(onCloseSite: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text("Close site") },
+        leadingIcon = {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = null,
+            )
+        },
+        onClick = onCloseSite,
+    )
+}

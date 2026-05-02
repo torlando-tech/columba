@@ -429,7 +429,7 @@ dependencies {
     implementation("org.msgpack:msgpack-core:0.9.8")
 
     // MapLibre - for offline-capable maps
-    implementation("org.maplibre.gl:android-sdk:12.3.1")
+    implementation("org.maplibre.gl:android-sdk:13.0.2")
 
     // Google Play Services Location - for FusedLocationProviderClient
     implementation("com.google.android.gms:play-services-location:21.2.0")

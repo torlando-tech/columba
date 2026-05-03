@@ -4,6 +4,7 @@ import android.app.Application
 import app.cash.turbine.test
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -65,18 +66,31 @@ class ApkSharingViewModelTest {
     }
 
     @Test
-    fun `viewModel init triggers startServer which sets error state in test environment`() =
+    fun `viewModel init triggers startServer which reaches a terminal sharing-state`() =
         runTest(testDispatcher) {
             val viewModel = ApkSharingViewModel(application)
-            advanceUntilIdle()
 
-            viewModel.state.test(timeout = 5.seconds) {
-                val state = awaitItem()
-                // In Robolectric, either sourceDir doesn't exist or there's no WiFi,
-                // so we expect an error state or the default non-running state
-                assertFalse(state.isServerRunning)
-                cancelAndIgnoreRemainingEvents()
-            }
+            // The previous assertion (state.isServerRunning == false) was environment-dependent:
+            // on Linux CI getLocalIpAddress() can return a non-loopback IPv4 and the server
+            // actually binds, flipping the assertion red (issue #883). Wait for the post-init
+            // flow to settle into one of the three terminal shapes — production code is
+            // environment-aware, so accept any of them rather than pinning a specific value.
+            //
+            // Note: avoid withTimeout here — its virtual-time deadline races the real-IO
+            // bind in launchHttpServer; rely on runTest's outer real-time timeout instead.
+            val terminalState =
+                viewModel.state.first { state ->
+                    state.errorMessage != null ||
+                        state.needsHotspotPermission ||
+                        (state.isServerRunning && state.downloadUrl != null)
+                }
+
+            assertTrue(
+                "Expected a terminal sharing state (error, needs-permission, or running-with-url) but got $terminalState",
+                terminalState.errorMessage != null ||
+                    terminalState.needsHotspotPermission ||
+                    (terminalState.isServerRunning && terminalState.downloadUrl != null),
+            )
         }
 
     @Test

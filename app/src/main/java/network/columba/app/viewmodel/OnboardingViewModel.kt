@@ -1,7 +1,11 @@
 package network.columba.app.viewmodel
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +25,7 @@ import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 import network.columba.app.ui.screens.onboarding.OnboardingState
 import network.columba.app.util.BatteryOptimizationManager
+import network.columba.app.util.getBlePermissions
 import javax.inject.Inject
 
 /**
@@ -157,6 +162,62 @@ class OnboardingViewModel
             val isExempt = BatteryOptimizationManager.isIgnoringBatteryOptimizations(context)
             _state.value = _state.value.copy(batteryOptimizationExempt = isExempt)
             Log.d(TAG, "Battery optimization status: exempt=$isExempt")
+        }
+
+        /**
+         * Re-evaluate the POST_NOTIFICATIONS runtime permission. Used by the
+         * onboarding lifecycle observer to refresh the permission card after the
+         * user grants the permission via the system Settings UI (the launcher
+         * callback path does not fire when the user goes through the
+         * "Don't ask again" → app Settings flow).
+         *
+         * On API < 33 the permission is granted at install time; we mirror that
+         * by setting both flags to true.
+         */
+        fun checkNotificationPermissionStatus(context: Context) {
+            val granted =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) == PackageManager.PERMISSION_GRANTED
+                } else {
+                    true
+                }
+            _state.value =
+                _state.value.copy(
+                    notificationsGranted = granted,
+                    notificationsEnabled = granted,
+                )
+            Log.d(TAG, "Notification permission status: granted=$granted")
+        }
+
+        /**
+         * Re-evaluate the BLE runtime permission set. Mirrors
+         * [checkNotificationPermissionStatus] for the BLE card on the
+         * ConnectivityPage; covers the manual-Settings grant flow for which
+         * the permission launcher callback never fires.
+         *
+         * Intentionally does NOT mutate selectedInterfaces. The launcher
+         * callback path in [onBlePermissionsResult] is the only place that
+         * removes BLE from selection on denial — an idempotent on-resume
+         * re-check should not undo a user toggle.
+         */
+        fun checkBlePermissionsStatus(context: Context) {
+            val permissions = getBlePermissions()
+            val grantedFlags =
+                permissions.map {
+                    ContextCompat.checkSelfPermission(context, it) ==
+                        PackageManager.PERMISSION_GRANTED
+                }
+            val allGranted = grantedFlags.all { it }
+            val anyDenied = grantedFlags.any { !it }
+            _state.value =
+                _state.value.copy(
+                    blePermissionsGranted = allGranted,
+                    blePermissionsDenied = anyDenied && !allGranted,
+                )
+            Log.d(TAG, "BLE permissions status: allGranted=$allGranted, anyDenied=$anyDenied")
         }
 
         /**

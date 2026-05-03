@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,12 +38,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import network.columba.app.ui.screens.onboarding.pages.CompletePage
 import network.columba.app.ui.screens.onboarding.pages.ConnectivityPage
 import network.columba.app.ui.screens.onboarding.pages.IdentityPage
 import network.columba.app.ui.screens.onboarding.pages.PermissionsPage
 import network.columba.app.ui.screens.onboarding.pages.WelcomePage
 import network.columba.app.util.BatteryOptimizationManager
+import network.columba.app.util.getBlePermissions
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.OnboardingViewModel
 import kotlinx.coroutines.launch
@@ -63,6 +68,7 @@ fun OnboardingPagerScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { ONBOARDING_PAGE_COUNT })
 
@@ -96,6 +102,24 @@ fun OnboardingPagerScreen(
     // Check initial battery status
     LaunchedEffect(Unit) {
         viewModel.checkBatteryOptimizationStatus(context)
+    }
+
+    // Refresh permission state on every ON_RESUME so cards reflect grants made
+    // via the system Settings UI (e.g. battery optimization exemption, which
+    // launches a Settings activity with no result callback into the app).
+    DisposableEffect(lifecycleOwner, context) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.checkBatteryOptimizationStatus(context)
+                    viewModel.checkNotificationPermissionStatus(context)
+                    viewModel.checkBlePermissionsStatus(context)
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Sync pager state with viewmodel state
@@ -220,10 +244,10 @@ fun OnboardingPagerScreen(
                                 },
                                 onEnableBatteryOptimization = {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                        // Use safe method that handles OEM devices without direct exemption support
+                                        // Use safe method that handles OEM devices without direct exemption support.
+                                        // The ON_RESUME observer above re-reads the post-grant state once the
+                                        // user returns from the system Settings activity.
                                         BatteryOptimizationManager.requestBatteryOptimizationExemption(context)
-                                        // Manually trigger status check since we're not using launcher
-                                        viewModel.checkBatteryOptimizationStatus(context)
                                     }
                                 },
                                 onBack = {
@@ -333,26 +357,5 @@ private fun PageIndicator(
                         .background(color),
             )
         }
-    }
-}
-
-/**
- * Get the required BLE permissions based on Android version.
- */
-private fun getBlePermissions(): Array<String> {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // Android 12+
-        arrayOf(
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_ADVERTISE,
-        )
-    } else {
-        // Android 11 and below
-        arrayOf(
-            Manifest.permission.BLUETOOTH,
-            Manifest.permission.BLUETOOTH_ADMIN,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-        )
     }
 }

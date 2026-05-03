@@ -68,7 +68,7 @@
     <string name="summary">Summary</string>
     <string name="identity">Identity</string>
     <string name="networks">Networks</string>
-    <string name="none_seleced">None seleced</string>
+    <string name="none_selected">None selected</string>
     <string name="enabled">Enabled</string>
     <string name="disabled">Disabled</string>
     <string name="restricted">Restricted</string>

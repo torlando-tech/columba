@@ -199,6 +199,7 @@ android {
 
     buildTypes {
         release {
+            resValue("string", "app_name", "Columba")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -211,6 +212,9 @@ android {
             buildConfigField("Boolean", "ENABLE_MEMORY_PROFILING", "false")
         }
         debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "columbatest")
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -235,6 +239,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 
     composeOptions {

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Columba</string>
+    <!-- app_name is defined per build type in app/build.gradle.kts via resValue
+         (release: "Columba", debug: "columbatest") so debug + release builds can
+         coexist on a phone with distinct launcher labels. -->
 
     <!-- Incoming call screen -->
     <string name="incoming_voice_call">Incoming Voice Call</string>

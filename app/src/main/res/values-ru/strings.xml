@@ -18,7 +18,7 @@
     <string name="view_interface_details">Детали</string>
     <string name="interface_actions">Действия</string>
     <string name="edit_interface">Редактировать</string>
-    <string name="messenger_requires">"Приватный мессерждер, для которого: "</string>
+    <string name="messenger_requires">"Приватный мессенджер, для которого: "</string>
     <string name="welcome_to">Добро пожаловть в %1$s</string>
     <string name="no_phone_number">Не нужен номер телефона</string>
     <string name="no_email_address">Не нужен Email</string>
@@ -55,7 +55,7 @@
     <string name="summary">Итого</string>
     <string name="identity">Никнейм</string>
     <string name="networks">Сети</string>
-    <string name="none_seleced">Ничего не выбранно</string>
+    <string name="none_seleced">Ничего не выбрано</string>
     <string name="enabled">Включены</string>
     <string name="disabled">Выключены</string>
     <string name="restricted">Ограниченно</string>

@@ -84,7 +84,7 @@ fun MicronPageContent(
 ) {
     val defaultFg = MaterialTheme.colorScheme.onSurface
     val pageBg = document.pageBackground?.toArgb()?.let { Color(it) }
-    val containerModifier = if (pageBg != null) modifier.background(pageBg) else modifier
+    val columnModifier = if (pageBg != null) Modifier.background(pageBg) else Modifier
 
     // Measure monospace char width once so MicronLineComposable can set
     // lineHeight = 2 × charWidth (in sp), giving square half-block pixels.
@@ -104,8 +104,8 @@ fun MicronPageContent(
     val squareLineHeightSp =
         if (renderingMode == RenderingMode.MONOSPACE_SCROLL) measuredLineHeightSp else TextUnit.Unspecified
 
-    SelectionContainer(modifier = Modifier.testTag("micron-selection-container")) {
-        Column(modifier = containerModifier) {
+    SelectionContainer(modifier = modifier.testTag("micron-selection-container")) {
+        Column(modifier = columnModifier) {
             for ((lineIndex, line) in document.lines.withIndex()) {
                 MicronLineComposable(
                     line = line,

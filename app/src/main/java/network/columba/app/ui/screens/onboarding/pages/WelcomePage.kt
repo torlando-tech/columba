@@ -103,17 +103,17 @@ fun WelcomePage(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Privacy features
-        PrivacyFeature(text = "No phone number")
+        PrivacyFeature(text = stringResource(R.string.no_phone_number))
         Spacer(modifier = Modifier.height(12.dp))
-        PrivacyFeature(text = "No email address")
+        PrivacyFeature(text = stringResource(R.string.no_email_address))
         Spacer(modifier = Modifier.height(12.dp))
-        PrivacyFeature(text = "No sign-up or accounts")
+        PrivacyFeature(text = stringResource(R.string.no_accounts))
 
         Spacer(modifier = Modifier.height(32.dp))
 
         // Identity explanation
         Text(
-            text = "Your identity is generated and stored securely on your device. You control it completely.",
+            text = stringResource(R.string.welcome_security_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -132,7 +132,7 @@ fun WelcomePage(
             shape = RoundedCornerShape(12.dp),
         ) {
             Text(
-                text = "Get Started",
+                text = stringResource(R.string.get_started),
                 style = MaterialTheme.typography.titleMedium,
             )
         }
@@ -144,7 +144,7 @@ fun WelcomePage(
             onClick = onRestoreFromBackup,
         ) {
             Text(
-                text = "Restore from backup",
+                text = stringResource(R.string.restore_from_backup),
                 color = MaterialTheme.colorScheme.primary,
             )
         }

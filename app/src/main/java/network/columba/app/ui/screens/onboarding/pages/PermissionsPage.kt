@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 
 /**
  * Permissions page - explains and requests notification and battery permissions.
@@ -69,7 +71,7 @@ fun PermissionsPage(
 
         // Title
         Text(
-            text = "Stay Connected",
+            text = stringResource(R.string.stay_connected),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -80,7 +82,7 @@ fun PermissionsPage(
 
         // Subtitle
         Text(
-            text = "Columba can notify you when:",
+            text = stringResource(R.string.can_notify_you, stringResource(R.string.app_name)),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -93,9 +95,9 @@ fun PermissionsPage(
             modifier = Modifier.padding(horizontal = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            FeatureItem("New messages arrive")
-            FeatureItem("Someone adds you as a contact")
-            FeatureItem("Delivery confirmations are received")
+            FeatureItem(stringResource(R.string.item_new_messages))
+            FeatureItem(stringResource(R.string.item_some_add_contact))
+            FeatureItem(stringResource(R.string.item_delivery_confirmed))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -103,8 +105,8 @@ fun PermissionsPage(
         // Notification permission card
         PermissionCard(
             icon = Icons.Default.Notifications,
-            title = "Notifications",
-            description = "Get alerts for new messages",
+            title = stringResource(R.string.notifications),
+            description = stringResource(R.string.notifications_description),
             isGranted = notificationsGranted,
             onEnable = onEnableNotifications,
         )
@@ -114,9 +116,9 @@ fun PermissionsPage(
         // Battery optimization card
         PermissionCard(
             icon = Icons.Default.BatteryChargingFull,
-            title = "Unrestricted Battery",
-            description = "Receive messages even when phone is idle",
-            secondaryDescription = "Prevents Android from pausing Columba",
+            title = stringResource(R.string.unrestricted_battery),
+            description = stringResource(R.string.unrestricted_battery_description),
+            secondaryDescription = stringResource(R.string.unrestricted_battery_secondDescription, stringResource(R.string.app_name)),
             isGranted = batteryOptimizationExempt,
             onEnable = onEnableBatteryOptimization,
         )
@@ -136,7 +138,7 @@ fun PermissionsPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Back")
+                Text(stringResource(R.string.back))
             }
 
             Button(
@@ -147,7 +149,7 @@ fun PermissionsPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Continue")
+                Text(stringResource(R.string.nextAction))
             }
         }
 
@@ -274,7 +276,7 @@ private fun PermissionCard(
                     onClick = onEnable,
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("Enable")
+                    Text(stringResource(R.string.enable))
                 }
             }
         }

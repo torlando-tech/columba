@@ -46,7 +46,8 @@ import network.columba.app.util.BatteryOptimizationManager
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.OnboardingViewModel
 import kotlinx.coroutines.launch
-
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 /**
  * Main onboarding screen with horizontal pager for multi-step setup.
  * Guides users through identity setup, connectivity options, and permissions.
@@ -293,7 +294,7 @@ private fun TopBar(
                 modifier = Modifier.align(Alignment.CenterEnd),
             ) {
                 Text(
-                    text = "Skip",
+                    text = stringResource(R.string.skip),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

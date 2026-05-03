@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import network.columba.app.R
+import androidx.compose.ui.res.stringResource
 
 /**
  * Welcome page - introduces privacy-first messaging.
@@ -82,7 +83,7 @@ fun WelcomePage(
 
         // Title
         Text(
-            text = "Welcome to Columba",
+            text = stringResource(R.string.welcome_to, stringResource(R.string.app_name)),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -93,7 +94,7 @@ fun WelcomePage(
 
         // Subtitle
         Text(
-            text = "A private messenger that requires:",
+            text = stringResource(R.string.messenger_requires),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

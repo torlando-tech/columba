@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Columba</string>
+    <string name="incoming_voice_call">Входящий аудиовызов</string>
+    <string name="call_answer">Ответить</string>
+    <string name="call_decline">Отклонить</string>
+    <string name="call_answer_content_description">Ответить на вызов</string>
+    <string name="call_decline_content_description">Отклонить вызов</string>
+    <string name="error_no_file_manager">На телефоне не найден файловый менеджер</string>
+    <string name="locate_on_map">Геолокация на карте</string>
+    <string name="service_restart_banner">Перезапуск сервиса Reticulum \u2026</string>
+    <string name="offline_banner_shutdown">Columba сейчас офлайн</string>
+    <string name="offline_banner_error">Ошибка подключения</string>
+    <string name="offline_banner_reconnecting">Переподключение\u2026</string>
+    <string name="offline_banner_reconnect">Переподключиться</string>
+    <string name="offline_banner_reconnecting_description">Процесс переподключения</string>
+    <string name="delete_interface">Удалить интерфейс</string>
+    <string name="view_interface_details">Детали</string>
+    <string name="interface_actions">Действия</string>
+    <string name="edit_interface">Редактировать</string>
+    <string name="messenger_requires">"Приватный мессерждер, для работы которого: "</string>
+    <string name="welcome_to">Добро пожаловть в %1$s</string>
+</resources>

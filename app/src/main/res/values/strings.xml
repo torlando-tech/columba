@@ -30,4 +30,6 @@
     <string name="view_interface_details">View interface details</string>
     <string name="interface_actions">Interface actions</string>
     <string name="edit_interface">Edit interface</string>
+    <string name="messenger_requires">A private messenger that requires:</string>
+    <string name="welcome_to">Welcome to %1$s</string>
 </resources>

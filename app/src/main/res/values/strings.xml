@@ -79,5 +79,5 @@
     <string name="configure_lora">Configure LoRa</string>
     <string name="start_messaging">Start Messaging</string>
     <string name="share_identity">Share identity</string>
-    <string name="share_invite_message">Add me on Reticulum: \\n\\n%1$s\\n%2$s</string>
+    <string name="share_invite_message">Add me on Reticulum: \n\n%1$s\n%2$s</string>
 </resources>

@@ -18,6 +18,7 @@ import androidx.room.PrimaryKey
         Index("senderHash"), // For querying locations by contact
         Index("senderHash", "timestamp"), // For getting latest per contact
         Index("expiresAt"), // For cleanup of expired locations
+        Index("source", "senderHash", "timestamp", name = "idx_received_locations_source"),
     ],
 )
 data class ReceivedLocationEntity(
@@ -32,4 +33,11 @@ data class ReceivedLocationEntity(
     val receivedAt: Long, // When we received this update
     val approximateRadius: Int = 0, // Coarsening radius in meters (0 = precise)
     val appearanceJson: String? = null, // Icon appearance JSON: {"icon_name":"car","foreground_color":"RRGGBB","background_color":"RRGGBB"}
-)
+    @androidx.room.ColumnInfo(defaultValue = "location_sharing")
+    val source: String = SOURCE_LOCATION_SHARING,
+) {
+    companion object {
+        const val SOURCE_LOCATION_SHARING = "location_sharing"
+        // Future: SOURCE_SOS_TRAIL = "sos_trail" for SOS breadcrumb trail entries (see PR #713)
+    }
+}

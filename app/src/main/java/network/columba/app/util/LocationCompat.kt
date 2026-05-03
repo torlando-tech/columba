@@ -29,7 +29,10 @@ import com.google.android.gms.common.GoogleApiAvailability
  */
 object LocationCompat {
     private const val TAG = "LocationCompat"
-    private const val SINGLE_LOCATION_TIMEOUT_MS = 10_000L
+    // Cold-start GPS lock can take 20–30 s indoors with poor sky view.
+    // Bumped from 10 s after observing API < R one-shot calls timing out before GPS could
+    // produce a real fix and silently falling back to the (often very stale) last-known.
+    private const val SINGLE_LOCATION_TIMEOUT_MS = 30_000L
 
     @Volatile
     private var checked = false
@@ -51,7 +54,7 @@ object LocationCompat {
                                 GoogleApiAvailability
                                     .getInstance()
                                     .isGooglePlayServicesAvailable(context)
-                            result == ConnectionResult.SUCCESS
+                            result == ConnectionResult.SUCCESS && !isMicroG(context)
                         } catch (e: Exception) {
                             // GoogleApiAvailability can throw (e.g. missing manifest metadata
                             // in unit tests or corrupted GMS state on-device). Treat as unavailable.
@@ -73,6 +76,32 @@ object LocationCompat {
         }
         return available
     }
+
+    /**
+     * Detect MicroG, which masquerades as `com.google.android.gms` but ships activities
+     * under the `org.microg.*` namespace. Real Google GMS keeps everything under
+     * `com.google.android.gms.*`. MicroG's FusedLocationProvider routes through its own
+     * NLP and can return stale cell-tower fixes labelled HIGH_ACCURACY — concretely we
+     * observed a 2 km offset where Waze (querying GPS_PROVIDER directly) had no issue.
+     * Treating MicroG as "GMS not available" forces the platform LocationManager path.
+     */
+    private fun isMicroG(context: Context): Boolean =
+        try {
+            val pkgInfo =
+                context.packageManager.getPackageInfo(
+                    "com.google.android.gms",
+                    android.content.pm.PackageManager.GET_ACTIVITIES,
+                )
+            val isMicroG =
+                pkgInfo.activities?.any { it.name.startsWith("org.microg.") } == true
+            if (isMicroG) {
+                Log.i(TAG, "Detected MicroG (org.microg.* activities in com.google.android.gms) — bypassing FusedLocationProvider")
+            }
+            isMicroG
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to inspect GMS package", e)
+            false
+        }
 
     /**
      * Get the last known location from Android's LocationManager.

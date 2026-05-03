@@ -157,6 +157,9 @@ class SettingsRepository
 
             // Message sort order: false = received time (default), true = sent time
             val SORT_MESSAGES_BY_SENT_TIME = booleanPreferencesKey("sort_messages_by_sent_time")
+
+            // Persisted location sharing sessions (JSON array, survives restart)
+            val LOCATION_SHARING_SESSIONS = stringPreferencesKey("location_sharing_sessions")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -2033,6 +2036,23 @@ class SettingsRepository
         suspend fun setSortMessagesBySentTime(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.SORT_MESSAGES_BY_SENT_TIME] = enabled
+            }
+        }
+
+        // ========== Location Sharing Session Persistence ==========
+
+        suspend fun saveLocationSharingSessions(sessionsJson: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.LOCATION_SHARING_SESSIONS] = sessionsJson
+            }
+        }
+
+        suspend fun getLocationSharingSessions(): String? =
+            context.dataStore.data.first()[PreferencesKeys.LOCATION_SHARING_SESSIONS]
+
+        suspend fun clearLocationSharingSessions() {
+            context.dataStore.edit { preferences ->
+                preferences.remove(PreferencesKeys.LOCATION_SHARING_SESSIONS)
             }
         }
     }

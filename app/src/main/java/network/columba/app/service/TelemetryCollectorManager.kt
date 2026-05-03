@@ -187,7 +187,7 @@ class TelemetryCollectorManager
             // Start periodic sending and requesting
             restartPeriodicSend()
             restartPeriodicRequest()
-            locationTracker.update(shouldTrackLocation(), _sendIntervalSeconds.value * 1000L)
+            updateLocationTracking()
         }
 
         private fun CoroutineScope.launchSendSettingsObservers() {
@@ -215,7 +215,7 @@ class TelemetryCollectorManager
                         Log.d(TAG, "Collector address updated: ${address?.take(16) ?: "none"}")
                         restartPeriodicSend()
                         restartPeriodicRequest()
-                        locationTracker.update(shouldTrackLocation(), _sendIntervalSeconds.value * 1000L)
+                        updateLocationTracking()
                     }
             }
             launch {
@@ -225,7 +225,7 @@ class TelemetryCollectorManager
                         _isEnabled.value = enabled
                         Log.d(TAG, "Collector enabled: $enabled")
                         restartPeriodicSend()
-                        locationTracker.update(shouldTrackLocation(), _sendIntervalSeconds.value * 1000L)
+                        updateLocationTracking()
                     }
             }
             launch {
@@ -255,6 +255,7 @@ class TelemetryCollectorManager
                         _isRequestEnabled.value = enabled
                         Log.d(TAG, "Request enabled: $enabled")
                         restartPeriodicRequest()
+                        updateLocationTracking()
                     }
             }
             launch {
@@ -314,16 +315,42 @@ class TelemetryCollectorManager
          */
         fun stop() {
             Log.d(TAG, "Stopping TelemetryCollectorManager")
+            // Poison state first so straggling flow collectors won't re-acquire the service
+            _isEnabled.value = false
+            _isRequestEnabled.value = false
+            _collectorAddress.value = null
             settingsObserverJob?.cancel()
             periodicSendJob?.cancel()
             periodicRequestJob?.cancel()
-            locationTracker.stop()
             settingsObserverJob = null
             periodicSendJob = null
             periodicRequestJob = null
+            locationTracker.stop()
+            if (LocationServiceCoordinator.isAcquired(LocationServiceCoordinator.REASON_TELEMETRY)) {
+                LocationServiceCoordinator.release(context, LocationServiceCoordinator.REASON_TELEMETRY)
+            }
         }
 
         private fun shouldTrackLocation(): Boolean = _isEnabled.value && _collectorAddress.value != null
+
+        /** Whether any telemetry activity (send or request) needs the process kept alive. */
+        private fun needsForegroundService(): Boolean =
+            _collectorAddress.value != null && (_isEnabled.value || _isRequestEnabled.value)
+
+        /** Update location tracking and coordinate the foreground service lifecycle. */
+        private fun updateLocationTracking() {
+            val shouldTrack = shouldTrackLocation()
+            locationTracker.update(shouldTrack, _sendIntervalSeconds.value * 1000L)
+
+            // Foreground service is needed for both send (GPS) and request-only (periodic polling)
+            val needsService = needsForegroundService()
+            val hasService = LocationServiceCoordinator.isAcquired(LocationServiceCoordinator.REASON_TELEMETRY)
+            if (needsService && !hasService) {
+                LocationServiceCoordinator.acquire(context, LocationServiceCoordinator.REASON_TELEMETRY)
+            } else if (!needsService && hasService) {
+                LocationServiceCoordinator.release(context, LocationServiceCoordinator.REASON_TELEMETRY)
+            }
+        }
 
         /**
          * Update the collector address.
@@ -500,7 +527,9 @@ class TelemetryCollectorManager
                 return TelemetrySendResult.NetworkNotReady
             }
 
-            return sendTelemetryToCollector(collector)
+            // User explicitly hit "send now" — accept any accuracy (even coarse cell-only),
+            // bypassing the periodic-cycle accuracy threshold.
+            return sendTelemetryToCollector(collector, allowAnyAccuracy = true)
         }
 
         /**
@@ -668,7 +697,10 @@ class TelemetryCollectorManager
          * Send telemetry to the specified collector.
          */
         @Suppress("ReturnCount") // Early returns for validation are clearer than nested conditions
-        private suspend fun sendTelemetryToCollector(collectorHash: String): TelemetrySendResult {
+        private suspend fun sendTelemetryToCollector(
+            collectorHash: String,
+            allowAnyAccuracy: Boolean = false,
+        ): TelemetrySendResult {
             if (_isSending.value) {
                 Log.d(TAG, "Already sending, skipping")
                 return TelemetrySendResult.Error("Already sending")
@@ -678,7 +710,7 @@ class TelemetryCollectorManager
 
             try {
                 // Use continuously tracked location when available; otherwise try a fresh one-shot fix.
-                val location = locationTracker.getTelemetryLocation()
+                val location = locationTracker.getTelemetryLocation(allowAnyAccuracy = allowAnyAccuracy)
                 if (location == null) {
                     Log.w(TAG, "No recent valid location available")
                     return TelemetrySendResult.NoLocationAvailable
@@ -782,9 +814,12 @@ class TelemetryCollectorManager
                 // Convert collector hash to bytes
                 val collectorBytes = collectorHash.hexToByteArray()
 
-                // Use last request time as timebase (request telemetry since last request)
-                // Pass null for first request to get all available telemetry
-                val timebase = _lastRequestTime.value
+                // Use last request time as timebase (request telemetry since last request).
+                // Sideband/Python collectors expect timebase in SECONDS (time.time() convention)
+                // and store received_at in seconds. Sending millis here causes the collector's
+                // `received_at >= timebase` filter to always be false → 0 entries returned.
+                // Pass null for first request to get all available telemetry.
+                val timebase = _lastRequestTime.value?.let { it / 1000L }
 
                 // Send telemetry request via protocol
                 val result =

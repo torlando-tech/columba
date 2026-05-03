@@ -1207,11 +1207,16 @@ class NativeReticulumProtocol(
             }
         }
 
+        // OPPORTUNISTIC: telemetry payloads fit in a single packet and don't need
+        // a delivery proof or stateful Link. Forcing DIRECT here makes LXMRouter
+        // establish a Link first; if that Link can't reach ACTIVE state (e.g. after
+        // a reboot while path discovery is still warming up) the telemetry sits in
+        // the outbound queue indefinitely and the receiver's map never refreshes.
         return sendLxmfMessageWithMethod(
             destinationHash = destinationHash,
             content = "",
             sourceIdentity = sourceIdentity,
-            deliveryMethod = DeliveryMethod.DIRECT,
+            deliveryMethod = DeliveryMethod.OPPORTUNISTIC,
             iconAppearance = iconAppearance,
             extraFields = fields,
         )

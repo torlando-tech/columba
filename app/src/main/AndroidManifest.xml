@@ -52,6 +52,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Auto-start after device boot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Notification permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -159,6 +163,15 @@
                 android:resource="@xml/usb_device_filter" />
         </activity>
 
+        <!-- Location Foreground Service -->
+        <!-- Keeps the main process alive during Doze so GPS callbacks continue -->
+        <!-- Only runs when location sharing or telemetry collection is active -->
+        <service
+            android:name=".service.LocationForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <!-- Reticulum Background Service -->
         <!-- Runs in separate process to allow clean restarts when applying config changes -->
         <!-- BLE functionality is now integrated via KotlinBLEBridge (no separate service needed) -->
@@ -181,6 +194,17 @@
                 <action android:name="android.companion.CompanionDeviceService" />
             </intent-filter>
         </service>
+
+        <!-- Auto-start services after device boot -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- FileProvider for sharing identity files -->
         <provider

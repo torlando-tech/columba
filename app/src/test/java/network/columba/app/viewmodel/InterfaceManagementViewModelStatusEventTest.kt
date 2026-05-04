@@ -51,6 +51,7 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var bleStatusRepository: BleStatusRepository
     private lateinit var serviceProtocol: ReticulumProtocol
+    private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
     private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
     private lateinit var debugInfoFlow: MutableSharedFlow<String>
     private lateinit var viewModel: InterfaceManagementViewModel
@@ -66,6 +67,9 @@ class InterfaceManagementViewModelStatusEventTest {
         configManager = mockk()
         bleStatusRepository = mockk()
         serviceProtocol = mockk()
+        transportObserver = mockk()
+        every { transportObserver.currentTransport() } returns
+            network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
 
         // Mock repository flows
         every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
@@ -118,6 +122,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -135,6 +140,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -153,6 +159,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -174,6 +181,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -206,6 +214,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -242,6 +251,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     genericProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -284,6 +294,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -330,6 +341,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -375,6 +387,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -427,6 +440,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -486,6 +500,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -543,6 +558,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -603,6 +619,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -640,6 +657,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -667,6 +685,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -710,6 +729,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -739,6 +759,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -768,6 +789,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -791,6 +813,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -837,6 +860,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -863,6 +887,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -899,6 +924,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -937,6 +963,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -979,6 +1006,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -1006,6 +1034,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -1032,6 +1061,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()
@@ -1057,6 +1087,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     configManager,
                     bleStatusRepository,
                     serviceProtocol,
+                    transportObserver,
                 )
 
             advanceUntilIdle()

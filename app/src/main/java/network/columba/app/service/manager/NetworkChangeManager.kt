@@ -19,11 +19,18 @@ import android.util.Log
  * discover this device on the new network.
  *
  * Inspired by Sideband's carrier change detection pattern.
+ *
+ * Per-interface network restrictions (Wi-Fi only / cellular only) are enforced by
+ * a separate observer in the main process (see `InterfaceTransportObserver`); this
+ * manager runs in the `:reticulum` service process and stays focused on lock/announce
+ * concerns. Both observers monitor the same `ConnectivityManager` independently —
+ * each `NetworkCallback` fires per-process, so duplication is unavoidable.
  */
 class NetworkChangeManager(
     private val context: Context,
     private val lockManager: LockManager,
     private val onNetworkChanged: () -> Unit = {},
+    private val onTransportChanged: (CurrentTransport) -> Unit = {},
 ) {
     companion object {
         private const val TAG = "NetworkChangeManager"
@@ -36,6 +43,11 @@ class NetworkChangeManager(
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var isMonitoring = false
     private var lastNetworkId: String? = null
+
+    // Last-emitted transport, used to suppress duplicate `onTransportChanged` callbacks
+    // when capabilities update without actually changing the transport class. Initialised
+    // to null so the first observed transport always fires (including NONE-on-startup).
+    private var lastTransport: CurrentTransport? = null
 
     /**
      * Start monitoring network changes.
@@ -66,6 +78,12 @@ class NetworkChangeManager(
 
                 override fun onLost(network: Network) {
                     Log.d(TAG, "Network lost: $network")
+                    // If no default network remains, emit NONE so transport-restricted
+                    // interfaces detach. ConnectivityManager.activeNetwork goes null only
+                    // after the OS finishes the disconnection, so check it here.
+                    if (connectivityManager.activeNetwork == null) {
+                        emitTransportIfChanged(CurrentTransport.NONE)
+                    }
                     // Don't clear lastNetworkId here - we want to detect when a new network connects
                 }
 
@@ -77,6 +95,13 @@ class NetworkChangeManager(
                     val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                     val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                     Log.v(TAG, "Network capabilities changed: internet=$hasInternet, validated=$isValidated")
+
+                    // Compute transport class and emit if it changed since last emission.
+                    // `onCapabilitiesChanged` fires after `onAvailable` and again whenever a
+                    // capability flips (validation, metered, etc.) — the last-value cache
+                    // collapses those into a single `onTransportChanged` per actual transport
+                    // transition.
+                    emitTransportIfChanged(currentTransportOf(networkCapabilities))
                 }
             }
 
@@ -111,6 +136,7 @@ class NetworkChangeManager(
         networkCallback = null
         isMonitoring = false
         lastNetworkId = null
+        lastTransport = null
     }
 
     /**
@@ -135,6 +161,16 @@ class NetworkChangeManager(
             onNetworkChanged()
         } catch (e: Exception) {
             Log.e(TAG, "Error in network change callback", e)
+        }
+    }
+
+    private fun emitTransportIfChanged(transport: CurrentTransport) {
+        if (transport == lastTransport) return
+        lastTransport = transport
+        try {
+            onTransportChanged(transport)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in transport change callback", e)
         }
     }
 }

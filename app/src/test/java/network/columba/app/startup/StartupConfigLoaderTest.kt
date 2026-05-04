@@ -38,6 +38,7 @@ class StartupConfigLoaderTest {
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var identityRepository: IdentityRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
     private lateinit var loader: StartupConfigLoader
 
     private val testIdentity =
@@ -66,6 +67,11 @@ class StartupConfigLoaderTest {
         interfaceRepository = mockk()
         identityRepository = mockk()
         settingsRepository = mockk()
+        transportObserver = mockk()
+        // Default to WIFI_LIKE so existing tests' AutoInterface (default WIFI_ONLY) passes
+        // the filter unchanged. Tests can override to assert filter behaviour.
+        io.mockk.every { transportObserver.currentTransport() } returns
+            network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
 
         // Default stubs for settings that most tests don't override
         coEvery { settingsRepository.getBatteryProfile() } returns BatteryProfile.BALANCED
@@ -73,7 +79,13 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
         coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
 
-        loader = StartupConfigLoader(interfaceRepository, identityRepository, settingsRepository)
+        loader =
+            StartupConfigLoader(
+                interfaceRepository,
+                identityRepository,
+                settingsRepository,
+                transportObserver,
+            )
     }
 
     @After

@@ -37,6 +37,7 @@ import network.columba.app.data.model.RNodeRegionalPresets
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.reticulum.ble.util.BlePairingHandler
 import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.model.NetworkRestriction
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.RssiThrottler
 import network.columba.app.util.validation.DeviceNameValidator
@@ -195,6 +196,8 @@ data class RNodeWizardState(
     val networkName: String = "",
     val passphrase: String = "",
     val passphraseVisible: Boolean = false,
+    // Network transport restriction (TCP-only field; ignored when connectionType != TCP_WIFI)
+    val networkRestriction: String = NetworkRestriction.ANY.value,
     // Validation errors
     val nameError: String? = null,
     val frequencyError: String? = null,
@@ -441,6 +444,7 @@ class RNodeWizardViewModel
                             enableFramebuffer = config.enableFramebuffer,
                             networkName = config.networkName.orEmpty(),
                             passphrase = config.passphrase.orEmpty(),
+                            networkRestriction = config.networkRestriction.value,
                         )
                     }
 
@@ -3341,6 +3345,15 @@ class RNodeWizardViewModel
         }
 
         /**
+         * Update the network restriction selection ("any" / "wifi_only" / "cellular_only").
+         * Field is preserved across all connection modes; the runtime filter ignores it for
+         * non-IP modes (`classic`, `ble`, `usb`).
+         */
+        fun updateNetworkRestriction(value: String) {
+            _state.update { it.copy(networkRestriction = value) }
+        }
+
+        /**
          * Get the maximum TX power for the selected region (or default fallback).
          */
         private fun getMaxTxPower(): Int = RNodeConfigValidator.getMaxTxPower(_state.value.selectedFrequencyRegion)
@@ -3521,6 +3534,9 @@ class RNodeWizardViewModel
                             networkName = state.networkName.trim().ifEmpty { null },
                             passphrase = state.passphrase.trim().ifEmpty { null },
                             enableFramebuffer = state.enableFramebuffer,
+                            networkRestriction =
+                                NetworkRestriction.fromValue(state.networkRestriction)
+                                    ?: NetworkRestriction.ANY,
                         )
 
                     if (state.editingInterfaceId != null) {

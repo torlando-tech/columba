@@ -6,7 +6,10 @@ import org.json.JSONObject
  * Extension function to convert InterfaceConfig to a JSON string.
  * Used by InterfaceRepository and InterfaceDatabase for serialization.
  */
-@Suppress("CyclomaticComplexMethod")
+@Suppress(
+    "CyclomaticComplexMethod",
+    "LongMethod", // 6 type branches × per-field serialization makes this unavoidably long
+)
 fun InterfaceConfig.toJsonString(): String =
     when (this) {
         is InterfaceConfig.AutoInterface ->
@@ -17,6 +20,7 @@ fun InterfaceConfig.toJsonString(): String =
                     discoveryPort?.let { put("discovery_port", it) }
                     dataPort?.let { put("data_port", it) }
                     put("mode", mode)
+                    putRestrictionUnlessDefault(networkRestriction, NetworkRestriction.WIFI_ONLY)
                 }.toString()
 
         is InterfaceConfig.TCPClient ->
@@ -34,6 +38,7 @@ fun InterfaceConfig.toJsonString(): String =
                     put("socks_proxy_enabled", socksProxyEnabled)
                     put("socks_proxy_host", socksProxyHost)
                     put("socks_proxy_port", socksProxyPort)
+                    putRestrictionUnlessDefault(networkRestriction, NetworkRestriction.ANY)
                 }.toString()
 
         is InterfaceConfig.RNode ->
@@ -57,6 +62,7 @@ fun InterfaceConfig.toJsonString(): String =
                     networkName?.let { put("network_name", it) }
                     passphrase?.let { put("passphrase", it) }
                     put("enable_framebuffer", enableFramebuffer)
+                    putRestrictionUnlessDefault(networkRestriction, NetworkRestriction.ANY)
                 }.toString()
 
         is InterfaceConfig.UDP ->
@@ -67,6 +73,7 @@ fun InterfaceConfig.toJsonString(): String =
                     put("forward_ip", forwardIp)
                     put("forward_port", forwardPort)
                     put("mode", mode)
+                    putRestrictionUnlessDefault(networkRestriction, NetworkRestriction.ANY)
                 }.toString()
 
         is InterfaceConfig.AndroidBLE ->
@@ -80,6 +87,7 @@ fun InterfaceConfig.toJsonString(): String =
                     put("ble_discovery_interval_idle_ms", bleDiscoveryIntervalIdleMs)
                     put("ble_scan_duration_ms", bleScanDurationMs)
                     put("ble_advertising_refresh_interval_ms", bleAdvertisingRefreshIntervalMs)
+                    putRestrictionUnlessDefault(networkRestriction, NetworkRestriction.ANY)
                 }.toString()
 
         is InterfaceConfig.TCPServer ->
@@ -90,8 +98,16 @@ fun InterfaceConfig.toJsonString(): String =
                     put("mode", mode)
                     networkName?.let { put("network_name", it) }
                     passphrase?.let { put("passphrase", it) }
+                    putRestrictionUnlessDefault(networkRestriction, NetworkRestriction.ANY)
                 }.toString()
     }
+
+private fun JSONObject.putRestrictionUnlessDefault(
+    value: NetworkRestriction,
+    default: NetworkRestriction,
+) {
+    if (value != default) put("network_restriction", value.value)
+}
 
 /**
  * Get the type name string for this InterfaceConfig.

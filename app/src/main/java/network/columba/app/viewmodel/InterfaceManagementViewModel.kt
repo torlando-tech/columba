@@ -21,8 +21,11 @@ import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.model.NetworkRestriction
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.manager.InterfaceTransportObserver
+import network.columba.app.service.manager.filterByTransport
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONObject
@@ -128,6 +131,10 @@ data class InterfaceConfigState(
     val ltAlock: String = "",
     // Common fields
     val mode: String = "roaming",
+    // Network transport restriction: "any", "wifi_only", or "cellular_only".
+    // Stored as a string (matching the JSON wire form) so the existing copy()-based
+    // dialog plumbing keeps working without an enum import for every screen.
+    val networkRestriction: String = NetworkRestriction.ANY.value,
     // Validation
     val nameError: String? = null,
     val targetHostError: String? = null,
@@ -146,7 +153,19 @@ data class InterfaceConfigState(
     val listenPortError: String? = null,
     val socksProxyHostError: String? = null,
     val socksProxyPortError: String? = null,
-)
+) {
+    /**
+     * Whether the network-restriction selector should render for this state's interface
+     * type. False for non-IP transports — `AndroidBLE` is always out-of-band, and `RNode`
+     * only rides IP when configured for TCP/Wi-Fi.
+     */
+    val networkRestrictionApplies: Boolean
+        get() = when (type) {
+            "AndroidBLE" -> false
+            "RNode" -> connectionMode == "tcp"
+            else -> true
+        }
+}
 
 /**
  * ViewModel for managing Reticulum network interface configurations.
@@ -160,6 +179,7 @@ class InterfaceManagementViewModel
         private val configManager: InterfaceConfigManager,
         private val bleStatusRepository: BleStatusRepository,
         private val reticulumProtocol: ReticulumProtocol,
+        private val transportObserver: InterfaceTransportObserver,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
@@ -874,6 +894,7 @@ class InterfaceManagementViewModel
                         discoveryPort = config.discoveryPort?.toString().orEmpty(),
                         dataPort = config.dataPort?.toString().orEmpty(),
                         mode = config.mode,
+                        networkRestriction = config.networkRestriction.value,
                     )
 
                 is InterfaceConfig.TCPClient ->
@@ -889,6 +910,7 @@ class InterfaceManagementViewModel
                         socksProxyHost = config.socksProxyHost,
                         socksProxyPort = config.socksProxyPort.toString(),
                         mode = config.mode,
+                        networkRestriction = config.networkRestriction.value,
                     )
 
                 is InterfaceConfig.AndroidBLE ->
@@ -904,6 +926,7 @@ class InterfaceManagementViewModel
                         bleScanDurationMs = config.bleScanDurationMs.toString(),
                         bleAdvertisingRefreshIntervalMs = config.bleAdvertisingRefreshIntervalMs.toString(),
                         mode = config.mode,
+                        networkRestriction = config.networkRestriction.value,
                     )
 
                 is InterfaceConfig.RNode ->
@@ -923,6 +946,7 @@ class InterfaceManagementViewModel
                         mode = config.mode,
                         networkName = config.networkName.orEmpty(),
                         passphrase = config.passphrase.orEmpty(),
+                        networkRestriction = config.networkRestriction.value,
                     )
 
                 is InterfaceConfig.TCPServer ->
@@ -935,6 +959,7 @@ class InterfaceManagementViewModel
                         mode = config.mode,
                         networkName = config.networkName.orEmpty(),
                         passphrase = config.passphrase.orEmpty(),
+                        networkRestriction = config.networkRestriction.value,
                     )
 
                 else -> InterfaceConfigState() // Default for unsupported types
@@ -944,9 +969,17 @@ class InterfaceManagementViewModel
         /**
          * Convert InterfaceConfigState to InterfaceConfig for saving.
          */
-        @Suppress("CyclomaticComplexMethod") // One branch per interface type — inherent complexity
-        private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig =
-            when (state.type) {
+        @Suppress(
+            "CyclomaticComplexMethod", // One branch per interface type — inherent complexity
+            "LongMethod", // 6 type branches × per-field copying makes this unavoidably long
+        )
+        private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig {
+            // Per-type defaults: AutoInterface defaults to WIFI_ONLY (UDP multicast on
+            // cellular is meaningless), all other types default to ANY.
+            val defaultRestriction =
+                if (state.type == "AutoInterface") NetworkRestriction.WIFI_ONLY else NetworkRestriction.ANY
+            val restriction = NetworkRestriction.fromValue(state.networkRestriction) ?: defaultRestriction
+            return when (state.type) {
                 "AutoInterface" ->
                     InterfaceConfig.AutoInterface(
                         name = state.name.trim(),
@@ -956,6 +989,7 @@ class InterfaceManagementViewModel
                         discoveryPort = state.discoveryPort.takeIf { it.isNotBlank() }?.toIntOrNull(),
                         dataPort = state.dataPort.takeIf { it.isNotBlank() }?.toIntOrNull(),
                         mode = state.mode,
+                        networkRestriction = restriction,
                     )
 
                 "TCPClient" ->
@@ -972,6 +1006,7 @@ class InterfaceManagementViewModel
                         socksProxyEnabled = state.socksProxyEnabled,
                         socksProxyHost = state.socksProxyHost.trim(),
                         socksProxyPort = state.socksProxyPort.toIntOrNull() ?: 9050,
+                        networkRestriction = restriction,
                     )
 
                 "AndroidBLE" ->
@@ -986,6 +1021,7 @@ class InterfaceManagementViewModel
                         bleDiscoveryIntervalIdleMs = state.bleDiscoveryIntervalIdleMs.toLongOrNull() ?: 30000L,
                         bleScanDurationMs = state.bleScanDurationMs.toLongOrNull() ?: 10000L,
                         bleAdvertisingRefreshIntervalMs = state.bleAdvertisingRefreshIntervalMs.toLongOrNull() ?: 60_000L,
+                        networkRestriction = restriction,
                     )
 
                 "RNode" ->
@@ -1004,6 +1040,7 @@ class InterfaceManagementViewModel
                         mode = state.mode,
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.trim().ifEmpty { null },
+                        networkRestriction = restriction,
                     )
 
                 "TCPServer" ->
@@ -1042,10 +1079,12 @@ class InterfaceManagementViewModel
                             },
                         networkName = state.networkName.trim().ifEmpty { null },
                         passphrase = state.passphrase.trim().ifEmpty { null },
+                        networkRestriction = restriction,
                     )
 
                 else -> throw IllegalArgumentException("Unsupported interface type: ${state.type}")
             }
+        }
 
         /**
          * Apply pending interface configuration changes to the running Reticulum instance.
@@ -1072,7 +1111,8 @@ class InterfaceManagementViewModel
                 viewModelScope.launch(ioDispatcher) {
                     try {
                         val configs = interfaceRepository.enabledInterfaces.first()
-                        reticulumProtocol.reloadInterfaces(configs)
+                        val filtered = filterByTransport(configs, transportObserver.currentTransport())
+                        reticulumProtocol.reloadInterfaces(filtered)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)

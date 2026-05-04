@@ -97,6 +97,9 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var telemetryCollectorManager: TelemetryCollectorManager
 
+    @Inject
+    lateinit var interfaceTransportObserver: network.columba.app.service.manager.InterfaceTransportObserver
+
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Default for background initialization (no main-thread work needed)
     // SupervisorJob ensures failures don't crash the entire app
@@ -554,6 +557,13 @@ class ColumbaApplication : Application() {
                 android.util.Log.e("ColumbaApplication", "Failed to bind to ReticulumService", e)
             }
         }
+
+        // Observe Android transport changes (Wi-Fi/Ethernet ↔ cellular ↔ none) so per-interface
+        // network restrictions are re-applied on carrier transitions. Independent of the Reticulum
+        // init pipeline above — fires whenever the OS reports a transport change, and reloads
+        // the filtered enabled set into the native stack. Safe to start before Reticulum is ready
+        // (early `reloadInterfaces` calls just log a failure and the next transport change wins).
+        interfaceTransportObserver.start(applicationScope)
     }
 
     override fun onTerminate() {
@@ -563,6 +573,7 @@ class ColumbaApplication : Application() {
         autoAnnounceManager.stop()
         messageCollector.stopCollecting()
         identityResolutionManager.stop()
+        interfaceTransportObserver.stop()
 
         // Shutdown and unbind from service when app terminates
         applicationScope.launch {

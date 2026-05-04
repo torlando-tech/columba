@@ -51,7 +51,11 @@ class InterfaceTransportObserver
         }
 
         private var callback: ConnectivityManager.NetworkCallback? = null
+
+        @Volatile
         private var lastTransport: CurrentTransport? = null
+
+        @Volatile
         private var reloadJob: Job? = null
 
         /**

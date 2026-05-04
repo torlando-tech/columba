@@ -7,6 +7,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -135,6 +136,8 @@ class InterfaceTransportObserver
                             "Reload-on-transport: ${configs.size} enabled → ${filtered.size} active for $transport",
                         )
                         reticulumProtocol.reloadInterfaces(filtered)
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to reload interfaces on transport change", e)
                     }

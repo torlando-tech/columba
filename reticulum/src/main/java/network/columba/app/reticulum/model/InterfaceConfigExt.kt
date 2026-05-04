@@ -80,6 +80,7 @@ fun InterfaceConfig.toJsonString(): String =
                     put("ble_discovery_interval_idle_ms", bleDiscoveryIntervalIdleMs)
                     put("ble_scan_duration_ms", bleScanDurationMs)
                     put("ble_advertising_refresh_interval_ms", bleAdvertisingRefreshIntervalMs)
+                    put("ble_codec", bleCodec)
                 }.toString()
 
         is InterfaceConfig.TCPServer ->

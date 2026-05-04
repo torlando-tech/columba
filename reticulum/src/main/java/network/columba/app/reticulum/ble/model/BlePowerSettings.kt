@@ -1,5 +1,32 @@
 package network.columba.app.reticulum.ble.model
 
+/**
+ * BLE PHY codec selection for Bluetooth 5 connections.
+ *
+ * S=2 and S=8 use the LE Coded PHY with FEC for extended range at reduced throughput.
+ * S=8 is the most range-friendly option (125 Kbps, ~4x range vs 1M PHY).
+ *
+ * Counter-intuitive power behaviour: S=8 has ~70% higher TX power per packet, but its
+ * FEC eliminates retransmissions at poor signal quality. At link budgets where 1M PHY
+ * would need more than ~2 retransmissions per packet (typical through rubble or walls),
+ * S=8 can have lower net energy consumption than 1M PHY.
+ */
+enum class BleCodec(
+    val displayName: String,
+    val description: String,
+) {
+    PHY_1M("1M", "1 Mbps — standard range and throughput (default)"),
+    PHY_2M("2M", "2 Mbps — higher throughput, similar range"),
+    CODED_S2("S=2", "Coded PHY S=2 — 500 Kbps, ~2× range, FEC"),
+    CODED_S8("S=8", "Coded PHY S=8 — 125 Kbps, ~4× range, FEC (long range)"),
+    ;
+
+    companion object {
+        fun fromString(name: String): BleCodec =
+            entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: PHY_1M
+    }
+}
+
 data class BlePowerSettings(
     val preset: BlePowerPreset = BlePowerPreset.BALANCED,
     val discoveryIntervalMs: Long = 5000L,

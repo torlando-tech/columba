@@ -401,6 +401,7 @@ class InterfaceRepository
                             bleDiscoveryIntervalIdleMs = json.optLong("ble_discovery_interval_idle_ms", 30000L),
                             bleScanDurationMs = json.optLong("ble_scan_duration_ms", 10000L),
                             bleAdvertisingRefreshIntervalMs = json.optLong("ble_advertising_refresh_interval_ms", 60_000L),
+                            bleCodec = json.optString("ble_codec", "PHY_1M"),
                         )
                     }
 

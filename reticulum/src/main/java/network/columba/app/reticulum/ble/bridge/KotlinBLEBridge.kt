@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.util.Log
 import network.columba.app.reticulum.ble.client.BleGattClient
 import network.columba.app.reticulum.ble.client.BleScanner
+import network.columba.app.reticulum.ble.model.BleCodec
 import network.columba.app.reticulum.ble.model.BleConstants
 import network.columba.app.reticulum.ble.model.BleDevice
 import network.columba.app.reticulum.ble.model.BlePowerPreset
@@ -2156,5 +2157,19 @@ class KotlinBLEBridge(
                 "scanDuration=${powerSettings.scanDurationMs}ms, " +
                 "adRefresh=${powerSettings.advertisingRefreshIntervalMs}ms",
         )
+    }
+
+    /**
+     * Configure the BLE PHY codec used for new connections.
+     *
+     * Call this before [startAsync] or between connection cycles.
+     * The codec preference is applied to each new GATT connection via [BluetoothGatt.setPreferredPhy].
+     *
+     * @param codecName BleCodec enum name: "PHY_1M", "PHY_2M", "CODED_S2", or "CODED_S8"
+     */
+    fun configureCodec(codecName: String) {
+        val codec = BleCodec.fromString(codecName)
+        gattClient?.preferredCodec = codec
+        Log.i(TAG, "BLE codec configured: ${codec.displayName} (${codec.description})")
     }
 }

@@ -107,6 +107,7 @@ data class InterfaceConfigState(
     val bleDiscoveryIntervalIdleMs: String = "30000",
     val bleScanDurationMs: String = "10000",
     val bleAdvertisingRefreshIntervalMs: String = "60000",
+    val bleCodec: String = "PHY_1M",
     // TCPServer fields
     val listenIp: String = "0.0.0.0",
     val listenPort: String = "4242",
@@ -903,6 +904,7 @@ class InterfaceManagementViewModel
                         bleDiscoveryIntervalIdleMs = config.bleDiscoveryIntervalIdleMs.toString(),
                         bleScanDurationMs = config.bleScanDurationMs.toString(),
                         bleAdvertisingRefreshIntervalMs = config.bleAdvertisingRefreshIntervalMs.toString(),
+                        bleCodec = config.bleCodec,
                         mode = config.mode,
                     )
 
@@ -986,6 +988,7 @@ class InterfaceManagementViewModel
                         bleDiscoveryIntervalIdleMs = state.bleDiscoveryIntervalIdleMs.toLongOrNull() ?: 30000L,
                         bleScanDurationMs = state.bleScanDurationMs.toLongOrNull() ?: 10000L,
                         bleAdvertisingRefreshIntervalMs = state.bleAdvertisingRefreshIntervalMs.toLongOrNull() ?: 60_000L,
+                        bleCodec = state.bleCodec,
                     )
 
                 "RNode" ->

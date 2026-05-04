@@ -1008,4 +1008,89 @@ class InterfaceRepositoryTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // ========== AndroidBLE ble_codec deserialization (items 5–6) ==========
+
+    @Test
+    fun `AndroidBLE without ble_codec key defaults to PHY_1M`() =
+        runTest {
+            // Simulates a config saved before ble_codec was added — key is absent.
+            val entity =
+                InterfaceEntity(
+                    id = 99,
+                    name = "Bluetooth LE",
+                    type = "AndroidBLE",
+                    enabled = true,
+                    configJson = """{"device_name":"OldDevice","max_connections":7,"mode":"full"}""",
+                    displayOrder = 0,
+                )
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.AndroidBLE
+                assertEquals("PHY_1M", config.bleCodec)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `AndroidBLE with ble_codec CODED_S8 deserializes correctly`() =
+        runTest {
+            val entity =
+                InterfaceEntity(
+                    id = 100,
+                    name = "Bluetooth LE",
+                    type = "AndroidBLE",
+                    enabled = true,
+                    configJson = """{"device_name":"ESP32","max_connections":7,"mode":"full","ble_codec":"CODED_S8"}""",
+                    displayOrder = 0,
+                )
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val interfaces = awaitItem()
+
+                assertEquals(1, interfaces.size)
+                val config = interfaces[0] as InterfaceConfig.AndroidBLE
+                assertEquals("CODED_S8", config.bleCodec)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `AndroidBLE ble_codec round-trips all four values`() =
+        runTest {
+            val codecs = listOf("PHY_1M", "PHY_2M", "CODED_S2", "CODED_S8")
+
+            for (codec in codecs) {
+                val entity =
+                    InterfaceEntity(
+                        id = 200,
+                        name = "Bluetooth LE",
+                        type = "AndroidBLE",
+                        enabled = true,
+                        configJson = """{"device_name":"Dev","max_connections":7,"mode":"full","ble_codec":"$codec"}""",
+                        displayOrder = 0,
+                    )
+                every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+                every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+                val repository = InterfaceRepository(mockDao)
+
+                repository.enabledInterfaces.test {
+                    val interfaces = awaitItem()
+                    val config = interfaces[0] as InterfaceConfig.AndroidBLE
+                    assertEquals("ble_codec should round-trip for $codec", codec, config.bleCodec)
+                    cancelAndIgnoreRemainingEvents()
+                }
+            }
+        }
 }

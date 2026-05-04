@@ -73,7 +73,11 @@ class InterfaceTransportObserver
                         network: Network,
                         networkCapabilities: NetworkCapabilities,
                     ) {
-                        applyTransport(currentTransportOf(networkCapabilities), scope)
+                        // The callback fires for every network matching NET_CAPABILITY_INTERNET,
+                        // not just the default route — classify by activeNetwork so a cellular
+                        // backup network's capability update doesn't masquerade as a transport
+                        // change while Wi-Fi is still the default.
+                        applyTransport(currentTransport(), scope)
                     }
 
                     override fun onLost(network: Network) {

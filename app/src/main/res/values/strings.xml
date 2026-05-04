@@ -42,7 +42,6 @@
     <string name="choose_your_name">Choose a display name others will see:</string>
     <string name="display_name">Display Name</string>
     <string name="name_example">Anonymous Peer</string>
-    <string name="app_name">Columba</string>
     <string name="name_change_description">You can change this anytime, or create multiple identities for different contexts.</string>
     <string name="back">Back</string>
     <string name="nextAction">Continue</string>

@@ -7,8 +7,10 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import network.columba.app.BuildConfig
 import network.columba.app.service.ReticulumService
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -69,9 +71,10 @@ class SmokeTest {
     @Test
     fun test01_appContextAvailable() {
         assertNotNull("App context should not be null", context)
-        assertTrue(
-            "Package name should be network.columba.app",
-            context.packageName == "network.columba.app",
+        assertEquals(
+            "context.packageName must match BuildConfig.APPLICATION_ID",
+            BuildConfig.APPLICATION_ID,
+            context.packageName,
         )
     }
 

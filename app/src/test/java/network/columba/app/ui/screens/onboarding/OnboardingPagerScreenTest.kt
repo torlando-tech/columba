@@ -728,7 +728,11 @@ class OnboardingPagerScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        // Then - All three permission re-checks are wired through the observer.
+        // Then - The screen rendered and reached its initial RESUMED state (real
+        // outcome — without RESUMED, DisposableEffect never registers the observer).
+        composeTestRule.onNodeWithText("Welcome to Columba").assertIsDisplayed()
+
+        // And - All three permission re-checks are wired through the observer.
         // checkBatteryOptimizationStatus also fires from the existing LaunchedEffect(Unit),
         // so it may be called more than once; the new on-resume contract is that the
         // notification + BLE re-check methods fire at least once on the activity's

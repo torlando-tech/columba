@@ -7,6 +7,7 @@ import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.model.NetworkRestriction
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
@@ -55,6 +56,8 @@ data class TcpClientWizardState(
     val socksProxyEnabled: Boolean = false,
     val socksProxyHost: String = "127.0.0.1",
     val socksProxyPort: String = "9050",
+    // Network transport restriction: "any" | "wifi_only" | "cellular_only"
+    val networkRestriction: String = NetworkRestriction.ANY.value,
     // Save state
     val isSaving: Boolean = false,
     val saveError: String? = null,
@@ -114,6 +117,7 @@ class TcpClientWizardViewModel
                             socksProxyEnabled = config.socksProxyEnabled,
                             socksProxyHost = config.socksProxyHost,
                             socksProxyPort = config.socksProxyPort.toString(),
+                            networkRestriction = config.networkRestriction.value,
                         )
                     }
 
@@ -291,6 +295,13 @@ class TcpClientWizardViewModel
         }
 
         /**
+         * Update the network restriction selection ("any" / "wifi_only" / "cellular_only").
+         */
+        fun updateNetworkRestriction(value: String) {
+            _state.update { it.copy(networkRestriction = value) }
+        }
+
+        /**
          * Check if the user can proceed to the next step.
          */
         fun canProceed(): Boolean {
@@ -381,6 +392,9 @@ class TcpClientWizardViewModel
                             socksProxyEnabled = currentState.socksProxyEnabled,
                             socksProxyHost = currentState.socksProxyHost.trim().ifEmpty { "127.0.0.1" },
                             socksProxyPort = currentState.socksProxyPort.toIntOrNull() ?: 9050,
+                            networkRestriction =
+                                NetworkRestriction.fromValue(currentState.networkRestriction)
+                                    ?: NetworkRestriction.ANY,
                         )
 
                     if (isEditing) {

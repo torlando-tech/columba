@@ -60,6 +60,7 @@ class InterfaceConfigManagerTest {
     private lateinit var autoAnnounceManager: AutoAnnounceManager
     private lateinit var identityResolutionManager: IdentityResolutionManager
     private lateinit var propagationNodeManager: PropagationNodeManager
+    private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
     private lateinit var applicationScope: CoroutineScope
 
     private lateinit var manager: InterfaceConfigManager
@@ -84,6 +85,9 @@ class InterfaceConfigManagerTest {
         autoAnnounceManager = mockk()
         identityResolutionManager = mockk()
         propagationNodeManager = mockk()
+        transportObserver = mockk()
+        every { transportObserver.currentTransport() } returns
+            network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
         applicationScope = testScope.backgroundScope
 
         // Setup SharedPreferences mock
@@ -160,6 +164,7 @@ class InterfaceConfigManagerTest {
                 autoAnnounceManager = autoAnnounceManager,
                 identityResolutionManager = identityResolutionManager,
                 propagationNodeManager = propagationNodeManager,
+                transportObserver = transportObserver,
                 applicationScope = applicationScope,
             )
     }
@@ -444,6 +449,7 @@ class InterfaceConfigManagerTest {
                     autoAnnounceManager = autoAnnounceManager,
                     identityResolutionManager = identityResolutionManager,
                     propagationNodeManager = propagationNodeManager,
+                    transportObserver = transportObserver,
                     applicationScope = applicationScope,
                 )
 
@@ -509,6 +515,7 @@ class InterfaceConfigManagerTest {
                     autoAnnounceManager = autoAnnounceManager,
                     identityResolutionManager = identityResolutionManager,
                     propagationNodeManager = propagationNodeManager,
+                    transportObserver = transportObserver,
                     applicationScope = applicationScope,
                 )
 
@@ -553,6 +560,7 @@ class InterfaceConfigManagerTest {
                     autoAnnounceManager = autoAnnounceManager,
                     identityResolutionManager = identityResolutionManager,
                     propagationNodeManager = propagationNodeManager,
+                    transportObserver = transportObserver,
                     applicationScope = applicationScope,
                 )
 
@@ -591,6 +599,7 @@ class InterfaceConfigManagerTest {
                     autoAnnounceManager = autoAnnounceManager,
                     identityResolutionManager = identityResolutionManager,
                     propagationNodeManager = propagationNodeManager,
+                    transportObserver = transportObserver,
                     applicationScope = applicationScope,
                 )
 
@@ -630,6 +639,7 @@ class InterfaceConfigManagerTest {
                     autoAnnounceManager = autoAnnounceManager,
                     identityResolutionManager = identityResolutionManager,
                     propagationNodeManager = propagationNodeManager,
+                    transportObserver = transportObserver,
                     applicationScope = applicationScope,
                 )
 
@@ -686,6 +696,7 @@ class InterfaceConfigManagerTest {
                     autoAnnounceManager = autoAnnounceManager,
                     identityResolutionManager = identityResolutionManager,
                     propagationNodeManager = propagationNodeManager,
+                    transportObserver = transportObserver,
                     applicationScope = applicationScope,
                 )
 

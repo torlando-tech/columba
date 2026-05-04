@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import network.columba.app.service.binder.ReticulumServiceBinder
 import network.columba.app.service.manager.BleCoordinator
+import network.columba.app.service.manager.CurrentTransport
 import network.columba.app.service.manager.LockManager
 import network.columba.app.service.manager.NetworkChangeManager
 import network.columba.app.service.manager.ServiceNotificationManager
@@ -38,12 +39,16 @@ object ServiceModule {
      * @param context Service context
      * @param scope Coroutine scope for async operations
      * @param onNetworkChanged Callback when network connectivity changes (for LXMF announce)
+     * @param onTransportChanged Callback when the active transport class transitions (for
+     *   per-interface network restriction enforcement). Fires only when the transport
+     *   bucket actually changes, not on every capabilities update.
      * @return Container with all initialized managers
      */
     fun createManagers(
         context: Context,
         scope: CoroutineScope,
         onNetworkChanged: () -> Unit = {},
+        onTransportChanged: (CurrentTransport) -> Unit = {},
     ): ServiceManagers {
         val state = ServiceState()
         val lockManager = LockManager(context)
@@ -51,7 +56,13 @@ object ServiceModule {
         val bleCoordinator = BleCoordinator(context)
         val settingsAccessor = ServiceSettingsAccessor(context)
         val persistenceManager = ServicePersistenceManager(context, scope, settingsAccessor)
-        val networkChangeManager = NetworkChangeManager(context, lockManager, onNetworkChanged)
+        val networkChangeManager =
+            NetworkChangeManager(
+                context = context,
+                lockManager = lockManager,
+                onNetworkChanged = onNetworkChanged,
+                onTransportChanged = onTransportChanged,
+            )
 
         return ServiceManagers(
             state = state,

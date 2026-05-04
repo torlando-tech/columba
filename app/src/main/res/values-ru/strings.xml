@@ -54,7 +54,7 @@
     <string name="summary">Итого</string>
     <string name="identity">Никнейм</string>
     <string name="networks">Сети</string>
-    <string name="none_seleced">Ничего не выбрано</string>
+    <string name="none_selected">Ничего не выбрано</string>
     <string name="enabled">Включены</string>
     <string name="disabled">Выключены</string>
     <string name="restricted">Ограниченно</string>

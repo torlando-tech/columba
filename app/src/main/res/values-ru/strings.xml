@@ -17,12 +17,12 @@
     <string name="view_interface_details">Детали</string>
     <string name="interface_actions">Действия</string>
     <string name="edit_interface">Редактировать</string>
-    <string name="messenger_requires">"Приватный мессенджер, для которого: "</string>
-    <string name="welcome_to">Добро пожаловть в %1$s</string>
+    <string name="messenger_requires">Приватный мессенджер, для которого:</string>
+    <string name="welcome_to">Добро пожаловать в %1$s</string>
     <string name="no_phone_number">Не нужен номер телефона</string>
     <string name="no_email_address">Не нужен Email</string>
     <string name="no_accounts">Не нужна авторизация или аккаунты</string>
-    <string name="welcome_security_description">Вашш профиль создается и надежно хранится на вашем устройстве. Только вы контролируете его</string>
+    <string name="welcome_security_description">Ваш профиль создается и надежно хранится на вашем устройстве. Только вы контролируете его</string>
     <string name="get_started">Начать</string>
     <string name="restore_from_backup">Восстановить из бэкапа</string>
     <string name="your_identity">Ваш профиль</string>
@@ -65,5 +65,5 @@
     <string name="configure_lora">Настроить LoRa</string>
     <string name="start_messaging">Начать общение</string>
     <string name="share_identity">Поделиться профилем</string>
-    <string name="share_invite_message">Добавьте меня через reticulum: \\n\\n%1$s\\n%2$s</string>
+    <string name="share_invite_message">Добавьте меня через reticulum: \n\n%1$s\n%2$s</string>
 </resources>

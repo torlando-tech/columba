@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Columba</string>
     <string name="incoming_voice_call">Входящий аудиовызов</string>
     <string name="call_answer">Ответить</string>
     <string name="call_decline">Отклонить</string>

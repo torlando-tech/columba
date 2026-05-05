@@ -218,10 +218,63 @@ class OnboardingViewModelPermissionsTest {
         }
 
     @Test
-    fun checkBlePermissionsStatus_setsDeniedTrueWhenAnyDenied() =
+    fun checkBlePermissionsStatus_doesNotSetDeniedTrueOnFreshInstall() =
         runTest {
+            // Regression guard: on a fresh install, BLE runtime perms are never
+            // pre-granted, so anyDenied=true on the very first ON_RESUME. The
+            // re-check must NOT flip blePermissionsDenied to true from its initial
+            // false state — that would render the red "Permissions denied" status
+            // on the BLE card before the user has ever interacted with it.
+            // The launcher callback (onBlePermissionsResult) is the sole setter
+            // for the denied=true transition.
             stubBlePermissionsScanDenied()
             val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.checkBlePermissionsStatus(context)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(false, state.blePermissionsGranted)
+                assertEquals(false, state.blePermissionsDenied)
+            }
+        }
+
+    @Test
+    fun checkBlePermissionsStatus_clearsDeniedFlagWhenPermissionsNowGranted() =
+        runTest {
+            // After a launcher denial flagged blePermissionsDenied=true, a later
+            // grant via the system Settings UI fires ON_RESUME with all perms
+            // granted; the re-check must clear the denied flag so the card flips
+            // back to "granted" without requiring another launcher round-trip.
+            stubBlePermissionsAllGranted()
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+            // Simulate prior launcher denial that set the flag.
+            viewModel.onBlePermissionsResult(allGranted = false, anyDenied = true)
+            advanceUntilIdle()
+
+            viewModel.checkBlePermissionsStatus(context)
+            advanceUntilIdle()
+
+            viewModel.state.test {
+                val state = awaitItem()
+                assertEquals(true, state.blePermissionsGranted)
+                assertEquals(false, state.blePermissionsDenied)
+            }
+        }
+
+    @Test
+    fun checkBlePermissionsStatus_preservesPriorDeniedFlagOnResumeWithDenials() =
+        runTest {
+            // After a real launcher denial set blePermissionsDenied=true, a later
+            // ON_RESUME with perms still denied must preserve the flag (the user
+            // hasn't done anything to change it). Resume only clears, never sets.
+            stubBlePermissionsScanDenied()
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.onBlePermissionsResult(allGranted = false, anyDenied = true)
             advanceUntilIdle()
 
             viewModel.checkBlePermissionsStatus(context)
@@ -257,7 +310,9 @@ class OnboardingViewModelPermissionsTest {
                     state.selectedInterfaces.contains(OnboardingInterfaceType.BLE),
                 )
                 assertFalse(state.blePermissionsGranted)
-                assertTrue(state.blePermissionsDenied)
+                // Resume re-check never SETS denied=true; only the launcher callback
+                // can flip that flag, and we never invoked it in this test.
+                assertFalse(state.blePermissionsDenied)
             }
         }
 }

@@ -212,10 +212,17 @@ class OnboardingViewModel
                 }
             val allGranted = grantedFlags.all { it }
             val anyDenied = grantedFlags.any { !it }
+            // The resume re-check only CLEARS blePermissionsDenied (when perms are
+            // now granted) — it never sets it true. The launcher callback in
+            // [onBlePermissionsResult] remains the sole setter, so a fresh install
+            // (where checkSelfPermission says "not granted" before the user has
+            // ever interacted with BLE) does not flip the card into the red
+            // "Permissions denied" state on the first ON_RESUME.
             _state.value =
                 _state.value.copy(
                     blePermissionsGranted = allGranted,
-                    blePermissionsDenied = anyDenied && !allGranted,
+                    blePermissionsDenied =
+                        if (allGranted) false else _state.value.blePermissionsDenied,
                 )
             Log.d(TAG, "BLE permissions status: allGranted=$allGranted, anyDenied=$anyDenied")
         }

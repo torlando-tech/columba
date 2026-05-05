@@ -172,11 +172,11 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -286,11 +286,11 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -369,11 +369,11 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6

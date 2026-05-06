@@ -11,6 +11,7 @@ import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.model.NetworkRestriction
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
@@ -1104,6 +1105,72 @@ class InterfaceManagementViewModelStatusEventTest {
                 assertEquals(true, state.interfaceOnlineStatus["WiFi"])
                 assertEquals(true, state.interfaceOnlineStatus["BLE"])
             }
+        }
+
+    // endregion
+
+    // region Add-dialog default network restriction (issue #899)
+    //
+    // The dialog opens with `InterfaceConfigState()`, which leaves
+    // `networkRestriction = null` so `configStateToInterfaceConfig` resolves to
+    // the per-type default (AutoInterface → WIFI_ONLY, others → ANY). These
+    // tests pin that contract from the public-API surface.
+
+    @Test
+    fun `showAddDialog then save without touching restriction persists AutoInterface as WIFI_ONLY`() =
+        runTest {
+            val capturedConfigs = mutableListOf<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(capturedConfigs)) } returns 1L
+            every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
+            coEvery { serviceProtocol.reloadInterfaces(any()) } returns Unit
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                )
+            advanceUntilIdle()
+
+            viewModel.showAddDialog()
+            // Type stays "AutoInterface" (the default); restriction stays null (untouched).
+            viewModel.updateConfigState { it.copy(name = "Auto Test") }
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            val saved = capturedConfigs.single() as InterfaceConfig.AutoInterface
+            assertEquals(NetworkRestriction.WIFI_ONLY, saved.networkRestriction)
+        }
+
+    @Test
+    fun `showAddDialog then explicitly choose ANY persists AutoInterface as ANY`() =
+        runTest {
+            val capturedConfigs = mutableListOf<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(capturedConfigs)) } returns 1L
+            every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
+            coEvery { serviceProtocol.reloadInterfaces(any()) } returns Unit
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                )
+            advanceUntilIdle()
+
+            viewModel.showAddDialog()
+            viewModel.updateConfigState {
+                it.copy(name = "Auto Test", networkRestriction = NetworkRestriction.ANY.value)
+            }
+            viewModel.saveInterface()
+            advanceUntilIdle()
+
+            val saved = capturedConfigs.single() as InterfaceConfig.AutoInterface
+            assertEquals(NetworkRestriction.ANY, saved.networkRestriction)
         }
 
     // endregion

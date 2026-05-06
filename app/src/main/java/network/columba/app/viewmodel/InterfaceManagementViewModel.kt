@@ -134,7 +134,10 @@ data class InterfaceConfigState(
     // Network transport restriction: "any", "wifi_only", or "cellular_only".
     // Stored as a string (matching the JSON wire form) so the existing copy()-based
     // dialog plumbing keeps working without an enum import for every screen.
-    val networkRestriction: String = NetworkRestriction.ANY.value,
+    // Null means "user has not picked a value" — `configStateToInterfaceConfig`
+    // resolves that to the per-type default (AutoInterface → WIFI_ONLY, others → ANY)
+    // so freshly-opened dialogs persist the right per-type default rather than ANY.
+    val networkRestriction: String? = null,
     // Validation
     val nameError: String? = null,
     val targetHostError: String? = null,
@@ -165,6 +168,16 @@ data class InterfaceConfigState(
             "RNode" -> connectionMode == "tcp"
             else -> true
         }
+
+    /**
+     * Network-restriction value for *display* — the persisted value comes from
+     * `configStateToInterfaceConfig`, which applies the same per-type fallback at
+     * save time. Mirrors `defaultRestriction` in `configStateToInterfaceConfig` so
+     * a freshly-opened dialog highlights the per-type default segment.
+     */
+    val effectiveNetworkRestriction: String
+        get() = networkRestriction
+            ?: if (type == "AutoInterface") NetworkRestriction.WIFI_ONLY.value else NetworkRestriction.ANY.value
 }
 
 /**
@@ -978,7 +991,7 @@ class InterfaceManagementViewModel
             // cellular is meaningless), all other types default to ANY.
             val defaultRestriction =
                 if (state.type == "AutoInterface") NetworkRestriction.WIFI_ONLY else NetworkRestriction.ANY
-            val restriction = NetworkRestriction.fromValue(state.networkRestriction) ?: defaultRestriction
+            val restriction = state.networkRestriction?.let { NetworkRestriction.fromValue(it) } ?: defaultRestriction
             return when (state.type) {
                 "AutoInterface" ->
                     InterfaceConfig.AutoInterface(

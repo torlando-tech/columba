@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.map
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.model.NetworkRestriction
 import network.columba.app.reticulum.model.toJsonString
 import network.columba.app.reticulum.model.typeName
 import network.columba.app.util.validation.InputValidator
@@ -217,6 +218,7 @@ class InterfaceRepository
                             discoveryPort = discoveryPort,
                             dataPort = dataPort,
                             mode = json.optString("mode", "full"),
+                            networkRestriction = parseRestriction(json, defaultForType = NetworkRestriction.WIFI_ONLY),
                         )
                     }
 
@@ -253,6 +255,7 @@ class InterfaceRepository
                             socksProxyEnabled = json.optBoolean("socks_proxy_enabled", false),
                             socksProxyHost = json.optString("socks_proxy_host", "127.0.0.1"),
                             socksProxyPort = json.optInt("socks_proxy_port", 9050),
+                            networkRestriction = parseRestriction(json, defaultForType = NetworkRestriction.ANY),
                         )
                     }
 
@@ -325,6 +328,7 @@ class InterfaceRepository
                             networkName = json.optString("network_name", "").ifEmpty { null },
                             passphrase = json.optString("passphrase", "").ifEmpty { null },
                             enableFramebuffer = json.optBoolean("enable_framebuffer", true),
+                            networkRestriction = parseRestriction(json, defaultForType = NetworkRestriction.ANY),
                         )
                     }
 
@@ -371,6 +375,7 @@ class InterfaceRepository
                             forwardIp = forwardIp,
                             forwardPort = forwardPort,
                             mode = json.optString("mode", "full"),
+                            networkRestriction = parseRestriction(json, defaultForType = NetworkRestriction.ANY),
                         )
                     }
 
@@ -401,6 +406,7 @@ class InterfaceRepository
                             bleDiscoveryIntervalIdleMs = json.optLong("ble_discovery_interval_idle_ms", 30000L),
                             bleScanDurationMs = json.optLong("ble_scan_duration_ms", 10000L),
                             bleAdvertisingRefreshIntervalMs = json.optLong("ble_advertising_refresh_interval_ms", 60_000L),
+                            networkRestriction = parseRestriction(json, defaultForType = NetworkRestriction.ANY),
                         )
                     }
 
@@ -432,6 +438,7 @@ class InterfaceRepository
                             mode = json.optString("mode", "full"),
                             networkName = json.optString("network_name", "").ifEmpty { null },
                             passphrase = json.optString("passphrase", "").ifEmpty { null },
+                            networkRestriction = parseRestriction(json, defaultForType = NetworkRestriction.ANY),
                         )
                     }
 
@@ -482,6 +489,19 @@ class InterfaceRepository
          * Used to look up the database ID when navigating from the network status screen.
          */
         suspend fun findInterfaceByName(name: String): InterfaceEntity? = interfaceDao.findInterfaceByName(name)
+
+        /**
+         * Parse the optional `network_restriction` field, falling back to the type-specific
+         * default when missing or unrecognised. Pre-`network_restriction` rows are unaffected.
+         */
+        private fun parseRestriction(
+            json: JSONObject,
+            defaultForType: NetworkRestriction,
+        ): NetworkRestriction {
+            val raw = json.optString("network_restriction", "")
+            if (raw.isEmpty()) return defaultForType
+            return NetworkRestriction.fromValue(raw) ?: defaultForType
+        }
 
         companion object {
             private const val TAG = "InterfaceRepository"

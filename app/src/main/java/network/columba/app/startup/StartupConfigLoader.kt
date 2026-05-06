@@ -6,6 +6,8 @@ import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.reticulum.model.BatteryProfile
 import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.service.manager.InterfaceTransportObserver
+import network.columba.app.service.manager.filterByTransport
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -23,6 +25,7 @@ class StartupConfigLoader
         private val interfaceRepository: InterfaceRepository,
         private val identityRepository: IdentityRepository,
         private val settingsRepository: SettingsRepository,
+        private val transportObserver: InterfaceTransportObserver,
     ) {
         /**
          * Configuration data loaded during startup.
@@ -58,8 +61,14 @@ class StartupConfigLoader
                 val autoconnectIfacOnlyDeferred = async { settingsRepository.getAutoconnectIfacOnly() }
 
                 val savedAutoconnect = autoconnectCountDeferred.await()
+                // Filter the enabled set against the device's current transport so the
+                // very first config the native stack sees doesn't try to start e.g. a
+                // wifi-only AutoInterface while the phone is on cellular at boot.
+                val rawEnabled = interfacesDeferred.await()
+                val transport = transportObserver.currentTransport()
+                val filteredEnabled = filterByTransport(rawEnabled, transport)
                 StartupConfig(
-                    interfaces = interfacesDeferred.await(),
+                    interfaces = filteredEnabled,
                     identity = identityDeferred.await(),
                     preferOwn = preferOwnDeferred.await(),
                     rpcKey = rpcKeyDeferred.await(),

@@ -22,6 +22,8 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.reticulum.model.LogLevel
 import network.columba.app.reticulum.model.ReticulumConfig
 import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.service.manager.InterfaceTransportObserver
+import network.columba.app.service.manager.filterByTransport
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,6 +56,7 @@ class InterfaceConfigManager
         private val autoAnnounceManager: AutoAnnounceManager,
         private val identityResolutionManager: IdentityResolutionManager,
         private val propagationNodeManager: PropagationNodeManager,
+        private val transportObserver: InterfaceTransportObserver,
         @ApplicationScope private val applicationScope: CoroutineScope,
     ) {
         companion object {
@@ -92,8 +95,14 @@ class InterfaceConfigManager
 
                     // Step 2: Load interfaces BEFORE stopping service
                     Log.d(TAG, "Step 2: Loading interfaces from database...")
-                    val enabledInterfaces = interfaceRepository.enabledInterfaces.first()
-                    Log.d(TAG, "✓ Loaded ${enabledInterfaces.size} enabled interface(s)")
+                    val rawEnabledInterfaces = interfaceRepository.enabledInterfaces.first()
+                    val transport = transportObserver.currentTransport()
+                    val enabledInterfaces = filterByTransport(rawEnabledInterfaces, transport)
+                    Log.d(
+                        TAG,
+                        "✓ Loaded ${rawEnabledInterfaces.size} enabled interface(s); " +
+                            "${enabledInterfaces.size} active for transport=$transport",
+                    )
 
                     // Step 3: Set flag to prevent ColumbaApplication from auto-initializing on service restart
                     // CRITICAL: Use commit() not apply() to ensure flag is written to disk BEFORE service starts

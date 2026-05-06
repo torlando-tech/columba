@@ -162,6 +162,18 @@ sealed class InterfaceConfig {
     abstract val enabled: Boolean
 
     /**
+     * Restricts this interface to a specific Android transport type. Lets users keep e.g.
+     * a LAN-only TCP transport in their interface list without it spamming connect attempts
+     * over cellular, or flag a public TCP server as cellular-only for offload-when-roaming.
+     *
+     * Enforced by `InterfaceTransportFilter` against the device's current `NetworkCapabilities`
+     * before passing the config list into the native stack. Structurally present on all
+     * subclasses for uniform UI/persistence, but the filter ignores it for non-IP transports
+     * (`AndroidBLE`, `RNode` with `connectionMode != "tcp"`).
+     */
+    abstract val networkRestriction: NetworkRestriction
+
+    /**
      * AutoInterface - Automatically discovers peers on the local network.
      * Uses UDP multicast for peer discovery and establishes direct connections.
      *
@@ -181,6 +193,7 @@ sealed class InterfaceConfig {
         val discoveryPort: Int? = null,
         val dataPort: Int? = null,
         val mode: String = "full",
+        override val networkRestriction: NetworkRestriction = NetworkRestriction.WIFI_ONLY,
     ) : InterfaceConfig()
 
     /**
@@ -217,6 +230,7 @@ sealed class InterfaceConfig {
         val socksProxyHost: String = "127.0.0.1",
         /** SOCKS5 proxy port. Defaults to 9050 (Orbot's default SOCKS port). */
         val socksProxyPort: Int = 9050,
+        override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig()
 
     /**
@@ -264,6 +278,7 @@ sealed class InterfaceConfig {
         val networkName: String? = null,
         val passphrase: String? = null,
         val enableFramebuffer: Boolean = true, // Display logo on RNode screen
+        override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig()
 
     /**
@@ -286,6 +301,7 @@ sealed class InterfaceConfig {
         val forwardIp: String = "255.255.255.255",
         val forwardPort: Int = 4242,
         val mode: String = "full",
+        override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig()
 
     /**
@@ -310,6 +326,7 @@ sealed class InterfaceConfig {
         val bleDiscoveryIntervalIdleMs: Long = 30000L,
         val bleScanDurationMs: Long = 10000L,
         val bleAdvertisingRefreshIntervalMs: Long = 60_000L,
+        override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig()
 
     /**
@@ -332,6 +349,7 @@ sealed class InterfaceConfig {
         val mode: String = "full",
         val networkName: String? = null,
         val passphrase: String? = null,
+        override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig()
 }
 
@@ -391,4 +409,30 @@ enum class InterfaceMode(
     ACCESS_POINT("access_point"), // Access point mode (quiet unless active)
     ROAMING("roaming"), // Roaming mode
     BOUNDARY("boundary"), // Boundary mode
+}
+
+/**
+ * Restricts an interface to a specific Android transport type. Mobile-specific concern
+ * with no python upstream equivalent — see `port-deviations.md`.
+ *
+ * `ETHERNET` is bucketed with `WIFI_ONLY` since the local link is wired/wifi-like from
+ * the user's perspective (USB tether to a PC, dock, etc.).
+ */
+enum class NetworkRestriction(
+    val value: String,
+) {
+    /** No restriction — interface starts on any active transport. */
+    ANY("any"),
+
+    /** Only enable when the device's default network is Wi-Fi or Ethernet. */
+    WIFI_ONLY("wifi_only"),
+
+    /** Only enable when the device's default network is cellular. */
+    CELLULAR_ONLY("cellular_only"),
+
+    ;
+
+    companion object {
+        fun fromValue(raw: String?): NetworkRestriction? = entries.firstOrNull { it.value == raw }
+    }
 }

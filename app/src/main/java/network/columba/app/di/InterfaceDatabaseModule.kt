@@ -122,6 +122,7 @@ object InterfaceDatabaseModule {
         autoAnnounceManager: AutoAnnounceManager,
         identityResolutionManager: IdentityResolutionManager,
         propagationNodeManager: PropagationNodeManager,
+        transportObserver: network.columba.app.service.manager.InterfaceTransportObserver,
         @ApplicationScope applicationScope: CoroutineScope,
     ): InterfaceConfigManager =
         InterfaceConfigManager(
@@ -137,6 +138,7 @@ object InterfaceDatabaseModule {
             autoAnnounceManager = autoAnnounceManager,
             identityResolutionManager = identityResolutionManager,
             propagationNodeManager = propagationNodeManager,
+            transportObserver = transportObserver,
             applicationScope = applicationScope,
         )
 }

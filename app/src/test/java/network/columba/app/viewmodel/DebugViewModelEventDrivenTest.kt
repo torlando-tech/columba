@@ -20,6 +20,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -45,6 +46,11 @@ import org.junit.Test
 class DebugViewModelEventDrivenTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
+    // ioDispatcher shares testDispatcher.scheduler so withContext(ioDispatcher) continuations
+    // are drained by advanceUntilIdle() — closes the race where a real Dispatchers.IO resumption
+    // could land after observeNetworkStatus() reset _debugInfo.value (see issue #883).
+    private val ioDispatcher = StandardTestDispatcher(testDispatcher.scheduler)
+
     @Suppress("NoRelaxedMocks") // Android Context with many system service methods
     private val mockContext: android.content.Context = mockk(relaxed = true)
 
@@ -55,6 +61,17 @@ class DebugViewModelEventDrivenTest {
     private lateinit var mockInterfaceRepository: InterfaceRepository
 
     private val debugInfoFlow = MutableSharedFlow<String>(replay = 1)
+
+    private fun buildViewModel(protocol: ReticulumProtocol = mockProtocol): DebugViewModel =
+        DebugViewModel(
+            mockContext,
+            protocol,
+            mockSettingsRepo,
+            mockIdentityRepo,
+            mockInterfaceConfigManager,
+            mockInterfaceRepository,
+            ioDispatcher,
+        )
 
     @Suppress("NoRelaxedMocks") // Protocol/Repository mocks with many unused methods in these tests
     @Before
@@ -107,26 +124,15 @@ class DebugViewModelEventDrivenTest {
 
     @After
     fun tearDown() {
-        // Allow pending IO operations to complete before resetting Main dispatcher
-        // This prevents "Dispatchers.Main was accessed when the platform dispatcher was absent" errors
-        Thread.sleep(50)
         Dispatchers.resetMain()
         clearAllMocks()
     }
 
     @Test
     fun `viewModel collects from debugInfoFlow without crashing`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - create ViewModel (which starts observeDebugInfo in init)
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // When - emit to the flow
             val debugJson =
@@ -149,17 +155,9 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `parseAndUpdateDebugInfo handles malformed JSON gracefully`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // When - emit invalid JSON
             debugInfoFlow.emit("not valid json {{{")
@@ -174,17 +172,9 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `initial state has default values before Flow emits`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // Then - initial state (before any emissions)
             val state = viewModel.debugInfo.value
@@ -196,17 +186,9 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `multiple emissions to debugInfoFlow do not crash`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // When - emit multiple updates rapidly
             debugInfoFlow.emit("""{"initialized": false}""")
@@ -222,7 +204,7 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `observeDebugInfo falls back to fetchDebugInfo for non-ServiceProtocol`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - use a non-NativeReticulumProtocol mock
             // Protocol with many methods - relaxed mock is appropriate
             @Suppress("NoRelaxedMocks")
@@ -241,15 +223,7 @@ class DebugViewModelEventDrivenTest {
             coEvery { nonServiceProtocol.getFailedInterfaces() } returns emptyList()
 
             // When - create ViewModel with non-service protocol
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    nonServiceProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel(nonServiceProtocol)
             advanceUntilIdle()
 
             // Then - should have called getDebugInfo for fallback
@@ -261,17 +235,9 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `parseAndUpdateDebugInfo parses interfaces array correctly`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // When - emit JSON with interfaces
             val debugJson =
@@ -293,7 +259,7 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `parseAndUpdateDebugInfo merges failed interfaces`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - mock failed interfaces
             val failedInterfaces =
                 listOf(
@@ -302,15 +268,7 @@ class DebugViewModelEventDrivenTest {
                 )
             coEvery { mockProtocol.getFailedInterfaces() } returns failedInterfaces
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // When - emit JSON
             val debugJson = """{"initialized": true, "interfaces": []}"""
@@ -325,20 +283,12 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `parseAndUpdateDebugInfo extracts NetworkStatus ERROR to error field`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - set network status to ERROR
             val errorStatus = NetworkStatus.ERROR("Test error message")
             every { mockProtocol.networkStatus } returns MutableStateFlow(errorStatus)
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // When - emit JSON without explicit error
             val debugJson = """{"initialized": true}"""
@@ -353,22 +303,14 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `restartService sets isRestarting state correctly`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given
             coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
                 firstArg<(() -> Unit)?>()?.invoke()
                 Result.success(Unit)
             }
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
             advanceUntilIdle()
 
             // Then - initial state should be false
@@ -384,19 +326,11 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `restartService handles exception and resets isRestarting`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - make applyInterfaceChanges throw
             coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } throws RuntimeException("Restart failed")
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
             advanceUntilIdle()
 
             // When - call restartService
@@ -411,20 +345,12 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `generateShareText returns null when publicKey is null`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - make identity loading fail so publicKey remains null
             coEvery { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
             coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
             advanceUntilIdle()
 
             // When
@@ -436,20 +362,12 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `generateShareText returns null when destinationHash is null`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - make destination loading fail so destinationHash remains null
             coEvery { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
             coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
             advanceUntilIdle()
 
             // When
@@ -463,20 +381,12 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `debugInfo is reset to defaults when network status becomes SHUTDOWN`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - create a mutable network status flow
             val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
             every { mockProtocol.networkStatus } returns networkStatusFlow
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // Emit some debug info to set state
             val debugJson =
@@ -504,20 +414,12 @@ class DebugViewModelEventDrivenTest {
 
     @Test
     fun `debugInfo remains populated while network is READY`() =
-        runTest {
+        runTest(testDispatcher) {
             // Given - network is READY
             val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
             every { mockProtocol.networkStatus } returns networkStatusFlow
 
-            val viewModel =
-                DebugViewModel(
-                    mockContext,
-                    mockProtocol,
-                    mockSettingsRepo,
-                    mockIdentityRepo,
-                    mockInterfaceConfigManager,
-                    mockInterfaceRepository,
-                )
+            val viewModel = buildViewModel()
 
             // When - emit debug info
             val debugJson =

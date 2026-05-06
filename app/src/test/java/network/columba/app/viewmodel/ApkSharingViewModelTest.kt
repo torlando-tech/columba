@@ -78,19 +78,13 @@ class ApkSharingViewModelTest {
             //
             // Note: avoid withTimeout here — its virtual-time deadline races the real-IO
             // bind in launchHttpServer; rely on runTest's outer real-time timeout instead.
-            val terminalState =
-                viewModel.state.first { state ->
-                    state.errorMessage != null ||
-                        state.needsHotspotPermission ||
-                        (state.isServerRunning && state.downloadUrl != null)
-                }
-
-            assertTrue(
-                "Expected a terminal sharing state (error, needs-permission, or running-with-url) but got $terminalState",
-                terminalState.errorMessage != null ||
-                    terminalState.needsHotspotPermission ||
-                    (terminalState.isServerRunning && terminalState.downloadUrl != null),
-            )
+            viewModel.state.first { state ->
+                state.errorMessage != null ||
+                    state.needsHotspotPermission ||
+                    (state.isServerRunning && state.downloadUrl != null)
+            }
+            // Reaching here means a terminal state was emitted (Flow.first contract);
+            // if the predicate is never satisfied, runTest's outer real-time deadline fires.
         }
 
     @Test

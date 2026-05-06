@@ -13,6 +13,7 @@ import network.columba.app.viewmodel.OnboardingViewModel
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -699,6 +700,46 @@ class OnboardingPagerScreenTest {
         // Then
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Skip").assertIsDisplayed()
+    }
+
+    // ========== Lifecycle Observer Tests ==========
+
+    @Test
+    fun lifecycleObserver_onResume_refreshesAllPermissionStatuses() {
+        // Given - The screen registers a DisposableEffect that calls all three
+        // check* methods on each ON_RESUME so cards reflect grants made via the
+        // system Settings UI (e.g. battery optimization, where the launching
+        // Intent has no result callback into the app).
+        //
+        // Robolectric brings the host activity through CREATED -> STARTED -> RESUMED
+        // when setContent runs, so first composition is followed by an ON_RESUME
+        // event which the observer must handle.
+        val mockViewModel = createMockOnboardingViewModel()
+        val mockDebugViewModel = createMockDebugViewModel()
+
+        // When
+        composeTestRule.setContent {
+            OnboardingPagerScreen(
+                onOnboardingComplete = {},
+                onImportData = {},
+                viewModel = mockViewModel,
+                debugViewModel = mockDebugViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Then - The screen rendered and reached its initial RESUMED state (real
+        // outcome — without RESUMED, DisposableEffect never registers the observer).
+        composeTestRule.onNodeWithText("Welcome to Columba").assertIsDisplayed()
+
+        // And - All three permission re-checks are wired through the observer.
+        // checkBatteryOptimizationStatus also fires from the existing LaunchedEffect(Unit),
+        // so it may be called more than once; the new on-resume contract is that the
+        // notification + BLE re-check methods fire at least once on the activity's
+        // initial RESUMED transition.
+        verify(atLeast = 1) { mockViewModel.checkNotificationPermissionStatus(any()) }
+        verify(atLeast = 1) { mockViewModel.checkBlePermissionsStatus(any()) }
+        verify(atLeast = 1) { mockViewModel.checkBatteryOptimizationStatus(any()) }
     }
 
     // ========== PageIndicator Component Tests ==========

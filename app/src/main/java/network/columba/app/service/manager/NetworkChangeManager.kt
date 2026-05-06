@@ -96,12 +96,11 @@ class NetworkChangeManager(
                     val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                     Log.v(TAG, "Network capabilities changed: internet=$hasInternet, validated=$isValidated")
 
-                    // Compute transport class and emit if it changed since last emission.
-                    // `onCapabilitiesChanged` fires after `onAvailable` and again whenever a
-                    // capability flips (validation, metered, etc.) — the last-value cache
-                    // collapses those into a single `onTransportChanged` per actual transport
-                    // transition.
-                    emitTransportIfChanged(currentTransportOf(networkCapabilities))
+                    // The callback fires for every network matching NET_CAPABILITY_INTERNET,
+                    // not just the default route — classify by activeNetwork so a cellular
+                    // backup network's capability update doesn't masquerade as a transport
+                    // change while Wi-Fi is still the default.
+                    emitTransportIfChanged(currentTransportOf(connectivityManager))
                 }
             }
 

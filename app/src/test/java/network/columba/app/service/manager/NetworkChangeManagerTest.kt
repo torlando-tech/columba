@@ -286,7 +286,10 @@ class NetworkChangeManagerTest {
         val wifiCaps = mockNetworkCapabilities(wifi = true)
         val cellCaps = mockNetworkCapabilities(cellular = true)
 
+        every { connectivityManager.activeNetwork } returns network
+        every { connectivityManager.getNetworkCapabilities(network) } returns wifiCaps
         callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
+        every { connectivityManager.getNetworkCapabilities(network) } returns cellCaps
         callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
 
         assertEquals(
@@ -311,7 +314,10 @@ class NetworkChangeManagerTest {
         val wifiCaps = mockNetworkCapabilities(wifi = true)
         val cellCaps = mockNetworkCapabilities(cellular = true)
 
+        every { connectivityManager.activeNetwork } returns network
+        every { connectivityManager.getNetworkCapabilities(network) } returns wifiCaps
         callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
+        every { connectivityManager.getNetworkCapabilities(network) } returns cellCaps
         callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
         // Same transport class fired again — should be suppressed by the last-value cache.
         callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
@@ -335,10 +341,10 @@ class NetworkChangeManagerTest {
             )
         mgr.start()
         val network = mockk<android.net.Network>(relaxed = true)
-        callbackSlot.captured.onCapabilitiesChanged(
-            network,
-            mockNetworkCapabilities(wifi = true),
-        )
+        val wifiCaps = mockNetworkCapabilities(wifi = true)
+        every { connectivityManager.activeNetwork } returns network
+        every { connectivityManager.getNetworkCapabilities(network) } returns wifiCaps
+        callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
         // Active network goes null — simulates last network gone.
         every { connectivityManager.activeNetwork } returns null
         callbackSlot.captured.onLost(network)
@@ -362,10 +368,45 @@ class NetworkChangeManagerTest {
             )
         mgr.start()
         val network = mockk<android.net.Network>(relaxed = true)
-        callbackSlot.captured.onCapabilitiesChanged(
-            network,
-            mockNetworkCapabilities(ethernet = true),
-        )
+        val ethCaps = mockNetworkCapabilities(ethernet = true)
+        every { connectivityManager.activeNetwork } returns network
+        every { connectivityManager.getNetworkCapabilities(network) } returns ethCaps
+        callbackSlot.captured.onCapabilitiesChanged(network, ethCaps)
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `onCapabilitiesChanged cellular backup on wifi default does not flip transport`() {
+        // Dual-radio case: Wi-Fi is the default route, cellular backup is up
+        // simultaneously. Android's NET_CAPABILITY_INTERNET callback fires for
+        // every matching network, including cellular's capability updates. The
+        // production code must classify off `activeNetwork`, not the per-callback
+        // capabilities, so the cellular update doesn't masquerade as a transport
+        // change while Wi-Fi is still the default.
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr =
+            NetworkChangeManager(
+                context = context,
+                lockManager = lockManager,
+                onTransportChanged = { transports.add(it) },
+            )
+        mgr.start()
+        val wifiNetwork = mockk<android.net.Network>(relaxed = true)
+        val cellularNetwork = mockk<android.net.Network>(relaxed = true)
+        val wifiCaps = mockNetworkCapabilities(wifi = true)
+        val cellCaps = mockNetworkCapabilities(cellular = true)
+
+        every { connectivityManager.activeNetwork } returns wifiNetwork
+        every { connectivityManager.getNetworkCapabilities(wifiNetwork) } returns wifiCaps
+        every { connectivityManager.getNetworkCapabilities(cellularNetwork) } returns cellCaps
+
+        callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, wifiCaps)
+        // Cellular backup network reports a capability update; activeNetwork is
+        // still the Wi-Fi mock, so transport must remain WIFI_LIKE.
+        callbackSlot.captured.onCapabilitiesChanged(cellularNetwork, cellCaps)
+
         assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
         mgr.stop()
     }

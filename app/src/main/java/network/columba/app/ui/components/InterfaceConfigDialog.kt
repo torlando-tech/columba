@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -169,6 +171,19 @@ fun InterfaceConfigDialog(
                         }
 
                         Divider()
+
+                        // Network restriction (Wi-Fi / Cellular / Any) — IP-only.
+                        // Hidden for AndroidBLE (out-of-band) and for RNode unless connection
+                        // mode is TCP. The filter ignores the field for non-IP interfaces, but
+                        // showing the selector would be misleading.
+                        if (configState.networkRestrictionApplies) {
+                            NetworkRestrictionSelector(
+                                selectedRestriction = configState.networkRestriction,
+                                onRestrictionChange = {
+                                    onConfigUpdate(configState.copy(networkRestriction = it))
+                                },
+                            )
+                        }
 
                         // Interface Mode
                         InterfaceModeSelector(
@@ -724,6 +739,56 @@ fun AndroidBLEFields(
         steps = 26,
         enabled = isCustom,
     )
+}
+
+/**
+ * Three-option segmented selector for the per-interface network restriction:
+ * Any / Wi-Fi only / Cellular only. Used inside the Advanced Options section of
+ * `InterfaceConfigDialog` and the wizard review steps for IP-based interface types.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NetworkRestrictionSelector(
+    selectedRestriction: String,
+    onRestrictionChange: (String) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "Network restriction" },
+    ) {
+        Text(
+            "Active On Network",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        // Values match the on-disk JSON form (NetworkRestriction.value) so the round
+        // trip through configStateToInterfaceConfig is a straight string lookup.
+        val options =
+            listOf(
+                "any" to "Any",
+                "wifi_only" to "Wi-Fi only",
+                "cellular_only" to "Cellular only",
+            )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, (value, label) ->
+                SegmentedButton(
+                    selected = selectedRestriction == value,
+                    onClick = { onRestrictionChange(value) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                    icon = {},
+                    label = { Text(label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+                )
+            }
+        }
+        Text(
+            "Skip starting this interface when the device's active network doesn't match. " +
+                "Wi-Fi/Ethernet are bucketed together; cellular includes mobile data.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable

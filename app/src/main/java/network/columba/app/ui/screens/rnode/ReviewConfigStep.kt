@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.FrequencySlotCalculator
 import network.columba.app.ui.components.IfacConfigCard
+import network.columba.app.ui.components.NetworkRestrictionSelector
 import network.columba.app.viewmodel.RNodeWizardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -513,6 +514,25 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                         selectedMode = state.interfaceMode,
                         onModeChange = { viewModel.updateInterfaceMode(it) },
                     )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Network transport restriction (Wi-Fi / Cellular / Any). Only meaningful
+                    // when the RNode is reached over TCP/Wi-Fi — Bluetooth and USB connections
+                    // are out-of-band, so the selector is rendered but disabled with a hint.
+                    Column {
+                        NetworkRestrictionSelector(
+                            selectedRestriction = state.networkRestriction,
+                            onRestrictionChange = { viewModel.updateNetworkRestriction(it) },
+                        )
+                        if (!isTcpMode) {
+                            Text(
+                                "TCP-only field — does not apply to Bluetooth or USB connections.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
 
                     Spacer(Modifier.height(16.dp))
 

@@ -14,6 +14,8 @@ import kotlinx.coroutines.test.setMain
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.model.NetworkRestriction
+import network.columba.app.reticulum.model.toJsonString
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -1006,6 +1008,111 @@ class InterfaceRepositoryTest {
                 assertEquals(null, config.passphrase)
 
                 cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // ========== networkRestriction round-trip + legacy-default tests ==========
+
+    @Test
+    fun `entityToConfig autoInterface legacy json without restriction defaults to wifi only`() =
+        runTest {
+            // Pre-network_restriction AutoInterface row (Tyler's response: existing installs
+            // get the new wifi_only default for AutoInterface specifically).
+            val legacy =
+                InterfaceEntity(
+                    id = 1,
+                    name = "Auto Discovery",
+                    type = "AutoInterface",
+                    enabled = true,
+                    configJson = """{"group_id":"","discovery_scope":"link","mode":"full"}""",
+                    displayOrder = 0,
+                )
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(legacy))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val parsed = awaitItem().single() as InterfaceConfig.AutoInterface
+                assertEquals(NetworkRestriction.WIFI_ONLY, parsed.networkRestriction)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `entityToConfig tcpClient legacy json without restriction defaults to any`() =
+        runTest {
+            val legacy = createValidTcpClientEntity()
+            every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+            every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(legacy))
+            val repository = InterfaceRepository(mockDao)
+
+            repository.enabledInterfaces.test {
+                val parsed = awaitItem().single() as InterfaceConfig.TCPClient
+                assertEquals(NetworkRestriction.ANY, parsed.networkRestriction)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `entityToConfig roundTrip preserves cellularOnly across all 6 types`() =
+        runTest {
+            // Build one config of each type with CELLULAR_ONLY, write through toJsonString,
+            // read back via entityToConfig, assert exact value preservation.
+            val sources: List<Pair<InterfaceConfig, String>> =
+                listOf(
+                    InterfaceConfig.AutoInterface(
+                        name = "auto",
+                        networkRestriction = NetworkRestriction.CELLULAR_ONLY,
+                    ) to "AutoInterface",
+                    InterfaceConfig.TCPClient(
+                        name = "tcp",
+                        targetHost = "10.0.0.1",
+                        targetPort = 4242,
+                        networkRestriction = NetworkRestriction.CELLULAR_ONLY,
+                    ) to "TCPClient",
+                    InterfaceConfig.TCPServer(
+                        name = "tcps",
+                        networkRestriction = NetworkRestriction.CELLULAR_ONLY,
+                    ) to "TCPServer",
+                    InterfaceConfig.UDP(
+                        name = "udp",
+                        networkRestriction = NetworkRestriction.CELLULAR_ONLY,
+                    ) to "UDP",
+                    InterfaceConfig.AndroidBLE(
+                        name = "ble",
+                        networkRestriction = NetworkRestriction.CELLULAR_ONLY,
+                    ) to "AndroidBLE",
+                    InterfaceConfig.RNode(
+                        name = "rnode",
+                        targetDeviceName = "RNode 1234",
+                        connectionMode = "classic",
+                        networkRestriction = NetworkRestriction.CELLULAR_ONLY,
+                    ) to "RNode",
+                )
+
+            sources.forEachIndexed { idx, (source, type) ->
+                val entity =
+                    InterfaceEntity(
+                        id = idx + 1L,
+                        name = source.name,
+                        type = type,
+                        enabled = source.enabled,
+                        configJson = source.toJsonString(),
+                        displayOrder = idx,
+                    )
+                every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+                every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+                val repository = InterfaceRepository(mockDao)
+
+                repository.enabledInterfaces.test {
+                    val parsed = awaitItem().single()
+                    assertEquals(
+                        "round-trip lost CELLULAR_ONLY for $type",
+                        NetworkRestriction.CELLULAR_ONLY,
+                        parsed.networkRestriction,
+                    )
+                    cancelAndIgnoreRemainingEvents()
+                }
             }
         }
 }

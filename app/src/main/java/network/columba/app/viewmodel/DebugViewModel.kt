@@ -3,12 +3,13 @@ package network.columba.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.di.IoDispatcher
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.util.IdentityQrCodeUtils
 import network.columba.app.util.generateDefaultDisplayName
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -98,6 +99,7 @@ class DebugViewModel
         private val identityRepository: network.columba.app.data.repository.IdentityRepository,
         private val interfaceConfigManager: network.columba.app.service.InterfaceConfigManager,
         private val interfaceRepository: network.columba.app.repository.InterfaceRepository,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         companion object {
             private const val TAG = "DebugViewModel"
@@ -186,7 +188,7 @@ class DebugViewModel
 
                 // Get failed interfaces
                 val failedInterfaces =
-                    withContext(Dispatchers.IO) {
+                    withContext(ioDispatcher) {
                         reticulumProtocol.getFailedInterfaces()
                     }
                 val failedInterfaceInfos =
@@ -280,7 +282,7 @@ class DebugViewModel
                     if (isServiceShutdown()) return@launch
 
                     val (pythonDebugInfo, failedInterfaces) =
-                        withContext(Dispatchers.IO) {
+                        withContext(ioDispatcher) {
                             Pair(reticulumProtocol.getDebugInfo(), reticulumProtocol.getFailedInterfaces())
                         }
 

@@ -370,7 +370,6 @@ object MicronParser {
         }
     }
 
-    private const val TRUE_COLOR_LEN = 6
     private const val SHORT_COLOR_LEN = 3
 
     /**
@@ -388,15 +387,19 @@ object MicronParser {
         // True color: next char is 'T' followed by 6 hex chars
         if (afterCmd < line.length && line[afterCmd] == 'T') {
             val colorStart = afterCmd + 1
-            if (colorStart + TRUE_COLOR_LEN <= line.length) {
-                val colorStr = line.substring(colorStart, colorStart + TRUE_COLOR_LEN)
+            if (colorStart + MicronColor.TRUE_COLOR_LEN <= line.length) {
+                val colorStr = line.substring(colorStart, colorStart + MicronColor.TRUE_COLOR_LEN)
                 val color = MicronColor.parseTrueColor(colorStr)
                 if (color != null) {
                     val newStyle =
                         if (isForeground) currentStyle.copy(foreground = color) else currentStyle.copy(background = color)
-                    return FormatResult(newStyle, alignment, colorStart + TRUE_COLOR_LEN)
+                    return FormatResult(newStyle, alignment, colorStart + MicronColor.TRUE_COLOR_LEN)
                 }
             }
+            // 'T' was committed as a true-color marker; skip the 3-char fallback
+            // to avoid a pointless attempt to parse "T..." as a 3-char color
+            // (T is never a valid hex digit, so the fallback always fails).
+            return null
         }
 
         // Standard 3-char color

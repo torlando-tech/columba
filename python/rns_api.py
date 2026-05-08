@@ -238,6 +238,7 @@ class RnsApi:
         per_attempt_base = RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT * max(1, hops) + 6
         last_reason = None
         last_status = None
+        attempts_made = 0
 
         for attempt in range(1, MAX_LINK_ATTEMPTS + 1):
             if self._cancel_flag:
@@ -247,6 +248,7 @@ class RnsApi:
             if remaining < 5:
                 break
 
+            attempts_made += 1
             if attempt > 1:
                 log_info("RnsApi", "request_nomadnet_page",
                          f"Link attempt #{attempt} to {dest_hash_hex[:16]}")
@@ -308,9 +310,9 @@ class RnsApi:
             if last_reason == 0x03:
                 return {"success": False, "error": "Connection closed by node"}
 
-        # All attempts exhausted
+        # All attempts exhausted (or skipped because deadline was already near-exhausted)
         log_warning("RnsApi", "request_nomadnet_page",
-                   f"Link to {dest_hash_hex[:16]} failed after {MAX_LINK_ATTEMPTS} attempts "
+                   f"Link to {dest_hash_hex[:16]} failed after {attempts_made} attempt(s) "
                    f"(last_status={last_status}, last_reason={last_reason})")
         return {"success": False,
                 "error": f"Connection timed out ({hops} hops). Node may be offline or unreachable."}

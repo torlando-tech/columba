@@ -434,11 +434,21 @@ class NativeReticulumProtocol(
                     }
                 }
             } catch (_: InterruptedException) {
-                // Best-effort: re-assert interrupt and abandon the wait. We still
-                // proceed to close — leaving a half-drained executor + open DB across
-                // shutdown is worse than losing the in-flight writes.
-                Thread.currentThread().interrupt()
+                // shutdownNow() signals workers but does not wait. We still need a
+                // brief drain before reticulumDatabase?.close() runs, otherwise a
+                // worker mid-endTransaction races the close (the very COLUMBA-8R
+                // bug this method exists to fix). Re-asserting Thread.interrupt()
+                // before awaitTermination would make it throw immediately and skip
+                // the drain — so wait first, then restore the flag.
                 executor.shutdownNow()
+                try {
+                    executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
+                } catch (_: InterruptedException) {
+                    // Give up entirely; we still proceed to close the DB below
+                    // because leaving a half-drained executor + open DB across
+                    // shutdown is worse than losing the in-flight writes.
+                }
+                Thread.currentThread().interrupt()
             }
         }
         reticulumDbWriteExecutor = null

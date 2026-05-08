@@ -75,8 +75,15 @@ class InterfaceManagementViewModelStatusEventTest {
         bleStatusRepository = mockk()
         serviceProtocol = mockk()
         transportObserver = mockk()
-        every { transportObserver.currentTransport() } returns
+        every { transportObserver.snapshotTransport() } returns
             network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
+        // Default StateFlow seeded with WIFI_LIKE so most tests don't observe a
+        // transport churn during init. Tests that exercise transitions override this
+        // with their own MutableStateFlow before constructing the ViewModel.
+        every { transportObserver.currentTransport } returns
+            kotlinx.coroutines.flow.MutableStateFlow(
+                network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE,
+            )
 
         // These tests were written against the kotlin backend's hot-reload
         // behaviour — stub capabilities with hotReloadInterfaces = true so
@@ -1150,6 +1157,124 @@ class InterfaceManagementViewModelStatusEventTest {
                 assertEquals(true, state.interfaceOnlineStatus["WiFi"])
                 assertEquals(true, state.interfaceOnlineStatus["BLE"])
             }
+        }
+
+    // endregion
+
+    // region currentTransport collection (issue #897)
+
+    @Test
+    fun viewModel_initialState_seedsCurrentTransportFromSnapshot() =
+        runTest {
+            // Snapshot returns CELLULAR — VM seed must use it instead of the
+            // CurrentTransport.NONE default on InterfaceManagementState.
+            every { transportObserver.snapshotTransport() } returns
+                network.columba.app.rns.host.manager.CurrentTransport.CELLULAR
+            // Pair the StateFlow with the same value so the immediate collect emission
+            // doesn't clobber the seed back to a different value.
+            every { transportObserver.currentTransport } returns
+                kotlinx.coroutines.flow.MutableStateFlow(
+                    network.columba.app.rns.host.manager.CurrentTransport.CELLULAR,
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+
+            advanceUntilIdle()
+
+            assertEquals(
+                network.columba.app.rns.host.manager.CurrentTransport.CELLULAR,
+                viewModel.state.value.currentTransport,
+            )
+        }
+
+    @Test
+    fun viewModel_transportFlowEmits_updatesState() =
+        runTest {
+            val transportFlow =
+                kotlinx.coroutines.flow.MutableStateFlow(
+                    network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE,
+                )
+            every { transportObserver.snapshotTransport() } returns
+                network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
+            every { transportObserver.currentTransport } returns transportFlow
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+
+            advanceUntilIdle()
+            assertEquals(
+                network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE,
+                viewModel.state.value.currentTransport,
+            )
+
+            // Emit a transition — VM's collector should propagate to state.
+            transportFlow.value = network.columba.app.rns.host.manager.CurrentTransport.CELLULAR
+            advanceUntilIdle()
+
+            assertEquals(
+                network.columba.app.rns.host.manager.CurrentTransport.CELLULAR,
+                viewModel.state.value.currentTransport,
+            )
+        }
+
+    @Test
+    fun viewModel_transportFlow_doesNotChangeOtherStateFields() =
+        runTest {
+            val transportFlow =
+                kotlinx.coroutines.flow.MutableStateFlow(
+                    network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE,
+                )
+            every { transportObserver.snapshotTransport() } returns
+                network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
+            every { transportObserver.currentTransport } returns transportFlow
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+
+            advanceUntilIdle()
+
+            // Seed unrelated state fields with sentinel values so we can detect
+            // unintended clobbering by the transport collector.
+            interfaceStatusFlow.emit("""{"WiFi": true, "BLE": false}""")
+            advanceUntilIdle()
+            val before = viewModel.state.value
+            assertEquals(true, before.interfaceOnlineStatus["WiFi"])
+            assertEquals(false, before.interfaceOnlineStatus["BLE"])
+
+            // Now flip the transport — only `currentTransport` should change.
+            transportFlow.value = network.columba.app.rns.host.manager.CurrentTransport.CELLULAR
+            advanceUntilIdle()
+
+            val after = viewModel.state.value
+            assertEquals(
+                network.columba.app.rns.host.manager.CurrentTransport.CELLULAR,
+                after.currentTransport,
+            )
+            assertEquals(before.interfaces, after.interfaces)
+            assertEquals(before.interfaceOnlineStatus, after.interfaceOnlineStatus)
+            assertEquals(before.transportInterfaces, after.transportInterfaces)
         }
 
     // endregion

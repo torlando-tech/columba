@@ -70,7 +70,7 @@ class StartupConfigLoaderTest {
         transportObserver = mockk()
         // Default to WIFI_LIKE so existing tests' AutoInterface (default WIFI_ONLY) passes
         // the filter unchanged. Tests can override to assert filter behaviour.
-        io.mockk.every { transportObserver.currentTransport() } returns
+        io.mockk.every { transportObserver.snapshotTransport() } returns
             network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
 
         // Default stubs for settings that most tests don't override

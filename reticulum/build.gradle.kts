@@ -30,6 +30,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // reticulum-kt's public API references java.time.LocalDateTime (API 26+),
+        // but our minSdk is 24. Without desugaring, devices on Android 7.x crash
+        // with NoClassDefFoundError as soon as Transport.registerDestination runs.
+        // See Sentry COLUMBA-8M.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -54,6 +59,9 @@ android {
 dependencies {
     // LXST module (telephony, codecs, audio pipeline)
     api(libs.lxst.kt)
+
+    // Java 8+ API desugaring (java.time.*, etc.) — required for API 24/25 support.
+    coreLibraryDesugaring(libs.android.desugar.jdk.libs)
 
     // Hilt
     implementation(libs.hilt)

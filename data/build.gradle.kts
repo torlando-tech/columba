@@ -16,6 +16,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required for API 24/25 support — see Sentry COLUMBA-8M.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -33,6 +35,9 @@ android {
 
 dependencies {
     implementation(project(":domain"))
+
+    // Java 8+ API desugaring (java.time.*, etc.) — required for API 24/25 support.
+    coreLibraryDesugaring(libs.android.desugar.jdk.libs)
 
     // Hilt
     implementation(libs.hilt)

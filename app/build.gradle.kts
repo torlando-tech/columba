@@ -228,6 +228,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required because reticulum-kt's public API touches java.time.LocalDateTime,
+        // which only exists on API 26+. Our minSdk is 24, so devices on Android 7.x
+        // crash with NoClassDefFoundError without this. See Sentry COLUMBA-8M.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -365,6 +369,9 @@ dependencies {
     implementation(libs.lxst.kt)
     implementation(project(":reticulum"))
     implementation(project(":micron"))
+
+    // Java 8+ API desugaring (java.time.*, etc.) — required for API 24/25 support.
+    coreLibraryDesugaring(libs.android.desugar.jdk.libs)
 
     // Core
     implementation(libs.core.ktx)

@@ -4,10 +4,8 @@ updates:
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
+      interval: "daily"
+    open-pull-requests-limit: 30
     reviewers:
       - "torlando-tech"
     labels:
@@ -36,10 +34,8 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 3
+      interval: "daily"
+    open-pull-requests-limit: 20
     reviewers:
       - "torlando-tech"
     labels:

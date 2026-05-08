@@ -30,4 +30,12 @@
     <string name="view_interface_details">View interface details</string>
     <string name="interface_actions">Interface actions</string>
     <string name="edit_interface">Edit interface</string>
+
+    <!-- Network restriction indicator on interface cards (issue #897) -->
+    <string name="interface_restriction_wifi_only">Wi-Fi only</string>
+    <string name="interface_restriction_cellular_only">Cellular only</string>
+    <string name="interface_restriction_wifi_only_paused">Wi-Fi only · paused</string>
+    <string name="interface_restriction_cellular_only_paused">Cellular only · paused</string>
+    <string name="interface_restriction_no_network">No network · paused</string>
+    <string name="interface_status_restricted">Restricted</string>
 </resources>

@@ -52,8 +52,14 @@ private fun InterfaceConfig.passesTransport(transport: CurrentTransport): Boolea
  * Whether this interface's connection rides on Android's IP carrier (and therefore needs
  * to honour the transport restriction). RNode is multi-modal: only `tcp` mode rides IP;
  * Bluetooth and USB are out-of-band and ignore the restriction.
+ *
+ * Marked `internal` so the UI-side mirror in `InterfaceManagementUtils.entityRidesOnIpCarrier`
+ * can pin its truth table against this one in a unit test (see
+ * `entityRidesOnIpCarrier_truthTable_matchesInterfaceTransportFilter`). The two
+ * predicates MUST stay aligned — the UI claims an interface is restricted iff the
+ * runtime filter would actually drop it.
  */
-private fun InterfaceConfig.ridesOnIpCarrier(): Boolean =
+internal fun InterfaceConfig.ridesOnIpCarrier(): Boolean =
     when (this) {
         is InterfaceConfig.AutoInterface -> true
         is InterfaceConfig.TCPClient -> true

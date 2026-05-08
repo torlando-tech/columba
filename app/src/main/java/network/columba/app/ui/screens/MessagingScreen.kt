@@ -81,6 +81,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -1748,6 +1749,19 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
     ) {
+        // Unverified-sender warning — mirrors Sideband's "this message is
+        // likely to be fake" banner. Renders for every bubble type
+        // (text, media-only, attachment, pending-file notification)
+        // because a forged message could carry any payload shape.
+        //
+        // Trigger condition: signatureVerified is exactly false (the
+        // SOURCE_UNKNOWN path from LXMF-kt). null means "no warning"
+        // for legacy rows, sent messages, and pre-feature paths — see
+        // MessageEntity.signatureVerified KDoc for the full state table.
+        if (message.signatureVerified == false) {
+            UnverifiedSenderChip(modifier = Modifier.padding(bottom = 4.dp))
+        }
+
         // Handle pending file notifications (system messages for files arriving via relay)
         if (message.isPendingFileNotification) {
             if (message.isSuperseded) {
@@ -2836,6 +2850,57 @@ internal fun getMessageStatusIcon(status: String): String =
         "failed" -> "!"
         else -> ""
     }
+
+/**
+ * Inline warning banner for messages whose LXMF signature could not be
+ * verified against a known sender identity (`UnverifiedReason.SOURCE_UNKNOWN`
+ * from LXMF-kt). Mirrors Sideband's "this message is likely to be fake"
+ * banner — visible enough that a user reading the conversation cannot
+ * miss it.
+ *
+ * Placed at the top of every bubble for which `MessageUi.signatureVerified
+ * == false` (legacy null and verified true both skip the chip).
+ *
+ * Threat model context: the LXMF wire layer encrypts to the recipient's
+ * public key (anyone who knows the recipient's destination hash can
+ * encrypt to it), so receipt-decryption alone does NOT prove the
+ * sender's identity. The signature is what proves authenticity. When
+ * the receiver doesn't yet know the sender's identity (their announce
+ * hasn't propagated), the signature can't be verified — and the message
+ * could legitimately be a first-contact OR a forgery from anyone who
+ * generated a fresh identity hash. The chip surfaces that uncertainty.
+ *
+ * Rendered with `colorScheme.errorContainer` for the same warning
+ * affordance the rest of the app uses for failed states (matches
+ * existing pattern at MessagingScreen.kt:1056, 1567, 1580).
+ */
+@Composable
+private fun UnverifiedSenderChip(modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = "Unverified sender",
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = "Unverified sender — may be forged",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
 
 @Composable
 private fun TextSizeDialog(

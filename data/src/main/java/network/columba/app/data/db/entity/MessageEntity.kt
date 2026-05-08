@@ -63,4 +63,23 @@ data class MessageEntity(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
+    // For received messages: whether the LXMF signature was verified
+    // against the sender's known identity. True when we had the sender's
+    // public key on file and the signature matched. False when the
+    // sender's identity was unknown to our RNS at receive time
+    // (`UnverifiedReason.SOURCE_UNKNOWN` in LXMF-kt) — these messages
+    // could be forgeries from anyone who knows our destination hash and
+    // generates a fresh identity hash. UI must display a warning
+    // indicator on bubbles where this is false.
+    //
+    // Null for: messages sent by us (signing is local — implicitly
+    // verified), messages from before this column existed (Room
+    // migration backfills as null), and any code path that doesn't
+    // populate the field. Treat null as a "no warning" state to
+    // preserve the historical UI behavior for legacy rows.
+    //
+    // SIGNATURE_INVALID is dropped at the LXMF-kt router layer and
+    // never reaches this column — the only way to land a false here
+    // from production is via SOURCE_UNKNOWN.
+    val signatureVerified: Boolean? = null,
 )

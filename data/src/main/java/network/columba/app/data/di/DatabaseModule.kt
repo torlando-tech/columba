@@ -27,6 +27,7 @@ import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
+import network.columba.app.data.db.migrations.ALL_MIGRATIONS
 import javax.inject.Singleton
 
 @Module
@@ -109,7 +110,11 @@ object DatabaseModule {
                 context,
                 ColumbaDatabase::class.java,
                 DATABASE_NAME,
-            ).fallbackToDestructiveMigration()
+            ).addMigrations(*ALL_MIGRATIONS)
+            // Keep destructive fallback as the LAST resort: triggered only when
+            // no Migration is registered for a version step. Per-version
+            // ALL_MIGRATIONS entries take precedence and preserve user data.
+            .fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .addCallback(DURABILITY_CALLBACK)

@@ -52,8 +52,15 @@ private fun InterfaceConfig.passesTransport(transport: CurrentTransport): Boolea
  * Whether this interface's connection rides on Android's IP carrier (and therefore needs
  * to honour the transport restriction). RNode is multi-modal: only `tcp` mode rides IP;
  * Bluetooth and USB are out-of-band and ignore the restriction.
+ *
+ * Public so the UI-side mirror in `InterfaceManagementUtils.entityRidesOnIpCarrier` (in the
+ * `:app` module) can pin its truth table against this one in a unit test (see
+ * `entityRidesOnIpCarrier_truthTable_matchesInterfaceTransportFilter`). `internal` won't
+ * cross the `:rns-host` → `:app` module boundary, so the drift pin requires it be public.
+ * The two predicates MUST stay aligned — the UI claims an interface is restricted iff the
+ * runtime filter would actually drop it.
  */
-private fun InterfaceConfig.ridesOnIpCarrier(): Boolean =
+fun InterfaceConfig.ridesOnIpCarrier(): Boolean =
     when (this) {
         is InterfaceConfig.AutoInterface -> true
         is InterfaceConfig.TCPClient -> true
@@ -80,8 +87,8 @@ fun currentTransportOf(connectivityManager: ConnectivityManager): CurrentTranspo
  *
  * For VPN over an underlying transport (the common case), Android typically reports both
  * `TRANSPORT_VPN` and the underlying transport on the same `NetworkCapabilities` — so the
- * underlying-transport check still wins, matching Tyler's intent in the plan's open
- * questions ("VPN behavior: underlying transport").
+ * underlying-transport check still wins, which is the intended VPN behaviour (classify by
+ * the underlying transport, not the VPN itself).
  */
 fun currentTransportOf(capabilities: NetworkCapabilities): CurrentTransport =
     when {

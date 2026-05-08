@@ -3,6 +3,8 @@ package network.columba.app.ui.screens
 import android.bluetooth.BluetoothAdapter
 import android.util.Log
 import network.columba.app.data.database.entity.InterfaceEntity
+import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.host.manager.CurrentTransport
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -118,3 +120,103 @@ fun InterfaceEntity.shouldToggleBeEnabled(
     )
     return result
 }
+
+/**
+ * The visible network-restriction state of an interface card given the device's current
+ * transport. Card render reads this and either hides the chip ([NotApplicable]) or shows
+ * one of three variants — the chip plus the right-column status text follow from the
+ * variant, so the rendering site stays branch-free.
+ *
+ * Kept colocated with [restrictionView] so the parse/decision logic and its result type
+ * live in one file.
+ */
+sealed interface InterfaceRestrictionView {
+    /** Restriction does not apply — non-IP interface, or interface is ANY. Hide chip. */
+    data object NotApplicable : InterfaceRestrictionView
+
+    /** Restriction applies and the current transport matches — chip rendered in info tone. */
+    data class Allowed(val restriction: NetworkRestriction) : InterfaceRestrictionView
+
+    /**
+     * Restriction applies and current transport excludes this interface — chip rendered in
+     * tertiary tone (informational, not error — the user configured this), status text
+     * reads "Restricted" instead of "Offline".
+     */
+    data class Blocked(val restriction: NetworkRestriction) : InterfaceRestrictionView
+
+    /** No active default network — IP interfaces are inactive regardless of restriction. */
+    data class NoNetwork(val restriction: NetworkRestriction) : InterfaceRestrictionView
+}
+
+/**
+ * Decide how to surface this entity's network restriction in the card given the device's
+ * current transport. Mirrors the truth table inside `InterfaceTransportFilter` so the UI
+ * never claims a state inconsistent with what the runtime filter actually does — the
+ * `entityRidesOnIpCarrier_truthTable_matchesInterfaceTransportFilter` test pins drift.
+ */
+fun InterfaceEntity.restrictionView(currentTransport: CurrentTransport): InterfaceRestrictionView {
+    if (!entityRidesOnIpCarrier(this)) return InterfaceRestrictionView.NotApplicable
+    val restriction = parseRestrictionForEntity(this)
+    return when {
+        restriction == NetworkRestriction.ANY -> InterfaceRestrictionView.NotApplicable
+        currentTransport == CurrentTransport.NONE -> InterfaceRestrictionView.NoNetwork(restriction)
+        restrictionMatchesTransport(restriction, currentTransport) -> InterfaceRestrictionView.Allowed(restriction)
+        else -> InterfaceRestrictionView.Blocked(restriction)
+    }
+}
+
+private fun restrictionMatchesTransport(
+    restriction: NetworkRestriction,
+    currentTransport: CurrentTransport,
+): Boolean =
+    when (restriction) {
+        NetworkRestriction.WIFI_ONLY -> currentTransport == CurrentTransport.WIFI_LIKE
+        NetworkRestriction.CELLULAR_ONLY -> currentTransport == CurrentTransport.CELLULAR
+        // ANY is handled by `restrictionView` before reaching here; kept exhaustive
+        // so adding a new NetworkRestriction value forces an update at this site.
+        NetworkRestriction.ANY -> true
+    }
+
+/**
+ * Mirror of `InterfaceTransportFilter.ridesOnIpCarrier`, keyed off the entity's raw
+ * `(type, connection_mode)` rather than a parsed `InterfaceConfig`. The card path doesn't
+ * have a config, only the entity, so we duplicate the predicate and pin both with the
+ * `entityRidesOnIpCarrier_truthTable_matchesInterfaceTransportFilter` test to catch
+ * drift if a new interface type is added.
+ */
+internal fun entityRidesOnIpCarrier(entity: InterfaceEntity): Boolean =
+    when (entity.type) {
+        "AutoInterface", "TCPClient", "TCPServer", "UDP" -> true
+        "AndroidBLE" -> false
+        "RNode" -> readConnectionMode(entity.configJson) == "tcp"
+        else -> false
+    }
+
+/**
+ * Pull the persisted `network_restriction` off the entity's JSON, applying the same
+ * type-aware default as `InterfaceRepository.parseRestriction` so legacy rows (saved
+ * before the restriction column existed) render the chip the runtime filter actually
+ * applies.
+ */
+internal fun parseRestrictionForEntity(entity: InterfaceEntity): NetworkRestriction {
+    val defaultForType =
+        if (entity.type == "AutoInterface") NetworkRestriction.WIFI_ONLY else NetworkRestriction.ANY
+    val raw =
+        try {
+            JSONObject(entity.configJson).optString("network_restriction", "")
+        } catch (e: JSONException) {
+            Log.v("InterfaceUtils", "Malformed configJson for ${entity.name}", e)
+            ""
+        }
+    if (raw.isEmpty()) return defaultForType
+    return NetworkRestriction.fromValue(raw) ?: defaultForType
+}
+
+private fun readConnectionMode(configJson: String): String? =
+    try {
+        JSONObject(configJson).optString("connection_mode", "")
+            .takeIf { it.isNotEmpty() }
+    } catch (e: JSONException) {
+        Log.v("InterfaceUtils", "Malformed configJson while reading connection_mode", e)
+        null
+    }

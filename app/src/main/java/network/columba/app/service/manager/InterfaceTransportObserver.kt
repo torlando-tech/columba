@@ -11,6 +11,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import network.columba.app.repository.InterfaceRepository
@@ -61,6 +64,17 @@ class InterfaceTransportObserver
         @Volatile
         private var reloadJob: Job? = null
 
+        private val _currentTransport = MutableStateFlow(CurrentTransport.NONE)
+
+        /**
+         * Reactive view of the device's current transport class. Emits on every transition
+         * the observer treats as meaningful (i.e. once per call to `applyTransport()` that
+         * actually changed `lastTransport`). Seeded with `NONE` until the first capability
+         * callback fires after `start()` — collectors should treat that initial value as
+         * "unknown" rather than "definitely no network".
+         */
+        val currentTransport: StateFlow<CurrentTransport> = _currentTransport.asStateFlow()
+
         /**
          * Start observing transport changes. Caller supplies the `CoroutineScope` to launch
          * reload work in (typically `Application`-scoped so it outlives ViewModel rebuilds).
@@ -80,7 +94,7 @@ class InterfaceTransportObserver
                         // not just the default route — classify by activeNetwork so a cellular
                         // backup network's capability update doesn't masquerade as a transport
                         // change while Wi-Fi is still the default.
-                        applyTransport(currentTransport(), scope)
+                        applyTransport(snapshotTransport(), scope)
                     }
 
                     override fun onLost(network: Network) {
@@ -97,6 +111,15 @@ class InterfaceTransportObserver
             try {
                 connectivityManager.registerNetworkCallback(request, cb)
                 callback = cb
+                // Seed the reactive view at start() so the StateFlow's initial value
+                // reflects reality before the first capability callback fires. Without
+                // this, collectors that subscribe between start() and the first callback
+                // would briefly observe NONE even on a Wi-Fi-connected device. We do NOT
+                // touch `lastTransport` here — leaving it null preserves the
+                // "first callback always emits a transition" contract that
+                // `applyTransport()` relies on (boot-on-cellular drops a wifi-only
+                // AutoInterface immediately, not on the first carrier change).
+                _currentTransport.value = currentTransportOf(connectivityManager)
                 Log.d(TAG, "Transport observer started")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to register transport observer", e)
@@ -118,14 +141,18 @@ class InterfaceTransportObserver
             lastTransport = null
             reloadJob?.cancel()
             reloadJob = null
+            // Deliberately do NOT reset `_currentTransport` to NONE here — `stop()` runs
+            // at app teardown, and a NONE blip on the StateFlow would lie to any UI still
+            // alive (e.g. a Compose recomposition flushing during shutdown).
         }
 
         /**
          * Read the device's current transport without registering a callback. Used by
-         * one-shot config-build sites (`StartupConfigLoader`, `applyInterfaceChanges`) so
-         * the first config the native stack sees already has the right subset enabled.
+         * one-shot config-build sites (`StartupConfigLoader`, `applyInterfaceChanges`,
+         * `syncNativeInterfaces`) where a synchronous read is wanted instead of collecting
+         * the [currentTransport] Flow.
          */
-        fun currentTransport(): CurrentTransport = currentTransportOf(connectivityManager)
+        fun snapshotTransport(): CurrentTransport = currentTransportOf(connectivityManager)
 
         private fun applyTransport(
             transport: CurrentTransport,
@@ -134,6 +161,7 @@ class InterfaceTransportObserver
             if (transport == lastTransport) return
             val previous = lastTransport
             lastTransport = transport
+            _currentTransport.value = transport
             Log.i(TAG, "Transport changed: $previous → $transport — re-filtering interfaces")
             // Cancel any in-flight reload — the latest transport wins.
             reloadJob?.cancel()

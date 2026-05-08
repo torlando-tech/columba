@@ -68,7 +68,7 @@ class StartupConfigLoader
                 // very first config the native stack sees doesn't try to start e.g. a
                 // wifi-only AutoInterface while the phone is on cellular at boot.
                 val rawEnabled = interfacesDeferred.await()
-                val transport = transportObserver.currentTransport()
+                val transport = transportObserver.snapshotTransport()
                 val filteredEnabled = filterByTransport(rawEnabled, transport)
                 StartupConfig(
                     interfaces = filteredEnabled,

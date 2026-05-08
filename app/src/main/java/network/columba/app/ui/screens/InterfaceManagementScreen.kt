@@ -40,7 +40,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsInputAntenna
+import androidx.compose.material.icons.filled.SignalCellularAlt
+import androidx.compose.material.icons.filled.SignalCellularOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -83,7 +87,9 @@ import kotlinx.coroutines.delay
 import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.host.ble.util.BlePermissionManager
+import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
 import network.columba.app.ui.components.LocalCapabilities
@@ -324,6 +330,7 @@ fun InterfaceManagementScreen(
                                             },
                                             bluetoothState = state.bluetoothState,
                                             blePermissionsGranted = state.blePermissionsGranted,
+                                            currentTransport = state.currentTransport,
                                             isOnline = isOnline,
                                             peerCount = spawnedPeers.size,
                                             onErrorClick = { errorDialogInterface = iface },
@@ -579,6 +586,7 @@ fun InterfaceCard(
     onToggle: (Boolean) -> Unit,
     bluetoothState: Int,
     blePermissionsGranted: Boolean,
+    currentTransport: CurrentTransport = CurrentTransport.NONE,
     isOnline: Boolean? = null,
     peerCount: Int = 0,
     onErrorClick: (() -> Unit)? = null,
@@ -588,6 +596,15 @@ fun InterfaceCard(
     val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted, isOnline)
     val online = isOnline == true && interfaceEntity.enabled
     val statusColor = if (online) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val restrictionView = interfaceEntity.restrictionView(currentTransport)
+    // Whether the card's right-column status reads "Restricted" instead of "Offline".
+    // Only applies when the runtime filter would actually drop this interface — i.e.
+    // Blocked (current transport excludes) or NoNetwork (no default route at all).
+    val isRestrictedDormant = interfaceEntity.enabled &&
+        (
+            restrictionView is InterfaceRestrictionView.Blocked ||
+                restrictionView is InterfaceRestrictionView.NoNetwork
+        )
 
     Card(
         modifier =
@@ -655,6 +672,13 @@ fun InterfaceCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // Network-restriction indicator — only renders when the interface honours
+                // the restriction (i.e. NotApplicable hides). The chip variant carries the
+                // tone/icon decision; the rendering site stays branch-free here.
+                if (restrictionView !is InterfaceRestrictionView.NotApplicable) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    InterfaceRestrictionChip(restrictionView)
+                }
                 // Error / permission prompt
                 val needsPermission = !blePermissionsGranted && interfaceEntity.isBleInterface()
                 if (needsPermission) {
@@ -698,6 +722,7 @@ fun InterfaceCard(
                         when {
                             !interfaceEntity.enabled -> "Disabled"
                             online -> "Online"
+                            isRestrictedDormant -> stringResource(R.string.interface_status_restricted)
                             else -> "Offline"
                         },
                     style = MaterialTheme.typography.labelSmall,
@@ -705,6 +730,8 @@ fun InterfaceCard(
                         when {
                             !interfaceEntity.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
                             online -> Color(0xFF4CAF50)
+                            // "Restricted" is informational, not error — the user configured this. Keep
+                            // the muted tone instead of error-red so the card doesn't read as malfunctioning.
                             else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         },
                 )
@@ -1566,6 +1593,103 @@ fun DiscoveredInterfacesSummaryCard(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
+            )
+        }
+    }
+}
+
+/**
+ * Small static (non-interactive) pill rendering the interface's network-restriction state.
+ * Three flavours:
+ *
+ * - [InterfaceRestrictionView.Allowed]: subtle `surfaceVariant` info chip — restriction
+ *   applies but the current transport matches, so the interface is active.
+ * - [InterfaceRestrictionView.Blocked]: `tertiaryContainer` chip — the runtime filter
+ *   has dropped this interface because the current transport excludes it. Tertiary
+ *   (not error) because the user configured this; an error tone would mis-signal severity.
+ * - [InterfaceRestrictionView.NoNetwork]: `surfaceVariant` chip — no default route, IP
+ *   interfaces are inactive regardless of restriction. Same rationale as Blocked for
+ *   not using error.
+ */
+@Composable
+private fun InterfaceRestrictionChip(view: InterfaceRestrictionView) {
+    when (view) {
+        is InterfaceRestrictionView.NotApplicable -> Unit
+        is InterfaceRestrictionView.Allowed -> {
+            val (icon, labelRes) =
+                when (view.restriction) {
+                    NetworkRestriction.WIFI_ONLY -> Icons.Default.Wifi to R.string.interface_restriction_wifi_only
+                    NetworkRestriction.CELLULAR_ONLY ->
+                        Icons.Default.SignalCellularAlt to R.string.interface_restriction_cellular_only
+                    NetworkRestriction.ANY -> return // Defensive — Allowed(ANY) shouldn't reach here.
+                }
+            RestrictionChip(
+                icon = icon,
+                labelRes = labelRes,
+                container = MaterialTheme.colorScheme.surfaceVariant,
+                content = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        is InterfaceRestrictionView.Blocked -> {
+            val (icon, labelRes) =
+                when (view.restriction) {
+                    NetworkRestriction.WIFI_ONLY ->
+                        Icons.Default.WifiOff to R.string.interface_restriction_wifi_only_paused
+                    NetworkRestriction.CELLULAR_ONLY ->
+                        Icons.Default.SignalCellularOff to R.string.interface_restriction_cellular_only_paused
+                    NetworkRestriction.ANY -> return // Defensive — Blocked(ANY) shouldn't reach here.
+                }
+            // tertiaryContainer (not errorContainer) — a transport-restricted pause is
+            // not a malfunction, the user configured this. error tone would mis-signal severity.
+            RestrictionChip(
+                icon = icon,
+                labelRes = labelRes,
+                container = MaterialTheme.colorScheme.tertiaryContainer,
+                content = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+        }
+        is InterfaceRestrictionView.NoNetwork -> {
+            RestrictionChip(
+                icon = Icons.Default.WifiOff,
+                labelRes = R.string.interface_restriction_no_network,
+                container = MaterialTheme.colorScheme.surfaceVariant,
+                content = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RestrictionChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    labelRes: Int,
+    container: Color,
+    content: Color,
+) {
+    // A static, non-interactive pill — deliberately NOT an AssistChip. The indicator is
+    // purely informational, so it must not appear as an actionable control in the
+    // accessibility tree (a chip with a no-op onClick announces as clickable to TalkBack
+    // while doing nothing). The label text is the accessible name; the leading icon is
+    // decorative (null contentDescription) because the label already names the indicator —
+    // giving it a description would make TalkBack announce the same thing twice.
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = container,
+        contentColor = content,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = stringResource(labelRes),
+                style = MaterialTheme.typography.labelSmall,
             )
         }
     }

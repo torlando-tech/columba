@@ -19,10 +19,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *
  * When bumping the version, ALWAYS:
  *   1. Add the new Migration object below.
- *   2. Add it to [ALL_MIGRATIONS] so all three database providers
- *      (DatabaseModule, ServiceDatabaseProvider, InterfaceDatabaseModule)
+ *   2. Add it to [ALL_MIGRATIONS] so all ColumbaDatabase builders
+ *      (DatabaseModule, ServiceDatabaseProvider)
  *      pick it up automatically — there is one source of truth here, not
- *      three drifting copies.
+ *      two drifting copies.
  *   3. Bump the `version = N` value in the @Database annotation in
  *      ColumbaDatabase.kt to match.
  *   4. Add an entry to the version-history comment above.

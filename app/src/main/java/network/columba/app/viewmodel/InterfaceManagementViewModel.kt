@@ -24,6 +24,7 @@ import network.columba.app.reticulum.model.InterfaceConfig
 import network.columba.app.reticulum.model.NetworkRestriction
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.manager.CurrentTransport
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.service.manager.filterByTransport
 import network.columba.app.util.validation.InputValidator
@@ -64,6 +65,10 @@ data class InterfaceManagementState(
     val discoveredUnknownCount: Int = 0,
     val discoveredStaleCount: Int = 0,
     val isDiscoveryEnabled: Boolean = false,
+    // The device's current transport class — drives the "this interface is paused
+    // because you're on cellular" indicator on each card. `NONE` means either no
+    // active default network or that the observer hasn't seen its first callback yet.
+    val currentTransport: CurrentTransport = CurrentTransport.NONE,
 )
 
 /**
@@ -201,9 +206,25 @@ class InterfaceManagementViewModel
             Log.d(TAG, "ViewModel initialized")
             loadInterfaces()
             observeBluetoothState()
+            observeTransportChanges()
             checkExternalPendingChanges()
             observeInterfaceStatusChanges()
             loadDiscoveredInterfacesCount()
+        }
+
+        /**
+         * Seed `currentTransport` from the observer's snapshot, then collect future
+         * transitions. The seed covers the case where the screen opens before any
+         * capability callback has fired since `start()`, so the chip isn't stuck on
+         * `NONE` waiting for the user's first transport flip.
+         */
+        private fun observeTransportChanges() {
+            _state.update { it.copy(currentTransport = transportObserver.snapshotTransport()) }
+            viewModelScope.launch(ioDispatcher) {
+                transportObserver.currentTransport.collect { transport ->
+                    _state.update { it.copy(currentTransport = transport) }
+                }
+            }
         }
 
         /**
@@ -1111,7 +1132,7 @@ class InterfaceManagementViewModel
                 viewModelScope.launch(ioDispatcher) {
                     try {
                         val configs = interfaceRepository.enabledInterfaces.first()
-                        val filtered = filterByTransport(configs, transportObserver.currentTransport())
+                        val filtered = filterByTransport(configs, transportObserver.snapshotTransport())
                         reticulumProtocol.reloadInterfaces(filtered)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()

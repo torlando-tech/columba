@@ -86,7 +86,7 @@ class InterfaceConfigManagerTest {
         identityResolutionManager = mockk()
         propagationNodeManager = mockk()
         transportObserver = mockk()
-        every { transportObserver.currentTransport() } returns
+        every { transportObserver.snapshotTransport() } returns
             network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
         applicationScope = testScope.backgroundScope
 

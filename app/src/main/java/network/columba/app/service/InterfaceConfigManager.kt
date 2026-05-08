@@ -96,7 +96,7 @@ class InterfaceConfigManager
                     // Step 2: Load interfaces BEFORE stopping service
                     Log.d(TAG, "Step 2: Loading interfaces from database...")
                     val rawEnabledInterfaces = interfaceRepository.enabledInterfaces.first()
-                    val transport = transportObserver.currentTransport()
+                    val transport = transportObserver.snapshotTransport()
                     val enabledInterfaces = filterByTransport(rawEnabledInterfaces, transport)
                     Log.d(
                         TAG,

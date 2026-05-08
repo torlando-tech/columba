@@ -120,6 +120,91 @@ jobs:
           echo -e "$CHECKSUMS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      # When this release bumps reticulum-kt / LXMF-kt / LXST-kt vs the previous
+      # tag, fetch the commit log between the old and new lib versions and inject
+      # it into the release notes. Lib repos publish tags but not GitHub Releases,
+      # so we synthesize from `compare` API output instead.
+      - name: Build library-changelog injection
+        id: libchangelog
+        env:
+          TAG_NAME: ${{ steps.version.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Find the tag that immediately precedes this one in semver order.
+          PREV_TAG=$(git tag --sort=-v:refname \
+            | awk -v t="$TAG_NAME" 'BEGIN{found=0} { if (found) { print; exit } if ($0==t) { found=1 } }')
+          echo "previous tag: ${PREV_TAG:-(none — first release)}"
+
+          extract_pin() {
+            git show "$1:gradle/libs.versions.toml" 2>/dev/null \
+              | awk -v var="$2" '$1==var || $1==var"=" { for(i=1;i<=NF;i++){ if($i~/"v[0-9.]+"/){ gsub(/"/,"",$i); print $i; exit }}}'
+          }
+
+          NOTES=""
+          # libdef format: "<libs.versions.toml var>:<github repo>"
+          for libdef in "reticulumKt:reticulum-kt" "lxmfKt:LXMF-kt" "lxstKt:LXST-kt"; do
+            var="${libdef%%:*}"
+            repo="${libdef##*:}"
+            old=""
+            if [ -n "$PREV_TAG" ]; then
+              old=$(extract_pin "$PREV_TAG" "$var" || true)
+            fi
+            new=$(extract_pin "$TAG_NAME" "$var" || true)
+
+            # Skip if not pinned in this release, or if unchanged.
+            if [ -z "$new" ]; then
+              echo "skip $repo: no pin in $TAG_NAME"
+              continue
+            fi
+            if [ "$old" = "$new" ]; then
+              echo "skip $repo: unchanged at $new"
+              continue
+            fi
+
+            echo "$repo: ${old:-(unpinned)} -> $new"
+            NOTES+=$'\n### `'"$repo"$'` updated: `'"${old:-unpinned}"$'` → `'"$new"$'`\n\n'
+            NOTES+="See https://github.com/torlando-tech/$repo/compare/${old:-$new}...${new}"$'\n\n'
+
+            if [ -n "$old" ]; then
+              # Pull commit messages between old and new lib tags. Filter to
+              # noteworthy conventional-commit types only — feat/fix/perf/breaking
+              # — to keep the lib changelog focused. chore/ci/test/review/revert/
+              # build/style/refactor noise is hidden, with a per-tag "compare" link
+              # already provided above for anyone who wants the full diff.
+              # gh api compare returns up to 250 commits per page; --paginate
+              # handles larger spans defensively.
+              if log=$(gh api --paginate "repos/torlando-tech/$repo/compare/$old...$new" \
+                  --jq '.commits[]
+                        | select(.commit.message | test("^Merge ") | not)
+                        | (.commit.message | split("\n")[0]) as $subject
+                        | select($subject | test("^(feat|fix|perf)(\\([^)]+\\))?!?:|^[A-Z][^:]+$|^BREAKING"))
+                        | "- " + $subject + " (`" + (.sha[0:7]) + "`)"' 2>/dev/null); then
+                if [ -n "$log" ]; then
+                  NOTES+="$log"$'\n'
+                else
+                  NOTES+="_(no user-facing feat/fix/perf commits — only chores/tests/reviews; see compare link for the full diff.)_"$'\n'
+                fi
+              else
+                NOTES+="_(failed to fetch compare; see GitHub link above)_"$'\n'
+              fi
+            else
+              NOTES+="_First inclusion of this library — no prior version to diff against._"$'\n'
+            fi
+          done
+
+          # If anything got injected, wrap with a section header. Empty otherwise.
+          if [ -n "$NOTES" ]; then
+            FINAL=$'\n### Reticulum / LXMF / LXST updates\n\nThis release picks up the following library updates:'"$NOTES"
+          else
+            FINAL=""
+          fi
+
+          echo "notes<<__EOF__" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$FINAL" >> "$GITHUB_OUTPUT"
+          echo "__EOF__" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -161,9 +246,8 @@ jobs:
             ```
             ${{ steps.sha256.outputs.checksums }}
             ```
-
+            ${{ steps.libchangelog.outputs.notes }}
             ### What's Changed
-            See the release notes below for details.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

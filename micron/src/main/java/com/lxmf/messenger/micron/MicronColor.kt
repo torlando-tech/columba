@@ -41,7 +41,7 @@ sealed class MicronColor {
         private const val HEX_RADIX = 16
         private const val HEX_DOUBLER = 0x11
         private const val MAX_GRAYSCALE = 99
-        private const val TRUE_COLOR_LEN = 6
+        internal const val TRUE_COLOR_LEN = 6
 
         /**
          * Parse a Micron color string (3 chars after F/B command).

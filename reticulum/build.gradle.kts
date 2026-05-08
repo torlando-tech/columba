@@ -98,7 +98,7 @@ dependencies {
     // Instrumented Testing (androidTest)
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.test.core)
-    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:runner:1.7.0")
 }
 
 ksp {

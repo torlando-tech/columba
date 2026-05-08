@@ -237,8 +237,14 @@ class RnsApi:
         # hop count, but cap so we leave time for the page request itself.
         # RNS.Link.ESTABLISHMENT_TIMEOUT_PER_HOP is the documented Link-level
         # alias for RNS.Reticulum.DEFAULT_PER_HOP_TIMEOUT (both = 6 in the
-        # reference; see RNS/Link.py:75 and RNS/Reticulum.py:141).
-        per_attempt_base = RNS.Link.ESTABLISHMENT_TIMEOUT_PER_HOP * max(1, hops) + 6
+        # reference; see RNS/Link.py:75 and RNS/Reticulum.py:141). Use a
+        # defensive getattr chain so older/fork RNS builds that don't expose
+        # the constant under either name fall back to the literal default of
+        # 6s rather than raising AttributeError and breaking all browsing.
+        per_hop_timeout = getattr(
+            RNS.Link, 'ESTABLISHMENT_TIMEOUT_PER_HOP',
+            getattr(RNS.Reticulum, 'DEFAULT_PER_HOP_TIMEOUT', 6))
+        per_attempt_base = per_hop_timeout * max(1, hops) + 6
         last_reason = None
         last_status = None
         attempts_made = 0

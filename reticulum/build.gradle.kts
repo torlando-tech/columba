@@ -93,7 +93,7 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20251224")
 
     // Instrumented Testing (androidTest)
     androidTestImplementation(libs.junit.android)

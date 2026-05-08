@@ -456,7 +456,7 @@ dependencies {
     testImplementation(libs.paging.testing)
     testImplementation(libs.test.core)
     testImplementation("androidx.test.ext:junit:1.1.5")
-    testImplementation("org.json:json:20231013") // Real JSON implementation for unit tests
+    testImplementation("org.json:json:20251224") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.espresso)
     // Note: mockk-android removed - requires minSdk 26 but project uses 24

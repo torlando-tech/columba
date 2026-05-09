@@ -38,6 +38,8 @@
                 <action android:name="network.columba.test.ENABLE_INTERFACE" />
                 <action android:name="network.columba.test.ADD_TCP_CLIENT" />
                 <action android:name="network.columba.test.REMOVE_INTERFACE" />
+                <action android:name="network.columba.test.SET_PROP_NODE" />
+                <action android:name="network.columba.test.SYNC_PROP" />
             </intent-filter>
         </receiver>
     </application>

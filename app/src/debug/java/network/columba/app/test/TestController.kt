@@ -304,6 +304,62 @@ object TestController {
         }
     }
 
+    /** Configure (or clear) the outbound propagation node. Pass an empty
+     * `hex` to clear. The protocol stores the dest hash and uses it as
+     * the relay for any subsequent PROPAGATED message. */
+    fun handleSetPropNode(context: Context, hex: String) {
+        ensureInit(context)
+        scope.launch {
+            val bytes = if (hex.isBlank()) null else hex.fromHex()
+            if (hex.isNotBlank() && bytes == null) {
+                Log.i(LOGCAT_TAG, "prop_node_err reason=bad_hex hex=$hex")
+                return@launch
+            }
+            val res = protocol!!.setOutboundPropagationNode(bytes)
+            if (res.isSuccess) {
+                Log.i(
+                    LOGCAT_TAG,
+                    "prop_node_set hex=${if (bytes == null) "(cleared)" else hex}",
+                )
+            } else {
+                Log.i(
+                    LOGCAT_TAG,
+                    "prop_node_err reason=${escape(res.exceptionOrNull()?.message ?: "unknown")}",
+                )
+            }
+        }
+    }
+
+    /** Kick a propagation-node sync — fetches any messages waiting for
+     * this peer at the configured PN. Anything new arrives via the
+     * existing observeMessages flow → rxQueue. */
+    fun handleSyncProp(context: Context) {
+        ensureInit(context)
+        scope.launch {
+            val identity = protocol!!.getLxmfIdentity().getOrNull()
+            if (identity?.privateKey == null) {
+                Log.i(LOGCAT_TAG, "prop_sync_err reason=no_active_identity_priv")
+                return@launch
+            }
+            val res = protocol!!.requestMessagesFromPropagationNode(
+                identityPrivateKey = identity.privateKey,
+            )
+            if (res.isSuccess) {
+                val state = res.getOrNull()
+                Log.i(
+                    LOGCAT_TAG,
+                    "prop_sync_started state=${state?.state ?: "?"} " +
+                        "messages_received=${state?.messagesReceived ?: 0}",
+                )
+            } else {
+                Log.i(
+                    LOGCAT_TAG,
+                    "prop_sync_err reason=${escape(res.exceptionOrNull()?.message ?: "unknown")}",
+                )
+            }
+        }
+    }
+
     fun handleRemoveInterface(context: Context, name: String) {
         ensureInit(context)
         scope.launch {

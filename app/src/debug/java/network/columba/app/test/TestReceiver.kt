@@ -64,6 +64,45 @@ class TestReceiver : BroadcastReceiver() {
             "network.columba.test.RX_CLEAR" ->
                 TestController.handleRxClear(app)
 
+            "network.columba.test.ANNOUNCE" ->
+                TestController.handleAnnounce(app)
+
+            "network.columba.test.LIST_INTERFACES" ->
+                TestController.handleListInterfaces(app)
+
+            "network.columba.test.DISABLE_ALL_INTERFACES" ->
+                TestController.handleDisableAllInterfaces(app)
+
+            "network.columba.test.DISABLE_INTERFACE" -> {
+                val name = intent.getStringExtra("name") ?: ""
+                TestController.handleSetInterfaceEnabled(app, name, enabled = false)
+            }
+
+            "network.columba.test.ENABLE_INTERFACE" -> {
+                val name = intent.getStringExtra("name") ?: ""
+                TestController.handleSetInterfaceEnabled(app, name, enabled = true)
+            }
+
+            "network.columba.test.ADD_TCP_CLIENT" -> {
+                val name = intent.getStringExtra("name") ?: ""
+                val host = intent.getStringExtra("host") ?: ""
+                val port = intent.getStringExtra("port")?.toIntOrNull() ?: -1
+                if (name.isEmpty() || host.isEmpty() || port !in 1..65535) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "interface_add_err reason=missing_or_invalid_extras " +
+                            "name=$name host=$host port=$port",
+                    )
+                } else {
+                    TestController.handleAddTcpClient(app, name, host, port)
+                }
+            }
+
+            "network.columba.test.REMOVE_INTERFACE" -> {
+                val name = intent.getStringExtra("name") ?: ""
+                TestController.handleRemoveInterface(app, name)
+            }
+
             else ->
                 Log.i(TestController.LOGCAT_TAG, "rx_broadcast_unknown action=$action")
         }

@@ -236,9 +236,16 @@ jobs:
             FINAL=""
           fi
 
-          echo "notes<<__EOF__" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$FINAL" >> "$GITHUB_OUTPUT"
-          echo "__EOF__" >> "$GITHUB_OUTPUT"
+          # Use a random per-run delimiter so the heredoc can't be closed
+          # early by a literal line in a fetched commit message. GitHub
+          # Actions docs recommend this pattern:
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
+          delim="LIBCHANGELOG_$(openssl rand -hex 16)"
+          {
+            printf '%s<<%s\n' "notes" "$delim"
+            printf '%s\n' "$FINAL"
+            printf '%s\n' "$delim"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

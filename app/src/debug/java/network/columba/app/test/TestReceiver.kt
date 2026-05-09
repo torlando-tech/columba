@@ -98,6 +98,14 @@ class TestReceiver : BroadcastReceiver() {
                 }
             }
 
+            "network.columba.test.SET_PROP_NODE" -> {
+                val hex = intent.getStringExtra("hex") ?: ""
+                TestController.handleSetPropNode(app, hex)
+            }
+
+            "network.columba.test.SYNC_PROP" ->
+                TestController.handleSyncProp(app)
+
             "network.columba.test.REMOVE_INTERFACE" -> {
                 val name = intent.getStringExtra("name") ?: ""
                 TestController.handleRemoveInterface(app, name)

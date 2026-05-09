@@ -15,6 +15,24 @@
             android:name="leakcanary.internal.activity.LeakLauncherActivity"
             android:enabled="false"
             tools:replace="android:enabled" />
+
+        <!-- Debug-only: exposes a BroadcastReceiver that the columba phone
+             harness drives via `adb shell am broadcast`. See TestReceiver.kt
+             for the full action contract. Compiled out of release builds. -->
+        <receiver
+            android:name="network.columba.app.test.TestReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="network.columba.test.GET_DEST" />
+                <action android:name="network.columba.test.HAS_PATH" />
+                <action android:name="network.columba.test.SEND_DIRECT" />
+                <action android:name="network.columba.test.SEND_OPP" />
+                <action android:name="network.columba.test.SEND_PROP" />
+                <action android:name="network.columba.test.GET_MSG_STATE" />
+                <action android:name="network.columba.test.GET_RX" />
+                <action android:name="network.columba.test.RX_CLEAR" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

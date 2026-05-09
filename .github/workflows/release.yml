@@ -169,7 +169,7 @@ jobs:
             fi
 
             echo "$repo: ${old:-(unpinned)} -> $new"
-            NOTES+=$'\n### `'"$repo"$'` updated: `'"${old:-unpinned}"$'` → `'"$new"$'`\n\n'
+            NOTES+=$'\n#### `'"$repo"$'` updated: `'"${old:-unpinned}"$'` → `'"$new"$'`\n\n'
 
             if [ -n "$old" ]; then
               # Compare link only makes sense when there's a prior version

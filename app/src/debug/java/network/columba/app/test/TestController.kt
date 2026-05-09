@@ -10,12 +10,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.reticulum.model.NetworkRestriction
 import network.columba.app.reticulum.protocol.DeliveryMethod
 import network.columba.app.reticulum.protocol.DeliveryStatusUpdate
 import network.columba.app.reticulum.protocol.ReceivedMessage
 import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.repository.InterfaceRepository
+import network.columba.app.service.InterfaceConfigManager
 
 /**
  * Debug-only test surface for the columba phone harness.
@@ -37,10 +42,14 @@ object TestController {
     @InstallIn(SingletonComponent::class)
     interface TestEntryPoint {
         fun reticulumProtocol(): ReticulumProtocol
+        fun interfaceRepository(): InterfaceRepository
+        fun interfaceConfigManager(): InterfaceConfigManager
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var protocol: ReticulumProtocol? = null
+    private var interfaceRepo: InterfaceRepository? = null
+    private var interfaceConfigManager: InterfaceConfigManager? = null
     private val rxQueue = mutableListOf<ReceivedMessage>()
     private val rxLock = Any()
     private val deliveryStates = mutableMapOf<String, String>() // msgHashHex -> stateName
@@ -57,6 +66,8 @@ object TestController {
             TestEntryPoint::class.java,
         )
         protocol = ep.reticulumProtocol()
+        interfaceRepo = ep.interfaceRepository()
+        interfaceConfigManager = ep.interfaceConfigManager()
         receiveJob = scope.launch {
             protocol!!.observeMessages().collect { msg ->
                 synchronized(rxLock) { rxQueue.add(msg) }
@@ -180,6 +191,149 @@ object TestController {
         ensureInit(context)
         synchronized(rxLock) { rxQueue.clear() }
         Log.i(LOGCAT_TAG, "rx_cleared")
+    }
+
+    /** Force an announce of the active LXMF destination. Critical for the
+     * harness — peers can't echo back to the phone until they've seen its
+     * announce, and Columba may not announce on a fresh interface for a
+     * while. This is also gated by a Columba-internal "minimum interval
+     * between announces" rate-limiter. If your call returns
+     * `applied=false`, that's almost certainly the cause. */
+    fun handleAnnounce(context: Context) {
+        ensureInit(context)
+        scope.launch {
+            val dest = protocol!!.getLxmfDestination().getOrNull() ?: run {
+                Log.i(LOGCAT_TAG, "announce_err reason=no_active_destination")
+                return@launch
+            }
+            val result = protocol!!.announceDestination(dest)
+            if (result.isSuccess) {
+                Log.i(LOGCAT_TAG, "announced dest=${dest.hexHash}")
+            } else {
+                Log.i(
+                    LOGCAT_TAG,
+                    "announce_err dest=${dest.hexHash} reason=${escape(result.exceptionOrNull()?.message ?: "unknown")}",
+                )
+            }
+        }
+    }
+
+    // ─── interface management ──────────────────────────────────────────
+
+    fun handleListInterfaces(context: Context) {
+        ensureInit(context)
+        scope.launch {
+            val rows = interfaceRepo!!.allInterfaceEntities.first()
+            for (e in rows) {
+                Log.i(
+                    LOGCAT_TAG,
+                    "interface id=${e.id} name=${escape(e.name)} type=${e.type} enabled=${e.enabled}",
+                )
+            }
+            Log.i(LOGCAT_TAG, "interface_list_done count=${rows.size}")
+        }
+    }
+
+    /** Disables every existing interface (sets enabled=false). Does NOT
+     * delete — the user's config survives. Useful for "isolate one test
+     * interface" setups: disable all, then enable/add the test one. */
+    fun handleDisableAllInterfaces(context: Context) {
+        ensureInit(context)
+        scope.launch {
+            val rows = interfaceRepo!!.allInterfaceEntities.first()
+            var disabled = 0
+            for (e in rows) {
+                if (e.enabled) {
+                    interfaceRepo!!.toggleInterfaceEnabled(e.id, false)
+                    disabled++
+                }
+            }
+            applyAndLog("interfaces_disabled", "count=$disabled")
+        }
+    }
+
+    fun handleSetInterfaceEnabled(context: Context, name: String, enabled: Boolean) {
+        ensureInit(context)
+        scope.launch {
+            val e = interfaceRepo!!.findInterfaceByName(name)
+            if (e == null) {
+                Log.i(
+                    LOGCAT_TAG,
+                    "interface_${if (enabled) "enable" else "disable"}_err " +
+                        "name=${escape(name)} reason=not_found",
+                )
+                return@launch
+            }
+            interfaceRepo!!.toggleInterfaceEnabled(e.id, enabled)
+            applyAndLog(
+                if (enabled) "interface_enabled" else "interface_disabled",
+                "name=${escape(name)} id=${e.id}",
+            )
+        }
+    }
+
+    /** Adds a new TCP-client interface targeting host:port. If an interface
+     * with the same name already exists, replaces it (delete-then-insert)
+     * so repeat invocations are idempotent. */
+    fun handleAddTcpClient(
+        context: Context,
+        name: String,
+        host: String,
+        port: Int,
+    ) {
+        ensureInit(context)
+        scope.launch {
+            val existing = interfaceRepo!!.findInterfaceByName(name)
+            if (existing != null) {
+                interfaceRepo!!.deleteInterface(existing.id)
+            }
+            val cfg = InterfaceConfig.TCPClient(
+                name = name,
+                enabled = true,
+                targetHost = host,
+                targetPort = port,
+                kissFraming = false,
+                mode = "full",
+                networkRestriction = NetworkRestriction.ANY,
+            )
+            val newId = interfaceRepo!!.insertInterface(cfg)
+            applyAndLog(
+                "interface_added",
+                "name=${escape(name)} id=$newId type=TCPClient host=${escape(host)} port=$port",
+            )
+        }
+    }
+
+    fun handleRemoveInterface(context: Context, name: String) {
+        ensureInit(context)
+        scope.launch {
+            val e = interfaceRepo!!.findInterfaceByName(name)
+            if (e == null) {
+                Log.i(
+                    LOGCAT_TAG,
+                    "interface_remove_err name=${escape(name)} reason=not_found",
+                )
+                return@launch
+            }
+            interfaceRepo!!.deleteInterface(e.id)
+            applyAndLog("interface_removed", "name=${escape(name)} id=${e.id}")
+        }
+    }
+
+    /** Calls applyInterfaceChanges() on the config manager so the just-edited
+     * DB rows actually take effect on the running stack, then logs the
+     * provided event. */
+    private suspend fun applyAndLog(event: String, extras: String) {
+        val res = interfaceConfigManager!!.applyInterfaceChanges()
+        if (res.isSuccess) {
+            Log.i(LOGCAT_TAG, "$event $extras applied=true")
+        } else {
+            val err = res.exceptionOrNull()?.message ?: "unknown"
+            Log.i(
+                LOGCAT_TAG,
+                "$event $extras applied=false err=${escape(err)}",
+            )
+        }
     }
 }
 

@@ -31,6 +31,13 @@
                 <action android:name="network.columba.test.GET_MSG_STATE" />
                 <action android:name="network.columba.test.GET_RX" />
                 <action android:name="network.columba.test.RX_CLEAR" />
+                <action android:name="network.columba.test.ANNOUNCE" />
+                <action android:name="network.columba.test.LIST_INTERFACES" />
+                <action android:name="network.columba.test.DISABLE_ALL_INTERFACES" />
+                <action android:name="network.columba.test.DISABLE_INTERFACE" />
+                <action android:name="network.columba.test.ENABLE_INTERFACE" />
+                <action android:name="network.columba.test.ADD_TCP_CLIENT" />
+                <action android:name="network.columba.test.REMOVE_INTERFACE" />
             </intent-filter>
         </receiver>
     </application>

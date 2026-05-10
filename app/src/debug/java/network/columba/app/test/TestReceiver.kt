@@ -15,6 +15,11 @@ import network.columba.app.reticulum.protocol.DeliveryMethod
  * Action contract (one action per row; reply lines under
  * [TestController.LOGCAT_TAG] tag, format `event=… key=…`):
  *
+ * Any handler may also emit a catch-all
+ * `launch_err type=<ExClass> msg=<…>` line if an unhandled exception
+ * escapes a `scope.launch` — the harness should treat this as a hard
+ * failure for whichever command was in flight.
+ *
  *   network.columba.test.GET_DEST                     -> dest=<hex> | dest_err reason=not_ready
  *   network.columba.test.HAS_PATH       --es to       -> has_path to=<hex> result=0|1
  *   network.columba.test.SEND_DIRECT    --es to,text  -> msg_sent id=<hex> method=DIRECT

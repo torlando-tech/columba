@@ -6,6 +6,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,7 +47,24 @@ object TestController {
         fun interfaceConfigManager(): InterfaceConfigManager
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // Surface uncaught throws inside any scope.launch as a parseable
+    // logcat line under LOGCAT_TAG, so the harness sees a failure event
+    // instead of hanging on a missing success event. Without this, an
+    // exception in a launch (e.g. SQLiteException from Room in the
+    // interface-management handlers) would go to Android's default
+    // uncaught-exception sink — visible in logcat as a stack trace under
+    // the kotlinx.coroutines tag, but invisible to a harness scanning
+    // only COLUMBA_TEST.
+    private val launchErrorHandler = CoroutineExceptionHandler { _, t ->
+        Log.e(
+            LOGCAT_TAG,
+            "launch_err type=${t.javaClass.simpleName} msg=${escape(t.message ?: "")}",
+            t,
+        )
+    }
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + launchErrorHandler,
+    )
     private var protocol: ReticulumProtocol? = null
     private var interfaceRepo: InterfaceRepository? = null
     private var interfaceConfigManager: InterfaceConfigManager? = null

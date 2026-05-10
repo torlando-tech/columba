@@ -26,7 +26,16 @@ import network.columba.app.reticulum.protocol.DeliveryMethod
  *   network.columba.test.SEND_OPP       --es to,text  -> msg_sent id=<hex> method=OPPORTUNISTIC
  *   network.columba.test.SEND_PROP      --es to,text  -> msg_sent id=<hex> method=PROPAGATED
  *   network.columba.test.GET_MSG_STATE  --es id       -> msg_state id=<hex> state=<…> | msg_state_err reason=missing_id
- *   network.columba.test.GET_RX                       -> N×rx_msg lines + rx_drain count=N
+ *   network.columba.test.GET_RX                       -> N×rx_msg source=drain lines + rx_drain count=N
+ *
+ * NOTE: `rx_msg` lines also stream live from the observer at message
+ * arrival, tagged `source=stream`. A harness that only cares about
+ * "any delivery" can match the bare `rx_msg from=… id=… content=…`
+ * pattern (the `source=` token sits between `rx_msg` and `from=`).
+ * To count exactly once, pin to one source via `rx_msg source=stream`
+ * or `rx_msg source=drain`. All values are escape()'d — whitespace
+ * becomes a Unicode Control-Picture sentinel so values are always
+ * single tokens.
  *   network.columba.test.RX_CLEAR                     -> rx_cleared
  *   network.columba.test.ANNOUNCE                     -> announced dest=<hex> | announce_err …
  *   network.columba.test.LIST_INTERFACES              -> N×interface lines + interface_list_done count=N

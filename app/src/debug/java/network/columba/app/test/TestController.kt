@@ -89,9 +89,16 @@ object TestController {
         receiveJob = scope.launch {
             protocol!!.observeMessages().collect { msg ->
                 synchronized(rxLock) { rxQueue.add(msg) }
+                // `source=stream` distinguishes real-time observer logs
+                // from the queue drain emitted by handleGetRx (where lines
+                // carry `source=drain`). Without the tag, every received
+                // message would appear twice in logcat — once here when
+                // it streams in, again when GET_RX drains the queue —
+                // and a harness regex matching plain `rx_msg …` would
+                // sometimes hit the duplicate first and confuse counts.
                 Log.i(
                     LOGCAT_TAG,
-                    "rx_msg from=${msg.sourceHash.toHex()} " +
+                    "rx_msg source=stream from=${msg.sourceHash.toHex()} " +
                         "id=${msg.messageHash} content=${escape(msg.content)}",
                 )
             }
@@ -203,9 +210,12 @@ object TestController {
             rxQueue.clear()
         }
         for (msg in drained) {
+            // `source=drain` mirrors the streaming-observer convention so
+            // a harness can wait on rx_msg from either path while keeping
+            // counts honest (no double-logging the same delivery).
             Log.i(
                 LOGCAT_TAG,
-                "rx_msg from=${msg.sourceHash.toHex()} " +
+                "rx_msg source=drain from=${msg.sourceHash.toHex()} " +
                     "id=${msg.messageHash} content=${escape(msg.content)}",
             )
         }
@@ -448,5 +458,16 @@ private fun String.fromHex(): ByteArray? {
 /** Escape a value for the `key=value` log format: replace any
  * whitespace and special chars that confuse the harness's regex. */
 private fun escape(s: String): String =
-    s.replace('\n', '⏎').replace('\r', ' ').replace('\t', ' ')
+    // Replace every whitespace char with a visible non-whitespace sentinel
+    // so the result is always a single token in the harness's `key=value`
+    // format and matches `\S+` regexes. Previously `\r`/`\t` were replaced
+    // *with literal spaces* (which is itself token-breaking), and plain
+    // ` ` (0x20) wasn't escaped at all — so any message content or
+    // interface name containing a space would split the log line into
+    // multiple tokens and break harness parsing.
+    //   ' ' (0x20)  → '␣' (U+2423 OPEN BOX)
+    //   '\n' (0x0A) → '⏎' (U+23CE RETURN SYMBOL)
+    //   '\r' (0x0D) → '␍' (U+240D SYMBOL FOR CARRIAGE RETURN)
+    //   '\t' (0x09) → '␉' (U+2409 SYMBOL FOR HORIZONTAL TABULATION)
+    s.replace(" ", "␣").replace("\n", "⏎").replace("\r", "␍").replace("\t", "␉")
         .let { if (it.length > 1024) it.substring(0, 1024) + "…" else it }

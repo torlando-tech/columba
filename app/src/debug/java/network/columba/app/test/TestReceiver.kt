@@ -25,7 +25,7 @@ import network.columba.app.reticulum.protocol.DeliveryMethod
  *   network.columba.test.SEND_DIRECT    --es to,text  -> msg_sent id=<hex> method=DIRECT
  *   network.columba.test.SEND_OPP       --es to,text  -> msg_sent id=<hex> method=OPPORTUNISTIC
  *   network.columba.test.SEND_PROP      --es to,text  -> msg_sent id=<hex> method=PROPAGATED
- *   network.columba.test.GET_MSG_STATE  --es id       -> msg_state id=<hex> state=<…>
+ *   network.columba.test.GET_MSG_STATE  --es id       -> msg_state id=<hex> state=<…> | msg_state_err reason=missing_id
  *   network.columba.test.GET_RX                       -> N×rx_msg lines + rx_drain count=N
  *   network.columba.test.RX_CLEAR                     -> rx_cleared
  *   network.columba.test.ANNOUNCE                     -> announced dest=<hex> | announce_err …
@@ -105,7 +105,14 @@ class TestReceiver : BroadcastReceiver() {
 
             "network.columba.test.GET_MSG_STATE" -> {
                 val id = intent.getStringExtra("id") ?: ""
-                TestController.handleGetMsgState(app, id)
+                if (id.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "msg_state_err reason=missing_id",
+                    )
+                } else {
+                    TestController.handleGetMsgState(app, id)
+                }
             }
 
             "network.columba.test.GET_RX" ->

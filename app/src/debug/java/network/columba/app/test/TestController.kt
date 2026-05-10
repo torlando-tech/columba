@@ -196,9 +196,10 @@ object TestController {
     /** Force an announce of the active LXMF destination. Critical for the
      * harness — peers can't echo back to the phone until they've seen its
      * announce, and Columba may not announce on a fresh interface for a
-     * while. This is also gated by a Columba-internal "minimum interval
-     * between announces" rate-limiter. If your call returns
-     * `applied=false`, that's almost certainly the cause. */
+     * while. Rate-limited internally by Columba ("minimum interval between
+     * announces"); on success the reply is `announced dest=<hex>`, on
+     * failure it's `announce_err dest=<hex> reason=<msg>` (or
+     * `announce_err reason=no_active_destination` before LXMF is up). */
     fun handleAnnounce(context: Context) {
         ensureInit(context)
         scope.launch {

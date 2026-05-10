@@ -372,11 +372,20 @@ object TestController {
             )
             if (res.isSuccess) {
                 val state = res.getOrNull()
-                Log.i(
-                    LOGCAT_TAG,
-                    "prop_sync_started state=${state?.state ?: "?"} " +
-                        "messages_received=${state?.messagesReceived ?: 0}",
-                )
+                if (state == null) {
+                    // Result.success(null) isn't documented in
+                    // requestMessagesFromPropagationNode's contract — emit a
+                    // distinct error token rather than a `state=?` sentinel
+                    // that would silently get past a harness regex expecting
+                    // a numeric `state=<n>`.
+                    Log.i(LOGCAT_TAG, "prop_sync_err reason=null_result")
+                } else {
+                    Log.i(
+                        LOGCAT_TAG,
+                        "prop_sync_started state=${state.state} " +
+                            "messages_received=${state.messagesReceived}",
+                    )
+                }
             } else {
                 Log.i(
                     LOGCAT_TAG,

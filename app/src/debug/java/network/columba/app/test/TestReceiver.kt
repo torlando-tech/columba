@@ -132,12 +132,26 @@ class TestReceiver : BroadcastReceiver() {
 
             "network.columba.test.DISABLE_INTERFACE" -> {
                 val name = intent.getStringExtra("name") ?: ""
-                TestController.handleSetInterfaceEnabled(app, name, enabled = false)
+                if (name.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "interface_disable_err reason=missing_name",
+                    )
+                } else {
+                    TestController.handleSetInterfaceEnabled(app, name, enabled = false)
+                }
             }
 
             "network.columba.test.ENABLE_INTERFACE" -> {
                 val name = intent.getStringExtra("name") ?: ""
-                TestController.handleSetInterfaceEnabled(app, name, enabled = true)
+                if (name.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "interface_enable_err reason=missing_name",
+                    )
+                } else {
+                    TestController.handleSetInterfaceEnabled(app, name, enabled = true)
+                }
             }
 
             "network.columba.test.ADD_TCP_CLIENT" -> {
@@ -165,7 +179,14 @@ class TestReceiver : BroadcastReceiver() {
 
             "network.columba.test.REMOVE_INTERFACE" -> {
                 val name = intent.getStringExtra("name") ?: ""
-                TestController.handleRemoveInterface(app, name)
+                if (name.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "interface_remove_err reason=missing_name",
+                    )
+                } else {
+                    TestController.handleRemoveInterface(app, name)
+                }
             }
 
             else ->

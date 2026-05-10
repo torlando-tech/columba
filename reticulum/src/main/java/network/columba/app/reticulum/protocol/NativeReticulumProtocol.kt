@@ -411,15 +411,43 @@ class NativeReticulumProtocol(
         Transport.destinationRatchetStore = null
         network.reticulum.identity.Identity.identityStore = null
 
+        // Drain the DB writer before closing the database. Reticulum.stop()'s
+        // final flush calls packetHashStore.saveAll(), which posts a deleteByGeneration
+        // and N chunked insertAll(500) writes onto this single-thread executor. With a
+        // large hashlist those transactions can take well past 5s to drain. Previously
+        // we ignored awaitTermination's boolean — so on slow drains, reticulumDatabase
+        // .close() ran while a worker was mid-endTransaction, and Room's
+        // SQLiteClosable.acquireReference threw IllegalStateException
+        // ("attempt to re-open an already-closed object"). See Sentry COLUMBA-8R.
         reticulumDbWriteExecutor?.let { executor ->
             executor.shutdown()
             try {
-                // TODO(#857): the boolean return is being discarded. Fixed in PR #857
-                // (NativeReticulumProtocol shutdown race) — once that lands, this
-                // @Suppress can be removed (the call gets wrapped in `if (!...)`).
-                @Suppress("DiscardedConcurrencyReturn")
-                executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
+                if (!executor.awaitTermination(15, java.util.concurrent.TimeUnit.SECONDS)) {
+                    Log.w(
+                        TAG,
+                        "DB write executor did not drain within 15s; forcing shutdownNow. " +
+                            "Some persisted writes may be lost.",
+                    )
+                    executor.shutdownNow()
+                    if (!executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                        Log.e(TAG, "DB write executor still running after shutdownNow + 5s wait; closing DB anyway")
+                    }
+                }
             } catch (_: InterruptedException) {
+                // shutdownNow() signals workers but does not wait. We still need a
+                // brief drain before reticulumDatabase?.close() runs, otherwise a
+                // worker mid-endTransaction races the close (the very COLUMBA-8R
+                // bug this method exists to fix). Re-asserting Thread.interrupt()
+                // before awaitTermination would make it throw immediately and skip
+                // the drain — so wait first, then restore the flag.
+                executor.shutdownNow()
+                try {
+                    executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)
+                } catch (_: InterruptedException) {
+                    // Give up entirely; we still proceed to close the DB below
+                    // because leaving a half-drained executor + open DB across
+                    // shutdown is worse than losing the in-flight writes.
+                }
                 Thread.currentThread().interrupt()
             }
         }

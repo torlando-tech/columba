@@ -99,8 +99,15 @@ object TestController {
             val identity = protocol!!.getLxmfIdentity().getOrNull()
             // Prefer the LXMF destination hash (what peers route to).
             // Fall back to identity hash if destination isn't ready.
-            val hex = dest?.hexHash ?: dest?.hash?.toHex() ?: identity?.hash?.toHex() ?: ""
-            Log.i(LOGCAT_TAG, "dest=$hex")
+            val hex = dest?.hexHash ?: dest?.hash?.toHex() ?: identity?.hash?.toHex()
+            if (hex == null) {
+                // Mirror handleAnnounce's not-ready signal so the harness sees
+                // an explicit error token rather than a bare `dest=` it can't
+                // parse.
+                Log.i(LOGCAT_TAG, "dest_err reason=not_ready")
+            } else {
+                Log.i(LOGCAT_TAG, "dest=$hex")
+            }
         }
     }
 

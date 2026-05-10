@@ -15,7 +15,7 @@ import network.columba.app.reticulum.protocol.DeliveryMethod
  * Action contract (one action per row; reply lines under
  * [TestController.LOGCAT_TAG] tag, format `event=… key=…`):
  *
- *   network.columba.test.GET_DEST                     -> dest=<hex>
+ *   network.columba.test.GET_DEST                     -> dest=<hex> | dest_err reason=not_ready
  *   network.columba.test.HAS_PATH       --es to       -> has_path to=<hex> result=0|1
  *   network.columba.test.SEND_DIRECT    --es to,text  -> msg_sent id=<hex> method=DIRECT
  *   network.columba.test.SEND_OPP       --es to,text  -> msg_sent id=<hex> method=OPPORTUNISTIC
@@ -29,7 +29,7 @@ import network.columba.app.reticulum.protocol.DeliveryMethod
  *   network.columba.test.DISABLE_INTERFACE  --es name -> interface_disabled name=<…> id=<n> applied=true
  *   network.columba.test.ENABLE_INTERFACE   --es name -> interface_enabled  name=<…> id=<n> applied=true
  *   network.columba.test.ADD_TCP_CLIENT     --es name,host,port -> interface_added name=<…> id=<n> type=TCPClient … applied=true
- *   network.columba.test.REMOVE_INTERFACE   --es name -> interface_removed name=<…> applied=true
+ *   network.columba.test.REMOVE_INTERFACE   --es name -> interface_removed name=<…> id=<n> applied=true
  *   network.columba.test.SET_PROP_NODE      --es hex  -> prop_node_set hex=<…> | prop_node_err …
  *   network.columba.test.SYNC_PROP                    -> prop_sync_started state=<n> messages_received=<n>
  *

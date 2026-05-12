@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronDocument
+import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
@@ -558,6 +559,11 @@ class NomadNetBrowserViewModel
 
         /**
          * Emit a [BrowserState.PageLoaded] and trigger partial detection.
+         *
+         * Also seeds [_formFields] with parser-declared defaults for any text fields
+         * the user has not already populated. Required so unmodified pre-filled fields
+         * (e.g. a "display name" pre-filled with the user's nickname) are actually
+         * submitted instead of being sent as empty strings.
          */
         private fun emitPageLoaded(
             document: MicronDocument,
@@ -565,6 +571,7 @@ class NomadNetBrowserViewModel
             nodeHash: String,
         ) {
             _isPullRefreshing.value = false
+            _formFields.update { current -> seedFieldDefaults(document, current) }
             _browserState.value =
                 BrowserState.PageLoaded(
                     document = document,
@@ -572,6 +579,26 @@ class NomadNetBrowserViewModel
                     nodeHash = nodeHash,
                 )
             partialManager.detectAndLoad(document)
+        }
+
+        /**
+         * Return a copy of [current] with parser-declared text-field defaults filled
+         * in for any field name the user has not already typed into. User-typed values
+         * (including empty strings the user explicitly cleared) win over defaults.
+         */
+        private fun seedFieldDefaults(
+            document: MicronDocument,
+            current: Map<String, String>,
+        ): Map<String, String> {
+            val seeded = current.toMutableMap()
+            for (line in document.lines) {
+                for (element in line.elements) {
+                    if (element is MicronElement.Field && element.name !in seeded) {
+                        seeded[element.name] = element.defaultValue
+                    }
+                }
+            }
+            return seeded
         }
 
         private fun formatNomadnetStatus(status: String): String =

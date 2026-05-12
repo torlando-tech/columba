@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -441,10 +442,14 @@ fun NomadNetBrowserScreen(
                 PullToRefreshBox(
                     isRefreshing = isPullRefreshing,
                     onRefresh = { viewModel.refresh() },
+                    // imePadding required because MainActivity uses enableEdgeToEdge(),
+                    // which makes the manifest's adjustResize a no-op — without it the
+                    // soft keyboard slides up on top of focused micron form fields.
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .padding(paddingValues),
+                            .padding(paddingValues)
+                            .imePadding(),
                 ) {
                     if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
                         // BoxWithConstraints captures viewport width before

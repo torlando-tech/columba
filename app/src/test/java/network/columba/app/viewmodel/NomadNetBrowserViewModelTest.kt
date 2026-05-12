@@ -11,6 +11,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -220,6 +221,96 @@ class NomadNetBrowserViewModelTest {
             }
             Thread.sleep(100) // Wait for Dispatchers.IO coroutine
             assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+        }
+
+    // Regression for #917: a page-author-supplied default (e.g. a "display name"
+    // pre-filled with the user's nickname) must be in _formFields after parse, so
+    // submission sends the default instead of an empty string when the user does
+    // not retype the field.
+    @Test
+    fun `loadPage seeds parser-declared field defaults into form state`() =
+        runTest(testDispatcher) {
+            val pageWithField = "`<|display_name`Alice>"
+            every { pageCache.get(any(), any()) } returns pageWithField
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            assertEquals("Alice", viewModel.formFields.value["display_name"])
+        }
+
+    @Test
+    fun `navigateToLink submits parser-declared default for unmodified field`() =
+        runTest(testDispatcher) {
+            // Forum-style page: display_name pre-filled, message empty.
+            // User types into message only — display_name must still go through.
+            val pageWithFields = "`<|display_name`Alice>\n`<|message`>"
+            every { pageCache.get(any(), any()) } returns pageWithFields
+            val formDataSlot = slot<String>()
+            coEvery {
+                protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
+            } returns Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            viewModel.updateField("message", "hello world")
+            viewModel.navigateToLink("/page/post.mu", listOf("display_name", "message"))
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for Dispatchers.IO coroutine
+
+            val submitted = org.json.JSONObject(formDataSlot.captured)
+            assertEquals("Alice", submitted.getString("display_name"))
+            assertEquals("hello world", submitted.getString("message"))
+        }
+
+    @Test
+    fun `navigateToLink user-typed value wins over field default`() =
+        runTest(testDispatcher) {
+            val pageWithField = "`<|display_name`Alice>"
+            every { pageCache.get(any(), any()) } returns pageWithField
+            val formDataSlot = slot<String>()
+            coEvery {
+                protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
+            } returns Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            viewModel.updateField("display_name", "Bob")
+            viewModel.navigateToLink("/page/post.mu", listOf("display_name"))
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for Dispatchers.IO coroutine
+
+            assertEquals(
+                "Bob",
+                org.json.JSONObject(formDataSlot.captured).getString("display_name"),
+            )
+        }
+
+    @Test
+    fun `navigateToLink user-cleared field submits empty string not default`() =
+        runTest(testDispatcher) {
+            val pageWithField = "`<|display_name`Alice>"
+            every { pageCache.get(any(), any()) } returns pageWithField
+            val formDataSlot = slot<String>()
+            coEvery {
+                protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
+            } returns Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            // User explicitly clears the pre-filled default to empty.
+            viewModel.updateField("display_name", "")
+            viewModel.navigateToLink("/page/post.mu", listOf("display_name"))
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for Dispatchers.IO coroutine
+
+            assertEquals(
+                "",
+                org.json.JSONObject(formDataSlot.captured).getString("display_name"),
+            )
         }
 
     @Test

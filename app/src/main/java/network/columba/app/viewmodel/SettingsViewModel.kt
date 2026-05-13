@@ -26,8 +26,8 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.model.NetworkStatus
+import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.PropagationNodeManager

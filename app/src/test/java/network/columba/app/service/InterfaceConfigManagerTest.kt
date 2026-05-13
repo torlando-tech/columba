@@ -29,7 +29,7 @@ import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
+import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import org.junit.After
 import org.junit.Assert.assertTrue

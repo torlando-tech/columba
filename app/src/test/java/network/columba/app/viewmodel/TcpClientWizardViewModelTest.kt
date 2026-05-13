@@ -5,7 +5,7 @@ import app.cash.turbine.test
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks

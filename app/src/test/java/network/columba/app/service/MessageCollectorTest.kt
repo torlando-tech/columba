@@ -6,7 +6,7 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
-import network.columba.app.reticulum.protocol.ReceivedMessage
+import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import io.mockk.Runs
 import io.mockk.clearAllMocks

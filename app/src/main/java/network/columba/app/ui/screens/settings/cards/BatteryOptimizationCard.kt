@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import network.columba.app.reticulum.model.BatteryProfile
+import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.util.BatteryOptimizationManager
 
 @Composable

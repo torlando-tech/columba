@@ -109,7 +109,7 @@ class ColumbaApplicationTest {
     fun `withTimeoutOrNull for getLxmfIdentity returns identity when fast`() =
         runTest {
             // Arrange
-            val mockIdentity = mockk<network.columba.app.reticulum.model.Identity>()
+            val mockIdentity = mockk<network.columba.app.rns.api.model.Identity>()
             coEvery { mockProtocol.getLxmfIdentity() } coAnswers {
                 delay(100)
                 Result.success(mockIdentity)
@@ -131,7 +131,7 @@ class ColumbaApplicationTest {
     fun `getLxmfIdentity returns identity when mock succeeds`() =
         runTest {
             // Arrange
-            val mockIdentity = mockk<network.columba.app.reticulum.model.Identity>()
+            val mockIdentity = mockk<network.columba.app.rns.api.model.Identity>()
             coEvery { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
 
             // Act

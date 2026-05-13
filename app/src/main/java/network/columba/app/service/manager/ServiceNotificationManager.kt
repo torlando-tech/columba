@@ -15,7 +15,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import network.columba.app.MainActivity
 import network.columba.app.R
-import network.columba.app.reticulum.protocol.PropagationState
+import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.service.state.ServiceState
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap

@@ -5,8 +5,8 @@ import android.location.Location
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.protocol.MessageReceipt
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.util.LocationCompat
 import io.mockk.Runs
@@ -539,7 +539,7 @@ class TelemetryCollectorManagerTest {
                 coEvery { serviceProtocol.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)
                 coEvery { serviceProtocol.getLxmfIdentity() } returns
                     Result.success(
-                        network.columba.app.reticulum.model.Identity(
+                        network.columba.app.rns.api.model.Identity(
                             hash = ByteArray(16) { 0x01 },
                             publicKey = ByteArray(32) { 0x02 },
                             privateKey = null,

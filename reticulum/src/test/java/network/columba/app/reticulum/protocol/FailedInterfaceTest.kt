@@ -1,5 +1,7 @@
 package network.columba.app.reticulum.protocol
 
+import network.columba.app.rns.api.model.FailedInterface
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

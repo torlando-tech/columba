@@ -5,8 +5,8 @@ import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.protocol.PropagationState
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.test.TestFactories
 import io.mockk.Runs
@@ -952,7 +952,7 @@ class PropagationNodeManagerTest {
 
             // Mock the sync protocol call to return success
             val mockSyncState =
-                network.columba.app.reticulum.protocol.PropagationState(
+                network.columba.app.rns.api.model.PropagationState(
                     state = 0,
                     stateName = "IDLE",
                     progress = 0.0f,
@@ -1201,7 +1201,7 @@ class PropagationNodeManagerTest {
                 )
 
             val mockSyncState =
-                network.columba.app.reticulum.protocol.PropagationState(
+                network.columba.app.rns.api.model.PropagationState(
                     state = 0,
                     stateName = "IDLE",
                     progress = 0.0f,
@@ -1255,7 +1255,7 @@ class PropagationNodeManagerTest {
                 )
 
             val mockSyncState =
-                network.columba.app.reticulum.protocol.PropagationState(
+                network.columba.app.rns.api.model.PropagationState(
                     state = 0,
                     stateName = "IDLE",
                     progress = 0.0f,
@@ -1359,7 +1359,7 @@ class PropagationNodeManagerTest {
                 )
 
             val mockSyncState =
-                network.columba.app.reticulum.protocol.PropagationState(
+                network.columba.app.rns.api.model.PropagationState(
                     state = 0,
                     stateName = "IDLE",
                     progress = 0.0f,
@@ -1528,7 +1528,7 @@ class PropagationNodeManagerTest {
             coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } coAnswers {
                 syncCompletion.await() // Wait until we explicitly complete it
                 Result.success(
-                    network.columba.app.reticulum.protocol.PropagationState(
+                    network.columba.app.rns.api.model.PropagationState(
                         state = 0,
                         stateName = "IDLE",
                         progress = 0.0f,

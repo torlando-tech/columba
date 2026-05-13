@@ -1,4 +1,4 @@
-package network.columba.app.reticulum.model
+package network.columba.app.rns.api.model
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals

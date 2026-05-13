@@ -87,7 +87,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import network.columba.app.R
-import network.columba.app.reticulum.protocol.DiscoveredInterface
+import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.ui.components.ServiceRestartBanner
 import network.columba.app.ui.components.SortModeSelector
 import network.columba.app.ui.theme.MaterialDesignIcons

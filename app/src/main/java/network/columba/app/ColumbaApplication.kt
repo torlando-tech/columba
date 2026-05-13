@@ -15,8 +15,8 @@ import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.LogLevel
-import network.columba.app.reticulum.model.ReticulumConfig
+import network.columba.app.rns.api.model.LogLevel
+import network.columba.app.rns.api.model.ReticulumConfig
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.MessageCollector
@@ -590,13 +590,13 @@ class ColumbaApplication : Application() {
      * Map the protocol's sealed NetworkStatus to the string vocabulary that
      * ServiceNotificationManager.getStatusTexts already branches on.
      */
-    private fun networkStatusToServiceString(status: network.columba.app.reticulum.model.NetworkStatus): String =
+    private fun networkStatusToServiceString(status: network.columba.app.rns.api.model.NetworkStatus): String =
         when (status) {
-            is network.columba.app.reticulum.model.NetworkStatus.READY -> "READY"
-            is network.columba.app.reticulum.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
-            is network.columba.app.reticulum.model.NetworkStatus.CONNECTING -> "CONNECTING"
-            is network.columba.app.reticulum.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
-            is network.columba.app.reticulum.model.NetworkStatus.ERROR -> "ERROR:${status.message}"
+            is network.columba.app.rns.api.model.NetworkStatus.READY -> "READY"
+            is network.columba.app.rns.api.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
+            is network.columba.app.rns.api.model.NetworkStatus.CONNECTING -> "CONNECTING"
+            is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+            is network.columba.app.rns.api.model.NetworkStatus.ERROR -> "ERROR:${status.message}"
         }
 
     /**

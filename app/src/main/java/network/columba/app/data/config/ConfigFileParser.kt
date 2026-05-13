@@ -1,7 +1,7 @@
 package network.columba.app.data.config
 
 import android.util.Log
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.util.validation.ValidationResult

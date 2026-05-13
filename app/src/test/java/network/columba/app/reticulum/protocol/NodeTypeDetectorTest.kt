@@ -1,6 +1,6 @@
 package network.columba.app.reticulum.protocol
 
-import network.columba.app.reticulum.model.NodeType
+import network.columba.app.rns.api.model.NodeType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.nio.charset.StandardCharsets

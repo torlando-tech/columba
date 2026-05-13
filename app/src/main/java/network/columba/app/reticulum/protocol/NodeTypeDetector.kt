@@ -1,7 +1,7 @@
 package network.columba.app.reticulum.protocol
 
 import android.util.Log
-import network.columba.app.reticulum.model.NodeType
+import network.columba.app.rns.api.model.NodeType
 import java.nio.charset.StandardCharsets
 
 /**

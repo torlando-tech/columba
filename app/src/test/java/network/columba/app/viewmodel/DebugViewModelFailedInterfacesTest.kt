@@ -1,6 +1,6 @@
 package network.columba.app.viewmodel
 
-import network.columba.app.reticulum.protocol.FailedInterface
+import network.columba.app.rns.api.model.FailedInterface
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull

@@ -2,7 +2,7 @@ package network.columba.app.startup
 
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.model.Identity
+import network.columba.app.rns.api.model.Identity
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.mockk

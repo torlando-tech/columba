@@ -107,8 +107,8 @@ class DebugViewModel
         }
 
         // Cached identity and destination for test announces - reused across all announces
-        private var cachedIdentity: network.columba.app.reticulum.model.Identity? = null
-        private var cachedDestination: network.columba.app.reticulum.model.Destination? = null
+        private var cachedIdentity: network.columba.app.rns.api.model.Identity? = null
+        private var cachedDestination: network.columba.app.rns.api.model.Destination? = null
 
         private val _debugInfo = MutableStateFlow(DebugInfo())
         val debugInfo: StateFlow<DebugInfo> = _debugInfo.asStateFlow()
@@ -219,7 +219,7 @@ class DebugViewModel
                         wakeLockHeld = json.optBoolean("wake_lock_held", false),
                         error =
                             json.optString("error", null)
-                                ?: if (status is network.columba.app.reticulum.model.NetworkStatus.ERROR) status.message else null,
+                                ?: if (status is network.columba.app.rns.api.model.NetworkStatus.ERROR) status.message else null,
                         // Process persistence debug info
                         heartbeatAgeSeconds = json.optLong("heartbeat_age_seconds", -1),
                         healthCheckRunning = json.optBoolean("health_check_running", false),
@@ -242,16 +242,16 @@ class DebugViewModel
                     // Convert NetworkStatus to readable string
                     _networkStatus.value =
                         when (status) {
-                            is network.columba.app.reticulum.model.NetworkStatus.READY -> "READY"
-                            is network.columba.app.reticulum.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
-                            is network.columba.app.reticulum.model.NetworkStatus.CONNECTING -> "CONNECTING"
-                            is network.columba.app.reticulum.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
-                            is network.columba.app.reticulum.model.NetworkStatus.ERROR -> "ERROR: ${status.message}"
+                            is network.columba.app.rns.api.model.NetworkStatus.READY -> "READY"
+                            is network.columba.app.rns.api.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
+                            is network.columba.app.rns.api.model.NetworkStatus.CONNECTING -> "CONNECTING"
+                            is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+                            is network.columba.app.rns.api.model.NetworkStatus.ERROR -> "ERROR: ${status.message}"
                             else -> status.toString()
                         }
 
                     // Reset debug info when shutdown - prevents stale "initialized: true" in UI
-                    if (status is network.columba.app.reticulum.model.NetworkStatus.SHUTDOWN) {
+                    if (status is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN) {
                         _debugInfo.value = DebugInfo(isLoading = false)
                     }
                 }
@@ -269,7 +269,7 @@ class DebugViewModel
         /** Check if the service has been shut down (by network status or SharedPreferences flag). */
         private fun isServiceShutdown(): Boolean {
             val status = reticulumProtocol.networkStatus.value
-            if (status is network.columba.app.reticulum.model.NetworkStatus.SHUTDOWN) return true
+            if (status is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN) return true
             // Also check SharedPreferences flag — onServiceDisconnected may not have fired yet
             return context
                 .getSharedPreferences("columba_prefs", android.content.Context.MODE_PRIVATE)
@@ -317,7 +317,7 @@ class DebugViewModel
                             wakeLockHeld = wakeLockHeld,
                             error =
                                 pythonDebugInfo["error"] as? String
-                                    ?: if (status is network.columba.app.reticulum.model.NetworkStatus.ERROR) status.message else null,
+                                    ?: if (status is network.columba.app.rns.api.model.NetworkStatus.ERROR) status.message else null,
                             heartbeatAgeSeconds = (pythonDebugInfo["heartbeat_age_seconds"] as? Number)?.toLong() ?: -1,
                             healthCheckRunning = pythonDebugInfo["health_check_running"] as? Boolean ?: false,
                             networkMonitorRunning = pythonDebugInfo["network_monitor_running"] as? Boolean ?: false,
@@ -391,7 +391,7 @@ class DebugViewModel
          * Get the LXMF identity for test announces.
          * This ensures announces use the same identity as LXMF messaging.
          */
-        private suspend fun getOrCreateIdentity(): network.columba.app.reticulum.model.Identity {
+        private suspend fun getOrCreateIdentity(): network.columba.app.rns.api.model.Identity {
             // Return cached identity if available
             cachedIdentity?.let {
                 Log.d(TAG, "Using cached identity")
@@ -421,7 +421,7 @@ class DebugViewModel
          * Get the LXMF delivery destination for test announces.
          * This reuses the destination already created by the LXMF router.
          */
-        private suspend fun getOrCreateDestination(identity: network.columba.app.reticulum.model.Identity): network.columba.app.reticulum.model.Destination {
+        private suspend fun getOrCreateDestination(identity: network.columba.app.rns.api.model.Identity): network.columba.app.rns.api.model.Destination {
             // Return cached destination if available
             cachedDestination?.let {
                 Log.d(TAG, "Using cached destination")

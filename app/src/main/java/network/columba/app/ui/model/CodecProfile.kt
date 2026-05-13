@@ -1,6 +1,6 @@
 package network.columba.app.ui.model
 
-import network.columba.app.reticulum.model.LinkSpeedProbeResult
+import network.columba.app.rns.api.model.LinkSpeedProbeResult
 
 /**
  * Audio codec profiles for voice calls.

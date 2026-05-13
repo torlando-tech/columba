@@ -7,8 +7,8 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.di.ApplicationScope
 import network.columba.app.di.DefaultDispatcher
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.protocol.PropagationState
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -430,7 +430,7 @@ class PropagationNodeManager
         }
 
         private suspend fun handlePollResult(
-            state: network.columba.app.reticulum.protocol.PropagationState,
+            state: network.columba.app.rns.api.model.PropagationState,
             timeoutJob: kotlinx.coroutines.Job,
         ): Boolean =
             when {

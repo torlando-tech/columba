@@ -13,9 +13,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.database.entity.InterfaceEntity
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
-import network.columba.app.reticulum.model.toJsonString
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.model.toJsonString
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

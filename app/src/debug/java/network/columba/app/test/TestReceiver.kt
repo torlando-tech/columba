@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import network.columba.app.BuildConfig
-import network.columba.app.reticulum.protocol.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryMethod
 
 /**
  * Debug-only BroadcastReceiver that exposes the [TestController] surface

@@ -13,8 +13,8 @@ import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.protocol.DeliveryMethod
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.LocationSharingManager
@@ -67,7 +67,7 @@ import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import network.columba.app.data.repository.Message as DataMessage
-import network.columba.app.reticulum.model.Message as ReticulumMessage
+import network.columba.app.rns.api.model.Message as ReticulumMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -818,7 +818,7 @@ class MessagingViewModel
             }
         }
 
-        private suspend fun handleDeliveryStatusUpdate(update: network.columba.app.reticulum.protocol.DeliveryStatusUpdate) {
+        private suspend fun handleDeliveryStatusUpdate(update: network.columba.app.rns.api.model.DeliveryStatusUpdate) {
             try {
                 // Retry mechanism to handle race condition where delivery proof arrives
                 // before database transaction completes
@@ -1162,7 +1162,7 @@ class MessagingViewModel
                             val fg = activeId.iconForegroundColor
                             val bg = activeId.iconBackgroundColor
                             if (name != null && fg != null && bg != null) {
-                                network.columba.app.reticulum.protocol.IconAppearance(
+                                network.columba.app.rns.api.model.IconAppearance(
                                     iconName = name,
                                     foregroundColor = fg,
                                     backgroundColor = bg,
@@ -1208,7 +1208,7 @@ class MessagingViewModel
 
         @Suppress("LongParameterList") // Refactoring to data class would add unnecessary complexity
         private suspend fun handleSendSuccess(
-            receipt: network.columba.app.reticulum.protocol.MessageReceipt,
+            receipt: network.columba.app.rns.api.model.MessageReceipt,
             sanitized: String,
             destinationHash: String,
             imageData: ByteArray?,
@@ -1911,7 +1911,7 @@ class MessagingViewModel
                         val fg = activeId.iconForegroundColor
                         val bg = activeId.iconBackgroundColor
                         if (name != null && fg != null && bg != null) {
-                            network.columba.app.reticulum.protocol.IconAppearance(
+                            network.columba.app.rns.api.model.IconAppearance(
                                 iconName = name,
                                 foregroundColor = fg,
                                 backgroundColor = bg,
@@ -2487,7 +2487,7 @@ private fun ByteArray.toHexString(): String {
 private val HEX_CHARS = "0123456789abcdef".toCharArray()
 
 private fun resolveActualDestHash(
-    receipt: network.columba.app.reticulum.protocol.MessageReceipt,
+    receipt: network.columba.app.rns.api.model.MessageReceipt,
     fallbackHash: String,
 ): String =
     if (receipt.destinationHash.isNotEmpty()) {

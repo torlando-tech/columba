@@ -1,4 +1,4 @@
-package network.columba.app.reticulum.model
+package network.columba.app.rns.api.model
 
 sealed class LinkEvent {
     data class Established(val link: Link) : LinkEvent()

@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
-import network.columba.app.reticulum.model.NodeType
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.AnnounceStreamViewModel
 import org.junit.Assert.assertEquals

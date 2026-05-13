@@ -14,7 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.InterfaceType
-import network.columba.app.reticulum.model.NodeType
+import network.columba.app.rns.api.model.NodeType
 
 private enum class AspectChip(
     val label: String,

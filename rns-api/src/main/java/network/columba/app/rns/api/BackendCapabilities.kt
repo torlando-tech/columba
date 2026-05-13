@@ -116,4 +116,30 @@ data class BackendCapabilities(
         KOTLIN_NATIVE,
         PYTHON_CHAQUOPY,
     }
+
+    companion object {
+        /**
+         * Sentinel snapshot returned by the IPC layer before a backend binding
+         * has been established (e.g., from the early seed of the UI-side
+         * `StateFlow<BackendCapabilities>` between `RnsBackendClient`
+         * construction and `connect()` completing). Every capability is the
+         * safe-default; UI code that gates on a capability before the first
+         * real snapshot lands behaves as though the backend can't honour it,
+         * which is correct: there is no backend.
+         */
+        val UNKNOWN: BackendCapabilities = BackendCapabilities(
+            backendId = BackendId.KOTLIN_NATIVE,
+            versions = Versions(null, null, null, null),
+            interfaces = InterfaceCaps(hotReloadInterfaces = false),
+            telemetry = TelemetryCaps(
+                collectorHostMode = Support.UNSUPPORTED,
+                storeOwnTelemetry = Support.UNSUPPORTED,
+                allowedRequestersFilter = Support.UNSUPPORTED,
+            ),
+            performance = PerformanceCaps(
+                batteryProfileTuning = Support.UNSUPPORTED,
+                sharedInstanceAvailabilityChecks = false,
+            ),
+        )
+    }
 }

@@ -1,12 +1,12 @@
 package network.columba.app.reticulum.protocol
 
-import network.columba.app.reticulum.model.DestinationType
-import network.columba.app.reticulum.model.Direction
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.LinkStatus
-import network.columba.app.reticulum.model.LogLevel
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.model.ReticulumConfig
+import network.columba.app.rns.api.model.DestinationType
+import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.LinkStatus
+import network.columba.app.rns.api.model.LogLevel
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.ReticulumConfig
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -6,7 +6,7 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.NetworkStatus
+import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -705,7 +705,7 @@ class TelemetryCollectorManager
                         val fg = activeId.iconForegroundColor
                         val bg = activeId.iconBackgroundColor
                         if (name != null && fg != null && bg != null) {
-                            network.columba.app.reticulum.protocol.IconAppearance(
+                            network.columba.app.rns.api.model.IconAppearance(
                                 iconName = name,
                                 foregroundColor = fg,
                                 backgroundColor = bg,

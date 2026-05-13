@@ -52,6 +52,11 @@ android {
 }
 
 dependencies {
+    // Backend-seam contract (value types, capabilities, interfaces, AIDL).
+    // Exposed via api() so consumers (:app) get the contract types transitively
+    // without having to depend on :rns-api directly.
+    api(project(":rns-api"))
+
     // LXST module (telephony, codecs, audio pipeline)
     api(libs.lxst.kt)
 

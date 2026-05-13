@@ -14,11 +14,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
-import network.columba.app.reticulum.protocol.DeliveryMethod
-import network.columba.app.reticulum.protocol.DeliveryStatusUpdate
-import network.columba.app.reticulum.protocol.ReceivedMessage
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.service.InterfaceConfigManager

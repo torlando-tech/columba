@@ -3,7 +3,7 @@ package network.columba.app.reticulum.protocol
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.reticulum.usb.KotlinUSBBridge
 import network.reticulum.transport.Transport
 
@@ -87,11 +87,15 @@ internal object RNodeConnectionHelper {
         val bridge = KotlinUSBBridge.getInstance(ctx)
 
         val currentDeviceId =
-            if (config.usbVendorId != null && config.usbProductId != null) {
-                val found = bridge.findDeviceByVidPid(config.usbVendorId, config.usbProductId)
-                if (found >= 0) found else config.usbDeviceId
-            } else {
-                config.usbDeviceId
+            run {
+                val vendorId = config.usbVendorId
+                val productId = config.usbProductId
+                if (vendorId != null && productId != null) {
+                    val found = bridge.findDeviceByVidPid(vendorId, productId)
+                    if (found >= 0) found else config.usbDeviceId
+                } else {
+                    config.usbDeviceId
+                }
             }
 
         if (currentDeviceId != null && !bridge.hasPermission(currentDeviceId)) {

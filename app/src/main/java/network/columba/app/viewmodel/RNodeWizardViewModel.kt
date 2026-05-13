@@ -36,8 +36,8 @@ import network.columba.app.data.model.RNodeRegionalPreset
 import network.columba.app.data.model.RNodeRegionalPresets
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.reticulum.ble.util.BlePairingHandler
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.RssiThrottler
 import network.columba.app.util.validation.DeviceNameValidator

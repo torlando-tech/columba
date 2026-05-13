@@ -3,7 +3,7 @@ package network.columba.app.service.manager
 import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
-import network.columba.app.reticulum.protocol.PropagationState
+import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.service.state.ServiceState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

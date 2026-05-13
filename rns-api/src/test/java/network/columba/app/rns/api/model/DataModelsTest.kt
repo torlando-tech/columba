@@ -1,6 +1,6 @@
-package network.columba.app.reticulum.model
+package network.columba.app.rns.api.model
 
-import network.columba.app.reticulum.protocol.ReceivedMessage
+import network.columba.app.rns.api.model.ReceivedMessage
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

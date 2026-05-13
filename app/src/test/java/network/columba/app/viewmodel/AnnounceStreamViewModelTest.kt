@@ -10,10 +10,10 @@ import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.model.AnnounceEvent
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.model.NodeType
+import network.columba.app.rns.api.model.AnnounceEvent
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager

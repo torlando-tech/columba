@@ -11,8 +11,8 @@ import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.model.NodeType
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
@@ -246,25 +246,25 @@ class AnnounceStreamViewModel
                         withTimeoutOrNull(timeout) {
                             reticulumProtocol.networkStatus.first { status ->
                                 when (status) {
-                                    is network.columba.app.reticulum.model.NetworkStatus.READY -> {
+                                    is network.columba.app.rns.api.model.NetworkStatus.READY -> {
                                         Log.d(TAG, "Service is READY, starting announce collection")
                                         _initializationStatus.value = "Ready"
                                         true
                                     }
-                                    is network.columba.app.reticulum.model.NetworkStatus.ERROR -> {
+                                    is network.columba.app.rns.api.model.NetworkStatus.ERROR -> {
                                         Log.e(TAG, "Service entered ERROR state: $status, not starting announce collection")
                                         _initializationStatus.value = "Error: ${status.message}"
                                         throw RuntimeException("Service error: ${status.message}")
                                     }
-                                    is network.columba.app.reticulum.model.NetworkStatus.CONNECTING -> {
+                                    is network.columba.app.rns.api.model.NetworkStatus.CONNECTING -> {
                                         Log.d(TAG, "Service is CONNECTING, waiting...")
                                         false
                                     }
-                                    is network.columba.app.reticulum.model.NetworkStatus.SHUTDOWN -> {
+                                    is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN -> {
                                         Log.d(TAG, "Service is SHUTDOWN, waiting...")
                                         false
                                     }
-                                    is network.columba.app.reticulum.model.NetworkStatus.INITIALIZING -> {
+                                    is network.columba.app.rns.api.model.NetworkStatus.INITIALIZING -> {
                                         Log.d(TAG, "Service is INITIALIZING, waiting...")
                                         false
                                     }

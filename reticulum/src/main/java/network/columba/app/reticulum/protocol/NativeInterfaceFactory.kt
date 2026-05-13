@@ -10,7 +10,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.reticulum.interfaces.auto.AutoInterface
 import network.reticulum.interfaces.tcp.TCPClientInterface
 import network.reticulum.interfaces.tcp.TCPServerInterface

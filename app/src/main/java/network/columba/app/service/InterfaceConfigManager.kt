@@ -19,8 +19,8 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.LogLevel
-import network.columba.app.reticulum.model.ReticulumConfig
+import network.columba.app.rns.api.model.LogLevel
+import network.columba.app.rns.api.model.ReticulumConfig
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.service.manager.filterByTransport

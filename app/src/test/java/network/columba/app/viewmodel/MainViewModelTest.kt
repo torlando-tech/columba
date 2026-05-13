@@ -2,12 +2,12 @@ package network.columba.app.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import network.columba.app.reticulum.model.Destination
-import network.columba.app.reticulum.model.DestinationType
-import network.columba.app.reticulum.model.Direction
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.model.PacketReceipt
+import network.columba.app.rns.api.model.Destination
+import network.columba.app.rns.api.model.DestinationType
+import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.PacketReceipt
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers

@@ -467,7 +467,7 @@ class LocationSharingManager
                         val fg = activeId.iconForegroundColor
                         val bg = activeId.iconBackgroundColor
                         if (name != null && fg != null && bg != null) {
-                            network.columba.app.reticulum.protocol.IconAppearance(
+                            network.columba.app.rns.api.model.IconAppearance(
                                 iconName = name,
                                 foregroundColor = fg,
                                 backgroundColor = bg,

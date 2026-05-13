@@ -1,5 +1,16 @@
 package network.columba.app.reticulum.protocol
 
+import network.columba.app.rns.api.model.ConversationLinkResult
+import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.DiscoveredInterface
+import network.columba.app.rns.api.model.FailedInterface
+import network.columba.app.rns.api.model.IconAppearance
+import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.rns.api.model.PropagationState
+import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.VoiceCallState
+
 import android.util.Log
 import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
@@ -14,19 +25,19 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import network.columba.app.reticulum.model.AnnounceEvent
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.model.DestinationType
-import network.columba.app.reticulum.model.Direction
-import network.columba.app.reticulum.model.LinkEvent
-import network.columba.app.reticulum.model.LinkSpeedProbeResult
-import network.columba.app.reticulum.model.LinkStatus
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.model.NodeType
-import network.columba.app.reticulum.model.PacketReceipt
-import network.columba.app.reticulum.model.PacketType
-import network.columba.app.reticulum.model.ReceivedPacket
-import network.columba.app.reticulum.model.ReticulumConfig
+import network.columba.app.rns.api.model.AnnounceEvent
+import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.model.DestinationType
+import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.LinkEvent
+import network.columba.app.rns.api.model.LinkSpeedProbeResult
+import network.columba.app.rns.api.model.LinkStatus
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.NodeType
+import network.columba.app.rns.api.model.PacketReceipt
+import network.columba.app.rns.api.model.PacketType
+import network.columba.app.rns.api.model.ReceivedPacket
+import network.columba.app.rns.api.model.ReticulumConfig
 import network.reticulum.Reticulum
 import network.reticulum.common.DestinationDirection
 import network.reticulum.lxmf.LXMFConstants
@@ -36,9 +47,9 @@ import network.reticulum.transport.Transport
 import org.json.JSONObject
 import org.msgpack.core.MessagePack
 import tech.torlando.columba.reticulum.BuildConfig
-import network.columba.app.reticulum.model.Destination as ColumbaDestination
-import network.columba.app.reticulum.model.Identity as ColumbaIdentity
-import network.columba.app.reticulum.model.Link as ColumbaLink
+import network.columba.app.rns.api.model.Destination as ColumbaDestination
+import network.columba.app.rns.api.model.Identity as ColumbaIdentity
+import network.columba.app.rns.api.model.Link as ColumbaLink
 
 /**
  * Native Kotlin implementation of [ReticulumProtocol] backed by reticulum-kt and lxmf-kt.
@@ -1692,7 +1703,7 @@ class NativeReticulumProtocol(
         )
     }
 
-    override suspend fun reloadInterfaces(configs: List<network.columba.app.reticulum.model.InterfaceConfig>) {
+    override suspend fun reloadInterfaces(configs: List<network.columba.app.rns.api.model.InterfaceConfig>) {
         withContext(Dispatchers.IO) {
             NativeInterfaceFactory.syncInterfaces(configs)
         }
@@ -1797,7 +1808,7 @@ class NativeReticulumProtocol(
             // Find and restart any RNode interfaces
             val config = lastConfig
             if (config != null) {
-                val rnodeConfigs = config.enabledInterfaces.filterIsInstance<network.columba.app.reticulum.model.InterfaceConfig.RNode>()
+                val rnodeConfigs = config.enabledInterfaces.filterIsInstance<network.columba.app.rns.api.model.InterfaceConfig.RNode>()
                 for (rnode in rnodeConfigs) {
                     Log.i(TAG, "Reconnecting RNode interface: ${rnode.name}")
                     NativeInterfaceFactory.restartInterface(rnode)

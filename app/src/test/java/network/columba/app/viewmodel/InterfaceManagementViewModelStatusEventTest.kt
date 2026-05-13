@@ -10,7 +10,7 @@ import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks

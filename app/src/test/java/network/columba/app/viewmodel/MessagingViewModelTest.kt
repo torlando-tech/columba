@@ -16,9 +16,9 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.protocol.DeliveryStatusUpdate
-import network.columba.app.reticulum.protocol.MessageReceipt
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager

@@ -495,7 +495,7 @@ class ConversationLinkManager
          */
         private fun handleNewIncomingLink(
             destHashHex: String,
-            result: network.columba.app.reticulum.protocol.ConversationLinkResult,
+            result: network.columba.app.rns.api.model.ConversationLinkResult,
         ) {
             Log.d(
                 TAG,
@@ -524,7 +524,7 @@ class ConversationLinkManager
         private fun updateActiveLinkMetrics(
             destHashHex: String,
             state: LinkState,
-            result: network.columba.app.reticulum.protocol.ConversationLinkResult,
+            result: network.columba.app.rns.api.model.ConversationLinkResult,
         ) {
             val updatedState =
                 state.copy(

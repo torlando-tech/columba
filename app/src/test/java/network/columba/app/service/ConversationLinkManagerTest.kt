@@ -365,7 +365,7 @@ class ConversationLinkManagerTest {
             // Given: A mock protocol that returns "active" when queried
             val mockProtocol = io.mockk.mockk<network.columba.app.reticulum.protocol.ReticulumProtocol>()
             io.mockk.coEvery { mockProtocol.getConversationLinkStatus(any()) } returns
-                network.columba.app.reticulum.protocol.ConversationLinkResult(
+                network.columba.app.rns.api.model.ConversationLinkResult(
                     isActive = true, // Peer established link to us!
                     establishmentRateBps = 100_000L,
                     expectedRateBps = null,

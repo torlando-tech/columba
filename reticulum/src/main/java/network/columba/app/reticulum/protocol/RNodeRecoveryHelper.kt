@@ -5,7 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 
 internal object RNodeRecoveryHelper {
     private const val TAG = "NativeInterfaceFactory"

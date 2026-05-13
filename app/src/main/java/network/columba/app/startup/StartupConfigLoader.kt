@@ -4,8 +4,8 @@ import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.service.manager.filterByTransport
 import kotlinx.coroutines.async

@@ -1,7 +1,7 @@
 package network.columba.app.service.manager
 
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

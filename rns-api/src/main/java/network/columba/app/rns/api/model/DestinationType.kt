@@ -3,13 +3,16 @@ package network.columba.app.rns.api.model
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
-sealed class DestinationType : Parcelable {
-    @Parcelize
-    data object SINGLE : DestinationType()
-
-    @Parcelize
-    data object GROUP : DestinationType()
-
-    @Parcelize
-    data object PLAIN : DestinationType()
+/**
+ * Reticulum destination type — SINGLE (point-to-point), GROUP (shared key),
+ * PLAIN (unencrypted).
+ *
+ * Modeled as an enum (not a sealed class with data objects) for @Parcelize
+ * compatibility — see [Direction] for the rationale.
+ */
+@Parcelize
+enum class DestinationType : Parcelable {
+    SINGLE,
+    GROUP,
+    PLAIN,
 }

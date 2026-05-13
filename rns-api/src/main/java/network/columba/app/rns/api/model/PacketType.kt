@@ -3,16 +3,16 @@ package network.columba.app.rns.api.model
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
-sealed class PacketType : Parcelable {
-    @Parcelize
-    data object DATA : PacketType()
-
-    @Parcelize
-    data object ANNOUNCE : PacketType()
-
-    @Parcelize
-    data object LINKREQUEST : PacketType()
-
-    @Parcelize
-    data object PROOF : PacketType()
+/**
+ * Reticulum packet type — DATA, ANNOUNCE, LINKREQUEST, PROOF.
+ *
+ * Modeled as an enum (not a sealed class with data objects) for @Parcelize
+ * compatibility — see [Direction] for the rationale.
+ */
+@Parcelize
+enum class PacketType : Parcelable {
+    DATA,
+    ANNOUNCE,
+    LINKREQUEST,
+    PROOF,
 }

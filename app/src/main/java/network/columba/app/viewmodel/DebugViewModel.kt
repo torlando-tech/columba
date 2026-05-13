@@ -539,7 +539,10 @@ class DebugViewModel
                     _debugInfo.value = DebugInfo(isLoading = false)
                     _networkStatus.value = "SHUTDOWN"
 
-                    // Unbind FIRST to prevent auto-rebind if service process crashes
+                    reticulumProtocol.shutdown()
+
+                    // unbindService() is a no-op on NativeReticulumProtocol but kept for
+                    // symmetry with ColumbaApplication.onTerminate's ordering.
                     reticulumProtocol.unbindService()
 
                     // Send ACTION_STOP to stop the foreground service and remove notification

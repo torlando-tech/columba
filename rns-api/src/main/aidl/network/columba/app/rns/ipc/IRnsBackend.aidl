@@ -3,46 +3,44 @@
 // and the source of sub-interface IBinder references (RnsCore, RnsLxmf,
 // RnsTelephony, RnsTelemetry, RnsNomadnet, RnsTransportAdmin).
 //
-// Sub-interface accessors (getCore/getLxmf/...) are SYNCHRONOUS by design:
-// they return pre-existing IBinder references on the host stub and complete
-// in microseconds. The UI process calls each accessor once at bind time and
-// caches the resulting binder; subsequent calls go directly to the sub-binder
-// without traversing IRnsBackend.
+// Every method is `oneway` with a typed callback. Sub-interface accessors use
+// the same fire-once callback shape as data-returning methods, so the contract
+// is uniform: nothing on the AIDL surface can ever block the caller's thread,
+// eliminating an entire class of ANR/deadlock failure modes by construction.
 //
-// This is a deliberate deviation from the literal "all methods oneway" rule
-// in the dual-build plan: oneway-with-callback for accessor methods would add
-// real latency at bind time without ANR benefit, since the binder reference
-// is immediately available on the host side. Methods that DO touch protocol
-// state (the capability snapshot, observer registrations) stay oneway.
+// The :rns-ipc client adapter wraps each accessor in
+// `suspendCancellableCoroutine` at bind time, caches the resulting binder for
+// the lifetime of the service binding, and re-fetches if the service crashes
+// and re-binds (DeadObjectException recovery via fresh oneway-callback round).
 //
 // Capability observation:
-//   - getCapabilities      — oneway snapshot via callback; client uses to seed
-//                            its StateFlow<BackendCapabilities>.
-//   - registerCapabilitiesObserver / unregisterCapabilitiesObserver — oneway;
-//                            host pushes updates as capabilities mutate at
-//                            runtime (e.g., LXST jar absence in stripped-down
-//                            test builds, RNode disconnect downgrades).
+//   - getCapabilities      — fire-once snapshot via callback; client uses to
+//                            seed its StateFlow<BackendCapabilities>.
+//   - registerCapabilitiesObserver / unregisterCapabilitiesObserver — host
+//                            pushes updates as capabilities mutate at runtime
+//                            (e.g., LXST jar absence in stripped-down test
+//                            builds, RNode disconnect downgrades).
 package network.columba.app.rns.ipc;
 
-import network.columba.app.rns.ipc.IRnsCore;
-import network.columba.app.rns.ipc.IRnsLxmf;
-import network.columba.app.rns.ipc.IRnsNomadnet;
-import network.columba.app.rns.ipc.IRnsTelemetry;
-import network.columba.app.rns.ipc.IRnsTelephony;
-import network.columba.app.rns.ipc.IRnsTransportAdmin;
 import network.columba.app.rns.ipc.callback.IRnsCapabilitiesCallback;
+import network.columba.app.rns.ipc.callback.IRnsCoreCallback;
+import network.columba.app.rns.ipc.callback.IRnsLxmfCallback;
+import network.columba.app.rns.ipc.callback.IRnsNomadnetCallback;
+import network.columba.app.rns.ipc.callback.IRnsTelemetryCallback;
+import network.columba.app.rns.ipc.callback.IRnsTelephonyCallback;
+import network.columba.app.rns.ipc.callback.IRnsTransportAdminCallback;
 
-interface IRnsBackend {
-    // ==================== Sub-interface accessors (sync) ====================
-    IRnsCore getCore();
-    IRnsLxmf getLxmf();
-    IRnsTelephony getTelephony();
-    IRnsTelemetry getTelemetry();
-    IRnsNomadnet getNomadnet();
-    IRnsTransportAdmin getTransportAdmin();
+oneway interface IRnsBackend {
+    // ==================== Sub-interface accessors ====================
+    void getCore(in IRnsCoreCallback cb);
+    void getLxmf(in IRnsLxmfCallback cb);
+    void getTelephony(in IRnsTelephonyCallback cb);
+    void getTelemetry(in IRnsTelemetryCallback cb);
+    void getNomadnet(in IRnsNomadnetCallback cb);
+    void getTransportAdmin(in IRnsTransportAdminCallback cb);
 
-    // ==================== Capabilities (oneway) ====================
-    oneway void getCapabilities(in IRnsCapabilitiesCallback cb);
-    oneway void registerCapabilitiesObserver(in IRnsCapabilitiesCallback cb);
-    oneway void unregisterCapabilitiesObserver(in IRnsCapabilitiesCallback cb);
+    // ==================== Capabilities ====================
+    void getCapabilities(in IRnsCapabilitiesCallback cb);
+    void registerCapabilitiesObserver(in IRnsCapabilitiesCallback cb);
+    void unregisterCapabilitiesObserver(in IRnsCapabilitiesCallback cb);
 }

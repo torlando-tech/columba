@@ -31,7 +31,7 @@ import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.model.MapStylePreference
 import network.columba.app.data.repository.CustomThemeRepository
 import network.columba.app.rns.api.model.BatteryProfile
-import network.columba.app.service.persistence.ServiceSettingsAccessor
+import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.CustomTheme
 import network.columba.app.ui.theme.PresetTheme

@@ -25,7 +25,7 @@ import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.manager.InterfaceTransportObserver
-import network.columba.app.service.manager.filterByTransport
+import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONObject

@@ -35,8 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import network.columba.app.reticulum.flasher.FrequencyBand
-import network.columba.app.reticulum.flasher.RNodeDeviceInfo
+import network.columba.app.rns.host.flasher.FrequencyBand
+import network.columba.app.rns.host.flasher.RNodeDeviceInfo
 import network.columba.app.viewmodel.FlashResult
 
 /**

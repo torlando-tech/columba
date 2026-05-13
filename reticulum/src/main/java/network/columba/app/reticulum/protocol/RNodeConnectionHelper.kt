@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import network.columba.app.rns.api.model.InterfaceConfig
-import network.columba.app.reticulum.usb.KotlinUSBBridge
+import network.columba.app.rns.host.usb.KotlinUSBBridge
 import network.reticulum.transport.Transport
 
 internal object RNodeConnectionHelper {
@@ -58,7 +58,7 @@ internal object RNodeConnectionHelper {
                     parentScope = scope,
                     displayImageData =
                         if (config.enableFramebuffer) {
-                            network.columba.app.reticulum.call.rnode.ColumbaLogo.FB_DATA
+                            network.columba.app.rns.host.call.rnode.ColumbaLogo.FB_DATA
                         } else {
                             null
                         },
@@ -120,7 +120,7 @@ internal object RNodeConnectionHelper {
         val address = config.targetDeviceName
         check(address.isNotBlank()) { "BLE device address/name not configured for RNode" }
         val bleConn =
-            network.columba.app.reticulum.call.rnode
+            network.columba.app.rns.host.call.rnode
                 .BluetoothLeConnection(ctx, address)
         return bleConn.connect()
     }

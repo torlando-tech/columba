@@ -72,9 +72,9 @@ import kotlinx.coroutines.launch
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.ble.util.BlePermissionManager
+import network.columba.app.rns.host.ble.util.BlePermissionManager
 import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.ReticulumService
+import network.columba.app.rns.host.ReticulumService
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.OfflineModeBanner
 import network.columba.app.ui.screens.AnnounceDetailScreen
@@ -1519,7 +1519,7 @@ fun ColumbaNavigation(
                                         isDisablingTransport = true
                                         coroutineScope.launch {
                                             val flasher =
-                                                network.columba.app.reticulum.flasher
+                                                network.columba.app.rns.host.flasher
                                                     .RNodeFlasher(context)
                                             val success = flasher.tncModeController.disableTncMode(usbDeviceId)
                                             isDisablingTransport = false

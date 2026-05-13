@@ -6,7 +6,7 @@ import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import network.columba.app.data.repository.CustomThemeRepository
-import network.columba.app.service.persistence.ServiceSettingsAccessor
+import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk

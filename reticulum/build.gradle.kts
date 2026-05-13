@@ -25,6 +25,12 @@ android {
         buildConfigField("String", "RNS_KT_VERSION", "\"${libs.versions.reticulumKt.get().removePrefix("v")}\"")
         buildConfigField("String", "LXMF_KT_VERSION", "\"${libs.versions.lxmfKt.get().removePrefix("v")}\"")
         buildConfigField("String", "LXST_KT_VERSION", "\"${libs.versions.lxstKt.get().removePrefix("v")}\"")
+
+        // `:rns-host` carries the `rnsImpl` flavor dimension; `:reticulum` does not.
+        // Pin the Kotlin variant so Gradle can resolve `:rns-host` unambiguously for
+        // consumers of `:reticulum`. A.12 deletes this module, so this strategy is
+        // strictly transitional.
+        missingDimensionStrategy("rnsImpl", "kotlinBackend")
     }
 
     compileOptions {
@@ -56,6 +62,12 @@ dependencies {
     // Exposed via api() so consumers (:app) get the contract types transitively
     // without having to depend on :rns-api directly.
     api(project(":rns-api"))
+
+    // Hardware-bridge peripherals (BLE / USB / RNode / flasher / call/telephone)
+    // were moved from :reticulum into :rns-host in Phase A.7. NativeReticulumProtocol
+    // still calls into them during the strangler-fig window — A.8 splits the
+    // protocol into :rns-backend-kt and severs this dependency.
+    api(project(":rns-host"))
 
     // LXST module (telephony, codecs, audio pipeline)
     api(libs.lxst.kt)

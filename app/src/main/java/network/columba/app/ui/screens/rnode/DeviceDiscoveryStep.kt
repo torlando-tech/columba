@@ -60,7 +60,7 @@ import androidx.compose.ui.unit.sp
 import network.columba.app.data.model.BluetoothType
 import network.columba.app.data.model.DiscoveredRNode
 import network.columba.app.data.model.DiscoveredUsbDevice
-import network.columba.app.reticulum.ble.util.BlePermissionManager
+import network.columba.app.rns.host.ble.util.BlePermissionManager
 import network.columba.app.viewmodel.RNodeConnectionType
 import network.columba.app.viewmodel.RNodeWizardState
 import network.columba.app.viewmodel.RNodeWizardViewModel

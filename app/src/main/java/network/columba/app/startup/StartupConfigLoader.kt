@@ -7,7 +7,7 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.service.manager.InterfaceTransportObserver
-import network.columba.app.service.manager.filterByTransport
+import network.columba.app.rns.host.manager.filterByTransport
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first

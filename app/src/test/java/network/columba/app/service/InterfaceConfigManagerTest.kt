@@ -87,7 +87,7 @@ class InterfaceConfigManagerTest {
         propagationNodeManager = mockk()
         transportObserver = mockk()
         every { transportObserver.currentTransport() } returns
-            network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
+            network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
         applicationScope = testScope.backgroundScope
 
         // Setup SharedPreferences mock

@@ -7,7 +7,7 @@ import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import network.columba.app.service.ReticulumService
+import network.columba.app.rns.host.ReticulumService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After

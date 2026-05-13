@@ -22,8 +22,9 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.LogLevel
 import network.columba.app.rns.api.model.ReticulumConfig
 import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.host.ReticulumService
 import network.columba.app.service.manager.InterfaceTransportObserver
-import network.columba.app.service.manager.filterByTransport
+import network.columba.app.rns.host.manager.filterByTransport
 import javax.inject.Inject
 import javax.inject.Singleton
 

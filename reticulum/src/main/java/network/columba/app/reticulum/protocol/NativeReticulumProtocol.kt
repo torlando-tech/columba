@@ -206,14 +206,14 @@ class NativeReticulumProtocol(
 
     // LXST telephony — transport + full call manager (GIL-free voice calls)
     private val callTransport =
-        network.columba.app.reticulum.call.telephone
+        network.columba.app.rns.host.call.telephone
             .NativeNetworkTransport()
 
     /**
      * Wires [Telephone], [PacketRouter], [AudioDevice], and the `lxst.telephony` destination.
      * Null until [setupNativeTelephone] is called during [initialize].
      */
-    private var callManager: network.columba.app.reticulum.call.telephone.NativeCallManager? = null
+    private var callManager: network.columba.app.rns.host.call.telephone.NativeCallManager? = null
 
     // Blocked destinations and blackholed identities
     private val blockedDestinations =
@@ -1852,7 +1852,7 @@ class NativeReticulumProtocol(
     private fun setupNativeTelephone(identity: NativeIdentity) {
         val ctx = appContext ?: return
         val manager =
-            network.columba.app.reticulum.call.telephone
+            network.columba.app.rns.host.call.telephone
                 .NativeCallManager(ctx, identity, callTransport)
         manager.setup()
         callManager = manager

@@ -83,7 +83,7 @@ import kotlinx.coroutines.delay
 import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.InterfaceType
-import network.columba.app.reticulum.ble.util.BlePermissionManager
+import network.columba.app.rns.host.ble.util.BlePermissionManager
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
 import network.columba.app.ui.components.interfaceTypeIconData

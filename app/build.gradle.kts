@@ -131,7 +131,7 @@ android {
         }
     }
 
-    flavorDimensions += "telemetry"
+    flavorDimensions += listOf("telemetry", "rnsImpl")
 
     productFlavors {
         create("sentry") {
@@ -145,6 +145,28 @@ android {
             // Empty DSN - Sentry fully disabled (no init, no network calls)
             buildConfigField("String", "SENTRY_DSN", "\"\"")
         }
+
+        // RNS backend selection. `kotlinBackend` ships reticulum-kt / lxmf-kt /
+        // lxst-kt natively (default). `pythonBackend` ships upstream Python
+        // RNS/LXMF via Chaquopy — wired in Phase B; the flavor exists today so
+        // `:rns-host`'s flavor-aware source sets resolve at configuration time.
+        create("kotlinBackend") {
+            dimension = "rnsImpl"
+            isDefault = true
+            buildConfigField("String", "RNS_IMPL", "\"kotlin\"")
+        }
+        create("pythonBackend") {
+            dimension = "rnsImpl"
+            buildConfigField("String", "RNS_IMPL", "\"python\"")
+        }
+    }
+
+    // CI tasks and IDE module-level installs still reference variants without the
+    // `rnsImpl` qualifier (e.g. `:app:testNoSentryDebugUnitTest`). Pinning the
+    // default to `kotlinBackend` lets those tasks resolve unambiguously while
+    // the Python flavor remains opt-in.
+    defaultConfig {
+        missingDimensionStrategy("rnsImpl", "kotlinBackend")
     }
 
     // Track whether release signing is configured
@@ -364,6 +386,7 @@ dependencies {
     implementation(project(":data"))
     implementation(libs.lxst.kt)
     implementation(project(":reticulum"))
+    implementation(project(":rns-host"))
     implementation(project(":micron"))
 
     // Core

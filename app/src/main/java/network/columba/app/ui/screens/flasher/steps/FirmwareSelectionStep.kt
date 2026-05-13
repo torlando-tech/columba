@@ -42,10 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import network.columba.app.reticulum.flasher.FirmwarePackage
-import network.columba.app.reticulum.flasher.FirmwareSource
-import network.columba.app.reticulum.flasher.FrequencyBand
-import network.columba.app.reticulum.flasher.RNodeBoard
+import network.columba.app.rns.host.flasher.FirmwarePackage
+import network.columba.app.rns.host.flasher.FirmwareSource
+import network.columba.app.rns.host.flasher.FrequencyBand
+import network.columba.app.rns.host.flasher.RNodeBoard
 
 /**
  * Step 3: Firmware Selection
@@ -257,7 +257,7 @@ private fun BoardSelectionCard(
     // Filter to flashable boards
     val boards =
         RNodeBoard.entries.filter {
-            it != RNodeBoard.UNKNOWN && it.platform != network.columba.app.reticulum.flasher.RNodePlatform.AVR
+            it != RNodeBoard.UNKNOWN && it.platform != network.columba.app.rns.host.flasher.RNodePlatform.AVR
         }
 
     Card(modifier = modifier.fillMaxWidth()) {

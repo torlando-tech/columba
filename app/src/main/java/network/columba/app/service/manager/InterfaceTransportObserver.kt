@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.host.manager.CurrentTransport
+import network.columba.app.rns.host.manager.currentTransportOf
+import network.columba.app.rns.host.manager.filterByTransport
 import javax.inject.Inject
 import javax.inject.Singleton
 

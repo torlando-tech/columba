@@ -7,7 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.model.ConnectionType
-import network.columba.app.reticulum.ble.bridge.KotlinBLEBridge
+import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.test.BleTestFixtures
 import io.mockk.clearAllMocks

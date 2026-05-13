@@ -31,7 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import network.columba.app.reticulum.usb.UsbDeviceInfo
+import network.columba.app.rns.host.usb.UsbDeviceInfo
 
 /**
  * Step 1: Device Selection

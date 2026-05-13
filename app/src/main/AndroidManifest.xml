@@ -159,15 +159,8 @@
                 android:resource="@xml/usb_device_filter" />
         </activity>
 
-        <!-- Reticulum Background Service -->
-        <!-- Runs in separate process to allow clean restarts when applying config changes -->
-        <!-- BLE functionality is now integrated via KotlinBLEBridge (no separate service needed) -->
-        <service
-            android:name=".service.ReticulumService"
-            android:enabled="true"
-            android:exported="false"
-            android:process=":reticulum"
-            android:foregroundServiceType="connectedDevice|microphone" />
+        <!-- Reticulum Background Service is declared by :rns-host's AndroidManifest.xml.
+             Manifest merger pulls it in here so the :reticulum process registers correctly. -->
 
         <!-- RNode Companion Device Service (Android 12+) -->
         <!-- Enables Android to recognize Columba as the companion app for RNode devices -->

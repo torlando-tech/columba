@@ -6,7 +6,7 @@ import android.util.Log
 import network.columba.app.data.model.BleConnectionInfo
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.model.ConnectionType
-import network.columba.app.reticulum.ble.bridge.KotlinBLEBridge
+import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow

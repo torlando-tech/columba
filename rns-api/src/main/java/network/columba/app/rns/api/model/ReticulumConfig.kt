@@ -1,5 +1,6 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcel
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
@@ -160,8 +161,16 @@ data class ReticulumConfig(
 /**
  * Sealed class representing different Reticulum network interface types.
  * Each type contains the configuration parameters specific to that interface.
+ *
+ * Manual Parcelable implementation rather than @Parcelize because @Parcelize
+ * doesn't synthesize a polymorphic CREATOR on sealed parents — AIDL needs
+ * `InterfaceConfig.CREATOR` to round-trip `List<InterfaceConfig>` values
+ * typed at the sealed parent. Each subclass writes a small int tag + its
+ * fields; CREATOR dispatches on the tag.
  */
 sealed class InterfaceConfig : Parcelable {
+    override fun describeContents(): Int = 0
+
     abstract val name: String
     abstract val enabled: Boolean
 
@@ -189,7 +198,6 @@ sealed class InterfaceConfig : Parcelable {
      * @param dataPort UDP port for data communication (null = RNS default 42671)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
-    @Parcelize
     data class AutoInterface(
         override val name: String = "Auto Discovery",
         override val enabled: Boolean = true,
@@ -199,7 +207,19 @@ sealed class InterfaceConfig : Parcelable {
         val dataPort: Int? = null,
         val mode: String = "full",
         override val networkRestriction: NetworkRestriction = NetworkRestriction.WIFI_ONLY,
-    ) : InterfaceConfig()
+    ) : InterfaceConfig() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_AUTO_INTERFACE)
+            parcel.writeString(name)
+            parcel.writeInt(if (enabled) 1 else 0)
+            parcel.writeString(groupId)
+            parcel.writeString(discoveryScope)
+            parcel.writeNullableInt(discoveryPort)
+            parcel.writeNullableInt(dataPort)
+            parcel.writeString(mode)
+            parcel.writeParcelable(networkRestriction, flags)
+        }
+    }
 
     /**
      * TCPClient - Connects to a remote TCP server for Reticulum networking.
@@ -216,7 +236,6 @@ sealed class InterfaceConfig : Parcelable {
      * @param bootstrapOnly When true, this interface auto-detaches once sufficient discovered
      *                      interfaces are connected (RNS 1.1.0+ bootstrap feature)
      */
-    @Parcelize
     data class TCPClient(
         override val name: String = "TCP Connection",
         override val enabled: Boolean = true,
@@ -237,7 +256,24 @@ sealed class InterfaceConfig : Parcelable {
         /** SOCKS5 proxy port. Defaults to 9050 (Orbot's default SOCKS port). */
         val socksProxyPort: Int = 9050,
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
-    ) : InterfaceConfig()
+    ) : InterfaceConfig() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_TCP_CLIENT)
+            parcel.writeString(name)
+            parcel.writeInt(if (enabled) 1 else 0)
+            parcel.writeString(targetHost)
+            parcel.writeInt(targetPort)
+            parcel.writeInt(if (kissFraming) 1 else 0)
+            parcel.writeString(mode)
+            parcel.writeString(networkName)
+            parcel.writeString(passphrase)
+            parcel.writeInt(if (bootstrapOnly) 1 else 0)
+            parcel.writeInt(if (socksProxyEnabled) 1 else 0)
+            parcel.writeString(socksProxyHost)
+            parcel.writeInt(socksProxyPort)
+            parcel.writeParcelable(networkRestriction, flags)
+        }
+    }
 
     /**
      * RNode - LoRa radio interface using RNode hardware.
@@ -263,7 +299,6 @@ sealed class InterfaceConfig : Parcelable {
      * @param passphrase Optional IFAC passphrase for cryptographic authentication
      * @param enableFramebuffer Display Columba logo on RNode's screen
      */
-    @Parcelize
     data class RNode(
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
@@ -286,7 +321,33 @@ sealed class InterfaceConfig : Parcelable {
         val passphrase: String? = null,
         val enableFramebuffer: Boolean = true, // Display logo on RNode screen
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
-    ) : InterfaceConfig()
+    ) : InterfaceConfig() {
+        @Suppress("LongMethod") // Mechanical field serialization; one parcel.write per field.
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_RNODE)
+            parcel.writeString(name)
+            parcel.writeInt(if (enabled) 1 else 0)
+            parcel.writeString(targetDeviceName)
+            parcel.writeString(connectionMode)
+            parcel.writeString(tcpHost)
+            parcel.writeInt(tcpPort)
+            parcel.writeNullableInt(usbDeviceId)
+            parcel.writeNullableInt(usbVendorId)
+            parcel.writeNullableInt(usbProductId)
+            parcel.writeLong(frequency)
+            parcel.writeInt(bandwidth)
+            parcel.writeInt(txPower)
+            parcel.writeInt(spreadingFactor)
+            parcel.writeInt(codingRate)
+            parcel.writeNullableDouble(stAlock)
+            parcel.writeNullableDouble(ltAlock)
+            parcel.writeString(mode)
+            parcel.writeString(networkName)
+            parcel.writeString(passphrase)
+            parcel.writeInt(if (enableFramebuffer) 1 else 0)
+            parcel.writeParcelable(networkRestriction, flags)
+        }
+    }
 
     /**
      * UDP - UDP interface for IP networking.
@@ -300,7 +361,6 @@ sealed class InterfaceConfig : Parcelable {
      * @param forwardPort UDP port to forward packets to
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
-    @Parcelize
     data class UDP(
         override val name: String = "UDP Interface",
         override val enabled: Boolean = true,
@@ -310,7 +370,19 @@ sealed class InterfaceConfig : Parcelable {
         val forwardPort: Int = 4242,
         val mode: String = "full",
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
-    ) : InterfaceConfig()
+    ) : InterfaceConfig() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_UDP)
+            parcel.writeString(name)
+            parcel.writeInt(if (enabled) 1 else 0)
+            parcel.writeString(listenIp)
+            parcel.writeInt(listenPort)
+            parcel.writeString(forwardIp)
+            parcel.writeInt(forwardPort)
+            parcel.writeString(mode)
+            parcel.writeParcelable(networkRestriction, flags)
+        }
+    }
 
     /**
      * AndroidBLE - Bluetooth Low Energy interface for mobile mesh networking.
@@ -323,7 +395,6 @@ sealed class InterfaceConfig : Parcelable {
      * @param maxConnections Maximum simultaneous BLE connections (default: 7)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
-    @Parcelize
     data class AndroidBLE(
         override val name: String = "Bluetooth LE",
         override val enabled: Boolean = true,
@@ -336,7 +407,22 @@ sealed class InterfaceConfig : Parcelable {
         val bleScanDurationMs: Long = 10000L,
         val bleAdvertisingRefreshIntervalMs: Long = 60_000L,
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
-    ) : InterfaceConfig()
+    ) : InterfaceConfig() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_ANDROID_BLE)
+            parcel.writeString(name)
+            parcel.writeInt(if (enabled) 1 else 0)
+            parcel.writeString(deviceName)
+            parcel.writeInt(maxConnections)
+            parcel.writeString(mode)
+            parcel.writeString(blePowerPreset)
+            parcel.writeLong(bleDiscoveryIntervalMs)
+            parcel.writeLong(bleDiscoveryIntervalIdleMs)
+            parcel.writeLong(bleScanDurationMs)
+            parcel.writeLong(bleAdvertisingRefreshIntervalMs)
+            parcel.writeParcelable(networkRestriction, flags)
+        }
+    }
 
     /**
      * TCPServer - Accepts incoming TCP connections from other Reticulum nodes.
@@ -350,7 +436,6 @@ sealed class InterfaceConfig : Parcelable {
      * @param networkName Optional IFAC network name for cryptographic authentication
      * @param passphrase Optional IFAC passphrase for cryptographic authentication
      */
-    @Parcelize
     data class TCPServer(
         override val name: String = "TCP Server",
         override val enabled: Boolean = true,
@@ -360,8 +445,160 @@ sealed class InterfaceConfig : Parcelable {
         val networkName: String? = null,
         val passphrase: String? = null,
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
-    ) : InterfaceConfig()
+    ) : InterfaceConfig() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_TCP_SERVER)
+            parcel.writeString(name)
+            parcel.writeInt(if (enabled) 1 else 0)
+            parcel.writeString(listenIp)
+            parcel.writeInt(listenPort)
+            parcel.writeString(mode)
+            parcel.writeString(networkName)
+            parcel.writeString(passphrase)
+            parcel.writeParcelable(networkRestriction, flags)
+        }
+    }
+
+    companion object {
+        private const val TAG_AUTO_INTERFACE = 0
+        private const val TAG_TCP_CLIENT = 1
+        private const val TAG_RNODE = 2
+        private const val TAG_UDP = 3
+        private const val TAG_ANDROID_BLE = 4
+        private const val TAG_TCP_SERVER = 5
+
+        @JvmField
+        @Suppress(
+            "LongMethod", // Mechanical field deserialization mirroring writeToParcel.
+            "DEPRECATION", // readParcelable(ClassLoader) targets minSdk 24; ClassLoader+Class overload is API 33+.
+        )
+        val CREATOR: Parcelable.Creator<InterfaceConfig> = object : Parcelable.Creator<InterfaceConfig> {
+            override fun createFromParcel(parcel: Parcel): InterfaceConfig {
+                val cl = InterfaceConfig::class.java.classLoader
+                fun readNetworkRestriction(): NetworkRestriction =
+                    parcel.readParcelable<NetworkRestriction>(cl) ?: NetworkRestriction.ANY
+                return when (val tag = parcel.readInt()) {
+                    TAG_AUTO_INTERFACE ->
+                        AutoInterface(
+                            name = parcel.readString().orEmpty(),
+                            enabled = parcel.readInt() != 0,
+                            groupId = parcel.readString().orEmpty(),
+                            discoveryScope = parcel.readString().orEmpty(),
+                            discoveryPort = parcel.readNullableInt(),
+                            dataPort = parcel.readNullableInt(),
+                            mode = parcel.readString().orEmpty(),
+                            networkRestriction = readNetworkRestriction(),
+                        )
+                    TAG_TCP_CLIENT ->
+                        TCPClient(
+                            name = parcel.readString().orEmpty(),
+                            enabled = parcel.readInt() != 0,
+                            targetHost = parcel.readString().orEmpty(),
+                            targetPort = parcel.readInt(),
+                            kissFraming = parcel.readInt() != 0,
+                            mode = parcel.readString().orEmpty(),
+                            networkName = parcel.readString(),
+                            passphrase = parcel.readString(),
+                            bootstrapOnly = parcel.readInt() != 0,
+                            socksProxyEnabled = parcel.readInt() != 0,
+                            socksProxyHost = parcel.readString().orEmpty(),
+                            socksProxyPort = parcel.readInt(),
+                            networkRestriction = readNetworkRestriction(),
+                        )
+                    TAG_RNODE ->
+                        RNode(
+                            name = parcel.readString().orEmpty(),
+                            enabled = parcel.readInt() != 0,
+                            targetDeviceName = parcel.readString().orEmpty(),
+                            connectionMode = parcel.readString().orEmpty(),
+                            tcpHost = parcel.readString(),
+                            tcpPort = parcel.readInt(),
+                            usbDeviceId = parcel.readNullableInt(),
+                            usbVendorId = parcel.readNullableInt(),
+                            usbProductId = parcel.readNullableInt(),
+                            frequency = parcel.readLong(),
+                            bandwidth = parcel.readInt(),
+                            txPower = parcel.readInt(),
+                            spreadingFactor = parcel.readInt(),
+                            codingRate = parcel.readInt(),
+                            stAlock = parcel.readNullableDouble(),
+                            ltAlock = parcel.readNullableDouble(),
+                            mode = parcel.readString().orEmpty(),
+                            networkName = parcel.readString(),
+                            passphrase = parcel.readString(),
+                            enableFramebuffer = parcel.readInt() != 0,
+                            networkRestriction = readNetworkRestriction(),
+                        )
+                    TAG_UDP ->
+                        UDP(
+                            name = parcel.readString().orEmpty(),
+                            enabled = parcel.readInt() != 0,
+                            listenIp = parcel.readString().orEmpty(),
+                            listenPort = parcel.readInt(),
+                            forwardIp = parcel.readString().orEmpty(),
+                            forwardPort = parcel.readInt(),
+                            mode = parcel.readString().orEmpty(),
+                            networkRestriction = readNetworkRestriction(),
+                        )
+                    TAG_ANDROID_BLE ->
+                        AndroidBLE(
+                            name = parcel.readString().orEmpty(),
+                            enabled = parcel.readInt() != 0,
+                            deviceName = parcel.readString().orEmpty(),
+                            maxConnections = parcel.readInt(),
+                            mode = parcel.readString().orEmpty(),
+                            blePowerPreset = parcel.readString().orEmpty(),
+                            bleDiscoveryIntervalMs = parcel.readLong(),
+                            bleDiscoveryIntervalIdleMs = parcel.readLong(),
+                            bleScanDurationMs = parcel.readLong(),
+                            bleAdvertisingRefreshIntervalMs = parcel.readLong(),
+                            networkRestriction = readNetworkRestriction(),
+                        )
+                    TAG_TCP_SERVER ->
+                        TCPServer(
+                            name = parcel.readString().orEmpty(),
+                            enabled = parcel.readInt() != 0,
+                            listenIp = parcel.readString().orEmpty(),
+                            listenPort = parcel.readInt(),
+                            mode = parcel.readString().orEmpty(),
+                            networkName = parcel.readString(),
+                            passphrase = parcel.readString(),
+                            networkRestriction = readNetworkRestriction(),
+                        )
+                    else -> error("Unknown InterfaceConfig tag: $tag")
+                }
+            }
+
+            override fun newArray(size: Int): Array<InterfaceConfig?> = arrayOfNulls(size)
+        }
+    }
 }
+
+// AIDL-friendly nullable-primitive helpers used by InterfaceConfig and any
+// other manual Parcelable in this package. Standard pattern: write a 0/1
+// marker, then the value if marker is 1.
+
+private fun Parcel.writeNullableInt(value: Int?) {
+    if (value == null) {
+        writeInt(0)
+    } else {
+        writeInt(1)
+        writeInt(value)
+    }
+}
+
+private fun Parcel.readNullableInt(): Int? = if (readInt() == 0) null else readInt()
+
+private fun Parcel.writeNullableDouble(value: Double?) {
+    if (value == null) {
+        writeInt(0)
+    } else {
+        writeInt(1)
+        writeDouble(value)
+    }
+}
+
+private fun Parcel.readNullableDouble(): Double? = if (readInt() == 0) null else readDouble()
 
 @Parcelize
 enum class LogLevel : Parcelable {

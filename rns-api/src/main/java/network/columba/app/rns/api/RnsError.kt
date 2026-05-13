@@ -1,7 +1,7 @@
 package network.columba.app.rns.api
 
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 
 /**
  * Typed error envelope crossing the AIDL boundary between the UI process
@@ -17,8 +17,16 @@ import kotlinx.parcelize.Parcelize
  * message and choose recovery actions; truly novel failures fall through
  * to [Generic] with the original message and stack trace text preserved
  * for debugging.
+ *
+ * Manual Parcelable implementation rather than @Parcelize because @Parcelize
+ * doesn't synthesize a polymorphic CREATOR on sealed parents — AIDL needs
+ * `RnsError.CREATOR` to round-trip values typed as the sealed parent. Each
+ * subclass writes a small int tag + its payload; CREATOR dispatches on the
+ * tag.
  */
 sealed class RnsError : Parcelable {
+    override fun describeContents(): Int = 0
+
     /**
      * Unrecognized failure. [stackTraceText] is the formatted stack trace
      * for the originating exception (`Throwable.stackTraceToString()`),
@@ -26,11 +34,16 @@ sealed class RnsError : Parcelable {
      * Never empty for backend-side failures; may be `null` for client-side
      * synthesized errors (e.g., timeout from the IPC layer itself).
      */
-    @Parcelize
     data class Generic(
         val message: String,
         val stackTraceText: String?,
-    ) : RnsError()
+    ) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_GENERIC)
+            parcel.writeString(message)
+            parcel.writeString(stackTraceText)
+        }
+    }
 
     /**
      * Backend hasn't completed initialize() yet. Surfaced by any operation
@@ -38,15 +51,22 @@ sealed class RnsError : Parcelable {
      * the network-status observer to flip to READY or surface a "still
      * starting up" notice.
      */
-    @Parcelize
-    data object BackendNotReady : RnsError()
+    data object BackendNotReady : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_BACKEND_NOT_READY)
+        }
+    }
 
     /**
      * Identity wasn't found in the backend's identity store. [hashHex] is
      * the truncated identity hash that was looked up.
      */
-    @Parcelize
-    data class IdentityNotFound(val hashHex: String) : RnsError()
+    data class IdentityNotFound(val hashHex: String) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_IDENTITY_NOT_FOUND)
+            parcel.writeString(hashHex)
+        }
+    }
 
     /**
      * Operation took longer than the caller's timeout budget. [operation]
@@ -55,11 +75,16 @@ sealed class RnsError : Parcelable {
      * IPC layer also synthesizes it when an AIDL callback fails to fire
      * within the suspending caller's deadline.
      */
-    @Parcelize
     data class TimeoutExceeded(
         val operation: String,
         val timeoutMs: Long,
-    ) : RnsError()
+    ) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_TIMEOUT_EXCEEDED)
+            parcel.writeString(operation)
+            parcel.writeLong(timeoutMs)
+        }
+    }
 
     /**
      * Caller invoked a method whose corresponding capability is
@@ -70,8 +95,12 @@ sealed class RnsError : Parcelable {
      * naming the specific capability path (e.g.,
      * `"performance.batteryProfileTuning"`).
      */
-    @Parcelize
-    data class FeatureUnsupported(val feature: String) : RnsError()
+    data class FeatureUnsupported(val feature: String) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_FEATURE_UNSUPPORTED)
+            parcel.writeString(feature)
+        }
+    }
 
     /**
      * Telephony state machine refused the requested transition.
@@ -79,11 +108,16 @@ sealed class RnsError : Parcelable {
      * [actual] is the current state name. UI typically just shows a
      * toast and re-renders the call card from the latest [VoiceCallState].
      */
-    @Parcelize
     data class CallStateInvalid(
         val expected: String,
         val actual: String,
-    ) : RnsError()
+    ) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_CALL_STATE_INVALID)
+            parcel.writeString(expected)
+            parcel.writeString(actual)
+        }
+    }
 
     /**
      * NomadNet page request couldn't reach the destination or the
@@ -91,11 +125,43 @@ sealed class RnsError : Parcelable {
      * destination's hex hash; [path] is the requested page path
      * (`"/page/index.mu"` etc.).
      */
-    @Parcelize
     data class NomadnetPageNotFound(
         val destHash: String,
         val path: String,
-    ) : RnsError()
+    ) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_NOMADNET_PAGE_NOT_FOUND)
+            parcel.writeString(destHash)
+            parcel.writeString(path)
+        }
+    }
+
+    companion object {
+        private const val TAG_GENERIC = 0
+        private const val TAG_BACKEND_NOT_READY = 1
+        private const val TAG_IDENTITY_NOT_FOUND = 2
+        private const val TAG_TIMEOUT_EXCEEDED = 3
+        private const val TAG_FEATURE_UNSUPPORTED = 4
+        private const val TAG_CALL_STATE_INVALID = 5
+        private const val TAG_NOMADNET_PAGE_NOT_FOUND = 6
+
+        @JvmField
+        val CREATOR: Parcelable.Creator<RnsError> = object : Parcelable.Creator<RnsError> {
+            override fun createFromParcel(parcel: Parcel): RnsError =
+                when (val tag = parcel.readInt()) {
+                    TAG_GENERIC -> Generic(parcel.readString().orEmpty(), parcel.readString())
+                    TAG_BACKEND_NOT_READY -> BackendNotReady
+                    TAG_IDENTITY_NOT_FOUND -> IdentityNotFound(parcel.readString().orEmpty())
+                    TAG_TIMEOUT_EXCEEDED -> TimeoutExceeded(parcel.readString().orEmpty(), parcel.readLong())
+                    TAG_FEATURE_UNSUPPORTED -> FeatureUnsupported(parcel.readString().orEmpty())
+                    TAG_CALL_STATE_INVALID -> CallStateInvalid(parcel.readString().orEmpty(), parcel.readString().orEmpty())
+                    TAG_NOMADNET_PAGE_NOT_FOUND -> NomadnetPageNotFound(parcel.readString().orEmpty(), parcel.readString().orEmpty())
+                    else -> error("Unknown RnsError tag: $tag")
+                }
+
+            override fun newArray(size: Int): Array<RnsError?> = arrayOfNulls(size)
+        }
+    }
 }
 
 /**

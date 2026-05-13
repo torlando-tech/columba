@@ -1,12 +1,17 @@
 package network.columba.app.rns.api.model
 
-enum class NodeType {
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
+enum class NodeType : Parcelable {
     NODE, // General mesh network node
     PEER, // Node we can message with
     PROPAGATION_NODE, // Relay/repeater node for signal propagation
     PHONE, // lxst.telephony — callable audio/telephony destination
 }
 
+@Parcelize
 data class AnnounceEvent(
     val destinationHash: ByteArray,
     val identity: Identity,
@@ -20,7 +25,7 @@ data class AnnounceEvent(
     val stampCost: Int? = null, // Pre-parsed by LXMF stamp cost functions
     val stampCostFlexibility: Int? = null, // For propagation nodes only
     val peeringCost: Int? = null, // For propagation nodes only
-) {
+) : Parcelable {
     @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

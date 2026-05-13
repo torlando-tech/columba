@@ -1,5 +1,8 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * Result of a NomadNet page request.
  *
@@ -15,6 +18,7 @@ package network.columba.app.rns.api.model
  * @param fileName Display name of the downloaded file when `type == "file"`.
  * @param fileSize Size in bytes of the downloaded file when `type == "file"`.
  */
+@Parcelize
 data class NomadnetPageResult(
     val content: String,
     val path: String,
@@ -22,4 +26,4 @@ data class NomadnetPageResult(
     val filePath: String? = null,
     val fileName: String? = null,
     val fileSize: Long = 0L,
-)
+) : Parcelable

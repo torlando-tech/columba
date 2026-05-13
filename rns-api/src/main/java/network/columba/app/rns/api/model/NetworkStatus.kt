@@ -1,13 +1,21 @@
 package network.columba.app.rns.api.model
 
-sealed class NetworkStatus {
-    object INITIALIZING : NetworkStatus()
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
-    object CONNECTING : NetworkStatus()
+sealed class NetworkStatus : Parcelable {
+    @Parcelize
+    data object INITIALIZING : NetworkStatus()
 
-    object READY : NetworkStatus()
+    @Parcelize
+    data object CONNECTING : NetworkStatus()
 
+    @Parcelize
+    data object READY : NetworkStatus()
+
+    @Parcelize
     data class ERROR(val message: String) : NetworkStatus()
 
-    object SHUTDOWN : NetworkStatus()
+    @Parcelize
+    data object SHUTDOWN : NetworkStatus()
 }

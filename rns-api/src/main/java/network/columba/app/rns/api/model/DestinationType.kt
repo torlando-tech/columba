@@ -1,9 +1,15 @@
 package network.columba.app.rns.api.model
 
-sealed class DestinationType {
-    object SINGLE : DestinationType()
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
-    object GROUP : DestinationType()
+sealed class DestinationType : Parcelable {
+    @Parcelize
+    data object SINGLE : DestinationType()
 
-    object PLAIN : DestinationType()
+    @Parcelize
+    data object GROUP : DestinationType()
+
+    @Parcelize
+    data object PLAIN : DestinationType()
 }

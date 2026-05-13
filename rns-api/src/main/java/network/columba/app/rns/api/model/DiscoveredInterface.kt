@@ -1,5 +1,8 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * Information about an interface discovered via RNS 1.1.x interface discovery.
  *
@@ -7,6 +10,7 @@ package network.columba.app.rns.api.model
  * announced by other nodes on the network, including TCP servers, RNodes, and
  * other interface types.
  */
+@Parcelize
 data class DiscoveredInterface(
     // Core identification
     val name: String,
@@ -65,7 +69,7 @@ data class DiscoveredInterface(
     val receivedAt: Long = 0L,
     /** When we first discovered this interface locally (unix seconds). */
     val discoveredAt: Long = 0L,
-) {
+) : Parcelable {
     /**
      * Returns true if this is a TCP-based interface.
      * BackboneInterface is the RNS 1.1.x upgraded TCP connection type.

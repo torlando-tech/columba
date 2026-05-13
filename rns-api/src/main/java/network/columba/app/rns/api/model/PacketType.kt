@@ -1,11 +1,18 @@
 package network.columba.app.rns.api.model
 
-sealed class PacketType {
-    object DATA : PacketType()
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
-    object ANNOUNCE : PacketType()
+sealed class PacketType : Parcelable {
+    @Parcelize
+    data object DATA : PacketType()
 
-    object LINKREQUEST : PacketType()
+    @Parcelize
+    data object ANNOUNCE : PacketType()
 
-    object PROOF : PacketType()
+    @Parcelize
+    data object LINKREQUEST : PacketType()
+
+    @Parcelize
+    data object PROOF : PacketType()
 }

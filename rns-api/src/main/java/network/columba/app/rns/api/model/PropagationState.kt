@@ -1,8 +1,12 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * State of propagation node message sync/transfer.
  */
+@Parcelize
 data class PropagationState(
     /** Numeric state code (0=idle, 1=path_requested, 2=link_establishing, etc.). */
     val state: Int,
@@ -12,7 +16,7 @@ data class PropagationState(
     val progress: Float,
     /** Number of messages received in the last completed transfer. */
     val messagesReceived: Int,
-) {
+) : Parcelable {
     companion object {
         // These constants mirror LXMF.LXMRouter.PR_* from Python LXMF library.
         // Keep in sync with LXMF/LXMRouter.py propagation transfer states.

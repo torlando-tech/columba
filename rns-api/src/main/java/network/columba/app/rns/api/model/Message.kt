@@ -1,5 +1,9 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
 data class Message(
     val id: String,
     val destinationHash: String,
@@ -10,4 +14,4 @@ data class Message(
     // LXMF fields as JSON: {"6": "hex_image_data", "7": "hex_audio_data"}
     // Key is LXMF field type: 5=FILE_ATTACHMENTS, 6=IMAGE, 7=AUDIO, 15=RENDERER
     val fieldsJson: String? = null,
-)
+) : Parcelable

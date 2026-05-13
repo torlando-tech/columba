@@ -1,7 +1,12 @@
 package network.columba.app.rns.api.model
 
-sealed class Direction {
-    object IN : Direction()
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
-    object OUT : Direction()
+sealed class Direction : Parcelable {
+    @Parcelize
+    data object IN : Direction()
+
+    @Parcelize
+    data object OUT : Direction()
 }

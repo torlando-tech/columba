@@ -1,13 +1,17 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * Information about an interface that failed to initialize.
  */
+@Parcelize
 data class FailedInterface(
     val name: String,
     val error: String,
     val recoverable: Boolean = true,
-) {
+) : Parcelable {
     companion object {
         /**
          * Parse a JSON array string into a list of FailedInterface objects.

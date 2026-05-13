@@ -1,10 +1,14 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
 data class PacketReceipt(
     val hash: ByteArray,
     val delivered: Boolean = false,
     val timestamp: Long,
-) {
+) : Parcelable {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

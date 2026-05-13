@@ -1,5 +1,8 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * Result of a link speed probe operation.
  *
@@ -16,6 +19,7 @@ package network.columba.app.rns.api.model
  * @property linkMtu Link MTU in bytes (higher values indicate faster connections)
  * @property error Error message if status is "error"
  */
+@Parcelize
 data class LinkSpeedProbeResult(
     val status: String,
     val establishmentRateBps: Long?,
@@ -26,7 +30,7 @@ data class LinkSpeedProbeResult(
     val nextHopBitrateBps: Long? = null,
     val linkMtu: Int? = null,
     val error: String? = null,
-) {
+) : Parcelable {
     /**
      * Whether the probe was successful.
      */

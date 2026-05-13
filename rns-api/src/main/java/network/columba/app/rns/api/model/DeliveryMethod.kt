@@ -1,9 +1,13 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * Delivery methods for LXMF messages.
  */
-enum class DeliveryMethod {
+@Parcelize
+enum class DeliveryMethod : Parcelable {
     /** Single-packet delivery, max 295 bytes content, no link required. */
     OPPORTUNISTIC,
 

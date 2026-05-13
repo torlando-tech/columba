@@ -1,11 +1,15 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * Result of conversation link operations.
  *
  * Contains all metrics needed for connection quality assessment and
  * image transfer time estimation.
  */
+@Parcelize
 data class ConversationLinkResult(
     /** Whether link is currently active. */
     val isActive: Boolean,
@@ -25,4 +29,4 @@ data class ConversationLinkResult(
     val alreadyExisted: Boolean = false,
     /** Error message if operation failed. */
     val error: String? = null,
-)
+) : Parcelable

@@ -1,11 +1,18 @@
 package network.columba.app.rns.api.model
 
-sealed class LinkStatus {
-    object PENDING : LinkStatus()
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
-    object ACTIVE : LinkStatus()
+sealed class LinkStatus : Parcelable {
+    @Parcelize
+    data object PENDING : LinkStatus()
 
-    object STALE : LinkStatus()
+    @Parcelize
+    data object ACTIVE : LinkStatus()
 
-    object CLOSED : LinkStatus()
+    @Parcelize
+    data object STALE : LinkStatus()
+
+    @Parcelize
+    data object CLOSED : LinkStatus()
 }

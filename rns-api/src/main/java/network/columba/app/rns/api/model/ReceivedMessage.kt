@@ -1,8 +1,12 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * A received LXMF message.
  */
+@Parcelize
 data class ReceivedMessage(
     val messageHash: String,
     val content: String,
@@ -21,4 +25,4 @@ data class ReceivedMessage(
     // Signal quality metrics (from RNode/BLE — null for TCP/AutoInterface).
     val receivedRssi: Int? = null,
     val receivedSnr: Float? = null,
-)
+) : Parcelable

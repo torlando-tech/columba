@@ -1,5 +1,9 @@
 package network.columba.app.rns.api.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
 data class ReticulumConfig(
     val storagePath: String,
     val enabledInterfaces: List<InterfaceConfig>,
@@ -75,7 +79,7 @@ data class ReticulumConfig(
      * providing spam prevention. Range: 8-20, default: 14.
      */
     val requiredDiscoveryValue: Int = 14,
-) {
+) : Parcelable {
     // Data-class-generated equals/hashCode use reference equality for ByteArray, so
     // two configs with identical key bytes would otherwise never compare equal. Override
     // to use contentEquals/contentHashCode for the key field; everything else is handled
@@ -157,7 +161,7 @@ data class ReticulumConfig(
  * Sealed class representing different Reticulum network interface types.
  * Each type contains the configuration parameters specific to that interface.
  */
-sealed class InterfaceConfig {
+sealed class InterfaceConfig : Parcelable {
     abstract val name: String
     abstract val enabled: Boolean
 
@@ -185,6 +189,7 @@ sealed class InterfaceConfig {
      * @param dataPort UDP port for data communication (null = RNS default 42671)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
+    @Parcelize
     data class AutoInterface(
         override val name: String = "Auto Discovery",
         override val enabled: Boolean = true,
@@ -211,6 +216,7 @@ sealed class InterfaceConfig {
      * @param bootstrapOnly When true, this interface auto-detaches once sufficient discovered
      *                      interfaces are connected (RNS 1.1.0+ bootstrap feature)
      */
+    @Parcelize
     data class TCPClient(
         override val name: String = "TCP Connection",
         override val enabled: Boolean = true,
@@ -257,6 +263,7 @@ sealed class InterfaceConfig {
      * @param passphrase Optional IFAC passphrase for cryptographic authentication
      * @param enableFramebuffer Display Columba logo on RNode's screen
      */
+    @Parcelize
     data class RNode(
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
@@ -293,6 +300,7 @@ sealed class InterfaceConfig {
      * @param forwardPort UDP port to forward packets to
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
+    @Parcelize
     data class UDP(
         override val name: String = "UDP Interface",
         override val enabled: Boolean = true,
@@ -315,6 +323,7 @@ sealed class InterfaceConfig {
      * @param maxConnections Maximum simultaneous BLE connections (default: 7)
      * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
      */
+    @Parcelize
     data class AndroidBLE(
         override val name: String = "Bluetooth LE",
         override val enabled: Boolean = true,
@@ -341,6 +350,7 @@ sealed class InterfaceConfig {
      * @param networkName Optional IFAC network name for cryptographic authentication
      * @param passphrase Optional IFAC passphrase for cryptographic authentication
      */
+    @Parcelize
     data class TCPServer(
         override val name: String = "TCP Server",
         override val enabled: Boolean = true,
@@ -353,7 +363,8 @@ sealed class InterfaceConfig {
     ) : InterfaceConfig()
 }
 
-enum class LogLevel {
+@Parcelize
+enum class LogLevel : Parcelable {
     CRITICAL,
     ERROR,
     WARNING,
@@ -362,10 +373,11 @@ enum class LogLevel {
     VERBOSE,
 }
 
+@Parcelize
 enum class BatteryProfile(
     val displayName: String,
     val description: String,
-) {
+) : Parcelable {
     MAXIMUM_BATTERY(
         displayName = "Maximum Battery",
         description = "Best battery life with slower background networking and discovery.",
@@ -388,9 +400,10 @@ enum class BatteryProfile(
 /**
  * Discovery scopes for AutoInterface
  */
+@Parcelize
 enum class DiscoveryScope(
     val value: String,
-) {
+) : Parcelable {
     LINK("link"), // Only local network segment
     ADMIN("admin"), // Administrative scope
     SITE("site"), // Site-wide scope
@@ -401,9 +414,10 @@ enum class DiscoveryScope(
 /**
  * Interface operating modes
  */
+@Parcelize
 enum class InterfaceMode(
     val value: String,
-) {
+) : Parcelable {
     FULL("full"), // All functionality enabled
     GATEWAY("gateway"), // Gateway mode (path discovery for others)
     ACCESS_POINT("access_point"), // Access point mode (quiet unless active)
@@ -418,9 +432,10 @@ enum class InterfaceMode(
  * `ETHERNET` is bucketed with `WIFI_ONLY` since the local link is wired/wifi-like from
  * the user's perspective (USB tether to a PC, dock, etc.).
  */
+@Parcelize
 enum class NetworkRestriction(
     val value: String,
-) {
+) : Parcelable {
     /** No restriction — interface starts on any active transport. */
     ANY("any"),
 

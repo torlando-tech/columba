@@ -48,7 +48,7 @@ class ColumbaApplication : Application() {
     // Constructed lazily rather than via Hilt because it only needs a Context and has
     // no other dependencies — this avoids adding a module binding for a single call site.
     private val serviceSettingsAccessor by lazy {
-        network.columba.app.service.persistence
+        network.columba.app.rns.host.persistence
             .ServiceSettingsAccessor(this)
     }
 
@@ -606,9 +606,9 @@ class ColumbaApplication : Application() {
     private fun updateServiceNotification(status: String) {
         try {
             val intent =
-                android.content.Intent(this, network.columba.app.service.ReticulumService::class.java).apply {
-                    action = network.columba.app.service.ReticulumService.ACTION_UPDATE_NOTIFICATION
-                    putExtra(network.columba.app.service.ReticulumService.EXTRA_NETWORK_STATUS, status)
+                android.content.Intent(this, network.columba.app.rns.host.ReticulumService::class.java).apply {
+                    action = network.columba.app.rns.host.ReticulumService.ACTION_UPDATE_NOTIFICATION
+                    putExtra(network.columba.app.rns.host.ReticulumService.EXTRA_NETWORK_STATUS, status)
                 }
             // startForegroundService also spins up the :reticulum process if it isn't running.
             // ReticulumService.onStartCommand guards on ::managers.isInitialized and returns

@@ -2,8 +2,8 @@
 
 package network.columba.app.service
 
-import network.columba.app.service.binder.ReticulumServiceBinder
-import network.columba.app.service.persistence.ServiceSettingsAccessor
+import network.columba.app.rns.host.binder.ReticulumServiceBinder
+import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery

@@ -544,8 +544,8 @@ class DebugViewModel
 
                     // Send ACTION_STOP to stop the foreground service and remove notification
                     val stopIntent =
-                        android.content.Intent(context, network.columba.app.service.ReticulumService::class.java).apply {
-                            action = network.columba.app.service.ReticulumService.ACTION_STOP
+                        android.content.Intent(context, network.columba.app.rns.host.ReticulumService::class.java).apply {
+                            action = network.columba.app.rns.host.ReticulumService.ACTION_STOP
                         }
                     androidx.core.content.ContextCompat
                         .startForegroundService(context, stopIntent)

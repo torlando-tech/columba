@@ -17,7 +17,7 @@ import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.util.PeerNameResolver
+import network.columba.app.rns.host.util.PeerNameResolver
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton

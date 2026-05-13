@@ -43,7 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import network.columba.app.reticulum.ble.model.BlePowerPreset
+import network.columba.app.rns.host.ble.model.BlePowerPreset
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.viewmodel.InterfaceConfigState
 

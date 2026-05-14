@@ -221,6 +221,14 @@ class SettingsViewModel
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+        /**
+         * The active RNS backend's capabilities — forwards [RnsBackend.capabilities].
+         * `ColumbaNavigation` provides this into `LocalCapabilities` above the
+         * NavHost so any screen can capability-gate its UI (Phase D).
+         */
+        val capabilities: StateFlow<network.columba.app.rns.api.BackendCapabilities> =
+            rnsBackend.capabilities
+
         // Track group telemetry state before toggle-off so we can restore it on toggle-on
         private var groupTelemetryWasEnabled = false
 

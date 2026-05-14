@@ -77,6 +77,12 @@ dependencies {
     // AIDL adapters (transitively brings in :rns-api contract types).
     api(project(":rns-ipc"))
 
+    // Native Kotlin RnsBackend impl — only on the kotlinBackend flavor's compile
+    // classpath. `HostBackendModule.kt` in src/kotlinBackend/ uses Hilt @Provides
+    // to surface NativeRnsBackend into the :reticulum-process graph and to feed
+    // the RNodeHostBridge adapter that wraps KotlinUSBBridge / BluetoothLeConnection.
+    "kotlinBackendImplementation"(project(":rns-backend-kt"))
+
     // Hilt
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)

@@ -10,7 +10,7 @@ navigation = "2.9.8"
 
 msgpack = "0.9.12"
 dataStore = "1.2.1"
-paging = "3.3.6"
+paging = "3.5.0"
 zxing = "3.5.3"
 cameraX = "1.6.1"
 ktlint = "12.1.1"

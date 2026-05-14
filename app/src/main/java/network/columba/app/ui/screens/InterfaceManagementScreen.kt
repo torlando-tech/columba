@@ -86,6 +86,7 @@ import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.host.ble.util.BlePermissionManager
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
+import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.interfaceTypeIconData
 import network.columba.app.viewmodel.InterfaceManagementViewModel
 
@@ -117,6 +118,11 @@ fun InterfaceManagementScreen(
 
     // State for interface type selection
     var showTypeSelector by remember { mutableStateOf(false) }
+
+    // State for the "Apply & Restart" confirmation dialog — shown on backends
+    // that can't hot-reload interfaces (Python), where applying restarts the
+    // RNS stack. Hot-reload backends apply directly without it.
+    var showApplyRestartConfirm by remember { mutableStateOf(false) }
 
     // Permission state
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -154,10 +160,22 @@ fun InterfaceManagementScreen(
                     }
                 },
                 actions = {
-                    // Show Apply Changes button when there are pending changes
+                    // Show the apply action when there are pending changes. On a
+                    // hot-reload backend (kotlin) changes mostly apply live, so
+                    // this only surfaces on a sync failure and applies directly.
+                    // On the Python backend it's the normal path — applying
+                    // restarts Reticulum — so it reads "Apply & Restart" and is
+                    // gated behind a confirmation dialog.
                     if (state.hasPendingChanges) {
+                        val hotReload = LocalCapabilities.current.interfaces.hotReloadInterfaces
                         Button(
-                            onClick = { viewModel.applyChanges() },
+                            onClick = {
+                                if (hotReload) {
+                                    viewModel.applyChanges()
+                                } else {
+                                    showApplyRestartConfirm = true
+                                }
+                            },
                             enabled = !state.isApplyingChanges,
                             colors =
                                 ButtonDefaults.buttonColors(
@@ -171,7 +189,7 @@ fun InterfaceManagementScreen(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("Apply Changes")
+                            Text(if (hotReload) "Apply Changes" else "Apply & Restart")
                         }
                     }
                 },
@@ -486,6 +504,38 @@ fun InterfaceManagementScreen(
                 }
             },
             onDismiss = { showTypeSelector = false },
+        )
+    }
+
+    // "Apply & Restart" confirmation — shown on backends that can't hot-reload
+    // interfaces (Python). applyChanges() rewrites the RNS config and restarts
+    // the stack, so warn before the brief disconnect.
+    if (showApplyRestartConfirm) {
+        AlertDialog(
+            onDismissRequest = { showApplyRestartConfirm = false },
+            title = { Text("Apply & Restart") },
+            text = {
+                Text(
+                    "Applying interface changes restarts Reticulum on this backend. " +
+                        "You'll briefly disconnect from peers, and any in-progress " +
+                        "transfers will be interrupted. This usually takes a few seconds.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showApplyRestartConfirm = false
+                        viewModel.applyChanges()
+                    },
+                ) {
+                    Text("Apply & Restart")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showApplyRestartConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 }

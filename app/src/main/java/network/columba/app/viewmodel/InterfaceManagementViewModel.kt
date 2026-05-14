@@ -22,6 +22,7 @@ import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.manager.InterfaceTransportObserver
@@ -180,6 +181,7 @@ class InterfaceManagementViewModel
         private val bleStatusRepository: BleStatusRepository,
         private val transportAdmin: RnsTransportAdmin,
         private val transportObserver: InterfaceTransportObserver,
+        private val rnsBackend: RnsBackend,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
@@ -1106,6 +1108,19 @@ class InterfaceManagementViewModel
         private var syncJob: kotlinx.coroutines.Job? = null
 
         private fun syncNativeInterfaces() {
+            // The Python backend can't hot-reload interfaces — upstream RNS reads
+            // them from its config file at construction
+            // (capabilities.interfaces.hotReloadInterfaces = false), so
+            // RnsTransportAdmin.reloadInterfaces() is a documented no-op there.
+            // Calling it would silently do nothing and leave no Apply button.
+            // Instead, mark the change pending: the UI surfaces an
+            // "Apply & Restart" action that drives applyChanges() (config rewrite
+            // + shutdown + reinitialise). On the kotlin backend hotReloadInterfaces
+            // is true and the change applies live below.
+            if (!rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                _state.update { it.copy(hasPendingChanges = true) }
+                return
+            }
             syncJob?.cancel()
             syncJob =
                 viewModelScope.launch(ioDispatcher) {

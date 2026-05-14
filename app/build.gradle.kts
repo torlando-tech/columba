@@ -385,7 +385,12 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
     implementation(libs.lxst.kt)
-    implementation(project(":reticulum"))
+    // :rns-api — the backend-seam contract (value types, sub-interfaces, AIDL).
+    // Was reaching :app transitively through :reticulum until A.12 deleted that
+    // module; declared directly now since :app imports network.columba.app.rns.api.*
+    // throughout. :rns-host (below) still brings the peripheral types + the
+    // reticulum-kt/lxmf-kt/lxst-kt/usb-serial stack via its api() edges.
+    implementation(project(":rns-api"))
     implementation(project(":rns-host"))
     implementation(project(":micron"))
 

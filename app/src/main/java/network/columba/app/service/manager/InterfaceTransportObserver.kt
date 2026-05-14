@@ -14,7 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.rns.host.manager.currentTransportOf
 import network.columba.app.rns.host.manager.filterByTransport
@@ -27,7 +27,7 @@ import javax.inject.Singleton
  * and asks the native stack to reload the resulting subset.
  *
  * Lives in the main process — `:reticulum`'s `NetworkChangeManager` cannot reach the
- * Hilt-injected `InterfaceRepository`, and `ReticulumProtocol.reloadInterfaces` is
+ * Hilt-injected `InterfaceRepository`, and `RnsTransportAdmin.reloadInterfaces` is
  * called from this side anyway. Each Android process gets its own `NetworkCallback`
  * delivery, so observing here is independent of the service-side observer.
  *
@@ -43,7 +43,7 @@ class InterfaceTransportObserver
     constructor(
         @ApplicationContext private val context: Context,
         private val interfaceRepository: InterfaceRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val transportAdmin: RnsTransportAdmin,
     ) {
         companion object {
             private const val TAG = "InterfaceTransportObserver"
@@ -146,7 +146,7 @@ class InterfaceTransportObserver
                             TAG,
                             "Reload-on-transport: ${configs.size} enabled → ${filtered.size} active for $transport",
                         )
-                        reticulumProtocol.reloadInterfaces(filtered)
+                        transportAdmin.reloadInterfaces(filtered)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

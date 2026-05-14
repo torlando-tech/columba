@@ -9,7 +9,7 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.LogLevel
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.ReticulumConfig
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +25,7 @@ import javax.inject.Inject
 class MainViewModel
     @Inject
     constructor(
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<UiState>(UiState.Initial)
         val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -46,9 +46,9 @@ class MainViewModel
                         logLevel = LogLevel.INFO,
                     )
 
-                reticulumProtocol.initialize(config)
+                rnsCore.initialize(config)
                     .onSuccess {
-                        _networkStatus.value = reticulumProtocol.networkStatus.value
+                        _networkStatus.value = rnsCore.networkStatus.value
                         _uiState.value = UiState.Success("Reticulum initialized successfully")
                     }
                     .onFailure { error ->
@@ -61,7 +61,7 @@ class MainViewModel
             viewModelScope.launch {
                 _uiState.value = UiState.Loading("Creating identity...")
 
-                reticulumProtocol.createIdentity()
+                rnsCore.createIdentity()
                     .onSuccess { identity ->
                         currentIdentity = identity
                         val hexHash = identity.hash.joinToString("") { "%02x".format(it) }
@@ -84,7 +84,7 @@ class MainViewModel
                 _uiState.value = UiState.Loading("Creating destination and sending packet...")
 
                 // Create a test destination
-                reticulumProtocol.createDestination(
+                rnsCore.createDestination(
                     identity = identity,
                     direction = Direction.OUT,
                     type = DestinationType.SINGLE,
@@ -92,7 +92,7 @@ class MainViewModel
                     aspects = listOf("test"),
                 ).onSuccess { destination ->
                     // Send a test packet
-                    reticulumProtocol.sendPacket(
+                    rnsCore.sendPacket(
                         destination = destination,
                         data = "Hello, Reticulum!".toByteArray(),
                     ).onSuccess { receipt ->

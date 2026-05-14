@@ -19,7 +19,7 @@ import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsNomadnet
 import org.json.JSONObject
 import javax.inject.Inject
 
@@ -28,7 +28,7 @@ import javax.inject.Inject
 class NomadNetBrowserViewModel
     @Inject
     constructor(
-        private val reticulumProtocol: ReticulumProtocol,
+        private val nomadnet: RnsNomadnet,
         private val pageCache: NomadNetPageCache,
     ) : ViewModel() {
         companion object {
@@ -136,7 +136,7 @@ class NomadNetBrowserViewModel
 
         private val partialManager: PartialManager by lazy {
             PartialManager(
-                protocol = reticulumProtocol,
+                protocol = nomadnet,
                 scope = viewModelScope,
                 currentNodeHash = { currentNodeHash },
                 formFields = { _formFields.value },
@@ -322,7 +322,7 @@ class NomadNetBrowserViewModel
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val result =
-                        reticulumProtocol.requestNomadnetPage(
+                        nomadnet.requestNomadnetPage(
                             destinationHash = nodeHash,
                             path = path,
                             formDataJson = formDataJson,
@@ -366,7 +366,7 @@ class NomadNetBrowserViewModel
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val result =
-                        reticulumProtocol.requestNomadnetPage(
+                        nomadnet.requestNomadnetPage(
                             destinationHash = nodeHash,
                             path = path,
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS * 2,
@@ -418,7 +418,7 @@ class NomadNetBrowserViewModel
             _downloadState.value = DownloadState()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    reticulumProtocol.cancelNomadnetPageRequest()
+                    nomadnet.cancelNomadnetPageRequest()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error cancelling download", e)
                 }
@@ -479,7 +479,7 @@ class NomadNetBrowserViewModel
                 // Only send cancel if no new fetch has started since we were called
                 if (fetchEpoch == epoch) {
                     try {
-                        reticulumProtocol.cancelNomadnetPageRequest()
+                        nomadnet.cancelNomadnetPageRequest()
                     } catch (e: Exception) {
                         Log.e(TAG, "Error cancelling", e)
                     }
@@ -506,7 +506,7 @@ class NomadNetBrowserViewModel
             _identifyInProgress.value = true
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    reticulumProtocol.identifyNomadnetLink(nodeHash).fold(
+                    nomadnet.identifyNomadnetLink(nodeHash).fold(
                         onSuccess = { alreadyIdentified ->
                             _isIdentified.value = true
                             if (!alreadyIdentified) refresh()
@@ -530,7 +530,7 @@ class NomadNetBrowserViewModel
             // Use NonCancellable because viewModelScope is already cancelled at this point.
             CoroutineScope(Dispatchers.IO + NonCancellable).launch {
                 try {
-                    reticulumProtocol.cancelNomadnetPageRequest()
+                    nomadnet.cancelNomadnetPageRequest()
                 } catch (_: Exception) {
                     // Best-effort cancellation — service may already be unbound
                 }
@@ -623,7 +623,7 @@ class NomadNetBrowserViewModel
             statusCollectionJob =
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        reticulumProtocol.nomadnetRequestStatusFlow.collect { status ->
+                        nomadnet.nomadnetRequestStatusFlow.collect { status ->
                             if (fetchEpoch != epoch) return@collect
                             if (status.isNotEmpty()) {
                                 _browserState.value = BrowserState.Loading(formatNomadnetStatus(status))
@@ -648,7 +648,7 @@ class NomadNetBrowserViewModel
             progressCollectionJob =
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
-                        reticulumProtocol.nomadnetDownloadProgressFlow.collect { progress ->
+                        nomadnet.nomadnetDownloadProgressFlow.collect { progress ->
                             if (fetchEpoch != epoch) return@collect
                             _downloadState.update { it.copy(progress = progress) }
                         }
@@ -685,7 +685,7 @@ class NomadNetBrowserViewModel
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val result =
-                        reticulumProtocol.requestNomadnetPage(
+                        nomadnet.requestNomadnetPage(
                             destinationHash = nodeHash,
                             path = path,
                             timeoutSeconds = PAGE_TIMEOUT_SECONDS,

@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.di.IoDispatcher
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.util.IdentityQrCodeUtils
 import network.columba.app.util.generateDefaultDisplayName
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -94,7 +96,9 @@ class DebugViewModel
     @Inject
     constructor(
         @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
+        private val rnsLxmf: RnsLxmf,
+        private val rnsTransportAdmin: RnsTransportAdmin,
         private val settingsRepository: SettingsRepository,
         private val identityRepository: network.columba.app.data.repository.IdentityRepository,
         private val interfaceConfigManager: network.columba.app.service.InterfaceConfigManager,
@@ -148,7 +152,7 @@ class DebugViewModel
         private fun observeDebugInfo() {
             viewModelScope.launch {
                 // Event-driven: collect debug info from service callbacks
-                reticulumProtocol
+                rnsTransportAdmin
                     .debugInfoFlow
                     .onStart {
                         // Trigger initial fetch to get data before first event
@@ -189,7 +193,7 @@ class DebugViewModel
                 // Get failed interfaces
                 val failedInterfaces =
                     withContext(ioDispatcher) {
-                        reticulumProtocol.getFailedInterfaces()
+                        rnsTransportAdmin.getFailedInterfaces()
                     }
                 val failedInterfaceInfos =
                     failedInterfaces.map { failed ->
@@ -204,7 +208,7 @@ class DebugViewModel
                 val interfaces = activeInterfaces + failedInterfaceInfos
 
                 // Get status for error message
-                val status = reticulumProtocol.networkStatus.value
+                val status = rnsCore.networkStatus.value
 
                 _debugInfo.value =
                     DebugInfo(
@@ -238,7 +242,7 @@ class DebugViewModel
         private fun observeNetworkStatus() {
             viewModelScope.launch {
                 // Phase 2.1: Observe StateFlow (no polling!)
-                reticulumProtocol.networkStatus.collect { status ->
+                rnsCore.networkStatus.collect { status ->
                     // Convert NetworkStatus to readable string
                     _networkStatus.value =
                         when (status) {
@@ -268,7 +272,7 @@ class DebugViewModel
 
         /** Check if the service has been shut down (by network status or SharedPreferences flag). */
         private fun isServiceShutdown(): Boolean {
-            val status = reticulumProtocol.networkStatus.value
+            val status = rnsCore.networkStatus.value
             if (status is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN) return true
             // Also check SharedPreferences flag — onServiceDisconnected may not have fired yet
             return context
@@ -283,7 +287,7 @@ class DebugViewModel
 
                     val (pythonDebugInfo, failedInterfaces) =
                         withContext(ioDispatcher) {
-                            Pair(reticulumProtocol.getDebugInfo(), reticulumProtocol.getFailedInterfaces())
+                            Pair(rnsTransportAdmin.getDebugInfo(), rnsTransportAdmin.getFailedInterfaces())
                         }
 
                     @Suppress("UNCHECKED_CAST")
@@ -301,7 +305,7 @@ class DebugViewModel
                             InterfaceInfo(name = failed.name, type = failed.name, online = false, error = failed.error)
                         }
                     val interfaces = activeInterfaces + failedInterfaceInfos
-                    val status = reticulumProtocol.networkStatus.value
+                    val status = rnsCore.networkStatus.value
                     val wakeLockHeld = pythonDebugInfo["wake_lock_held"] as? Boolean ?: false
 
                     _debugInfo.value =
@@ -360,7 +364,7 @@ class DebugViewModel
                     Log.d(TAG, "Using display name for announce")
 
                     // Announce it with configured display name
-                    reticulumProtocol
+                    rnsCore
                         .announceDestination(
                             destination = destination,
                             appData = displayName.toByteArray(),
@@ -402,7 +406,7 @@ class DebugViewModel
 
             // Get LXMF identity from the service (this is the router's identity)
             try {
-                val lxmfIdentity = reticulumProtocol.getLxmfIdentity().getOrThrow()
+                val lxmfIdentity = rnsLxmf.getLxmfIdentity().getOrThrow()
                 cachedIdentity = lxmfIdentity
                 Log.d(TAG, "Successfully retrieved LXMF identity from service")
                 return lxmfIdentity
@@ -412,7 +416,7 @@ class DebugViewModel
 
             // Fallback: create new identity (shouldn't happen with service-based protocol)
             Log.w(TAG, "Creating fallback identity (this shouldn't normally happen)")
-            val newIdentity = reticulumProtocol.createIdentity().getOrThrow()
+            val newIdentity = rnsCore.createIdentity().getOrThrow()
             cachedIdentity = newIdentity
             return newIdentity
         }
@@ -432,7 +436,7 @@ class DebugViewModel
 
             // Get LXMF destination from service (already registered by router)
             try {
-                val destination = reticulumProtocol.getLxmfDestination().getOrThrow()
+                val destination = rnsLxmf.getLxmfDestination().getOrThrow()
                 cachedDestination = destination
                 Log.d(TAG, "Successfully retrieved LXMF destination from service")
                 return destination
@@ -540,7 +544,7 @@ class DebugViewModel
                     _networkStatus.value = "SHUTDOWN"
 
                     // Unbind FIRST to prevent auto-rebind if service process crashes
-                    reticulumProtocol.unbindService()
+                    // unbindService() was a legacy no-op on the kotlin backend; ACTION_STOP below handles teardown.
 
                     // Send ACTION_STOP to stop the foreground service and remove notification
                     val stopIntent =

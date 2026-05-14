@@ -30,7 +30,7 @@ import network.columba.app.data.repository.OfflineMapRegionRepository
 import network.columba.app.map.MapStyleResult
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.SharingSession
 import network.columba.app.service.TelemetryCollectorManager
@@ -196,7 +196,7 @@ class MapViewModel
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val offlineMapRegionRepository: OfflineMapRegionRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val transportAdmin: RnsTransportAdmin,
         private val interfaceFirstSeenDao: network.columba.app.data.db.dao.InterfaceFirstSeenDao,
     ) : ViewModel() {
         companion object {
@@ -216,7 +216,7 @@ class MapViewModel
 
             /**
              * Dispatcher used for Room-backed calls reached via
-             * [ReticulumProtocol.getDiscoveredInterfaces] and the first-seen DAO.
+             * [RnsTransportAdmin.getDiscoveredInterfaces] and the first-seen DAO.
              *
              * Made internal var to allow injecting a test dispatcher (same pattern as
              * [DiscoveredInterfacesViewModel] and [InterfaceManagementViewModel]).
@@ -685,7 +685,7 @@ class MapViewModel
                 }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         private suspend fun loadInterfaceMarkers() {
-            // Dispatch to IO because ReticulumProtocol.getDiscoveredInterfaces() reaches
+            // Dispatch to IO because RnsTransportAdmin.getDiscoveredInterfaces() reaches
             // Transport.listDiscoveredInterfaces() -> RoomDiscoveryStore.loadAllDiscovered(),
             // which performs a synchronous (non-suspend) Room read and throws
             // IllegalStateException if invoked on the main thread. The first-seen DAO
@@ -693,7 +693,7 @@ class MapViewModel
             try {
                 val markers =
                     withContext(ioDispatcher) {
-                        val discovered = reticulumProtocol.getDiscoveredInterfaces()
+                        val discovered = transportAdmin.getDiscoveredInterfaces()
                         val withLocation = discovered.filter { it.hasLocation }
 
                         // Compute IDs once and persist first-seen timestamps

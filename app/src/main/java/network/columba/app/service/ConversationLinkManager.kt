@@ -2,7 +2,7 @@ package network.columba.app.service
 
 import android.util.Log
 import network.columba.app.data.model.ImageCompressionPreset
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.util.HexUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +29,7 @@ import javax.inject.Singleton
 class ConversationLinkManager
     @Inject
     constructor(
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
     ) {
         companion object {
             private const val TAG = "ConversationLinkManager"
@@ -247,7 +247,7 @@ class ConversationLinkManager
                 try {
                     val destHashBytes = HexUtils.hexToBytes(destHashHex)
                     val result =
-                        reticulumProtocol.establishConversationLink(
+                        rnsCore.establishConversationLink(
                             destHashBytes,
                             LINK_ESTABLISHMENT_TIMEOUT_SECONDS,
                         )
@@ -315,7 +315,7 @@ class ConversationLinkManager
             scope.launch {
                 try {
                     val destHashBytes = HexUtils.hexToBytes(destHashHex)
-                    val result = reticulumProtocol.closeConversationLink(destHashBytes)
+                    val result = rnsCore.closeConversationLink(destHashBytes)
 
                     result.fold(
                         onSuccess = { wasActive ->
@@ -379,7 +379,7 @@ class ConversationLinkManager
         suspend fun refreshLinkStatus(destHashHex: String): LinkState =
             try {
                 val destHashBytes = HexUtils.hexToBytes(destHashHex)
-                val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
+                val result = rnsCore.getConversationLinkStatus(destHashBytes)
 
                 val state =
                     LinkState(
@@ -468,7 +468,7 @@ class ConversationLinkManager
         ) {
             try {
                 val destHashBytes = HexUtils.hexToBytes(destHashHex)
-                val result = reticulumProtocol.getConversationLinkStatus(destHashBytes)
+                val result = rnsCore.getConversationLinkStatus(destHashBytes)
 
                 when {
                     // Detect transition from active to inactive (link became stale)

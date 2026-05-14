@@ -15,7 +15,9 @@ import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.DeliveryMethod
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
@@ -76,7 +78,9 @@ class MessagingViewModel
     @Inject
     constructor(
         @param:dagger.hilt.android.qualifiers.ApplicationContext private val applicationContext: Context,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
+        private val rnsLxmf: RnsLxmf,
+        private val rnsTransportAdmin: RnsTransportAdmin,
         private val conversationRepository: network.columba.app.data.repository.ConversationRepository,
         private val announceRepository: network.columba.app.data.repository.AnnounceRepository,
         private val contactRepository: network.columba.app.data.repository.ContactRepository,
@@ -600,7 +604,7 @@ class MessagingViewModel
 
                     // Send reaction via LXMF protocol
                     val result =
-                        reticulumProtocol.sendReaction(
+                        rnsLxmf.sendReaction(
                             destinationHash = destHashBytes,
                             targetMessageId = messageId,
                             emoji = emoji,
@@ -682,9 +686,9 @@ class MessagingViewModel
                                 .computeIdentityHash(it)
                         }
                     blockedPeerRepository.blockPeer(peerHash, peerIdentityHash, currentPeerName, blackholeEnabled)
-                    reticulumProtocol.blockDestination(peerHash)
+                    rnsCore.blockDestination(peerHash)
                     if (blackholeEnabled && peerIdentityHash != null) {
-                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                        rnsCore.blackholeIdentity(peerIdentityHash)
                     }
                     if (deleteConversation) {
                         conversationRepository.deleteConversation(peerHash)
@@ -730,7 +734,7 @@ class MessagingViewModel
         init {
             viewModelScope.launch {
                 try {
-                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                    _isTransportEnabled.value = rnsCore.isTransportEnabled()
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to check transport status", e)
                 }
@@ -749,7 +753,7 @@ class MessagingViewModel
             // Safe to enable now that identity loading is lazy (doesn't crash init)
             viewModelScope.launch {
                 try {
-                    reticulumProtocol.observeDeliveryStatus().collect { update ->
+                    rnsLxmf.observeDeliveryStatus().collect { update ->
                         try {
                             Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.status}")
                             handleDeliveryStatusUpdate(update)
@@ -767,7 +771,7 @@ class MessagingViewModel
             // Collect incoming reactions and update target messages
             viewModelScope.launch {
                 try {
-                    reticulumProtocol.reactionReceivedFlow.collect { reactionJson ->
+                    rnsTransportAdmin.reactionReceivedFlow.collect { reactionJson ->
                         try {
                             handleIncomingReaction(reactionJson)
                         } catch (e: Exception) {
@@ -805,7 +809,7 @@ class MessagingViewModel
 
             // Try to load identity
             return try {
-                val identity = reticulumProtocol.getLxmfIdentity().getOrThrow()
+                val identity = rnsLxmf.getLxmfIdentity().getOrThrow()
                 sourceIdentity = identity
                 // Cache the identity hash for reaction ownership checks
                 val hashHex = identity.hash.joinToString("") { "%02x".format(it) }
@@ -916,7 +920,7 @@ class MessagingViewModel
                         .chunked(2)
                         .map { it.toInt(16).toByte() }
                         .toByteArray()
-                val sentInterface = reticulumProtocol.getNextHopInterfaceName(destHashBytes)
+                val sentInterface = rnsCore.getNextHopInterfaceName(destHashBytes)
                 if (sentInterface != null) {
                     conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
                 }
@@ -1037,7 +1041,7 @@ class MessagingViewModel
             activeConversationManager.setActive(destinationHash)
 
             // Enable fast polling (1s) for active conversation
-            reticulumProtocol.setConversationActive(true)
+            rnsLxmf.setConversationActive(true)
 
             // Request path for this conversation peer if we don't have one
             viewModelScope.launch(Dispatchers.IO) {
@@ -1173,7 +1177,7 @@ class MessagingViewModel
                         }
 
                     val result =
-                        reticulumProtocol.sendLxmfMessageWithMethod(
+                        rnsLxmf.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
                             content = sanitized,
                             sourceIdentity = identity,
@@ -1240,7 +1244,7 @@ class MessagingViewModel
             // Query outbound interface immediately after send (best-effort)
             val sentInterface =
                 try {
-                    reticulumProtocol.getNextHopInterfaceName(receipt.destinationHash)
+                    rnsCore.getNextHopInterfaceName(receipt.destinationHash)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to query sent interface: ${e.message}")
                     null
@@ -1924,7 +1928,7 @@ class MessagingViewModel
                 Log.d(TAG, "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat)")
 
                 val result =
-                    reticulumProtocol.sendLxmfMessageWithMethod(
+                    rnsLxmf.sendLxmfMessageWithMethod(
                         destinationHash = destHashBytes,
                         content = sanitized,
                         sourceIdentity = identity,
@@ -2070,7 +2074,7 @@ class MessagingViewModel
                     Log.d(TAG, "Temporarily increasing incoming size limit from ${originalLimitKb}KB to ${newLimitKb}KB for ${fileSizeKb}KB file")
 
                     // Update Python layer temporarily (don't persist to DataStore)
-                    reticulumProtocol.setIncomingMessageSizeLimit(newLimitKb)
+                    rnsLxmf.setIncomingMessageSizeLimit(newLimitKb)
                     Log.d(TAG, "Python layer updated with temporary size limit")
 
                     // Trigger sync to fetch the file (silent = no toast)
@@ -2104,7 +2108,7 @@ class MessagingViewModel
                 } finally {
                     // Always revert the size limit when done
                     if (originalLimitKb != null) {
-                        reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
+                        rnsLxmf.setIncomingMessageSizeLimit(originalLimitKb)
                         Log.d(TAG, "Size limit reverted to ${originalLimitKb}KB")
                     }
                 }
@@ -2171,7 +2175,7 @@ class MessagingViewModel
 
                     // Send the message
                     val result =
-                        reticulumProtocol.sendLxmfMessageWithMethod(
+                        rnsLxmf.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
                             content = failedMessage.content,
                             sourceIdentity = identity,
@@ -2271,7 +2275,7 @@ class MessagingViewModel
 
         private suspend fun probeAndRecommendCodec(destHashBytes: ByteArray): CodecProfile =
             try {
-                val probe = reticulumProtocol.probeLinkSpeed(destHashBytes, 5.0f, "direct")
+                val probe = rnsCore.probeLinkSpeed(destHashBytes, 5.0f, "direct")
                 if (probe.isSuccess) CodecProfile.recommendFromProbe(probe) else CodecProfile.DEFAULT
             } catch (e: Exception) {
                 Log.e(TAG, "Error probing link speed for codec recommendation", e)
@@ -2298,7 +2302,7 @@ class MessagingViewModel
             activeConversationManager.setActive(null)
 
             // Disable fast polling when conversation screen is closed
-            reticulumProtocol.setConversationActive(false)
+            rnsLxmf.setConversationActive(false)
             Log.d(TAG, "ViewModel cleared - disabled fast polling")
         }
     }

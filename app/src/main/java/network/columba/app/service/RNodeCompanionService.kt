@@ -18,7 +18,7 @@ import androidx.annotation.RequiresApi
  * - Bound when the associated RNode is within BLE range or connected via Bluetooth
  * - Unbound when the device moves out of range or disconnects
  *
- * Reconnection is handled by NativeReticulumProtocol in the app process — the native
+ * Reconnection is handled by the native RNS backend in the app process — the native
  * BLE bridge watches for RNode presence and reconnects automatically. This service
  * exists only so Android keeps the app in its companion-device association.
  *

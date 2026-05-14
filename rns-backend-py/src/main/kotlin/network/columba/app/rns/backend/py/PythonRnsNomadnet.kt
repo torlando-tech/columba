@@ -228,6 +228,9 @@ class PythonRnsNomadnet(
      * threading `.progress` through [nomadnetDownloadProgressFlow], then build
      * the [NomadnetPageResult].
      */
+    // Each failure mode (cancelled / timeout / FAILED status) throws a distinct
+    // typed RnsException — collapsing them would lose the failure distinction.
+    @Suppress("ThrowsCount")
     private suspend fun awaitResponse(
         receipt: PyObject,
         safePath: String,

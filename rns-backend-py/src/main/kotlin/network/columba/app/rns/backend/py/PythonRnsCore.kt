@@ -62,6 +62,9 @@ class PythonRnsCore(
 
     // ==================== Initialization & lifecycle ====================
 
+    // catch(Throwable) is intentional: any failure crossing the Python/Chaquopy
+    // boundary must flip networkStatus to ERROR before re-throwing.
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun initialize(config: ReticulumConfig): Result<Unit> =
         pyResult {
             _networkStatus.value = NetworkStatus.INITIALIZING
@@ -171,6 +174,9 @@ class PythonRnsCore(
 
     // ==================== Destination management ====================
 
+    // Spread is required: RNS.Destination(identity, dir, type, app_name, *aspects)
+    // is variadic in `aspects`, whose count is only known at runtime.
+    @Suppress("SpreadOperator")
     override suspend fun createDestination(
         identity: Identity,
         direction: Direction,
@@ -227,7 +233,6 @@ class PythonRnsCore(
         pyResult {
             val pyDest = runtime.destinations[destination.hexHash]
                 ?: throw RnsException(RnsError.IdentityNotFound(destination.hexHash))
-            val packetClass = runtime.rnsModule["Packet"] ?: error("RNS.Packet missing")
             val pyPacket = runtime.rnsModule.callAttr("Packet", pyDest, data.toPyBytes())
             val receipt = pyPacket.callAttr("send")
             val hashBytes = pyPacket["packet_hash"]?.toJava(ByteArray::class.java) ?: ByteArray(0)

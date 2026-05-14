@@ -70,7 +70,7 @@ dependencies {
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.test.core)
     androidTestImplementation("androidx.test:runner:1.7.0")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.turbine)
     androidTestImplementation(libs.room)

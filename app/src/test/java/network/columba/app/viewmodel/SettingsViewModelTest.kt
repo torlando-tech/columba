@@ -10,7 +10,11 @@ import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.BackendCapabilities
+import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.LocationSharingManager
@@ -60,7 +64,10 @@ class SettingsViewModelTest {
 
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var identityRepository: IdentityRepository
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var rnsBackend: RnsBackend
+    private lateinit var rnsCore: RnsCore
+    private lateinit var rnsLxmf: RnsLxmf
+    private lateinit var rnsTransportAdmin: RnsTransportAdmin
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
@@ -101,7 +108,10 @@ class SettingsViewModelTest {
 
         settingsRepository = mockk()
         identityRepository = mockk()
-        reticulumProtocol = mockk()
+        rnsBackend = mockk()
+        rnsCore = mockk()
+        rnsLxmf = mockk()
+        rnsTransportAdmin = mockk()
         interfaceConfigManager = mockk()
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
@@ -232,12 +242,11 @@ class SettingsViewModelTest {
             Result.success(Unit)
         }
 
-        // Mock ReticulumProtocol methods
-        every { reticulumProtocol.networkStatus } returns networkStatusFlow
-        every { reticulumProtocol.supportsSharedInstanceAvailabilityChecks } returns true
-        every { reticulumProtocol.unbindService() } just Runs
-        coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
-        coEvery { reticulumProtocol.isSharedInstanceAvailable() } returns false
+        // Mock RNS seam sub-interfaces
+        every { rnsCore.networkStatus } returns networkStatusFlow
+        every { rnsBackend.capabilities } returns MutableStateFlow(BackendCapabilities.UNKNOWN)
+        coEvery { rnsCore.shutdown() } returns Result.success(Unit)
+        coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
 
         // Mock MapTileSourceManager flows
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
@@ -259,7 +268,10 @@ class SettingsViewModelTest {
             context = context,
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
-            reticulumProtocol = reticulumProtocol,
+            rnsBackend = rnsBackend,
+            rnsCore = rnsCore,
+            rnsLxmf = rnsLxmf,
+            rnsTransportAdmin = rnsTransportAdmin,
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
@@ -1573,8 +1585,8 @@ class SettingsViewModelTest {
     fun `triggerManualAnnounce success with NativeReticulumProtocol`() =
         runTest {
             // Given: NativeReticulumProtocol that returns success
-            val serviceProtocol =
-                mockk<ReticulumProtocol>(relaxed = true) {
+            val serviceRnsCore =
+                mockk<RnsCore>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
                     coEvery { triggerAutoAnnounce(any()) } returns Result.success(Unit)
                 }
@@ -1584,7 +1596,10 @@ class SettingsViewModelTest {
                     context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
-                    reticulumProtocol = serviceProtocol,
+                    rnsBackend = rnsBackend,
+                    rnsCore = serviceRnsCore,
+                    rnsLxmf = rnsLxmf,
+                    rnsTransportAdmin = rnsTransportAdmin,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
@@ -1613,7 +1628,7 @@ class SettingsViewModelTest {
             }
 
             // Verify announce was called and timestamp was saved
-            coVerify { serviceProtocol.triggerAutoAnnounce(any()) }
+            coVerify { serviceRnsCore.triggerAutoAnnounce(any()) }
             coVerify { settingsRepository.saveLastAutoAnnounceTime(any()) }
         }
 
@@ -1621,8 +1636,8 @@ class SettingsViewModelTest {
     fun `triggerManualAnnounce failure with NativeReticulumProtocol`() =
         runTest {
             // Given: NativeReticulumProtocol that returns failure
-            val serviceProtocol =
-                mockk<ReticulumProtocol>(relaxed = true) {
+            val serviceRnsCore =
+                mockk<RnsCore>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
                     coEvery { triggerAutoAnnounce(any()) } returns Result.failure(RuntimeException("Announce failed"))
                 }
@@ -1632,7 +1647,10 @@ class SettingsViewModelTest {
                     context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
-                    reticulumProtocol = serviceProtocol,
+                    rnsBackend = rnsBackend,
+                    rnsCore = serviceRnsCore,
+                    rnsLxmf = rnsLxmf,
+                    rnsTransportAdmin = rnsTransportAdmin,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
@@ -1838,7 +1856,7 @@ class SettingsViewModelTest {
                         .startForegroundService(context, any())
                 }
                 // Verify shutdown() is NOT called via IPC (it causes race conditions)
-                coVerify(exactly = 0) { reticulumProtocol.shutdown() }
+                coVerify(exactly = 0) { rnsCore.shutdown() }
             }
         }
 
@@ -2241,9 +2259,12 @@ class SettingsViewModelTest {
             SettingsViewModel.enableMonitors = false
 
             var monitorCallCount = 0
-            val serviceProtocol =
-                mockk<ReticulumProtocol>(relaxed = true) {
+            val serviceRnsCore =
+                mockk<RnsCore>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
+                }
+            val serviceRnsTransportAdmin =
+                mockk<RnsTransportAdmin>(relaxed = true) {
                     coEvery { isSharedInstanceAvailable() } coAnswers {
                         monitorCallCount++
                         false
@@ -2255,7 +2276,10 @@ class SettingsViewModelTest {
                     context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
-                    reticulumProtocol = serviceProtocol,
+                    rnsBackend = rnsBackend,
+                    rnsCore = serviceRnsCore,
+                    rnsLxmf = rnsLxmf,
+                    rnsTransportAdmin = serviceRnsTransportAdmin,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
@@ -2290,8 +2314,8 @@ class SettingsViewModelTest {
             // only calls isSharedInstanceAvailable() on NativeReticulumProtocol.
             SettingsViewModel.enableMonitors = false
 
-            val serviceProtocol =
-                mockk<ReticulumProtocol>(relaxed = true) {
+            val serviceRnsCore =
+                mockk<RnsCore>(relaxed = true) {
                     every { networkStatus } returns networkStatusFlow
                 }
 
@@ -2300,7 +2324,10 @@ class SettingsViewModelTest {
                     context = context,
                     settingsRepository = settingsRepository,
                     identityRepository = identityRepository,
-                    reticulumProtocol = serviceProtocol,
+                    rnsBackend = rnsBackend,
+                    rnsCore = serviceRnsCore,
+                    rnsLxmf = rnsLxmf,
+                    rnsTransportAdmin = rnsTransportAdmin,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,

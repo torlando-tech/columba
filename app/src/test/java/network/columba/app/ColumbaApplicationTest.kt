@@ -1,6 +1,6 @@
 package network.columba.app
 
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsLxmf
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -16,24 +16,29 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
 /**
  * Unit tests for ColumbaApplication startup behavior.
  * Tests timeout handling and utility functions used during initialization.
+ *
+ * A.10b removed the legacy `getStatus()` / stale-config-flag startup branch —
+ * `getStatus()` was a no-op on the kotlin backend and the `"READY"` string
+ * comparison never matched, so that branch was dead code. The tests covering
+ * it were deleted with the production logic. The `getLxmfIdentity` startup
+ * verification path survives, now routed through [RnsLxmf].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ColumbaApplicationTest {
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var mockProtocol: ReticulumProtocol
+    private lateinit var mockRnsLxmf: RnsLxmf
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        mockProtocol = mockk<ReticulumProtocol>()
+        mockRnsLxmf = mockk<RnsLxmf>()
     }
 
     @After
@@ -52,65 +57,11 @@ class ColumbaApplicationTest {
     // ========== Timeout Behavior Tests ==========
 
     @Test
-    fun `withTimeoutOrNull returns value when service responds within timeout`() =
-        runTest {
-            // Arrange
-            coEvery { mockProtocol.getStatus() } coAnswers {
-                delay(100) // Fast response
-                Result.success("READY")
-            }
-
-            // Act
-            val result =
-                withTimeoutOrNull(ColumbaApplication.IPC_TIMEOUT_MS) {
-                    mockProtocol.getStatus().getOrNull()
-                }
-            advanceUntilIdle()
-
-            // Assert
-            assertEquals("READY", result)
-        }
-
-    @Test
-    fun `service call returns result when mock succeeds`() =
-        runTest {
-            // Arrange
-            coEvery { mockProtocol.getStatus() } returns Result.success("READY")
-
-            // Act
-            val result = mockProtocol.getStatus().getOrNull()
-            advanceUntilIdle()
-
-            // Assert
-            assertEquals("READY", result)
-        }
-
-    @Test
-    fun `withTimeoutOrNull handles service error within timeout`() =
-        runTest {
-            // Arrange
-            coEvery { mockProtocol.getStatus() } coAnswers {
-                delay(100)
-                Result.failure(Exception("Service unavailable"))
-            }
-
-            // Act
-            val result =
-                withTimeoutOrNull(ColumbaApplication.IPC_TIMEOUT_MS) {
-                    mockProtocol.getStatus().getOrNull()
-                }
-            advanceUntilIdle()
-
-            // Assert
-            assertNull(result) // getOrNull returns null on failure
-        }
-
-    @Test
     fun `withTimeoutOrNull for getLxmfIdentity returns identity when fast`() =
         runTest {
             // Arrange
             val mockIdentity = mockk<network.columba.app.rns.api.model.Identity>()
-            coEvery { mockProtocol.getLxmfIdentity() } coAnswers {
+            coEvery { mockRnsLxmf.getLxmfIdentity() } coAnswers {
                 delay(100)
                 Result.success(mockIdentity)
             }
@@ -118,7 +69,7 @@ class ColumbaApplicationTest {
             // Act
             val result =
                 withTimeoutOrNull(ColumbaApplication.IPC_TIMEOUT_MS) {
-                    mockProtocol.getLxmfIdentity().getOrNull()
+                    mockRnsLxmf.getLxmfIdentity().getOrNull()
                 }
             advanceUntilIdle()
 
@@ -132,114 +83,15 @@ class ColumbaApplicationTest {
         runTest {
             // Arrange
             val mockIdentity = mockk<network.columba.app.rns.api.model.Identity>()
-            coEvery { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
+            coEvery { mockRnsLxmf.getLxmfIdentity() } returns Result.success(mockIdentity)
 
             // Act
-            val result = mockProtocol.getLxmfIdentity().getOrNull()
+            val result = mockRnsLxmf.getLxmfIdentity().getOrNull()
             advanceUntilIdle()
 
             // Assert
             assertNotNull(result)
             assertEquals(mockIdentity, result)
-        }
-
-    // ========== Status Check Pattern Tests ==========
-
-    @Test
-    fun `stale config flag logic clears flag when status is SHUTDOWN`() =
-        runTest {
-            // Arrange
-            coEvery { mockProtocol.getStatus() } returns Result.success("SHUTDOWN")
-
-            // Act - simulate the Application's stale flag check logic
-            val status =
-                withTimeoutOrNull(ColumbaApplication.IPC_TIMEOUT_MS) {
-                    mockProtocol.getStatus().getOrNull()
-                }
-            advanceUntilIdle()
-
-            val shouldClearFlag = status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")
-
-            // Assert
-            assertEquals("SHUTDOWN", status)
-            assertEquals(true, shouldClearFlag)
-        }
-
-    @Test
-    fun `stale config flag logic clears flag when status is null`() =
-        runTest {
-            // Arrange - service returns failure (which becomes null via getOrNull)
-            coEvery { mockProtocol.getStatus() } returns Result.failure(Exception("Not responding"))
-
-            // Act
-            val status = mockProtocol.getStatus().getOrNull()
-            advanceUntilIdle()
-
-            val shouldClearFlag = status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")
-
-            // Assert
-            assertNull(status)
-            assertEquals(true, shouldClearFlag)
-        }
-
-    @Test
-    fun `stale config flag logic clears flag when status starts with ERROR`() =
-        runTest {
-            // Arrange
-            coEvery { mockProtocol.getStatus() } returns Result.success("ERROR: Service crashed")
-
-            // Act
-            val status =
-                withTimeoutOrNull(ColumbaApplication.IPC_TIMEOUT_MS) {
-                    mockProtocol.getStatus().getOrNull()
-                }
-            advanceUntilIdle()
-
-            val shouldClearFlag = status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")
-
-            // Assert
-            assertEquals("ERROR: Service crashed", status)
-            assertEquals(true, shouldClearFlag)
-        }
-
-    @Test
-    fun `stale config flag logic preserves flag when status is INITIALIZING`() =
-        runTest {
-            // Arrange
-            coEvery { mockProtocol.getStatus() } returns Result.success("INITIALIZING")
-
-            // Act
-            val status =
-                withTimeoutOrNull(ColumbaApplication.IPC_TIMEOUT_MS) {
-                    mockProtocol.getStatus().getOrNull()
-                }
-            advanceUntilIdle()
-
-            val shouldClearFlag = status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")
-
-            // Assert
-            assertEquals("INITIALIZING", status)
-            assertEquals(false, shouldClearFlag)
-        }
-
-    @Test
-    fun `stale config flag logic preserves flag when status is READY`() =
-        runTest {
-            // Arrange
-            coEvery { mockProtocol.getStatus() } returns Result.success("READY")
-
-            // Act
-            val status =
-                withTimeoutOrNull(ColumbaApplication.IPC_TIMEOUT_MS) {
-                    mockProtocol.getStatus().getOrNull()
-                }
-            advanceUntilIdle()
-
-            val shouldClearFlag = status == "SHUTDOWN" || status == null || status.startsWith("ERROR:")
-
-            // Assert
-            assertEquals("READY", status)
-            assertEquals(false, shouldClearFlag)
         }
 
     // ========== ByteArray/Hex Utility Tests ==========

@@ -7,7 +7,8 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.PropagationState
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.test.TestFactories
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -65,7 +66,8 @@ class PropagationNodeManagerTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var announceRepository: AnnounceRepository
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var rnsCore: RnsCore
+    private lateinit var rnsLxmf: RnsLxmf
     private lateinit var manager: PropagationNodeManager
     private lateinit var myRelayFlow: MutableStateFlow<ContactEntity?>
     private lateinit var autoSelectFlow: MutableStateFlow<Boolean>
@@ -84,7 +86,8 @@ class PropagationNodeManagerTest {
         settingsRepository = mockk()
         contactRepository = mockk()
         announceRepository = mockk()
-        reticulumProtocol = mockk()
+        rnsCore = mockk()
+        rnsLxmf = mockk()
 
         // Initialize mutable flows for reactive testing
         myRelayFlow = MutableStateFlow<ContactEntity?>(null)
@@ -93,11 +96,11 @@ class PropagationNodeManagerTest {
         propagationStateFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
 
         // Mock networkStatus flow
-        every { reticulumProtocol.networkStatus } returns networkStatusFlow
+        every { rnsCore.networkStatus } returns networkStatusFlow
 
         // Mock propagationStateFlow for sync completion observation
-        every { reticulumProtocol.propagationStateFlow } returns propagationStateFlow
-        coEvery { reticulumProtocol.getPropagationState() } returns Result.success(PropagationState.IDLE)
+        every { rnsLxmf.propagationStateFlow } returns propagationStateFlow
+        coEvery { rnsLxmf.getPropagationState() } returns Result.success(PropagationState.IDLE)
 
         // Default settings mocks
         coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
@@ -124,7 +127,7 @@ class PropagationNodeManagerTest {
         coEvery { contactRepository.addContactFromAnnounce(any(), any()) } returns Result.success(Unit)
         coEvery { contactRepository.clearMyRelay() } just Runs
         every { contactRepository.getMyRelayFlow() } returns myRelayFlow
-        coEvery { reticulumProtocol.setOutboundPropagationNode(any()) } returns Result.success(Unit)
+        coEvery { rnsLxmf.setOutboundPropagationNode(any()) } returns Result.success(Unit)
 
         // Mock setAsMyRelay to update the myRelayFlow (simulate database update)
         coEvery { contactRepository.setAsMyRelay(any(), any()) } answers {
@@ -142,7 +145,8 @@ class PropagationNodeManagerTest {
                 settingsRepository = settingsRepository,
                 contactRepository = contactRepository,
                 announceRepository = announceRepository,
-                reticulumProtocol = reticulumProtocol,
+                rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                 scope = testScope.backgroundScope,
                 defaultDispatcher = testDispatcher,
             )
@@ -321,7 +325,7 @@ class PropagationNodeManagerTest {
 
             // Then: Should sync to Python layer
             assertTrue("start() should complete successfully", result.isSuccess)
-            coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
+            coVerify { rnsLxmf.setOutboundPropagationNode(any()) }
 
             manager.stop()
         }
@@ -349,8 +353,8 @@ class PropagationNodeManagerTest {
 
                 // Verify initial sync happened and allow coroutines to complete
                 advanceUntilIdle()
-                coVerify { reticulumProtocol.setOutboundPropagationNode(any()) }
-                io.mockk.clearMocks(reticulumProtocol, answers = false, recordedCalls = true, verificationMarks = true)
+                coVerify { rnsLxmf.setOutboundPropagationNode(any()) }
+                io.mockk.clearMocks(rnsCore, rnsLxmf, answers = false, recordedCalls = true, verificationMarks = true)
 
                 // When: Relay is removed (while collector is active)
                 myRelayFlow.value = null
@@ -366,7 +370,7 @@ class PropagationNodeManagerTest {
 
                 // Then: Should clear Python layer
                 assertTrue("start() should complete successfully", result.isSuccess)
-                coVerify { reticulumProtocol.setOutboundPropagationNode(null) }
+                coVerify { rnsLxmf.setOutboundPropagationNode(null) }
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -958,7 +962,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // Verify the currentRelayState starts as Loading before any coroutines run
@@ -1008,7 +1012,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1041,7 +1046,7 @@ class PropagationNodeManagerTest {
             assert(!stuckManager.isSyncing.value) { "isSyncing should be false after timeout" }
 
             // requestMessagesFromPropagationNode should NOT have been called
-            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 0) { rnsLxmf.requestMessagesFromPropagationNode() }
 
             stuckManager.stop()
         }
@@ -1058,7 +1063,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1088,7 +1094,7 @@ class PropagationNodeManagerTest {
             }
 
             // And: No sync was attempted
-            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 0) { rnsLxmf.requestMessagesFromPropagationNode() }
 
             stuckManager.stop()
         }
@@ -1105,7 +1111,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1117,7 +1124,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // Verify state starts as Loading
@@ -1140,7 +1147,7 @@ class PropagationNodeManagerTest {
             syncJob.join()
 
             // Should have proceeded past the timeout check to call the sync protocol
-            coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(atLeast = 1) { rnsLxmf.requestMessagesFromPropagationNode() }
 
             slowManager.stop()
         }
@@ -1164,7 +1171,7 @@ class PropagationNodeManagerTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.failure(Exception("test"))
 
             // When: Trigger sync - relay is already loaded, should not timeout
@@ -1207,7 +1214,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // When
@@ -1216,7 +1223,7 @@ class PropagationNodeManagerTest {
 
             // Then: Should not call requestMessagesFromPropagationNode because network is not ready
             assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
-            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 0) { rnsLxmf.requestMessagesFromPropagationNode() }
         }
 
     @Test
@@ -1238,7 +1245,7 @@ class PropagationNodeManagerTest {
 
             // Then: Should not call requestMessagesFromPropagationNode
             assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
-            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 0) { rnsLxmf.requestMessagesFromPropagationNode() }
         }
 
     @Test
@@ -1261,7 +1268,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // Keep StateFlow active and wait for relay to load using Turbine
@@ -1279,7 +1286,7 @@ class PropagationNodeManagerTest {
 
                 // Then: Should call requestMessagesFromPropagationNode
                 assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
-                coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+                coVerify(atLeast = 1) { rnsLxmf.requestMessagesFromPropagationNode() }
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -1297,7 +1304,7 @@ class PropagationNodeManagerTest {
 
             // Then: Should not call requestMessagesFromPropagationNode
             assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
-            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 0) { rnsLxmf.requestMessagesFromPropagationNode() }
         }
 
     @Test
@@ -1321,7 +1328,7 @@ class PropagationNodeManagerTest {
             // Then: Should try auto-select, but NOT call requestMessages (returns early after selecting)
             assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
-            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 0) { rnsLxmf.requestMessagesFromPropagationNode() }
         }
 
     @Test
@@ -1345,7 +1352,7 @@ class PropagationNodeManagerTest {
             // Then: Should NOT auto-select or sync
             assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.setAsMyRelay(any(), any()) }
-            coVerify(exactly = 0) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 0) { rnsLxmf.requestMessagesFromPropagationNode() }
         }
 
     @Test
@@ -1365,7 +1372,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // Keep StateFlow active and wait for relay to load using Turbine
@@ -1383,7 +1390,7 @@ class PropagationNodeManagerTest {
 
                 // Then: Protocol should be called
                 assertTrue("syncWithPropagationNode() should complete successfully", result.isSuccess)
-                coVerify(atLeast = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+                coVerify(atLeast = 1) { rnsLxmf.requestMessagesFromPropagationNode() }
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -1418,7 +1425,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // When
@@ -1463,7 +1470,7 @@ class PropagationNodeManagerTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.failure(Exception("Network error"))
 
             // When: Should not throw
@@ -1525,7 +1532,7 @@ class PropagationNodeManagerTest {
 
             // Use a CompletableDeferred to control when the sync completes
             val syncCompletion = kotlinx.coroutines.CompletableDeferred<Unit>()
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } coAnswers {
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } coAnswers {
                 syncCompletion.await() // Wait until we explicitly complete it
                 Result.success(
                     network.columba.app.rns.api.model.PropagationState(
@@ -1551,7 +1558,7 @@ class PropagationNodeManagerTest {
             testDispatcher.scheduler.runCurrent()
 
             // Then: Protocol should only be called once (second call skipped)
-            coVerify(exactly = 1) { reticulumProtocol.requestMessagesFromPropagationNode() }
+            coVerify(exactly = 1) { rnsLxmf.requestMessagesFromPropagationNode() }
 
             // Cleanup - complete the deferred to let the first sync finish
             syncCompletion.complete(Unit)
@@ -1587,7 +1594,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // When: Trigger sync and collect result
@@ -1638,7 +1645,7 @@ class PropagationNodeManagerTest {
                 cancelAndConsumeRemainingEvents()
             }
 
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.failure(Exception("Network error"))
 
             // When: Trigger sync and collect result
@@ -1687,7 +1694,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // When
@@ -2218,7 +2225,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2257,7 +2265,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2293,7 +2302,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2340,7 +2350,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2393,7 +2404,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2458,7 +2470,8 @@ class PropagationNodeManagerTest {
                     settingsRepository = settingsRepository,
                     contactRepository = contactRepository,
                     announceRepository = announceRepository,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2512,7 +2525,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // When: Start sync and complete with messages received
@@ -2574,7 +2587,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // When: Start sync and complete with zero messages
@@ -2636,7 +2649,7 @@ class PropagationNodeManagerTest {
                     progress = 0.0f,
                     messagesReceived = 0,
                 )
-            coEvery { reticulumProtocol.requestMessagesFromPropagationNode() } returns
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
                 Result.success(mockSyncState)
 
             // When: Start sync, complete with messages, then wait for delay

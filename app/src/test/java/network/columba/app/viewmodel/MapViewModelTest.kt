@@ -70,7 +70,7 @@ class MapViewModelTest {
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var offlineMapRegionRepository: OfflineMapRegionRepository
-    private lateinit var reticulumProtocol: network.columba.app.reticulum.protocol.ReticulumProtocol
+    private lateinit var reticulumProtocol: network.columba.app.rns.api.RnsTransportAdmin
     private lateinit var interfaceFirstSeenDao: network.columba.app.data.db.dao.InterfaceFirstSeenDao
     private lateinit var viewModel: MapViewModel
 

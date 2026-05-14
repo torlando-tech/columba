@@ -8,7 +8,7 @@ import app.cash.turbine.test
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.DiscoveredInterface
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -52,7 +52,7 @@ class DiscoveredInterfacesViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var reticulumProtocol: RnsTransportAdmin
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var interfaceConfigManager: InterfaceConfigManager

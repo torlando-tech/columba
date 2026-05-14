@@ -6,8 +6,9 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.model.ReceivedMessage
-import network.columba.app.reticulum.protocol.ReticulumProtocol
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -33,7 +34,8 @@ import org.junit.Test
  * MessageCollector only shows notifications for messages that exist in the database.
  */
 class MessageCollectorTest {
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var rnsCore: RnsCore
+    private lateinit var rnsLxmf: RnsLxmf
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
@@ -52,7 +54,8 @@ class MessageCollectorTest {
 
     @Before
     fun setup() {
-        reticulumProtocol = mockk()
+        rnsCore = mockk()
+        rnsLxmf = mockk()
         conversationRepository = mockk()
         announceRepository = mockk()
         contactRepository = mockk()
@@ -74,8 +77,8 @@ class MessageCollectorTest {
         messageFlow = MutableSharedFlow(extraBufferCapacity = 10)
 
         // Mock protocol flows
-        every { reticulumProtocol.observeMessages() } returns messageFlow
-        every { reticulumProtocol.observeAnnounces() } returns flowOf() // Empty flow for announces
+        every { rnsLxmf.observeMessages() } returns messageFlow
+        every { rnsCore.observeAnnounces() } returns flowOf() // Empty flow for announces
 
         // Mock conversation repository default behaviors
         // Note: getMessageById is no longer called - MessageCollector trusts broadcasts
@@ -100,7 +103,8 @@ class MessageCollectorTest {
 
         messageCollector =
             MessageCollector(
-                reticulumProtocol = reticulumProtocol,
+                rnsCore = rnsCore,
+                rnsLxmf = rnsLxmf,
                 conversationRepository = conversationRepository,
                 announceRepository = announceRepository,
                 contactRepository = contactRepository,

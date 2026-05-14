@@ -161,13 +161,14 @@ android {
         }
     }
 
-    // CI tasks and IDE module-level installs still reference variants without the
-    // `rnsImpl` qualifier (e.g. `:app:testNoSentryDebugUnitTest`). Pinning the
-    // default to `kotlinBackend` lets those tasks resolve unambiguously while
-    // the Python flavor remains opt-in.
-    defaultConfig {
-        missingDimensionStrategy("rnsImpl", "kotlinBackend")
-    }
+    // No `missingDimensionStrategy("rnsImpl", ...)` here: `:app` and `:rns-host`
+    // both declare the `rnsImpl` dimension with the same flavor names, so Gradle
+    // matches `:app:<x>BackendDebug` -> `:rns-host:<x>BackendDebug` by name.
+    // A `missingDimensionStrategy` in `defaultConfig` would instead pin *every*
+    // `:app` variant — including `pythonBackend` — to one `:rns-host` flavor,
+    // silently shipping the wrong backend. Task-name ambiguity
+    // (`:app:assembleNoSentryDebug`) is resolved by always qualifying the task
+    // with the `rnsImpl` flavor, not by this strategy.
 
     // Track whether release signing is configured
     val releaseSigningConfigured =

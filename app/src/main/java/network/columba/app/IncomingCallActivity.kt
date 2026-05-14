@@ -27,9 +27,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.ui.screens.IncomingCallActivityScreen
 import kotlinx.coroutines.Job
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import network.columba.app.di.CallCoordinatorEntryPoint
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
 
@@ -45,7 +47,10 @@ import tech.torlando.lxst.core.CallState
  * - Turns screen on (turnScreenOn / FLAG_TURN_SCREEN_ON)
  * - Dismisses keyguard when answering
  * - Plays default ringtone and vibrates in a call pattern
- * - Directly uses CallCoordinator singleton (no Hilt dependency)
+ * - Retrieves the singleton [CallCoordinator] via Hilt's
+ *   [CallCoordinatorEntryPoint] (the Activity itself is kept Hilt-free so
+ *   cold start stays under the lock-screen ringing latency budget — see
+ *   `CallCoordinatorEntryPoint.kt` for the rationale)
  * - Delegates to MainActivity for the active call screen after answering
  */
 class IncomingCallActivity : ComponentActivity() {
@@ -53,7 +58,11 @@ class IncomingCallActivity : ComponentActivity() {
         private const val TAG = "IncomingCallActivity"
     }
 
-    private val callCoordinator = CallCoordinator.getInstance()
+    private val callCoordinator: CallCoordinator by lazy {
+        EntryPointAccessors
+            .fromApplication(applicationContext, CallCoordinatorEntryPoint::class.java)
+            .callCoordinator()
+    }
     private var ringtone: Ringtone? = null
     private var ringtoneLoopJob: Job? = null
     private var vibrator: Vibrator? = null

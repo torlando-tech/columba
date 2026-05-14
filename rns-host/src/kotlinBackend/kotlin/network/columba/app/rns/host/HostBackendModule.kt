@@ -13,6 +13,7 @@ import network.columba.app.rns.backend.kt.RNodeHostBridge
 import network.columba.app.rns.host.call.rnode.BluetoothLeConnection
 import network.columba.app.rns.host.call.rnode.ColumbaLogo
 import network.columba.app.rns.host.usb.KotlinUSBBridge
+import tech.torlando.lxst.core.CallCoordinator
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Singleton
@@ -53,6 +54,25 @@ object HostBackendModule {
     @Provides
     @Singleton
     fun provideRnsBackend(native: NativeRnsBackend): RnsBackend = native
+
+    /**
+     * Surfaces the LXST [CallCoordinator] JVM singleton through Hilt so UI-side
+     * call-screen code (and `CallViewModel`) can `@Inject` it instead of calling
+     * `CallCoordinator.getInstance()` directly. The
+     * [network.columba.app.detekt.rules.NoCallCoordinatorGetInstanceOutsideHostRule]
+     * Detekt rule enforces this — `.getInstance()` is only allowed in `:rns-host`
+     * and `:rns-backend-kt` sources, of which this Hilt provider is the canonical
+     * call site.
+     *
+     * Note that `CallCoordinator` is a JVM singleton, so even with Hilt the
+     * UI process's instance is orphaned from the `:reticulum`-process one
+     * once A.10 wires the AIDL boundary. A.10 swaps this binding to a
+     * `RnsTelephony`-backed adapter so call state truly survives the seam.
+     * Today's Hilt binding is the strangler-fig pin for A.9.
+     */
+    @Provides
+    @Singleton
+    fun provideCallCoordinator(): CallCoordinator = CallCoordinator.getInstance()
 }
 
 /**

@@ -37,12 +37,11 @@ class CallViewModel
         private val contactRepository: ContactRepository,
         private val announceRepository: AnnounceRepository,
         private val protocol: ReticulumProtocol,
+        private val callBridge: CallCoordinator,
     ) : ViewModel() {
         companion object {
             private const val TAG = "CallViewModel"
         }
-
-        private val callBridge = CallCoordinator.getInstance()
 
         // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
         private val muteMutex = Mutex()

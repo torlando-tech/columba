@@ -44,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -78,6 +79,7 @@ import network.columba.app.rns.host.ble.util.BlePermissionManager
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.ReticulumService
 import network.columba.app.ui.components.BlePermissionBottomSheet
+import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.OfflineModeBanner
 import network.columba.app.ui.screens.AnnounceDetailScreen
 import network.columba.app.ui.screens.AnnounceStreamScreen
@@ -293,11 +295,18 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "Onboarding status resolved: completed=${resolved.hasCompletedOnboarding}")
             }
 
-            ColumbaNavigation(
-                pendingNavigation = pendingNavigation,
-                interfaceRepository = interfaceRepository,
-                crashReportManager = crashReportManager,
-            )
+            // Provide the active backend's capabilities into LocalCapabilities
+            // above the whole UI tree so any screen can capability-gate without
+            // prop-drilling (Phase D). settingsViewModel is the Activity-scoped
+            // instance, so this is the same StateFlow the gated screens read.
+            val capabilities by settingsViewModel.capabilities.collectAsState()
+            CompositionLocalProvider(LocalCapabilities provides capabilities) {
+                ColumbaNavigation(
+                    pendingNavigation = pendingNavigation,
+                    interfaceRepository = interfaceRepository,
+                    crashReportManager = crashReportManager,
+                )
+            }
         }
 
         // Initialize JankStats for frame monitoring (Phase 1 Plan 01-03)

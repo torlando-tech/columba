@@ -455,7 +455,7 @@ dependencies {
     testImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation(libs.paging.testing)
     testImplementation(libs.test.core)
-    testImplementation("androidx.test.ext:junit:1.1.5")
+    testImplementation("androidx.test.ext:junit:1.3.0")
     testImplementation("org.json:json:20251224") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.espresso)

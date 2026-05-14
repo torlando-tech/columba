@@ -40,7 +40,9 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         // ship a Python LXST. Version is filled in by :rns-host at wiring time
         // (it owns the lxst-kt dependency); null here is the pre-wire default.
         lxst = null,
-        bleReticulum = "ble-reticulum (torlando-tech fork)",
+        // ble-reticulum is torlando-tech's own project, NOT a fork of someone
+        // else's — so no "fork" label (unlike RNS/LXMF, which are forks).
+        bleReticulum = "ble-reticulum ${BuildConfig.PY_BLE_RETICULUM_VERSION}",
     ),
     interfaces = InterfaceCaps(
         hotReloadInterfaces = false,

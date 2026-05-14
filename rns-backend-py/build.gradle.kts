@@ -53,8 +53,13 @@ android {
         // BuildConfig surfaces the pinned upstream wheel versions to Kotlin so
         // PythonCapabilities can report them via RnsBackend.capabilities without
         // a runtime PyObject round-trip. Keep in sync with PINNED_VERSIONS.md.
-        buildConfigField("String", "PY_RNS_VERSION", "\"1.1.9 (torlando-tech fork 99c42fce)\"")
-        buildConfigField("String", "PY_LXMF_VERSION", "\"0.9.2 (torlando-tech fork 158b771c)\"")
+        // Display strings for the About card — kept short (the pinning SHAs live
+        // in PINNED_VERSIONS.md, not the user-facing version line). RNS and LXMF
+        // ARE torlando-tech forks of markqvist's upstream; ble-reticulum is
+        // torlando-tech's own project, so it carries no "fork" label.
+        buildConfigField("String", "PY_RNS_VERSION", "\"1.1.9 (torlando-tech fork)\"")
+        buildConfigField("String", "PY_LXMF_VERSION", "\"0.9.2 (torlando-tech fork)\"")
+        buildConfigField("String", "PY_BLE_RETICULUM_VERSION", "\"0.2.2\"")
     }
 
     compileOptions {

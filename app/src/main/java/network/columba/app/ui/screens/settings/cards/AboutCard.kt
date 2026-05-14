@@ -310,9 +310,15 @@ private fun InfoRow(
     label: String,
     value: String,
 ) {
+    // The label keeps its natural width; the value takes the remaining space and
+    // is right-aligned. Without the weight, a long value (e.g. the Python
+    // flavor's "Reticulum 1.1.9 (torlando-tech fork)") and the label both claim
+    // their full intrinsic width and crowd/overlap under SpaceBetween — instead
+    // a long value now wraps within its column.
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top,
     ) {
         Text(
             text = label,
@@ -323,6 +329,8 @@ private fun InfoRow(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
         )
     }
 }

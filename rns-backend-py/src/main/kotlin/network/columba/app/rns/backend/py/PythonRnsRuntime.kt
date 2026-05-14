@@ -1,0 +1,219 @@
+package network.columba.app.rns.backend.py
+
+import android.content.Context
+import android.util.Log
+import com.chaquo.python.PyObject
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
+import network.columba.app.rns.api.model.ReticulumConfig
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Runtime state holder for the Python flavor.
+ *
+ * Owns the Chaquopy `Python` interpreter handle, the cached upstream module
+ * objects (`RNS`, `LXMF`, `event_bridge`), the live `Reticulum` / `LXMRouter`
+ * instances after [start], and the registries that map Columba's stable
+ * hash/handle keys back to the live upstream PyObject references (an
+ * `RNS.Identity` / `RNS.Destination` / `RNS.Link` can't cross the AIDL seam,
+ * so the seam carries the hash/handle and this runtime resolves it).
+ *
+ * The six `PythonRns*` sub-impls hold a shared instance of this and call
+ * upstream RNS/LXMF directly through these PyObjects — there is no Python
+ * facade. See the module CLAUDE.md.
+ *
+ * Threading: every method here is expected to be called from
+ * `Dispatchers.IO` (the sub-impls wrap their calls in [pyResult] / [pyCall]).
+ * The registries are [ConcurrentHashMap] because event-bridge callbacks fire
+ * on RNS internal threads.
+ */
+class PythonRnsRuntime(
+    private val appContext: Context,
+) {
+    private companion object {
+        const val TAG = "PythonRnsRuntime"
+    }
+
+    /** Chaquopy interpreter. Starting it is idempotent + guarded by [ensureStarted]. */
+    val python: Python by lazy {
+        ensureStarted()
+        Python.getInstance()
+    }
+
+    /** Cached upstream `RNS` package object. */
+    val rnsModule: PyObject by lazy { python.getModule("RNS") }
+
+    /** Cached upstream `LXMF` package object. */
+    val lxmfModule: PyObject by lazy { python.getModule("LXMF") }
+
+    /** Cached Columba-authored `event_bridge` module — the one Python file with logic. */
+    val eventBridge: PyObject by lazy { python.getModule("event_bridge") }
+
+    /** Live `RNS.Reticulum()` instance after [start]; null before/after. */
+    @Volatile
+    var reticulumInstance: PyObject? = null
+        private set
+
+    /** Live `LXMF.LXMRouter(...)` instance after [start]; null before/after. */
+    @Volatile
+    var lxmRouter: PyObject? = null
+        private set
+
+    /** The local delivery `RNS.Identity` (from [ReticulumConfig.deliveryIdentityKey]). */
+    @Volatile
+    var localIdentity: PyObject? = null
+        private set
+
+    /** The local LXMF delivery `RNS.Destination` registered on [lxmRouter]. */
+    @Volatile
+    var localDestination: PyObject? = null
+        private set
+
+    /** hex identity hash -> live `RNS.Identity`. Seeded by restore + announce events. */
+    val identities = ConcurrentHashMap<String, PyObject>()
+
+    /** hex destination hash -> live `RNS.Destination`. */
+    val destinations = ConcurrentHashMap<String, PyObject>()
+
+    /** opaque handle id -> live `RNS.Link`. Keyed to mirror `:rns-ipc`'s HandleRegistry. */
+    val links = ConcurrentHashMap<Long, PyObject>()
+
+    private val running = AtomicBoolean(false)
+
+    /** True once [start] has completed and the stack is live. */
+    val isRunning: Boolean get() = running.get()
+
+    private fun ensureStarted() {
+        if (!Python.isStarted()) {
+            Log.i(TAG, "Starting Chaquopy Python interpreter")
+            Python.start(AndroidPlatform(appContext))
+        }
+    }
+
+    /**
+     * Bring the Python RNS/LXMF stack up: write the RNS `config` file from
+     * [config], construct `Reticulum(configdir)`, load the delivery identity,
+     * construct the `LXMRouter`, and register the delivery destination.
+     *
+     * [wireEventBridge] must be called afterwards to attach the Kotlin event
+     * sinks.
+     */
+    @Synchronized
+    fun start(config: ReticulumConfig) {
+        if (running.get()) {
+            Log.w(TAG, "start() called while already running — ignoring")
+            return
+        }
+        ensureStarted()
+
+        val configDir = File(config.storagePath, "reticulum").apply { mkdirs() }
+        File(configDir, "config").writeText(RnsConfigFile.build(config))
+        Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
+
+        // Construct the upstream Reticulum instance. RNS.Reticulum is a process
+        // singleton — stop() must fully tear it down before a restart.
+        reticulumInstance = rnsModule.callAttr("Reticulum", configDir.absolutePath)
+
+        // Delivery identity. The 64-byte private key is held in memory only;
+        // RNS.Identity.from_bytes() reconstructs the keypair.
+        val identityClass = rnsModule["Identity"]
+            ?: error("RNS.Identity not resolvable")
+        val identity =
+            config.deliveryIdentityKey?.let { key ->
+                identityClass.callAttr("from_bytes", key.toPyBytes())
+            } ?: config.identityFilePath?.let { path ->
+                identityClass.callAttr("from_file", path)
+            } ?: identityClass.callAttr("Identity") // fresh keys — caller persists
+        localIdentity = identity
+        // RNS.Identity.hash is an attribute. Cache the live identity under its
+        // hex hash so recallIdentity / sends can resolve it without a re-derive.
+        identity["hash"]?.let { identities[it.toJava(ByteArray::class.java).toHex()] = identity }
+
+        // LXMF router + delivery destination.
+        val lxmfStorage = File(config.storagePath, "lxmf").apply { mkdirs() }
+        val router = lxmfModule.callAttr("LXMRouter", identity, lxmfStorage.absolutePath)
+        lxmRouter = router
+        localDestination = router.callAttr(
+            "register_delivery_identity",
+            identity,
+            config.displayName ?: "",
+        )
+
+        running.set(true)
+        Log.i(TAG, "Python RNS/LXMF stack started")
+    }
+
+    /**
+     * Attach the Kotlin event sinks to upstream RNS/LXMF via `event_bridge.py`.
+     * Call once after [start]. The five callbacks are supplied by
+     * `PythonEventBridge`.
+     */
+    fun wireEventBridge(
+        onAnnounce: PyEventCallback,
+        onPacket: PyEventCallback,
+        onLinkEvent: PyEventCallback,
+        onLxmfDelivery: PyEventCallback,
+        onLxmfFailure: PyEventCallback,
+    ) {
+        eventBridge.callAttr(
+            "register_callbacks",
+            rnsModule["Transport"],
+            lxmRouter,
+            onAnnounce,
+            onPacket,
+            onLinkEvent,
+            onLxmfDelivery,
+            onLxmfFailure,
+        )
+        Log.i(TAG, "Event bridge wired")
+    }
+
+    /**
+     * Tear the stack down. Best-effort — RNS 1.1.x has no clean per-instance
+     * shutdown, so this deregisters the event bridge, asks RNS to run its exit
+     * handler, and drops every cached reference. The "Apply & Restart" flow
+     * (Phase B verification) exercises start->stop->start; restart correctness
+     * is on-device integration work.
+     */
+    @Synchronized
+    fun stop() {
+        if (!running.get()) return
+        runCatching { eventBridge.callAttr("deregister_callbacks") }
+            .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
+        runCatching {
+            // RNS.Reticulum.exit_handler() flushes path tables + closes
+            // interfaces without the os._exit() that RNS.exit() would do.
+            rnsModule["Reticulum"]?.callAttr("exit_handler")
+        }.onFailure { Log.w(TAG, "Reticulum exit_handler failed", it) }
+
+        identities.clear()
+        destinations.clear()
+        links.clear()
+        localDestination = null
+        localIdentity = null
+        lxmRouter = null
+        reticulumInstance = null
+        running.set(false)
+        Log.i(TAG, "Python RNS/LXMF stack stopped")
+    }
+
+    /** Resolve a destination hex hash to its live `RNS.Destination`, or throw [identityNotFound]. */
+    fun requireDestination(hexHash: String): PyObject =
+        destinations[hexHash] ?: featureUnsupportedDestination(hexHash)
+
+    private fun featureUnsupportedDestination(hexHash: String): Nothing =
+        throw network.columba.app.rns.api.RnsException(
+            network.columba.app.rns.api.RnsError.IdentityNotFound(hexHash),
+        )
+
+    /** Throw [network.columba.app.rns.api.RnsError.BackendNotReady] if [start] hasn't run. */
+    fun requireRunning() {
+        if (!running.get()) {
+            throw network.columba.app.rns.api.RnsException(
+                network.columba.app.rns.api.RnsError.BackendNotReady,
+            )
+        }
+    }
+}

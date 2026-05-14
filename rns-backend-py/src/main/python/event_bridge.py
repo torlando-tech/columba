@@ -31,6 +31,8 @@ per-Link, and LXMF delivery failure is a per-LXMessage `failed_callback`.
 The Kotlin sub-impls attach them at the point they create those objects.
 """
 
+import json
+
 import RNS
 
 # ----------------------------------------------------------------------------
@@ -54,6 +56,26 @@ def _hex(b):
     if isinstance(b, str):
         return b
     return bytes(b).hex()
+
+
+def _jsonable(v):
+    """Recursively coerce an LXMF field value into a JSON-encodable form.
+
+    bytes / Chaquopy jarray -> hex str; containers recurse; primitives pass
+    through; anything else falls back to str().
+    """
+    if isinstance(v, (bytes, bytearray)):
+        return v.hex()
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    if isinstance(v, dict):
+        return {str(k): _jsonable(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_jsonable(x) for x in v]
+    try:
+        return bytes(v).hex()  # Chaquopy jarray('B') from a Kotlin ByteArray
+    except Exception:  # noqa: BLE001
+        return str(v)
 
 
 def _emit(callback, payload):
@@ -95,13 +117,14 @@ class _AnnounceHandler:
 def _lxmf_delivery_callback(message):
     """LXMRouter delivery callback. `message` is an upstream LXMessage."""
     try:
-        fields = {}
+        # Field keys are ints (LXMF FIELD_* constants). JSON-encode the whole
+        # field map Python-side — bytes become hex strings — so the Kotlin
+        # side gets one `fields_json` string instead of a JNI hop per value.
+        fields_json = None
         if getattr(message, "fields", None):
-            # Field keys are ints (LXMF FIELD_* constants); stringify for the
-            # dict crossing JNI. Values stay as-is — the Kotlin side decodes
-            # telemetry / image / reaction payloads per field number.
-            for k, v in message.fields.items():
-                fields[str(k)] = v
+            fields_json = json.dumps(
+                {str(k): _jsonable(v) for k, v in message.fields.items()}
+            )
         payload = {
             "hash": _hex(getattr(message, "hash", None)),
             "source_hash": _hex(getattr(message, "source_hash", None)),
@@ -112,7 +135,7 @@ def _lxmf_delivery_callback(message):
             "signature_validated": bool(getattr(message, "signature_validated", False)),
             "stamp_valid": bool(getattr(message, "stamp_valid", False)),
             "method": getattr(message, "method", None),
-            "fields": fields,
+            "fields_json": fields_json,
         }
         _emit(_on_lxmf_delivery, payload)
     except Exception as e:  # noqa: BLE001

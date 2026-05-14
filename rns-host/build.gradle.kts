@@ -83,6 +83,14 @@ dependencies {
     // the RNodeHostBridge adapter that wraps KotlinUSBBridge / BluetoothLeConnection.
     "kotlinBackendImplementation"(project(":rns-backend-kt"))
 
+    // Chaquopy (upstream Python RNS/LXMF) RnsBackend impl — only on the
+    // pythonBackend flavor's compile classpath. `HostBackendModule.kt` in
+    // src/pythonBackend/ Hilt-provides ChaquopyRnsBackend and wires the LXST
+    // NetworkTransport adapter through PythonRnsRuntime. The kotlinBackend
+    // flavor never sees the Chaquopy runtime — that's the whole point of
+    // applying the chaquopy plugin at :rns-backend-py module level.
+    "pythonBackendImplementation"(project(":rns-backend-py"))
+
     // Hilt
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)

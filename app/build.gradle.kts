@@ -437,7 +437,7 @@ dependencies {
     implementation("org.maplibre.gl:android-sdk:13.1.0")
 
     // Google Play Services Location - for FusedLocationProviderClient
-    implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 
     // Memory leak detection
     debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")

@@ -54,7 +54,7 @@ android {
         // PythonCapabilities can report them via RnsBackend.capabilities without
         // a runtime PyObject round-trip. Keep in sync with PINNED_VERSIONS.md.
         buildConfigField("String", "PY_RNS_VERSION", "\"1.1.9 (torlando-tech fork 99c42fce)\"")
-        buildConfigField("String", "PY_LXMF_VERSION", "\"torlando-tech fork (receiving-interface-capture)\"")
+        buildConfigField("String", "PY_LXMF_VERSION", "\"0.9.2 (torlando-tech fork 158b771c)\"")
     }
 
     compileOptions {
@@ -100,13 +100,13 @@ chaquopy {
             install("git+https://github.com/torlando-tech/Reticulum@99c42fce06bc8afe8cfd0107acd990d8de428013")
 
             // Upstream LXMF — torlando-tech fork (external stamp generator +
-            // receiving-interface capture). TODO(PINNED_VERSIONS.md): resolve
-            // branch tip to a commit SHA before the first release build.
-            install("git+https://github.com/torlando-tech/LXMF@feature/receiving-interface-capture")
+            // receiving-interface capture). Pinned to the commit SHA at the
+            // tip of feature/receiving-interface-capture for reproducibility.
+            install("git+https://github.com/torlando-tech/LXMF@158b771c4c65ff43fd25764b00f5555ea543ab2e")
 
             // ble-reticulum — RNS.Interface subclass for the Android BLE bridge.
-            // TODO(PINNED_VERSIONS.md): resolve branch tip to a commit SHA.
-            install("git+https://github.com/torlando-tech/ble-reticulum.git@main")
+            // Pinned to the commit SHA at the tip of main for reproducibility.
+            install("git+https://github.com/torlando-tech/ble-reticulum.git@07d941304c9a1dc3a8e58087b3b974ff3d229e56")
 
             install("cryptography>=42.0.0")
 

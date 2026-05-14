@@ -13,7 +13,7 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.NodeType
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +41,7 @@ import javax.inject.Inject
 class AnnounceStreamViewModel
     @Inject
     constructor(
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
         private val announceRepository: AnnounceRepository,
         private val contactRepository: network.columba.app.data.repository.ContactRepository,
         private val propagationNodeManager: PropagationNodeManager,
@@ -176,7 +176,7 @@ class AnnounceStreamViewModel
         init {
             viewModelScope.launch {
                 try {
-                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                    _isTransportEnabled.value = rnsCore.isTransportEnabled()
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to check transport status", e)
                 }
@@ -210,7 +210,7 @@ class AnnounceStreamViewModel
          */
         private suspend fun updateReachableCount() {
             // Don't query if network is not ready (e.g., during shutdown)
-            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+            if (rnsCore.networkStatus.value !is NetworkStatus.READY) {
                 return
             }
 
@@ -218,7 +218,7 @@ class AnnounceStreamViewModel
                 // Get path table hashes from RNS (Python call - must be off main thread)
                 val pathTableHashes =
                     withContext(Dispatchers.IO) {
-                        reticulumProtocol.getPathTableHashes()
+                        rnsCore.getPathTableHashes()
                     }
 
                 // Count announces that match the path table (database query - already on IO dispatcher in repository)
@@ -244,7 +244,7 @@ class AnnounceStreamViewModel
                     val timeout = 10000L // 10 seconds max
                     val ready =
                         withTimeoutOrNull(timeout) {
-                            reticulumProtocol.networkStatus.first { status ->
+                            rnsCore.networkStatus.first { status ->
                                 when (status) {
                                     is network.columba.app.rns.api.model.NetworkStatus.READY -> {
                                         Log.d(TAG, "Service is READY, starting announce collection")
@@ -290,7 +290,7 @@ class AnnounceStreamViewModel
 
         private fun startCollectingAnnounces() {
             viewModelScope.launch {
-                reticulumProtocol.observeAnnounces().collect { announce ->
+                rnsCore.observeAnnounces().collect { announce ->
                     val hashHex = announce.destinationHash.joinToString("") { "%02x".format(it) }
                     Log.d(TAG, "Received announce: ${hashHex.take(16)}")
 
@@ -392,9 +392,9 @@ class AnnounceStreamViewModel
                                 .computeIdentityHash(it)
                         }
                     blockedPeerRepository.blockPeer(destinationHash, peerIdentityHash, peerName, blackholeEnabled)
-                    reticulumProtocol.blockDestination(destinationHash)
+                    rnsCore.blockDestination(destinationHash)
                     if (blackholeEnabled && peerIdentityHash != null) {
-                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                        rnsCore.blackholeIdentity(peerIdentityHash)
                     }
                     Log.d(TAG, "Blocked peer ${destinationHash.take(16)} (blackhole=$blackholeEnabled)")
                 } catch (e: Exception) {
@@ -447,7 +447,7 @@ class AnnounceStreamViewModel
                     // Get display name from active identity
                     val displayName = identityRepository.getActiveIdentitySync()?.displayName ?: "Unknown"
 
-                    val result = reticulumProtocol.triggerAutoAnnounce(displayName)
+                    val result = rnsCore.triggerAutoAnnounce(displayName)
 
                     if (result.isSuccess) {
                         _isAnnouncing.value = false
@@ -598,13 +598,13 @@ class AnnounceStreamViewModel
 
         // TODO: viewModelScope is cancelled shortly after onCleared() returns (as a
         // registered Closeable), so the coroutine launched below is likely cancelled
-        // before reticulumProtocol.shutdown() executes. Shutdown is managed by
+        // before rnsCore.shutdown() executes. Shutdown is managed by
         // ColumbaApplication. Consider removing or moving to a separate scope.
         override fun onCleared() {
             super.onCleared()
             // Shutdown Reticulum when ViewModel is cleared
             viewModelScope.launch {
-                reticulumProtocol.shutdown()
+                rnsCore.shutdown()
             }
         }
     }

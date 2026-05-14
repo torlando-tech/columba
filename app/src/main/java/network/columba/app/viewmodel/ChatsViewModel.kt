@@ -9,7 +9,7 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.Conversation
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.SyncProgress
@@ -46,7 +46,7 @@ class ChatsViewModel
         private val contactRepository: ContactRepository,
         private val announceRepository: AnnounceRepository,
         private val blockedPeerRepository: BlockedPeerRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
         private val propagationNodeManager: PropagationNodeManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val identityResolutionManager: IdentityResolutionManager,
@@ -62,7 +62,7 @@ class ChatsViewModel
         init {
             viewModelScope.launch {
                 try {
-                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                    _isTransportEnabled.value = rnsCore.isTransportEnabled()
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to check transport status", e)
                 }
@@ -221,9 +221,9 @@ class ChatsViewModel
             viewModelScope.launch {
                 try {
                     blockedPeerRepository.blockPeer(peerHash, peerIdentityHash, displayName, blackholeEnabled)
-                    reticulumProtocol.blockDestination(peerHash)
+                    rnsCore.blockDestination(peerHash)
                     if (blackholeEnabled && peerIdentityHash != null) {
-                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                        rnsCore.blackholeIdentity(peerIdentityHash)
                     }
                     if (deleteConversation) {
                         conversationRepository.deleteConversation(peerHash)

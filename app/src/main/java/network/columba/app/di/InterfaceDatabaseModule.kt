@@ -18,7 +18,8 @@ import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.AutoAnnounceManager
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.InterfaceConfigManager
@@ -111,7 +112,8 @@ object InterfaceDatabaseModule {
     @Singleton
     fun provideInterfaceConfigManager(
         @ApplicationContext context: Context,
-        reticulumProtocol: ReticulumProtocol,
+        rnsCore: RnsCore,
+        rnsTransportAdmin: RnsTransportAdmin,
         interfaceRepository: InterfaceRepository,
         identityRepository: IdentityRepository,
         identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider,
@@ -127,7 +129,8 @@ object InterfaceDatabaseModule {
     ): InterfaceConfigManager =
         InterfaceConfigManager(
             context = context,
-            reticulumProtocol = reticulumProtocol,
+            rnsCore = rnsCore,
+            rnsTransportAdmin = rnsTransportAdmin,
             interfaceRepository = interfaceRepository,
             identityRepository = identityRepository,
             identityKeyProvider = identityKeyProvider,

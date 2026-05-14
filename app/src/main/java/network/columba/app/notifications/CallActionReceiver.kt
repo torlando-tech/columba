@@ -87,7 +87,7 @@ class CallActionReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                app.reticulumProtocol.hangupCall()
+                app.rnsTelephony.hangupCall()
                 Log.d(TAG, "Successfully sent hangup for $actionType action")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to $actionType call", e)

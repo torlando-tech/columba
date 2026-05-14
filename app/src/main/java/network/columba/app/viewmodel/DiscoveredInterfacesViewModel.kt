@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.DiscoveredInterface
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,7 +100,7 @@ data class DiscoveredInterfacesState(
 class DiscoveredInterfacesViewModel
     @Inject
     constructor(
-        private val reticulumProtocol: ReticulumProtocol,
+        private val transportAdmin: RnsTransportAdmin,
         private val settingsRepository: SettingsRepository,
         private val interfaceRepository: InterfaceRepository,
     ) : ViewModel() {
@@ -127,9 +127,9 @@ class DiscoveredInterfacesViewModel
                 try {
                     _state.update { it.copy(isLoading = true, errorMessage = null) }
 
-                    val isEnabled = reticulumProtocol.isDiscoveryEnabled()
-                    val discovered = reticulumProtocol.getDiscoveredInterfaces()
-                    val autoconnectedEndpoints = reticulumProtocol.getAutoconnectedEndpoints()
+                    val isEnabled = transportAdmin.isDiscoveryEnabled()
+                    val discovered = transportAdmin.getDiscoveredInterfaces()
+                    val autoconnectedEndpoints = transportAdmin.getAutoconnectedEndpoints()
                     val availableCount = discovered.count { it.status == "available" }
                     val unknownCount = discovered.count { it.status == "unknown" }
                     val staleCount = discovered.count { it.status == "stale" }
@@ -197,7 +197,7 @@ class DiscoveredInterfacesViewModel
 
                     // Push persisted value into the native protocol so the
                     // filter applies from the moment the service starts.
-                    reticulumProtocol.setAutoconnectIfacOnly(ifacOnly)
+                    transportAdmin.setAutoconnectIfacOnly(ifacOnly)
 
                     _state.update {
                         it.copy(
@@ -258,7 +258,7 @@ class DiscoveredInterfacesViewModel
 
                     // Apply discovery setting directly (no service restart needed on native stack)
                     Log.d(TAG, "Applying discovery setting: enabled=$newEnabled")
-                    reticulumProtocol.setDiscoveryEnabled(newEnabled)
+                    transportAdmin.setDiscoveryEnabled(newEnabled)
                     _state.update { it.copy(isRestarting = false) }
                     Log.d(TAG, "Discovery setting applied successfully")
                     loadDiscoveredInterfaces()
@@ -294,7 +294,7 @@ class DiscoveredInterfacesViewModel
                     Log.d(TAG, "Autoconnect count saved: $clampedCount")
 
                     // Apply directly without restart (native stack supports hot update)
-                    reticulumProtocol.setAutoconnectLimit(clampedCount)
+                    transportAdmin.setAutoconnectLimit(clampedCount)
                     loadDiscoveredInterfaces()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set autoconnect count", e)
@@ -317,7 +317,7 @@ class DiscoveredInterfacesViewModel
                     val newValue = !_state.value.autoconnectIfacOnly
                     _state.update { it.copy(autoconnectIfacOnly = newValue) }
                     settingsRepository.saveAutoconnectIfacOnly(newValue)
-                    reticulumProtocol.setAutoconnectIfacOnly(newValue)
+                    transportAdmin.setAutoconnectIfacOnly(newValue)
                     Log.d(TAG, "Autoconnect IFAC-only: $newValue")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to toggle autoconnect IFAC-only", e)

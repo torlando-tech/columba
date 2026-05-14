@@ -16,7 +16,8 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.host.util.PeerNameResolver
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -41,7 +42,8 @@ import network.columba.app.data.repository.Message as DataMessage
 class MessageCollector
     @Inject
     constructor(
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
+        private val rnsLxmf: RnsLxmf,
         private val conversationRepository: ConversationRepository,
         private val announceRepository: AnnounceRepository,
         private val contactRepository: ContactRepository,
@@ -99,7 +101,7 @@ class MessageCollector
                 }
 
                 try {
-                    reticulumProtocol.observeMessages().collect { receivedMessage ->
+                    rnsLxmf.observeMessages().collect { receivedMessage ->
                         // De-duplicate: Skip if we've already processed this message in-memory
                         if (receivedMessage.messageHash in processedMessageIds) {
                             Log.d(TAG, "Skipping duplicate message ${receivedMessage.messageHash.take(16)} (in-memory cache)")
@@ -314,7 +316,7 @@ class MessageCollector
             // Also observe announces to build peer name mapping, store public keys, and persist to database
             scope.launch {
                 try {
-                    reticulumProtocol.observeAnnounces().collect { announce ->
+                    rnsCore.observeAnnounces().collect { announce ->
                         // Conversations are keyed by destination hash (LXMF destination)
                         // But we also need the identity hash for some operations
                         val destinationHash = announce.destinationHash.joinToString("") { "%02x".format(it) }

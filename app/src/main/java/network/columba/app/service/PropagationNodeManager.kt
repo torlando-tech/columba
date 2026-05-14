@@ -9,7 +9,8 @@ import network.columba.app.di.DefaultDispatcher
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.PropagationState
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -127,7 +128,8 @@ class PropagationNodeManager
         private val settingsRepository: SettingsRepository,
         private val contactRepository: ContactRepository,
         private val announceRepository: AnnounceRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
+        private val rnsLxmf: RnsLxmf,
         @ApplicationScope private val scope: CoroutineScope,
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     ) {
@@ -339,9 +341,9 @@ class PropagationNodeManager
                 val result =
                     if (destinationHash != null) {
                         val destHashBytes = destinationHash.hexToByteArray()
-                        reticulumProtocol.setOutboundPropagationNode(destHashBytes)
+                        rnsLxmf.setOutboundPropagationNode(destHashBytes)
                     } else {
-                        reticulumProtocol.setOutboundPropagationNode(null)
+                        rnsLxmf.setOutboundPropagationNode(null)
                     }
 
                 if (result.isSuccess) {
@@ -365,11 +367,11 @@ class PropagationNodeManager
         }
 
         /**
-         * Observe propagation state changes from ReticulumProtocol.
+         * Observe propagation state changes from the LXMF seam.
          * Updates syncProgress flow for UI and handles completion/error states.
          */
         private suspend fun observePropagationStateChanges() {
-            reticulumProtocol.propagationStateFlow.collect { state ->
+            rnsLxmf.propagationStateFlow.collect { state ->
                 Log.d(TAG, "Propagation state update: ${state.stateName} (${state.state})")
 
                 when (state.state) {
@@ -421,7 +423,7 @@ class PropagationNodeManager
                 kotlinx.coroutines.delay(pollInterval)
                 if (!_isSyncing.value) return
 
-                val state = reticulumProtocol.getPropagationState().getOrNull()
+                val state = rnsLxmf.getPropagationState().getOrNull()
                 if (state != null) {
                     _syncProgress.value = SyncProgress.InProgress(state.stateName, state.progress)
                     if (handlePollResult(state, timeoutJob)) return
@@ -770,7 +772,7 @@ class PropagationNodeManager
          */
         suspend fun syncWithPropagationNode() {
             // Don't sync if network is not ready (e.g., during shutdown)
-            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+            if (rnsCore.networkStatus.value !is NetworkStatus.READY) {
                 Log.d(TAG, "Network not ready, skipping sync")
                 return
             }
@@ -815,7 +817,7 @@ class PropagationNodeManager
                 }
 
             try {
-                val result = reticulumProtocol.requestMessagesFromPropagationNode()
+                val result = rnsLxmf.requestMessagesFromPropagationNode()
                 result
                     .onSuccess { state ->
                         Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
@@ -897,7 +899,7 @@ class PropagationNodeManager
             val timeoutJob = launchSyncTimeoutWatchdog()
 
             try {
-                val result = reticulumProtocol.requestMessagesFromPropagationNode()
+                val result = rnsLxmf.requestMessagesFromPropagationNode()
                 result
                     .onSuccess { propState ->
                         handleSyncRequestSuccess(propState, timeoutJob, keepSyncingState)

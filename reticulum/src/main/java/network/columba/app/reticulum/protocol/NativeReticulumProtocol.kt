@@ -107,7 +107,7 @@ class NativeReticulumProtocol(
     override suspend fun exportIdentityFile(keyData: ByteArray, filePath: String): ByteArray =
         impl.exportIdentityFile(keyData, filePath)
 
-    override fun getFullIdentityKey(): ByteArray? = impl.getFullIdentityKey()
+    override suspend fun getFullIdentityKey(): ByteArray? = impl.getFullIdentityKey()
 
     override suspend fun getLxmfIdentity(): Result<Identity> = impl.getLxmfIdentity()
 
@@ -178,9 +178,9 @@ class NativeReticulumProtocol(
 
     override suspend fun persistTransportData() = impl.persistTransportData()
 
-    override fun getHopCount(destinationHash: ByteArray): Int? = impl.getHopCount(destinationHash)
+    override suspend fun getHopCount(destinationHash: ByteArray): Int? = impl.getHopCount(destinationHash)
 
-    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? = impl.getNextHopInterfaceName(destinationHash)
+    override suspend fun getNextHopInterfaceName(destinationHash: ByteArray): String? = impl.getNextHopInterfaceName(destinationHash)
 
     override suspend fun getPathTableHashes(): List<String> = impl.getPathTableHashes()
 

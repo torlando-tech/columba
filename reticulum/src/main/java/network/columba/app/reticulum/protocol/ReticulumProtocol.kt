@@ -118,7 +118,7 @@ interface ReticulumProtocol {
 
     suspend fun persistTransportData()
 
-    fun getHopCount(destinationHash: ByteArray): Int?
+    suspend fun getHopCount(destinationHash: ByteArray): Int?
 
     /**
      * Get the next-hop interface name for a destination.
@@ -128,7 +128,7 @@ interface ReticulumProtocol {
      * @param destinationHash 16-byte destination hash
      * @return Formatted interface name, or null if path is unknown
      */
-    fun getNextHopInterfaceName(destinationHash: ByteArray): String?
+    suspend fun getNextHopInterfaceName(destinationHash: ByteArray): String?
 
     suspend fun getPathTableHashes(): List<String>
 
@@ -534,7 +534,7 @@ interface ReticulumProtocol {
      * storage, or null if the implementation has no key material to export yet.
      * Implementations without persistent keys (tests, mocks) return null.
      */
-    fun getFullIdentityKey(): ByteArray? = null
+    suspend fun getFullIdentityKey(): ByteArray? = null
 
     // ==================== Announce & Identity Restoration ====================
 

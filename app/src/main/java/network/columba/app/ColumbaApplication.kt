@@ -247,24 +247,16 @@ class ColumbaApplication : Application() {
             registerExistingCompanionDevices()
         }
 
-        // Set up the alternative relay handler for propagation failover
-        reticulumProtocol.alternativeRelayHandler = { excludeHashes ->
-            val relay = propagationNodeManager.getAlternativeRelay(excludeHashes)
-            if (relay != null) {
-                android.util.Log.d("ColumbaApplication", "Providing alternative relay: ${relay.destinationHash.take(16)}")
-                relay.destinationHash.hexStringToByteArray()
-            } else {
-                android.util.Log.d("ColumbaApplication", "No alternative relay available")
-                null
-            }
-        }
-
-        // Set up the reinitialization callback for when Android kills the service
-        // and we successfully rebind but Reticulum needs to be restarted
-        reticulumProtocol.onServiceNeedsInitialization = {
-            android.util.Log.i("ColumbaApplication", "Service needs reinitialization after rebind - starting initialization")
-            initializeReticulumService(reticulumProtocol)
-        }
+        // Mutable-closure registration for `alternativeRelayHandler` and
+        // `onServiceNeedsInitialization` was removed in A.10 — the
+        // `ReticulumProtocol` interface declared these as `var` with
+        // no-op default setters, and no production implementation ever
+        // overrode them, so the assignments were dead code. The plan's
+        // replacement is explicit `register*Handler` / `register*Listener`
+        // AIDL callbacks on `RnsCore`, to be added when the native backend
+        // actually wires propagation failover and rebind-reinit invocation
+        // sites (Phase B alongside the python flavor restoration). See
+        // `rns-dual-build-handoff.md` for the deviation rationale.
 
         // Mirror the protocol's networkStatus into the :reticulum service process so the
         // foreground notification stays in sync. On the native stack the protocol lives in

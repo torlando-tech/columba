@@ -166,6 +166,41 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `setConnecting round-trips and the callState observer sees Connecting`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        val hash = "deadbeefdeadbeefdeadbeefdeadbeef"
+        client.telephony.callState.test {
+            // Initial Idle snapshot.
+            assertEquals(network.columba.app.rns.api.model.CallState.Idle, awaitItem())
+
+            client.telephony.setConnecting(hash)
+            advanceUntilIdle()
+
+            val next = awaitItem()
+            assertTrue(
+                "expected Connecting, was $next",
+                next is network.columba.app.rns.api.model.CallState.Connecting,
+            )
+            assertEquals(hash, (next as network.columba.app.rns.api.model.CallState.Connecting).identityHash)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(hash, fake.telephony.remoteIdentity.value)
+    }
+
+    @Test
+    fun `declineCall round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        client.telephony.declineCall()
+        advanceUntilIdle()
+
+        assertEquals(1, fake.telephony.declineCount)
+    }
+
+    @Test
     fun `capabilities observer pushes mutations into the client StateFlow`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
@@ -227,16 +262,52 @@ private class FakeRnsTelephony : RnsTelephony {
     var nextInitiateResult: Result<Unit> = Result.success(Unit)
     var nextAnswerResult: Result<Unit> = Result.success(Unit)
     var hangupCount = 0
+    var declineCount = 0
     var nextCallState: Result<VoiceCallState> = Result.success(
         VoiceCallState("IDLE", isActive = false, isMuted = false, remoteIdentity = null, profile = null),
     )
 
+    private val _callState =
+        kotlinx.coroutines.flow.MutableStateFlow<network.columba.app.rns.api.model.CallState>(
+            network.columba.app.rns.api.model.CallState.Idle,
+        )
+    private val _remoteIdentity = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val _isMuted = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private val _isSpeakerOn = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private val _isPttMode = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private val _isPttActive = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    override val callState: kotlinx.coroutines.flow.StateFlow<network.columba.app.rns.api.model.CallState>
+        get() = _callState
+    override val remoteIdentity: kotlinx.coroutines.flow.StateFlow<String?> get() = _remoteIdentity
+    override val isMuted: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isMuted
+    override val isSpeakerOn: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isSpeakerOn
+    override val isPttMode: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isPttMode
+    override val isPttActive: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isPttActive
+
+    fun emitCallState(state: network.columba.app.rns.api.model.CallState) {
+        _callState.value = state
+    }
+
     override suspend fun initiateCall(destinationHash: String, profileCode: Int?) = nextInitiateResult
     override suspend fun answerCall() = nextAnswerResult
     override suspend fun hangupCall() { hangupCount++ }
-    override suspend fun setCallMuted(muted: Boolean) {}
-    override suspend fun setCallSpeaker(speakerOn: Boolean) {}
+    override suspend fun declineCall() { declineCount++ }
+    override suspend fun setCallMuted(muted: Boolean) { _isMuted.value = muted }
+    override suspend fun setCallSpeaker(speakerOn: Boolean) { _isSpeakerOn.value = speakerOn }
     override suspend fun getCallState(): Result<VoiceCallState> = nextCallState
+
+    override suspend fun setConnecting(destinationHash: String) {
+        _remoteIdentity.value = destinationHash
+        _callState.value = network.columba.app.rns.api.model.CallState.Connecting(destinationHash)
+    }
+    override suspend fun setEnded() {
+        _callState.value = network.columba.app.rns.api.model.CallState.Ended
+    }
+    override suspend fun setMutedLocally(muted: Boolean) { _isMuted.value = muted }
+    override suspend fun setSpeakerLocally(enabled: Boolean) { _isSpeakerOn.value = enabled }
+    override suspend fun setPttModeLocally(enabled: Boolean) { _isPttMode.value = enabled }
+    override suspend fun setPttActiveLocally(active: Boolean) { _isPttActive.value = active }
 }
 
 private class FakeRnsLxmf : RnsLxmf {
@@ -307,7 +378,7 @@ private class FakeRnsCore : RnsCore {
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> = emptyMap()
     override suspend fun importIdentityFile(fileData: ByteArray, displayName: String): Map<String, Any> = emptyMap()
     override suspend fun exportIdentityFile(keyData: ByteArray, filePath: String): ByteArray = ByteArray(0)
-    override fun getFullIdentityKey(): ByteArray? = null
+    override suspend fun getFullIdentityKey(): ByteArray? = null
     override suspend fun createDestination(
         identity: Identity,
         direction: Direction,
@@ -332,8 +403,8 @@ private class FakeRnsCore : RnsCore {
     override suspend fun hasPath(destinationHash: ByteArray): Boolean = false
     override suspend fun requestPath(destinationHash: ByteArray) = Result.success(Unit)
     override suspend fun persistTransportData() {}
-    override fun getHopCount(destinationHash: ByteArray): Int? = null
-    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? = null
+    override suspend fun getHopCount(destinationHash: ByteArray): Int? = null
+    override suspend fun getNextHopInterfaceName(destinationHash: ByteArray): String? = null
     override suspend fun getPathTableHashes(): List<String> = emptyList()
     override suspend fun probeLinkSpeed(
         destinationHash: ByteArray,

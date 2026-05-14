@@ -119,12 +119,11 @@ internal class ClientRnsCore(
         awaitNullableByteArray { cb -> remote.exportIdentityFile(keyData, filePath, cb) }
             ?: throw RnsException(RnsError.Generic("exportIdentityFile returned null", null))
 
-    // Non-suspend getter; AIDL is oneway so a real synchronous read isn't
-    // possible. Caching from an observer isn't natural here because callers
-    // pass arbitrary identity hashes. Returns null until A.10 promotes this
-    // (and `getHopCount` / `getNextHopInterfaceName`) to suspend on the
-    // Kotlin contract — see plan §"Sync getter contract reconciliation".
-    override fun getFullIdentityKey(): ByteArray? = null
+    // Promoted to suspend on the Kotlin contract in A.10 — the oneway AIDL
+    // shape was already callback-driven (IRnsByteArrayCallback / IRnsIntCallback
+    // / IRnsStringCallback), so the seam is honest now.
+    override suspend fun getFullIdentityKey(): ByteArray? =
+        awaitNullableByteArray { cb -> remote.getFullIdentityKey(cb) }
 
     override suspend fun createDestination(
         identity: Identity,
@@ -210,11 +209,11 @@ internal class ClientRnsCore(
         awaitResult { cb -> remote.persistTransportData(cb) }
     }
 
-    // See note on getFullIdentityKey — non-suspend across oneway AIDL has no
-    // honest implementation. A.10 will promote these to suspend.
-    override fun getHopCount(destinationHash: ByteArray): Int? = null
+    override suspend fun getHopCount(destinationHash: ByteArray): Int? =
+        awaitNullableInt { cb -> remote.getHopCount(destinationHash, cb) }
 
-    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? = null
+    override suspend fun getNextHopInterfaceName(destinationHash: ByteArray): String? =
+        awaitNullableString { cb -> remote.getNextHopInterfaceName(destinationHash, cb) }
 
     override suspend fun getPathTableHashes(): List<String> =
         awaitStringList { cb -> remote.getPathTableHashes(cb) }

@@ -73,7 +73,7 @@ class RnsBackendClient(
     suspend fun connect(remote: IRnsBackend) {
         coreClient = ClientRnsCore(fetchCore(remote), scope)
         lxmfClient = ClientRnsLxmf(fetchLxmf(remote), scope)
-        telephonyClient = ClientRnsTelephony(fetchTelephony(remote))
+        telephonyClient = ClientRnsTelephony(fetchTelephony(remote), scope)
         telemetryClient = ClientRnsTelemetry(fetchTelemetry(remote), scope)
         nomadnetClient = ClientRnsNomadnet(fetchNomadnet(remote), scope)
         transportAdminClient = ClientRnsTransportAdmin(fetchTransportAdmin(remote), scope)

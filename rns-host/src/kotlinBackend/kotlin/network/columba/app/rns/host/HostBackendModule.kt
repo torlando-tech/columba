@@ -13,7 +13,6 @@ import network.columba.app.rns.backend.kt.RNodeHostBridge
 import network.columba.app.rns.host.call.rnode.BluetoothLeConnection
 import network.columba.app.rns.host.call.rnode.ColumbaLogo
 import network.columba.app.rns.host.usb.KotlinUSBBridge
-import tech.torlando.lxst.core.CallCoordinator
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Singleton
@@ -55,24 +54,40 @@ object HostBackendModule {
     @Singleton
     fun provideRnsBackend(native: NativeRnsBackend): RnsBackend = native
 
-    /**
-     * Surfaces the LXST [CallCoordinator] JVM singleton through Hilt so UI-side
-     * call-screen code (and `CallViewModel`) can `@Inject` it instead of calling
-     * `CallCoordinator.getInstance()` directly. The
-     * [network.columba.app.detekt.rules.NoCallCoordinatorGetInstanceOutsideHostRule]
-     * Detekt rule enforces this — `.getInstance()` is only allowed in `:rns-host`
-     * and `:rns-backend-kt` sources, of which this Hilt provider is the canonical
-     * call site.
-     *
-     * Note that `CallCoordinator` is a JVM singleton, so even with Hilt the
-     * UI process's instance is orphaned from the `:reticulum`-process one
-     * once A.10 wires the AIDL boundary. A.10 swaps this binding to a
-     * `RnsTelephony`-backed adapter so call state truly survives the seam.
-     * Today's Hilt binding is the strangler-fig pin for A.9.
-     */
+    // Per-sub-interface providers live here (rather than in :app's ReticulumModule)
+    // so the single-source-binding rule is preserved — A.8 deviation #15 documented
+    // the duplicate-binding compile failure that motivates keeping these alongside
+    // the `RnsBackend` provider that backs them.
+
     @Provides
     @Singleton
-    fun provideCallCoordinator(): CallCoordinator = CallCoordinator.getInstance()
+    fun provideRnsCore(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsCore =
+        rnsBackend.core
+
+    @Provides
+    @Singleton
+    fun provideRnsLxmf(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsLxmf =
+        rnsBackend.lxmf
+
+    @Provides
+    @Singleton
+    fun provideRnsTelephony(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsTelephony =
+        rnsBackend.telephony
+
+    @Provides
+    @Singleton
+    fun provideRnsTelemetry(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsTelemetry =
+        rnsBackend.telemetry
+
+    @Provides
+    @Singleton
+    fun provideRnsNomadnet(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsNomadnet =
+        rnsBackend.nomadnet
+
+    @Provides
+    @Singleton
+    fun provideRnsTransportAdmin(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsTransportAdmin =
+        rnsBackend.transportAdmin
 }
 
 /**

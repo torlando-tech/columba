@@ -3,6 +3,7 @@ package network.columba.app.rns.api
 import android.os.Parcel
 import android.os.Parcelable
 import network.columba.app.rns.api.model.AnnounceRestoreEntry
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.FileAttachment
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.Link
@@ -139,6 +140,25 @@ class ParcelRoundTripTest {
         val original = NetworkStatus.ERROR("test failure")
         val restored = roundTrip(original, NetworkStatus.CREATOR)
         assertEquals(original, restored)
+    }
+
+    // ==================== CallState ====================
+
+    @Test
+    fun `CallState objects round-trip as singletons`() {
+        assertTrue(roundTrip(CallState.Idle, CallState.CREATOR) === CallState.Idle)
+        assertTrue(roundTrip(CallState.Busy, CallState.CREATOR) === CallState.Busy)
+        assertTrue(roundTrip(CallState.Rejected, CallState.CREATOR) === CallState.Rejected)
+        assertTrue(roundTrip(CallState.Ended, CallState.CREATOR) === CallState.Ended)
+    }
+
+    @Test
+    fun `CallState data-class variants round-trip with identity hash`() {
+        val hash = "deadbeefdeadbeefdeadbeefdeadbeef"
+        assertEquals(CallState.Connecting(hash), roundTrip(CallState.Connecting(hash) as CallState, CallState.CREATOR))
+        assertEquals(CallState.Ringing(hash), roundTrip(CallState.Ringing(hash) as CallState, CallState.CREATOR))
+        assertEquals(CallState.Incoming(hash), roundTrip(CallState.Incoming(hash) as CallState, CallState.CREATOR))
+        assertEquals(CallState.Active(hash), roundTrip(CallState.Active(hash) as CallState, CallState.CREATOR))
     }
 
     // ==================== LinkEvent ====================

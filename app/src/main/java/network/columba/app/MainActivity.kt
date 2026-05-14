@@ -70,7 +70,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import network.columba.app.di.CallCoordinatorEntryPoint
+import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -119,7 +119,7 @@ import network.columba.app.viewmodel.OnboardingViewModel
 import network.columba.app.viewmodel.SettingsViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
-import tech.torlando.lxst.core.CallState
+import network.columba.app.rns.api.model.CallState
 import javax.inject.Inject
 
 /**
@@ -920,16 +920,17 @@ fun ColumbaNavigation(
             }
     }
 
-    // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen.
-    // Composable functions can't @Inject, so the LXST singleton is reached through
-    // Hilt's CallCoordinatorEntryPoint rather than the direct `getInstance()` factory.
-    // The `NoCallCoordinatorGetInstanceOutsideHost` Detekt rule enforces this.
-    val callBridge = remember(context) {
+    // Observe call state for incoming calls and navigate to IncomingCallScreen.
+    // Composable functions can't @Inject, so the RnsTelephony seam singleton is
+    // reached through Hilt's RnsTelephonyEntryPoint. Replaces the A.9-era
+    // CallCoordinatorEntryPoint now that the call observable surface lives on
+    // RnsTelephony and survives the AIDL boundary.
+    val telephony = remember(context) {
         EntryPointAccessors
-            .fromApplication(context.applicationContext, CallCoordinatorEntryPoint::class.java)
-            .callCoordinator()
+            .fromApplication(context.applicationContext, RnsTelephonyEntryPoint::class.java)
+            .telephony()
     }
-    val callState by callBridge.callState.collectAsState()
+    val callState by telephony.callState.collectAsState()
 
     LaunchedEffect(callState) {
         when (val state = callState) {

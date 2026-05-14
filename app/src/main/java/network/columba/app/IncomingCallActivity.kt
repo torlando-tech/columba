@@ -31,9 +31,9 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import network.columba.app.di.CallCoordinatorEntryPoint
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.CallState
+import network.columba.app.di.RnsTelephonyEntryPoint
+import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallState
 
 /**
  * Lightweight Activity that displays the incoming call screen over the lock screen.
@@ -47,10 +47,10 @@ import tech.torlando.lxst.core.CallState
  * - Turns screen on (turnScreenOn / FLAG_TURN_SCREEN_ON)
  * - Dismisses keyguard when answering
  * - Plays default ringtone and vibrates in a call pattern
- * - Retrieves the singleton [CallCoordinator] via Hilt's
- *   [CallCoordinatorEntryPoint] (the Activity itself is kept Hilt-free so
+ * - Retrieves the singleton [RnsTelephony] via Hilt's
+ *   [RnsTelephonyEntryPoint] (the Activity itself is kept Hilt-free so
  *   cold start stays under the lock-screen ringing latency budget — see
- *   `CallCoordinatorEntryPoint.kt` for the rationale)
+ *   `RnsTelephonyEntryPoint.kt` for the rationale)
  * - Delegates to MainActivity for the active call screen after answering
  */
 class IncomingCallActivity : ComponentActivity() {
@@ -58,10 +58,10 @@ class IncomingCallActivity : ComponentActivity() {
         private const val TAG = "IncomingCallActivity"
     }
 
-    private val callCoordinator: CallCoordinator by lazy {
+    private val telephony: RnsTelephony by lazy {
         EntryPointAccessors
-            .fromApplication(applicationContext, CallCoordinatorEntryPoint::class.java)
-            .callCoordinator()
+            .fromApplication(applicationContext, RnsTelephonyEntryPoint::class.java)
+            .telephony()
     }
     private var ringtone: Ringtone? = null
     private var ringtoneLoopJob: Job? = null
@@ -96,7 +96,7 @@ class IncomingCallActivity : ComponentActivity() {
         // Monitor call state to auto-finish when call ends or is answered
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                callCoordinator.callState.collect { state ->
+                telephony.callState.collect { state ->
                     Log.d(TAG, "Call state changed: $state")
                     when (state) {
                         is CallState.Active -> {
@@ -273,7 +273,7 @@ class IncomingCallActivity : ComponentActivity() {
     }
 
     /**
-     * Answer the incoming call via CallCoordinator and navigate to MainActivity.
+     * Answer the incoming call via [RnsTelephony] and navigate to MainActivity.
      *
      * Dismisses the keyguard first (if locked) so the mic is accessible.
      * requestDismissKeyguard() is called here — not in onCreate() — to avoid
@@ -320,18 +320,12 @@ class IncomingCallActivity : ComponentActivity() {
     }
 
     private fun performAnswer() {
-        val app = applicationContext as? ColumbaApplication
-        if (app != null) {
-            lifecycleScope.launch {
-                try {
-                    app.reticulumProtocol.answerCall()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error answering call via protocol", e)
-                    callCoordinator.answerCall()
-                }
+        lifecycleScope.launch {
+            try {
+                telephony.answerCall()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error answering call", e)
             }
-        } else {
-            callCoordinator.answerCall()
         }
     }
 
@@ -341,19 +335,12 @@ class IncomingCallActivity : ComponentActivity() {
     private fun declineCall() {
         Log.i(TAG, "Declining call")
         stopRingtoneAndVibration()
-        val app = applicationContext as? ColumbaApplication
-        if (app != null) {
-            lifecycleScope.launch {
-                try {
-                    app.reticulumProtocol.hangupCall()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error declining call via protocol", e)
-                    callCoordinator.declineCall()
-                }
-                finish()
+        lifecycleScope.launch {
+            try {
+                telephony.declineCall()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error declining call", e)
             }
-        } else {
-            callCoordinator.declineCall()
             finish()
         }
     }

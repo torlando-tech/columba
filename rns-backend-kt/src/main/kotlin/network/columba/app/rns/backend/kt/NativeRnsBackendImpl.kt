@@ -1,5 +1,6 @@
 package network.columba.app.rns.backend.kt
 
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
@@ -205,6 +206,18 @@ class NativeRnsBackendImpl(
                 rtt = this.rtt?.toFloat(),
             )
         }
+
+        fun tech.torlando.lxst.core.CallState.toApiCallState(): CallState =
+            when (this) {
+                is tech.torlando.lxst.core.CallState.Idle -> CallState.Idle
+                is tech.torlando.lxst.core.CallState.Connecting -> CallState.Connecting(this.identityHash)
+                is tech.torlando.lxst.core.CallState.Ringing -> CallState.Ringing(this.identityHash)
+                is tech.torlando.lxst.core.CallState.Incoming -> CallState.Incoming(this.identityHash)
+                is tech.torlando.lxst.core.CallState.Active -> CallState.Active(this.identityHash)
+                is tech.torlando.lxst.core.CallState.Busy -> CallState.Busy
+                is tech.torlando.lxst.core.CallState.Rejected -> CallState.Rejected
+                is tech.torlando.lxst.core.CallState.Ended -> CallState.Ended
+            }
     }
 
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -285,6 +298,43 @@ class NativeRnsBackendImpl(
      * [getBleConnectionDetails] so consumers always see a starting state.
      */
     override val bleConnectionsFlow: SharedFlow<String> = _bleConnectionsFlow.asSharedFlow()
+
+    // ==================== RnsTelephony observable surface ====================
+    //
+    // `scope` above is cancelled/recreated each backend init/shutdown cycle, which
+    // would orphan a relay tied to it. CallCoordinator is a JVM singleton with
+    // stable StateFlow references that survive backend restarts, so the call
+    // observable surface gets its own forever-running scope. Cancelling this scope
+    // would invalidate the StateFlow seen by AIDL observers, which is undesirable.
+    private val telephonyRelayScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private val _callState = MutableStateFlow<CallState>(CallState.Idle)
+    override val callState: StateFlow<CallState> = _callState.asStateFlow()
+
+    private val callCoordinator: tech.torlando.lxst.core.CallCoordinator
+        get() = tech.torlando.lxst.core.CallCoordinator.getInstance()
+
+    override val remoteIdentity: StateFlow<String?>
+        get() = callCoordinator.remoteIdentity
+    override val isMuted: StateFlow<Boolean>
+        get() = callCoordinator.isMuted
+    override val isSpeakerOn: StateFlow<Boolean>
+        get() = callCoordinator.isSpeakerOn
+    override val isPttMode: StateFlow<Boolean>
+        get() = callCoordinator.isPttMode
+    override val isPttActive: StateFlow<Boolean>
+        get() = callCoordinator.isPttActive
+
+    init {
+        // Translate lxst-kt's CallState → :rns-api CallState into the StateFlow
+        // we expose. Lives on telephonyRelayScope so init/shutdown cycles don't
+        // tear down the relay.
+        telephonyRelayScope.launch {
+            callCoordinator.callState.collect { lxstState ->
+                _callState.value = lxstState.toApiCallState()
+            }
+        }
+    }
 
     // Delegate handlers
     private val nomadNetHandler = NativeNomadNetHandler(appContext, { deliveryIdentity })
@@ -977,9 +1027,9 @@ class NativeRnsBackendImpl(
             Unit
         }
 
-    override fun getHopCount(destinationHash: ByteArray): Int? = Transport.hopsTo(destinationHash)
+    override suspend fun getHopCount(destinationHash: ByteArray): Int? = Transport.hopsTo(destinationHash)
 
-    override fun getNextHopInterfaceName(destinationHash: ByteArray): String? = Transport.nextHopInterface(destinationHash)?.name
+    override suspend fun getNextHopInterfaceName(destinationHash: ByteArray): String? = Transport.nextHopInterface(destinationHash)?.name
 
     override suspend fun getPathTableHashes(): List<String> = Transport.pathTable.keys.map { it.toString() }
 
@@ -1028,7 +1078,7 @@ class NativeRnsBackendImpl(
      * Get the full 64-byte private key (X25519_prv + Ed25519_prv) for encrypted Room storage.
      * Returns null if identity not initialized or has no private key.
      */
-    override fun getFullIdentityKey(): ByteArray? =
+    override suspend fun getFullIdentityKey(): ByteArray? =
         try {
             deliveryIdentity?.getPrivateKey()
         } catch (_: Exception) {
@@ -1949,6 +1999,38 @@ class NativeRnsBackendImpl(
                 Log.w(TAG, "Ignored error setting speaker=$speakerOn: $e")
             }
         }
+    }
+
+    override suspend fun declineCall() {
+        // CallCoordinator.declineCall is non-suspend and routes through the same
+        // controller.hangup path as endCall — exposing it as a separate seam
+        // method preserves the call-site intent (rejecting unanswered vs ending
+        // active) without diverging behaviour.
+        callCoordinator.declineCall()
+    }
+
+    override suspend fun setConnecting(destinationHash: String) {
+        callCoordinator.setConnecting(destinationHash)
+    }
+
+    override suspend fun setEnded() {
+        callCoordinator.setEnded()
+    }
+
+    override suspend fun setMutedLocally(muted: Boolean) {
+        callCoordinator.setMutedLocally(muted)
+    }
+
+    override suspend fun setSpeakerLocally(enabled: Boolean) {
+        callCoordinator.setSpeakerLocally(enabled)
+    }
+
+    override suspend fun setPttModeLocally(enabled: Boolean) {
+        callCoordinator.setPttModeLocally(enabled)
+    }
+
+    override suspend fun setPttActiveLocally(active: Boolean) {
+        callCoordinator.setPttActiveLocally(active)
     }
 
     override suspend fun getCallState(): Result<VoiceCallState> =

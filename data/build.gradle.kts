@@ -66,7 +66,7 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)
     testImplementation(libs.turbine)
-    testImplementation("org.json:json:20240303") // Real JSON implementation for unit tests
+    testImplementation("org.json:json:20251224") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.test.core)
     androidTestImplementation("androidx.test:runner:1.7.0")

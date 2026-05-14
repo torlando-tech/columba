@@ -431,7 +431,7 @@ dependencies {
     implementation(libs.coil.gif)
 
     // MessagePack - for LXMF stamp generation
-    implementation("org.msgpack:msgpack-core:0.9.8")
+    implementation("org.msgpack:msgpack-core:0.9.12")
 
     // MapLibre - for offline-capable maps
     implementation("org.maplibre.gl:android-sdk:13.1.0")

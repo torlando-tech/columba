@@ -82,6 +82,9 @@ class PythonRnsRuntime(
 
     private val running = AtomicBoolean(false)
 
+    /** Guards [applyAndroidEnvPatches] so it runs exactly once per process. */
+    private val envPatched = AtomicBoolean(false)
+
     /** True once [start] has completed and the stack is live. */
     val isRunning: Boolean get() = running.get()
 
@@ -89,6 +92,24 @@ class PythonRnsRuntime(
         if (!Python.isStarted()) {
             Log.i(TAG, "Starting Chaquopy Python interpreter")
             Python.start(AndroidPlatform(appContext))
+        }
+        applyAndroidEnvPatches()
+    }
+
+    /**
+     * Neutralise upstream-RNS behaviour that breaks under Chaquopy *before* the
+     * first `RNS.Reticulum()` is constructed. `Reticulum.__init__` ends by
+     * registering SIGINT/SIGTERM handlers via `signal.signal()`, which raises
+     * `ValueError` off Python's main thread — and every PyObject call here runs
+     * on `Dispatchers.IO`, so without this `__init__` aborts after Transport +
+     * interfaces are up but before it returns. Idempotent; the Python side also
+     * guards against a double-apply.
+     */
+    private fun applyAndroidEnvPatches() {
+        if (envPatched.compareAndSet(false, true)) {
+            Python.getInstance().getModule("event_bridge")
+                .callAttr("apply_android_env_patches")
+            Log.i(TAG, "Applied Android/Chaquopy env patches")
         }
     }
 

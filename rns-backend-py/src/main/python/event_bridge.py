@@ -32,8 +32,55 @@ The Kotlin sub-impls attach them at the point they create those objects.
 """
 
 import json
+import signal
 
 import RNS
+
+
+# ----------------------------------------------------------------------------
+# Android/Chaquopy environment patches. Applied once by PythonRnsRuntime before
+# the first RNS.Reticulum() is constructed — see apply_android_env_patches().
+# ----------------------------------------------------------------------------
+
+def apply_android_env_patches():
+    """Make upstream RNS/LXMF safe to construct off Python's main thread.
+
+    `RNS.Reticulum.__init__` ends by registering SIGINT/SIGTERM handlers via
+    `signal.signal()`. Under Chaquopy every RNS call runs on a `Dispatchers.IO`
+    thread, and CPython's `signal.signal()` raises
+    `ValueError: signal only works in main thread of the main interpreter`
+    off the main thread — which aborts `Reticulum.__init__` *after* Transport
+    and the interfaces are already up but *before* it returns, so the Kotlin
+    side never sees a constructed instance.
+
+    On Android those handlers are dead weight anyway: the process lifecycle is
+    owned by the foreground `ReticulumService`, not POSIX signals to the
+    embedded interpreter. Shutdown goes through `PythonRnsRuntime.stop()` ->
+    `Reticulum.exit_handler()`. So wrap `signal.signal()` to no-op when it
+    would raise off-thread, while still honouring it if ever called on the
+    main thread. Idempotent.
+    """
+    if getattr(signal, "_columba_android_patched", False):
+        return
+    _real_signal = signal.signal
+
+    def _safe_signal(sig, handler):
+        try:
+            return _real_signal(sig, handler)
+        except ValueError:
+            # Off the main thread — the handler can't be registered, and
+            # SIGINT/SIGTERM are a desktop-shutdown concept that does not
+            # apply to an Android foreground-service-hosted interpreter.
+            RNS.log(
+                "event_bridge: skipped off-main-thread signal handler "
+                f"registration for {sig}",
+                RNS.LOG_DEBUG,
+            )
+            return None
+
+    signal.signal = _safe_signal
+    signal._columba_android_patched = True
+
 
 # ----------------------------------------------------------------------------
 # Module-level callback storage. Populated by register_callbacks().

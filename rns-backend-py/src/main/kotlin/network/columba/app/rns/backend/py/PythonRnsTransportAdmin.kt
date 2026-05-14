@@ -190,24 +190,43 @@ class PythonRnsTransportAdmin(
 
     override suspend fun getDebugInfo(): Map<String, Any> =
         pyCall {
-            // Real best-effort snapshot of whatever RNS status is reachable.
-            val info = linkedMapOf<String, Any>()
-            info["backend"] = "python-chaquopy"
-            info["running"] = runtime.isRunning
-            runCatching {
-                runtime.rnsModule.callAttr("version")?.toString()
-            }.getOrNull()?.let { info["rns_version"] = it }
-            runCatching {
-                val interfaces = transport()["interfaces"] ?: return@runCatching
-                info["interface_count"] =
-                    runtime.python.builtins.callAttr("len", interfaces)
-                        ?.toJava(Int::class.javaObjectType) ?: 0
-            }.onFailure { Log.w(TAG, "getDebugInfo: interface count failed", it) }
-            runCatching {
-                runtime.rnsModule["Reticulum"]?.callAttr("transport_enabled")
-                    ?.toJava(Boolean::class.javaObjectType)
-            }.getOrNull()?.let { info["transport_enabled"] = it }
-            info
+            // Mirror NativeRnsBackendImpl.getDebugInfo()'s key set exactly. The
+            // Network Status screen (DebugViewModel) and InterfaceManagementViewModel
+            // read these specific keys — a divergent shape leaves the screen
+            // looking broken (red "Reticulum Status" card, "RNS Available: No",
+            // empty interface list, every diagnostic line at its default). The
+            // host-side fields (multicast/wake lock, health/monitor/maintenance
+            // jobs) are :rns-host peripheral-manager state, not this backend's —
+            // the kotlin backend hardcodes them false too.
+            val running = runtime.isRunning
+            val t = transport()
+            linkedMapOf<String, Any>(
+                "backend" to "python-chaquopy",
+                "initialized" to running,
+                "reticulum_available" to running,
+                "storage_path" to (runtime.storagePath ?: ""),
+                "transport_enabled" to (
+                    runCatching {
+                        runtime.reticulumInstance?.callAttr("transport_enabled")
+                            ?.toJava(Boolean::class.javaObjectType)
+                    }.getOrNull() ?: false
+                ),
+                "interfaces" to collectInterfaces(),
+                "path_table_size" to pyLen(t["path_table"]),
+                "announce_table_size" to pyLen(t["announce_table"]),
+                "link_table_size" to pyLen(t["link_table"]),
+                // Host-side peripheral state — owned by :rns-host's managers, not
+                // the RNS backend. Hardcoded false/0 for parity with
+                // NativeRnsBackendImpl, which does the same.
+                "multicast_lock_held" to false,
+                "wake_lock_held" to false,
+                "heartbeat_age_seconds" to 0L,
+                "health_check_running" to false,
+                "network_monitor_running" to false,
+                "maintenance_running" to false,
+                "last_lock_refresh_age_seconds" to 0L,
+                "failed_interface_count" to 0,
+            )
         }
 
     override suspend fun getFailedInterfaces(): List<FailedInterface> =
@@ -265,6 +284,50 @@ class PythonRnsTransportAdmin(
     /** `RNS.Transport` — used statically by upstream RNS. */
     private fun transport(): PyObject =
         runtime.rnsModule["Transport"] ?: error("RNS.Transport not resolvable")
+
+    /** `len(pyObj)` as Int — 0 on null/failure. */
+    private fun pyLen(pyObj: PyObject?): Int =
+        pyObj?.let {
+            runCatching {
+                runtime.python.builtins.callAttr("len", it).toJava(Int::class.javaObjectType)
+            }.getOrNull()
+        } ?: 0
+
+    /**
+     * Enumerate `RNS.Transport.interfaces` into the same per-interface shape
+     * `NativeRnsBackendImpl.getDebugInfo()` emits — `{name, type, online,
+     * parent_name, can_send, rx_bytes, tx_bytes}`. The UI keys its interface
+     * online-status overlay on `name` = the full formatted interface name
+     * (`str(interface)`, e.g. `TCPInterface[test_mac/10.0.0.145:4242]`), so the
+     * `name`/`type` formatting matches the kotlin backend's `iface.name` /
+     * `iface.name.substringBefore("[")`. Per-interface reads are wrapped so one
+     * malformed interface can't blank the whole list.
+     */
+    private fun collectInterfaces(): List<Map<String, Any>> =
+        runCatching {
+            val interfaces = transport()["interfaces"] ?: return emptyList()
+            runtime.python.builtins.callAttr("list", interfaces).asList().mapNotNull { iface ->
+                runCatching {
+                    val name = iface.toString()
+                    val parentStr = iface["parent_interface"]?.toString()
+                    linkedMapOf<String, Any>(
+                        "name" to name,
+                        "type" to name.substringBefore("[").trim(),
+                        "online" to (iface["online"]?.toJava(Boolean::class.javaObjectType) ?: false),
+                        "parent_name" to (parentStr?.takeIf { it != "None" } ?: ""),
+                        "can_send" to (iface["OUT"]?.toJava(Boolean::class.javaObjectType) ?: false),
+                        "rx_bytes" to (iface["rxb"]?.toJava(Long::class.javaObjectType) ?: 0L),
+                        "tx_bytes" to (iface["txb"]?.toJava(Long::class.javaObjectType) ?: 0L),
+                    )
+                }.getOrElse {
+                    Log.w(TAG, "getDebugInfo: skipping an interface (attr read failed)", it)
+                    null
+                }
+            }
+        }.getOrElse {
+            Log.w(TAG, "getDebugInfo: interface enumeration failed", it)
+            emptyList()
+        }
 
     /**
      * Map one `RNS.Discovery` `info` dict to the JSON object shape that

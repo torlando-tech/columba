@@ -63,10 +63,17 @@ dependencies {
     // without having to depend on :rns-api directly.
     api(project(":rns-api"))
 
-    // Hardware-bridge peripherals (BLE / USB / RNode / flasher / call/telephone)
-    // were moved from :reticulum into :rns-host in Phase A.7. NativeReticulumProtocol
-    // still calls into them during the strangler-fig window — A.8 splits the
-    // protocol into :rns-backend-kt and severs this dependency.
+    // Native Kotlin RnsBackend impl — the facade in protocol/NativeReticulumProtocol.kt
+    // delegates every ReticulumProtocol call into the matching sub-impl. Phase A.10
+    // rewires :app's Hilt graph to inject sub-interfaces from :rns-backend-kt directly
+    // and deletes this facade + the dependency.
+    api(project(":rns-backend-kt"))
+
+    // Hardware-bridge peripherals (BLE / USB / RNode / flasher) were moved from
+    // :reticulum into :rns-host in Phase A.7. After A.8 the facade no longer
+    // references :rns-host directly, but transitive consumers of :reticulum
+    // (notably :app) still expect peripheral types like KotlinBLEBridge on the
+    // classpath. A.12 deletes :reticulum entirely, which severs this edge.
     api(project(":rns-host"))
 
     // LXST module (telephony, codecs, audio pipeline)

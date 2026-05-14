@@ -5,6 +5,8 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -12,8 +14,10 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
+import network.columba.app.rns.ipc.RnsBackendServer
 
 /**
  * Background service that hosts the native Reticulum stack.
@@ -26,6 +30,7 @@ import network.columba.app.rns.host.di.ServiceModule
  * - Binder is a plain android.os.Binder liveness handle (no cross-process protocol calls)
  * - State is managed in ServiceState
  */
+@AndroidEntryPoint
 class ReticulumService : Service() {
     companion object {
         private const val TAG = "ReticulumService"
@@ -38,6 +43,14 @@ class ReticulumService : Service() {
         const val EXTRA_NETWORK_STATUS = "network_status"
     }
 
+    /**
+     * Injected RnsBackend implementation. The flavor-specific HostBackendModule
+     * in src/{kotlinBackend,pythonBackend}/ provides the concrete instance —
+     * [NativeRnsBackend] on the kotlinBackend flavor, a Chaquopy-backed impl on
+     * the pythonBackend flavor (Phase B).
+     */
+    @Inject lateinit var rnsBackend: RnsBackend
+
     // Coroutine scope for background tasks
     // Uses Dispatchers.Default for CPU-bound work (JSON parsing, orchestration)
     // SupervisorJob ensures child coroutine failures don't cancel the entire service
@@ -46,8 +59,17 @@ class ReticulumService : Service() {
     // Managers container (initialized in onCreate)
     private lateinit var managers: ServiceModule.ServiceManagers
 
-    // Local binder returned from onBind() — liveness handle only, no protocol calls
+    // Local binder returned from onBind() — liveness handle only, no protocol calls.
+    // Retained internally so existing managers (BleCoordinator, NetworkChangeManager
+    // callbacks below) can call binder.restartAutoInterface() / announceLxmfDestination() /
+    // shutdown() / isInitialized() through the legacy in-process Java surface. A.10
+    // routes those calls through `rnsBackend` directly and deletes this property.
     private lateinit var binder: ReticulumServiceBinder
+
+    // Cross-process AIDL stub. Lazily constructed on the first onBind() so we
+    // don't pay the construction cost (and the rnsBackend dependency wiring) in
+    // the rare case the service runs only via startService (no bindService caller).
+    private var aidlServer: RnsBackendServer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -230,7 +252,16 @@ class ReticulumService : Service() {
         // Start as foreground when first client binds
         managers.notificationManager.startForeground(this)
 
-        return binder
+        // A.8: Return the cross-process AIDL stub instead of the legacy liveness
+        // binder. The UI process wraps this binder in `RnsBackendClient.connect()`
+        // and reaches the backend through the typed RnsBackend / sub-interface
+        // surface. The legacy `binder` field above is still constructed (in
+        // onCreate) because in-process service managers (NetworkChangeManager,
+        // BleCoordinator) call its `restartAutoInterface` / `announceLxmfDestination`
+        // helpers via direct Java calls — A.10 rewires those to use `rnsBackend`.
+        return aidlServer ?: RnsBackendServer(impl = rnsBackend, scope = serviceScope).also {
+            aidlServer = it
+        }
     }
 
     override fun onRebind(intent: Intent?) {

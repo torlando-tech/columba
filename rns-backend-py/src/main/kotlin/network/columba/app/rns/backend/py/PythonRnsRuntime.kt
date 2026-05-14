@@ -71,6 +71,11 @@ class PythonRnsRuntime(
     var localDestination: PyObject? = null
         private set
 
+    /** Absolute path of the RNS config dir written by [start]; null before/after. */
+    @Volatile
+    var storagePath: String? = null
+        private set
+
     /** hex identity hash -> live `RNS.Identity`. Seeded by restore + announce events. */
     val identities = ConcurrentHashMap<String, PyObject>()
 
@@ -131,6 +136,7 @@ class PythonRnsRuntime(
 
         val configDir = File(config.storagePath, "reticulum").apply { mkdirs() }
         File(configDir, "config").writeText(RnsConfigFile.build(config))
+        storagePath = configDir.absolutePath
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
 
         // Construct the upstream Reticulum instance. RNS.Reticulum is a process
@@ -214,6 +220,7 @@ class PythonRnsRuntime(
         links.clear()
         localDestination = null
         localIdentity = null
+        storagePath = null
         lxmRouter = null
         reticulumInstance = null
         running.set(false)

@@ -7,7 +7,9 @@ import com.google.android.gms.location.LocationServices
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkStatus
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -93,7 +95,9 @@ class TelemetryCollectorManager
     constructor(
         @ApplicationContext private val context: Context,
         private val settingsRepository: SettingsRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
+        private val rnsLxmf: RnsLxmf,
+        private val rnsTelemetry: RnsTelemetry,
         private val identityRepository: network.columba.app.data.repository.IdentityRepository,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
@@ -298,7 +302,7 @@ class TelemetryCollectorManager
             // Settings can emit before Reticulum network reaches READY.
             // Re-apply current host-mode + allowlist once READY to avoid stale Python-side state.
             launch {
-                reticulumProtocol.networkStatus
+                rnsCore.networkStatus
                     .collect { status ->
                         if (status is NetworkStatus.READY) {
                             Log.d(TAG, "Network became READY, re-syncing host mode + allowed requesters")
@@ -399,13 +403,13 @@ class TelemetryCollectorManager
          * Called when the setting changes.
          */
         private suspend fun syncHostModeWithPython(enabled: Boolean) {
-            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+            if (rnsCore.networkStatus.value !is NetworkStatus.READY) {
                 Log.d(TAG, "Network not ready, will sync host mode when ready")
                 return
             }
 
             try {
-                val result = reticulumProtocol.setTelemetryCollectorMode(enabled)
+                val result = rnsTelemetry.setTelemetryCollectorMode(enabled)
                 if (result.isSuccess) {
                     Log.i(TAG, "✅ Host mode synced with Python: $enabled")
                 } else {
@@ -446,13 +450,13 @@ class TelemetryCollectorManager
          * Called when the setting changes.
          */
         private suspend fun syncAllowedRequestersWithPython(allowedHashes: Set<String>) {
-            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+            if (rnsCore.networkStatus.value !is NetworkStatus.READY) {
                 Log.d(TAG, "Network not ready, will sync allowed requesters when ready")
                 return
             }
 
             try {
-                val result = reticulumProtocol.setTelemetryAllowedRequesters(allowedHashes)
+                val result = rnsTelemetry.setTelemetryAllowedRequesters(allowedHashes)
                 if (result.isSuccess) {
                     Log.i(TAG, "✅ Allowed requesters synced with Python: ${allowedHashes.size}")
                 } else {
@@ -475,7 +479,7 @@ class TelemetryCollectorManager
                 return TelemetryRequestResult.NoCollectorConfigured
             }
 
-            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+            if (rnsCore.networkStatus.value !is NetworkStatus.READY) {
                 Log.d(TAG, "Network not ready for request")
                 return TelemetryRequestResult.NetworkNotReady
             }
@@ -495,7 +499,7 @@ class TelemetryCollectorManager
                 return TelemetrySendResult.NoCollectorConfigured
             }
 
-            if (reticulumProtocol.networkStatus.value !is NetworkStatus.READY) {
+            if (rnsCore.networkStatus.value !is NetworkStatus.READY) {
                 Log.d(TAG, "Network not ready")
                 return TelemetrySendResult.NetworkNotReady
             }
@@ -521,7 +525,7 @@ class TelemetryCollectorManager
                 scope.launch {
                     try {
                         _isSending.first { !it }
-                        reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
+                        rnsCore.networkStatus.first { it is NetworkStatus.READY }
                         Log.d(TAG, "Network ready, starting periodic telemetry sends")
 
                         while (isActive) {
@@ -551,12 +555,12 @@ class TelemetryCollectorManager
 
             if (System.currentTimeMillis() >= nextSendTime) {
                 val currentCollector = _collectorAddress.value
-                if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                if (currentCollector != null && rnsCore.networkStatus.value is NetworkStatus.READY) {
                     lastSendAttemptAt = System.currentTimeMillis()
                     Log.d(TAG, "📡 Periodic telemetry send to collector")
                     logSendResult(sendTelemetryToCollector(currentCollector))
                 } else {
-                    Log.d(TAG, "Skipping periodic send (collector=${currentCollector != null}, network=${reticulumProtocol.networkStatus.value})")
+                    Log.d(TAG, "Skipping periodic send (collector=${currentCollector != null}, network=${rnsCore.networkStatus.value})")
                 }
             }
             return nextSendTime
@@ -588,7 +592,7 @@ class TelemetryCollectorManager
                 scope.launch {
                     try {
                         _isRequesting.first { !it }
-                        reticulumProtocol.networkStatus.first { it is NetworkStatus.READY }
+                        rnsCore.networkStatus.first { it is NetworkStatus.READY }
                         Log.d(TAG, "Network ready, starting periodic telemetry requests")
 
                         while (isActive) {
@@ -618,12 +622,12 @@ class TelemetryCollectorManager
 
             if (System.currentTimeMillis() >= nextRequestTime) {
                 val currentCollector = _collectorAddress.value
-                if (currentCollector != null && reticulumProtocol.networkStatus.value is NetworkStatus.READY) {
+                if (currentCollector != null && rnsCore.networkStatus.value is NetworkStatus.READY) {
                     lastRequestAttemptAt = System.currentTimeMillis()
                     Log.d(TAG, "📡 Periodic telemetry request from collector")
                     logRequestResult(requestTelemetryFromCollector(currentCollector))
                 } else {
-                    Log.d(TAG, "Skipping periodic request (collector=${currentCollector != null}, network=${reticulumProtocol.networkStatus.value})")
+                    Log.d(TAG, "Skipping periodic request (collector=${currentCollector != null}, network=${rnsCore.networkStatus.value})")
                 }
             }
             return nextRequestTime
@@ -656,7 +660,7 @@ class TelemetryCollectorManager
         private suspend fun syncHostModeIfNeededForLocalStore(): TelemetrySendResult.Error? {
             if (!_isHostModeEnabled.value) return null
 
-            val hostModeSyncResult = reticulumProtocol.setTelemetryCollectorMode(true)
+            val hostModeSyncResult = rnsTelemetry.setTelemetryCollectorMode(true)
             if (hostModeSyncResult.isSuccess) return null
 
             val syncError = hostModeSyncResult.exceptionOrNull()?.message ?: "Unknown host mode sync error"
@@ -720,19 +724,19 @@ class TelemetryCollectorManager
                     if (isLocalDestination(collectorHash)) {
                         syncHostModeIfNeededForLocalStore()?.let { return it }
                         Log.d(TAG, "📍 Collector is self, storing own telemetry locally")
-                        reticulumProtocol.storeOwnTelemetry(locationJson, iconAppearance)
+                        rnsTelemetry.storeOwnTelemetry(locationJson, iconAppearance)
                     } else {
                         // Get LXMF identity for network send
                         val sourceIdentity =
                             try {
-                                reticulumProtocol.getLxmfIdentity().getOrNull()
+                                rnsLxmf.getLxmfIdentity().getOrNull()
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to get LXMF identity", e)
                                 null
                             } ?: return TelemetrySendResult.Error("No LXMF identity")
 
                         val collectorBytes = collectorHash.hexToByteArray()
-                        reticulumProtocol.sendLocationTelemetry(
+                        rnsTelemetry.sendLocationTelemetry(
                             destinationHash = collectorBytes,
                             locationJson = locationJson,
                             sourceIdentity = sourceIdentity,
@@ -773,7 +777,7 @@ class TelemetryCollectorManager
                 // Get LXMF identity
                 val sourceIdentity =
                     try {
-                        reticulumProtocol.getLxmfIdentity().getOrNull()
+                        rnsLxmf.getLxmfIdentity().getOrNull()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get LXMF identity", e)
                         null
@@ -788,7 +792,7 @@ class TelemetryCollectorManager
 
                 // Send telemetry request via protocol
                 val result =
-                    reticulumProtocol.sendTelemetryRequest(
+                    rnsTelemetry.sendTelemetryRequest(
                         destinationHash = collectorBytes,
                         sourceIdentity = sourceIdentity,
                         timebase = timebase,

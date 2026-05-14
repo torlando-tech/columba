@@ -15,7 +15,7 @@ import kotlinx.coroutines.sync.withPermit
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsNomadnet
 import network.columba.app.util.DestinationHashValidator
 import org.json.JSONObject
 
@@ -26,7 +26,7 @@ import org.json.JSONObject
  * Each partial is fetched from the network, parsed, and its state exposed via [states].
  */
 class PartialManager(
-    private val protocol: ReticulumProtocol,
+    private val protocol: RnsNomadnet,
     private val scope: CoroutineScope,
     private val currentNodeHash: () -> String,
     private val formFields: () -> Map<String, String>,

@@ -75,7 +75,7 @@ import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.host.ble.util.BlePermissionManager
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.ReticulumService
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.OfflineModeBanner
@@ -149,7 +149,7 @@ class MainActivity : ComponentActivity() {
     lateinit var crashReportManager: CrashReportManager
 
     @Inject
-    lateinit var reticulumProtocol: ReticulumProtocol
+    lateinit var transportAdmin: RnsTransportAdmin
 
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
@@ -430,7 +430,7 @@ class MainActivity : ComponentActivity() {
                         Log.d(TAG, "🔌 USB permission already granted, triggering reconnect")
                         lastUsbReconnectAttempted = true
                         try {
-                            reticulumProtocol.reconnectRNodeInterface()
+                            transportAdmin.reconnectRNodeInterface()
                         } catch (e: Exception) {
                             Log.e(TAG, "🔌 Error triggering RNode reconnect", e)
                         }

@@ -4,7 +4,7 @@ import android.util.Log
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ConversationRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +30,7 @@ class IdentityResolutionManager
     constructor(
         private val contactRepository: ContactRepository,
         private val conversationRepository: ConversationRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
     ) {
         companion object {
             private const val TAG = "IdentityResolutionMgr"
@@ -131,7 +131,7 @@ class IdentityResolutionManager
                                 .map { it.toInt(16).toByte() }
                                 .toByteArray()
 
-                        val identity = reticulumProtocol.recallIdentity(destHashBytes)
+                        val identity = rnsCore.recallIdentity(destHashBytes)
 
                         if (identity != null && identity.publicKey != null) {
                             // Identity found! Update the contact
@@ -152,7 +152,7 @@ class IdentityResolutionManager
 
             // Periodically persist transport data (paths, destinations) to survive process kills
             try {
-                reticulumProtocol.persistTransportData()
+                rnsCore.persistTransportData()
             } catch (e: Exception) {
                 Log.e(TAG, "Error persisting transport data", e)
             }
@@ -243,12 +243,12 @@ class IdentityResolutionManager
             destHashBytes: ByteArray,
             displayHash: String,
         ) {
-            if (reticulumProtocol.hasPath(destHashBytes)) {
+            if (rnsCore.hasPath(destHashBytes)) {
                 Log.d(TAG, "Path exists for ${displayHash.take(8)}..., skipping request")
                 return
             }
 
             Log.d(TAG, "Requesting path for ${displayHash.take(8)}...")
-            reticulumProtocol.requestPath(destHashBytes)
+            rnsCore.requestPath(destHashBytes)
         }
     }

@@ -22,7 +22,7 @@ import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.rns.host.manager.filterByTransport
@@ -178,7 +178,7 @@ class InterfaceManagementViewModel
         private val interfaceRepository: InterfaceRepository,
         private val configManager: InterfaceConfigManager,
         private val bleStatusRepository: BleStatusRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val transportAdmin: RnsTransportAdmin,
         private val transportObserver: InterfaceTransportObserver,
     ) : ViewModel() {
         companion object {
@@ -229,7 +229,7 @@ class InterfaceManagementViewModel
             }
 
             viewModelScope.launch(ioDispatcher) {
-                reticulumProtocol.interfaceStatusFlow.collect { statusJson ->
+                transportAdmin.interfaceStatusFlow.collect { statusJson ->
                     try {
                         parseAndUpdateInterfaceStatus(statusJson)
                     } catch (e: Exception) {
@@ -239,7 +239,7 @@ class InterfaceManagementViewModel
             }
 
             viewModelScope.launch(ioDispatcher) {
-                reticulumProtocol.debugInfoFlow.collect { debugInfoJson ->
+                transportAdmin.debugInfoFlow.collect { debugInfoJson ->
                     try {
                         parseAndUpdateDebugInfo(debugInfoJson)
                     } catch (e: Exception) {
@@ -306,8 +306,8 @@ class InterfaceManagementViewModel
         private fun loadDiscoveredInterfacesCount() {
             viewModelScope.launch(ioDispatcher) {
                 try {
-                    val discoveryEnabled = reticulumProtocol.isDiscoveryEnabled()
-                    val discovered = reticulumProtocol.getDiscoveredInterfaces()
+                    val discoveryEnabled = transportAdmin.isDiscoveryEnabled()
+                    val discovered = transportAdmin.getDiscoveredInterfaces()
                     val availableCount = discovered.count { it.status == "available" }
                     val unknownCount = discovered.count { it.status == "unknown" }
                     val staleCount = discovered.count { it.status == "stale" }
@@ -345,7 +345,7 @@ class InterfaceManagementViewModel
         @Suppress("UNCHECKED_CAST")
         private suspend fun fetchInterfaceStatus() {
             try {
-                val debugInfo = reticulumProtocol.getDebugInfo()
+                val debugInfo = transportAdmin.getDebugInfo()
                 val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return
 
                 val statusMap = mutableMapOf<String, Boolean>()
@@ -1112,7 +1112,7 @@ class InterfaceManagementViewModel
                     try {
                         val configs = interfaceRepository.enabledInterfaces.first()
                         val filtered = filterByTransport(configs, transportObserver.currentTransport())
-                        reticulumProtocol.reloadInterfaces(filtered)
+                        transportAdmin.reloadInterfaces(filtered)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)
@@ -1190,7 +1190,7 @@ class InterfaceManagementViewModel
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     Log.i(TAG, "User triggered RNode reconnection")
-                    reticulumProtocol.reconnectRNodeInterface()
+                    transportAdmin.reconnectRNodeInterface()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error reconnecting RNode interface", e)
                 }

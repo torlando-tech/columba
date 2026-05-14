@@ -16,7 +16,8 @@ import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.model.LocationTelemetry
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.ui.model.SharingDuration
 import network.columba.app.util.LocationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -69,7 +70,8 @@ class LocationSharingManager
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsLxmf: RnsLxmf,
+        private val rnsTelemetry: RnsTelemetry,
         private val receivedLocationDao: ReceivedLocationDao,
         private val settingsRepository: SettingsRepository,
         private val identityRepository: network.columba.app.data.repository.IdentityRepository,
@@ -285,7 +287,7 @@ class LocationSharingManager
             scope.launch {
                 val sourceIdentity =
                     try {
-                        reticulumProtocol.getLxmfIdentity().getOrNull()
+                        rnsLxmf.getLxmfIdentity().getOrNull()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get LXMF identity for cease message", e)
                         null
@@ -310,7 +312,7 @@ class LocationSharingManager
 
                 try {
                     val destHashBytes = hexStringToByteArray(recipientHash)
-                    reticulumProtocol.sendLocationTelemetry(
+                    rnsTelemetry.sendLocationTelemetry(
                         destinationHash = destHashBytes,
                         locationJson = ceaseJson,
                         sourceIdentity = sourceIdentity,
@@ -428,7 +430,7 @@ class LocationSharingManager
                 // Get LXMF identity from the protocol
                 val sourceIdentity =
                     try {
-                        reticulumProtocol.getLxmfIdentity().getOrNull()
+                        rnsLxmf.getLxmfIdentity().getOrNull()
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get LXMF identity", e)
                         null
@@ -483,7 +485,7 @@ class LocationSharingManager
                         val destHashBytes = hexStringToByteArray(session.destinationHash)
 
                         val result =
-                            reticulumProtocol.sendLocationTelemetry(
+                            rnsTelemetry.sendLocationTelemetry(
                                 destinationHash = destHashBytes,
                                 locationJson = json,
                                 sourceIdentity = sourceIdentity,
@@ -527,7 +529,7 @@ class LocationSharingManager
 
         private fun startListeningForLocationTelemetry() {
             scope.launch {
-                reticulumProtocol.locationTelemetryFlow.collect { locationJson ->
+                rnsTelemetry.locationTelemetryFlow.collect { locationJson ->
                     handleReceivedLocation(locationJson)
                 }
             }

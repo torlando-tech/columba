@@ -283,10 +283,13 @@ class PythonRnsLxmf(
         }
 
         if (!fileAttachments.isNullOrEmpty()) {
-            // FIELD_FILE_ATTACHMENTS: [[name_bytes, data_bytes], ...]
-            // TODO(on-device): the exact attachment tuple shape upstream LXMF
-            // expects (bytes vs str filename) needs device verification against
-            // a Sideband/MeshChat peer — this mirrors NativeMessageSender.
+            // FIELD_FILE_ATTACHMENTS: [[name_bytes, data_bytes], ...] — byte-identical
+            // to NativeMessageSender (`listOf(name.toByteArray(), data)`), so
+            // cross-backend Columba attachment interop is guaranteed by construction.
+            // Note: upstream Sideband uses a `str` filename (`[basename, bytes]`);
+            // Columba (both backends) uses `bytes`. Columba<->Sideband attachment-
+            // filename interop is a Phase B on-device verification item — not a
+            // wire-shape bug on this backend.
             val attachments = fileAttachments.map { (name, data) ->
                 listOf(name.toByteArray(), data).toPyList()
             }
@@ -458,25 +461,20 @@ class PythonRnsLxmf(
     }
 
     override fun setIncomingMessageSizeLimit(limitKb: Int) {
-        // TODO(on-device): upstream LXMRouter has no incoming-message size cap
-        // (only `message_storage_limit`, which bounds a *propagation node's*
-        // served store — not inbound delivery reassembly). NativeRnsBackendImpl
-        // enforces this via a Kotlin-port-specific `incomingMessageSizeLimitKb`
-        // field; the equivalent enforcement hook for the Python router needs to
-        // be added in event_bridge.py on-device. Best-effort: attempt the
-        // propagation storage-limit setter so a configured cap is not silently
-        // dropped, and log.
+        // Upstream LXMF has no inbound message-size cap of its own — its
+        // `message_storage_limit` bounds a propagation *node's* served store,
+        // not inbound delivery, so calling it here would be wrong. The lxmf-kt
+        // port (kotlin backend) enforces a real `incomingMessageSizeLimitKb`;
+        // the Python equivalent is a post-reassembly drop in event_bridge.py.
+        // Known degradation vs the kotlin backend: LXMF fully reassembles a
+        // message before its delivery callback fires, so oversized messages are
+        // rejected before reaching the UI / storage, but the bandwidth + CPU of
+        // receiving them cannot be saved (upstream LXMF exposes no earlier
+        // hook). Recorded in the RNS dual-build handoff.
         runCatching {
-            val router = runtime.lxmRouter ?: return
-            if (limitKb > 0) {
-                router.callAttr("set_message_storage_limit", limitKb)
-            }
-        }.onFailure { Log.w(TAG, "setIncomingMessageSizeLimit($limitKb) best-effort failed", it) }
-        Log.d(
-            TAG,
-            "setIncomingMessageSizeLimit: ${if (limitKb > 0) "${limitKb}KB" else "unlimited"} " +
-                "(inbound reassembly cap is on-device follow-up)",
-        )
+            runtime.eventBridge.callAttr("set_incoming_message_size_limit", limitKb)
+        }.onFailure { Log.w(TAG, "setIncomingMessageSizeLimit($limitKb) failed", it) }
+        Log.d(TAG, "setIncomingMessageSizeLimit: ${if (limitKb > 0) "${limitKb}KB" else "unlimited"}")
     }
 
     // ==================== Internal helpers ====================

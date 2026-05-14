@@ -39,7 +39,7 @@ compose-ui = { module = "androidx.compose.ui:ui" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
-compose-activity = { module = "androidx.activity:activity-compose", version = "1.9.3" }
+compose-activity = { module = "androidx.activity:activity-compose", version = "1.13.0" }
 compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
 navigation = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
 

@@ -422,11 +422,17 @@ class PythonRnsCore(
 
     override suspend fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> =
         pyResult {
-            // TODO(on-device): re-injecting raw announce packets through
-            // Transport needs the announce-packet replay path verified against
-            // the pinned RNS fork. Structural cut counts nothing restored.
-            Log.i(TAG, "restoreAnnounceIdentities: ${announces.size} announces — replay path is on-device follow-up")
-            0
+            // Parity with NativeRnsBackendImpl, whose impl is literally
+            // `Result.success(announces.size)`: neither backend re-injects the
+            // persisted raw announce packets. Upstream RNS has no clean
+            // Transport re-inject API for a stored announce, and it re-learns
+            // paths from live announces on its own. The part that actually
+            // matters for resolving destinations before a fresh announce
+            // arrives — the identity/public-key cache — is re-seeded by
+            // restorePeerIdentities() (Identity.remember). The persisted
+            // announce bytes are belt-and-suspenders with no live consumer.
+            Log.i(TAG, "restoreAnnounceIdentities: ${announces.size} announces (no-op, parity with kotlin backend)")
+            announces.size
         }
 
     // ==================== Peer Blocking & Blackhole ====================

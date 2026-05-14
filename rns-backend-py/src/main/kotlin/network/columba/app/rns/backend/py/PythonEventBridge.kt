@@ -9,6 +9,7 @@ import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.LinkEvent
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import org.json.JSONObject
@@ -87,6 +88,7 @@ class PythonEventBridge {
     private fun handleAnnounce(payload: PyObject) {
         runCatching {
             val destHash = payload.dictBytes("destination_hash") ?: return
+            val aspect = payload.dictStr("aspect")
             val event = AnnounceEvent(
                 destinationHash = destHash,
                 identity = Identity(
@@ -95,16 +97,37 @@ class PythonEventBridge {
                     privateKey = null,
                 ),
                 appData = payload.dictBytes("app_data"),
-                // TODO(on-device): event_bridge.py does not yet carry hop count
-                // or the LXMF-parsed displayName/nodeType/stampCost enrichment
-                // that NativeRnsBackendImpl derives. Structural cut emits the
-                // raw announce; enrichment is follow-up.
-                hops = 0,
+                // hops + the LXMF-parsed display name / stamp costs are enriched
+                // Python-side in event_bridge._announce_enrichment via upstream
+                // RNS/LXMF parsers; nodeType is derived here from the aspect.
+                hops = payload.dictInt("hops") ?: 0,
                 timestamp = System.currentTimeMillis(),
+                aspect = aspect,
+                nodeType = nodeTypeForAspect(aspect),
+                displayName = payload.dictStr("display_name"),
+                stampCost = payload.dictInt("stamp_cost"),
+                stampCostFlexibility = payload.dictInt("stamp_cost_flexibility"),
+                peeringCost = payload.dictInt("peering_cost"),
             )
             _announces.tryEmit(event)
         }.onFailure { Log.e(TAG, "announce translation failed", it) }
     }
+
+    /**
+     * Mirrors `NativeRnsBackendImpl.resolveNodeType` — derived from the announce
+     * aspect. An unresolved aspect (`null`: an app Columba does not track) maps
+     * to the generic [NodeType.NODE] rather than `PEER`; the kotlin backend
+     * never sees unresolved aspects (its `RichAnnounceHandler` pre-filters), so
+     * its `else -> PEER` is `lxmf.delivery` only — spelled out explicitly here.
+     */
+    private fun nodeTypeForAspect(aspect: String?): NodeType =
+        when (aspect) {
+            "lxmf.propagation" -> NodeType.PROPAGATION_NODE
+            "nomadnetwork.node" -> NodeType.NODE
+            "lxst.telephony" -> NodeType.PHONE
+            "lxmf.delivery" -> NodeType.PEER
+            else -> NodeType.NODE
+        }
 
     private fun handleLxmfDelivery(payload: PyObject) {
         runCatching {

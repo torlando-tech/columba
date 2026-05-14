@@ -35,6 +35,8 @@ import json
 import signal
 
 import RNS
+import RNS.vendor.umsgpack as msgpack
+import LXMF
 
 
 # ----------------------------------------------------------------------------
@@ -140,6 +142,79 @@ def _emit(callback, payload):
         RNS.log(f"event_bridge: onEvent dispatch failed: {e}", RNS.LOG_ERROR)
 
 
+# Aspects Columba tracks. RNS's announce handler with `aspect_filter = None`
+# receives every announce but is not told which aspect matched, so we resolve
+# it by recomputing the destination hash for each known aspect — pure RNS
+# protocol code, no Columba app-logic.
+_KNOWN_ASPECTS = ("lxmf.delivery", "lxmf.propagation", "nomadnetwork.node", "lxst.telephony")
+
+
+def _resolve_aspect(destination_hash, identity):
+    """Which known aspect produced this announce, or None if not one we track."""
+    if identity is None:
+        return None
+    for aspect in _KNOWN_ASPECTS:
+        try:
+            if RNS.Destination.hash_from_name_and_identity(aspect, identity) == destination_hash:
+                return aspect
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+def _announce_enrichment(destination_hash, identity, app_data):
+    """RNS/LXMF protocol-leaf enrichment for an announce.
+
+    Returns the matched aspect, current hop count, and the upstream-LXMF-parsed
+    display name + stamp costs. All of this is upstream RNS/LXMF protocol code
+    (`LXMF.display_name_from_app_data` / `stamp_cost_from_app_data` /
+    `pn_*_from_app_data`, `RNS.Transport.hops_to`) — no Columba app-logic — done
+    Python-side so the Kotlin event bridge gets one flat dict instead of a JNI
+    hop per derived field. `NodeType` is derived Kotlin-side from `aspect`.
+    """
+    enrichment = {
+        "aspect": None,
+        "hops": 0,
+        "display_name": None,
+        "stamp_cost": None,
+        "stamp_cost_flexibility": None,
+        "peering_cost": None,
+    }
+    try:
+        aspect = _resolve_aspect(destination_hash, identity)
+        enrichment["aspect"] = aspect
+
+        hops = RNS.Transport.hops_to(destination_hash)
+        # PATHFINDER_M is RNS's "hop count unknown" sentinel — surface 0 instead.
+        enrichment["hops"] = 0 if hops == RNS.Transport.PATHFINDER_M else hops
+
+        if app_data:
+            if aspect == "lxmf.propagation":
+                enrichment["display_name"] = LXMF.pn_name_from_app_data(app_data)
+                enrichment["stamp_cost"] = LXMF.pn_stamp_cost_from_app_data(app_data)
+                # data[5] is [target_cost, flexibility, peering]; upstream LXMF
+                # only exposes [0] via pn_stamp_cost_from_app_data — read the
+                # rest off the same validated structure for kotlin-backend parity.
+                if LXMF.pn_announce_data_is_valid(app_data):
+                    costs = msgpack.unpackb(app_data)[5]
+                    if isinstance(costs, list):
+                        if len(costs) > 1:
+                            enrichment["stamp_cost_flexibility"] = costs[1]
+                        if len(costs) > 2:
+                            enrichment["peering_cost"] = costs[2]
+            elif aspect == "nomadnetwork.node":
+                # NomadNet node app_data is "name:..." UTF-8.
+                name = app_data.decode("utf-8", "replace").split(":", 1)[0]
+                enrichment["display_name"] = name or None
+            else:
+                # lxmf.delivery + any unresolved aspect: peer announce format.
+                enrichment["display_name"] = LXMF.display_name_from_app_data(app_data)
+                enrichment["stamp_cost"] = LXMF.stamp_cost_from_app_data(app_data)
+    except Exception as e:  # noqa: BLE001 — enrichment is best-effort, never fatal
+        RNS.log(f"event_bridge: announce enrichment failed: {e}", RNS.LOG_DEBUG)
+    return enrichment
+
+
 class _AnnounceHandler:
     """RNS announce handler — `aspect_filter = None` catches every aspect.
 
@@ -158,12 +233,55 @@ class _AnnounceHandler:
             "app_data": _hex(app_data),
             "announce_packet_hash": _hex(announce_packet_hash),
         }
+        payload.update(_announce_enrichment(destination_hash, announced_identity, app_data))
         _emit(_on_announce, payload)
+
+
+# Inbound LXMF message-size cap (KB; 0 = unlimited). Set from Kotlin via
+# set_incoming_message_size_limit(); enforced post-reassembly in
+# _lxmf_delivery_callback().
+_incoming_message_size_limit_kb = 0
+
+
+def set_incoming_message_size_limit(limit_kb):
+    """Set the inbound LXMF message-size cap (KB; 0 = unlimited).
+
+    Upstream LXMF has no inbound size limit of its own — `message_storage_limit`
+    bounds a propagation *node's* served store, not inbound delivery, so calling
+    it for this would be wrong. The lxmf-kt port (kotlin backend) has a real
+    `incomingMessageSizeLimitKb`; this is the Python-backend equivalent.
+
+    Enforcement is a *post-reassembly* drop in `_lxmf_delivery_callback`: LXMF
+    fully reassembles a message before invoking its delivery callback, so an
+    oversized message is rejected before it reaches the Columba UI / storage,
+    but the bandwidth + CPU of receiving it cannot be saved — upstream LXMF
+    exposes no pre-reassembly hook. This degradation-vs-kotlin is recorded in
+    the RNS dual-build handoff doc.
+    """
+    global _incoming_message_size_limit_kb
+    _incoming_message_size_limit_kb = max(0, int(limit_kb))
+    RNS.log(
+        "event_bridge: incoming message size limit set to "
+        f"{_incoming_message_size_limit_kb or 'unlimited'} KB",
+        RNS.LOG_DEBUG,
+    )
 
 
 def _lxmf_delivery_callback(message):
     """LXMRouter delivery callback. `message` is an upstream LXMessage."""
     try:
+        # Post-reassembly inbound size cap — see set_incoming_message_size_limit().
+        if _incoming_message_size_limit_kb > 0:
+            packed = getattr(message, "packed", None)
+            size = len(packed) if packed else len(getattr(message, "content", b"") or b"")
+            if size > _incoming_message_size_limit_kb * 1024:
+                RNS.log(
+                    f"event_bridge: dropping inbound LXMF message ({size} B > "
+                    f"{_incoming_message_size_limit_kb} KB limit)",
+                    RNS.LOG_WARNING,
+                )
+                return
+
         # Field keys are ints (LXMF FIELD_* constants). JSON-encode the whole
         # field map Python-side — bytes become hex strings — so the Kotlin
         # side gets one `fields_json` string instead of a JNI hop per value.
@@ -233,6 +351,27 @@ def deregister_callbacks():
     except Exception as e:  # noqa: BLE001
         RNS.log(f"event_bridge: deregister failed: {e}", RNS.LOG_ERROR)
     _announce_handler = None
+
+
+# --- Per-Link packet bridge ------------------------------------------------
+
+def make_link_packet_handler(on_packet):
+    """Wrap a Kotlin `PyEventCallback` as an `RNS.Link` packet callback.
+
+    `RNS.Link.set_packet_callback` expects a `callback(message, packet)`
+    callable and invokes it on a fresh thread with `message` = the decrypted
+    plaintext bytes. Kotlin objects are not directly callable from Python, so
+    this returns a Python closure that forwards `message` to
+    `on_packet.onEvent(message)`. The Kotlin side (`PythonNetworkTransport`)
+    demuxes single-byte LXST signalling frames from multi-byte audio frames.
+
+    This is the LXST-voice sibling of `register_callbacks`' per-object
+    callbacks — used by `:rns-host`'s `PythonNetworkTransport` to bridge an
+    `RNS.Link`'s inbound packets into lxst-kt's `PacketRouter`.
+    """
+    def _handler(message, packet):  # noqa: ARG001 — `packet` unused; RNS passes it
+        _emit(on_packet, message)
+    return _handler
 
 
 # --- Accessors for the per-object callbacks -------------------------------

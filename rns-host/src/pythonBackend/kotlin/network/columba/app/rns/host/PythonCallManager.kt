@@ -72,10 +72,12 @@ class PythonCallManager(
             },
         )
 
-        // transport -> PacketRouter (inbound audio). NOTE: PythonNetworkTransport
-        // stores this callback but does not yet attach it to a live RNS.Link —
-        // see its TODO(on-device). Wired here so the bridge is complete the
-        // moment that attachment lands.
+        // transport -> PacketRouter (inbound audio). PythonNetworkTransport
+        // attaches this to the live RNS.Link's packet callback in
+        // attachLinkPacketHandler() and demuxes the LXST msgpack wire format
+        // ({FIELD_FRAMES: bin} / {FIELD_SIGNALLING: [code]}), so inbound audio
+        // reaches the PacketRouter once a link is active. Set here so the
+        // @Volatile field is populated before any link comes up.
         transport.setPacketCallback { data -> packetRouter.onInboundPacket(data) }
 
         // Telephone — its init block wires transport.signalCallback.
@@ -90,10 +92,21 @@ class PythonCallManager(
         // Register as CallController so CallCoordinator relays UI actions here.
         callCoordinator.setCallManager(this)
 
-        // TODO(on-device): register the lxst.telephony RNS.Destination + inbound
-        // link/identity protocol (NativeCallManager.registerTelephonyDestination
-        // equivalent). Needs PythonNetworkTransport's link-callback bridge.
-        Log.i(TAG, "Python telephony stack ready (outbound path wired; inbound is on-device follow-up)")
+        // TODO(on-device): inbound-call accept path. The outbound path, the LXST
+        // msgpack wire protocol, and the inbound-packet bridge are all wired now
+        // (PythonNetworkTransport.attachLinkPacketHandler / handleIncomingPacket).
+        // What remains is the incoming-call accept flow — port NativeCallManager's:
+        //   1. registerTelephonyDestination(): build an IN RNS.Destination
+        //      (localIdentity, IN, SINGLE, "lxst", "telephony") with a
+        //      set_link_established_callback.
+        //   2. on link-established: set_remote_identified_callback on the link;
+        //      hold the link pending identity verification.
+        //   3. on remote-identified: attach the packet handler to the inbound
+        //      link + mark it active, then Telephone.onIncomingCall(...) so
+        //      CallCoordinator rings the UI.
+        // Each callback crosses Chaquopy the same way make_link_packet_handler
+        // does; verifying the accept flow needs a real inbound call from a peer.
+        Log.i(TAG, "Python telephony stack ready (outbound + LXST wire protocol wired; inbound-call accept is on-device follow-up)")
     }
 
     // ===== CallController — invoked by CallCoordinator on UI actions =====

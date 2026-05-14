@@ -83,7 +83,7 @@ dependencies {
     implementation(libs.room)
 
     // Crash Reporting - Sentry (for KotlinBLEBridge metrics)
-    implementation("io.sentry:sentry-android:8.31.0")
+    implementation("io.sentry:sentry-android:8.41.0")
 
     // Testing
     testImplementation(libs.junit)

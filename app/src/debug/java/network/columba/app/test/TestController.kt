@@ -19,7 +19,8 @@ import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.ReceivedMessage
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.service.InterfaceConfigManager
 
@@ -27,8 +28,8 @@ import network.columba.app.service.InterfaceConfigManager
  * Debug-only test surface for the columba phone harness.
  *
  * Lazy-initialized on the first broadcast received by [TestReceiver]. Binds
- * to [ReticulumProtocol] via Hilt's entry-point pattern (the protocol is a
- * singleton across the app), then subscribes to the inbound message and
+ * to [RnsCore] + [RnsLxmf] via Hilt's entry-point pattern (sub-interfaces are
+ * singletons across the app), then subscribes to the inbound message and
  * delivery-status flows. Each broadcast action invokes one of the methods
  * below, which logs a structured `event=… key=…` line under the
  * [LOGCAT_TAG] tag for the harness to parse.
@@ -42,7 +43,8 @@ object TestController {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface TestEntryPoint {
-        fun reticulumProtocol(): ReticulumProtocol
+        fun rnsCore(): RnsCore
+        fun rnsLxmf(): RnsLxmf
         fun interfaceRepository(): InterfaceRepository
         fun interfaceConfigManager(): InterfaceConfigManager
     }
@@ -65,7 +67,8 @@ object TestController {
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + launchErrorHandler,
     )
-    private var protocol: ReticulumProtocol? = null
+    private var rnsCore: RnsCore? = null
+    private var rnsLxmf: RnsLxmf? = null
     private var interfaceRepo: InterfaceRepository? = null
     private var interfaceConfigManager: InterfaceConfigManager? = null
     private val rxQueue = mutableListOf<ReceivedMessage>()
@@ -83,11 +86,12 @@ object TestController {
             context.applicationContext,
             TestEntryPoint::class.java,
         )
-        protocol = ep.reticulumProtocol()
+        rnsCore = ep.rnsCore()
+        rnsLxmf = ep.rnsLxmf()
         interfaceRepo = ep.interfaceRepository()
         interfaceConfigManager = ep.interfaceConfigManager()
         receiveJob = scope.launch {
-            protocol!!.observeMessages().collect { msg ->
+            rnsLxmf!!.observeMessages().collect { msg ->
                 synchronized(rxLock) { rxQueue.add(msg) }
                 // `source=stream` distinguishes real-time observer logs
                 // from the queue drain emitted by handleGetRx (where lines
@@ -104,7 +108,7 @@ object TestController {
             }
         }
         deliveryJob = scope.launch {
-            protocol!!.observeDeliveryStatus().collect { upd ->
+            rnsLxmf!!.observeDeliveryStatus().collect { upd ->
                 // DeliveryStatusUpdate.messageHash is already a hex string;
                 // status is one of "delivered" | "failed" | "retrying_propagated"
                 val idHex = upd.messageHash
@@ -120,8 +124,8 @@ object TestController {
     fun handleGetDest(context: Context) {
         ensureInit(context)
         scope.launch {
-            val dest = protocol!!.getLxmfDestination().getOrNull()
-            val identity = protocol!!.getLxmfIdentity().getOrNull()
+            val dest = rnsLxmf!!.getLxmfDestination().getOrNull()
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull()
             // Prefer the LXMF destination hash (what peers route to).
             // Fall back to identity hash if destination isn't ready.
             val hex = dest?.hexHash ?: dest?.hash?.toHex() ?: identity?.hash?.toHex()
@@ -144,7 +148,7 @@ object TestController {
                 return@launch
             }
             val has = try {
-                protocol!!.hasPath(toBytes)
+                rnsCore!!.hasPath(toBytes)
             } catch (e: Throwable) {
                 Log.i(LOGCAT_TAG, "has_path to=$toHex result=err msg=${escape(e.message ?: "")}")
                 return@launch
@@ -165,11 +169,11 @@ object TestController {
                 Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=bad_hex to=$toHex")
                 return@launch
             }
-            val identity = protocol!!.getLxmfIdentity().getOrNull() ?: run {
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull() ?: run {
                 Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=no_active_identity")
                 return@launch
             }
-            val result = protocol!!.sendLxmfMessageWithMethod(
+            val result = rnsLxmf!!.sendLxmfMessageWithMethod(
                 destinationHash = toBytes,
                 content = text,
                 sourceIdentity = identity,
@@ -238,11 +242,11 @@ object TestController {
     fun handleAnnounce(context: Context) {
         ensureInit(context)
         scope.launch {
-            val dest = protocol!!.getLxmfDestination().getOrNull() ?: run {
+            val dest = rnsLxmf!!.getLxmfDestination().getOrNull() ?: run {
                 Log.i(LOGCAT_TAG, "announce_err reason=no_active_destination")
                 return@launch
             }
-            val result = protocol!!.announceDestination(dest)
+            val result = rnsCore!!.announceDestination(dest)
             if (result.isSuccess) {
                 Log.i(LOGCAT_TAG, "announced dest=${dest.hexHash}")
             } else {
@@ -351,7 +355,7 @@ object TestController {
                 Log.i(LOGCAT_TAG, "prop_node_err reason=bad_hex hex=$hex")
                 return@launch
             }
-            val res = protocol!!.setOutboundPropagationNode(bytes)
+            val res = rnsLxmf!!.setOutboundPropagationNode(bytes)
             if (res.isSuccess) {
                 Log.i(
                     LOGCAT_TAG,
@@ -372,12 +376,12 @@ object TestController {
     fun handleSyncProp(context: Context) {
         ensureInit(context)
         scope.launch {
-            val identity = protocol!!.getLxmfIdentity().getOrNull()
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull()
             if (identity?.privateKey == null) {
                 Log.i(LOGCAT_TAG, "prop_sync_err reason=no_active_identity_priv")
                 return@launch
             }
-            val res = protocol!!.requestMessagesFromPropagationNode(
+            val res = rnsLxmf!!.requestMessagesFromPropagationNode(
                 identityPrivateKey = identity.privateKey,
             )
             if (res.isSuccess) {

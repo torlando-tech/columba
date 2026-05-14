@@ -11,7 +11,7 @@ import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.model.InterfaceConfig
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -50,7 +50,7 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var bleStatusRepository: BleStatusRepository
-    private lateinit var serviceProtocol: ReticulumProtocol
+    private lateinit var serviceProtocol: RnsTransportAdmin
     private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
     private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
     private lateinit var debugInfoFlow: MutableSharedFlow<String>
@@ -238,7 +238,7 @@ class InterfaceManagementViewModelStatusEventTest {
     fun `non-NativeReticulumProtocol does not crash`() =
         runTest {
             // Use a generic ReticulumProtocol mock instead of NativeReticulumProtocol
-            val genericProtocol: ReticulumProtocol = mockk()
+            val genericProtocol: RnsTransportAdmin = mockk()
             every { genericProtocol.interfaceStatusFlow } returns MutableSharedFlow()
             every { genericProtocol.debugInfoFlow } returns MutableSharedFlow()
             coEvery { genericProtocol.getDebugInfo() } returns emptyMap()

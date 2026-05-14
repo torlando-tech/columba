@@ -515,16 +515,20 @@ class CallViewModelTest {
         runTest {
             isPttModeFlow.value = true
             callStateFlow.value = CallState.Active("test-hash")
-
+            // setPttActive's guard requires callState == Active, which also starts the
+            // VM's `while(true) { delay(1000) }` duration timer. Stop that timer BEFORE
+            // any scheduler drain — `advanceUntilIdle()` against a live infinite timer
+            // never returns. `setPttActive`'s viewModelScope.launch runs eagerly on the
+            // UnconfinedTestDispatcher so its mock calls are already recorded; the
+            // `runCurrent()` below just flushes the muteMutex hop without advancing
+            // virtual time into the (now-cancelled) timer's delay.
             viewModel.setPttActive(true)
-            testDispatcher.scheduler.advanceUntilIdle()
+            callStateFlow.value = CallState.Idle
+            testDispatcher.scheduler.runCurrent()
 
             coVerify { mockTelephony.setPttActiveLocally(true) }
             coVerify { mockTelephony.setMutedLocally(false) }
             coVerify { mockTelephony.setCallMuted(false) }
-
-            // Cancel the duration timer so runTest can complete
-            callStateFlow.value = CallState.Idle
         }
 
     @Test
@@ -532,16 +536,14 @@ class CallViewModelTest {
         runTest {
             isPttModeFlow.value = true
             callStateFlow.value = CallState.Active("test-hash")
-
+            // See `setPttActive pressed` — stop the duration timer before draining.
             viewModel.setPttActive(false)
-            testDispatcher.scheduler.advanceUntilIdle()
+            callStateFlow.value = CallState.Idle
+            testDispatcher.scheduler.runCurrent()
 
             coVerify { mockTelephony.setPttActiveLocally(false) }
             coVerify { mockTelephony.setMutedLocally(true) }
             coVerify { mockTelephony.setCallMuted(true) }
-
-            // Cancel the duration timer so runTest can complete
-            callStateFlow.value = CallState.Idle
         }
 
     @Test
@@ -550,7 +552,7 @@ class CallViewModelTest {
             isPttModeFlow.value = false
 
             viewModel.setPttActive(true)
-            testDispatcher.scheduler.advanceUntilIdle()
+            testDispatcher.scheduler.runCurrent()
 
             coVerify(exactly = 0) { mockTelephony.setPttActiveLocally(any()) }
             coVerify(exactly = 0) { mockTelephony.setMutedLocally(any()) }

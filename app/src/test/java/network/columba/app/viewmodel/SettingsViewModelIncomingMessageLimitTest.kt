@@ -8,7 +8,11 @@ import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkStatus
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.BackendCapabilities
+import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.LocationSharingManager
@@ -57,7 +61,10 @@ class SettingsViewModelIncomingMessageLimitTest {
 
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var identityRepository: IdentityRepository
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var rnsBackend: RnsBackend
+    private lateinit var rnsCore: RnsCore
+    private lateinit var rnsLxmf: RnsLxmf
+    private lateinit var rnsTransportAdmin: RnsTransportAdmin
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
@@ -96,7 +103,10 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         settingsRepository = mockk()
         identityRepository = mockk()
-        reticulumProtocol = mockk<ReticulumProtocol>()
+        rnsBackend = mockk()
+        rnsCore = mockk()
+        rnsLxmf = mockk()
+        rnsTransportAdmin = mockk()
         interfaceConfigManager = mockk()
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
@@ -199,13 +209,14 @@ class SettingsViewModelIncomingMessageLimitTest {
         coEvery { identityRepository.getActiveIdentitySync() } returns null
         coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
 
-        // Mock ReticulumProtocol networkStatus flow
-        every { reticulumProtocol.networkStatus } returns networkStatusFlow
+        // Mock RNS seam sub-interfaces
+        every { rnsCore.networkStatus } returns networkStatusFlow
+        every { rnsBackend.capabilities } returns MutableStateFlow(BackendCapabilities.UNKNOWN)
 
         // Mock methods called during setIncomingMessageSizeLimit
         coEvery { settingsRepository.saveIncomingMessageSizeLimitKb(any()) } just Runs
         coEvery { settingsRepository.saveMapMarkerDeclutterEnabled(any()) } just Runs
-        every { reticulumProtocol.setIncomingMessageSizeLimit(any()) } just Runs
+        every { rnsLxmf.setIncomingMessageSizeLimit(any()) } just Runs
     }
 
     @After
@@ -221,7 +232,10 @@ class SettingsViewModelIncomingMessageLimitTest {
             context = context,
             settingsRepository = settingsRepository,
             identityRepository = identityRepository,
-            reticulumProtocol = reticulumProtocol,
+            rnsBackend = rnsBackend,
+            rnsCore = rnsCore,
+            rnsLxmf = rnsLxmf,
+            rnsTransportAdmin = rnsTransportAdmin,
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
@@ -281,7 +295,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
-            verify { reticulumProtocol.setIncomingMessageSizeLimit(25600) }
+            verify { rnsLxmf.setIncomingMessageSizeLimit(25600) }
         }
 
     @Test
@@ -299,7 +313,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(1024) }
-            verify { reticulumProtocol.setIncomingMessageSizeLimit(1024) }
+            verify { rnsLxmf.setIncomingMessageSizeLimit(1024) }
         }
 
     @Test
@@ -317,7 +331,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(5120) }
-            verify { reticulumProtocol.setIncomingMessageSizeLimit(5120) }
+            verify { rnsLxmf.setIncomingMessageSizeLimit(5120) }
         }
 
     @Test
@@ -335,7 +349,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             coVerify { settingsRepository.saveIncomingMessageSizeLimitKb(131072) }
-            verify { reticulumProtocol.setIncomingMessageSizeLimit(131072) }
+            verify { rnsLxmf.setIncomingMessageSizeLimit(131072) }
         }
 
     // ========== State Update Tests ==========

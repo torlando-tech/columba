@@ -22,7 +22,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.InterfaceConfigManager
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -46,7 +46,7 @@ class IdentityManagerViewModelTest {
     private lateinit var mockContext: Context
     private lateinit var mockRepository: IdentityRepository
     private lateinit var mockKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider
-    private lateinit var mockProtocol: ReticulumProtocol
+    private lateinit var mockProtocol: RnsCore
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
     private val testDispatcher = StandardTestDispatcher()
 

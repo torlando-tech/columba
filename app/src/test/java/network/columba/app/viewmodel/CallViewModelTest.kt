@@ -119,7 +119,7 @@ class CallViewModelTest {
         coEvery { mockAnnounceRepository.getAnnounce(any()) } returns null
         coEvery { mockAnnounceRepository.findByIdentityHash(any()) } returns null
 
-        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockProtocol)
+        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockProtocol, mockCallCoordinator)
     }
 
     @After

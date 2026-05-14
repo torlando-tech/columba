@@ -3,13 +3,17 @@ package network.columba.app
 import android.app.Application
 import android.content.Intent
 import android.view.WindowManager
+import dagger.hilt.android.EntryPointAccessors
+import network.columba.app.di.CallCoordinatorEntryPoint
 import network.columba.app.notifications.CallNotificationHelper
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.mockkStatic
 import io.mockk.unmockkObject
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,13 +63,25 @@ class IncomingCallActivityTest {
         Dispatchers.setMain(testDispatcher)
         context = RuntimeEnvironment.getApplication()
 
-        // Mock CallCoordinator singleton so the activity sees Incoming state
-        // (default Idle would auto-finish the activity)
+        // Mock CallCoordinator so the activity sees Incoming state
+        // (default Idle would auto-finish the activity). The activity now reaches
+        // for the coordinator through Hilt's CallCoordinatorEntryPoint rather than
+        // CallCoordinator.getInstance(), so the test mocks both the entry-point
+        // chain (production path) and the legacy singleton (defense-in-depth in
+        // case any other code path still calls getInstance during the activity's
+        // lifecycle).
         callStateFlow = MutableStateFlow<CallState>(CallState.Incoming("abc123def456"))
         mockCallCoordinator = mockk()
         every { mockCallCoordinator.callState } returns callStateFlow
         every { mockCallCoordinator.answerCall() } just Runs
         every { mockCallCoordinator.declineCall() } just Runs
+
+        val mockEntryPoint = mockk<CallCoordinatorEntryPoint>()
+        every { mockEntryPoint.callCoordinator() } returns mockCallCoordinator
+        mockkStatic(EntryPointAccessors::class)
+        every {
+            EntryPointAccessors.fromApplication(any<android.content.Context>(), CallCoordinatorEntryPoint::class.java)
+        } returns mockEntryPoint
 
         mockkObject(CallCoordinator.Companion)
         every { CallCoordinator.getInstance() } returns mockCallCoordinator
@@ -75,6 +91,7 @@ class IncomingCallActivityTest {
     fun tearDown() {
         Dispatchers.resetMain()
         unmockkObject(CallCoordinator.Companion)
+        unmockkStatic(EntryPointAccessors::class)
     }
 
     private fun buildCallIntent(

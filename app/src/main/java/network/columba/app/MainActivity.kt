@@ -67,8 +67,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import network.columba.app.di.CallCoordinatorEntryPoint
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -117,7 +119,6 @@ import network.columba.app.viewmodel.OnboardingViewModel
 import network.columba.app.viewmodel.SettingsViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
-import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.CallState
 import javax.inject.Inject
 
@@ -919,8 +920,15 @@ fun ColumbaNavigation(
             }
     }
 
-    // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen
-    val callBridge = remember { CallCoordinator.getInstance() }
+    // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen.
+    // Composable functions can't @Inject, so the LXST singleton is reached through
+    // Hilt's CallCoordinatorEntryPoint rather than the direct `getInstance()` factory.
+    // The `NoCallCoordinatorGetInstanceOutsideHost` Detekt rule enforces this.
+    val callBridge = remember(context) {
+        EntryPointAccessors
+            .fromApplication(context.applicationContext, CallCoordinatorEntryPoint::class.java)
+            .callCoordinator()
+    }
     val callState by callBridge.callState.collectAsState()
 
     LaunchedEffect(callState) {

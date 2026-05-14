@@ -69,9 +69,9 @@ import network.columba.app.rns.api.model.Link as ColumbaLink
  *   extra dispatch layer.
  * - State stays mutable here (single owner) — the sub-interface delegators have no
  *   state of their own.
- * - The strangler-fig facade [network.columba.app.reticulum.protocol.NativeReticulumProtocol]
- *   in `:reticulum` delegates to the [NativeRnsBackend] root that wraps this impl,
- *   keeping today's `ReticulumProtocol`-injecting call sites untouched until A.10.
+ * - UI-process consumers inject the [RnsBackend] sub-interfaces directly (provided
+ *   by `:rns-host`'s `HostBackendModule`). The A.10 strangler-fig facade and the
+ *   `:reticulum` module that hosted it were removed in A.10c / A.12.
  */
 @Suppress("LargeClass", "TooManyFunctions")
 class NativeRnsBackendImpl(

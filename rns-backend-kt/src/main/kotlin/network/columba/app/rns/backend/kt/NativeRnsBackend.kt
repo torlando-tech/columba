@@ -25,10 +25,11 @@ import network.columba.app.rns.api.RnsTransportAdmin
  *
  * Construction shape:
  * - Hilt module in `:rns-host/src/kotlinBackend/.../HostBackendModule.kt`
- *   provides this as `@Singleton` for the `:reticulum`-process Hilt graph.
- * - The strangler-fig facade in `:reticulum/protocol/NativeReticulumProtocol`
- *   wraps this and forwards every `ReticulumProtocol` call to the matching
- *   sub-interface; A.10 deletes the facade.
+ *   provides this as `@Singleton` for the `:reticulum`-process Hilt graph,
+ *   along with per-sub-interface `@Provides` so the UI process injects
+ *   `RnsCore` / `RnsLxmf` / `RnsTelephony` / etc. directly. The A.10
+ *   strangler-fig facade and the whole `:reticulum` module were removed in
+ *   A.10c / A.12 once every consumer had moved onto the sub-interfaces.
  */
 class NativeRnsBackend(
     appContext: Context? = null,
@@ -36,9 +37,9 @@ class NativeRnsBackend(
 ) : RnsBackend {
     /**
      * Internal worker holding all shared state and the actual reticulum-kt /
-     * lxmf-kt / lxst-kt calls. Public so the legacy facade in `:reticulum`
-     * can reach individual methods that aren't in any [RnsBackend]
-     * sub-interface (`getStatus`, version helpers) until A.10.
+     * lxmf-kt / lxst-kt calls. Public for in-process callers that need the
+     * few methods not surfaced on any [RnsBackend] sub-interface (legacy
+     * `getStatus` / version helpers).
      */
     val impl: NativeRnsBackendImpl = NativeRnsBackendImpl(
         appContext = appContext,

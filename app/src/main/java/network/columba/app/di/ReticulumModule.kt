@@ -1,15 +1,14 @@
 package network.columba.app.di
 
-import android.content.Context
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import network.columba.app.reticulum.protocol.NativeReticulumProtocol
 import network.columba.app.reticulum.protocol.ReticulumProtocol
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.backend.kt.NativeRnsBackend
 import javax.inject.Singleton
 
 /**
@@ -18,13 +17,16 @@ import javax.inject.Singleton
  * Uses the native Kotlin stack (reticulum-kt + lxmf-kt).
  *
  * Phase A.8 additions:
+ * - [provideReticulumProtocol] wraps the singleton [NativeRnsBackend]
+ *   provided by `:rns-host`'s `HostBackendModule` (kotlinBackend flavor)
+ *   in the legacy facade. The 32 UI-side `ReticulumProtocol`-injecting
+ *   call sites and the new `RnsBackend`/`RnsTelephony`-injecting call
+ *   sites (A.9+) now resolve to the SAME backend instance — earlier
+ *   drafts that gave the facade its own internal `NativeRnsBackend`
+ *   created two parallel RNS stacks in the UI process.
  * - [provideRnsTelephony] surfaces the new sub-interface contract so A.9
  *   (CallCoordinator regression fix) and A.10 (UI sub-interface injection)
  *   can land without further touching this module.
- * - `RnsBackend` itself is provided by `:rns-host`'s `HostBackendModule`
- *   (kotlinBackend flavor source set). The legacy facade
- *   [NativeReticulumProtocol] gets its own [NativeReticulumProtocol.backend]
- *   internally; this Hilt module does not double-bind it.
  * - A.10 deletes [provideReticulumProtocol] and the facade once the 32
  *   UI-side call sites switch to injecting specific sub-interfaces.
  */
@@ -33,9 +35,7 @@ import javax.inject.Singleton
 object ReticulumModule {
     @Provides
     @Singleton
-    fun provideReticulumProtocol(
-        @ApplicationContext context: Context,
-    ): ReticulumProtocol = NativeReticulumProtocol(appContext = context)
+    fun provideReticulumProtocol(backend: NativeRnsBackend): ReticulumProtocol = NativeReticulumProtocol(backend)
 
     @Provides
     @Singleton

@@ -31,7 +31,6 @@ import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.model.ReticulumConfig
 import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.backend.kt.NativeRnsBackend
-import network.columba.app.rns.backend.kt.RNodeHostBridge
 
 /**
  * Strangler-fig facade implementing [ReticulumProtocol] on top of
@@ -46,11 +45,14 @@ import network.columba.app.rns.backend.kt.RNodeHostBridge
  *
  * Construction:
  * - The `:app` Hilt module `ReticulumModule` provides this as
- *   `@Singleton`, passing in `@ApplicationContext Context`.
- * - The optional [rnodeHostBridge] parameter is set when the kotlinBackend
- *   Hilt module in `:rns-host` wires the bridge that opens USB/BLE serial
- *   streams to RNode hardware (passed via [NativeRnsBackend] construction
- *   inside `:rns-host`).
+ *   `@Singleton`, passing in the singleton [NativeRnsBackend] that
+ *   `:rns-host`'s `HostBackendModule` (kotlinBackend flavor) constructs
+ *   with the `RNodeHostBridge`. Sharing the singleton is load-bearing:
+ *   `ReticulumProtocol` callers and `RnsBackend`/`RnsTelephony` callers
+ *   (A.9+) must observe the same RNS Transport / LXMF Router / call
+ *   state. Constructing the backend inside this facade — as a prior
+ *   draft did — split the UI-process Hilt graph into two parallel
+ *   stacks.
  *
  * Plan deviation #8: The handoff suggested splitting into 6 separate sub-
  * impl classes with a private state holder. Instead `NativeRnsBackendImpl`
@@ -61,21 +63,17 @@ import network.columba.app.rns.backend.kt.RNodeHostBridge
  */
 @Suppress("TooManyFunctions")
 class NativeReticulumProtocol(
-    appContext: Context? = null,
-    rnodeHostBridge: RNodeHostBridge? = null,
+    val backend: NativeRnsBackend,
 ) : ReticulumProtocol {
+
     /**
-     * The actual [NativeRnsBackend] this facade delegates to.
-     *
-     * Public so the `:app` Hilt module can pluck it out and bind it as
-     * `RnsBackend` / sub-interfaces via additive providers (see
-     * `app/.../di/ReticulumModule.kt`). The cast is the strangler-fig
-     * pin — A.10 removes both the cast and this facade entirely.
+     * Construct a facade that builds its own [NativeRnsBackend] with
+     * defaults. Retained for unit tests and for the rare consumer that
+     * needs a UI-process-only stack without going through Hilt. Production
+     * paths go through `ReticulumModule.provideReticulumProtocol` which
+     * injects the singleton [NativeRnsBackend] from `HostBackendModule`.
      */
-    val backend: NativeRnsBackend = NativeRnsBackend(
-        appContext = appContext,
-        rnodeHostBridge = rnodeHostBridge,
-    )
+    constructor(appContext: Context? = null) : this(NativeRnsBackend(appContext = appContext))
 
     private val impl get() = backend.impl
 

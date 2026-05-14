@@ -174,6 +174,10 @@ class PythonRnsLxmf(
      * `LXMessage.pack()` (which assigns `.hash`) runs inside `handle_outbound`,
      * so the hash is only valid to read afterwards.
      */
+    // Each guard (no recipient identity / no source destination / unknown
+    // method) throws a distinct typed RnsException; collapsing them would lose
+    // the failure distinction the UI surfaces.
+    @Suppress("ThrowsCount")
     private fun dispatchLxmessage(
         destinationHash: ByteArray,
         content: String,

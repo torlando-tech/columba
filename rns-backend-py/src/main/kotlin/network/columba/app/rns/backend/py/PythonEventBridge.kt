@@ -82,6 +82,18 @@ class PythonEventBridge {
     val onLxmfDelivered = PyEventCallback { payload -> handleLxmfDelivered(payload) }
 
     /**
+     * Outbound try-propagation-on-fail retry sink: `attach_lxmessage_callbacks`
+     * fires this when a DIRECT/OPPORTUNISTIC send fails AND
+     * `try_propagation_on_fail` was set on the message AND a propagation node
+     * is configured — the Sideband pattern that escalates the message to a
+     * PROPAGATED re-`handle_outbound` instead of reporting failure. Surfaces
+     * as `status = "retrying_propagated"` on the delivery-status flow,
+     * matching `NativeMessageSender.installDeliveryCallbacks` on the kotlin
+     * backend so the UI need not branch on backend.
+     */
+    val onLxmfRetryingPropagated = PyEventCallback { payload -> handleLxmfRetryingPropagated(payload) }
+
+    /**
      * Packet observation is a low-traffic diagnostic surface; upstream RNS
      * delivers raw packets per-Destination, so wiring this fully is on-device
      * integration work. The sink is present so `event_bridge.py`'s
@@ -237,6 +249,21 @@ class PythonEventBridge {
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf delivered translation failed", it) }
+    }
+
+    private fun handleLxmfRetryingPropagated(payload: PyObject) {
+        runCatching {
+            // Mirrors NativeMessageSender.installDeliveryCallbacks — same
+            // `retrying_propagated` status string the kotlin backend emits
+            // when a DIRECT send fails and falls back to PROPAGATED.
+            _deliveryStatus.tryEmit(
+                DeliveryStatusUpdate(
+                    messageHash = payload.dictStr("hash").orEmpty(),
+                    status = "retrying_propagated",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+        }.onFailure { Log.e(TAG, "lxmf retrying-propagated translation failed", it) }
     }
 
     private fun handlePacket(payload: PyObject) {

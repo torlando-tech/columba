@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.ble.bridge
 
+import network.columba.app.rns.api.util.toHex
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
@@ -771,7 +772,7 @@ class KotlinBLEBridge(
         // Update all BLE components (if available)
         gattClient?.setTransportIdentity(identityBytes)
         gattServer?.setTransportIdentity(identityBytes)
-        Log.i(TAG, "Transport identity set: ${identityBytes.joinToString("") { "%02x".format(it) }}")
+        Log.i(TAG, "Transport identity set: ${identityBytes.toHex()}")
 
         // Trigger any pending identity callback (e.g., from restart waiting for identity)
         identityReadyCallback?.let { callback ->
@@ -1575,7 +1576,7 @@ class KotlinBLEBridge(
                 val peerIdentity = addressToIdentity[address]
                 val localIdentityBytes = transportIdentityHash
                 if (peerIdentity != null && localIdentityBytes != null) {
-                    val localIdentityHex = localIdentityBytes.joinToString("") { "%02x".format(it) }
+                    val localIdentityHex = localIdentityBytes.toHex()
                     // Acquire per-peer mutex before changing deduplicationState
                     // This ensures send() sees consistent state
                     peer.stateMutex.withLock {

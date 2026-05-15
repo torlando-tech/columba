@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import network.reticulum.common.DestinationDirection
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 import network.reticulum.lxmf.LXMRouter
 import network.reticulum.lxmf.LXMessage
 import network.reticulum.transport.Transport
@@ -222,8 +224,4 @@ internal class NativeMessageSender(
             )
         }
     }
-
-    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
-
-    private fun String.hexToBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }

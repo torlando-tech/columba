@@ -5,6 +5,7 @@
 package network.columba.app.rns.backend.kt
 
 import android.util.Log
+import network.columba.app.rns.api.util.toHex
 import network.reticulum.common.DestinationDirection
 import network.reticulum.common.DestinationType
 import network.reticulum.destination.Destination
@@ -297,6 +298,4 @@ class NativeNetworkTransport : NetworkTransport {
             packetCallback?.invoke(data)
         }
     }
-
-    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 }

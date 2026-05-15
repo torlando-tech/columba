@@ -16,6 +16,17 @@ package network.columba.app.rns.api.util
  * to the Python flavor.
  */
 object LxmfFields {
+    /**
+     * LXMF app name for delivery destinations — matches
+     * `LXMF.LXMRouter.APP_NAME` upstream and the kotlin port's
+     * `LXMFConstants.APP_NAME`. Combined with [DELIVERY_ASPECT] this is the
+     * `<identity>.lxmf.delivery` destination Columba peers send to.
+     */
+    const val APP_NAME = "lxmf"
+
+    /** Local aspect for LXMF delivery destinations (`LXMRouter.DELIVERY_ASPECT`). */
+    const val DELIVERY_ASPECT = "delivery"
+
     /** Single-shot telemetry payload (Sideband-compatible location JSON). */
     const val FIELD_TELEMETRY = 0x02
 

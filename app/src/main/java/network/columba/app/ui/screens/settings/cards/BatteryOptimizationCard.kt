@@ -52,7 +52,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.ui.components.LocalCapabilities
-import network.columba.app.ui.components.UnsupportedFeatureNotice
 import network.columba.app.util.BatteryOptimizationManager
 
 @Composable
@@ -70,7 +69,8 @@ fun BatteryOptimizationCard(
     // The in-app battery PROFILE picker tunes reticulum-kt's BLE-scan /
     // multicast-lock / AutoInterface aggressiveness — the Python backend has no
     // equivalent runtime knob (PYTHON_CAPABILITIES.performance.batteryProfileTuning
-    // = UNSUPPORTED), so the picker is replaced with a notice there. The Android
+    // = UNSUPPORTED), so the picker is simply hidden there (matching the
+    // release/v0.10.x layout — no replacement notice). The Android
     // battery-optimization *exemption* section below is OS-level and stays on
     // both backends.
     val batteryProfileTuningSupported =
@@ -218,22 +218,12 @@ fun BatteryOptimizationCard(
                                 }
                             }
                         }
-                    } else {
-                        // Python backend: no in-app battery profile tuning (the
-                        // reticulum-kt BLE-scan / multicast-lock / AutoInterface
-                        // knobs have no upstream-Python equivalent). The Android
-                        // battery-optimization exemption section below still
-                        // applies and is the meaningful background-reliability
-                        // control on this backend.
-                        UnsupportedFeatureNotice(
-                            message =
-                                "The Python backend has no in-app battery profile — Reticulum's " +
-                                    "background behaviour is fixed. Use Android's battery optimization " +
-                                    "settings below to control how the system treats Columba in the background.",
-                        )
+                        HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
                     }
-
-                    HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
+                    // When the backend has no in-app battery profile (Python),
+                    // the picker + its divider are simply omitted — the card
+                    // then matches the release/v0.10.x layout: just the Android
+                    // battery-optimization exemption section below.
 
                     if (isCheckingStatus) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.data.database.entity.InterfaceEntity
@@ -188,6 +189,21 @@ class InterfaceManagementViewModel
 
             // Made internal var to allow injecting test dispatcher
             internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+
+            // Interface online-status poll cadence while this screen is open.
+            // The kotlin backend also pushes status via interfaceStatusFlow /
+            // debugInfoFlow; the Python backend's RNS has no interface-status
+            // event stream, so this poll is its only refresh path.
+            private const val INTERFACE_STATUS_POLL_INTERVAL_MS = 5_000L
+
+            /**
+             * Controls whether the interface-status poll loop runs. Set to false
+             * in unit tests so `advanceUntilIdle()` does not spin forever on the
+             * `while (isActive) { … delay … }` loop — same pattern as
+             * `SettingsViewModel.enableMonitors`.
+             * @suppress VisibleForTesting
+             */
+            internal var enableStatusPolling = true
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -221,13 +237,29 @@ class InterfaceManagementViewModel
         /**
          * Observe interface status change events.
          *
+         * - a poll loop calls `fetchInterfaceStatus()` every
+         *   [INTERFACE_STATUS_POLL_INTERVAL_MS] while this screen is open
          * - `interfaceStatusFlow` provides lightweight online/offline updates
          * - `debugInfoFlow` provides full transport interface snapshots including spawned peers
-         * - one initial fetch seeds the state before the first event arrives
+         *
+         * The kotlin backend pushes status through the two flows; the Python
+         * backend's RNS has no interface-status event stream, so on that backend
+         * the flows stay idle and the poll is the only refresh — without it an
+         * interface that comes online *after* the initial fetch (e.g. after an
+         * "Apply & Restart") stays shown as offline. The poll is a harmless
+         * periodic re-sync on the kotlin backend.
          */
         private fun observeInterfaceStatusChanges() {
             viewModelScope.launch(ioDispatcher) {
-                fetchInterfaceStatus()
+                if (enableStatusPolling) {
+                    while (isActive) {
+                        fetchInterfaceStatus()
+                        kotlinx.coroutines.delay(INTERFACE_STATUS_POLL_INTERVAL_MS)
+                    }
+                } else {
+                    // Unit tests: a single fetch, no infinite poll loop.
+                    fetchInterfaceStatus()
+                }
             }
 
             viewModelScope.launch(ioDispatcher) {

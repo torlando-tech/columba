@@ -11,6 +11,7 @@ import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.VoiceCallState
+import network.columba.app.rns.api.util.AppDataParser
 
 import android.util.Log
 import androidx.room.Room
@@ -158,16 +159,6 @@ class NativeRnsBackendImpl(
                 "nomadnetwork.node" -> NodeType.NODE
                 "lxst.telephony" -> NodeType.PHONE
                 else -> NodeType.PEER
-            }
-
-        fun parseStampMeta(
-            aspect: String,
-            appData: ByteArray?,
-        ): Triple<Int?, Int?, Int?> =
-            if (aspect == "lxmf.propagation") {
-                appData?.let { AppDataParser.parsePropagationStampMeta(it) } ?: Triple(null, null, null)
-            } else {
-                Triple(appData?.let { AppDataParser.parsePeerStampCost(it) }, null, null)
             }
 
         fun buildPeerAnnounceAppData(displayName: String): ByteArray {
@@ -847,7 +838,7 @@ class NativeRnsBackendImpl(
         val hops = if (announceHops > 0) announceHops else (Transport.hopsTo(destinationHash) ?: 0)
         val nodeType = resolveNodeType(aspect)
         val displayName = appData?.let { AppDataParser.parseDisplayName(it, aspect) }
-        val stampMeta = Companion.parseStampMeta(aspect, appData)
+        val stampMeta = AppDataParser.parseStampMeta(appData, aspect)
 
         val event =
             AnnounceEvent(

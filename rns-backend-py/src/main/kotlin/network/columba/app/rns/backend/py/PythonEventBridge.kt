@@ -13,6 +13,7 @@ import network.columba.app.rns.api.model.LinkEvent
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
+import network.columba.app.rns.api.util.AppDataParser
 import org.json.JSONObject
 
 /**
@@ -104,6 +105,17 @@ class PythonEventBridge {
             // NodeType.NODE and collide unknown-aspect junk into the "Site"
             // announce-stream filter alongside real nomadnetwork.node entries.
             val aspect = payload.dictStr("aspect") ?: return
+            // Display name + stamp meta are derived kotlin-side from the raw
+            // app_data via the shared `AppDataParser` — same code path the
+            // native kotlin backend (`NativeRnsBackendImpl`) uses — so the
+            // two backends can never drift on the parsing rules. event_bridge.py
+            // only does Python-only enrichment (aspect resolution via
+            // `RNS.Destination.hash_from_name_and_identity` and hops via
+            // `RNS.Transport.hops_to`) and hands the raw app_data bytes over.
+            val appData = payload.dictBytes("app_data")
+            val displayName = appData?.let { AppDataParser.parseDisplayName(it, aspect) }
+            val (stampCost, stampFlex, peeringCost) =
+                AppDataParser.parseStampMeta(appData, aspect)
             val event = AnnounceEvent(
                 destinationHash = destHash,
                 identity = Identity(
@@ -111,18 +123,15 @@ class PythonEventBridge {
                     publicKey = payload.dictBytes("public_key") ?: ByteArray(0),
                     privateKey = null,
                 ),
-                appData = payload.dictBytes("app_data"),
-                // hops + the LXMF-parsed display name / stamp costs are enriched
-                // Python-side in event_bridge._announce_enrichment via upstream
-                // RNS/LXMF parsers; nodeType is derived here from the aspect.
+                appData = appData,
                 hops = payload.dictInt("hops") ?: 0,
                 timestamp = System.currentTimeMillis(),
                 aspect = aspect,
                 nodeType = nodeTypeForAspect(aspect),
-                displayName = payload.dictStr("display_name"),
-                stampCost = payload.dictInt("stamp_cost"),
-                stampCostFlexibility = payload.dictInt("stamp_cost_flexibility"),
-                peeringCost = payload.dictInt("peering_cost"),
+                displayName = displayName,
+                stampCost = stampCost,
+                stampCostFlexibility = stampFlex,
+                peeringCost = peeringCost,
             )
             _announces.tryEmit(event)
         }.onFailure { Log.e(TAG, "announce translation failed", it) }

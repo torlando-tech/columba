@@ -35,8 +35,6 @@ import json
 import signal
 
 import RNS
-import RNS.vendor.umsgpack as msgpack
-import LXMF
 
 
 # ----------------------------------------------------------------------------
@@ -229,59 +227,30 @@ def _resolve_aspect(destination_hash, identity):
 
 
 def _announce_enrichment(destination_hash, identity, app_data):
-    """RNS/LXMF protocol-leaf enrichment for an announce.
+    """Python-only enrichment for an announce: matched aspect + current hops.
 
-    Returns the matched aspect, current hop count, and the upstream-LXMF-parsed
-    display name + stamp costs. All of this is upstream RNS/LXMF protocol code
-    (`LXMF.display_name_from_app_data` / `stamp_cost_from_app_data` /
-    `pn_*_from_app_data`, `RNS.Transport.hops_to`) — no Columba app-logic — done
-    Python-side so the Kotlin event bridge gets one flat dict instead of a JNI
-    hop per derived field. `NodeType` is derived Kotlin-side from `aspect`.
+    The kotlin event-bridge side derives display name + stamp costs from the
+    raw `app_data` bytes via the shared `network.columba.app.rns.api.util.
+    AppDataParser` (same parser the native kotlin backend uses), so neither
+    field is computed here — keeping the parsing in one place means the two
+    backends cannot drift on its rules.
+
+    What stays Python-side: `aspect` requires `RNS.Destination.
+    hash_from_name_and_identity` (which needs the Python identity object),
+    and `hops` requires `RNS.Transport.hops_to` (Python-only Transport state).
+    `app_data` is unused here but kept on the parameter list so callers don't
+    need to special-case unrelated aspects.
     """
     enrichment = {
         "aspect": None,
         "hops": 0,
-        "display_name": None,
-        "stamp_cost": None,
-        "stamp_cost_flexibility": None,
-        "peering_cost": None,
     }
     try:
-        aspect = _resolve_aspect(destination_hash, identity)
-        enrichment["aspect"] = aspect
+        enrichment["aspect"] = _resolve_aspect(destination_hash, identity)
 
         hops = RNS.Transport.hops_to(destination_hash)
         # PATHFINDER_M is RNS's "hop count unknown" sentinel — surface 0 instead.
         enrichment["hops"] = 0 if hops == RNS.Transport.PATHFINDER_M else hops
-
-        if app_data:
-            if aspect == "lxmf.propagation":
-                enrichment["display_name"] = LXMF.pn_name_from_app_data(app_data)
-                enrichment["stamp_cost"] = LXMF.pn_stamp_cost_from_app_data(app_data)
-                # data[5] is [target_cost, flexibility, peering]; upstream LXMF
-                # only exposes [0] via pn_stamp_cost_from_app_data — read the
-                # rest off the same validated structure for kotlin-backend parity.
-                if LXMF.pn_announce_data_is_valid(app_data):
-                    costs = msgpack.unpackb(app_data)[5]
-                    if isinstance(costs, list):
-                        if len(costs) > 1:
-                            enrichment["stamp_cost_flexibility"] = costs[1]
-                        if len(costs) > 2:
-                            enrichment["peering_cost"] = costs[2]
-            elif aspect == "nomadnetwork.node":
-                # NomadNet node app_data is the configured node name as UTF-8
-                # bytes — see NomadNet `Node.py`:
-                #     self.app_data = self.name.encode("utf-8")
-                # Do NOT split on ":" — node operators put colons in their
-                # configured names (e.g. ".:FreeBSD 1st nomad node"), and a
-                # split-and-take-first stripped everything after the colon
-                # (down to just "." for that example).
-                name = app_data.decode("utf-8", "replace")
-                enrichment["display_name"] = name or None
-            else:
-                # lxmf.delivery + any unresolved aspect: peer announce format.
-                enrichment["display_name"] = LXMF.display_name_from_app_data(app_data)
-                enrichment["stamp_cost"] = LXMF.stamp_cost_from_app_data(app_data)
     except Exception as e:  # noqa: BLE001 — enrichment is best-effort, never fatal
         RNS.log(f"event_bridge: announce enrichment failed: {e}", RNS.LOG_DEBUG)
     return enrichment

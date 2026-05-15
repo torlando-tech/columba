@@ -1,8 +1,23 @@
-package network.columba.app.rns.backend.kt
+package network.columba.app.rns.api.util
 
 import android.util.Log
 
-internal object AppDataParser {
+/**
+ * Backend-agnostic announce `app_data` parsing.
+ *
+ * Sits in `:rns-api` so both backends share one source of truth for
+ * display-name + stamp-cost extraction: the kotlin native backend
+ * (`:rns-backend-kt`) calls these from `NativeRnsBackendImpl`, and the
+ * python flavor (`:rns-backend-py`) calls them from `PythonEventBridge`
+ * with the raw `app_data` bytes the event_bridge.py hands over the JNI
+ * seam. Keeping the parser here closes the drift gap that previously
+ * required fixing the same NomadNet ":"-split bug in two files.
+ *
+ * The `app_data` formats parsed here are protocol-leaf — they're set by
+ * upstream LXMF / NomadNet, not by Columba — so reuse across backends is
+ * unambiguously correct and the upstream wire format is the spec.
+ */
+object AppDataParser {
     private const val TAG = "NativeReticulumProtocol"
 
     fun parseDisplayName(
@@ -27,6 +42,25 @@ internal object AppDataParser {
             val preview = appData.take(16).joinToString(" ") { "%02x".format(it) }
             Log.w(TAG, "Failed to parse display name (aspect=$aspect, size=${appData.size}, first16=[$preview])", e)
             null
+        }
+
+    /**
+     * Stamp-meta triple `(stampCost, flexibility, peering)` for an announce.
+     *
+     * Propagation-node announces carry the full triple in their msgpack
+     * payload; peer announces (lxmf.delivery + any other aspect) only carry
+     * a single stamp cost — flexibility / peering are always null for those.
+     */
+    fun parseStampMeta(
+        appData: ByteArray?,
+        aspect: String,
+    ): Triple<Int?, Int?, Int?> =
+        if (appData == null) {
+            Triple(null, null, null)
+        } else if (aspect == "lxmf.propagation") {
+            parsePropagationStampMeta(appData) ?: Triple(null, null, null)
+        } else {
+            Triple(parsePeerStampCost(appData), null, null)
         }
 
     private fun parsePeerDisplayName(appData: ByteArray): String? {

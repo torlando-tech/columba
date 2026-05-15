@@ -60,6 +60,12 @@ dependencies {
     // an interface config.
     implementation("org.json:json:20240303")
 
+    // msgpack-core powers `util.AppDataParser` — the announce app_data
+    // parser is consumed by every backend (kotlin native + python flavor)
+    // and lives here so display-name / stamp-cost / propagation-meta
+    // parsing has one source of truth across both implementations.
+    implementation(libs.msgpack)
+
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)

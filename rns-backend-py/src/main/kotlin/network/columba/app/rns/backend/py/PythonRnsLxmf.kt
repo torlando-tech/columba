@@ -3,10 +3,17 @@ package network.columba.app.rns.backend.py
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
@@ -56,7 +63,22 @@ class PythonRnsLxmf(
         /** Bound on how long to wait for a recipient identity to resolve via a path request. */
         const val PATH_RESOLVE_TIMEOUT_MS = 10_000L
         const val PATH_RESOLVE_POLL_MS = 250L
+
+        /** Live-poll cadence for upstream `propagation_transfer_state`. */
+        const val PROPAGATION_POLL_INTERVAL_MS = 500L
     }
+
+    /**
+     * Backend-owned scope for fire-and-forget jobs (propagation poll loop).
+     * Cancelled on stop via [PythonRnsRuntime] lifecycle — actually the
+     * runtime doesn't expose a hook today, so the job dies naturally when
+     * the process restarts. The single in-flight job is tracked in
+     * [propagationPollJob] so a re-trigger / cancel can interrupt it.
+     */
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile
+    private var propagationPollJob: Job? = null
 
     /**
      * Propagation transfer-state stream. `replay = 1` so a late UI subscriber
@@ -393,6 +415,18 @@ class PythonRnsLxmf(
         pyResult {
             val router = runtime.lxmRouter
                 ?: throw RnsException(RnsError.BackendNotReady)
+            // Sideband's `request_lxmf_sync` idle guard: only start a fresh
+            // sync when the router is IDLE or a previous sync has reached
+            // COMPLETE. Re-firing mid-`PR_LINK_ESTABLISHING` / `PR_RECEIVING`
+            // would thrash the outbound link.
+            val pre = readPropagationState(router)
+            val isInTransit = pre.state in
+                PropagationState.STATE_PATH_REQUESTED until PropagationState.STATE_COMPLETE
+            if (isInTransit) {
+                Log.i(TAG, "Propagation sync already in flight (state=${pre.stateName}); not re-triggering")
+                return@pyResult pre.also { _propagationStateFlow.tryEmit(it) }
+            }
+
             // The sync runs as the identity that owns the delivery destination.
             // identityPrivateKey lets a caller sync as a different identity; if
             // supplied we reconstruct it, else use the live local identity.
@@ -406,6 +440,7 @@ class PythonRnsLxmf(
             // max_messages == 0 (PR_ALL_MESSAGES) means "all"; the contract's
             // default of 256 is passed through verbatim.
             router.callAttr("request_messages_from_propagation_node", syncIdentity, maxMessages)
+            startPropagationPoll()
             readPropagationState(router).also { _propagationStateFlow.tryEmit(it) }
         }
 
@@ -414,6 +449,57 @@ class PythonRnsLxmf(
             val router = runtime.lxmRouter ?: return@pyResult PropagationState.IDLE
             readPropagationState(router).also { _propagationStateFlow.tryEmit(it) }
         }
+
+    /**
+     * Cancel an in-flight propagation sync.
+     *
+     * Calls upstream `LXMRouter.cancel_propagation_node_requests()` which
+     * tears down `outbound_propagation_link` + resets the transfer state —
+     * the hard cancel Sideband uses in `cancel_lxmf_sync`. Stops the
+     * live-poll job and emits IDLE.
+     */
+    override suspend fun cancelMessageSync(): Result<Unit> =
+        pyResult {
+            propagationPollJob?.cancel()
+            propagationPollJob = null
+            val router = runtime.lxmRouter
+            if (router != null) {
+                try {
+                    router.callAttr("cancel_propagation_node_requests")
+                } catch (e: Exception) {
+                    Log.w(TAG, "cancel_propagation_node_requests raised: ${e.message}")
+                }
+            }
+            _propagationStateFlow.tryEmit(PropagationState.IDLE)
+            Log.i(TAG, "Cancelled propagation sync")
+        }
+
+    /**
+     * Spawn a coroutine that polls upstream `propagation_transfer_*` while
+     * the sync is in transit, emitting each snapshot to
+     * [_propagationStateFlow]. Stops when state >= COMPLETE or job cancelled.
+     *
+     * Upstream LXMF advances state on RNS internal threads (path-request
+     * job, link establish/closed callbacks, Resource progress). Chaquopy
+     * doesn't surface a state-change observer; polling is the simplest
+     * portable bridge — same approach the kotlin backend uses.
+     */
+    private fun startPropagationPoll() {
+        propagationPollJob?.cancel()
+        propagationPollJob = backgroundScope.launch {
+            try {
+                while (isActive) {
+                    val router = runtime.lxmRouter ?: break
+                    val snap = readPropagationState(router)
+                    _propagationStateFlow.tryEmit(snap)
+                    if (snap.state >= PropagationState.STATE_COMPLETE) break
+                    delay(PROPAGATION_POLL_INTERVAL_MS)
+                }
+            } finally {
+                propagationPollJob = null
+            }
+        }
+    }
 
     /**
      * Read LXMRouter's `propagation_transfer_*` attributes into a

@@ -149,6 +149,17 @@ interface RnsLxmf {
     suspend fun getPropagationState(): Result<PropagationState>
 
     /**
+     * Cancel an in-flight propagation sync.
+     *
+     * Mirrors Sideband's `cancel_lxmf_sync` -> upstream LXMF's
+     * `cancel_propagation_node_requests`: tears down the outbound propagation
+     * link (if any) and stops the path-request retry loop. A no-op when no
+     * sync is active. Subsequent [requestMessagesFromPropagationNode] calls
+     * start a fresh sync.
+     */
+    suspend fun cancelMessageSync(): Result<Unit>
+
+    /**
      * Observable stream of propagation transfer state changes (path
      * request → link establish → receiving → complete). UI subscribes for
      * the propagation sync progress indicator.

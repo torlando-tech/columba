@@ -84,6 +84,72 @@ def apply_android_env_patches():
     signal._columba_android_patched = True
 
 
+def reset_reticulum_for_restart():
+    """Reset RNS.Reticulum + RNS.Transport process-global state so a fresh
+    Reticulum() can be constructed after a stop — Columba's "Apply & Restart".
+
+    RNS is built as a desktop daemon: Reticulum and Transport keep singleton +
+    global state in class attributes and never reset them (the OS process is
+    expected to exit). Columba restarts the RNS stack in-process, so without
+    this:
+      - the second `Reticulum()` raises
+        `OSError("Attempt to reinitialise Reticulum, when it was already
+        running")` because `Reticulum.__instance` is still set;
+      - `LXMRouter.register_delivery_identity()` raises
+        `KeyError("Attempt to register an already registered destination")`
+        because `Transport.destinations` still holds the first run's delivery
+        destination.
+
+    This ports the RNS-state-clearing step of `release/v0.10.x`'s
+    `reticulum_wrapper.shutdown()` — the validated reference. Every attribute is
+    `hasattr`/`getattr`-guarded so it stays correct across RNS versions. Call
+    from `PythonRnsRuntime.stop()` AFTER `Reticulum.exit_handler()` (which has
+    already detached interfaces + persisted path data). RNS daemon threads are
+    not stopped here — they exit their loops once `Transport._should_run` is
+    False (set by `exit_handler()`); a fresh `Reticulum()` starts new ones.
+    """
+    reticulum = RNS.Reticulum
+    transport = RNS.Transport
+
+    # Reticulum singleton + one-shot exit guards. Without the __instance reset
+    # the next Reticulum() raises OSError; without the *_ran resets a second
+    # exit_handler() would no-op and skip interface detach + persist.
+    reticulum._Reticulum__instance = None
+    reticulum._Reticulum__exit_handler_ran = False
+    reticulum._Reticulum__interface_detach_ran = False
+
+    # Transport global state. `owner` + the registries below are what make a
+    # second Reticulum() / register_delivery_identity() fail if left stale.
+    if hasattr(transport, "owner"):
+        transport.owner = None
+    for attr in (
+        "interfaces",
+        "local_client_interfaces",
+        "local_client_rssi_cache",
+        "local_client_snr_cache",
+        "local_client_q_cache",
+        "destinations",
+        "destination_table",
+        "announce_table",
+        "held_announces",
+        "announce_handlers",
+    ):
+        container = getattr(transport, attr, None)
+        if container is not None:
+            try:
+                container.clear()
+            except Exception as e:  # noqa: BLE001 — best-effort per-attr
+                RNS.log(
+                    f"event_bridge: couldn't clear Transport.{attr}: {e}",
+                    RNS.LOG_DEBUG,
+                )
+
+    import gc
+
+    gc.collect()
+    RNS.log("event_bridge: reset Reticulum + Transport state for restart", RNS.LOG_DEBUG)
+
+
 # ----------------------------------------------------------------------------
 # Module-level callback storage. Populated by register_callbacks().
 # ----------------------------------------------------------------------------

@@ -143,15 +143,19 @@ class PythonRnsLxmf(
                 iconAppearance = iconAppearance,
                 extraFields = extraFields,
             )
-            // TODO(on-device): tryPropagationOnFail needs LXMessage failure
-            // callbacks wired to a re-send via PROPAGATED — upstream LXMF does
-            // not do the direct->propagated fallback itself. The desired_method
-            // is honoured; the on-failure retry is on-device follow-up.
+            // tryPropagationOnFail mirrors Sideband's `try_propagation_on_fail`
+            // pattern: tag the LXMessage so the failure callback (in
+            // `event_bridge.attach_lxmessage_callbacks`) rebuilds it as
+            // PROPAGATED and re-routes through `handle_outbound` instead of
+            // reporting failure. Upstream LXMF does not do the fallback
+            // itself — the retry lives in the Python side of event_bridge so
+            // it has direct access to the live LXMessage / LXMRouter.
             dispatchLxmessage(
                 destinationHash = destinationHash,
                 content = content,
                 fields = fields,
                 desiredMethod = lxmfMethodInt(deliveryMethod),
+                tryPropagationOnFail = tryPropagationOnFail,
             )
         }
 
@@ -190,12 +194,13 @@ class PythonRnsLxmf(
     // Each guard (no recipient identity / no source destination / unknown
     // method) throws a distinct typed RnsException; collapsing them would lose
     // the failure distinction the UI surfaces.
-    @Suppress("ThrowsCount")
+    @Suppress("ThrowsCount", "LongParameterList")
     private fun dispatchLxmessage(
         destinationHash: ByteArray,
         content: String,
         fields: PyObject,
         desiredMethod: Int,
+        tryPropagationOnFail: Boolean = false,
     ): MessageReceipt {
         val router = runtime.lxmRouter
             ?: throw RnsException(RnsError.BackendNotReady)
@@ -221,11 +226,20 @@ class PythonRnsLxmf(
         // OPPORTUNISTIC packet proof / DIRECT link ack) or fails. LXMF tracks
         // this per-LXMessage, not router-wide — without it the delivery-status
         // flow never updates for sent messages.
+        //
+        // `try_propagation_on_fail` only applies when the caller picked a
+        // non-PROPAGATED method AND a propagation node is configured — the
+        // event_bridge helper re-checks both before doing the retry dance,
+        // but we skip wiring the retry hook for PROPAGATED sends here too so
+        // the LXMessage isn't tagged unnecessarily.
+        val tryPropagation = tryPropagationOnFail && desiredMethod != LXMF_METHOD_PROPAGATED
         runtime.eventBridge.callAttr(
             "attach_lxmessage_callbacks",
             lxmessage,
             events.onLxmfDelivered,
             events.onLxmfFailure,
+            events.onLxmfRetryingPropagated,
+            tryPropagation,
         )
 
         router.callAttr("handle_outbound", lxmessage)

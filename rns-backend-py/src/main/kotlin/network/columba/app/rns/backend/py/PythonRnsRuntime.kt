@@ -214,6 +214,16 @@ class PythonRnsRuntime(
             // interfaces without the os._exit() that RNS.exit() would do.
             rnsModule["Reticulum"]?.callAttr("exit_handler")
         }.onFailure { Log.w(TAG, "Reticulum exit_handler failed", it) }
+        runCatching {
+            // exit_handler() detaches interfaces + persists path data but does
+            // NOT clear RNS's process-global singleton / Transport-registry
+            // state — a fresh start() would then hit OSError("Attempt to
+            // reinitialise Reticulum") and KeyError("...already registered
+            // destination"). This clears it (ported from release/v0.10.x's
+            // reticulum_wrapper.shutdown()). Separate runCatching so it runs
+            // even if exit_handler() above threw.
+            eventBridge.callAttr("reset_reticulum_for_restart")
+        }.onFailure { Log.w(TAG, "Reticulum state reset for restart failed", it) }
 
         identities.clear()
         destinations.clear()

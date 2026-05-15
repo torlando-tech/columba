@@ -14,8 +14,12 @@ internal object AppDataParser {
                 appData.isEmpty() -> null
                 aspect == "lxmf.propagation" -> parsePropagationNodeName(appData)
                 aspect == "nomadnetwork.node" -> {
-                    val raw = String(appData, Charsets.UTF_8)
-                    raw.split(":").firstOrNull()?.takeIf { it.isNotBlank() }
+                    // NomadNet `Node.py`: `self.app_data = self.name.encode("utf-8")`
+                    // — the configured node name, no field-delimiter format.
+                    // A previous `split(":").firstOrNull()` stripped colons out
+                    // of names like ".:FreeBSD 1st nomad node" and surfaced
+                    // only "." in the UI.
+                    String(appData, Charsets.UTF_8).takeIf { it.isNotBlank() }
                 }
                 else -> parsePeerDisplayName(appData)
             }

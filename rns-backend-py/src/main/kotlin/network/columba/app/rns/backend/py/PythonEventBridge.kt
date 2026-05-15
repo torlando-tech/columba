@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.LinkEvent
 import network.columba.app.rns.api.model.NodeType
@@ -96,7 +97,13 @@ class PythonEventBridge {
     private fun handleAnnounce(payload: PyObject) {
         runCatching {
             val destHash = payload.dictBytes("destination_hash") ?: return
-            val aspect = payload.dictStr("aspect")
+            // event_bridge._AnnounceHandler already drops announces whose aspect
+            // doesn't resolve to one Columba tracks (matching the kotlin
+            // backend's RichAnnounceHandler). Re-guard here so a null aspect
+            // can never reach nodeTypeForAspect — its `else` would map to
+            // NodeType.NODE and collide unknown-aspect junk into the "Site"
+            // announce-stream filter alongside real nomadnetwork.node entries.
+            val aspect = payload.dictStr("aspect") ?: return
             val event = AnnounceEvent(
                 destinationHash = destHash,
                 identity = Identity(
@@ -123,10 +130,12 @@ class PythonEventBridge {
 
     /**
      * Mirrors `NativeRnsBackendImpl.resolveNodeType` — derived from the announce
-     * aspect. An unresolved aspect (`null`: an app Columba does not track) maps
-     * to the generic [NodeType.NODE] rather than `PEER`; the kotlin backend
-     * never sees unresolved aspects (its `RichAnnounceHandler` pre-filters), so
-     * its `else -> PEER` is `lxmf.delivery` only — spelled out explicitly here.
+     * aspect. Only ever called with one of the four aspects Columba tracks:
+     * `event_bridge._AnnounceHandler` drops unresolved-aspect announces and
+     * `handleAnnounce` re-guards, so `aspect` is never null/unknown here. The
+     * `else` is a defensive default only — it must NOT be reached, because
+     * mapping anything-but-`nomadnetwork.node` to `NODE` would collide junk
+     * into the "Site" announce-stream filter.
      */
     private fun nodeTypeForAspect(aspect: String?): NodeType =
         when (aspect) {
@@ -150,6 +159,25 @@ class PythonEventBridge {
                 timestamp = (payload.dictDouble("timestamp")
                     ?: (System.currentTimeMillis() / 1000.0)).let { (it * 1000).toLong() },
                 fieldsJson = fieldsJson,
+                // Icon appearance (LXMF Field 4) — parse from fieldsJson so the
+                // Python side stays thin. Matches NativeTelemetryHandler's
+                // extractIconAppearance on the kotlin backend.
+                iconAppearance = fieldsJson?.let { extractIconAppearance(it) },
+                // Receiving-interface, hops, and signal metrics. Upstream
+                // Python LXMF does not annotate any of these; `event_bridge.py`
+                // sources them at delivery time from (a) the torlando-tech
+                // LXMF fork's `message.receiving_interface` / `receiving_hops`
+                // (set on opportunistic deliveries), (b) `RNS.Transport.
+                // path_table` as a fallback for link-based deliveries, and
+                // (c) `interface.get_rssi()` / `get_snr()` on the receiving
+                // RNode interface for the signal metrics — mirrors
+                // `release/v0.10.x`'s `signal_quality.extract_signal_metrics`.
+                // Non-RNode paths (TCP/Auto/Backbone) leave rssi/snr null,
+                // matching kotlin's null-when-unavailable shape.
+                receivedHopCount = payload.dictInt("receiving_hops"),
+                receivedInterface = payload.dictStr("receiving_interface"),
+                receivedRssi = payload.dictInt("rssi"),
+                receivedSnr = payload.dictDouble("snr")?.toFloat(),
             )
             _messages.tryEmit(message)
 
@@ -160,6 +188,25 @@ class PythonEventBridge {
             }
         }.onFailure { Log.e(TAG, "lxmf delivery translation failed", it) }
     }
+
+    /**
+     * Parse LXMF Field 4 (icon appearance) out of the JSON-encoded field map.
+     *
+     * Mirrors `NativeTelemetryHandler.extractIconAppearance` but reads from
+     * the JSON form `event_bridge.py` emits: `_jsonable` hex-encodes ByteArray
+     * field values, so the fg / bg entries here are already lowercase hex
+     * strings — same shape `ByteArray.toHex()` produces on the kotlin path.
+     */
+    private fun extractIconAppearance(fieldsJson: String): IconAppearance? =
+        runCatching {
+            val fields = JSONObject(fieldsJson)
+            val arr = fields.optJSONArray(FIELD_ICON_APPEARANCE) ?: return@runCatching null
+            if (arr.length() < 3) return@runCatching null
+            val name = arr.optString(0, "").takeIf { it.isNotEmpty() } ?: return@runCatching null
+            val fg = arr.optString(1, "").takeIf { it.isNotEmpty() } ?: return@runCatching null
+            val bg = arr.optString(2, "").takeIf { it.isNotEmpty() } ?: return@runCatching null
+            IconAppearance(iconName = name, foregroundColor = fg, backgroundColor = bg)
+        }.getOrNull()
 
     private fun routeFieldSideChannels(fieldsJson: String) {
         runCatching {

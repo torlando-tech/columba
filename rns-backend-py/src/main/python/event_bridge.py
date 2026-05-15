@@ -269,8 +269,14 @@ def _announce_enrichment(destination_hash, identity, app_data):
                         if len(costs) > 2:
                             enrichment["peering_cost"] = costs[2]
             elif aspect == "nomadnetwork.node":
-                # NomadNet node app_data is "name:..." UTF-8.
-                name = app_data.decode("utf-8", "replace").split(":", 1)[0]
+                # NomadNet node app_data is the configured node name as UTF-8
+                # bytes — see NomadNet `Node.py`:
+                #     self.app_data = self.name.encode("utf-8")
+                # Do NOT split on ":" — node operators put colons in their
+                # configured names (e.g. ".:FreeBSD 1st nomad node"), and a
+                # split-and-take-first stripped everything after the colon
+                # (down to just "." for that example).
+                name = app_data.decode("utf-8", "replace")
                 enrichment["display_name"] = name or None
             else:
                 # lxmf.delivery + any unresolved aspect: peer announce format.
@@ -284,14 +290,26 @@ def _announce_enrichment(destination_hash, identity, app_data):
 class _AnnounceHandler:
     """RNS announce handler — `aspect_filter = None` catches every aspect.
 
-    RNS calls `received_announce` on the Transport thread; we flatten and
-    hand off to Kotlin immediately.
+    RNS calls `received_announce` on the Transport thread; we resolve the
+    aspect, and — for the four aspects Columba tracks — flatten and hand the
+    announce off to Kotlin. Announces for any other aspect are dropped (see
+    `received_announce`).
     """
 
     aspect_filter = None
     receive_path_responses = True
 
     def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None):
+        enrichment = _announce_enrichment(destination_hash, announced_identity, app_data)
+        # Only surface announces for aspects Columba tracks. This matches the
+        # kotlin backend's RichAnnounceHandler, which returns False (drops the
+        # announce) when no known aspect matches. `aspect_filter = None` above
+        # means RNS hands us *every* announce, including ones from unrelated
+        # RNS apps — without this drop those leak into the announce stream with
+        # a junk display name (whatever their app_data decodes to) and an
+        # "unknown" aspect, and collide into the "Site" filter.
+        if enrichment.get("aspect") is None:
+            return
         payload = {
             "destination_hash": _hex(destination_hash),
             "identity_hash": _hex(announced_identity.hash) if announced_identity is not None else None,
@@ -299,7 +317,7 @@ class _AnnounceHandler:
             "app_data": _hex(app_data),
             "announce_packet_hash": _hex(announce_packet_hash),
         }
-        payload.update(_announce_enrichment(destination_hash, announced_identity, app_data))
+        payload.update(enrichment)
         _emit(_on_announce, payload)
 
 
@@ -333,6 +351,45 @@ def set_incoming_message_size_limit(limit_kb):
     )
 
 
+def _signal_metrics(interface_obj):
+    """Extract (rssi, snr) from a receiving `RNS.Interface` at delivery time.
+
+    Ports release/v0.10.x's `signal_quality.extract_signal_metrics` — RNode-class
+    interfaces (`RNodeInterface`, `RNodeMultiInterface`) expose `get_rssi()` +
+    `get_snr()`; TCP / Auto / Backbone interfaces don't, so the result is
+    `(None, None)` for those (same null-when-unavailable shape the kotlin
+    backend produces for non-RNode paths).
+
+    BLE per-peer RSSI lookup (v0.10.x's `BLEPeerInterface` -> `parent.driver.
+    get_peer_rssi(peer_address)` special case) is intentionally NOT ported here:
+    BLE-on-Python interface deployment is a separate task — once a Columba
+    BLE driver lands Python-side, this helper grows the `BLEPeerInterface`
+    branch then.
+
+    Best-effort: any attribute-access / call exception falls back to `None`,
+    because a signal-metrics failure must not wedge inbound message delivery.
+    """
+    rssi = None
+    snr = None
+    if interface_obj is None:
+        return rssi, snr
+    try:
+        if hasattr(interface_obj, "get_rssi"):
+            v = interface_obj.get_rssi()
+            if v is not None:
+                rssi = int(v)
+    except Exception as e:  # noqa: BLE001
+        RNS.log(f"event_bridge: get_rssi failed: {e}", RNS.LOG_DEBUG)
+    try:
+        if hasattr(interface_obj, "get_snr"):
+            v = interface_obj.get_snr()
+            if v is not None:
+                snr = float(v)
+    except Exception as e:  # noqa: BLE001
+        RNS.log(f"event_bridge: get_snr failed: {e}", RNS.LOG_DEBUG)
+    return rssi, snr
+
+
 def _lxmf_delivery_callback(message):
     """LXMRouter delivery callback. `message` is an upstream LXMessage."""
     try:
@@ -356,6 +413,45 @@ def _lxmf_delivery_callback(message):
             fields_json = json.dumps(
                 {str(k): _jsonable(v) for k, v in message.fields.items()}
             )
+        # Receiving-interface annotation + signal metrics. Two sources, in
+        # priority order (mirrors release/v0.10.x's _on_lxmf_delivery):
+        #   1. torlando-tech LXMF fork (branch feature/receiving-interface-capture)
+        #      sets `message.receiving_interface` (RNS.Interface) +
+        #      `message.receiving_hops` on inbound opportunistic messages.
+        #      Upstream LXMF leaves these off entirely, so getattr-guard.
+        #   2. Fallback to `RNS.Transport.path_table[source_hash][5]` for
+        #      link-based deliveries (DIRECT method) and for any case where
+        #      the LXMF annotation didn't fire — every reachable destination
+        #      has a path_table entry whose index 5 is the receiving interface
+        #      object. Hops independently fall back to `RNS.Transport.hops_to`.
+        recv_iface = getattr(message, "receiving_interface", None)
+        recv_hops = getattr(message, "receiving_hops", None)
+        source_hash_bytes = getattr(message, "source_hash", None)
+        if (recv_iface is None or recv_hops is None) and source_hash_bytes is not None:
+            try:
+                if recv_iface is None:
+                    path_entry = RNS.Transport.path_table.get(source_hash_bytes)
+                    if path_entry is not None and len(path_entry) > 5:
+                        recv_iface = path_entry[5]
+                if recv_hops is None:
+                    h = RNS.Transport.hops_to(source_hash_bytes)
+                    if h != RNS.Transport.PATHFINDER_M:
+                        recv_hops = h
+            except Exception as e:  # noqa: BLE001 — fallback is best-effort
+                RNS.log(
+                    f"event_bridge: path_table fallback failed: {e}",
+                    RNS.LOG_DEBUG,
+                )
+
+        # Resolve the interface object to its configured short name for
+        # parity with `PythonRnsTransportAdmin` (which keys by `iface["name"]`)
+        # and with the kotlin backend's `Transport.getInterfaces()...name`.
+        recv_iface_name = None
+        if recv_iface is not None:
+            recv_iface_name = getattr(recv_iface, "name", None) or str(recv_iface)
+
+        rssi, snr = _signal_metrics(recv_iface)
+
         payload = {
             "hash": _hex(getattr(message, "hash", None)),
             "source_hash": _hex(getattr(message, "source_hash", None)),
@@ -367,6 +463,10 @@ def _lxmf_delivery_callback(message):
             "stamp_valid": bool(getattr(message, "stamp_valid", False)),
             "method": getattr(message, "method", None),
             "fields_json": fields_json,
+            "receiving_interface": recv_iface_name,
+            "receiving_hops": recv_hops,
+            "rssi": rssi,
+            "snr": snr,
         }
         _emit(_on_lxmf_delivery, payload)
     except Exception as e:  # noqa: BLE001

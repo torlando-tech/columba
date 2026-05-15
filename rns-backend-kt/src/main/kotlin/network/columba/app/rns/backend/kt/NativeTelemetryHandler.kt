@@ -15,7 +15,8 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import network.reticulum.lxmf.LXMFConstants
+import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.api.util.LxmfFields
 import network.reticulum.lxmf.LXMessage
 import org.json.JSONObject
 import org.msgpack.core.MessagePack
@@ -57,16 +58,16 @@ internal class NativeTelemetryHandler(
         // image-only / file-only / audio-only messages to be classified
         // as isLocationOnlyMessage and silently dropped from chat emission.
         val hasAttachmentContent =
-            fields.containsKey(LXMFConstants.FIELD_IMAGE) ||
-                fields.containsKey(LXMFConstants.FIELD_FILE_ATTACHMENTS) ||
-                fields.containsKey(LXMFConstants.FIELD_AUDIO)
+            fields.containsKey(LxmfFields.FIELD_IMAGE) ||
+                fields.containsKey(LxmfFields.FIELD_FILE_ATTACHMENTS) ||
+                fields.containsKey(LxmfFields.FIELD_AUDIO)
         val hasChatContent = hasTextContent || hasAttachmentContent
         var isLocationOnlyMessage = false
         var locationEvent: JSONObject? = null
 
         locationEvent = processFieldTelemetry(fields, message.sourceHash, timestamp, locationEvent)
 
-        val telemetryStream = fields[LXMFConstants.FIELD_TELEMETRY_STREAM] as? List<*>
+        val telemetryStream = fields[LxmfFields.FIELD_TELEMETRY_STREAM] as? List<*>
         if (telemetryStream != null) {
             if (!hasChatContent) isLocationOnlyMessage = true
             val streamEntries =
@@ -109,7 +110,7 @@ internal class NativeTelemetryHandler(
         timestamp: Long,
         existing: JSONObject?,
     ): JSONObject? {
-        val telemetryField = fields[LXMFConstants.FIELD_TELEMETRY] ?: return existing
+        val telemetryField = fields[LxmfFields.FIELD_TELEMETRY] ?: return existing
         val locationEvent = unpackLocationTelemetryField(telemetryField) ?: return existing
         Log.d(TAG, "Telemetry received in FIELD_TELEMETRY from ${sourceHash.toHex().take(16)}")
 
@@ -120,7 +121,7 @@ internal class NativeTelemetryHandler(
                     sourceHashHex = sourceHash.toHex(),
                     packedTelemetry = packedTelemetry,
                     timestampSeconds = (locationEvent.optLong("ts", timestamp) / 1000L),
-                    appearanceField = sanitizeAppearanceField(fields[LXMFConstants.FIELD_ICON_APPEARANCE]),
+                    appearanceField = sanitizeAppearanceField(fields[LxmfFields.FIELD_ICON_APPEARANCE]),
                 )
             }
         }
@@ -154,7 +155,7 @@ internal class NativeTelemetryHandler(
 
     fun handleTelemetryCommands(message: LXMessage) {
         val commandList =
-            (message.fields[LXMFConstants.FIELD_COMMANDS] as? List<*>)
+            (message.fields[LxmfFields.FIELD_COMMANDS] as? List<*>)
                 ?.takeIf { telemetryCollectorEnabledProvider() }
                 ?: return
         var hasTelemetryRequest = false
@@ -206,7 +207,7 @@ internal class NativeTelemetryHandler(
                     message.sourceHash,
                     "",
                     DeliveryMethod.DIRECT,
-                    mapOf(LXMFConstants.FIELD_TELEMETRY_STREAM to entriesToSend),
+                    mapOf(LxmfFields.FIELD_TELEMETRY_STREAM to entriesToSend),
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send telemetry response: ${e.message}")
@@ -302,18 +303,8 @@ internal class NativeTelemetryHandler(
     }
 
     fun extractIconAppearance(fields: Map<Int, Any>): IconAppearance? {
-        val iconField = fields[LXMFConstants.FIELD_ICON_APPEARANCE] as? List<*>
-        if (iconField == null || iconField.size < 3) return null
-        val name =
-            (iconField[0] as? String)
-                ?: (iconField[0] as? ByteArray)?.let { String(it, Charsets.UTF_8) }
-        val fg = (iconField[1] as? ByteArray)?.toHex()
-        val bg = (iconField[2] as? ByteArray)?.toHex()
-        return if (name != null && fg != null && bg != null) {
-            IconAppearance(iconName = name, foregroundColor = fg, backgroundColor = bg)
-        } else {
-            null
-        }
+        val iconField = fields[LxmfFields.FIELD_ICON_APPEARANCE] as? List<*> ?: return null
+        return AppDataParser.parseIconAppearance(iconField)
     }
 
     fun storeTelemetryForCollector(

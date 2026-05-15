@@ -9,6 +9,30 @@ enum class NodeType : Parcelable {
     PEER, // Node we can message with
     PROPAGATION_NODE, // Relay/repeater node for signal propagation
     PHONE, // lxst.telephony — callable audio/telephony destination
+    UNKNOWN, // Aspect didn't resolve to one Columba tracks — don't guess
+    ;
+
+    companion object {
+        /**
+         * Map an announce aspect to its [NodeType]. Centralised here so both
+         * backends (kotlin-native + python-flavor) share one source of truth —
+         * previously each had its own `when` block and they diverged on the
+         * fallback branch (kotlin -> PEER, python -> NODE).
+         *
+         * Returns [UNKNOWN] for any aspect Columba doesn't explicitly handle,
+         * including `null`. Upstream callers normally drop unknown-aspect
+         * announces before reaching this — the [UNKNOWN] case is a defensive
+         * default, not an assumption.
+         */
+        fun fromAspect(aspect: String?): NodeType =
+            when (aspect) {
+                "lxmf.propagation" -> PROPAGATION_NODE
+                "nomadnetwork.node" -> NODE
+                "lxst.telephony" -> PHONE
+                "lxmf.delivery" -> PEER
+                else -> UNKNOWN
+            }
+    }
 }
 
 @Parcelize

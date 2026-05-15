@@ -161,5 +161,6 @@ object NodeTypeDetector {
             NodeType.NODE -> "Content/service node"
             NodeType.PROPAGATION_NODE -> "Message relay node"
             NodeType.PHONE -> "LXST telephony destination"
+            NodeType.UNKNOWN -> "Unknown aspect"
         }
 }

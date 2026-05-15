@@ -20,6 +20,7 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.util.LxmfFields
 
 /**
  * `RnsLxmf` over upstream Python LXMF, driven through Chaquopy.
@@ -49,14 +50,6 @@ class PythonRnsLxmf(
         const val LXMF_METHOD_OPPORTUNISTIC = 0x01
         const val LXMF_METHOD_DIRECT = 0x02
         const val LXMF_METHOD_PROPAGATED = 0x03
-
-        // LXMF FIELD_* numbers (LXMF/LXMF.py).
-        const val FIELD_ICON_APPEARANCE = 0x04
-        const val FIELD_FILE_ATTACHMENTS = 0x05
-        const val FIELD_IMAGE = 0x06
-
-        /** Columba's custom reaction field (LXMF Field 16 = 0x10). */
-        const val FIELD_REACTION = 16
 
         /** LXMF delivery destination app name + aspect (LXMRouter.APP_NAME / DELIVERY_ASPECT). */
         const val LXMF_APP_NAME = "lxmf"
@@ -157,7 +150,7 @@ class PythonRnsLxmf(
                 "emoji" to emoji,
                 "sender" to sourceIdentity.hash.toHex(),
             )
-            val fields = pyDict(mapOf(FIELD_REACTION to reaction))
+            val fields = pyDict(mapOf(LxmfFields.FIELD_REACTION to reaction))
             dispatchLxmessage(
                 destinationHash = destinationHash,
                 content = "",
@@ -291,7 +284,7 @@ class PythonRnsLxmf(
 
         if (imageData != null && imageFormat != null) {
             // FIELD_IMAGE: [format_string, image_bytes]
-            fields[FIELD_IMAGE] = listOf(imageFormat, imageData).toPyList()
+            fields[LxmfFields.FIELD_IMAGE] = listOf(imageFormat, imageData).toPyList()
         }
 
         if (!fileAttachments.isNullOrEmpty()) {
@@ -305,11 +298,11 @@ class PythonRnsLxmf(
             val attachments = fileAttachments.map { (name, data) ->
                 listOf(name.toByteArray(), data).toPyList()
             }
-            fields[FIELD_FILE_ATTACHMENTS] = attachments.toPyList()
+            fields[LxmfFields.FIELD_FILE_ATTACHMENTS] = attachments.toPyList()
         }
 
         if (replyToMessageId != null) {
-            fields[FIELD_REACTION] = pyDict(mapOf("reply_to" to replyToMessageId))
+            fields[LxmfFields.FIELD_REACTION] = pyDict(mapOf("reply_to" to replyToMessageId))
         }
 
         if (extraFields != null) {
@@ -321,7 +314,7 @@ class PythonRnsLxmf(
 
         if (iconAppearance != null) {
             // FIELD_ICON_APPEARANCE: [icon_name, fg_rgb_bytes, bg_rgb_bytes]
-            fields[FIELD_ICON_APPEARANCE] = listOf(
+            fields[LxmfFields.FIELD_ICON_APPEARANCE] = listOf(
                 iconAppearance.iconName,
                 iconAppearance.foregroundColor.hexToBytes(),
                 iconAppearance.backgroundColor.hexToBytes(),

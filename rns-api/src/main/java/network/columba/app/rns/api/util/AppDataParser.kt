@@ -1,6 +1,7 @@
 package network.columba.app.rns.api.util
 
 import android.util.Log
+import network.columba.app.rns.api.model.IconAppearance
 
 /**
  * Backend-agnostic announce `app_data` parsing.
@@ -162,6 +163,42 @@ object AppDataParser {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse peer stamp cost: ${e.message}")
             null
+        }
+
+    /**
+     * Parse an LXMF Field 4 (icon appearance) tuple into a typed
+     * [IconAppearance], or return null if the tuple is missing/malformed.
+     *
+     * Accepts the field in either shape both backends use:
+     *  - msgpack-decoded `List<Any?>` of `[String|ByteArray, ByteArray, ByteArray]`
+     *    (kotlin native backend path — the fg/bg ByteArrays are raw 3-byte RGB).
+     *  - JSON-decoded `List<Any?>` of `[String, String, String]` (python backend
+     *    path — `event_bridge.py` hex-encodes the fg/bg bytes before crossing
+     *    JNI, so they arrive as already-hex strings).
+     *
+     * The kotlin-side `IconAppearance` value always carries fg/bg as
+     * lowercase-hex strings; ByteArray inputs are converted with `%02x`.
+     */
+    fun parseIconAppearance(field: List<Any?>?): IconAppearance? {
+        if (field == null || field.size < 3) return null
+        val name = nameOrNull(field[0]) ?: return null
+        val fg = hexOrStringOrNull(field[1]) ?: return null
+        val bg = hexOrStringOrNull(field[2]) ?: return null
+        return IconAppearance(iconName = name, foregroundColor = fg, backgroundColor = bg)
+    }
+
+    private fun nameOrNull(value: Any?): String? =
+        when (value) {
+            is String -> value.takeIf { it.isNotEmpty() }
+            is ByteArray -> String(value, Charsets.UTF_8).takeIf { it.isNotEmpty() }
+            else -> null
+        }
+
+    private fun hexOrStringOrNull(value: Any?): String? =
+        when (value) {
+            is ByteArray -> value.joinToString("") { "%02x".format(it) }.takeIf { it.isNotEmpty() }
+            is String -> value.takeIf { it.isNotEmpty() }
+            else -> null
         }
 
     fun serializeFieldsToJson(fields: Map<Int, Any>): String? =

@@ -5,7 +5,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
-import network.reticulum.lxmf.LXMFConstants
+import network.columba.app.rns.api.util.LxmfFields
 import network.reticulum.lxmf.LXMessage
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -66,7 +66,7 @@ class NativeTelemetryHandlerTest {
         val message =
             mockMessage(
                 content = "",
-                fields = mapOf(LXMFConstants.FIELD_TELEMETRY_STREAM to emptyList<Any>()),
+                fields = mapOf(LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>()),
             )
         assertTrue(handler.handleIncomingTelemetry(message, timestamp = 0L))
     }
@@ -76,7 +76,7 @@ class NativeTelemetryHandlerTest {
         val message =
             mockMessage(
                 content = "check this out",
-                fields = mapOf(LXMFConstants.FIELD_TELEMETRY_STREAM to emptyList<Any>()),
+                fields = mapOf(LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>()),
             )
         assertFalse(handler.handleIncomingTelemetry(message, timestamp = 0L))
     }
@@ -91,8 +91,8 @@ class NativeTelemetryHandlerTest {
                 content = "",
                 fields =
                     mapOf(
-                        LXMFConstants.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
-                        LXMFConstants.FIELD_IMAGE to listOf("webp", ByteArray(100)),
+                        LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
+                        LxmfFields.FIELD_IMAGE to listOf("webp", ByteArray(100)),
                     ),
             )
         assertFalse(
@@ -109,8 +109,8 @@ class NativeTelemetryHandlerTest {
                 content = "",
                 fields =
                     mapOf(
-                        LXMFConstants.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
-                        LXMFConstants.FIELD_FILE_ATTACHMENTS to listOf<List<ByteArray>>(),
+                        LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
+                        LxmfFields.FIELD_FILE_ATTACHMENTS to listOf<List<ByteArray>>(),
                     ),
             )
         assertFalse(handler.handleIncomingTelemetry(message, timestamp = 0L))
@@ -123,8 +123,8 @@ class NativeTelemetryHandlerTest {
                 content = "",
                 fields =
                     mapOf(
-                        LXMFConstants.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
-                        LXMFConstants.FIELD_AUDIO to listOf(0, ByteArray(0)),
+                        LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
+                        LxmfFields.FIELD_AUDIO to listOf(0, ByteArray(0)),
                     ),
             )
         assertFalse(handler.handleIncomingTelemetry(message, timestamp = 0L))
@@ -148,8 +148,8 @@ class NativeTelemetryHandlerTest {
                 content = "",
                 fields =
                     mapOf(
-                        LXMFConstants.FIELD_TELEMETRY to locationJson,
-                        LXMFConstants.FIELD_IMAGE to listOf("webp", ByteArray(100)),
+                        LxmfFields.FIELD_TELEMETRY to locationJson,
+                        LxmfFields.FIELD_IMAGE to listOf("webp", ByteArray(100)),
                     ),
             )
         assertFalse(
@@ -168,7 +168,7 @@ class NativeTelemetryHandlerTest {
         val message =
             mockMessage(
                 content = "",
-                fields = mapOf(LXMFConstants.FIELD_TELEMETRY to locationJson),
+                fields = mapOf(LxmfFields.FIELD_TELEMETRY to locationJson),
             )
         assertTrue(
             "Location-only message (FIELD_TELEMETRY with location, no text, no attachment) " +

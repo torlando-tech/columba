@@ -12,6 +12,7 @@ import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.api.util.LxmfFields
 
 import android.util.Log
 import androidx.room.Room
@@ -43,7 +44,6 @@ import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.model.ReticulumConfig
 import network.reticulum.Reticulum
 import network.reticulum.common.DestinationDirection
-import network.reticulum.lxmf.LXMFConstants
 import network.reticulum.lxmf.LXMRouter
 import network.reticulum.lxmf.LXMessage
 import network.reticulum.transport.Transport
@@ -151,14 +151,6 @@ class NativeRnsBackendImpl(
                 1 -> NativeDestination.create(identity, direction, type, appName, aspects[0])
                 2 -> NativeDestination.create(identity, direction, type, appName, aspects[0], aspects[1])
                 else -> NativeDestination.create(identity, direction, type, appName, aspects[0], aspects[1], aspects[2])
-            }
-
-        fun resolveNodeType(aspect: String): NodeType =
-            when (aspect) {
-                "lxmf.propagation" -> NodeType.PROPAGATION_NODE
-                "nomadnetwork.node" -> NodeType.NODE
-                "lxst.telephony" -> NodeType.PHONE
-                else -> NodeType.PEER
             }
 
         fun buildPeerAnnounceAppData(displayName: String): ByteArray {
@@ -836,7 +828,7 @@ class NativeRnsBackendImpl(
         if (blockedDestinations.contains(destHex) || blackholedIdentities.contains(announcedIdentity.hexHash)) return
 
         val hops = if (announceHops > 0) announceHops else (Transport.hopsTo(destinationHash) ?: 0)
-        val nodeType = resolveNodeType(aspect)
+        val nodeType = NodeType.fromAspect(aspect)
         val displayName = appData?.let { AppDataParser.parseDisplayName(it, aspect) }
         val stampMeta = AppDataParser.parseStampMeta(appData, aspect)
 
@@ -1314,7 +1306,7 @@ class NativeRnsBackendImpl(
                     .put("ts", locationData.optLong("ts", System.currentTimeMillis()))
                     .toString()
         } else {
-            fields[LXMFConstants.FIELD_TELEMETRY] = telemetryHandler.packLocationTelemetry(locationData)
+            fields[LxmfFields.FIELD_TELEMETRY] = telemetryHandler.packLocationTelemetry(locationData)
 
             val meta = JSONObject()
             if (locationData.has("expires") && !locationData.isNull("expires")) {
@@ -1357,7 +1349,7 @@ class NativeRnsBackendImpl(
             deliveryMethod = DeliveryMethod.DIRECT,
             extraFields =
                 mapOf(
-                    LXMFConstants.FIELD_COMMANDS to commands,
+                    LxmfFields.FIELD_COMMANDS to commands,
                 ),
         )
     }

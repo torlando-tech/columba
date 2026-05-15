@@ -14,6 +14,7 @@ import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.api.util.LxmfFields
 import org.json.JSONObject
 
 /**
@@ -40,14 +41,14 @@ class PythonEventBridge {
     private companion object {
         const val TAG = "PythonEventBridge"
 
-        // LXMF FIELD_* numbers, stringified to match event_bridge.py's
-        // json.dumps({str(k): ...}) keys.
-        const val FIELD_TELEMETRY = "2"
-        const val FIELD_TELEMETRY_STREAM = "3"
-        const val FIELD_ICON_APPEARANCE = "4"
-
-        /** Columba's custom reaction field (LXMF Field 16 = 0x10). */
-        const val FIELD_REACTION = "16"
+        // event_bridge.py emits the field map as `json.dumps({str(k): ...})`,
+        // so JSON-keyed lookups need the stringified form of every LXMF field
+        // ID. Derived from `LxmfFields` so the source-of-truth values live in
+        // one place across both backends.
+        val FIELD_TELEMETRY_KEY = LxmfFields.FIELD_TELEMETRY.toString()
+        val FIELD_TELEMETRY_STREAM_KEY = LxmfFields.FIELD_TELEMETRY_STREAM.toString()
+        val FIELD_ICON_APPEARANCE_KEY = LxmfFields.FIELD_ICON_APPEARANCE.toString()
+        val FIELD_REACTION_KEY = LxmfFields.FIELD_REACTION.toString()
     }
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
@@ -98,12 +99,12 @@ class PythonEventBridge {
     private fun handleAnnounce(payload: PyObject) {
         runCatching {
             val destHash = payload.dictBytes("destination_hash") ?: return
-            // event_bridge._AnnounceHandler already drops announces whose aspect
-            // doesn't resolve to one Columba tracks (matching the kotlin
-            // backend's RichAnnounceHandler). Re-guard here so a null aspect
-            // can never reach nodeTypeForAspect — its `else` would map to
-            // NodeType.NODE and collide unknown-aspect junk into the "Site"
-            // announce-stream filter alongside real nomadnetwork.node entries.
+            // event_bridge._AnnounceHandler already drops announces whose
+            // aspect doesn't resolve to one Columba tracks (matching the
+            // kotlin backend's RichAnnounceHandler). Re-guard here so the
+            // downstream `NodeType.fromAspect` only ever sees known aspects;
+            // it falls back to `NodeType.UNKNOWN` for anything else, and
+            // those would never match a `Site` / `Peer` / etc. filter chip.
             val aspect = payload.dictStr("aspect") ?: return
             // Display name + stamp meta are derived kotlin-side from the raw
             // app_data via the shared `AppDataParser` — same code path the
@@ -127,7 +128,7 @@ class PythonEventBridge {
                 hops = payload.dictInt("hops") ?: 0,
                 timestamp = System.currentTimeMillis(),
                 aspect = aspect,
-                nodeType = nodeTypeForAspect(aspect),
+                nodeType = NodeType.fromAspect(aspect),
                 displayName = displayName,
                 stampCost = stampCost,
                 stampCostFlexibility = stampFlex,
@@ -136,24 +137,6 @@ class PythonEventBridge {
             _announces.tryEmit(event)
         }.onFailure { Log.e(TAG, "announce translation failed", it) }
     }
-
-    /**
-     * Mirrors `NativeRnsBackendImpl.resolveNodeType` — derived from the announce
-     * aspect. Only ever called with one of the four aspects Columba tracks:
-     * `event_bridge._AnnounceHandler` drops unresolved-aspect announces and
-     * `handleAnnounce` re-guards, so `aspect` is never null/unknown here. The
-     * `else` is a defensive default only — it must NOT be reached, because
-     * mapping anything-but-`nomadnetwork.node` to `NODE` would collide junk
-     * into the "Site" announce-stream filter.
-     */
-    private fun nodeTypeForAspect(aspect: String?): NodeType =
-        when (aspect) {
-            "lxmf.propagation" -> NodeType.PROPAGATION_NODE
-            "nomadnetwork.node" -> NodeType.NODE
-            "lxst.telephony" -> NodeType.PHONE
-            "lxmf.delivery" -> NodeType.PEER
-            else -> NodeType.NODE
-        }
 
     private fun handleLxmfDelivery(payload: PyObject) {
         runCatching {
@@ -208,28 +191,24 @@ class PythonEventBridge {
      */
     private fun extractIconAppearance(fieldsJson: String): IconAppearance? =
         runCatching {
-            val fields = JSONObject(fieldsJson)
-            val arr = fields.optJSONArray(FIELD_ICON_APPEARANCE) ?: return@runCatching null
-            if (arr.length() < 3) return@runCatching null
-            val name = arr.optString(0, "").takeIf { it.isNotEmpty() } ?: return@runCatching null
-            val fg = arr.optString(1, "").takeIf { it.isNotEmpty() } ?: return@runCatching null
-            val bg = arr.optString(2, "").takeIf { it.isNotEmpty() } ?: return@runCatching null
-            IconAppearance(iconName = name, foregroundColor = fg, backgroundColor = bg)
+            val arr = JSONObject(fieldsJson).optJSONArray(FIELD_ICON_APPEARANCE_KEY) ?: return@runCatching null
+            val list = (0 until arr.length()).map { arr.opt(it) }
+            AppDataParser.parseIconAppearance(list)
         }.getOrNull()
 
     private fun routeFieldSideChannels(fieldsJson: String) {
         runCatching {
             val fields = JSONObject(fieldsJson)
             // Telemetry: FIELD_TELEMETRY (single) or FIELD_TELEMETRY_STREAM (batch).
-            if (fields.has(FIELD_TELEMETRY)) {
-                _locationTelemetry.tryEmit(fields.get(FIELD_TELEMETRY).toString())
+            if (fields.has(FIELD_TELEMETRY_KEY)) {
+                _locationTelemetry.tryEmit(fields.get(FIELD_TELEMETRY_KEY).toString())
             }
-            if (fields.has(FIELD_TELEMETRY_STREAM)) {
-                _locationTelemetry.tryEmit(fields.get(FIELD_TELEMETRY_STREAM).toString())
+            if (fields.has(FIELD_TELEMETRY_STREAM_KEY)) {
+                _locationTelemetry.tryEmit(fields.get(FIELD_TELEMETRY_STREAM_KEY).toString())
             }
             // Reaction: Columba's custom Field 16.
-            if (fields.has(FIELD_REACTION)) {
-                _reactionReceived.tryEmit(fields.get(FIELD_REACTION).toString())
+            if (fields.has(FIELD_REACTION_KEY)) {
+                _reactionReceived.tryEmit(fields.get(FIELD_REACTION_KEY).toString())
             }
         }.onFailure { Log.w(TAG, "field side-channel routing failed", it) }
     }

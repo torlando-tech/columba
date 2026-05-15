@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
+import network.columba.app.rns.api.util.hexToBytes
 
 /**
  * Chaquopy interop helpers shared by every `PythonRns*` sub-impl.
@@ -44,13 +45,6 @@ fun List<*>.toPyList(): PyObject {
  *  `bytes`. Cheap to be explicit. */
 fun ByteArray.toPyBytes(): PyObject =
     Python.getInstance().builtins.callAttr("bytes", this)
-
-fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
-
-fun String.hexToBytes(): ByteArray {
-    require(length % 2 == 0) { "hex string must have even length" }
-    return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-}
 
 // --- Python dict accessors -------------------------------------------------
 // `event_bridge.py` payloads (and many upstream return values) are Python

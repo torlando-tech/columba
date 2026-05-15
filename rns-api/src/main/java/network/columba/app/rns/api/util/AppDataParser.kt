@@ -28,8 +28,8 @@ object AppDataParser {
         try {
             when {
                 appData.isEmpty() -> null
-                aspect == "lxmf.propagation" -> parsePropagationNodeName(appData)
-                aspect == "nomadnetwork.node" -> {
+                aspect == Aspects.LXMF_PROPAGATION -> parsePropagationNodeName(appData)
+                aspect == Aspects.NOMADNET_NODE -> {
                     // NomadNet `Node.py`: `self.app_data = self.name.encode("utf-8")`
                     // — the configured node name, no field-delimiter format.
                     // A previous `split(":").firstOrNull()` stripped colons out
@@ -58,7 +58,7 @@ object AppDataParser {
     ): Triple<Int?, Int?, Int?> =
         if (appData == null) {
             Triple(null, null, null)
-        } else if (aspect == "lxmf.propagation") {
+        } else if (aspect == Aspects.LXMF_PROPAGATION) {
             parsePropagationStampMeta(appData) ?: Triple(null, null, null)
         } else {
             Triple(parsePeerStampCost(appData), null, null)

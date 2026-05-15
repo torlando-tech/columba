@@ -21,6 +21,8 @@ import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 
 /**
  * `RnsLxmf` over upstream Python LXMF, driven through Chaquopy.
@@ -50,10 +52,6 @@ class PythonRnsLxmf(
         const val LXMF_METHOD_OPPORTUNISTIC = 0x01
         const val LXMF_METHOD_DIRECT = 0x02
         const val LXMF_METHOD_PROPAGATED = 0x03
-
-        /** LXMF delivery destination app name + aspect (LXMRouter.APP_NAME / DELIVERY_ASPECT). */
-        const val LXMF_APP_NAME = "lxmf"
-        const val LXMF_DELIVERY_ASPECT = "delivery"
 
         /** Bound on how long to wait for a recipient identity to resolve via a path request. */
         const val PATH_RESOLVE_TIMEOUT_MS = 10_000L
@@ -254,8 +252,8 @@ class PythonRnsLxmf(
             recipientIdentity,
             destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
             destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
-            LXMF_APP_NAME,
-            LXMF_DELIVERY_ASPECT,
+            LxmfFields.APP_NAME,
+            LxmfFields.DELIVERY_ASPECT,
         ) ?: throw RnsException(
             RnsError.Generic("RNS.Destination construction returned None for $hex", null),
         )
@@ -354,8 +352,8 @@ class PythonRnsLxmf(
                 // under app "lxmf" / aspect "delivery" (LXMRouter.register_delivery_identity).
                 direction = Direction.IN,
                 type = DestinationType.SINGLE,
-                appName = LXMF_APP_NAME,
-                aspects = listOf(LXMF_DELIVERY_ASPECT),
+                appName = LxmfFields.APP_NAME,
+                aspects = listOf(LxmfFields.DELIVERY_ASPECT),
             )
         }
 

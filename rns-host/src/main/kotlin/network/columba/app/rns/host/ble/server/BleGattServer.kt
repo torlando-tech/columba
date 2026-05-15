@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.ble.server
 
+import network.columba.app.rns.api.util.toHex
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
@@ -597,7 +598,7 @@ class BleGattServer(
             "Transport identity hash must be exactly 16 bytes (got ${identityHash.size})"
         }
         transportIdentityHash = identityHash
-        Log.i(TAG, "Transport identity set: ${identityHash.joinToString("") { "%02x".format(it) }}")
+        Log.i(TAG, "Transport identity set: ${identityHash.toHex()}")
     }
 
     // ========== GATT Server Callback Handlers ==========
@@ -646,7 +647,7 @@ class BleGattServer(
                 identityMutex.withLock {
                     val identity = addressToIdentity.remove(address)
                     if (identity != null) {
-                        val identityHash = identity.joinToString("") { "%02x".format(it) }.take(16)
+                        val identityHash = identity.toHex().take(16)
                         identityToAddress.remove(identityHash)
                         Log.d(TAG, "Cleaned up identity mapping for $address (hash: $identityHash)")
                     }
@@ -684,7 +685,7 @@ class BleGattServer(
                     // Identity characteristic read - return transport identity hash
                     val identity = transportIdentityHash
                     if (identity != null) {
-                        Log.d(TAG, "Serving identity to ${device.address}: ${identity.joinToString("") { "%02x".format(it) }}")
+                        Log.d(TAG, "Serving identity to ${device.address}: ${identity.toHex()}")
                         gattServer?.sendResponse(
                             device,
                             requestId,
@@ -793,7 +794,7 @@ class BleGattServer(
                     //
                     // if (existingIdentity == null && value.size == 16) {
                     //     // Likely identity handshake - store for Kotlin's address resolution
-                    //     val identityHash = value.joinToString("") { "%02x".format(it) }
+                    //     val identityHash = value.toHex()
                     //     Log.d(TAG, "Received 16-byte data from ${device.address} (likely identity): $identityHash")
                     //
                     //     identityMutex.withLock {

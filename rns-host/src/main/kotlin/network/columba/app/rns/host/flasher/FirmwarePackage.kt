@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.flasher
 
+import network.columba.app.rns.api.util.toHex
 import android.content.Context
 import android.util.Log
 import kotlinx.serialization.Serializable
@@ -126,7 +127,7 @@ data class FirmwarePackage(
                 if (calculatedHash.contentEquals(embeddedHash)) {
                     Log.d(
                         TAG,
-                        "ESP32 firmware hash validated: ${embeddedHash.joinToString("") { "%02x".format(it) }}",
+                        "ESP32 firmware hash validated: ${embeddedHash.toHex()}",
                     )
                     embeddedHash
                 } else {
@@ -134,8 +135,8 @@ data class FirmwarePackage(
                     Log.w(
                         TAG,
                         "ESP32 firmware hash mismatch! Embedded hash doesn't match calculated. " +
-                            "Embedded: ${embeddedHash.joinToString("") { "%02x".format(it) }}, " +
-                            "Calculated: ${calculatedHash.joinToString("") { "%02x".format(it) }}",
+                            "Embedded: ${embeddedHash.toHex()}, " +
+                            "Calculated: ${calculatedHash.toHex()}",
                     )
                     // Fall back to returning embedded hash anyway (trust the file)
                     embeddedHash
@@ -144,13 +145,13 @@ data class FirmwarePackage(
             RNodePlatform.NRF52 -> {
                 // nRF52 doesn't have embedded hash - calculate SHA256 of entire binary
                 val hash = MessageDigest.getInstance("SHA-256").digest(firmwareData)
-                Log.d(TAG, "nRF52 firmware hash calculated: ${hash.joinToString("") { "%02x".format(it) }}")
+                Log.d(TAG, "nRF52 firmware hash calculated: ${hash.toHex()}")
                 hash
             }
             else -> {
                 // For unknown platforms, calculate SHA256 of entire binary
                 val hash = MessageDigest.getInstance("SHA-256").digest(firmwareData)
-                Log.d(TAG, "Firmware hash calculated: ${hash.joinToString("") { "%02x".format(it) }}")
+                Log.d(TAG, "Firmware hash calculated: ${hash.toHex()}")
                 hash
             }
         }
@@ -171,7 +172,7 @@ data class FirmwarePackage(
                     digest.update(buffer, 0, bytesRead)
                 }
             }
-            return digest.digest().joinToString("") { "%02x".format(it) }
+            return digest.digest().toHex()
         }
 
         /**

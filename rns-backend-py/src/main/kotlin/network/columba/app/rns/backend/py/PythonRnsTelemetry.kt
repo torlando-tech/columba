@@ -10,6 +10,7 @@ import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.toHex
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -38,10 +39,6 @@ class PythonRnsTelemetry(
 ) : RnsTelemetry {
     private companion object {
         const val TAG = "PythonRnsTelemetry"
-
-        /** LXMF app name for delivery destinations (`LXMF.LXMF.APP_NAME`). */
-        const val LXMF_APP_NAME = "lxmf"
-        const val LXMF_DELIVERY_ASPECT = "delivery"
     }
 
     // ==================== Collector-host-mode state ====================
@@ -210,8 +207,8 @@ class PythonRnsTelemetry(
             recalled,
             destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
             destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
-            LXMF_APP_NAME,
-            LXMF_DELIVERY_ASPECT,
+            LxmfFields.APP_NAME,
+            LxmfFields.DELIVERY_ASPECT,
         )
         runtime.destinations[hex] = pyDest
         return pyDest

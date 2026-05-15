@@ -2,6 +2,7 @@ package network.columba.app.rns.api.model
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
+import network.columba.app.rns.api.util.Aspects
 
 @Parcelize
 enum class NodeType : Parcelable {
@@ -26,10 +27,10 @@ enum class NodeType : Parcelable {
          */
         fun fromAspect(aspect: String?): NodeType =
             when (aspect) {
-                "lxmf.propagation" -> PROPAGATION_NODE
-                "nomadnetwork.node" -> NODE
-                "lxst.telephony" -> PHONE
-                "lxmf.delivery" -> PEER
+                Aspects.LXMF_PROPAGATION -> PROPAGATION_NODE
+                Aspects.NOMADNET_NODE -> NODE
+                Aspects.LXST_TELEPHONY -> PHONE
+                Aspects.LXMF_DELIVERY -> PEER
                 else -> UNKNOWN
             }
     }

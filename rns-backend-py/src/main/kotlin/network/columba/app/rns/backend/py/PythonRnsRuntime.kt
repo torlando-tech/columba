@@ -2,6 +2,7 @@ package network.columba.app.rns.backend.py
 
 import android.content.Context
 import android.util.Log
+import network.columba.app.rns.api.util.toHex
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform

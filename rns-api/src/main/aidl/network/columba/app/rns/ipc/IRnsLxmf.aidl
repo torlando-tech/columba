@@ -83,6 +83,7 @@ oneway interface IRnsLxmf {
 
     void requestMessagesFromPropagationNode(in @nullable byte[] identityPrivateKey, int maxMessages, in IRnsResultCallback cb);
     void getPropagationState(in IRnsResultCallback cb);
+    void cancelMessageSync(in IRnsResultCallback cb);
 
     // SharedFlow<PropagationState>: observer register/unregister.
     void registerPropagationStateObserver(in IRnsPropagationStateCallback cb);

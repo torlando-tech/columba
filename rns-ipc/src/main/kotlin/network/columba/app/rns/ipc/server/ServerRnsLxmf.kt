@@ -140,6 +140,9 @@ internal class ServerRnsLxmf(
         Bundle().apply { putParcelable(BundleKeys.PROPAGATION_STATE, state) }
     }
 
+    override fun cancelMessageSync(cb: IRnsResultCallback) =
+        dispatch(cb, scope) { impl.cancelMessageSync().bundleOrThrow() }
+
     override fun registerPropagationStateObserver(cb: IRnsPropagationStateCallback) =
         propagationHub.registerObserver(cb)
     override fun unregisterPropagationStateObserver(cb: IRnsPropagationStateCallback) =

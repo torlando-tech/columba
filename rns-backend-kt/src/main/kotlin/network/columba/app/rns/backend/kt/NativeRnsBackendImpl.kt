@@ -23,6 +23,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,6 +99,9 @@ class NativeRnsBackendImpl(
     companion object {
         private const val TAG = "NativeReticulumProtocol"
         private const val FIELD_COLUMBA_META = 0x70
+
+        /** Live-poll cadence for `propagationTransferState`. ~2 polls / second. */
+        private const val PROPAGATION_POLL_INTERVAL_MS = 500L
 
         fun NativeIdentity.toColumba(): ColumbaIdentity =
             ColumbaIdentity(
@@ -194,6 +199,13 @@ class NativeRnsBackendImpl(
     }
 
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // Live propagation-state poll job. lxmf-kt advances `propagationTransferState`
+    // on its internal threads (path arrival, link callbacks, resource progress);
+    // we poll it here so `propagationStateFlow` emits each transition rather
+    // than only on explicit `getPropagationState()` reads. Held @Volatile +
+    // serialized through `requestMessagesFromPropagationNode` / `cancelMessageSync`.
+    @Volatile private var propagationPollJob: kotlinx.coroutines.Job? = null
 
     // When true, auto-connect ignores discovered interfaces that did not
     // advertise an IFAC network name. Set via setAutoconnectIfacOnly().
@@ -1219,21 +1231,25 @@ class NativeRnsBackendImpl(
     ): Result<PropagationState> =
         try {
             val r = router ?: return Result.success(PropagationState.IDLE)
+            // Sideband's `request_lxmf_sync` idle guard: only start a fresh
+            // sync when the router is IDLE or a previous sync has reached
+            // COMPLETE. Re-firing mid-`PR_LINK_ESTABLISHING` / `PR_RECEIVING`
+            // would thrash the outbound link.
+            val currentState = r.propagationTransferState
+            val isInTransit = currentState.ordinal in
+                PropagationState.STATE_PATH_REQUESTED until PropagationState.STATE_COMPLETE
+            if (isInTransit) {
+                Log.i(TAG, "Propagation sync already in flight (state=$currentState); not re-triggering")
+                return Result.success(readPropagationState(r))
+            }
             val activeNode = r.getActivePropagationNode()
             val propNodeCount = r.getPropagationNodes().size
             Log.d(TAG, "Propagation sync: activeNode=${activeNode?.hexHash?.take(12)}, totalPropNodes=$propNodeCount")
             r.requestMessagesFromPropagationNode()
-            val state = r.propagationTransferState
-            Log.d(TAG, "Triggered propagation node sync (max=$maxMessages), lxmRouterState=$state")
-            // Return the state we just set, not a re-read that might race with callbacks
-            Result.success(
-                PropagationState(
-                    state = state.ordinal,
-                    stateName = state.name.lowercase(),
-                    progress = r.propagationTransferProgress.toFloat(),
-                    messagesReceived = r.propagationTransferLastResult,
-                ),
-            )
+            val state = readPropagationState(r)
+            Log.d(TAG, "Triggered propagation node sync (max=$maxMessages), lxmRouterState=${state.stateName}")
+            startPropagationPoll()
+            Result.success(state)
         } catch (e: Exception) {
             Log.e(TAG, "Propagation sync exception: ${e.message}", e)
             Result.success(PropagationState(state = 0, stateName = "failed", progress = 0f, messagesReceived = 0))
@@ -1242,13 +1258,64 @@ class NativeRnsBackendImpl(
     override suspend fun getPropagationState(): Result<PropagationState> =
         runCatching {
             val r = router ?: return@runCatching PropagationState.IDLE
-            PropagationState(
-                state = r.propagationTransferState.ordinal,
-                stateName = r.propagationTransferState.name.lowercase(),
-                progress = r.propagationTransferProgress.toFloat(),
-                messagesReceived = r.propagationTransferLastResult,
-            )
+            readPropagationState(r)
         }
+
+    /**
+     * Cancel an in-flight propagation sync.
+     *
+     * lxmf-kt does not currently expose `cancelPropagationNodeRequests()`
+     * (the upstream Python LXMF API that tears down `outboundPropagationLink`
+     * + resets state) — this is a known capability gap to file against
+     * lxmf-kt. The kotlin backend's cancel is therefore **soft**: it stops
+     * the live state-poll and emits IDLE to the UI, but the in-flight RNS
+     * link / Resource transfer continues in the background until it
+     * completes naturally. The Python flavor's cancel is hard (it calls
+     * upstream `cancel_propagation_node_requests`).
+     */
+    override suspend fun cancelMessageSync(): Result<Unit> =
+        runCatching {
+            propagationPollJob?.cancel()
+            propagationPollJob = null
+            // Surface IDLE so the UI progress indicator clears even though
+            // the underlying transfer may still be running.
+            _propagationStateFlow.tryEmit(PropagationState.IDLE)
+            Log.i(TAG, "Cancelled propagation sync (soft — lxmf-kt teardown TODO)")
+        }
+
+    private fun readPropagationState(r: network.reticulum.lxmf.LXMRouter): PropagationState =
+        PropagationState(
+            state = r.propagationTransferState.ordinal,
+            stateName = r.propagationTransferState.name.lowercase(),
+            progress = r.propagationTransferProgress.toFloat(),
+            messagesReceived = r.propagationTransferLastResult,
+        )
+
+    /**
+     * Spawn a coroutine that polls `propagationTransferState` while the sync
+     * is in transit and emits each snapshot to [_propagationStateFlow]. Stops
+     * when state >= COMPLETE or the job is cancelled.
+     *
+     * lxmf-kt advances state on RNS internal threads (path arrival, link
+     * established, Resource progress callbacks) but doesn't expose a
+     * state-change observer — polling is the simplest portable bridge.
+     */
+    private fun startPropagationPoll() {
+        propagationPollJob?.cancel()
+        propagationPollJob = scope.launch(Dispatchers.IO) {
+            val r = router ?: return@launch
+            try {
+                while (isActive) {
+                    val snap = readPropagationState(r)
+                    _propagationStateFlow.tryEmit(snap)
+                    if (snap.state >= PropagationState.STATE_COMPLETE) break
+                    kotlinx.coroutines.delay(PROPAGATION_POLL_INTERVAL_MS)
+                }
+            } finally {
+                propagationPollJob = null
+            }
+        }
+    }
 
     // ==================== Phase 2: Reactions & Telemetry Stubs ====================
 

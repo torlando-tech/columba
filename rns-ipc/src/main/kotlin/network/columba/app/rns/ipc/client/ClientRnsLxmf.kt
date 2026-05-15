@@ -169,6 +169,11 @@ internal class ClientRnsLxmf(
             ?: throw RnsException(RnsError.Generic("getPropagationState payload missing 'state'", null))
     }
 
+    override suspend fun cancelMessageSync(): Result<Unit> = runCatching {
+        awaitResult { cb -> remote.cancelMessageSync(cb) }
+        Unit
+    }
+
     private val propagationShared = MutableSharedFlow<PropagationState>(extraBufferCapacity = 16)
 
     init {

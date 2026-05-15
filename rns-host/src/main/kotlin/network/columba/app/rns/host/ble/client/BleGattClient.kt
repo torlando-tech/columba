@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.ble.client
 
+import network.columba.app.rns.api.util.toHex
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -375,7 +376,7 @@ class BleGattClient(
             "Transport identity hash must be exactly 16 bytes, got ${identityHash.size}"
         }
         transportIdentityHash = identityHash
-        Log.d(TAG, "Transport identity set: ${identityHash.joinToString("") { "%02x".format(it) }}")
+        Log.d(TAG, "Transport identity set: ${identityHash.toHex()}")
     }
 
     /**
@@ -826,7 +827,7 @@ class BleGattClient(
             Log.i(TAG, "  Peer: $address")
             Log.i(TAG, "  MTU: $mtu bytes")
             Log.i(TAG, "  Peer Identity: ${identityHash ?: "NOT AVAILABLE (Protocol v1)"}")
-            Log.i(TAG, "  Our Identity: ${ourIdentity?.joinToString("") { "%02x".format(it) }?.take(16) ?: "NOT SET"}")
+            Log.i(TAG, "  Our Identity: ${ourIdentity?.toHex()?.take(16) ?: "NOT SET"}")
             Log.i(TAG, "==============================")
 
             // Clear handshake in progress flag
@@ -895,7 +896,7 @@ class BleGattClient(
                 // Identity characteristic read
                 if (value.size == 16) {
                     // Convert 16 bytes to 32-character hex string
-                    val identityHash = value.joinToString("") { "%02x".format(it) }
+                    val identityHash = value.toHex()
 
                     Log.i(TAG, "Received identity from $address: $identityHash")
 

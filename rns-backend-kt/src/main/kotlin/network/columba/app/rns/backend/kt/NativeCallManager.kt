@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import network.columba.app.rns.api.util.hexToBytes
 import network.reticulum.common.DestinationDirection
 import network.reticulum.common.DestinationType
 import network.reticulum.destination.Destination
@@ -277,7 +278,7 @@ class NativeCallManager(
         profileCode: Int?,
     ) {
         scope.launch {
-            val destBytes = destinationHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val destBytes = destinationHash.hexToBytes()
             val profile =
                 profileCode
                     ?.let { code ->

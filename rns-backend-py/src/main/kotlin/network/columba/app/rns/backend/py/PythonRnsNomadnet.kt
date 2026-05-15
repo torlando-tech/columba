@@ -2,6 +2,7 @@ package network.columba.app.rns.backend.py
 
 import android.util.Log
 import com.chaquo.python.PyObject
+import network.columba.app.rns.api.util.hexToBytes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

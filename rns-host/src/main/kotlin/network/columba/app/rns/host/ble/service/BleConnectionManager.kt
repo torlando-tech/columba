@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.ble.service
 
+import network.columba.app.rns.api.util.toHex
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -315,7 +316,7 @@ class BleConnectionManager(
         }
 
         Log.i(TAG, "Setting transport identity on all BLE components")
-        Log.i(TAG, "  Identity: ${identityHash.joinToString("") { "%02x".format(it) }}")
+        Log.i(TAG, "  Identity: ${identityHash.toHex()}")
 
         // Set on GATT components for Protocol v2.2 compliance
         // (Advertiser no longer needs identity — device name is not advertised)

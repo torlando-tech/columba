@@ -12,7 +12,10 @@ import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.api.util.Aspects
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 
 import android.util.Log
 import androidx.room.Room
@@ -126,19 +129,6 @@ class NativeRnsBackendImpl(
                 aspects = this.aspects,
             )
 
-        fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
-
-        fun String.hexToBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-
-        fun hexStringToByteArray(hex: String): ByteArray {
-            val len = hex.length
-            val data = ByteArray(len / 2)
-            for (i in 0 until len step 2) {
-                data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
-            }
-            return data
-        }
-
         fun createNativeDestination(
             identity: NativeIdentity,
             direction: DestinationDirection,
@@ -168,11 +158,11 @@ class NativeRnsBackendImpl(
                 this.destination?.identity?.toColumba()
                     ?: ColumbaIdentity(hash = destHash, publicKey = ByteArray(0), privateKey = null)
             return ColumbaLink(
-                id = this.linkId.joinToString("") { "%02x".format(it) },
+                id = this.linkId.toHex(),
                 destination =
                     ColumbaDestination(
                         hash = destHash,
-                        hexHash = destHash.joinToString("") { "%02x".format(it) },
+                        hexHash = destHash.toHex(),
                         identity = identity,
                         direction = Direction.OUT,
                         type = DestinationType.SINGLE,
@@ -413,7 +403,7 @@ class NativeRnsBackendImpl(
         }
 
         router!!.registerFailedDeliveryCallback { message ->
-            val hash = message.hash?.joinToString("") { "%02x".format(it) } ?: return@registerFailedDeliveryCallback
+            val hash = message.hash?.toHex() ?: return@registerFailedDeliveryCallback
             _deliveryStatus.tryEmit(DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()))
         }
 
@@ -607,7 +597,7 @@ class NativeRnsBackendImpl(
                 // Forward any propagation node hash that was set before the router existed
                 // (PropagationNodeManager starts early and sets the relay before initialize)
                 activePropagationNodeHash?.let { hash ->
-                    val hexHash = hash.joinToString("") { "%02x".format(it) }
+                    val hexHash = hash.toHex()
                     val success = router!!.setActivePropagationNode(hexHash)
                     Log.d(TAG, "Forwarded saved propagation node to router: ${hexHash.take(16)} (success=$success)")
                 }
@@ -716,10 +706,7 @@ class NativeRnsBackendImpl(
 
     private fun registerAnnounceHandlers() {
         // Register known aspects so Transport can resolve them for us
-        Transport.registerKnownAspect("lxmf.delivery")
-        Transport.registerKnownAspect("lxmf.propagation")
-        Transport.registerKnownAspect("nomadnetwork.node")
-        Transport.registerKnownAspect("lxst.telephony")
+        Aspects.ALL.forEach { Transport.registerKnownAspect(it) }
 
         // null aspectFilter = receive all announces; Transport resolves the aspect for us
         Transport.registerAnnounceHandler(
@@ -754,7 +741,7 @@ class NativeRnsBackendImpl(
         // Parse authorized discovery sources (hex identity hashes → ByteArrayKey set)
         val discoverySources =
             config.interfaceDiscoverySources
-                ?.map { network.reticulum.common.ByteArrayKey(hexStringToByteArray(it)) }
+                ?.map { network.reticulum.common.ByteArrayKey(it.hexToBytes()) }
                 ?.toSet()
 
         // Auto-connect factory: creates a TCPClientInterface from discovered
@@ -824,7 +811,7 @@ class NativeRnsBackendImpl(
         announceHops: Int = 0,
         receivingInterfaceName: String? = null,
     ) {
-        val destHex = destinationHash.joinToString("") { "%02x".format(it) }
+        val destHex = destinationHash.toHex()
         if (blockedDestinations.contains(destHex) || blackholedIdentities.contains(announcedIdentity.hexHash)) return
 
         val hops = if (announceHops > 0) announceHops else (Transport.hopsTo(destinationHash) ?: 0)
@@ -851,7 +838,7 @@ class NativeRnsBackendImpl(
         _announces.tryEmit(event)
         emitInterfaceSnapshotsAsync()
 
-        if (aspect == "lxmf.propagation" && appData != null) {
+        if (aspect == Aspects.LXMF_PROPAGATION && appData != null) {
             router?.handlePropagationAnnounce(destinationHash, announcedIdentity, appData)
         }
     }
@@ -919,7 +906,7 @@ class NativeRnsBackendImpl(
                         .put("reaction_to", reactionTo)
                         .put("emoji", emoji)
                         .put("sender", sender)
-                        .put("source_hash", sourceHash.joinToString("") { "%02x".format(it) })
+                        .put("source_hash", sourceHash.toHex())
                         .put("timestamp", timestamp)
                         .toString()
 
@@ -977,7 +964,7 @@ class NativeRnsBackendImpl(
                 Transport.getInterfaces().firstOrNull { it.hash.contentEquals(hash) }?.name
             }
         return ReceivedMessage(
-            messageHash = message.hash?.let { it.joinToString("") { b -> "%02x".format(b) } } ?: "",
+            messageHash = message.hash?.let { it.toHex() } ?: "",
             content = content,
             sourceHash = sourceHash,
             destinationHash = destHash,
@@ -1210,7 +1197,7 @@ class NativeRnsBackendImpl(
     override suspend fun setOutboundPropagationNode(destHash: ByteArray?): Result<Unit> =
         runCatching {
             activePropagationNodeHash = destHash
-            val hexHash = destHash?.joinToString("") { "%02x".format(it) }
+            val hexHash = destHash?.toHex()
             if (hexHash != null) {
                 val success = router?.setActivePropagationNode(hexHash) ?: false
                 Log.d(TAG, "Propagation node set: ${hexHash.take(16)} (success=$success)")
@@ -1222,8 +1209,8 @@ class NativeRnsBackendImpl(
 
     override suspend fun getOutboundPropagationNode(): Result<String?> =
         runCatching {
-            router?.getActivePropagationNode()?.destHash?.joinToString("") { "%02x".format(it) }
-                ?: activePropagationNodeHash?.joinToString("") { "%02x".format(it) }
+            router?.getActivePropagationNode()?.destHash?.toHex()
+                ?: activePropagationNodeHash?.toHex()
         }
 
     override suspend fun requestMessagesFromPropagationNode(
@@ -1271,7 +1258,7 @@ class NativeRnsBackendImpl(
         emoji: String,
         sourceIdentity: ColumbaIdentity,
     ): Result<MessageReceipt> {
-        val senderHash = sourceIdentity.hash.joinToString("") { "%02x".format(it) }
+        val senderHash = sourceIdentity.hash.toHex()
 
         return sendLxmfMessageWithMethod(
             destinationHash = destinationHash,
@@ -1517,7 +1504,7 @@ class NativeRnsBackendImpl(
     ): Result<ConversationLinkResult> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val hexHash = destinationHash.joinToString("") { "%02x".format(it) }
+                val hexHash = destinationHash.toHex()
 
                 // Check if link already exists
                 activeLinks[hexHash]?.let { existing ->
@@ -1589,14 +1576,14 @@ class NativeRnsBackendImpl(
 
     override suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean> =
         runCatching {
-            val hexHash = destinationHash.joinToString("") { "%02x".format(it) }
+            val hexHash = destinationHash.toHex()
             val link = activeLinks.remove(hexHash) ?: return@runCatching false
             link.teardown()
             true
         }
 
     override suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult {
-        val hexHash = destinationHash.joinToString("") { "%02x".format(it) }
+        val hexHash = destinationHash.toHex()
         val link = activeLinks[hexHash]
         return if (link != null && link.status == network.reticulum.link.LinkConstants.ACTIVE) {
             ConversationLinkResult(
@@ -1614,7 +1601,7 @@ class NativeRnsBackendImpl(
         timeoutSeconds: Float,
         deliveryMethod: String,
     ): LinkSpeedProbeResult {
-        val hexHash = destinationHash.joinToString("") { "%02x".format(it) }
+        val hexHash = destinationHash.toHex()
         val existingLink = activeLinks[hexHash]
         if (existingLink != null && existingLink.status == network.reticulum.link.LinkConstants.ACTIVE) {
             return LinkSpeedProbeResult(
@@ -1852,7 +1839,7 @@ class NativeRnsBackendImpl(
                 ifacNetname = info.ifacNetname,
                 ifacNetkey = info.ifacNetkey,
                 transport = info.transport,
-                discoveryHash = info.discoveryHash.joinToString("") { "%02x".format(it) },
+                discoveryHash = info.discoveryHash.toHex(),
                 receivedAt = info.received,
                 discoveredAt = info.discovered,
             )

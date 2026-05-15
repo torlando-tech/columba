@@ -2,6 +2,8 @@ package network.columba.app.rns.backend.kt
 
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 import network.reticulum.common.DestinationDirection
 import network.reticulum.transport.Transport
 import org.msgpack.core.MessagePack
@@ -39,7 +41,7 @@ internal class NativeNomadNetHandler(
                 requestStatusFlow.value = "connecting"
                 downloadProgressFlow.value = 0f
 
-                val destBytes = destinationHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                val destBytes = destinationHash.hexToBytes()
                 val safePath = if (path.isBlank() || !path.startsWith("/")) "/page/index.mu" else path
 
                 val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes)
@@ -348,7 +350,7 @@ internal class NativeNomadNetHandler(
                 deliveryIdentityProvider()
                     ?: error("No local identity available")
 
-            val linkIdHex = link.linkId.joinToString("") { "%02x".format(it) }
+            val linkIdHex = link.linkId.toHex()
             // add() returns false if the link was already identified — use it as an
             // atomic check-then-act so concurrent callers can't both pass the guard.
             if (!identifiedNomadnetLinks.add(linkIdHex)) {

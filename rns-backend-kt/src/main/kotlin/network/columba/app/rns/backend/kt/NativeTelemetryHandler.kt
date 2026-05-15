@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.util.AppDataParser
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 import network.reticulum.lxmf.LXMessage
 import org.json.JSONObject
 import org.msgpack.core.MessagePack
@@ -367,8 +369,4 @@ internal class NativeTelemetryHandler(
         } catch (_: Exception) {
             null
         }
-
-    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
-
-    private fun String.hexToBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }

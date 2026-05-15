@@ -296,25 +296,35 @@ class PythonRnsTransportAdmin(
     /**
      * Enumerate `RNS.Transport.interfaces` into the same per-interface shape
      * `NativeRnsBackendImpl.getDebugInfo()` emits — `{name, type, online,
-     * parent_name, can_send, rx_bytes, tx_bytes}`. The UI keys its interface
-     * online-status overlay on `name` = the full formatted interface name
-     * (`str(interface)`, e.g. `TCPInterface[test_mac/10.0.0.145:4242]`), so the
-     * `name`/`type` formatting matches the kotlin backend's `iface.name` /
-     * `iface.name.substringBefore("[")`. Per-interface reads are wrapped so one
-     * malformed interface can't blank the whole list.
+     * parent_name, can_send, rx_bytes, tx_bytes}`. `name` is the configured
+     * interface name (`interface.name` — the RNS config `[[section]]` header),
+     * matching `NativeRnsBackendImpl`'s `iface.name` and what the UI keys its
+     * online-status overlay on (`InterfaceEntity.name`). Per-interface reads
+     * are wrapped so one malformed interface can't blank the whole list.
      */
     private fun collectInterfaces(): List<Map<String, Any>> =
         runCatching {
             val interfaces = transport()["interfaces"] ?: return emptyList()
             runtime.python.builtins.callAttr("list", interfaces).asList().mapNotNull { iface ->
                 runCatching {
-                    val name = iface.toString()
-                    val parentStr = iface["parent_interface"]?.toString()
+                    // `interface.name` is the configured name — the RNS config
+                    // `[[section]]` header — which is what the UI matches against
+                    // `InterfaceEntity.name` (the interface-management toggle rows
+                    // + `parentName` filtering) and what NativeRnsBackendImpl emits
+                    // as `iface.name`. `str(interface)` is the verbose
+                    // "TCPInterface[name/host:port]" form — keying on that left the
+                    // toggle rows all showing offline because the lookup missed.
+                    val name = iface["name"]?.toString() ?: iface.toString()
+                    val parentName = runCatching {
+                        iface["parent_interface"]
+                            ?.takeIf { it.toString() != "None" }
+                            ?.get("name")?.toString()
+                    }.getOrNull()
                     linkedMapOf<String, Any>(
                         "name" to name,
                         "type" to name.substringBefore("[").trim(),
                         "online" to (iface["online"]?.toJava(Boolean::class.javaObjectType) ?: false),
-                        "parent_name" to (parentStr?.takeIf { it != "None" } ?: ""),
+                        "parent_name" to (parentName ?: ""),
                         "can_send" to (iface["OUT"]?.toJava(Boolean::class.javaObjectType) ?: false),
                         "rx_bytes" to (iface["rxb"]?.toJava(Long::class.javaObjectType) ?: 0L),
                         "tx_bytes" to (iface["txb"]?.toJava(Long::class.javaObjectType) ?: 0L),
@@ -323,6 +333,12 @@ class PythonRnsTransportAdmin(
                     Log.w(TAG, "getDebugInfo: skipping an interface (attr read failed)", it)
                     null
                 }
+            }.also { collected ->
+                Log.d(
+                    TAG,
+                    "getDebugInfo interfaces: " +
+                        collected.joinToString { "${it["name"]}=${if (it["online"] == true) "online" else "offline"}" },
+                )
             }
         }.getOrElse {
             Log.w(TAG, "getDebugInfo: interface enumeration failed", it)

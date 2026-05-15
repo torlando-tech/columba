@@ -66,6 +66,9 @@ class InterfaceManagementViewModelStatusEventTest {
 
         // Use test dispatcher for IO operations
         InterfaceManagementViewModel.ioDispatcher = testDispatcher
+        // Disable the interface-status poll loop so advanceUntilIdle() doesn't
+        // spin forever on its `while (isActive) { … delay … }`.
+        InterfaceManagementViewModel.enableStatusPolling = false
 
         interfaceRepository = mockk()
         configManager = mockk()

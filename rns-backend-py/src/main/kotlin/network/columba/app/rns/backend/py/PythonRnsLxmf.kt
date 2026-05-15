@@ -517,9 +517,26 @@ class PythonRnsLxmf(
         return dict
     }
 
-    /** Recursively convert Kotlin collections to Python list/dict; pass scalars through. */
+    /**
+     * Recursively convert Kotlin collections to Python list/dict; convert
+     * `ByteArray` to Python `bytes`; pass scalars and already-built [PyObject]s
+     * through unchanged.
+     *
+     * Branch order matters:
+     *  - `is PyObject` MUST be first: Chaquopy's [PyObject] itself implements
+     *    `Map`, so a pre-built PyObject value (e.g. the `.toPyList()` result
+     *    `buildFields` stores for `FIELD_IMAGE` / `FIELD_FILE_ATTACHMENTS` /
+     *    `FIELD_ICON_APPEARANCE`, or the `pyDict(...)` for `FIELD_REACTION`)
+     *    would otherwise match `is Map<*, *>` and `pyDict` ⇄ `toPyValue` recurse
+     *    until a StackOverflowError aborts the send.
+     *  - `is ByteArray` before the collection branches: a raw `ByteArray` dict
+     *    value crosses JNI as a `jarray('B')`, which `umsgpack` can't pack —
+     *    convert it to real `bytes` (same fix `toPyList` applies to elements).
+     */
     private fun toPyValue(value: Any?): Any? =
         when (value) {
+            is PyObject -> value
+            is ByteArray -> value.toPyBytes()
             is Map<*, *> -> pyDict(value)
             is List<*> -> value.map { toPyValue(it) }.toPyList()
             else -> value

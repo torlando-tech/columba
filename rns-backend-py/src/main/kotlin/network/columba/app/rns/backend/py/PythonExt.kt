@@ -22,11 +22,22 @@ import network.columba.app.rns.api.RnsException
 
 /**
  * Chaquopy footgun guard: Kotlin/Java `List` -> real Python `list`.
+ *
+ * Also converts `ByteArray` *elements* to Python `bytes` ([toPyBytes]): left
+ * raw, a `ByteArray` inside the list crosses JNI as a `jarray('B')`, which
+ * upstream `umsgpack` can't serialise — LXMF's `LXMessage.pack()` then dies
+ * with `UnsupportedTypeException: ... java.jarray('B')` when it packs a fields
+ * dict containing the list (this is what broke image / file-attachment sends).
+ * Already-built [PyObject]s and every other element type pass through
+ * unchanged.
+ *
  * See the module CLAUDE.md. Use at *every* `callAttr` site that takes a
  * list parameter.
  */
-fun List<*>.toPyList(): PyObject =
-    Python.getInstance().builtins.callAttr("list", this.toTypedArray())
+fun List<*>.toPyList(): PyObject {
+    val converted = this.map { if (it is ByteArray) it.toPyBytes() else it }
+    return Python.getInstance().builtins.callAttr("list", converted.toTypedArray())
+}
 
 /** Kotlin `ByteArray` -> Python `bytes`. Chaquopy hands a `ByteArray` to a
  *  `callAttr` arg as a `jarray('B')`; some upstream code paths want a real

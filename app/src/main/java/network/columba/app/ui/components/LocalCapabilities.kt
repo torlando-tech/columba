@@ -8,8 +8,9 @@ import network.columba.app.rns.api.BackendCapabilities
  *
  * Provided once above the NavHost in `ColumbaNavigation` from
  * `SettingsViewModel.capabilities` (which forwards `RnsBackend.capabilities`).
- * UI that differs by backend reads this — directly or via [CapabilityGate] — so
- * a screen does not need the capabilities object prop-drilled to it.
+ * UI that differs by backend reads this directly (e.g. `BatteryOptimizationCard`
+ * hides the profile picker, `InterfaceManagementScreen` switches the Apply
+ * button to "Apply & Restart") — no need to prop-drill the capabilities object.
  *
  * Defaults to [BackendCapabilities.UNKNOWN] (safe defaults: every capability
  * `UNSUPPORTED`, hot-reload off) for `@Preview`s and any subtree that somehow

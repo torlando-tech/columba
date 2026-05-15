@@ -440,6 +440,33 @@ def make_link_packet_handler(on_packet):
     return _handler
 
 
+# --- Per-LXMessage outbound delivery / failure -----------------------------
+
+def attach_lxmessage_callbacks(lxmessage, on_delivered, on_failed):
+    """Wire per-LXMessage delivery + failure callbacks for an outbound message.
+
+    LXMF tracks outbound delivery and failure *per-LXMessage*, not router-wide:
+    `LXMessage.register_delivery_callback` fires when the message's delivery
+    proof arrives (the packet proof for an OPPORTUNISTIC send, the link ack for
+    a DIRECT send), `register_failed_callback` when it fails. Both are invoked
+    as `callback(lxmessage)`.
+
+    `PythonRnsLxmf` calls this right before `handle_outbound()` for every
+    message it sends — without it the Kotlin side never learns a sent message
+    was delivered or failed, so the delivery-status flow stays silent (no
+    delivery proofs surface in the UI). Success vs failure is implied by which
+    Kotlin `PyEventCallback` fires; the payload is a flat `{hash}` dict.
+    """
+    def _delivered(msg):
+        _emit(on_delivered, {"hash": _hex(getattr(msg, "hash", None))})
+
+    def _failed(msg):
+        _emit(on_failed, {"hash": _hex(getattr(msg, "hash", None))})
+
+    lxmessage.register_delivery_callback(_delivered)
+    lxmessage.register_failed_callback(_failed)
+
+
 # --- Accessors for the per-object callbacks -------------------------------
 # RNS packet/link callbacks are set per-Destination / per-Link, and LXMF
 # delivery failure is a per-LXMessage `failed_callback`. The Kotlin sub-impls

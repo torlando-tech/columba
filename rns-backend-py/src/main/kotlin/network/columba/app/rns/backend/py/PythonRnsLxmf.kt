@@ -203,6 +203,18 @@ class PythonRnsLxmf(
             RnsError.Generic("LXMF.LXMessage construction returned None", null),
         )
 
+        // Wire per-LXMessage delivery + failure callbacks BEFORE handle_outbound
+        // so the Kotlin side learns when this message is delivered (the
+        // OPPORTUNISTIC packet proof / DIRECT link ack) or fails. LXMF tracks
+        // this per-LXMessage, not router-wide — without it the delivery-status
+        // flow never updates for sent messages.
+        runtime.eventBridge.callAttr(
+            "attach_lxmessage_callbacks",
+            lxmessage,
+            events.onLxmfDelivered,
+            events.onLxmfFailure,
+        )
+
         router.callAttr("handle_outbound", lxmessage)
 
         val hashBytes = lxmessage["hash"]?.toJava(ByteArray::class.java) ?: ByteArray(0)

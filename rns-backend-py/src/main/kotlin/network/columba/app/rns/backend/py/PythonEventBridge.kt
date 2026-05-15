@@ -71,6 +71,14 @@ class PythonEventBridge {
     val onLxmfFailure = PyEventCallback { payload -> handleLxmfFailure(payload) }
 
     /**
+     * Outbound-delivery sink: `event_bridge.attach_lxmessage_callbacks` fires
+     * this when a message Columba *sent* receives its delivery proof — the
+     * packet proof for an OPPORTUNISTIC send, the link ack for a DIRECT send.
+     * Attached per-LXMessage by [PythonRnsLxmf], not via `register_callbacks`.
+     */
+    val onLxmfDelivered = PyEventCallback { payload -> handleLxmfDelivered(payload) }
+
+    /**
      * Packet observation is a low-traffic diagnostic surface; upstream RNS
      * delivers raw packets per-Destination, so wiring this fully is on-device
      * integration work. The sink is present so `event_bridge.py`'s
@@ -180,6 +188,20 @@ class PythonEventBridge {
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf failure translation failed", it) }
+    }
+
+    private fun handleLxmfDelivered(payload: PyObject) {
+        runCatching {
+            // Mirrors NativeMessageSender — "delivered" is the same status
+            // string the kotlin backend emits on a delivery proof.
+            _deliveryStatus.tryEmit(
+                DeliveryStatusUpdate(
+                    messageHash = payload.dictStr("hash").orEmpty(),
+                    status = "delivered",
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+        }.onFailure { Log.e(TAG, "lxmf delivered translation failed", it) }
     }
 
     private fun handlePacket(payload: PyObject) {

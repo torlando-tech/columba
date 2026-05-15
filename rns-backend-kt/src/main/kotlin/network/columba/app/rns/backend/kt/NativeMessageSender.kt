@@ -16,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import network.reticulum.common.DestinationDirection
-import network.reticulum.lxmf.LXMFConstants
+import network.columba.app.rns.api.util.LxmfFields
 import network.reticulum.lxmf.LXMRouter
 import network.reticulum.lxmf.LXMessage
 import network.reticulum.transport.Transport
@@ -127,11 +127,11 @@ internal class NativeMessageSender(
         val fields = mutableMapOf<Int, Any>()
 
         if (options.imageData != null && options.imageFormat != null) {
-            fields[LXMFConstants.FIELD_IMAGE] = listOf(options.imageFormat, options.imageData)
+            fields[LxmfFields.FIELD_IMAGE] = listOf(options.imageFormat, options.imageData)
         }
 
         if (!options.fileAttachments.isNullOrEmpty()) {
-            fields[LXMFConstants.FIELD_FILE_ATTACHMENTS] =
+            fields[LxmfFields.FIELD_FILE_ATTACHMENTS] =
                 options.fileAttachments.map { (name, data) ->
                     listOf(name.toByteArray(), data)
                 }
@@ -146,7 +146,7 @@ internal class NativeMessageSender(
         }
 
         if (options.iconAppearance != null) {
-            fields[LXMFConstants.FIELD_ICON_APPEARANCE] =
+            fields[LxmfFields.FIELD_ICON_APPEARANCE] =
                 listOf(
                     options.iconAppearance.iconName,
                     options.iconAppearance.foregroundColor.hexToBytes(),

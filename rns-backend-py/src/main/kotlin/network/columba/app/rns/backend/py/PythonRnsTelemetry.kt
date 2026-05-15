@@ -9,6 +9,7 @@ import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.rns.api.util.LxmfFields
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -41,13 +42,6 @@ class PythonRnsTelemetry(
         /** LXMF app name for delivery destinations (`LXMF.LXMF.APP_NAME`). */
         const val LXMF_APP_NAME = "lxmf"
         const val LXMF_DELIVERY_ASPECT = "delivery"
-
-        // LXMF FIELD_* numbers (LXMF/LXMF.py). The fields dict handed to
-        // LXMessage is keyed by these ints; event_bridge.py stringifies them.
-        const val FIELD_TELEMETRY = 0x02
-        const val FIELD_TELEMETRY_STREAM = 0x03
-        const val FIELD_ICON_APPEARANCE = 0x04
-        const val FIELD_COMMANDS = 0x09
     }
 
     // ==================== Collector-host-mode state ====================
@@ -77,8 +71,8 @@ class PythonRnsTelemetry(
             // FIELD_TELEMETRY carries the location JSON payload; FIELD_ICON_APPEARANCE
             // optionally rides along (Sideband/MeshChat interop, LXMF Field 4).
             val fields = buildFieldsDict {
-                put(FIELD_TELEMETRY, locationJson)
-                iconAppearance?.let { put(FIELD_ICON_APPEARANCE, it.toPyField()) }
+                put(LxmfFields.FIELD_TELEMETRY, locationJson)
+                iconAppearance?.let { put(LxmfFields.FIELD_ICON_APPEARANCE, it.toPyField()) }
             }
             sendLxmfWithFields(destinationHash, fields)
         }
@@ -102,7 +96,7 @@ class PythonRnsTelemetry(
                 mapOf(0x01 to (timebase ?: 0L)).toPyDict(),
             ).toPyList()
             val fields = buildFieldsDict {
-                putRaw(FIELD_COMMANDS, commandList)
+                putRaw(LxmfFields.FIELD_COMMANDS, commandList)
             }
             sendLxmfWithFields(destinationHash, fields)
         }

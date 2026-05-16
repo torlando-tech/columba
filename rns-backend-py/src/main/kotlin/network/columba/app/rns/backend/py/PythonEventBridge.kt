@@ -10,11 +10,14 @@ import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.LinkEvent
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.util.AppDataParser
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.TelemeterCodec
+import network.columba.app.rns.api.util.hexToBytes
 import org.json.JSONObject
 
 /**
@@ -48,13 +51,14 @@ class PythonEventBridge {
         val FIELD_TELEMETRY_KEY = LxmfFields.FIELD_TELEMETRY.toString()
         val FIELD_TELEMETRY_STREAM_KEY = LxmfFields.FIELD_TELEMETRY_STREAM.toString()
         val FIELD_ICON_APPEARANCE_KEY = LxmfFields.FIELD_ICON_APPEARANCE.toString()
+        val FIELD_CUSTOM_META_KEY = LxmfFields.FIELD_CUSTOM_META.toString()
         val FIELD_REACTION_KEY = LxmfFields.FIELD_REACTION.toString()
     }
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
     private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 64)
-    private val _locationTelemetry = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    private val _locationTelemetry = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceived = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 16)
     private val _links = MutableSharedFlow<LinkEvent>(extraBufferCapacity = 16)
@@ -62,7 +66,7 @@ class PythonEventBridge {
     val announces: SharedFlow<AnnounceEvent> = _announces.asSharedFlow()
     val messages: SharedFlow<ReceivedMessage> = _messages.asSharedFlow()
     val deliveryStatus: SharedFlow<DeliveryStatusUpdate> = _deliveryStatus.asSharedFlow()
-    val locationTelemetry: SharedFlow<String> = _locationTelemetry.asSharedFlow()
+    val locationTelemetry: SharedFlow<LocationTelemetry> = _locationTelemetry.asSharedFlow()
     val reactionReceived: SharedFlow<String> = _reactionReceived.asSharedFlow()
     val packets: SharedFlow<ReceivedPacket> = _packets.asSharedFlow()
     val links: SharedFlow<LinkEvent> = _links.asSharedFlow()
@@ -188,9 +192,84 @@ class PythonEventBridge {
             // Derive the telemetry / reaction side-channels from the field map —
             // same split NativeRnsBackendImpl makes, just sourced from JSON.
             if (fieldsJson != null) {
-                routeFieldSideChannels(fieldsJson)
+                assembleLocationTelemetry(fieldsJson, sourceHash, message.iconAppearance)
+                routeReactionSideChannel(fieldsJson)
             }
         }.onFailure { Log.e(TAG, "lxmf delivery translation failed", it) }
+    }
+
+    /**
+     * Decode `FIELD_TELEMETRY` (Telemeter msgpack) + optional
+     * `FIELD_CUSTOM_META` (Columba extras msgpack) into a typed
+     * `LocationTelemetry` via the shared `TelemeterCodec`. The Python
+     * side just hex-encodes the raw bytes through `_jsonable`; all
+     * codec work happens Kotlin-side — one implementation shared with
+     * `NativeRnsBackendImpl`, no drift between the two backends.
+     */
+    private fun assembleLocationTelemetry(
+        fieldsJson: String,
+        sourceHash: ByteArray,
+        iconAppearance: IconAppearance?,
+    ) {
+        runCatching {
+            val fields = JSONObject(fieldsJson)
+            val telemetryHex = fields.optString(FIELD_TELEMETRY_KEY, "")
+            if (telemetryHex.isBlank()) return@runCatching
+            val telemetryBytes = telemetryHex.hexToBytes() ?: return@runCatching
+            val decoded = TelemeterCodec.unpackLocationTelemetry(telemetryBytes)
+                ?: return@runCatching
+            val meta = fields.optString(FIELD_CUSTOM_META_KEY, "").takeIf { it.isNotBlank() }
+                ?.let { it.hexToBytes() }
+                ?.let { TelemeterCodec.unpackColumbaMeta(it) }
+
+            // Cease frame short-circuits: the recipient deletes the
+            // sender's location regardless of lat/lng (which the cease
+            // sender zeros out). Preserve that contract.
+            if (meta?.cease == true) {
+                _locationTelemetry.tryEmit(
+                    LocationTelemetry(
+                        type = LocationTelemetry.TYPE_LOCATION_SHARE,
+                        lat = 0.0,
+                        lng = 0.0,
+                        acc = 0f,
+                        ts = meta.tsMillis ?: decoded.ts,
+                        cease = true,
+                        sourceHash = sourceHash.takeIf { it.isNotEmpty() }?.let {
+                            // `toHex()` lives in api.util; inline here to avoid
+                            // an extra import — sourceHash is just bytes -> hex.
+                            it.joinToString("") { b -> "%02x".format(b) }
+                        },
+                    ),
+                )
+                return@runCatching
+            }
+
+            _locationTelemetry.tryEmit(
+                decoded.copy(
+                    ts = meta?.tsMillis ?: decoded.ts,
+                    expires = meta?.expires,
+                    approxRadius = meta?.approxRadius ?: 0,
+                    sourceHash = sourceHash.takeIf { it.isNotEmpty() }?.let {
+                        it.joinToString("") { b -> "%02x".format(b) }
+                    },
+                    appearance = iconAppearance,
+                ),
+            )
+        }.onFailure { Log.w(TAG, "location telemetry assembly failed", it) }
+    }
+
+    /**
+     * Reaction-channel routing — `FIELD_REACTION` (0x10) is a
+     * Columba-specific field that doesn't go through Telemeter, so
+     * it stays a JSON-string side-channel as before.
+     */
+    private fun routeReactionSideChannel(fieldsJson: String) {
+        runCatching {
+            val fields = JSONObject(fieldsJson)
+            if (fields.has(FIELD_REACTION_KEY)) {
+                _reactionReceived.tryEmit(fields.get(FIELD_REACTION_KEY).toString())
+            }
+        }.onFailure { Log.w(TAG, "reaction side-channel routing failed", it) }
     }
 
     /**
@@ -208,22 +287,14 @@ class PythonEventBridge {
             AppDataParser.parseIconAppearance(list)
         }.getOrNull()
 
-    private fun routeFieldSideChannels(fieldsJson: String) {
-        runCatching {
-            val fields = JSONObject(fieldsJson)
-            // Telemetry: FIELD_TELEMETRY (single) or FIELD_TELEMETRY_STREAM (batch).
-            if (fields.has(FIELD_TELEMETRY_KEY)) {
-                _locationTelemetry.tryEmit(fields.get(FIELD_TELEMETRY_KEY).toString())
-            }
-            if (fields.has(FIELD_TELEMETRY_STREAM_KEY)) {
-                _locationTelemetry.tryEmit(fields.get(FIELD_TELEMETRY_STREAM_KEY).toString())
-            }
-            // Reaction: Columba's custom Field 16.
-            if (fields.has(FIELD_REACTION_KEY)) {
-                _reactionReceived.tryEmit(fields.get(FIELD_REACTION_KEY).toString())
-            }
-        }.onFailure { Log.w(TAG, "field side-channel routing failed", it) }
-    }
+    // `routeFieldSideChannels` + `parseLocationTelemetry` were removed
+    // when the Telemeter codec consolidated into
+    // `network.columba.app.rns.api.util.TelemeterCodec`. Inbound
+    // location telemetry now goes through `assembleLocationTelemetry`
+    // (called from `handleLxmfDelivery`), which decodes the
+    // FIELD_TELEMETRY + FIELD_CUSTOM_META bytes directly via the
+    // shared codec — no JSON intermediate, no `event_bridge.py` side
+    // assembly. Reactions still go through `routeReactionSideChannel`.
 
     private fun handleLxmfFailure(payload: PyObject) {
         runCatching {

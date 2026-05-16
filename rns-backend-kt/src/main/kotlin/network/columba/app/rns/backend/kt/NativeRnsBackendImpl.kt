@@ -7,6 +7,7 @@ import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.model.FailedInterface
 import network.columba.app.rns.api.model.IconAppearance
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
@@ -98,7 +99,10 @@ class NativeRnsBackendImpl(
     network.columba.app.rns.api.RnsTransportAdmin {
     companion object {
         private const val TAG = "NativeReticulumProtocol"
-        private const val FIELD_COLUMBA_META = 0x70
+        // Upstream LXMF FIELD_CUSTOM_META — see NativeTelemetryHandler /
+        // LocationTelemetry.COLUMBA_META_FIELD_ID. 0xFD is the documented
+        // app-extension point; 0x70 was a non-canonical invention.
+        private const val FIELD_COLUMBA_META = 0xFD
 
         /** Live-poll cadence for `propagationTransferState`. ~2 polls / second. */
         private const val PROPAGATION_POLL_INTERVAL_MS = 500L
@@ -258,7 +262,7 @@ class NativeRnsBackendImpl(
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
     private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 64)
-    private val _locationTelemetryFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    private val _locationTelemetryFlow = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceivedFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 16)
     private val _links = MutableSharedFlow<LinkEvent>(extraBufferCapacity = 16)
@@ -1346,32 +1350,22 @@ class NativeRnsBackendImpl(
 
     override suspend fun sendLocationTelemetry(
         destinationHash: ByteArray,
-        locationJson: String,
+        telemetry: LocationTelemetry,
         sourceIdentity: ColumbaIdentity,
         iconAppearance: IconAppearance?,
     ): Result<MessageReceipt> {
-        val locationData = JSONObject(locationJson)
+        // Wire format (Sideband-interop, paramount):
+        //   FIELD_TELEMETRY (0x02)   = Telemeter msgpack (shared codec)
+        //   FIELD_CUSTOM_META (0xFD) = Columba extras msgpack, omitted
+        //                              when telemetry carries no extras
+        // Both fields go through `TelemeterCodec` — one implementation
+        // shared with `PythonRnsTelemetry` so the bit-format Sideband
+        // peers consume is byte-identical across both Columba backends.
         val fields = mutableMapOf<Int, Any>()
-
-        if (locationData.optBoolean("cease", false)) {
-            fields[FIELD_COLUMBA_META] =
-                JSONObject()
-                    .put("cease", true)
-                    .put("ts", locationData.optLong("ts", System.currentTimeMillis()))
-                    .toString()
-        } else {
-            fields[LxmfFields.FIELD_TELEMETRY] = telemetryHandler.packLocationTelemetry(locationData)
-
-            val meta = JSONObject()
-            if (locationData.has("expires") && !locationData.isNull("expires")) {
-                meta.put("expires", locationData.getLong("expires"))
-            }
-            if (locationData.optInt("approxRadius", 0) > 0) {
-                meta.put("approxRadius", locationData.getInt("approxRadius"))
-            }
-            if (meta.length() > 0) {
-                fields[FIELD_COLUMBA_META] = meta.toString()
-            }
+        fields[LxmfFields.FIELD_TELEMETRY] =
+            network.columba.app.rns.api.util.TelemeterCodec.packLocationTelemetry(telemetry)
+        network.columba.app.rns.api.util.TelemeterCodec.packColumbaMeta(telemetry)?.let {
+            fields[FIELD_COLUMBA_META] = it
         }
 
         return sendLxmfMessageWithMethod(

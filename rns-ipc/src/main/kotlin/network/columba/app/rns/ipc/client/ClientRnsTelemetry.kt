@@ -13,10 +13,11 @@ import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.IRnsTelemetry
-import network.columba.app.rns.ipc.callback.IRnsStringEventCallback
+import network.columba.app.rns.ipc.callback.IRnsLocationTelemetryCallback
 
 internal class ClientRnsTelemetry(
     private val remote: IRnsTelemetry,
@@ -24,12 +25,12 @@ internal class ClientRnsTelemetry(
 ) : RnsTelemetry {
     override suspend fun sendLocationTelemetry(
         destinationHash: ByteArray,
-        locationJson: String,
+        telemetry: LocationTelemetry,
         sourceIdentity: Identity,
         iconAppearance: IconAppearance?,
     ): Result<MessageReceipt> = runCatching {
         val bundle = awaitResult { cb ->
-            remote.sendLocationTelemetry(destinationHash, locationJson, sourceIdentity, iconAppearance, cb)
+            remote.sendLocationTelemetry(destinationHash, telemetry, sourceIdentity, iconAppearance, cb)
         }
         bundle.classLoader = MessageReceipt::class.java.classLoader
         @Suppress("DEPRECATION")
@@ -77,20 +78,20 @@ internal class ClientRnsTelemetry(
         Unit
     }
 
-    // Replayable buffer keeps the most recent telemetry JSON line so UI
-    // observers that subscribe after the host emitted aren't left with a
-    // blank state. extraBufferCapacity covers the burst case where the host
-    // sends a stream batch faster than the UI can consume.
-    private val locationTelemetryShared = MutableSharedFlow<String>(
+    // Replay-0 buffer with burst headroom — UI observers that subscribe
+    // after the host emitted aren't entitled to a stale frame, but the
+    // burst case (telemetry-stream batch arriving faster than the UI
+    // can consume) needs the headroom.
+    private val locationTelemetryShared = MutableSharedFlow<LocationTelemetry>(
         replay = 0,
         extraBufferCapacity = 64,
     )
 
     init {
-        callbackFlow<String> {
-            val cb = object : IRnsStringEventCallback.Stub() {
-                override fun onString(value: String?) {
-                    if (value != null) trySend(value)
+        callbackFlow<LocationTelemetry> {
+            val cb = object : IRnsLocationTelemetryCallback.Stub() {
+                override fun onLocationTelemetry(payload: LocationTelemetry?) {
+                    if (payload != null) trySend(payload)
                 }
             }
             remote.registerTelemetryObserver(cb)
@@ -98,6 +99,6 @@ internal class ClientRnsTelemetry(
         }.onEach { locationTelemetryShared.emit(it) }.launchIn(scope)
     }
 
-    override val locationTelemetryFlow: SharedFlow<String>
+    override val locationTelemetryFlow: SharedFlow<LocationTelemetry>
         get() = locationTelemetryShared.asSharedFlow()
 }

@@ -13,7 +13,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.entity.ReceivedLocationEntity
-import network.columba.app.data.model.LocationTelemetry
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsLxmf
@@ -33,8 +33,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
@@ -298,23 +296,21 @@ class LocationSharingManager
                     return@launch
                 }
 
-                val ceaseJson =
-                    Json.encodeToString(
-                        LocationTelemetry(
-                            lat = 0.0,
-                            lng = 0.0,
-                            acc = 0f,
-                            ts = System.currentTimeMillis(),
-                            expires = null,
-                            cease = true,
-                        ),
+                val ceaseTelemetry =
+                    LocationTelemetry(
+                        lat = 0.0,
+                        lng = 0.0,
+                        acc = 0f,
+                        ts = System.currentTimeMillis(),
+                        expires = null,
+                        cease = true,
                     )
 
                 try {
                     val destHashBytes = hexStringToByteArray(recipientHash)
                     rnsTelemetry.sendLocationTelemetry(
                         destinationHash = destHashBytes,
-                        locationJson = ceaseJson,
+                        telemetry = ceaseTelemetry,
                         sourceIdentity = sourceIdentity,
                     )
                     Log.d(TAG, "Sent cease sharing message to $recipientHash")
@@ -460,8 +456,6 @@ class LocationSharingManager
                         approxRadius = precisionRadius,
                     )
 
-                val json = Json.encodeToString(telemetry)
-
                 // Get user's icon appearance for Sideband/MeshChat interoperability
                 val iconAppearance =
                     identityRepository.getActiveIdentitySync()?.let { activeId ->
@@ -487,7 +481,7 @@ class LocationSharingManager
                         val result =
                             rnsTelemetry.sendLocationTelemetry(
                                 destinationHash = destHashBytes,
-                                locationJson = json,
+                                telemetry = telemetry,
                                 sourceIdentity = sourceIdentity,
                                 iconAppearance = iconAppearance,
                             )
@@ -529,65 +523,69 @@ class LocationSharingManager
 
         private fun startListeningForLocationTelemetry() {
             scope.launch {
-                rnsTelemetry.locationTelemetryFlow.collect { locationJson ->
-                    handleReceivedLocation(locationJson)
+                rnsTelemetry.locationTelemetryFlow.collect { telemetry ->
+                    handleReceivedLocation(telemetry)
                 }
             }
         }
 
-        private suspend fun handleReceivedLocation(locationJson: String) {
+        private suspend fun handleReceivedLocation(telemetry: LocationTelemetry) {
             try {
-                val json = JSONObject(locationJson)
-                val senderHash = json.getString("source_hash").lowercase()
+                val senderHash = telemetry.sourceHash?.lowercase() ?: run {
+                    Log.w(TAG, "Received telemetry without sourceHash — dropping")
+                    return
+                }
 
-                // Check for cease flag - sender has stopped sharing
-                if (json.optBoolean("cease", false)) {
-                    val ceaseTimestamp = json.optLong("ts", 0)
-                    // Only delete if cease is newer than latest location (prevents race condition
-                    // where old cease messages arrive after new sharing session starts)
+                // Cease frame — sender has stopped sharing.
+                if (telemetry.cease) {
                     val latestLocation = receivedLocationDao.getLatestLocationForSender(senderHash)
-                    if (latestLocation == null || ceaseTimestamp > latestLocation.receivedAt) {
+                    if (latestLocation == null || telemetry.ts > latestLocation.receivedAt) {
                         receivedLocationDao.deleteLocationsForSender(senderHash)
                         Log.d(TAG, "Ceased sharing from $senderHash - deleted locations")
                     } else {
-                        Log.d(TAG, "Ignoring stale cease from $senderHash (cease=$ceaseTimestamp, latest=${latestLocation.receivedAt})")
+                        Log.d(TAG, "Ignoring stale cease from $senderHash (cease=${telemetry.ts}, latest=${latestLocation.receivedAt})")
                     }
                     return
                 }
 
-                val lat = json.getDouble("lat")
-                val lng = json.getDouble("lng")
-                val acc = json.getDouble("acc").toFloat()
-                val ts = json.getLong("ts")
-                val expires = if (json.has("expires") && !json.isNull("expires")) json.getLong("expires") else null
-                val approxRadius = json.optInt("approxRadius", 0)
-
-                // Extract appearance data if present (from FIELD_TELEMETRY_STREAM entries)
+                // Re-serialize appearance to JSON for the existing
+                // `ReceivedLocationEntity.appearanceJson` column — Room
+                // stores the raw JSON string today, and reshaping the
+                // schema to a Parcelable is out of scope for the
+                // RnsTelemetry-surface refactor. One JSON encode per
+                // received-location with appearance is the entire
+                // remaining JSON cost on this path.
                 val appearanceJson =
-                    if (json.has("appearance") && !json.isNull("appearance")) {
-                        json.getJSONObject("appearance").toString()
-                    } else {
-                        null
+                    telemetry.appearance?.let { a ->
+                        JSONObject()
+                            .put("icon_name", a.iconName)
+                            .put("foreground_color", a.foregroundColor)
+                            .put("background_color", a.backgroundColor)
+                            .toString()
                     }
 
                 val entity =
                     ReceivedLocationEntity(
                         id = UUID.randomUUID().toString(),
                         senderHash = senderHash,
-                        latitude = lat,
-                        longitude = lng,
-                        accuracy = acc,
-                        timestamp = ts,
-                        expiresAt = expires,
+                        latitude = telemetry.lat,
+                        longitude = telemetry.lng,
+                        accuracy = telemetry.acc,
+                        timestamp = telemetry.ts,
+                        expiresAt = telemetry.expires,
                         receivedAt = System.currentTimeMillis(),
-                        approximateRadius = approxRadius,
+                        approximateRadius = telemetry.approxRadius,
                         appearanceJson = appearanceJson,
                     )
 
                 receivedLocationDao.insert(entity)
-                Log.d(TAG, "Stored location from $senderHash: ($lat, $lng) approxRadius=$approxRadius appearance=${appearanceJson != null}")
+                Log.d(
+                    TAG,
+                    "Stored location from $senderHash: (${telemetry.lat}, ${telemetry.lng}) " +
+                        "approxRadius=${telemetry.approxRadius} appearance=${appearanceJson != null}",
+                )
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to parse/store received location: $locationJson", e)
+                Log.e(TAG, "Failed to store received location: $telemetry", e)
             }
         }
 

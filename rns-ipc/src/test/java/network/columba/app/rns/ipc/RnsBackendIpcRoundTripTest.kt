@@ -360,6 +360,7 @@ private class FakeRnsLxmf : RnsLxmf {
     ): Result<PropagationState> = Result.failure(NotImplementedError())
 
     override suspend fun getPropagationState(): Result<PropagationState> = Result.failure(NotImplementedError())
+    override suspend fun cancelMessageSync(): Result<Unit> = Result.success(Unit)
     override val propagationStateFlow: SharedFlow<PropagationState> = propagation.asSharedFlow()
 
     override fun setConversationActive(active: Boolean) {}

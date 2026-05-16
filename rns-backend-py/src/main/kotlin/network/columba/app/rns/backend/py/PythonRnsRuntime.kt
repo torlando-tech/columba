@@ -153,7 +153,7 @@ class PythonRnsRuntime(
                 identityClass.callAttr("from_bytes", key.toPyBytes())
             } ?: config.identityFilePath?.let { path ->
                 identityClass.callAttr("from_file", path)
-            } ?: identityClass.callAttr("Identity") // fresh keys — caller persists
+            } ?: identityClass.call() // fresh keys — Python `RNS.Identity()`; caller persists
         localIdentity = identity
         // RNS.Identity.hash is an attribute. Cache the live identity under its
         // hex hash so recallIdentity / sends can resolve it without a re-derive.

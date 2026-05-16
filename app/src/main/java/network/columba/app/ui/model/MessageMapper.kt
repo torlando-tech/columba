@@ -595,7 +595,14 @@ private fun parsePositionalAttachment(
         Log.w(TAG, "Positional file attachment at $index has ${entry.length()} elements, expected >= 2")
         return null
     }
-    val filename = entry.optString(0, "unknown").ifEmpty { "unknown" }
+    // Filename element: Columba (both backends) sends bytes; upstream LXMF
+    // serializers hex-encode every ByteArray field value, so what arrives
+    // here is the lowercase hex of the UTF-8 filename. Sideband sends a
+    // `str` filename which arrives unchanged. Decode hex when it looks
+    // like hex; fall back to the raw string otherwise so Sideband interop
+    // (real strings) and Columba<->Columba (hex bytes) both render right.
+    val rawFilename = entry.optString(0, "unknown").ifEmpty { "unknown" }
+    val filename = decodeHexFilenameOrNull(rawFilename) ?: rawFilename
     // Data is hex-encoded; each byte is 2 hex chars. If a size field is
     // provided as element [2] prefer it, otherwise infer from the hex
     // length — matches the observed Sideband wire payload exactly.
@@ -607,6 +614,30 @@ private fun parsePositionalAttachment(
         mimeType = FileUtils.getMimeTypeFromFilename(filename),
         index = index,
     )
+}
+
+/**
+ * If [s] looks like lowercase-hex (even-length, all `[0-9a-f]`) and decodes
+ * to printable UTF-8, return the decoded string; else null. The "printable"
+ * check rejects a real filename that *happens* to be a hex literal (e.g.
+ * `"deadbeef"`) from getting decoded into garbage — the round-trip-to-bytes-
+ * and-back check guards the false-positive case.
+ */
+private fun decodeHexFilenameOrNull(s: String): String? {
+    if (s.length < 2 || s.length % 2 != 0) return null
+    if (!s.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
+    return try {
+        val bytes = ByteArray(s.length / 2) {
+            ((Character.digit(s[it * 2], 16) shl 4) + Character.digit(s[it * 2 + 1], 16)).toByte()
+        }
+        val decoded = String(bytes, Charsets.UTF_8)
+        // Filenames are practically always printable; reject if decode
+        // produced control characters (other than tab/newline) — that's
+        // a hex literal that just happened to look hex-shaped.
+        if (decoded.any { it.code in 0..31 && it != '\t' && it != '\n' }) null else decoded
+    } catch (e: Exception) {
+        null
+    }
 }
 
 /**

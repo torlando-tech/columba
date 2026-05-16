@@ -895,6 +895,61 @@ class MessageMapperTest {
     }
 
     @Test
+    fun `toMessageUi decodes hex-encoded filename from Columba sender`() {
+        // Both Columba backends send the filename element as bytes
+        // (`PythonRnsLxmf.buildFields`: `name.toByteArray()`), so the
+        // upstream-LXMF serializer hex-encodes the filename when it
+        // crosses into fieldsJson. Receiver must hex-decode UTF-8 when
+        // the element looks like lowercase-hex; without this, the file
+        // bubble rendered the raw hex string in the UI on every Columba
+        // -> Columba file attachment.
+        // 0x74 65 73 74 2d 61 74 74 61 63 68 2e 74 78 74 == "test-attach.txt"
+        val fieldsJson = """{"5": [["746573742d6174746163682e747874", "0102", 16]]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("test-attach.txt", result.fileAttachments[0].filename)
+        assertEquals("text/plain", result.fileAttachments[0].mimeType)
+        assertEquals(16, result.fileAttachments[0].sizeBytes)
+    }
+
+    @Test
+    fun `toMessageUi preserves plain-string filename from Sideband sender`() {
+        // Sideband (and other upstream-LXMF apps) sends the filename
+        // element as a real str — the hex-fallback path must NOT touch
+        // strings that aren't all-hex. Regression guard alongside the
+        // existing 'positional wire format' test.
+        val fieldsJson = """{"5": [["report-2026.pdf", "0102"]]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(1, result.fileAttachments.size)
+        assertEquals("report-2026.pdf", result.fileAttachments[0].filename)
+        assertEquals("application/pdf", result.fileAttachments[0].mimeType)
+    }
+
+    @Test
+    fun `toMessageUi rejects hex decode that produces control-char garbage`() {
+        // Odd edge case: a string that is all-hex AND has even length
+        // but whose decoded bytes contain ASCII control characters
+        // (NUL/SOH/etc.) is almost certainly not a real UTF-8 filename
+        // — fall back to the raw string. `0102` decodes to <SOH><STX>.
+        val fieldsJson = """{"5": [["0102", "abcd"]]}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(1, result.fileAttachments.size)
+        // The control-char decode is rejected by the printable-check;
+        // we fall back to the raw hex literal as the filename. The UI
+        // still renders something rather than throwing or showing empty.
+        assertEquals("0102", result.fileAttachments[0].filename)
+    }
+
+    @Test
     fun `toMessageUi accepts explicit size in positional wire format`() {
         // Optional third element, if present, overrides the inferred size.
         val fieldsJson = """{"5": [["doc.pdf", "0102", 9999]]}"""

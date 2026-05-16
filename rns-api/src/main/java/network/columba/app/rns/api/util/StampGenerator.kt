@@ -1,4 +1,4 @@
-package network.columba.app.crypto
+package network.columba.app.rns.api.util
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -15,23 +15,33 @@ import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Native Kotlin implementation of LXMF stamp generation.
  *
- * This replaces Python's multiprocessing-based stamp generation which fails on Android
- * due to lack of sem_open support and aggressive process killing by Android.
+ * Replaces Python LXMF's multiprocessing-based stamp generation, which
+ * fails on Android because Chaquopy lacks `sem_open` and Android
+ * aggressively kills idle helper processes (the multiprocessing.Manager
+ * deadlocks waiting on the worker that just got SIGKILL'd).
  *
- * The algorithm matches LXMF's LXStamper.py exactly:
- * 1. Generate workblock using HKDF expansion
- * 2. Find a stamp (random 32 bytes) where SHA256(workblock + stamp) has enough leading zeros
+ * The algorithm matches LXMF/LXStamper.py exactly:
+ *   1. Generate workblock via HKDF expansion (HMAC-SHA256, RFC 5869)
+ *   2. Search for a `stamp` (random 32 bytes) where
+ *      `SHA256(workblock || stamp)` has at least `stampCost` leading
+ *      zero bits.
+ *
+ * Lives in `:rns-api` (not `:app`) so the Python backend
+ * (`:rns-backend-py.PythonRnsRuntime`) can wire it into upstream LXMF
+ * via `LXStamper.set_external_generator(...)` — the same Strangler-Fig
+ * offload the release/v0.10.x service binder performed before the
+ * dual-build refactor.
+ *
+ * Stateless, no-arg constructor, safe to share — callers may inject a
+ * single instance or construct on demand. Hilt scope intentionally NOT
+ * declared here so this module stays Hilt-free; consumers that want
+ * `@Singleton` scope wrap with their own `@Provides`.
  */
-@Singleton
-class StampGenerator
-    @Inject
-    constructor() {
+class StampGenerator {
         companion object {
             private const val TAG = "StampGenerator"
             const val STAMP_SIZE = 32 // 256 bits / 8

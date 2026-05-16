@@ -66,6 +66,7 @@ class MapViewModelTest {
     private lateinit var receivedLocationDao: ReceivedLocationDao
     private lateinit var locationSharingManager: LocationSharingManager
     private lateinit var announceDao: AnnounceDao
+    private lateinit var conversationDao: network.columba.app.data.db.dao.ConversationDao
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var mapTileSourceManager: MapTileSourceManager
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
@@ -87,6 +88,7 @@ class MapViewModelTest {
         receivedLocationDao = mockk()
         locationSharingManager = mockk()
         announceDao = mockk()
+        conversationDao = mockk()
         settingsRepository = mockk()
         mapTileSourceManager = mockk()
         telemetryCollectorManager = mockk()
@@ -100,6 +102,7 @@ class MapViewModelTest {
         every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
         every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(emptyList())
         every { announceDao.getAnnouncesForLocationSenders() } returns flowOf(emptyList())
+        every { conversationDao.getAllPeerNameLookups() } returns flowOf(emptyList())
         every { locationSharingManager.isSharing } returns MutableStateFlow(false)
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
         every { locationSharingManager.startSharing(any(), any(), any()) } just Runs
@@ -144,6 +147,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -168,6 +172,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -192,6 +197,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -216,6 +222,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -245,6 +252,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -277,6 +285,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -309,6 +318,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -339,6 +349,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -363,6 +374,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -392,6 +404,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -465,6 +478,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -515,6 +529,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -542,6 +557,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -568,6 +584,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -592,6 +609,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -649,6 +667,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -704,6 +723,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -751,6 +771,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -777,6 +798,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -813,6 +835,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -844,6 +867,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -873,6 +897,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -902,6 +927,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -931,6 +957,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -960,6 +987,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -989,6 +1017,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1019,6 +1048,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1050,6 +1080,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1093,6 +1124,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1119,6 +1151,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1159,6 +1192,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1185,6 +1219,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1211,6 +1246,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1273,6 +1309,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1311,6 +1348,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1343,6 +1381,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1410,6 +1449,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1445,6 +1485,7 @@ class MapViewModelTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(emptyList())
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getAnnouncesForLocationSenders() } returns flowOf(emptyList())
+        every { conversationDao.getAllPeerNameLookups() } returns flowOf(emptyList())
 
             viewModel =
                 MapViewModel(
@@ -1453,6 +1494,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1465,7 +1507,10 @@ class MapViewModelTest {
                 val state = awaitItem()
                 assertEquals(1, state.contactMarkers.size)
                 // Falls back to first 8 characters of hash
-                assertEquals("abcdefgh", state.contactMarkers[0].displayName)
+                // Fallback formatter changed to `Peer ABCDEFGH` (uppercase,
+                // matching PeerNameResolver.formatHashAsFallback) — reads
+                // less like a stray hash leak in the marker label.
+                assertEquals("Peer ABCDEFGH", state.contactMarkers[0].displayName)
             }
         }
 
@@ -1511,6 +1556,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1567,6 +1613,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1622,6 +1669,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1667,6 +1715,7 @@ class MapViewModelTest {
             every { contactRepository.getEnrichedContacts() } returns flowOf(contacts)
             every { receivedLocationDao.getLatestLocationsPerSenderUnfiltered() } returns flowOf(receivedLocations)
             every { announceDao.getAnnouncesForLocationSenders() } returns flowOf(emptyList())
+        every { conversationDao.getAllPeerNameLookups() } returns flowOf(emptyList())
 
             viewModel =
                 MapViewModel(
@@ -1675,6 +1724,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1707,6 +1757,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1734,6 +1785,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1758,6 +1810,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1787,6 +1840,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1807,6 +1861,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1837,6 +1892,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1863,6 +1919,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1893,6 +1950,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1922,6 +1980,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1942,6 +2001,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -1974,6 +2034,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -2001,6 +2062,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -2020,6 +2082,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -2044,6 +2107,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -2065,6 +2129,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -2088,6 +2153,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,
@@ -2113,6 +2179,7 @@ class MapViewModelTest {
                     receivedLocationDao,
                     locationSharingManager,
                     announceDao,
+                    conversationDao,
                     settingsRepository,
                     mapTileSourceManager,
                     telemetryCollectorManager,

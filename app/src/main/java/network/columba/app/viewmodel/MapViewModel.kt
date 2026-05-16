@@ -192,6 +192,7 @@ class MapViewModel
         private val receivedLocationDao: ReceivedLocationDao,
         private val locationSharingManager: LocationSharingManager,
         private val announceDao: AnnounceDao,
+        private val conversationDao: network.columba.app.data.db.dao.ConversationDao,
         private val settingsRepository: SettingsRepository,
         private val mapTileSourceManager: MapTileSourceManager,
         private val telemetryCollectorManager: TelemetryCollectorManager,
@@ -361,8 +362,26 @@ class MapViewModel
                     receivedLocationDao.getLatestLocationsPerSenderUnfiltered(),
                     contacts,
                     announceDao.getAnnouncesForLocationSenders(),
+                    // Conversation peerNames — covers the case where we've
+                    // chatted with a peer (so the conversation row has a
+                    // real name) but the peer isn't in contacts and the
+                    // announce has aged out of the announces table. Without
+                    // this fallback the marker label drops to "Peer 1A2B3C4D"
+                    // (the formatted-hash placeholder).
+                    conversationDao.getAllPeerNameLookups(),
                     _refreshTrigger,
-                ) { locations, contactList, announceList, _ ->
+                ) { args ->
+                    @Suppress("UNCHECKED_CAST")
+                    val locations =
+                        args[0] as List<network.columba.app.data.db.entity.ReceivedLocationEntity>
+                    @Suppress("UNCHECKED_CAST")
+                    val contactList = args[1] as List<EnrichedContact>
+                    @Suppress("UNCHECKED_CAST")
+                    val announceList = args[2] as List<network.columba.app.data.model.MapAnnounceLookup>
+                    @Suppress("UNCHECKED_CAST")
+                    val conversationPeerNames =
+                        args[3] as List<network.columba.app.data.db.dao.ConversationPeerNameLookup>
+
                     val currentTime = System.currentTimeMillis()
                     val localHashes = telemetryCollectorManager.getLocalIdentityHashes()
 
@@ -374,7 +393,17 @@ class MapViewModel
                     val announceMap = announceList.associateBy { it.destinationHash }
                     val announceMapLower = announceList.associateBy { it.destinationHash.lowercase() }
 
-                    Log.d(TAG, "Processing ${locations.size} locations, ${contactList.size} contacts, ${announceList.size} announces")
+                    // Lookup map from conversations (case-insensitive only —
+                    // we already lowercase-normalize senderHash on the
+                    // receive side in LocationSharingManager).
+                    val conversationNameMapLower =
+                        conversationPeerNames.associate { it.peerHash.lowercase() to it.peerName }
+
+                    Log.d(
+                        TAG,
+                        "Processing ${locations.size} locations, ${contactList.size} contacts, " +
+                            "${announceList.size} announces, ${conversationPeerNames.size} conversation names",
+                    )
 
                     locations
                         .mapNotNull { loc ->
@@ -401,16 +430,39 @@ class MapViewModel
                                 announceMap[loc.senderHash]
                                     ?: announceMapLower[loc.senderHash.lowercase()]
 
-                            // Try contacts first (exact, then case-insensitive)
-                            // Then try announces (exact, then case-insensitive)
+                            // Name resolution chain — must match the order
+                            // PeerNameResolver.resolve uses elsewhere
+                            // (MessageCollector, ServicePersistenceManager):
+                            //   1. Contact custom nickname / display name
+                            //   2. Announce peer name (network broadcast)
+                            //   3. Conversation peer name (snapshot from
+                            //      when MessageCollector saved the row)
+                            //   4. Formatted hash fallback (`"Peer 1A2B3C4D"`
+                            //      uppercase) — matches PeerNameResolver's
+                            //      formatHashAsFallback, NOT a raw
+                            //      `senderHash.take(8)` lowercase prefix,
+                            //      which used to leak through and read as
+                            //      "ugly hex" in the marker label.
+                            val senderHashLower = loc.senderHash.lowercase()
+                            val fallbackName =
+                                if (loc.senderHash.length >= 8) {
+                                    "Peer ${loc.senderHash.take(8).uppercase()}"
+                                } else {
+                                    "Unknown Peer"
+                                }
                             val displayName =
                                 contactMap[loc.senderHash]?.displayName
-                                    ?: contactMapLower[loc.senderHash.lowercase()]?.displayName
-                                    ?: announce?.peerName
-                                    ?: loc.senderHash.take(8)
+                                    ?: contactMapLower[senderHashLower]?.displayName
+                                    ?: announce?.peerName?.takeIf { it.isNotBlank() }
+                                    ?: conversationNameMapLower[senderHashLower]
+                                    ?: fallbackName
 
-                            if (displayName == loc.senderHash.take(8)) {
-                                Log.w(TAG, "No name found for senderHash: ${loc.senderHash}")
+                            if (displayName == fallbackName) {
+                                Log.w(
+                                    TAG,
+                                    "No name found for senderHash: ${loc.senderHash} — " +
+                                        "no contact, announce, or conversation match",
+                                )
                             }
 
                             // Prefer appearance from telemetry message, fall back to announce

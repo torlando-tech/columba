@@ -112,6 +112,19 @@ class TestReceiver : BroadcastReceiver() {
             "network.columba.test.SEND_PROP" ->
                 dispatchSend(app, intent, DeliveryMethod.PROPAGATED)
 
+            "network.columba.test.SEND_LOCATION" -> {
+                val to = intent.getStringExtra("to") ?: ""
+                val json = intent.getStringExtra("json") ?: ""
+                if (to.isEmpty() || json.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "loc_send_err reason=missing_args to=$to bytes=${json.length}",
+                    )
+                } else {
+                    TestController.handleSendLocation(app, to, json)
+                }
+            }
+
             "network.columba.test.GET_MSG_STATE" -> {
                 val id = intent.getStringExtra("id") ?: ""
                 if (id.isEmpty()) {

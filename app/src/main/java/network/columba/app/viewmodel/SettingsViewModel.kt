@@ -904,11 +904,10 @@ class SettingsViewModel
                         .putBoolean("is_user_shutdown", true)
                         .commit()
 
-                    // Unbind FIRST to prevent auto-rebind if the service process crashes.
-                    // Do NOT call reticulumProtocol.shutdown() — its async Python cleanup can
-                    // crash the service process before ACTION_STOP is delivered, triggering
-                    // the protocol's auto-rebind which restarts the service.
-                    // ACTION_STOP will handle shutdown internally in the service process.
+                    reticulumProtocol.shutdown()
+
+                    // unbindService() is a no-op on NativeReticulumProtocol but kept for
+                    // symmetry with ColumbaApplication.onTerminate's ordering.
                     reticulumProtocol.unbindService()
 
                     // Send ACTION_STOP to actually stop the foreground service and remove notification

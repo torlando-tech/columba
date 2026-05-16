@@ -3905,7 +3905,7 @@ class MessagingViewModelTest {
         }
 
     @Test
-    fun `sendReaction updates message fieldsJson in database`() =
+    fun `sendReaction writes flat reactionsJson blob to reactionsJson column`() =
         runViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
@@ -3924,6 +3924,7 @@ class MessagingViewModelTest {
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = null,
                 )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
@@ -3934,24 +3935,22 @@ class MessagingViewModelTest {
                 rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act
             viewModel.sendReaction("test-msg-id", "👍")
             advanceUntilIdle()
 
-            // Assert: Database was updated with reaction in fieldsJson
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            assertTrue(json.has("16"))
-            val field16 = json.getJSONObject("16")
-            assertTrue(field16.has("reactions"))
-            val reactions = field16.getJSONObject("reactions")
-            assertTrue(reactions.has("👍"))
+            // Assert: Database was updated with the flat reactions blob
+            // (DB v2+ shape — no field-16 wrapper).
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("👍"))
+            assertEquals(1, json.getJSONArray("👍").length())
         }
 
     @Test
@@ -4043,13 +4042,15 @@ class MessagingViewModelTest {
         }
 
     @Test
-    fun `sendReaction adds reaction to existing fieldsJson with reply_to`() =
+    fun `sendReaction does not touch fieldsJson when the target has reply metadata`() =
         runViewModelTest {
+            // DB v2 split: reply metadata stays in fieldsJson / dedicated
+            // `replyToMessageId` column, reactions live in reactionsJson.
+            // The two never collide, so reactions for a reply-message
+            // only need to update reactionsJson.
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Setup: Mock message that already has a reply_to in field 16
-            val existingFieldsJson = """{"16": {"reply_to": "original-msg-id"}}"""
             val testMessage =
                 MessageEntity(
                     id = "test-msg-id",
@@ -4059,38 +4060,33 @@ class MessagingViewModelTest {
                     timestamp = System.currentTimeMillis(),
                     isFromMe = false,
                     status = "delivered",
-                    fieldsJson = existingFieldsJson,
+                    fieldsJson = null,
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = "original-msg-id",
+                    reactionsJson = null,
                 )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
-            // Mock protocol
             val mockReceipt = mockk<MessageReceipt>()
             every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
             coEvery {
                 rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedReactionsJson))
             } just Runs
 
-            // Act
             viewModel.sendReaction("test-msg-id", "❤️")
             advanceUntilIdle()
 
-            // Assert: Both reply_to and reactions are preserved
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val field16 = json.getJSONObject("16")
-            assertEquals("original-msg-id", field16.getString("reply_to"))
-            assertTrue(field16.has("reactions"))
-            val reactions = field16.getJSONObject("reactions")
-            assertTrue(reactions.has("❤️"))
+            // Assert: only the reactions blob is touched.
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("❤️"))
+            assertEquals(1, json.length()) // no other keys leaked in
         }
 
     @Test
@@ -4099,8 +4095,8 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Setup: Mock message that already has a 👍 reaction from someone else
-            val existingFieldsJson = """{"16": {"reactions": {"👍": ["other-sender-hash"]}}}"""
+            // Setup: target message already has a 👍 reaction from another peer
+            val existingReactionsJson = """{"👍": ["other-sender-hash"]}"""
             val testMessage =
                 MessageEntity(
                     id = "test-msg-id",
@@ -4110,10 +4106,11 @@ class MessagingViewModelTest {
                     timestamp = System.currentTimeMillis(),
                     isFromMe = false,
                     status = "delivered",
-                    fieldsJson = existingFieldsJson,
+                    fieldsJson = null,
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = existingReactionsJson,
                 )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
@@ -4124,10 +4121,10 @@ class MessagingViewModelTest {
                 rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act
@@ -4135,10 +4132,9 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Assert: Both senders are in the reaction list
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val reactions = json.getJSONObject("16").getJSONObject("reactions")
-            val thumbsUp = reactions.getJSONArray("👍")
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            val thumbsUp = json.getJSONArray("👍")
             assertEquals(2, thumbsUp.length())
             assertEquals("other-sender-hash", thumbsUp.getString(0))
             // Our sender hash is derived from testIdentity
@@ -4173,13 +4169,14 @@ class MessagingViewModelTest {
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = null,
                 )
             coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act: Emit incoming reaction
@@ -4187,12 +4184,11 @@ class MessagingViewModelTest {
             reactionFlow.emit(reactionJson)
             advanceUntilIdle()
 
-            // Assert: Database was updated
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val reactions = json.getJSONObject("16").getJSONObject("reactions")
-            assertTrue(reactions.has("😂"))
-            val senders = reactions.getJSONArray("😂")
+            // Assert: Database was updated with flat reactionsJson blob
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("😂"))
+            val senders = json.getJSONArray("😂")
             assertEquals("remote-sender-hash", senders.getString(0))
         }
 
@@ -4266,8 +4262,8 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Setup: Mock target message that already has reactions
-            val existingFieldsJson = """{"16": {"reactions": {"👍": ["sender-1"]}}}"""
+            // Setup: target message already has a 👍 reaction from sender-1
+            val existingReactionsJson = """{"👍": ["sender-1"]}"""
             val targetMessage =
                 MessageEntity(
                     id = "target-msg-id",
@@ -4277,17 +4273,18 @@ class MessagingViewModelTest {
                     timestamp = System.currentTimeMillis(),
                     isFromMe = true,
                     status = "delivered",
-                    fieldsJson = existingFieldsJson,
+                    fieldsJson = null,
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = existingReactionsJson,
                 )
             coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act: Emit incoming reaction with different emoji
@@ -4295,14 +4292,13 @@ class MessagingViewModelTest {
             reactionFlow.emit(reactionJson)
             advanceUntilIdle()
 
-            // Assert: Both reactions exist
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val reactions = json.getJSONObject("16").getJSONObject("reactions")
-            assertTrue(reactions.has("👍"))
-            assertTrue(reactions.has("❤️"))
-            assertEquals(1, reactions.getJSONArray("👍").length())
-            assertEquals(1, reactions.getJSONArray("❤️").length())
+            // Assert: Both reactions exist in the flat blob
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("👍"))
+            assertTrue(json.has("❤️"))
+            assertEquals(1, json.getJSONArray("👍").length())
+            assertEquals(1, json.getJSONArray("❤️").length())
         }
 
     // ========== IMAGE STATE TESTS ==========

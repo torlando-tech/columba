@@ -130,6 +130,7 @@ class PythonRnsLxmf(
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
+        replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
     ): Result<MessageReceipt> =
@@ -140,6 +141,7 @@ class PythonRnsLxmf(
                 imageFormat = imageFormat,
                 fileAttachments = fileAttachments,
                 replyToMessageId = replyToMessageId,
+                replyQuotedContent = replyQuotedContent,
                 iconAppearance = iconAppearance,
                 extraFields = extraFields,
             )
@@ -311,6 +313,7 @@ class PythonRnsLxmf(
         imageFormat: String? = null,
         fileAttachments: List<Pair<String, ByteArray>>? = null,
         replyToMessageId: String? = null,
+        replyQuotedContent: String? = null,
         iconAppearance: IconAppearance? = null,
         extraFields: Map<Int, Any>? = null,
     ): PyObject {
@@ -336,7 +339,21 @@ class PythonRnsLxmf(
         }
 
         if (replyToMessageId != null) {
-            fields[LxmfFields.FIELD_REACTION] = pyDict(mapOf("reply_to" to replyToMessageId))
+            // MeshChatX-compatible reply format (`meshchat.py:16697`):
+            //   fields[0x30] = raw 32-byte hash (NOT a hex string)
+            //   fields[0x31] = optional UTF-8 quoted content
+            // Saves ~32 bytes per reply vs the prior
+            // `fields[0x10] = {reply_to: <hex>}` overload and cleanly
+            // separates reply-target from the reactions field.
+            val hashBytes = replyToMessageId.hexToBytes()
+            if (hashBytes != null && hashBytes.isNotEmpty()) {
+                fields[LxmfFields.FIELD_REPLY_HASH] = hashBytes.toPyBytes()
+                replyQuotedContent?.takeIf { it.isNotEmpty() }?.let {
+                    fields[LxmfFields.FIELD_REPLY_QUOTE] = it.toByteArray(Charsets.UTF_8).toPyBytes()
+                }
+            } else {
+                Log.w(TAG, "replyToMessageId could not be hex-decoded: ${replyToMessageId.take(16)}")
+            }
         }
 
         if (extraFields != null) {

@@ -94,6 +94,12 @@ data class MessageExport(
     val status: String,
     val isRead: Boolean,
     val fieldsJson: String?,
+    // DB v2+ — per-target-message reactions aggregation, flat
+    // `{emoji: [senderHex, ...]}`. Optional for backwards-compat with
+    // older export bundles that still encode reactions under
+    // `fieldsJson.field16.reactions`; MigrationImporter routes either
+    // shape into the new column.
+    val reactionsJson: String? = null,
 )
 
 /**

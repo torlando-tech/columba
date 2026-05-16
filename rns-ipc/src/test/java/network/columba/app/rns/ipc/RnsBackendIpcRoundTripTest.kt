@@ -334,6 +334,7 @@ private class FakeRnsLxmf : RnsLxmf {
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
+        replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
     ): Result<MessageReceipt> = Result.failure(NotImplementedError())

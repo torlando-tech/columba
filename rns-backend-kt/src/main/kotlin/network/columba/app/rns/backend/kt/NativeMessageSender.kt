@@ -40,6 +40,7 @@ internal class NativeMessageSender(
         val imageFormat: String? = null,
         val fileAttachments: List<Pair<String, ByteArray>>? = null,
         val replyToMessageId: String? = null,
+        val replyQuotedContent: String? = null,
         val iconAppearance: IconAppearance? = null,
         val extraFields: Map<Int, Any>? = null,
     )
@@ -140,7 +141,23 @@ internal class NativeMessageSender(
         }
 
         if (options.replyToMessageId != null) {
-            fields[16] = mutableMapOf<String, Any>("reply_to" to options.replyToMessageId)
+            // MeshChatX-compatible reply format (`meshchat.py:16697`):
+            //   fields[0x30] = raw 32-byte hash (NOT a hex string)
+            //   fields[0x31] = optional UTF-8 quoted content
+            // ~32 bytes lighter per reply than the prior
+            // `fields[0x10] = {reply_to: <hex>}` overload, and cleanly
+            // separates the reply-target hash from the reactions field.
+            runCatching {
+                val hashBytes = options.replyToMessageId.hexToBytes()
+                if (hashBytes != null && hashBytes.isNotEmpty()) {
+                    fields[LxmfFields.FIELD_REPLY_HASH] = hashBytes
+                    options.replyQuotedContent?.takeIf { it.isNotEmpty() }?.let {
+                        fields[LxmfFields.FIELD_REPLY_QUOTE] = it.toByteArray(Charsets.UTF_8)
+                    }
+                } else {
+                    Log.w(TAG, "replyToMessageId could not be hex-decoded: ${options.replyToMessageId.take(16)}")
+                }
+            }
         }
 
         if (options.extraFields != null) {

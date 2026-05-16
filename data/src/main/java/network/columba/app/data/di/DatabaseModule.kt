@@ -109,7 +109,8 @@ object DatabaseModule {
                 context,
                 ColumbaDatabase::class.java,
                 DATABASE_NAME,
-            ).fallbackToDestructiveMigration()
+            ).addMigrations(ColumbaDatabase.MIGRATION_1_2)
+            .fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .addCallback(DURABILITY_CALLBACK)

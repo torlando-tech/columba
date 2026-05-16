@@ -60,6 +60,7 @@ interface RnsLxmf {
         imageFormat: String? = null,
         fileAttachments: List<Pair<String, ByteArray>>? = null,
         replyToMessageId: String? = null,
+        replyQuotedContent: String? = null,
         iconAppearance: IconAppearance? = null,
         extraFields: Map<Int, Any>? = null,
     ): Result<MessageReceipt>

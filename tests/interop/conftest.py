@@ -32,6 +32,7 @@ import pytest
 # Local imports
 sys.path.insert(0, str(Path(__file__).parent))
 from peer_columba import ColumbaPeer  # noqa: E402
+from peer_meshchatx import MeshChatXPeer  # noqa: E402
 from peer_sideband import SidebandPeer  # noqa: E402
 
 
@@ -39,6 +40,8 @@ DEFAULT_RNSD_HOST = "10.0.0.145"
 DEFAULT_RNSD_PORT = 4242
 DEFAULT_PROP_NODE_HEX = "33f2621f135146ce30f0767d811af2b6"
 DEFAULT_SIDEBAND_SRC = os.path.expanduser("~/repos/Sideband")
+DEFAULT_MESHCHATX_SRC = os.path.expanduser("~/repos/MeshChatX")
+DEFAULT_RETICULUM_CONFIG_DIR = os.path.expanduser("~/.reticulum")
 
 
 def pytest_addoption(parser):
@@ -113,6 +116,39 @@ def columba_peer(
 
 
 @pytest.fixture(scope="session")
+def meshchatx_src() -> str:
+    p = os.environ.get("MESHCHATX_SRC", DEFAULT_MESHCHATX_SRC)
+    if not os.path.isfile(os.path.join(p, "meshchatx", "meshchat.py")):
+        pytest.skip(
+            f"MeshChatX not found at {p}/meshchatx/meshchat.py. "
+            "Set MESHCHATX_SRC to a MeshChatX checkout."
+        )
+    return p
+
+
+@pytest.fixture(scope="session")
+def reticulum_config_dir() -> str:
+    return os.environ.get(
+        "COLUMBA_RETICULUM_CONFIG_DIR",
+        DEFAULT_RETICULUM_CONFIG_DIR,
+    )
+
+
+@pytest.fixture(scope="session")
+def meshchatx_peer(meshchatx_src: str, reticulum_config_dir: str):
+    """MeshChatX peer driven over its HTTP API. Shares the host's
+    Reticulum config so the same transport carries Columba/MCx/Sideband
+    traffic. Skipped if `MESHCHATX_SRC` env var isn't set."""
+    peer = MeshChatXPeer(
+        meshchatx_src=meshchatx_src,
+        reticulum_config_dir=reticulum_config_dir,
+    )
+    peer.start(ready_timeout=120.0)
+    yield peer
+    peer.stop()
+
+
+@pytest.fixture(scope="session")
 def sideband_peer(sideband_src: str, prop_node_hex: str):
     peer = SidebandPeer(
         sideband_src=sideband_src,
@@ -135,6 +171,24 @@ class InteropPair:
     @property
     def sideband_hex(self) -> str:
         return self.sideband.identity_hex
+
+
+@dataclass
+class MeshChatXPair:
+    """Columba ↔ MeshChatX paired fixture. Exists alongside
+    `InteropPair` because MeshChatX-specific tests don't need Sideband
+    in the loop, and the MeshChatX subprocess is expensive enough that
+    we don't want every test to wait for it."""
+    columba: ColumbaPeer
+    meshchatx: MeshChatXPeer
+
+    @property
+    def columba_hex(self) -> str:
+        return self.columba.identity_hex
+
+    @property
+    def meshchatx_hex(self) -> str:
+        return self.meshchatx.identity_hex
 
 
 def _ensure_sideband_knows_columba(
@@ -251,18 +305,51 @@ def interop(columba_peer: ColumbaPeer, sideband_peer: SidebandPeer):
     yield pair
 
 
+@pytest.fixture(scope="session")
+def meshchatx_interop(columba_peer: ColumbaPeer, meshchatx_peer: MeshChatXPeer):
+    """Paired Columba ↔ MeshChatX fixture for reply / reaction interop
+    tests. Mirrors `interop` but uses MeshChatX in place of Sideband.
+
+    MeshChatX shares the host's `~/.reticulum/config` so it sits on the
+    same shared rnsd instance Columba uses. After both peers are up we
+    just need to coax the path table on each side; the rest of the
+    machinery is identical to the Sideband path readiness gate."""
+    pair = MeshChatXPair(columba=columba_peer, meshchatx=meshchatx_peer)
+
+    columba_peer.broadcast("ANNOUNCE")
+    # MeshChatX announces on startup; if a stale path entry needs to
+    # clear we can re-announce via the HTTP API, but the default boot
+    # announce is normally enough for a session-scoped fixture.
+
+    col_has_mcx_path = columba_peer.has_path_to(
+        meshchatx_peer.identity_hex, timeout=30
+    )
+    if not col_has_mcx_path:
+        pytest.fail(
+            "MeshChatX path-readiness gate timed out:\n"
+            f"  Columba path to MeshChatX: False\n"
+            f"  Columba hex: {columba_peer.identity_hex}\n"
+            f"  MeshChatX hex: {meshchatx_peer.identity_hex}\n"
+        )
+
+    yield pair
+
+
 @pytest.fixture(autouse=True)
-def _refresh_peer_state(request, interop):
+def _refresh_peer_state(request):
     """Per-test safety net: re-announce Columba if Sideband's identity
     cache has aged out between tests. RNS keeps cached identities for a
     bounded window; long test runs occasionally drop them.
 
     Autouse so every test pays the (cheap, usually zero) cost without
-    having to opt in."""
-    # Skip for tests that don't take `interop` (none currently, but
-    # safe to gate so the fixture stays cheap).
+    having to opt in. The `interop` fixture is *not* requested in the
+    signature — instead we look it up lazily via `request.getfixturevalue`
+    so MeshChatX-only tests (which use the cheaper `meshchatx_interop`
+    pair) don't eagerly spin up Sideband.
+    """
     if "interop" not in request.fixturenames:
         return
+    interop = request.getfixturevalue("interop")
     _ensure_sideband_knows_columba(
         interop.columba, interop.sideband, timeout=15
     )

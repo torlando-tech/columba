@@ -372,6 +372,24 @@ class MigrationImporter
         ): Int {
             val entities =
                 messages.map { msg ->
+                    // Bundles exported by older Columba builds carry
+                    // reactions inside `fieldsJson.field16.reactions`
+                    // and have no `reactionsJson` field; lift them out
+                    // on import so the row lands in the v2+ shape.
+                    val (lifedFieldsJson, lifedReactionsJson) =
+                        if (msg.reactionsJson != null) {
+                            msg.fieldsJson to msg.reactionsJson
+                        } else {
+                            val fieldsJson = msg.fieldsJson
+                            if (fieldsJson != null) {
+                                val split =
+                                    network.columba.app.data.db.ColumbaDatabase
+                                        .splitReactionsOutOfFieldsJson(fieldsJson)
+                                if (split != null) split else fieldsJson to null
+                            } else {
+                                null to null
+                            }
+                        }
                     MessageEntity(
                         id = msg.id,
                         conversationHash = msg.conversationHash.lowercase(),
@@ -381,7 +399,8 @@ class MigrationImporter
                         isFromMe = msg.isFromMe,
                         status = msg.status,
                         isRead = msg.isRead,
-                        fieldsJson = msg.fieldsJson,
+                        fieldsJson = lifedFieldsJson,
+                        reactionsJson = lifedReactionsJson,
                     )
                 }
             val batches = entities.chunked(100)

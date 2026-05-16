@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -587,15 +588,15 @@ class MessagingViewModel
                     val senderHash = identity.hash.joinToString("") { "%02x".format(it) }
 
                     // Update local database with the reaction (optimistic update)
-                    val updatedFieldsJson =
-                        addReactionToFieldsJson(
-                            message.fieldsJson,
+                    val updatedReactionsJson =
+                        mergeReactionIntoJson(
+                            message.reactionsJson,
                             emoji,
                             senderHash,
                         )
 
-                    // Save the updated fieldsJson to database
-                    conversationRepository.updateMessageReactions(messageId, updatedFieldsJson)
+                    // Save the updated reactions blob to the dedicated column
+                    conversationRepository.updateMessageReactions(messageId, updatedReactionsJson)
 
                     Log.d(
                         TAG,
@@ -957,16 +958,17 @@ class MessagingViewModel
                     return
                 }
 
-                // Add the reaction to the message's fieldsJson
-                val updatedFieldsJson =
-                    addReactionToFieldsJson(
-                        targetMessage.fieldsJson,
+                // Aggregate the reaction into the dedicated DB column on
+                // the target message (NOT the carrier message; reactions
+                // attach to the message being reacted *to*).
+                val updatedReactionsJson =
+                    mergeReactionIntoJson(
+                        targetMessage.reactionsJson,
                         emoji,
                         senderHash,
                     )
 
-                // Save the updated fieldsJson to database
-                conversationRepository.updateMessageReactions(targetMessageId, updatedFieldsJson)
+                conversationRepository.updateMessageReactions(targetMessageId, updatedReactionsJson)
 
                 Log.d(TAG, "😀 Reaction $emoji added to message ${targetMessageId.take(16)}... from ${senderHash.take(16)}...")
             } catch (e: Exception) {
@@ -1187,6 +1189,19 @@ class MessagingViewModel
                             imageFormat = imageFormat,
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
                             replyToMessageId = replyToId,
+                            // MeshChatX-interop reply format ships the
+                            // quoted content inline (fields[0x31]) so
+                            // recipients render the preview even when
+                            // they don't have the original in their
+                            // local store (cross-app interop, or peer
+                            // history aged out). We pull it from local
+                            // DB at send time the same way MeshChatX
+                            // does.
+                            replyQuotedContent = replyToId?.let { id ->
+                                runCatching {
+                                    conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
+                                }.getOrNull()
+                            },
                             iconAppearance = iconAppearance,
                         )
 
@@ -1640,15 +1655,38 @@ class MessagingViewModel
                         _replyPreviewCache.update { it + (messageId to uiPreview) }
                         Log.d(TAG, "Loaded reply preview for message ${messageId.take(16)}")
                     } else {
-                        // Mark as loaded with a "deleted message" placeholder
-                        val deletedPreview =
-                            network.columba.app.ui.model.ReplyPreviewUi(
-                                messageId = replyToMessageId,
-                                senderName = "",
-                                contentPreview = "Message deleted",
+                        // Local DB doesn't have the original — try the
+                        // MeshChatX-style inline quote (fields[0x31])
+                        // attached to the replying message. That field
+                        // carries the original sender's content bytes
+                        // verbatim, so cross-app interop / aged-out
+                        // peer-history cases still render a preview
+                        // instead of "Message deleted".
+                        val replyingMessage = conversationRepository.getMessageById(messageId)
+                        val inlineQuote =
+                            network.columba.app.ui.model.parseReplyQuoteFromFields(
+                                replyingMessage?.fieldsJson,
                             )
-                        _replyPreviewCache.update { it + (messageId to deletedPreview) }
-                        Log.d(TAG, "Reply target message not found: ${replyToMessageId.take(16)}")
+                        val fallbackPreview =
+                            if (inlineQuote != null && inlineQuote.isNotEmpty()) {
+                                network.columba.app.ui.model.ReplyPreviewUi(
+                                    messageId = replyToMessageId,
+                                    senderName = "",
+                                    contentPreview = inlineQuote,
+                                )
+                            } else {
+                                network.columba.app.ui.model.ReplyPreviewUi(
+                                    messageId = replyToMessageId,
+                                    senderName = "",
+                                    contentPreview = "Message deleted",
+                                )
+                            }
+                        _replyPreviewCache.update { it + (messageId to fallbackPreview) }
+                        Log.d(
+                            TAG,
+                            "Reply target ${replyToMessageId.take(16)} not in local store; " +
+                                "using ${if (inlineQuote != null) "inline quote (${inlineQuote.length} chars)" else "deleted placeholder"}",
+                        )
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading reply preview for $messageId", e)
@@ -2520,59 +2558,42 @@ private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? =
     }
 
 /**
- * Add a reaction to the fieldsJson of a message.
+ * Merge an `(emoji, sender)` event into a target message's
+ * `reactionsJson` aggregation blob.
  *
- * Updates or creates the Field 16 "reactions" dictionary, adding the sender hash
- * to the specified emoji's list of senders. If the sender already reacted with
- * this emoji, the reaction is not duplicated.
+ * Shape: flat `{emoji: [senderHex, ...]}` — no field-16 wrapper since
+ * the column is a dedicated DB surface, not an overload of the LXMF
+ * fields map.
  *
- * @param fieldsJson The existing fieldsJson string (can be null)
- * @param emoji The emoji reaction to add
- * @param senderHash The hex hash of the sender adding the reaction
- * @return The updated fieldsJson string with the reaction added
+ * Idempotent for the same `(emoji, sender)` pair (won't duplicate the
+ * sender hash). Tolerant of malformed input — a JSON-unparseable
+ * existing blob is reset to a fresh single-entry blob.
  */
-private fun addReactionToFieldsJson(
-    fieldsJson: String?,
+@VisibleForTesting
+internal fun mergeReactionIntoJson(
+    reactionsJson: String?,
     emoji: String,
     senderHash: String,
 ): String {
     val json =
-        if (fieldsJson.isNullOrEmpty()) {
+        if (reactionsJson.isNullOrEmpty()) {
             org.json.JSONObject()
         } else {
             try {
-                org.json.JSONObject(fieldsJson)
+                org.json.JSONObject(reactionsJson)
             } catch (e: Exception) {
-                Log.w(HELPER_TAG, "Failed to parse fieldsJson, creating new: ${e.message}")
+                Log.w(HELPER_TAG, "Failed to parse reactionsJson, creating new: ${e.message}")
                 org.json.JSONObject()
             }
         }
 
-    // Get or create Field 16 (app extensions)
-    val field16 =
-        if (json.has("16")) {
-            json.getJSONObject("16")
-        } else {
-            org.json.JSONObject().also { json.put("16", it) }
-        }
-
-    // Get or create reactions dictionary
-    val reactions =
-        if (field16.has("reactions")) {
-            field16.getJSONObject("reactions")
-        } else {
-            org.json.JSONObject().also { field16.put("reactions", it) }
-        }
-
-    // Get or create the sender list for this emoji
     val senderList =
-        if (reactions.has(emoji)) {
-            reactions.getJSONArray(emoji)
+        if (json.has(emoji)) {
+            json.getJSONArray(emoji)
         } else {
-            org.json.JSONArray().also { reactions.put(emoji, it) }
+            org.json.JSONArray().also { json.put(emoji, it) }
         }
 
-    // Add sender if not already present (avoid duplicates)
     var alreadyReacted = false
     for (i in 0 until senderList.length()) {
         if (senderList.optString(i) == senderHash) {

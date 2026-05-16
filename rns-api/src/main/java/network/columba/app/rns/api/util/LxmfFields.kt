@@ -48,8 +48,41 @@ object LxmfFields {
     /** Command structures (Sideband telemetry-request RPCs). */
     const val FIELD_COMMANDS = 0x09
 
-    /** Columba's custom reaction field (LXMF Field 16 = 0x10). */
+    /**
+     * Tap-back reaction field — `fields[0x10] = {reaction_to, emoji, sender}`
+     * per-event wire shape, shared with MeshChatX
+     * (`src/backend/lxmf_utils.py:11 LXMF_APP_EXTENSIONS_FIELD = 16`).
+     * `reaction_to` and `sender` are hex strings (no canonical case);
+     * `emoji` is Unicode. One reaction per LXMessage on the wire;
+     * receiver aggregates per-target-message locally for UI rendering.
+     *
+     * Upstream LXMF doesn't allocate this byte yet; both Columba and
+     * MeshChatX work in the unallocated range. Spec discussion:
+     * https://github.com/thatSFguy/reticulum-specifications/issues/8
+     */
     const val FIELD_REACTION = 0x10
+
+    /**
+     * Reply-target message hash — `fields[0x30] = ByteArray(32)` raw
+     * bytes (NOT a hex string). MeshChatX format
+     * (`meshchat.py:16697`). Saves ~32 bytes on the wire per reply vs.
+     * the hex-string-in-dict overload Columba previously used at 0x10.
+     *
+     * Inbound parse may also fall back to a legacy
+     * `fields[0x10] = {reply_to: "<hex>"}` shape for un-upgraded
+     * Columba peers — see `MessageMapper.parseReplyToFromFields`.
+     */
+    const val FIELD_REPLY_HASH = 0x30
+
+    /**
+     * Optional reply quoted-content — `fields[0x31] = ByteArray` UTF-8
+     * bytes of the original message's content the sender saw. Lets the
+     * recipient render the reply preview even when they don't have the
+     * original message in their local store (cross-app interop case;
+     * also covers OPP-only peers whose local store cycles). MeshChatX
+     * format (`meshchat.py:16698`).
+     */
+    const val FIELD_REPLY_QUOTE = 0x31
 
     /**
      * Upstream LXMF `FIELD_CUSTOM_META` (0xFD) — documented extension point

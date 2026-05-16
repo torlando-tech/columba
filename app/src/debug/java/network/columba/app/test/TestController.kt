@@ -21,6 +21,7 @@ import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.service.InterfaceConfigManager
 
@@ -45,6 +46,7 @@ object TestController {
     interface TestEntryPoint {
         fun rnsCore(): RnsCore
         fun rnsLxmf(): RnsLxmf
+        fun rnsTelemetry(): RnsTelemetry
         fun interfaceRepository(): InterfaceRepository
         fun interfaceConfigManager(): InterfaceConfigManager
     }
@@ -69,6 +71,7 @@ object TestController {
     )
     private var rnsCore: RnsCore? = null
     private var rnsLxmf: RnsLxmf? = null
+    private var rnsTelemetry: RnsTelemetry? = null
     private var interfaceRepo: InterfaceRepository? = null
     private var interfaceConfigManager: InterfaceConfigManager? = null
     private val rxQueue = mutableListOf<ReceivedMessage>()
@@ -88,6 +91,7 @@ object TestController {
         )
         rnsCore = ep.rnsCore()
         rnsLxmf = ep.rnsLxmf()
+        rnsTelemetry = ep.rnsTelemetry()
         interfaceRepo = ep.interfaceRepository()
         interfaceConfigManager = ep.interfaceConfigManager()
         receiveJob = scope.launch {
@@ -115,6 +119,14 @@ object TestController {
                 val stateName = upd.status.uppercase()
                 synchronized(deliveryLock) { deliveryStates[idHex] = stateName }
                 Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$stateName")
+            }
+        }
+        // Surface FIELD_TELEMETRY entries on received LXMF messages — the
+        // backend extracts these from `fieldsJson` and emits the raw JSON
+        // string on locationTelemetryFlow. Mirrors `rx_msg source=stream`.
+        scope.launch {
+            rnsTelemetry!!.locationTelemetryFlow.collect { json ->
+                Log.i(LOGCAT_TAG, "rx_location source=stream json=${escape(json)}")
             }
         }
         initialized = true
@@ -195,6 +207,46 @@ object TestController {
                 Log.i(
                     LOGCAT_TAG,
                     "msg_send_err method=$method to=$toHex reason=${escape(err.message ?: err::class.simpleName ?: "unknown")}",
+                )
+            }
+        }
+    }
+
+    /**
+     * Send a Sideband-shape location-telemetry message via `RnsTelemetry`.
+     * `locationJson` is the raw JSON payload that lands in LXMF Field 2
+     * (`FIELD_TELEMETRY`) — peers observe it on `locationTelemetryFlow`.
+     */
+    fun handleSendLocation(
+        context: Context,
+        toHex: String,
+        locationJson: String,
+    ) {
+        ensureInit(context)
+        scope.launch {
+            val toBytes = toHex.fromHex() ?: run {
+                Log.i(LOGCAT_TAG, "loc_send_err reason=bad_hex to=$toHex")
+                return@launch
+            }
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull() ?: run {
+                Log.i(LOGCAT_TAG, "loc_send_err reason=no_active_identity")
+                return@launch
+            }
+            val result = rnsTelemetry!!.sendLocationTelemetry(
+                destinationHash = toBytes,
+                locationJson = locationJson,
+                sourceIdentity = identity,
+                iconAppearance = null,
+            )
+            result.onSuccess { receipt ->
+                Log.i(
+                    LOGCAT_TAG,
+                    "loc_sent id=${receipt.messageHash.toHex()} to=$toHex bytes=${locationJson.length}",
+                )
+            }.onFailure { err ->
+                Log.i(
+                    LOGCAT_TAG,
+                    "loc_send_err to=$toHex reason=${escape(err.message ?: err::class.simpleName ?: "unknown")}",
                 )
             }
         }

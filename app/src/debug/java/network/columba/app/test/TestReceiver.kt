@@ -46,6 +46,10 @@ import network.columba.app.rns.api.model.DeliveryMethod
  *   network.columba.test.REMOVE_INTERFACE   --es name -> interface_removed name=<…> id=<n> applied=true
  *   network.columba.test.SET_PROP_NODE      --es hex  -> prop_node_set hex=<…> | prop_node_err …
  *   network.columba.test.SYNC_PROP                    -> prop_sync_started state=<n> messages_received=<n>
+ *   network.columba.test.SEND_IMAGE  --es to,text,path,fmt          -> img_sent id=<hex> | img_send_err …
+ *   network.columba.test.SEND_FILE   --es to,text,path,name         -> file_sent id=<hex> | file_send_err …
+ *   network.columba.test.SEND_AUDIO  --es to,text,path,codec        -> audio_sent id=<hex> | audio_send_err …
+ *   network.columba.test.SEND_ICON   --es to,text,icon,fg,bg        -> icon_sent id=<hex> | icon_send_err …
  *
  * Dispatch happens off the main thread via [TestController]'s coroutine
  * scope, so we don't need [BroadcastReceiver.goAsync]; the broadcast
@@ -122,6 +126,67 @@ class TestReceiver : BroadcastReceiver() {
                     )
                 } else {
                     TestController.handleSendLocation(app, to, json)
+                }
+            }
+
+            "network.columba.test.SEND_IMAGE" -> {
+                val to = intent.getStringExtra("to") ?: ""
+                val text = intent.getStringExtra("text") ?: ""
+                val path = intent.getStringExtra("path") ?: ""
+                val fmt = intent.getStringExtra("fmt") ?: "png"
+                if (to.isEmpty() || path.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "img_send_err reason=missing_args to=$to path=$path",
+                    )
+                } else {
+                    TestController.handleSendImage(app, to, text, path, fmt)
+                }
+            }
+
+            "network.columba.test.SEND_FILE" -> {
+                val to = intent.getStringExtra("to") ?: ""
+                val text = intent.getStringExtra("text") ?: ""
+                val path = intent.getStringExtra("path") ?: ""
+                val name = intent.getStringExtra("name") ?: ""
+                if (to.isEmpty() || path.isEmpty() || name.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "file_send_err reason=missing_args to=$to path=$path name=$name",
+                    )
+                } else {
+                    TestController.handleSendFile(app, to, text, path, name)
+                }
+            }
+
+            "network.columba.test.SEND_AUDIO" -> {
+                val to = intent.getStringExtra("to") ?: ""
+                val text = intent.getStringExtra("text") ?: ""
+                val path = intent.getStringExtra("path") ?: ""
+                val codec = intent.getStringExtra("codec")?.toIntOrNull() ?: 0
+                if (to.isEmpty() || path.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "audio_send_err reason=missing_args to=$to path=$path",
+                    )
+                } else {
+                    TestController.handleSendAudio(app, to, text, path, codec)
+                }
+            }
+
+            "network.columba.test.SEND_ICON" -> {
+                val to = intent.getStringExtra("to") ?: ""
+                val text = intent.getStringExtra("text") ?: ""
+                val icon = intent.getStringExtra("icon") ?: ""
+                val fg = intent.getStringExtra("fg") ?: ""
+                val bg = intent.getStringExtra("bg") ?: ""
+                if (to.isEmpty() || icon.isEmpty() || fg.isEmpty() || bg.isEmpty()) {
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "icon_send_err reason=missing_args to=$to icon=$icon fg=$fg bg=$bg",
+                    )
+                } else {
+                    TestController.handleSendIcon(app, to, text, icon, fg, bg)
                 }
             }
 
@@ -223,6 +288,11 @@ class TestReceiver : BroadcastReceiver() {
     ) {
         val to = intent.getStringExtra("to") ?: ""
         val text = intent.getStringExtra("text") ?: ""
+        // Optional flag — when present + true, hands `tryPropagationOnFail`
+        // through to the LXMF send so a failed DIRECT/OPPORTUNISTIC retries
+        // as PROPAGATED (Sideband pattern). String form ("true"/"false") so
+        // `adb shell am broadcast --es try_prop true` works without --ez.
+        val tryProp = intent.getStringExtra("try_prop")?.equals("true", ignoreCase = true) == true
         if (to.isEmpty() || text.isEmpty()) {
             Log.i(
                 TestController.LOGCAT_TAG,
@@ -230,6 +300,6 @@ class TestReceiver : BroadcastReceiver() {
             )
             return
         }
-        TestController.handleSend(app, method, to, text)
+        TestController.handleSend(app, method, to, text, tryPropagationOnFail = tryProp)
     }
 }

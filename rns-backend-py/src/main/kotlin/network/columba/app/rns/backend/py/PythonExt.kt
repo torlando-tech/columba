@@ -40,6 +40,23 @@ fun List<*>.toPyList(): PyObject {
     return Python.getInstance().builtins.callAttr("list", converted.toTypedArray())
 }
 
+/**
+ * Chaquopy footgun guard: Kotlin `Map` -> real Python `dict`.
+ *
+ * Same shape of bug as [toPyList]. Passing a Kotlin/Java `Map` (incl.
+ * `HashMap`) into a `callAttr` site that expects a `dict` makes Python see
+ * `'HashMap' object is not iterable` — `builtins.dict(map)` tries to iterate
+ * the proxy as `(key, value)` pairs and Chaquopy's `Map` proxy doesn't expose
+ * that protocol. Build the dict via `__setitem__` instead.
+ *
+ * Values that are already [PyObject]s are passed through unchanged.
+ */
+fun Map<*, *>.toPyDict(): PyObject {
+    val dict = Python.getInstance().builtins.callAttr("dict")
+    forEach { (k, v) -> dict.callAttr("__setitem__", k, v) }
+    return dict
+}
+
 /** Kotlin `ByteArray` -> Python `bytes`. Chaquopy hands a `ByteArray` to a
  *  `callAttr` arg as a `jarray('B')`; some upstream code paths want a real
  *  `bytes`. Cheap to be explicit. */

@@ -431,10 +431,10 @@ private class FakeRnsCore : RnsCore {
 }
 
 private class FakeRnsTelemetry : RnsTelemetry {
-    private val emissions = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    private val emissions = MutableSharedFlow<network.columba.app.rns.api.model.LocationTelemetry>(extraBufferCapacity = 4)
     override suspend fun sendLocationTelemetry(
         destinationHash: ByteArray,
-        locationJson: String,
+        telemetry: network.columba.app.rns.api.model.LocationTelemetry,
         sourceIdentity: Identity,
         iconAppearance: IconAppearance?,
     ): Result<MessageReceipt> = Result.failure(NotImplementedError())
@@ -448,7 +448,8 @@ private class FakeRnsTelemetry : RnsTelemetry {
     override suspend fun storeOwnTelemetry(locationJson: String, iconAppearance: IconAppearance?) =
         Result.success(Unit)
     override suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>) = Result.success(Unit)
-    override val locationTelemetryFlow: SharedFlow<String> = emissions.asSharedFlow()
+    override val locationTelemetryFlow: SharedFlow<network.columba.app.rns.api.model.LocationTelemetry> =
+        emissions.asSharedFlow()
 }
 
 private class FakeRnsNomadnet : RnsNomadnet {

@@ -688,19 +688,34 @@ class TelemetryCollectorManager
                     return TelemetrySendResult.NoLocationAvailable
                 }
 
-                // Build location JSON using the location's actual capture time
-                // Fallback to current time if location.time is 0 (unknown)
-                val telemetryData =
-                    LocationTelemetryData(
+                // Build typed location payload using the location's actual capture time
+                // (fall back to current time if location.time is 0 / unknown).
+                val telemetry =
+                    network.columba.app.rns.api.model.LocationTelemetry(
                         lat = location.latitude,
                         lng = location.longitude,
                         acc = location.accuracy,
                         ts = if (location.time > 0) location.time else System.currentTimeMillis(),
                         altitude = location.altitude,
-                        speed = location.speed,
-                        bearing = location.bearing,
+                        speed = location.speed.toDouble(),
+                        bearing = location.bearing.toDouble(),
                     )
-                val locationJson = Json.encodeToString(telemetryData)
+                // storeOwnTelemetry still accepts a JSON string (the
+                // collector-host TODO path; not Sideband-interop relevant).
+                // Re-serialize from `telemetry` only for that branch.
+                val locationJson by lazy {
+                    val data =
+                        LocationTelemetryData(
+                            lat = telemetry.lat,
+                            lng = telemetry.lng,
+                            acc = telemetry.acc,
+                            ts = telemetry.ts,
+                            altitude = telemetry.altitude,
+                            speed = telemetry.speed.toFloat(),
+                            bearing = telemetry.bearing.toFloat(),
+                        )
+                    Json.encodeToString(data)
+                }
 
                 // Get user's icon appearance for Sideband/MeshChat interoperability
                 val iconAppearance =
@@ -738,7 +753,7 @@ class TelemetryCollectorManager
                         val collectorBytes = collectorHash.hexToByteArray()
                         rnsTelemetry.sendLocationTelemetry(
                             destinationHash = collectorBytes,
-                            locationJson = locationJson,
+                            telemetry = telemetry,
                             sourceIdentity = sourceIdentity,
                             iconAppearance = iconAppearance,
                         )

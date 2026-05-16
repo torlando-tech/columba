@@ -8,8 +8,10 @@ import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.TelemeterCodec
 import network.columba.app.rns.api.util.toHex
 import java.util.concurrent.ConcurrentHashMap
 
@@ -65,16 +67,30 @@ class PythonRnsTelemetry(
 
     override suspend fun sendLocationTelemetry(
         destinationHash: ByteArray,
-        locationJson: String,
+        telemetry: LocationTelemetry,
         sourceIdentity: Identity,
         iconAppearance: IconAppearance?,
     ): Result<MessageReceipt> =
         pyResult {
             runtime.requireRunning()
-            // FIELD_TELEMETRY carries the location JSON payload; FIELD_ICON_APPEARANCE
-            // optionally rides along (Sideband/MeshChat interop, LXMF Field 4).
+            // Wire format (Sideband-interop, paramount):
+            //   FIELD_TELEMETRY (0x02)   = upstream Telemeter msgpack
+            //                              ({SID_TIME, SID_LOCATION: [...]})
+            //   FIELD_CUSTOM_META (0xFD) = Columba's cease/expires/approxRadius
+            //                              msgpack — only attached when non-empty;
+            //                              Sideband ignores entirely.
+            //   FIELD_ICON_APPEARANCE (0x04) = sender chrome (Sideband interop).
+            //
+            // Encoding happens Kotlin-side via the shared
+            // `TelemeterCodec` — one implementation of the bit-format
+            // both backends interop over. The Python side just gets
+            // the resulting bytes; `event_bridge.py` no longer carries
+            // any Telemeter-encoding logic.
+            val telemetryBytes = TelemeterCodec.packLocationTelemetry(telemetry)
+            val metaBytes = TelemeterCodec.packColumbaMeta(telemetry)
             val fields = buildFieldsDict {
-                put(LxmfFields.FIELD_TELEMETRY, locationJson)
+                putRaw(LxmfFields.FIELD_TELEMETRY, telemetryBytes.toPyBytes())
+                metaBytes?.let { putRaw(LxmfFields.FIELD_CUSTOM_META, it.toPyBytes()) }
                 iconAppearance?.let { put(LxmfFields.FIELD_ICON_APPEARANCE, it.toPyField()) }
             }
             sendLxmfWithFields(destinationHash, fields)
@@ -149,7 +165,7 @@ class PythonRnsTelemetry(
 
     // ==================== Observable flow ====================
 
-    override val locationTelemetryFlow: SharedFlow<String> = events.locationTelemetry
+    override val locationTelemetryFlow: SharedFlow<LocationTelemetry> = events.locationTelemetry
 
     // ==================== Internal helpers ====================
 
@@ -253,15 +269,6 @@ class PythonRnsTelemetry(
     }
 }
 
-/**
- * Kotlin `Map` -> real Python `dict`. Mirrors [toPyList]'s footgun guard: a raw
- * Kotlin map handed into a `callAttr` dict parameter is not seen as a `dict`
- * upstream. Values that are already [PyObject]s are passed through; everything
- * else crosses as Chaquopy's default marshalling.
- */
-private fun Map<*, *>.toPyDict(): PyObject {
-    val builtins = com.chaquo.python.Python.getInstance().builtins
-    val dict = builtins.callAttr("dict")
-    forEach { (k, v) -> dict.callAttr("__setitem__", k, v) }
-    return dict
-}
+// `toPyDict()` lives in `PythonExt.kt` — promoted from this file when
+// `PythonRnsNomadnet.parseFormData` hit the same `'HashMap' object is not
+// iterable` crash this helper was built to dodge.

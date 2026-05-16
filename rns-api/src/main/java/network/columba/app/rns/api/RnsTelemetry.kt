@@ -3,6 +3,7 @@ package network.columba.app.rns.api
 import kotlinx.coroutines.flow.SharedFlow
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.MessageReceipt
 
 /**
@@ -16,16 +17,26 @@ import network.columba.app.rns.api.model.MessageReceipt
  */
 interface RnsTelemetry {
     /**
-     * Send location telemetry to a destination via LXMF field 7.
+     * Send location telemetry to a destination.
      *
-     * @param destinationHash Destination hash bytes (16 bytes identity hash)
-     * @param locationJson JSON string with location data
-     * @param sourceIdentity Identity of the sender
-     * @return Result containing MessageReceipt or failure
+     * Wire-format split (Sideband-interop):
+     *   - `FIELD_TELEMETRY` (0x02) — Sideband-compatible Telemeter msgpack
+     *     built from [telemetry]'s lat/lng/altitude/speed/bearing/accuracy.
+     *   - `FIELD_CUSTOM_META` (0xFD) — Columba's `cease`/`expires`/
+     *     `approxRadius`/`ts` extras, omitted entirely when none are set
+     *     so Sideband peers see a clean Telemeter-only payload.
+     *   - `FIELD_ICON_APPEARANCE` (0x04) — optional sender chrome.
+     *
+     * @param destinationHash Recipient LXMF identity hash bytes.
+     * @param telemetry Typed location payload (replaces the prior
+     *   JSON-string contract; the backend marshals the wire format).
+     * @param sourceIdentity Identity of the sender.
+     * @param iconAppearance Optional sender chrome riding alongside
+     *   the telemetry.
      */
     suspend fun sendLocationTelemetry(
         destinationHash: ByteArray,
-        locationJson: String,
+        telemetry: LocationTelemetry,
         sourceIdentity: Identity,
         iconAppearance: IconAppearance? = null,
     ): Result<MessageReceipt>
@@ -88,10 +99,16 @@ interface RnsTelemetry {
     suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>): Result<Unit>
 
     /**
-     * Observable stream of incoming FIELD_TELEMETRY location updates from
-     * peers (or, when the device is in collector host mode, also the
-     * FIELD_TELEMETRY_STREAM batches received from upstream collectors).
-     * Each emission is the JSON payload of the inbound telemetry frame.
+     * Observable stream of incoming `FIELD_TELEMETRY` location updates
+     * from peers (or, when the device is in collector host mode, also
+     * the `FIELD_TELEMETRY_STREAM` batches received from upstream
+     * collectors).
+     *
+     * Phase 2 of the Sideband-interop refactor changed this from
+     * `SharedFlow<String>` (JSON wire) to `SharedFlow<LocationTelemetry>`
+     * so consumers don't pay a JSON encode/decode per update. The
+     * backend impl handles all Telemeter / FIELD_CUSTOM_META decoding
+     * before emission.
      */
-    val locationTelemetryFlow: SharedFlow<String>
+    val locationTelemetryFlow: SharedFlow<LocationTelemetry>
 }

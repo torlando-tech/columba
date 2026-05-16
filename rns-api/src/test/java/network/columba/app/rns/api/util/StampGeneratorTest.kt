@@ -1,5 +1,6 @@
-package network.columba.app.crypto
+package network.columba.app.rns.api.util
 
+import android.app.Application
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -8,13 +9,22 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Unit tests for StampGenerator.
  *
  * Test vectors are generated from Python LXMF implementation to ensure
  * byte-for-byte compatibility.
+ *
+ * Robolectric required because StampGenerator uses `android.util.Log`;
+ * without it the JVM unit-test JAR throws "method not mocked" on the
+ * first `Log.d` call inside generateStamp.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 class StampGeneratorTest {
     private lateinit var stampGenerator: StampGenerator
 

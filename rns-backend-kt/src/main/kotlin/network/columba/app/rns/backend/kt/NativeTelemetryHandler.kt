@@ -52,31 +52,24 @@ internal class NativeTelemetryHandler(
         val receivedAtMillis: Long = System.currentTimeMillis(),
     )
 
+    /**
+     * Route inbound telemetry side-channels (FIELD_TELEMETRY,
+     * FIELD_TELEMETRY_STREAM, FIELD_CUSTOM_META, legacy LOCATION) to
+     * `locationTelemetryFlow`. Always runs — the chat-emit gate is a
+     * separate concern handled by
+     * `ReceivedMessage.isUserVisibleChatMessage()` in :rns-api.
+     */
     fun handleIncomingTelemetry(
         message: LXMessage,
         timestamp: Long,
-    ): Boolean {
+    ) {
         val fields = message.fields
-        val hasTextContent = message.content.isNotBlank()
-        // Image / file / audio attachments are user-visible content too —
-        // a message that's "only telemetry + image" should still render in
-        // the chat UI. Before this check was added, Sideband's habit of
-        // auto-attaching telemetry to every outbound message caused
-        // image-only / file-only / audio-only messages to be classified
-        // as isLocationOnlyMessage and silently dropped from chat emission.
-        val hasAttachmentContent =
-            fields.containsKey(LxmfFields.FIELD_IMAGE) ||
-                fields.containsKey(LxmfFields.FIELD_FILE_ATTACHMENTS) ||
-                fields.containsKey(LxmfFields.FIELD_AUDIO)
-        val hasChatContent = hasTextContent || hasAttachmentContent
-        var isLocationOnlyMessage = false
         var locationEvent: JSONObject? = null
 
         locationEvent = processFieldTelemetry(fields, message.sourceHash, timestamp, locationEvent)
 
         val telemetryStream = fields[LxmfFields.FIELD_TELEMETRY_STREAM] as? List<*>
         if (telemetryStream != null) {
-            if (!hasChatContent) isLocationOnlyMessage = true
             val streamEntries =
                 telemetryStream
                     .mapNotNull { it as? List<*> }
@@ -94,9 +87,6 @@ internal class NativeTelemetryHandler(
         }
 
         if (locationEvent != null) {
-            if (!hasChatContent) {
-                isLocationOnlyMessage = true
-            }
             locationEvent.put("source_hash", message.sourceHash.toHex())
             val appearance = extractIconAppearance(fields)
             Log.d(TAG, "Emitting location telemetry: $locationEvent")
@@ -109,8 +99,6 @@ internal class NativeTelemetryHandler(
                 locationTelemetryFlow.tryEmit(it)
             }
         }
-
-        return isLocationOnlyMessage
     }
 
     /**

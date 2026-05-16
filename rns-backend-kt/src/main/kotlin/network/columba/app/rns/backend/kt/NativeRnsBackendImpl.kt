@@ -16,6 +16,7 @@ import network.columba.app.rns.api.util.AppDataParser
 import network.columba.app.rns.api.util.Aspects
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.toHex
 
 import android.util.Log
@@ -888,67 +889,25 @@ class NativeRnsBackendImpl(
                     null
                 }
 
-            // Reactions are lightweight control messages in Field 16 and should not be
-            // surfaced as regular chat bubbles. Mirror the old Python wrapper behavior:
-            // emit a reaction event and skip normal message processing.
-            val directReactionField = fields[16] as? Map<*, *>
-            val jsonReactionField =
-                fieldsJson
-                    ?.let { runCatching { org.json.JSONObject(it).optJSONObject("16") }.getOrNull() }
-
-            if (fields.containsKey(16)) {
-                Log.d(
-                    TAG,
-                    "Incoming field16 type=${fields[16]?.javaClass?.name}, directKeys=${directReactionField?.keys}, jsonField16=$jsonReactionField",
-                )
-            }
-
-            val reactionTo =
-                (directReactionField?.get("reaction_to") as? String)
-                    ?: jsonReactionField?.optString("reaction_to")?.takeIf { it.isNotBlank() }
-            if (reactionTo != null) {
-                val emoji =
-                    (directReactionField?.get("emoji") as? String)
-                        ?: jsonReactionField?.optString("emoji")
-                        ?: ""
-                val sender =
-                    (directReactionField?.get("sender") as? String)
-                        ?: jsonReactionField?.optString("sender")
-                        ?: ""
-
-                val reactionJson =
-                    org.json
-                        .JSONObject()
-                        .put("reaction_to", reactionTo)
-                        .put("emoji", emoji)
-                        .put("sender", sender)
-                        .put("source_hash", sourceHash.toHex())
-                        .put("timestamp", timestamp)
-                        .toString()
-
-                Log.d(TAG, "Reaction received for ${message.hash?.toHex()?.take(16) ?: "unknown"} -> $reactionJson")
-                _reactionReceivedFlow.tryEmit(reactionJson)
-                return@launch
-            }
-
-            val isLocationOnlyMessage =
-                telemetryHandler.handleIncomingTelemetry(
-                    message = message,
-                    timestamp = timestamp,
-                )
-
-            // Extract icon appearance from fields
+            // ── Side-channel routing (always runs) ─────────────────────
+            // Reactions, location telemetry, telemetry commands, and icon
+            // appearance each have their own flow. We fire those routes
+            // unconditionally — the chat-bubble emit below is gated
+            // separately by `isUserVisibleChatMessage()`.
+            routeReactionSideChannel(fields, fieldsJson, sourceHash, message, timestamp)
+            telemetryHandler.handleIncomingTelemetry(message = message, timestamp = timestamp)
             val iconAppearance = telemetryHandler.extractIconAppearance(fields)
-
-            // Check for telemetry commands before emitting to UI
             telemetryHandler.handleTelemetryCommands(message)
 
-            if (isLocationOnlyMessage) {
-                Log.d(TAG, "Telemetry-only LXMF message received, skipping chat emission")
-                return@launch
-            }
-
-            _messages.tryEmit(
+            // ── Chat emit (gated by shared predicate) ──────────────────
+            // `isUserVisibleChatMessage()` returns true when the message
+            // has non-blank text content OR an image OR a file OR audio.
+            // Side-channel-only frames (reactions, telemetry-only,
+            // icon-only) fall through to false and don't render as empty
+            // bubbles. Shared with the Python backend
+            // (`PythonEventBridge.handleLxmfDelivery`) so the two
+            // backends can never drift on this rule.
+            val received =
                 buildReceivedMessage(
                     message = message,
                     content = content,
@@ -957,9 +916,78 @@ class NativeRnsBackendImpl(
                     timestamp = timestamp,
                     fieldsJson = fieldsJson,
                     iconAppearance = iconAppearance,
-                ),
+                )
+            if (received.isUserVisibleChatMessage()) {
+                _messages.tryEmit(received)
+            } else {
+                Log.d(
+                    TAG,
+                    "Side-channel-only LXMessage from ${sourceHash.toHex().take(16)} " +
+                        "— skipping chat emission (content blank, no image/file/audio)",
+                )
+            }
+        }
+    }
+
+    /**
+     * Fire `_reactionReceivedFlow` if the inbound message carries a
+     * `fields[0x10] = {reaction_to, emoji, sender}` per-event reaction.
+     * No-op for non-reaction messages.
+     *
+     * Routing is separate from the chat-emit gate: a reaction-only
+     * message still flows through this routine, then naturally fails
+     * `isUserVisibleChatMessage` (no text, no attachments) and skips
+     * the chat bubble.
+     */
+    private fun routeReactionSideChannel(
+        fields: Map<Int, Any?>,
+        fieldsJson: String?,
+        sourceHash: ByteArray,
+        message: LXMessage,
+        timestamp: Long,
+    ) {
+        val directReactionField = fields[16] as? Map<*, *>
+        val jsonReactionField =
+            fieldsJson
+                ?.let { runCatching { org.json.JSONObject(it).optJSONObject("16") }.getOrNull() }
+
+        if (fields.containsKey(16)) {
+            Log.d(
+                TAG,
+                "Incoming field16 type=${fields[16]?.javaClass?.name}, " +
+                    "directKeys=${directReactionField?.keys}, jsonField16=$jsonReactionField",
             )
         }
+
+        val reactionTo =
+            (directReactionField?.get("reaction_to") as? String)
+                ?: jsonReactionField?.optString("reaction_to")?.takeIf { it.isNotBlank() }
+                ?: return
+
+        val emoji =
+            (directReactionField?.get("emoji") as? String)
+                ?: jsonReactionField?.optString("emoji")
+                ?: ""
+        val sender =
+            (directReactionField?.get("sender") as? String)
+                ?: jsonReactionField?.optString("sender")
+                ?: ""
+
+        val reactionJson =
+            org.json
+                .JSONObject()
+                .put("reaction_to", reactionTo)
+                .put("emoji", emoji)
+                .put("sender", sender)
+                .put("source_hash", sourceHash.toHex())
+                .put("timestamp", timestamp)
+                .toString()
+
+        Log.d(
+            TAG,
+            "Reaction received for ${message.hash?.toHex()?.take(16) ?: "unknown"} -> $reactionJson",
+        )
+        _reactionReceivedFlow.tryEmit(reactionJson)
     }
 
     private fun buildReceivedMessage(

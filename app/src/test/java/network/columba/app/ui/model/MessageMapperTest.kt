@@ -514,6 +514,77 @@ class MessageMapperTest {
         assertEquals("original_msg_id", result.replyToMessageId)
     }
 
+    // ========== Canonical MeshChatX reply format (0x30/0x31) ==========
+
+    @Test
+    fun `toMessageUi extracts replyToMessageId from canonical 0x30 field`() {
+        // 0x30 = 48 decimal; event_bridge._jsonable serializes the
+        // raw ByteArray as a hex string at the JNI boundary.
+        val replyHashHex = "f4a3b2c1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"
+        val fieldsJson = """{"48": "$replyHashHex"}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(replyHashHex, result.replyToMessageId)
+    }
+
+    @Test
+    fun `toMessageUi prefers canonical 0x30 over legacy 0x10 reply_to`() {
+        // Mixed payload — exercises the explicit priority order in
+        // parseReplyToFromFields. Older peers may still send 0x10
+        // during the rollout window, but a peer that emits both
+        // should be treated as v2.
+        val fieldsJson =
+            """{
+                "48": "aabbccddeeff0011223344556677889900112233445566778899aabbccddeeff",
+                "16": {"reply_to": "11111111111111111111111111111111"}
+            }"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(
+            "aabbccddeeff0011223344556677889900112233445566778899aabbccddeeff",
+            result.replyToMessageId,
+        )
+    }
+
+    @Test
+    fun `toMessageUi lowercases canonical 0x30 hash`() {
+        // Normalize on the parse side so downstream comparisons
+        // (DB lookup, preview cache key) don't have to also
+        // normalize.
+        val fieldsJson = """{"48": "AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"}"""
+        val message = createMessage(TestMessageConfig(fieldsJson = fieldsJson))
+
+        val result = message.toMessageUi()
+
+        assertEquals(
+            "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+            result.replyToMessageId,
+        )
+    }
+
+    @Test
+    fun `parseReplyQuoteFromFields returns null when 0x31 is absent`() {
+        assertNull(parseReplyQuoteFromFields("""{"48": "abc"}"""))
+    }
+
+    @Test
+    fun `parseReplyQuoteFromFields decodes UTF-8 hex bytes`() {
+        // event_bridge._jsonable hex-encodes ByteArray field values.
+        // 0x31 = 49 decimal. "Hello!" → 48656c6c6f21 in hex.
+        val fieldsJson = """{"49": "48656c6c6f21"}"""
+
+        assertEquals("Hello!", parseReplyQuoteFromFields(fieldsJson))
+    }
+
+    @Test
+    fun `parseReplyQuoteFromFields tolerates malformed JSON`() {
+        assertNull(parseReplyQuoteFromFields("not valid json"))
+    }
+
     @Test
     fun `toMessageUi handles malformed JSON in field 16 gracefully`() {
         // This shouldn't happen in practice, but test edge case
@@ -2411,30 +2482,19 @@ class MessageMapperTest {
         assertEquals(0, reaction.count)
     }
 
-    // ========== parseReactionsFromField16 Tests ==========
+    // ========== parseReactionsJson Tests ==========
+    // (Comprehensive coverage lives in ReactionMapperTest; these are
+    // smoke checks that the wire from toMessageUi → parseReactionsJson
+    // still resolves to a sensible list after the v1→v2 column split.)
 
     @Test
-    fun `parseReactionsFromField16 returns empty list for null fieldsJson`() {
-        val result = parseReactionsFromField16(null)
-        assertTrue(result.isEmpty())
+    fun `parseReactionsJson returns empty list for null input`() {
+        assertTrue(parseReactionsJson(null).isEmpty())
     }
 
     @Test
-    fun `parseReactionsFromField16 returns empty list for missing field 16`() {
-        val result = parseReactionsFromField16("""{"6": "image"}""")
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun `parseReactionsFromField16 returns empty list for missing reactions key`() {
-        val result = parseReactionsFromField16("""{"16": {"reply_to": "id"}}""")
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun `parseReactionsFromField16 parses single reaction correctly`() {
-        val fieldsJson = """{"16": {"reactions": {"👍": ["sender1", "sender2"]}}}"""
-        val result = parseReactionsFromField16(fieldsJson)
+    fun `parseReactionsJson parses single reaction correctly`() {
+        val result = parseReactionsJson("""{"👍": ["sender1", "sender2"]}""")
 
         assertEquals(1, result.size)
         assertEquals("👍", result[0].emoji)
@@ -2443,56 +2503,18 @@ class MessageMapperTest {
     }
 
     @Test
-    fun `parseReactionsFromField16 parses multiple reactions correctly`() {
-        val fieldsJson = """{"16": {"reactions": {"👍": ["sender1"], "❤️": ["sender2", "sender3"]}}}"""
-        val result = parseReactionsFromField16(fieldsJson)
+    fun `parseReactionsJson parses multiple reactions correctly`() {
+        val result = parseReactionsJson("""{"👍": ["sender1"], "❤️": ["sender2", "sender3"]}""")
 
         assertEquals(2, result.size)
-        // Order may vary, so check both are present
         val emojiSet = result.map { it.emoji }.toSet()
         assertTrue(emojiSet.contains("👍"))
         assertTrue(emojiSet.contains("❤️"))
     }
 
     @Test
-    fun `parseReactionsFromField16 skips empty sender arrays`() {
-        val fieldsJson = """{"16": {"reactions": {"👍": [], "❤️": ["sender1"]}}}"""
-        val result = parseReactionsFromField16(fieldsJson)
-
-        assertEquals(1, result.size)
-        assertEquals("❤️", result[0].emoji)
-    }
-
-    @Test
-    fun `parseReactionsFromField16 skips empty sender strings`() {
-        val fieldsJson = """{"16": {"reactions": {"👍": ["", "sender1", ""]}}}"""
-        val result = parseReactionsFromField16(fieldsJson)
-
-        assertEquals(1, result.size)
-        assertEquals("👍", result[0].emoji)
-        assertEquals(listOf("sender1"), result[0].senderHashes)
-    }
-
-    @Test
-    fun `parseReactionsFromField16 handles invalid JSON gracefully`() {
-        val result = parseReactionsFromField16("not valid json")
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun `parseReactionsFromField16 handles reactions as wrong type`() {
-        val fieldsJson = """{"16": {"reactions": "not an object"}}"""
-        val result = parseReactionsFromField16(fieldsJson)
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun `parseReactionsFromField16 skips null values in sender array`() {
-        val fieldsJson = """{"16": {"reactions": {"👍": [null, "sender1", null]}}}"""
-        val result = parseReactionsFromField16(fieldsJson)
-
-        assertEquals(1, result.size)
-        assertEquals(listOf("sender1"), result[0].senderHashes)
+    fun `parseReactionsJson handles invalid JSON gracefully`() {
+        assertTrue(parseReactionsJson("not valid json").isEmpty())
     }
 
     // ========== loadImageData() TESTS ==========

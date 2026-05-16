@@ -48,6 +48,7 @@ oneway interface IRnsLxmf {
         in @nullable String imageFormat,
         in List<FileAttachment> fileAttachments,
         in @nullable String replyToMessageId,
+        in @nullable String replyQuotedContent,
         in @nullable IconAppearance iconAppearance,
         in @nullable Bundle extraFields,
         in IRnsResultCallback cb);

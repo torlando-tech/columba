@@ -29,7 +29,8 @@ object ServiceDatabaseProvider {
                 context.applicationContext,
                 ColumbaDatabase::class.java,
                 DatabaseModule.DATABASE_NAME,
-            ).fallbackToDestructiveMigration()
+            ).addMigrations(ColumbaDatabase.MIGRATION_1_2)
+            .fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .addCallback(DatabaseModule.DURABILITY_CALLBACK)

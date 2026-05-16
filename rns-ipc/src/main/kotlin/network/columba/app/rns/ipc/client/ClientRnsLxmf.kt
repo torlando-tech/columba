@@ -67,6 +67,7 @@ internal class ClientRnsLxmf(
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
+        replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
     ): Result<MessageReceipt> = runCatching {
@@ -81,6 +82,7 @@ internal class ClientRnsLxmf(
                 imageFormat,
                 fileAttachments.toFileAttachments(),
                 replyToMessageId,
+                replyQuotedContent,
                 iconAppearance,
                 extraFields?.toExtraFieldsBundle(),
                 cb,

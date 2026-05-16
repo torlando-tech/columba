@@ -45,10 +45,11 @@ fun Message.toMessageUi(): MessageUi {
     val fileAttachmentsList = if (hasFiles) parseFileAttachments(fieldsJson) else emptyList()
 
     // Get reply-to message ID: prefer DB column, fallback to parsing field 16
-    val replyId = replyToMessageId ?: parseReplyToFromField16(fieldsJson)
+    val replyId = replyToMessageId ?: parseReplyToFromFields(fieldsJson)
 
-    // Parse emoji reactions from field 16
-    val reactionsList = parseReactionsFromField16(fieldsJson)
+    // Parse the per-target-message reactions aggregation blob
+    // (DB-local; the wire format is a separate per-event surface).
+    val reactionsList = parseReactionsJson(reactionsJson)
 
     // Determine if we need to preserve fieldsJson for UI components
     // (uncached image, file attachments, or pending file notification)
@@ -82,21 +83,35 @@ fun Message.toMessageUi(): MessageUi {
 }
 
 /**
- * Parse the reply_to message ID from LXMF field 16 (app extensions).
+ * Parse the reply-target message hash from an inbound LXMessage's
+ * fields. Two formats are accepted, in priority order:
  *
- * Field 16 is structured as: {"reply_to": "message_id", ...}
- * This allows for future extensibility (reactions, mentions, etc.)
+ *   1. **MeshChatX-compatible (canonical)** — `fields[0x30] = bytes`
+ *      raw 32-byte hash (serialized to hex string by event_bridge.py
+ *      `_jsonable` on the way across the JNI boundary). MeshChatX
+ *      reference: `meshchat.py:16697`.
+ *   2. **Legacy Columba overload** — `fields[0x10] = {reply_to: <hex>}`.
+ *      Older Columba peers still send this; new Columba peers send
+ *      0x30 instead. Kept as a parser fallback so an upgrade doesn't
+ *      strand un-upgraded peer threading; outbound code no longer
+ *      writes this shape.
  *
- * @param fieldsJson The message's fields JSON
- * @return The reply_to message ID, or null if not present or parsing fails
+ * Returns a lowercase hex string of the target message hash, or null
+ * if neither shape is present.
  */
 @Suppress("SwallowedException", "ReturnCount") // Invalid JSON is expected to fail silently here
-private fun parseReplyToFromField16(fieldsJson: String?): String? {
+internal fun parseReplyToFromFields(fieldsJson: String?): String? {
     if (fieldsJson == null) return null
     return try {
         val fields = JSONObject(fieldsJson)
+        // Canonical: fields[0x30] = hex-encoded bytes (event_bridge.py
+        // hex-encodes ByteArray field values via `_jsonable`).
+        val field30 = fields.opt("48") // 0x30 == 48 decimal == JSON key "48"
+        if (field30 is String && field30.isNotEmpty()) {
+            return field30.lowercase()
+        }
+        // Legacy fallback: fields[0x10].reply_to (hex string).
         val field16 = fields.optJSONObject("16") ?: return null
-        // Check for JSON null value explicitly
         if (field16.isNull("reply_to")) return null
         val replyTo = field16.optString("reply_to", "")
         replyTo.ifEmpty { null }
@@ -106,22 +121,82 @@ private fun parseReplyToFromField16(fieldsJson: String?): String? {
 }
 
 /**
- * Parse emoji reactions from LXMF field 16 (app extensions).
+ * Parse the optional reply-quote content from `fields[0x31]` — UTF-8
+ * bytes of the original message's text the sender saw at reply time.
+ * Carried inline so recipients can render the quote even without the
+ * original in their local store (cross-app interop with MeshChatX,
+ * peer-history aged out, etc.). MeshChatX reference: `meshchat.py:16698`.
  *
- * Field 16 reactions structure: {"reactions": {"👍": ["sender_hash1", "sender_hash2"], "❤️": ["sender_hash3"]}}
- * Each emoji key maps to an array of sender destination hashes who reacted with that emoji.
- *
- * @param fieldsJson The message's fields JSON
- * @return List of ReactionUi objects, or empty list if not present or parsing fails
+ * Returns null when the field is absent — caller falls back to a local
+ * lookup of the original message's content.
  */
 @Suppress("SwallowedException", "ReturnCount") // Invalid JSON is expected to fail silently here
-fun parseReactionsFromField16(fieldsJson: String?): List<ReactionUi> {
-    if (fieldsJson == null) return emptyList()
+internal fun parseReplyQuoteFromFields(fieldsJson: String?): String? {
+    if (fieldsJson == null) return null
     return try {
         val fields = JSONObject(fieldsJson)
-        val field16 = fields.optJSONObject("16") ?: return emptyList()
-        val reactionsObj = field16.optJSONObject("reactions") ?: return emptyList()
+        // 0x31 == 49 decimal. Hex-encoded by event_bridge.py before
+        // crossing JNI; decode and UTF-8 it.
+        val hex = fields.optString("49", "")
+        if (hex.isEmpty()) return null
+        runCatching {
+            val bytes = ByteArray(hex.length / 2) {
+                ((Character.digit(hex[it * 2], 16) shl 4) +
+                    Character.digit(hex[it * 2 + 1], 16)).toByte()
+            }
+            String(bytes, Charsets.UTF_8)
+        }.getOrNull()
+    } catch (e: Exception) {
+        null
+    }
+}
 
+/**
+ * Legacy alias preserved for any pre-Phase-2 call sites. Forwards to
+ * [parseReplyToFromFields] which transparently handles both wire
+ * shapes. Will be removed once any remaining call sites migrate.
+ */
+@Deprecated(
+    "Use parseReplyToFromFields — it accepts both the canonical 0x30 " +
+        "format AND the legacy 0x10 overload.",
+    ReplaceWith("parseReplyToFromFields(fieldsJson)"),
+)
+private fun parseReplyToFromField16(fieldsJson: String?): String? =
+    parseReplyToFromFields(fieldsJson)
+
+/**
+ * Parse the per-target-message reactions aggregation blob stored
+ * in the `reactionsJson` column (DB v2+).
+ *
+ * Reaction layering — two distinct shapes exist:
+ *
+ *   1. **Wire format (per-event, interop-shared with MeshChatX):**
+ *      `fields[0x10] = {"reaction_to": <hex>, "emoji": "👍", "sender": <hex>}`
+ *      One LXMF message per reaction event. Both Columba and
+ *      MeshChatX put this shape on the wire — see GitHub issue #926
+ *      and MeshChatX #14 (Ivan's confirmation). The backend reaction
+ *      routers filter these events out before message persistence
+ *      and dispatch them via `_reactionReceivedFlow` →
+ *      `handleIncomingReaction`.
+ *
+ *   2. **DB-aggregated form (local-only, what this function reads):**
+ *      Flat `{"👍": [sender1, sender2], "❤️": [sender3]}` stored in
+ *      the `reactionsJson` column on the *target* message's row.
+ *      Built locally by `handleIncomingReaction` →
+ *      `mergeReactionIntoReactionsJson`. Never goes on the wire.
+ *
+ * Pre-v2 storage overloaded `fieldsJson.field16.reactions` for this
+ * blob; the v1→v2 Room migration in `ColumbaDatabase.MIGRATION_1_2`
+ * lifts that data into the dedicated column.
+ *
+ * @param reactionsJson The target message's reactionsJson column value
+ * @return List of ReactionUi objects, or empty list if absent / malformed
+ */
+@Suppress("SwallowedException") // Invalid JSON is expected to fail silently here
+fun parseReactionsJson(reactionsJson: String?): List<ReactionUi> {
+    if (reactionsJson.isNullOrEmpty()) return emptyList()
+    return try {
+        val reactionsObj = JSONObject(reactionsJson)
         val reactions = mutableListOf<ReactionUi>()
         val keys = reactionsObj.keys()
         while (keys.hasNext()) {
@@ -129,7 +204,6 @@ fun parseReactionsFromField16(fieldsJson: String?): List<ReactionUi> {
             val sendersArray = reactionsObj.optJSONArray(emoji) ?: continue
             val senderHashes = mutableListOf<String>()
             for (i in 0 until sendersArray.length()) {
-                // Skip null values in the array
                 if (sendersArray.isNull(i)) continue
                 val sender = sendersArray.optString(i, "")
                 if (sender.isNotEmpty()) {

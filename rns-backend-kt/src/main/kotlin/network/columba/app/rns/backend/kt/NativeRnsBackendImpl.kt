@@ -1189,6 +1189,7 @@ class NativeRnsBackendImpl(
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
         replyToMessageId: String?,
+        replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
     ): Result<MessageReceipt> =
@@ -1203,6 +1204,7 @@ class NativeRnsBackendImpl(
                     imageFormat = imageFormat,
                     fileAttachments = fileAttachments,
                     replyToMessageId = replyToMessageId,
+                    replyQuotedContent = replyQuotedContent,
                     iconAppearance = iconAppearance,
                     extraFields = extraFields,
                 ),

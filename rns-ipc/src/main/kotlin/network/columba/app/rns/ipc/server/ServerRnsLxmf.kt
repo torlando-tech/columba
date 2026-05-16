@@ -72,6 +72,7 @@ internal class ServerRnsLxmf(
         imageFormat: String?,
         fileAttachments: MutableList<FileAttachment>,
         replyToMessageId: String?,
+        replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Bundle?,
         cb: IRnsResultCallback,
@@ -86,6 +87,7 @@ internal class ServerRnsLxmf(
             imageFormat,
             fileAttachments.toAttachmentPairs().takeIf { it.isNotEmpty() },
             replyToMessageId,
+            replyQuotedContent,
             iconAppearance,
             extraFields?.toExtraFieldsMap(),
         ).getOrThrow()

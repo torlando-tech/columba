@@ -62,6 +62,12 @@ data class Message(
     val receivedAt: Long? = null,
     // Interface name through which message was sent (null for received messages or pre-feature messages)
     val sentInterface: String? = null,
+    // DB-local per-target-message reactions aggregation. Flat shape:
+    //   {"👍": ["sender_hex_1", ...], "❤️": [...]}
+    // Never appears on the wire — the LXMF reaction wire format is
+    // a per-event `fields[0x10] = {reaction_to, emoji, sender}` that
+    // the receiver routes into this field on the *target* message.
+    val reactionsJson: String? = null,
 )
 
 /**
@@ -599,6 +605,7 @@ class ConversationRepository
                 receivedInterface = receivedInterface,
                 receivedAt = receivedAt,
                 sentInterface = sentInterface,
+                reactionsJson = reactionsJson,
             )
 
         /**
@@ -634,21 +641,26 @@ class ConversationRepository
         }
 
         /**
-         * Update message reactions in fieldsJson.
-         * Used when adding/updating emoji reactions on a message.
+         * Update the per-target-message reactions aggregation column.
+         * Caller passes the full new `reactionsJson` blob (flat shape
+         * `{emoji: [senderHex, ...]}`). Used when adding/updating
+         * emoji reactions on a message.
+         *
+         * As of DB v2 this writes to the dedicated `reactionsJson`
+         * column — no longer overloaded onto `fieldsJson.field16`.
          *
          * @param messageId The ID of the message to update
-         * @param updatedFieldsJson The new fieldsJson containing updated reactions
+         * @param updatedReactionsJson The new reactions blob, or null to clear
          */
         suspend fun updateMessageReactions(
             messageId: String,
-            updatedFieldsJson: String,
+            updatedReactionsJson: String?,
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            messageDao.updateMessageFieldsJson(
+            messageDao.updateMessageReactionsJson(
                 messageId,
                 activeIdentity.identityHash,
-                updatedFieldsJson,
+                updatedReactionsJson,
             )
             android.util.Log.d(
                 "ConversationRepository",

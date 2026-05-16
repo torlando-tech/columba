@@ -5,37 +5,41 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.util.LxmfFields
 import network.reticulum.lxmf.LXMessage
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Verifies that NativeTelemetryHandler.handleIncomingTelemetry treats
- * image / file / audio attachments as user-visible chat content, even
- * when the text content is empty and telemetry fields are present.
+ * Verifies NativeTelemetryHandler.handleIncomingTelemetry correctly
+ * routes inbound location telemetry to `locationTelemetryFlow`.
  *
- * Before the fix this was covering, Sideband's habit of auto-attaching
- * telemetry (FIELD_TELEMETRY_STREAM and/or FIELD_TELEMETRY with a
- * location subrecord) to every outbound message caused image-only
- * messages ("hasTextContent = false, has location telemetry") to be
- * classified as `isLocationOnlyMessage` and dropped silently — users
- * saw nothing in chat. This regression test pins the expected
- * behavior: an image / file / audio attachment alone is enough to
- * surface the message.
+ * The chat-emit gate that used to also live here was lifted to
+ * [network.columba.app.rns.api.util.isUserVisibleChatMessage] in
+ * :rns-api so both backends share one impl — those tests live in
+ * `ChatMessageFilterTest`. This file is now scoped to the routing
+ * responsibility (does telemetry actually surface on the flow when
+ * the LXMessage carries it?).
  */
 class NativeTelemetryHandlerTest {
     private lateinit var handler: NativeTelemetryHandler
+    private lateinit var locationFlow: MutableSharedFlow<LocationTelemetry>
 
     @Before
     fun setup() {
+        locationFlow = MutableSharedFlow(replay = 4, extraBufferCapacity = 16)
         handler =
             NativeTelemetryHandler(
                 scopeProvider = { CoroutineScope(Dispatchers.Unconfined) },
-                locationTelemetryFlow = MutableSharedFlow(extraBufferCapacity = 16),
+                locationTelemetryFlow = locationFlow,
                 deliveryIdentityProvider = { null },
                 sendMessageFn = { _, _, _, _ -> },
                 storedTelemetry = ConcurrentHashMap(),
@@ -48,9 +52,6 @@ class NativeTelemetryHandlerTest {
         content: String = "",
         fields: Map<Int, Any> = emptyMap(),
     ): LXMessage {
-        // Strict mock (no relaxed = true, per NoRelaxedMocks detekt rule):
-        // handleIncomingTelemetry only reads these three fields off the
-        // message, so stub exactly those and nothing more.
         val message = mockk<LXMessage>()
         every { message.content } returns content
         every { message.fields } returns fields.toMutableMap()
@@ -58,122 +59,64 @@ class NativeTelemetryHandlerTest {
         return message
     }
 
-    // ----- Baseline: fields with telemetry and no other content are
-    //       still correctly classified as location-only. -----
+    private fun pollFlowNonBlocking(timeoutMillis: Long = 250): LocationTelemetry? =
+        runBlocking { withTimeoutOrNull(timeoutMillis) { locationFlow.first() } }
 
     @Test
-    fun `empty content plus telemetry_stream field is location-only`() {
-        val message =
-            mockMessage(
-                content = "",
-                fields = mapOf(LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>()),
-            )
-        assertTrue(handler.handleIncomingTelemetry(message, timestamp = 0L))
-    }
-
-    @Test
-    fun `text content plus telemetry_stream is not location-only`() {
-        val message =
-            mockMessage(
-                content = "check this out",
-                fields = mapOf(LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>()),
-            )
-        assertFalse(handler.handleIncomingTelemetry(message, timestamp = 0L))
-    }
-
-    // ----- Regression: attachments alongside telemetry must count
-    //       as chat content and cause isLocationOnly = false. -----
-
-    @Test
-    fun `image attachment alone with telemetry_stream is not location-only`() {
-        val message =
-            mockMessage(
-                content = "",
-                fields =
-                    mapOf(
-                        LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
-                        LxmfFields.FIELD_IMAGE to listOf("webp", ByteArray(100)),
-                    ),
-            )
-        assertFalse(
-            "Image-only message (empty text, telemetry present) was classified " +
-                "as location-only and would be dropped from the chat UI",
-            handler.handleIncomingTelemetry(message, timestamp = 0L),
-        )
-    }
-
-    @Test
-    fun `file attachment alone with telemetry_stream is not location-only`() {
-        val message =
-            mockMessage(
-                content = "",
-                fields =
-                    mapOf(
-                        LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
-                        LxmfFields.FIELD_FILE_ATTACHMENTS to listOf<List<ByteArray>>(),
-                    ),
-            )
-        assertFalse(handler.handleIncomingTelemetry(message, timestamp = 0L))
-    }
-
-    @Test
-    fun `audio attachment alone with telemetry_stream is not location-only`() {
-        val message =
-            mockMessage(
-                content = "",
-                fields =
-                    mapOf(
-                        LxmfFields.FIELD_TELEMETRY_STREAM to emptyList<Any>(),
-                        LxmfFields.FIELD_AUDIO to listOf(0, ByteArray(0)),
-                    ),
-            )
-        assertFalse(handler.handleIncomingTelemetry(message, timestamp = 0L))
-    }
-
-    @Test
-    fun `image attachment with FIELD_TELEMETRY (location) is not location-only`() {
-        // A FIELD_TELEMETRY entry carrying a location record is the other
-        // classification path that can flip isLocationOnlyMessage to true;
-        // make sure it also respects attachment content.
-        //
-        // `unpackLocationTelemetryField` accepts either msgpack bytes or a
-        // JSON string. We use the JSON-string branch so this test exercises
-        // a *real* location-payload path — a short arbitrary ByteArray would
-        // fail to parse as msgpack, leaving locationEvent = null and the
-        // assertFalse passing even without the fix (i.e. not actually pinning
-        // the guarded behavior).
-        val locationJson = """{"latitude":37.7749,"longitude":-122.4194,"altitude":15.0}"""
-        val message =
-            mockMessage(
-                content = "",
-                fields =
-                    mapOf(
-                        LxmfFields.FIELD_TELEMETRY to locationJson,
-                        LxmfFields.FIELD_IMAGE to listOf("webp", ByteArray(100)),
-                    ),
-            )
-        assertFalse(
-            "Message with image + telemetry (location payload) was dropped",
-            handler.handleIncomingTelemetry(message, timestamp = 0L),
-        )
-    }
-
-    @Test
-    fun `empty content plus FIELD_TELEMETRY location alone is location-only`() {
-        // Companion to the test above: prove the FIELD_TELEMETRY path
-        // DOES flip isLocationOnly in the absence of attachments. Catches
-        // regressions where a future refactor leaves the location branch
-        // permanently unreachable.
-        val locationJson = """{"latitude":37.7749,"longitude":-122.4194}"""
+    fun `FIELD_TELEMETRY with location JSON emits to flow`() {
+        // FIELD_TELEMETRY as a JSON string uses `lat`/`lng` keys
+        // (matching the working-buffer shape produced by the
+        // msgpack-decode path in `unpackLocationFromMsgpack`). The
+        // Telemeter-canonical `latitude`/`longitude` form only
+        // round-trips through the msgpack decoder.
+        val locationJson = """{"lat":37.7749,"lng":-122.4194,"altitude":15.0}"""
         val message =
             mockMessage(
                 content = "",
                 fields = mapOf(LxmfFields.FIELD_TELEMETRY to locationJson),
             )
-        assertTrue(
-            "Location-only message (FIELD_TELEMETRY with location, no text, no attachment) " +
-                "was not classified as location-only — the classification path is broken",
-            handler.handleIncomingTelemetry(message, timestamp = 0L),
+
+        handler.handleIncomingTelemetry(message, timestamp = 0L)
+
+        val emitted = pollFlowNonBlocking()
+        assertNotNull(
+            "FIELD_TELEMETRY with a location subrecord should fire " +
+                "locationTelemetryFlow — the map UI / location share " +
+                "machinery depends on it.",
+            emitted,
+        )
+        assertEquals(37.7749, emitted!!.lat, 0.0001)
+        assertEquals(-122.4194, emitted.lng, 0.0001)
+    }
+
+    @Test
+    fun `FIELD_TELEMETRY with text content alongside still routes telemetry`() {
+        // Sideband habitually piggybacks telemetry on text messages.
+        // The flow should still fire — only the chat-bubble decision
+        // is separate (handled by isUserVisibleChatMessage, which
+        // returns true here because content is non-blank).
+        val locationJson = """{"lat":40.0,"lng":-74.0}"""
+        val message =
+            mockMessage(
+                content = "hey, my location",
+                fields = mapOf(LxmfFields.FIELD_TELEMETRY to locationJson),
+            )
+
+        handler.handleIncomingTelemetry(message, timestamp = 0L)
+
+        assertNotNull(pollFlowNonBlocking())
+    }
+
+    @Test
+    fun `message without any telemetry fields does not fire flow`() {
+        val message = mockMessage(content = "plain text", fields = emptyMap())
+
+        handler.handleIncomingTelemetry(message, timestamp = 0L)
+
+        assertNull(
+            "Plain-text message with no telemetry fields must not produce " +
+                "a phantom location event.",
+            pollFlowNonBlocking(timeoutMillis = 150),
         )
     }
 }

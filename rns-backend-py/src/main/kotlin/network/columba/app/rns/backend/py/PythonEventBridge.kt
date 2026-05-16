@@ -15,6 +15,7 @@ import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.TelemeterCodec
 import network.columba.app.rns.api.util.hexToBytes
@@ -187,13 +188,29 @@ class PythonEventBridge {
                 receivedRssi = payload.dictInt("rssi"),
                 receivedSnr = payload.dictDouble("snr")?.toFloat(),
             )
-            _messages.tryEmit(message)
 
-            // Derive the telemetry / reaction side-channels from the field map —
-            // same split NativeRnsBackendImpl makes, just sourced from JSON.
+            // Side-channels always route — independent of the chat-emit
+            // decision below. Reaction / telemetry-only frames still
+            // need their dedicated flows to fire so the UI's reaction
+            // store and location map update.
             if (fieldsJson != null) {
                 assembleLocationTelemetry(fieldsJson, sourceHash, message.iconAppearance)
                 routeReactionSideChannel(fieldsJson)
+            }
+
+            // Chat emit is gated by the shared predicate
+            // `isUserVisibleChatMessage()` in :rns-api/util. Same
+            // implementation the Kotlin backend
+            // (NativeRnsBackendImpl) calls — adding a new
+            // user-visible field touches one place.
+            if (message.isUserVisibleChatMessage()) {
+                _messages.tryEmit(message)
+            } else {
+                Log.d(
+                    TAG,
+                    "Side-channel-only LXMessage from ${sourceHash.joinToString("") { "%02x".format(it) }.take(16)} " +
+                        "— skipping chat emission (content blank, no image/file/audio)",
+                )
             }
         }.onFailure { Log.e(TAG, "lxmf delivery translation failed", it) }
     }

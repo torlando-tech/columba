@@ -50,4 +50,19 @@ object LxmfFields {
 
     /** Columba's custom reaction field (LXMF Field 16 = 0x10). */
     const val FIELD_REACTION = 0x10
+
+    /**
+     * Upstream LXMF `FIELD_CUSTOM_META` (0xFD) — documented extension point
+     * for app-specific metadata that other LXMF clients should ignore.
+     * Columba uses this to carry the `cease` / `expires` / `approxRadius`
+     * extras that ride alongside a Sideband-compatible
+     * [FIELD_TELEMETRY] location share. Sideband's `core.py` has zero
+     * references to FIELD_CUSTOM_* — interop-safe.
+     *
+     * Previously this was a Columba-invented `0x70`; flipped to upstream's
+     * canonical 0xFD because invented field IDs in the unassigned range
+     * risk collision if upstream LXMF later assigns them. See also
+     * [LocationTelemetry.COLUMBA_META_FIELD_ID].
+     */
+    const val FIELD_CUSTOM_META = 0xFD
 }

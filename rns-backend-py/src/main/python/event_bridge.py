@@ -42,6 +42,13 @@ import RNS
 # (rather than `import LXMF`) so this module's slim-Python budget stays tight.
 _LXMF_METHOD_PROPAGATED = 0x03
 
+# Telemeter encode/decode used to live here (~190 lines of Columba-
+# authored Python). It moved to `rns-api/.../util/TelemeterCodec.kt`
+# so both backends — Kotlin-native and Python-Chaquopy — share one
+# implementation of the Sideband-interop bit-format. The Python tree
+# now stays at "ONE Columba-authored file with logic" per
+# rns-backend-py's CLAUDE.md slim-Python rule.
+
 
 # ----------------------------------------------------------------------------
 # Android/Chaquopy environment patches. Applied once by PythonRnsRuntime before
@@ -176,6 +183,17 @@ def _hex(b):
         return b
     return bytes(b).hex()
 
+
+# The Telemeter codec (pack_telemetry_location, pack_columba_meta,
+# unpack_telemetry_location, unpack_columba_meta,
+# _assemble_location_telemetry_json, _format_icon_appearance) was
+# removed when the codec moved to
+# `rns-api/.../util/TelemeterCodec.kt`. Both backends share that one
+# implementation now — see the rationale block above this section.
+# Inbound `FIELD_TELEMETRY` bytes ride through `_jsonable` (hex-encoded)
+# and `PythonEventBridge.assembleLocationTelemetry` calls the shared
+# Kotlin codec to decode them; outbound `FIELD_TELEMETRY` arrives
+# already-packed from `PythonRnsTelemetry.sendLocationTelemetry`.
 
 def _jsonable(v):
     """Recursively coerce an LXMF field value into a JSON-encodable form.
@@ -383,6 +401,14 @@ def _lxmf_delivery_callback(message):
         # Field keys are ints (LXMF FIELD_* constants). JSON-encode the whole
         # field map Python-side — bytes become hex strings — so the Kotlin
         # side gets one `fields_json` string instead of a JNI hop per value.
+        #
+        # FIELD_TELEMETRY (0x02) used to get pre-assembled into a
+        # Columba JSON shape here; that work moved to
+        # `rns-api/.../util/TelemeterCodec.kt` and
+        # `PythonEventBridge.assembleLocationTelemetry` decodes the
+        # raw msgpack bytes Kotlin-side. The Python tree now passes
+        # FIELD_TELEMETRY through `_jsonable` like any other binary
+        # field — hex-encoded for the JNI hop, no Telemeter awareness.
         fields_json = None
         if getattr(message, "fields", None):
             fields_json = json.dumps(
@@ -626,3 +652,58 @@ def link_event_callback():
 
 def lxmf_failure_callback():
     return _on_lxmf_failure
+
+
+# --- NomadNet request-response capture ------------------------------------
+# Upstream `Resource.assemble` closes the temp file backing
+# `RequestReceipt.response` synchronously after the response callback returns
+# — a later read from Kotlin's poll loop sees
+# `ValueError: I/O operation on closed file`. The fix has to be Python-side
+# because `receipt.response` for a file-response is a Python file object, and
+# only Python can call `.read()` on it before upstream closes it.
+#
+# Everything else (state, polling, error mapping) lives in
+# `PythonRnsNomadnet.kt`. This helper is the minimum-viable Python:
+# a dict holding the snapshot + two closures suitable for
+# `Link.request(response_callback=..., failed_callback=...)`.
+
+def make_nomadnet_response_capture():
+    # SimpleNamespace exposes `cap.done`-style attribute access — Chaquopy's
+    # `pyObject["key"]` from Kotlin maps to `__getattr__`, NOT `__getitem__`.
+    # A plain dict here would silently read null on every Kotlin-side lookup
+    # and the poll loop would never see completion.
+    from types import SimpleNamespace
+    cap = SimpleNamespace(
+        done=False,
+        response_bytes=None,
+        metadata_bytes=None,
+        error=None,
+    )
+
+    def _on_response(receipt):
+        try:
+            r = getattr(receipt, "response", None)
+            if hasattr(r, "read"):
+                cap.response_bytes = r.read()
+            elif isinstance(r, (bytes, bytearray)):
+                cap.response_bytes = bytes(r)
+            else:
+                cap.response_bytes = b"" if r is None else bytes(str(r), "utf-8")
+            m = getattr(receipt, "metadata", None)
+            if isinstance(m, (bytes, bytearray)):
+                cap.metadata_bytes = bytes(m)
+            elif m is not None:
+                import umsgpack
+                cap.metadata_bytes = umsgpack.packb(m)
+        except Exception as e:  # noqa: BLE001
+            cap.error = str(e)
+        finally:
+            cap.done = True
+
+    def _on_failed(receipt):
+        cap.error = "request_failed"
+        cap.done = True
+
+    cap.on_response = _on_response
+    cap.on_failed = _on_failed
+    return cap

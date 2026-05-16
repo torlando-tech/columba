@@ -39,6 +39,12 @@ class PythonRnsTelemetry(
 ) : RnsTelemetry {
     private companion object {
         const val TAG = "PythonRnsTelemetry"
+
+        /** `LXMF.LXMessage.OPPORTUNISTIC` — single encrypted packet, no link.
+         *  Matches Sideband's telemetry send (`core.py` always emits
+         *  telemetry as opportunistic; link-based would block on per-peer
+         *  establishment for what is fundamentally a fire-and-forget update). */
+        const val LXMF_METHOD_OPPORTUNISTIC = 0x01
     }
 
     // ==================== Collector-host-mode state ====================
@@ -161,16 +167,27 @@ class PythonRnsTelemetry(
         val sourceDest = runtime.localDestination
             ?: throw RnsException(RnsError.BackendNotReady)
 
-        // LXMessage(destination, source, content="", title="", fields=fields).
+        // LXMessage(destination, source, content="", title="", fields=fields,
+        //           desired_method=OPPORTUNISTIC).
         // Content/title are empty: a telemetry frame is field-only.
+        // OPPORTUNISTIC = single encrypted packet, no link establishment —
+        // matches Sideband's telemetry send (`Sideband/.../core.py` always
+        // emits telemetry as opportunistic). Without an explicit
+        // `desired_method` upstream LXMF defaults to DIRECT (link-based)
+        // which fails for telemetry to peers we haven't linked to before.
+        // `lxmfModule["LXMessage"]` IS the class; `.call(...)` constructs it
+        // (Python: `LXMF.LXMessage(...)`). Using `.callAttr("LXMessage", ...)`
+        // would look up an attribute named "LXMessage" on the class itself,
+        // which doesn't exist.
         val lxMessageClass = runtime.lxmfModule["LXMessage"] ?: error("LXMF.LXMessage missing")
-        val lxMessage = lxMessageClass.callAttr(
-            "LXMessage",
+        val lxMessage = lxMessageClass.call(
             destDest,
             sourceDest,
             "", // content
             "", // title
             fields,
+            null, // app_data
+            LXMF_METHOD_OPPORTUNISTIC,
         )
 
         router.callAttr("handle_outbound", lxMessage)

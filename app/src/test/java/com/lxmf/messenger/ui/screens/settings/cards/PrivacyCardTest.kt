@@ -36,10 +36,12 @@ class PrivacyCardTest {
     // ========== Callback Tracking Variables ==========
 
     private var blockUnknownSendersChanged: Boolean? = null
+    private var allowCallsFromContactsOnlyChanged: Boolean? = null
 
     @Before
     fun resetCallbackTrackers() {
         blockUnknownSendersChanged = null
+        allowCallsFromContactsOnlyChanged = null
     }
 
     // ========== Setup Helper ==========
@@ -47,6 +49,7 @@ class PrivacyCardTest {
     private fun setUpCard(
         isExpanded: Boolean = true,
         blockUnknownSenders: Boolean = false,
+        allowCallsFromContactsOnly: Boolean = false,
     ) {
         composeTestRule.setContent {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -55,6 +58,8 @@ class PrivacyCardTest {
                     onExpandedChange = {},
                     blockUnknownSenders = blockUnknownSenders,
                     onBlockUnknownSendersChange = { blockUnknownSendersChanged = it },
+                    allowCallsFromContactsOnly = allowCallsFromContactsOnly,
+                    onAllowCallsFromContactsOnlyChange = { allowCallsFromContactsOnlyChanged = it },
                 )
             }
         }

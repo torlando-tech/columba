@@ -282,6 +282,8 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.PRIVACY, it) },
                     blockUnknownSenders = state.blockUnknownSenders,
                     onBlockUnknownSendersChange = { viewModel.setBlockUnknownSenders(it) },
+                    allowCallsFromContactsOnly = state.allowCallsFromContactsOnly,
+                    onAllowCallsFromContactsOnlyChange = { viewModel.setAllowCallsFromContactsOnly(it) },
                     blockedPeerCount = blockedPeerCount,
                     onNavigateToBlockedUsers = onNavigateToBlockedUsers,
                 )

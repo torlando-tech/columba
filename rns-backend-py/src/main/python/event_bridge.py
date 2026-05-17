@@ -520,6 +520,71 @@ def deregister_callbacks():
     _announce_handler = None
 
 
+# --- LXST telephony callback bridges ---------------------------------------
+# RNS link lifecycle callbacks (`Destination.set_link_established_callback`,
+# `Link.set_remote_identified_callback`, `Link.set_link_closed_callback`) are
+# per-Destination / per-Link callables that upstream invokes on internal RNS
+# threads. Kotlin objects aren't directly callable from Python, so these
+# helpers wrap a Kotlin callback (single-arg `PyEventCallback` or 2-arg
+# `PyTwoArgCallback`) as a Python closure with the signature upstream
+# expects. Mirrors `make_link_packet_handler` (its sibling for inbound
+# audio packet callbacks) — same pattern, lifted from
+# release/v0.10.x's `python/lxst_modules/call_manager.py` where these
+# callbacks were registered against `self.__*_callback` methods inside
+# the Python class. Translating to Kotlin keeps the slim-Python rule
+# intact (no new rns_*.py facade).
+
+
+def make_link_established_handler(on_established):
+    """Wrap a Kotlin `PyEventCallback` as an RNS `set_link_established_callback`.
+
+    Upstream `RNS.Destination.set_link_established_callback` invokes the
+    callable with a single arg — the newly-established `RNS.Link`. Forwards
+    that link as a `PyObject` to the Kotlin sink, which carries it back to
+    `PythonCallManager.onInboundLinkEstablished` for the
+    STATUS_AVAILABLE + remote-identified install dance.
+    """
+    def _handler(link):
+        try:
+            on_established.onEvent(link)
+        except Exception as e:  # noqa: BLE001 — must not escape onto the RNS thread
+            RNS.log(f"event_bridge: link-established dispatch failed: {e}", RNS.LOG_ERROR)
+    return _handler
+
+
+def make_remote_identified_handler(on_identified):
+    """Wrap a Kotlin 2-arg callback as an RNS `set_remote_identified_callback`.
+
+    Upstream `RNS.Link.set_remote_identified_callback` invokes the callable
+    with `(link, identity)` once the remote peer proves their RNS identity.
+    Forwards both PyObjects to a Kotlin `PyTwoArgCallback`, which carries
+    them back to `PythonCallManager.onCallerIdentified` for
+    `transport.acceptInboundLink(link)` + `telephone.onIncomingCall(hex)`.
+    """
+    def _handler(link, identity):
+        try:
+            on_identified.onEvent(link, identity)
+        except Exception as e:  # noqa: BLE001 — must not escape onto the RNS thread
+            RNS.log(f"event_bridge: remote-identified dispatch failed: {e}", RNS.LOG_ERROR)
+    return _handler
+
+
+def make_link_closed_handler(on_closed):
+    """Wrap a Kotlin `PyEventCallback` as an RNS `set_link_closed_callback`.
+
+    Upstream `RNS.Link.set_link_closed_callback` invokes the callable with
+    the closed `RNS.Link`. Used by `PythonCallManager` to learn when the
+    remote tore down its end of the call link (before identification or
+    after a hangup signal) so it can release the Telephone state cleanly.
+    """
+    def _handler(link):
+        try:
+            on_closed.onEvent(link)
+        except Exception as e:  # noqa: BLE001 — must not escape onto the RNS thread
+            RNS.log(f"event_bridge: link-closed dispatch failed: {e}", RNS.LOG_ERROR)
+    return _handler
+
+
 # --- LXMF external stamp generator bridge ----------------------------------
 
 def install_external_stamp_generator(java_callback):

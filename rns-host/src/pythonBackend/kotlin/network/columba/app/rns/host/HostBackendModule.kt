@@ -58,17 +58,42 @@ object HostBackendModule {
     fun providePythonNetworkTransport(backend: ChaquopyRnsBackend): PythonNetworkTransport =
         PythonNetworkTransport(backend.runtime)
 
+    /**
+     * Eagerly-constructed `PythonCallManager` — its `init` block
+     * subscribes to `backend.core.networkStatus` and auto-runs
+     * [PythonCallManager.setup] once the backend reaches `READY`,
+     * which is when `PythonRnsRuntime.localIdentity` is populated.
+     * Mirrors the kotlin flavor's `NativeRnsBackendImpl.setupNativeTelephone`
+     * invocation point.
+     */
     @Provides
     @Singleton
     fun providePythonCallManager(
         @ApplicationContext context: Context,
+        backend: ChaquopyRnsBackend,
         transport: PythonNetworkTransport,
         callCoordinator: CallCoordinator,
-    ): PythonCallManager = PythonCallManager(context, transport, callCoordinator)
+    ): PythonCallManager =
+        PythonCallManager(
+            context = context,
+            runtime = backend.runtime,
+            transport = transport,
+            callCoordinator = callCoordinator,
+            backendStatusFlow = backend.core.networkStatus,
+        )
 
     @Provides
     @Singleton
-    fun provideRnsBackend(backend: ChaquopyRnsBackend): RnsBackend = backend
+    fun provideRnsBackend(
+        backend: ChaquopyRnsBackend,
+        // Force-construct PythonCallManager eagerly so its init-time
+        // backend-status observer is subscribed before `PythonRnsCore.initialize`
+        // can flip status to READY. Without an injection edge here, Hilt
+        // would lazily skip @Singleton construction — and a late-subscribing
+        // observer would miss the READY event, leaving telephony un-set-up.
+        // No code reads this param; the side effect is the construction.
+        @Suppress("UNUSED_PARAMETER") eagerCallManager: PythonCallManager,
+    ): RnsBackend = backend
 
     // Per-sub-interface providers — same single-source-binding rule + shape as
     // the kotlinBackend HostBackendModule.

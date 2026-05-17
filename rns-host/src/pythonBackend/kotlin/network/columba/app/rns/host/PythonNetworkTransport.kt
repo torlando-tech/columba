@@ -61,6 +61,23 @@ class PythonNetworkTransport(
     @Volatile
     private var signalCallback: ((Int) -> Unit)? = null
 
+    /**
+     * Local `RNS.Identity` used to prove ourselves to a remote peer.
+     *
+     * Set once by [PythonCallManager.setup] so [establishLink] can call
+     * `link.identify(localIdentity)` proactively after the outbound link
+     * reaches ACTIVE — mirrors `NativeNetworkTransport.setLocalIdentity` +
+     * the post-ACTIVE identify call. Without this, the v0.10.x
+     * "STATUS_AVAILABLE → callee triggers identify" handshake races with
+     * Kotlin callback installation on real devices.
+     */
+    @Volatile
+    private var localIdentity: PyObject? = null
+
+    fun setLocalIdentity(identity: PyObject) {
+        localIdentity = identity
+    }
+
     override val isLinkActive: Boolean
         get() = activeLink?.let { link ->
             runCatching { link["status"]?.toJava(Int::class.javaObjectType) == LINK_ACTIVE }
@@ -114,6 +131,24 @@ class PythonNetworkTransport(
             if (active) {
                 activeLink = link
                 attachLinkPacketHandler(link)
+                // Proactively identify so the callee can match us against
+                // its allow-list and ring its UI without waiting for a
+                // STATUS_AVAILABLE round-trip — mirrors
+                // `NativeNetworkTransport.establishLink` (kt backend line
+                // 173). The v0.10.x Python `call_manager.py` deferred
+                // identify until STATUS_AVAILABLE arrived; that worked
+                // on a single-stack build but races with callback
+                // installation on real Android hardware.
+                val id = localIdentity
+                if (id != null) {
+                    runCatching {
+                        val identified = link.callAttr("identify", id)
+                            ?.toJava(Boolean::class.javaObjectType) ?: false
+                        Log.i(TAG, "establishLink: proactive identify=$identified")
+                    }.onFailure { Log.w(TAG, "Proactive identify failed", it) }
+                } else {
+                    Log.w(TAG, "establishLink: link ACTIVE but localIdentity is null")
+                }
                 Log.i(TAG, "establishLink: link ACTIVE")
             } else {
                 Log.w(TAG, "establishLink: link did not reach ACTIVE within ${LINK_TIMEOUT_MS}ms")
@@ -198,6 +233,22 @@ class PythonNetworkTransport(
      * round-trip itself — that `event_bridge.make_link_packet_handler`'s closure
      * actually re-enters Kotlin when RNS fires it on its packet thread.
      */
+    /**
+     * Accept an inbound `RNS.Link` from an incoming caller as the active
+     * call link. Mirrors `NativeNetworkTransport.acceptInboundLink`.
+     *
+     * Called by [PythonCallManager.onCallerIdentified] after the remote
+     * has proved their identity. Wires the link's packet callback so
+     * audio + signals flow into [packetCallback] / [signalCallback]
+     * (which `PythonCallManager.setup` connected to the `PacketRouter`
+     * and the LXST signalling pipeline).
+     */
+    fun acceptInboundLink(link: PyObject) {
+        Log.i(TAG, "Accepting inbound call link")
+        activeLink = link
+        attachLinkPacketHandler(link)
+    }
+
     private fun attachLinkPacketHandler(link: PyObject) {
         runCatching {
             val sink = PyEventCallback { payload ->

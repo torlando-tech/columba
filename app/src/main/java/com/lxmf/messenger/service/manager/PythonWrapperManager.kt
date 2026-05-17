@@ -744,7 +744,7 @@ class PythonWrapperManager(
             if (!settingsAccessor.getAllowCallsFromContactsOnly()) {
                 true
             } else {
-                runBlocking(Dispatchers.IO) { // THREADING: blocking call back into Kotlin
+                runBlocking(Dispatchers.IO) { // THREADING: allowed — Python JNI callback requires synchronous return
                     val database = ServiceDatabaseProvider.getDatabase(context)
                     val announceDao = database.announceDao()
                     val contactDao = database.contactDao()

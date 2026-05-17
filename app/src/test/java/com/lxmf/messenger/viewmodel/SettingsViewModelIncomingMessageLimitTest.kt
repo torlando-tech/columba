@@ -177,6 +177,8 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         // Privacy settings flows
         every { settingsRepository.blockUnknownSendersFlow } returns MutableStateFlow(false)
+        every { settingsRepository.allowCallsFromContactsOnlyFlow } returns MutableStateFlow(false)
+        every { settingsRepository.allowVoiceCallsFlow } returns MutableStateFlow(true)
 
         // Telemetry request settings flows
         every { settingsRepository.telemetryRequestEnabledFlow } returns MutableStateFlow(false)

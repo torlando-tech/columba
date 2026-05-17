@@ -21,6 +21,8 @@ class ServiceSettingsAccessor(
 
         // Keys for cross-process settings
         const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
+        const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
+        const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
         const val KEY_NETWORK_CHANGE_ANNOUNCE_TIME = "network_change_announce_time"
         const val KEY_LAST_AUTO_ANNOUNCE_TIME = "last_auto_announce_time"
     }
@@ -63,4 +65,23 @@ class ServiceSettingsAccessor(
      * @return true if unknown senders should be blocked, false otherwise (default)
      */
     fun getBlockUnknownSenders(): Boolean = getCrossProcessPrefs().getBoolean(KEY_BLOCK_UNKNOWN_SENDERS, false)
+
+    /**
+     * Get the calls-from-contacts-only setting.
+     * When enabled, incoming LXST link requests from non-contacts are silently
+     * dropped after identification.
+     *
+     * @return true if non-contact callers should be silently dropped, false otherwise (default)
+     */
+    fun getAllowCallsFromContactsOnly(): Boolean =
+        getCrossProcessPrefs().getBoolean(KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY, false)
+
+    /**
+     * Get the master allow-voice-calls setting.
+     * When false, the inbound LXST destination is deregistered and no announces are sent.
+     * Outbound calls remain functional regardless.
+     *
+     * @return true if incoming voice calls should be accepted, false otherwise (default true)
+     */
+    fun getAllowVoiceCalls(): Boolean = getCrossProcessPrefs().getBoolean(KEY_ALLOW_VOICE_CALLS, true)
 }

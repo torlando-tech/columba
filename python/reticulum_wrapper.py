@@ -974,6 +974,43 @@ class ReticulumWrapper:
         except Exception as e:
             log_error("ReticulumWrapper", "shutdown_call_manager", f"Error: {e}")
 
+    def disable_lxst_incoming(self):
+        """Tear down the inbound LXST destination, stopping incoming voice calls.
+
+        Outbound calls remain functional — only the IN destination is
+        deregistered. The user can still dial out to anyone. This implements
+        the master "Allow voice calls" toggle when OFF.
+
+        Returns:
+            Dict with 'success' boolean
+        """
+        try:
+            if self._call_manager is not None:
+                self._call_manager.disable_incoming()
+                log_info("ReticulumWrapper", "disable_lxst_incoming", "Inbound LXST disabled")
+            return {'success': True}
+        except Exception as e:
+            log_error("ReticulumWrapper", "disable_lxst_incoming", f"Error: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def enable_lxst_incoming(self):
+        """Re-register the inbound LXST destination and re-announce.
+
+        Counterpart to disable_lxst_incoming. Used when the master "Allow
+        voice calls" toggle is flipped back ON.
+
+        Returns:
+            Dict with 'success' boolean
+        """
+        try:
+            if self._call_manager is not None:
+                self._call_manager.enable_incoming()
+                log_info("ReticulumWrapper", "enable_lxst_incoming", "Inbound LXST enabled")
+            return {'success': True}
+        except Exception as e:
+            log_error("ReticulumWrapper", "enable_lxst_incoming", f"Error: {e}")
+            return {'success': False, 'error': str(e)}
+
     def get_call_manager(self):
         """
         Get the LXST CallManager instance.

@@ -31,6 +31,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,8 @@ import kotlinx.coroutines.delay
 fun VoiceCallPermissionsCard(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    allowVoiceCalls: Boolean,
+    onAllowVoiceCallsChange: (Boolean) -> Unit,
 ) {
     // Not relevant below Android 10 — background activity launch restrictions
     // only became an issue starting with Q
@@ -145,6 +148,15 @@ fun VoiceCallPermissionsCard(
                     )
                 }
 
+                // Master "Allow voice calls" switch — placed to the left of the
+                // chevron so it stays visible whether the card is expanded or
+                // collapsed. When OFF, the inbound LXST destination is
+                // deregistered service-side; outbound calls still work.
+                Switch(
+                    checked = allowVoiceCalls,
+                    onCheckedChange = onAllowVoiceCallsChange,
+                )
+
                 Icon(
                     imageVector =
                         if (isExpanded) {
@@ -166,6 +178,18 @@ fun VoiceCallPermissionsCard(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    if (!allowVoiceCalls) {
+                        // Master toggle is OFF — let the user know inbound is
+                        // disabled before they see (and worry about) the
+                        // permission-status content below.
+                        Text(
+                            text =
+                                "Incoming voice calls are currently disabled. Outgoing calls still work.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = contentColor,
+                        )
+                    }
                     if (isCheckingStatus) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else if (allGranted) {

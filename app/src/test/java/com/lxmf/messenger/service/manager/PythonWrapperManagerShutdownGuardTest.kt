@@ -30,6 +30,7 @@ class PythonWrapperManagerShutdownGuardTest {
                 state = state,
                 context = mockk(),
                 scope = TestScope(),
+                settingsAccessor = mockk(),
             )
     }
 

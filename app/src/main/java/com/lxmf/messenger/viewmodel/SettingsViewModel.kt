@@ -124,6 +124,8 @@ data class SettingsState(
     val notificationsEnabled: Boolean = true,
     // Privacy state
     val blockUnknownSenders: Boolean = false,
+    val allowCallsFromContactsOnly: Boolean = false,
+    val allowVoiceCalls: Boolean = true,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -441,6 +443,8 @@ class SettingsViewModel
                             notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve privacy state from loadPrivacySettings()
                             blockUnknownSenders = _state.value.blockUnknownSenders,
+                            allowCallsFromContactsOnly = _state.value.allowCallsFromContactsOnly,
+                            allowVoiceCalls = _state.value.allowVoiceCalls,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
@@ -1502,6 +1506,16 @@ class SettingsViewModel
                     _state.update { it.copy(blockUnknownSenders = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.allowCallsFromContactsOnlyFlow.collect { enabled ->
+                    _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.allowVoiceCallsFlow.collect { enabled ->
+                    _state.update { it.copy(allowVoiceCalls = enabled) }
+                }
+            }
         }
 
         /**
@@ -1513,6 +1527,33 @@ class SettingsViewModel
                 settingsRepository.saveBlockUnknownSenders(enabled)
                 _state.update { it.copy(blockUnknownSenders = enabled) }
                 Log.d(TAG, "Block unknown senders ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the calls-from-contacts-only setting.
+         * When enabled, only contacts can establish incoming voice calls;
+         * non-contact callers' link attempts are silently dropped.
+         */
+        fun setAllowCallsFromContactsOnly(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAllowCallsFromContactsOnly(enabled)
+                _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
+                Log.d(TAG, "Calls-from-contacts-only ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the master allow-voice-calls setting.
+         * When disabled, the inbound LXST telephony destination is deregistered
+         * and no announces are sent; peers see this device as unreachable for
+         * calls. Outbound calls are unaffected.
+         */
+        fun setAllowVoiceCalls(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAllowVoiceCalls(enabled)
+                _state.update { it.copy(allowVoiceCalls = enabled) }
+                Log.d(TAG, "Allow voice calls ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

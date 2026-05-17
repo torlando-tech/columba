@@ -282,6 +282,8 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.PRIVACY, it) },
                     blockUnknownSenders = state.blockUnknownSenders,
                     onBlockUnknownSendersChange = { viewModel.setBlockUnknownSenders(it) },
+                    allowCallsFromContactsOnly = state.allowCallsFromContactsOnly,
+                    onAllowCallsFromContactsOnlyChange = { viewModel.setAllowCallsFromContactsOnly(it) },
                     blockedPeerCount = blockedPeerCount,
                     onNavigateToBlockedUsers = onNavigateToBlockedUsers,
                 )
@@ -297,6 +299,8 @@ fun SettingsScreen(
                 VoiceCallPermissionsCard(
                     isExpanded = state.cardExpansionStates[SettingsCardId.VOICE_CALL_PERMISSIONS.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.VOICE_CALL_PERMISSIONS, it) },
+                    allowVoiceCalls = state.allowVoiceCalls,
+                    onAllowVoiceCallsChange = { viewModel.setAllowVoiceCalls(it) },
                 )
 
                 AutoAnnounceCard(

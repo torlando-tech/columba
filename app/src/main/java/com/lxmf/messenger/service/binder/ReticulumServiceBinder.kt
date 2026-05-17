@@ -27,6 +27,7 @@ import com.lxmf.messenger.service.manager.PythonWrapperManager.Companion.getDict
 import com.lxmf.messenger.service.manager.RoutingManager
 import com.lxmf.messenger.service.manager.ServiceNotificationManager
 import com.lxmf.messenger.service.persistence.ServicePersistenceManager
+import com.lxmf.messenger.service.persistence.ServiceSettingsAccessor
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,7 @@ class ReticulumServiceBinder(
     private val notificationManager: ServiceNotificationManager,
     private val bleCoordinator: BleCoordinator,
     private val persistenceManager: ServicePersistenceManager,
+    private val settingsAccessor: ServiceSettingsAccessor,
     private val scope: CoroutineScope,
     private val onInitialized: () -> Unit,
     private val onShutdown: () -> Unit,
@@ -74,6 +76,7 @@ class ReticulumServiceBinder(
 
     // RNode bridge - created lazily when needed
     private var rnodeBridge: KotlinRNodeBridge? = null
+
 
     // ===========================================
     // Lifecycle Methods
@@ -1477,10 +1480,52 @@ class ReticulumServiceBinder(
             if (callManagerInitialized) {
                 registerCallCoordinatorListeners()
                 wrapperManager.setupTelephone()
+                // Register the contact-check predicate so Python can gate
+                // incoming links by the "Calls from contacts only" toggle.
+                wrapperManager.setupContactCheckCallback()
+                // Apply the master "Allow voice calls" toggle's current state.
+                // Runtime changes are signalled via ACTION_SET_ALLOW_VOICE_CALLS
+                // because SharedPreferences.OnSharedPreferenceChangeListener does
+                // not fire across processes.
+                applyInitialAllowVoiceCallsState()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to setup CallManager: ${e.message}", e)
         }
+    }
+
+    /**
+     * Read the persisted "Allow voice calls" toggle and apply it to Python.
+     *
+     * Default is true (preserves existing behaviour for users who haven't
+     * touched the toggle). When false, Python.disable_lxst_incoming() is
+     * invoked immediately after setupCallManager so the IN destination is
+     * never visible to the network for this session.
+     */
+    private fun applyInitialAllowVoiceCallsState() {
+        try {
+            val allowed = settingsAccessor.getAllowVoiceCalls()
+            Log.d(TAG, "Initial Allow voice calls state: $allowed")
+            if (!allowed) {
+                wrapperManager.setLxstIncomingEnabled(false)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read initial Allow voice calls state: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Apply a runtime change to the master "Allow voice calls" toggle.
+     *
+     * Invoked from [ReticulumService.onStartCommand] when the UI process
+     * sends `ACTION_SET_ALLOW_VOICE_CALLS`. The Intent path is used instead
+     * of `SharedPreferences.OnSharedPreferenceChangeListener` because
+     * SharedPreferences change listeners only fire in the process that
+     * wrote the value — they do not propagate across processes on Android.
+     */
+    fun setAllowVoiceCalls(allowed: Boolean) {
+        Log.i(TAG, "Allow voice calls runtime change → $allowed")
+        wrapperManager.setLxstIncomingEnabled(allowed)
     }
 
     /** Register listeners for IPC notification to UI process. */

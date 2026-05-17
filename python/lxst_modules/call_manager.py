@@ -71,6 +71,10 @@ except ImportError:  # pragma: no cover
             def request_path(h):
                 pass
 
+            @staticmethod
+            def deregister_destination(d):
+                pass
+
         class Link:
             ACTIVE = 0x00
 
@@ -203,12 +207,19 @@ class CallManager:
         self._kotlin_call_bridge = None
         self._kotlin_network_bridge = None
         self._kotlin_telephone_callback = None
+        self._contact_check_callback = None  # java.util.function.Function<String, Boolean>
         self._initialized = False
         self._active_call_identity = None
         self._call_start_time = None
         self._call_handler_lock = threading.Lock()
         self._cancel_event = threading.Event()
         self._last_announce = 0  # Epoch 0 → first announce fires immediately
+
+        # Master inbound enable/disable (Feature 2). When True, __jobs and
+        # _announce_telephony skip; new link-establish events are ignored.
+        # Toggled by enable_incoming()/disable_incoming() under _call_handler_lock.
+        self._incoming_disabled = False
+        self._jobs_thread = None
 
         # TX batching state
         self._tx_batch = []           # Accumulated frames awaiting send
@@ -246,7 +257,8 @@ class CallManager:
             RNS.log(f"CallManager announced on {RNS.prettyhexrep(self.destination.hash)}", RNS.LOG_DEBUG)
 
             # Start background jobs thread for periodic re-announcing
-            threading.Thread(target=self.__jobs, daemon=True).start()
+            self._jobs_thread = threading.Thread(target=self.__jobs, daemon=True)
+            self._jobs_thread.start()
 
             self._initialized = True
             RNS.log("CallManager initialized with raw Reticulum transport", RNS.LOG_INFO)
@@ -273,13 +285,18 @@ class CallManager:
         """Background thread for periodic re-announcing.
 
         Matches reference LXST Telephony.__jobs pattern:
-        - Runs while destination exists
+        - Runs while destination exists and incoming is not disabled
         - Re-announces every ANNOUNCE_INTERVAL (3 hours)
+
+        Exits cleanly when self.destination is None (disable_incoming() or
+        teardown()). enable_incoming() respawns a fresh thread.
         """
-        while self.destination is not None:
+        while self.destination is not None and not self._incoming_disabled:
             time.sleep(self.JOB_INTERVAL)
+            if self._incoming_disabled or self.destination is None:
+                break
             if time.time() > self._last_announce + self.ANNOUNCE_INTERVAL:
-                if self.destination is not None:
+                if self.destination is not None and not self._incoming_disabled:
                     try:
                         self.destination.announce()
                         self._last_announce = time.time()
@@ -298,6 +315,21 @@ class CallManager:
         """Set callback for notifying Kotlin Telephone of state changes."""
         self._kotlin_telephone_callback = callback
         RNS.log("Kotlin Telephone callback set", RNS.LOG_DEBUG)
+
+    def set_kotlin_contact_check_callback(self, callback):
+        """Set callback for checking whether a caller identity is a contact.
+
+        The callback is invoked synchronously from __caller_identified with the
+        identity hash (hex string) and must return a Boolean: True if the
+        caller is in the user's contacts (or the calls-from-contacts-only
+        toggle is off — Kotlin gates that), False otherwise.
+
+        Args:
+            callback: java.util.function.Function<String, Boolean> or any
+                Python callable taking a hex string and returning a bool
+        """
+        self._contact_check_callback = callback
+        RNS.log("Kotlin contact-check callback set", RNS.LOG_DEBUG)
 
     # ===== Call Actions (called from Kotlin) =====
 
@@ -469,6 +501,20 @@ class CallManager:
     def __incoming_link_established(self, link):
         """Handle new incoming link (someone is calling us)."""
         with self._call_handler_lock:
+            # Master toggle: if incoming was disabled between when the link
+            # request was admitted by Transport and when this callback fires
+            # (TOCTOU window), silently teardown without signalling. This is
+            # defence-in-depth — disable_incoming() deregisters the destination
+            # so new requests should not reach us, but a pre-flight request
+            # can still complete here.
+            if self._incoming_disabled:
+                RNS.log("Incoming call but incoming disabled, silently tearing down", RNS.LOG_DEBUG)
+                try:
+                    link.teardown()
+                except Exception:
+                    pass
+                return
+
             if self.active_call is not None or self._busy:
                 RNS.log("Incoming call, but line busy, signalling busy", RNS.LOG_DEBUG)
                 self._send_signal_to_remote(STATUS_BUSY, link)
@@ -489,6 +535,20 @@ class CallManager:
                 RNS.log(f"Caller identified but line busy, signalling busy", RNS.LOG_DEBUG)
                 self._send_signal_to_remote(STATUS_BUSY, link)
                 link.teardown()
+                return
+
+            # Silent-drop gate (Feature 1: "Calls from contacts only").
+            # Must run BEFORE _send_signal_to_remote(STATUS_RINGING) and BEFORE
+            # any Kotlin notify — the goal is for the caller to see "link
+            # established → nothing" so they fall through to their wait-time
+            # timeout, indistinguishable from "remote went away". We send NO
+            # signals (not even STATUS_BUSY) so non-contacts cannot distinguish
+            # "you are blocked" from "you are unreachable".
+            if self._should_silently_drop(identity):
+                try:
+                    link.teardown()
+                except Exception:
+                    pass
                 return
 
             if not self._is_allowed(identity):
@@ -801,9 +861,115 @@ class CallManager:
     def _is_allowed(self, identity):
         """Check if caller identity is allowed.
 
-        Returns True for all callers (allow-all). Contact-based filtering
-        can be added in a future phase.
+        Returns True for all callers (allow-all). This is the "explicit reject"
+        gate — when it returns False, the caller is signalled BUSY (i.e., they
+        learn the device is reachable but rejecting them). Currently always
+        returns True. Contact-based silent-drop filtering lives in
+        _should_silently_drop() instead.
         """
         identity_hash = identity.hash.hex() if identity else "unknown"
         RNS.log(f"Allow check for {identity_hash[:16]}...: allowed", RNS.LOG_DEBUG)
         return True
+
+    def _should_silently_drop(self, identity):
+        """Check whether to silently drop a caller after identification.
+
+        Unlike _is_allowed, a True result here means "do not signal anything
+        to the caller and do not notify Kotlin". The caller's link will be
+        torn down with no STATUS_BUSY / STATUS_REJECTED — they fall through
+        to their wait-time timeout, indistinguishable from "remote went away".
+
+        The decision is delegated to the Kotlin contact-check callback, which
+        consults the user's contacts DB and the "calls from contacts only"
+        toggle. If the callback returns True, the caller IS a contact (or the
+        toggle is off) — allow. If False, silently drop.
+
+        Fails open: any exception or missing callback results in "allow".
+        """
+        if self._contact_check_callback is None:
+            return False  # No gate installed → allow everyone
+        identity_hash = identity.hash.hex() if identity else None
+        if identity_hash is None:
+            return False  # Unknown identity → allow (fail open)
+        try:
+            is_allowed = self._contact_check_callback(identity_hash)
+            if is_allowed is None:
+                return False  # Defensive: treat None as allow
+            allowed_bool = bool(is_allowed)
+            if not allowed_bool:
+                RNS.log(
+                    f"Calls-only-from-contacts: dropping link from {identity_hash[:16]}",
+                    RNS.LOG_INFO,
+                )
+            return not allowed_bool
+        except Exception as e:
+            # Fail open: any error in the Kotlin callback should not brick calls
+            RNS.log(f"Contact-check callback raised, allowing: {e}", RNS.LOG_WARNING)
+            return False
+
+    def disable_incoming(self):
+        """Tear down the inbound destination & stop announces.
+
+        Outbound calls (CallManager.call) still work because they construct
+        a fresh OUT Destination per call. Active calls are torn down.
+
+        Note: Reticulum has no public "revoke announce" API — remote peers'
+        path tables retain stale entries for up to ~14 days (TTL-based) but
+        new link requests will not resolve to a live destination.
+        """
+        with self._call_handler_lock:
+            if self._incoming_disabled:
+                return  # Already disabled
+            self._incoming_disabled = True
+
+            if self.destination is not None:
+                try:
+                    RNS.Transport.deregister_destination(self.destination)
+                    RNS.log("Telephony destination deregistered", RNS.LOG_INFO)
+                except Exception as e:
+                    RNS.log(f"Error deregistering destination: {e}", RNS.LOG_WARNING)
+                self.destination = None
+
+            # Tear down any active/ringing call so the remote sees a clean drop
+            link_to_teardown = self.active_call
+            self.active_call = None
+            self._active_call_identity = None
+            self._call_start_time = None
+
+        if link_to_teardown is not None:
+            try:
+                if hasattr(link_to_teardown, 'status') and link_to_teardown.status == RNS.Link.ACTIVE:
+                    link_to_teardown.teardown()
+            except Exception as e:
+                RNS.log(f"Error tearing down active call on disable: {e}", RNS.LOG_ERROR)
+
+    def enable_incoming(self):
+        """Re-create the inbound destination, install the callback, and announce.
+
+        Respawns the __jobs thread since the previous one exits when
+        self.destination becomes None.
+        """
+        with self._call_handler_lock:
+            if not self._incoming_disabled and self.destination is not None:
+                return  # Already enabled
+            self._incoming_disabled = False
+            try:
+                self.destination = RNS.Destination(
+                    self.identity, RNS.Destination.IN, RNS.Destination.SINGLE,
+                    APP_NAME, PRIMITIVE_NAME
+                )
+                self.destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
+                self.destination.set_link_established_callback(self.__incoming_link_established)
+                self.destination.announce()
+                self._last_announce = time.time()
+                RNS.log("Telephony destination re-announced after enable", RNS.LOG_INFO)
+            except Exception as e:
+                RNS.log(f"Error re-creating destination on enable: {e}", RNS.LOG_ERROR)
+                self.destination = None
+                self._incoming_disabled = True
+                return
+
+            # Respawn the jobs thread (the previous one exited when destination became None)
+            if self._jobs_thread is None or not self._jobs_thread.is_alive():
+                self._jobs_thread = threading.Thread(target=self.__jobs, daemon=True)
+                self._jobs_thread.start()

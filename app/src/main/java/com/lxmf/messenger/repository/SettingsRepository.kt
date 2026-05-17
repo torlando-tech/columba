@@ -128,6 +128,8 @@ class SettingsRepository
 
             // Privacy preferences
             val BLOCK_UNKNOWN_SENDERS = booleanPreferencesKey("block_unknown_senders")
+            val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
+            val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
 
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
@@ -1577,6 +1579,8 @@ class SettingsRepository
             // Cross-process SharedPreferences keys (for settings read by the service)
             const val CROSS_PROCESS_PREFS_NAME = "cross_process_settings"
             const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
+            const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
+            const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
 
             /** Default telemetry send interval: 5 minutes */
             const val DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS = 300
@@ -1773,6 +1777,121 @@ class SettingsRepository
                 .edit()
                 .putBoolean(KEY_BLOCK_UNKNOWN_SENDERS, enabled)
                 .apply()
+        }
+
+        /**
+         * Flow of the calls-from-contacts-only setting.
+         * When enabled, only contacts can establish incoming voice calls.
+         * Non-contact callers' link attempts are silently dropped after
+         * identification (no STATUS_RINGING, no UI surface).
+         * Defaults to false if not set (allow all callers - preserves existing behavior).
+         */
+        val allowCallsFromContactsOnlyFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_CALLS_FROM_CONTACTS_ONLY] ?: false
+                }.distinctUntilChanged()
+
+        /**
+         * Get the calls-from-contacts-only setting (non-flow).
+         */
+        suspend fun getAllowCallsFromContactsOnly(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_CALLS_FROM_CONTACTS_ONLY] ?: false
+                }.first()
+
+        /**
+         * Save the calls-from-contacts-only setting.
+         *
+         * Also writes to SharedPreferences with MODE_MULTI_PROCESS so the service process
+         * can read it (DataStore doesn't support reliable cross-process reads).
+         *
+         * @param enabled Whether to gate incoming calls to contacts only
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun saveAllowCallsFromContactsOnly(enabled: Boolean) {
+            // Write to DataStore for local flow/UI
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ALLOW_CALLS_FROM_CONTACTS_ONLY] = enabled
+            }
+            // Write to SharedPreferences for cross-process access by the service
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY, enabled)
+                .apply()
+        }
+
+        /**
+         * Flow of the master allow-voice-calls setting.
+         * When false, the inbound LXST telephony destination is deregistered and
+         * no announces are sent — peers see the device as unreachable for calls.
+         * Outbound calls remain functional regardless.
+         * Defaults to true if not set (allow incoming - preserves existing behavior).
+         */
+        val allowVoiceCallsFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_VOICE_CALLS] ?: true
+                }.distinctUntilChanged()
+
+        /**
+         * Get the allow-voice-calls setting (non-flow).
+         */
+        suspend fun getAllowVoiceCalls(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_VOICE_CALLS] ?: true
+                }.first()
+
+        /**
+         * Save the master allow-voice-calls setting.
+         *
+         * Also writes to SharedPreferences with MODE_MULTI_PROCESS so the service process
+         * can read it (DataStore doesn't support reliable cross-process reads).
+         *
+         * @param enabled Whether to accept incoming voice calls
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun saveAllowVoiceCalls(enabled: Boolean) {
+            // Write to DataStore for local flow/UI
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ALLOW_VOICE_CALLS] = enabled
+            }
+            // Write to SharedPreferences so the :reticulum service can re-read
+            // the persisted value on next process start (the SharedPreferences
+            // change listener does NOT fire across processes — see Intent below).
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_ALLOW_VOICE_CALLS, enabled)
+                .apply()
+            // Signal the :reticulum service to apply the new state at runtime.
+            // SharedPreferences listeners only fire in the writing process on
+            // Android, so the persisted value alone isn't enough — without
+            // this Intent the service keeps the destination registered until
+            // its next cold start. Mirrors the existing ACTION_RESTART_BLE
+            // notification pattern.
+            try {
+                val intent =
+                    android.content.Intent(
+                        context,
+                        com.lxmf.messenger.service.ReticulumService::class.java,
+                    ).apply {
+                        action = com.lxmf.messenger.service.ReticulumService.ACTION_SET_ALLOW_VOICE_CALLS
+                        putExtra(
+                            com.lxmf.messenger.service.ReticulumService.EXTRA_ALLOW_VOICE_CALLS,
+                            enabled,
+                        )
+                    }
+                context.startService(intent)
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "SettingsRepository",
+                    "Failed to signal ReticulumService of Allow voice calls change: ${e.message}",
+                )
+            }
         }
 
         // Custom theme methods (delegated to CustomThemeRepository)

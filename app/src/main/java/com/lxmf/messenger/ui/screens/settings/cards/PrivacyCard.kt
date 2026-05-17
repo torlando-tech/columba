@@ -37,14 +37,29 @@ fun PrivacyCard(
         icon = Icons.Default.Security,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
-        headerAction = {
+    ) {
+        // Messages-from-contacts-only toggle row. Moved out of the card header
+        // so it's visually equal-billed with the calls toggle below.
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Messages from contacts only",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
+            )
             Switch(
                 checked = blockUnknownSenders,
                 onCheckedChange = onBlockUnknownSendersChange,
             )
-        },
-    ) {
-        // Description
+        }
         Text(
             text =
                 if (blockUnknownSenders) {
@@ -52,7 +67,7 @@ fun PrivacyCard(
                 } else {
                     "Anyone can send you messages, including unknown senders."
                 },
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 

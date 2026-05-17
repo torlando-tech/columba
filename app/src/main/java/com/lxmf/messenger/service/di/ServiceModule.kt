@@ -170,6 +170,7 @@ object ServiceModule {
             notificationManager = managers.notificationManager,
             bleCoordinator = managers.bleCoordinator,
             persistenceManager = managers.persistenceManager,
+            settingsAccessor = managers.settingsAccessor,
             scope = scope,
             onInitialized = onInitialized,
             onShutdown = onShutdown,

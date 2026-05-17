@@ -652,6 +652,38 @@ class PythonWrapperManager(
     fun getTelephone(): Telephone? = telephone
 
     /**
+     * Toggle inbound LXST voice-call reception on or off (Feature 2 master).
+     *
+     * When [enabled] is false, Python deregisters the inbound destination from
+     * RNS.Transport and tears down any in-flight call. New inbound link
+     * requests fail at the transport layer — the device looks "unreachable
+     * for calls" to peers.
+     *
+     * When [enabled] is true, Python rebuilds the destination from the same
+     * identity (deterministic hash, so peers' cached paths still point to the
+     * right place once they receive the fresh announce), reinstalls the
+     * link-established callback, announces, and respawns the announce-loop
+     * thread.
+     *
+     * Outbound calls are unaffected in either state — CallManager.call()
+     * constructs an OUT destination per-call from the remote's identity.
+     *
+     * Idempotent on both sides: calling enable when already enabled (or
+     * disable when already disabled) is a no-op in Python.
+     */
+    fun setLxstIncomingEnabled(enabled: Boolean) {
+        withWrapper { wrapper ->
+            try {
+                val method = if (enabled) "enable_lxst_incoming" else "disable_lxst_incoming"
+                wrapper.callAttr(method)?.close()
+                Log.i(TAG, "📞 LXST incoming ${if (enabled) "enabled" else "disabled"}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to toggle LXST incoming to $enabled: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Register the Kotlin-side contact-check callback with Python.
      *
      * Python's CallManager.__caller_identified invokes this synchronously

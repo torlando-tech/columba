@@ -628,7 +628,12 @@ def attach_lxmessage_callbacks(
     to plain failure when none is set.
     """
     def _delivered(msg):
-        _emit(on_delivered, {"hash": _hex(getattr(msg, "hash", None))})
+        msg_hash_hex = _hex(getattr(msg, "hash", None))
+        RNS.log(
+            f"event_bridge: _delivered fired for {msg_hash_hex}",
+            RNS.LOG_DEBUG,
+        )
+        _emit(on_delivered, {"hash": msg_hash_hex})
 
     def _failed(msg):
         # Sideband pattern: if try_propagation_on_fail was set on the message

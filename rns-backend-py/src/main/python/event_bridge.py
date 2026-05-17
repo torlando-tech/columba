@@ -122,6 +122,63 @@ def reset_reticulum_for_restart():
     reticulum = RNS.Reticulum
     transport = RNS.Transport
 
+    # Explicit interface socket close BEFORE clearing the registry.
+    # Upstream RNS's AutoInterface.detach() only flips boolean flags
+    # (AutoInterface.py:644) — UDPServer sockets keep the IPv6
+    # link-local multicast bind. Without this, the next Reticulum()
+    # hits `OSError: [Errno 98] Address already in use` and the whole
+    # service crash-loops. Best-effort per interface; iterates a snapshot
+    # of the current registry so a half-broken interface can't take down
+    # the cleanup loop.
+    interfaces_snapshot = list(getattr(transport, "interfaces", []) or [])
+    for iface in interfaces_snapshot:
+        # AutoInterface: dict of ifname -> socketserver.UDPServer
+        servers = getattr(iface, "interface_servers", None)
+        if isinstance(servers, dict):
+            for ifname, server in list(servers.items()):
+                try:
+                    server.shutdown()
+                except Exception as e:  # noqa: BLE001
+                    RNS.log(
+                        f"event_bridge: UDPServer.shutdown on {ifname} failed: {e}",
+                        RNS.LOG_DEBUG,
+                    )
+                try:
+                    server.server_close()
+                except Exception as e:  # noqa: BLE001
+                    RNS.log(
+                        f"event_bridge: UDPServer.server_close on {ifname} failed: {e}",
+                        RNS.LOG_DEBUG,
+                    )
+            servers.clear()
+        # AutoInterface also opens a peer-discovery socket on most platforms.
+        for sock_attr in ("discovery_socket", "unicast_discovery_socket", "announce_socket"):
+            sock = getattr(iface, sock_attr, None)
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception as e:  # noqa: BLE001
+                    RNS.log(
+                        f"event_bridge: {sock_attr}.close failed: {e}",
+                        RNS.LOG_DEBUG,
+                    )
+        # Generic interface socket-close — TCP/UDP interfaces expose
+        # `.socket` (single socket) or `.server` (socketserver). Defensive
+        # close so a future interface type doesn't reintroduce this bug.
+        for sock_attr in ("socket", "server"):
+            sock = getattr(iface, sock_attr, None)
+            if sock is None:
+                continue
+            close = getattr(sock, "close", None) or getattr(sock, "server_close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception as e:  # noqa: BLE001
+                    RNS.log(
+                        f"event_bridge: {sock_attr}.close failed: {e}",
+                        RNS.LOG_DEBUG,
+                    )
+
     # Reticulum singleton + one-shot exit guards. Without the __instance reset
     # the next Reticulum() raises OSError; without the *_ran resets a second
     # exit_handler() would no-op and skip interface detach + persist.

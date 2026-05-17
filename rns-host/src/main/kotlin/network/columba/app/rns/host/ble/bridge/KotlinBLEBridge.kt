@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.ble.bridge
 
+import com.chaquo.python.PyObject
 import network.columba.app.rns.api.util.toHex
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -268,6 +269,145 @@ class KotlinBLEBridge(
                     Log.e(TAG, "Error notifying connection change listener", e)
                 }
             }
+        }
+    }
+
+    // ====================================================================
+    // Python event callbacks (consumed by :rns-backend-py/AndroidBLE driver)
+    //
+    // The bundled python `android_ble_driver.py` registers Python callables
+    // via these setOn* methods at driver-start time; Kotlin invokes them at
+    // each significant BLE event using `callAttr("__call__", args...)` per
+    // Chaquopy's Python-from-Java convention.
+    //
+    // Type is `PyObject` (not Kotlin function types / `fun interface`s)
+    // because Chaquopy 17 cannot SAM-convert Python callables into either
+    // shape — observed at runtime:
+    //   "Cannot convert function object to kotlin.jvm.functions.Function4"
+    //   "Cannot convert function object to …$OnDeviceDiscoveredCallback"
+    // PyObject is the only known-good seam type and matches
+    // release/v0.10.x's bridge surface exactly. The runtime class lives in
+    // `com.chaquo.python.runtime:chaquopy_java`, a `compileOnly` dep on
+    // `:rns-host` — kotlinBackend flavor never loads the class because it
+    // never calls these setOn* methods.
+    // ====================================================================
+
+    @Volatile
+    private var onDeviceDiscovered: PyObject? = null
+
+    @Volatile
+    private var onConnected: PyObject? = null
+
+    @Volatile
+    private var onDisconnected: PyObject? = null
+
+    @Volatile
+    private var onDataReceived: PyObject? = null
+
+    @Volatile
+    private var onIdentityReceived: PyObject? = null
+
+    @Volatile
+    private var onMtuNegotiated: PyObject? = null
+
+    @Volatile
+    private var onAddressChanged: PyObject? = null
+
+    @Volatile
+    private var onDuplicateIdentityDetected: PyObject? = null
+
+    fun setOnDeviceDiscovered(callback: PyObject) {
+        onDeviceDiscovered = callback
+    }
+
+    fun setOnConnected(callback: PyObject) {
+        onConnected = callback
+        // Sync existing connections to Python when callback is registered (v0.10.x parity).
+        // Handles the case where peers were established before the Python driver started —
+        // the driver registers the callback then expects to learn about pre-existing connections.
+        scope.launch { syncExistingConnectionsToPython() }
+    }
+
+    fun setOnDisconnected(callback: PyObject) {
+        onDisconnected = callback
+    }
+
+    fun setOnDataReceived(callback: PyObject) {
+        onDataReceived = callback
+    }
+
+    fun setOnIdentityReceived(callback: PyObject) {
+        onIdentityReceived = callback
+    }
+
+    fun setOnMtuNegotiated(callback: PyObject) {
+        onMtuNegotiated = callback
+    }
+
+    fun setOnAddressChanged(callback: PyObject) {
+        onAddressChanged = callback
+    }
+
+    fun setOnDuplicateIdentityDetected(callback: PyObject) {
+        onDuplicateIdentityDetected = callback
+    }
+
+    /**
+     * Notify the Python BLE driver of a peer connection.
+     *
+     * Single helper rather than scattered `onConnected?.invoke(...)` calls so
+     * the role-string derivation (central vs peripheral) stays consistent
+     * with v0.10.x — the Python driver branches on this string.
+     */
+    private fun notifyPythonConnected(
+        address: String,
+        mtu: Int,
+        isCentral: Boolean,
+        isPeripheral: Boolean,
+        identityHash: String?,
+    ) {
+        val role = if (isCentral && !isPeripheral) "central" else "peripheral"
+        runCatching {
+            onConnected?.callAttr("__call__", address, mtu, role, identityHash)
+        }.onFailure { Log.w(TAG, "Python onConnected callback threw for $address: ${it.message}") }
+    }
+
+    /**
+     * Replay connections that existed before the Python driver's
+     * `setOnConnected` registered. Without this, peers connected during
+     * Kotlin's early start window would be invisible to Python until the
+     * next reconnect.
+     */
+    private suspend fun syncExistingConnectionsToPython() {
+        // Snapshot under lock, dispatch outside (Python callbacks may suspend
+        // on internal Python locks; we don't want to hold peersMutex through them).
+        val peersToSync = mutableListOf<Triple<String, PeerConnection, String>>()
+        peersMutex.withLock {
+            connectedPeers.forEach { (address, peer) ->
+                val identityHash = peer.identityHash ?: addressToIdentity[address]
+                if (identityHash != null) {
+                    peersToSync.add(Triple(address, peer, identityHash))
+                }
+            }
+        }
+        if (peersToSync.isEmpty()) {
+            Log.d(TAG, "No existing connections with identity to sync to Python")
+            return
+        }
+        Log.i(TAG, "Syncing ${peersToSync.size} existing connections to Python")
+        peersToSync.forEach { (address, peer, identityHash) ->
+            Log.d(TAG, "Syncing connection: $address with identity ${identityHash.take(16)}...")
+            notifyPythonConnected(
+                address = address,
+                mtu = peer.mtu,
+                isCentral = peer.isCentral,
+                isPeripheral = peer.isPeripheral,
+                identityHash = identityHash,
+            )
+            // MTU also re-fires so the driver's fragmenter/reassembler are sized correctly.
+            runCatching {
+                onMtuNegotiated?.callAttr("__call__", address, peer.mtu)
+            }.onFailure { Log.w(TAG, "Python onMtuNegotiated sync threw for $address: ${it.message}") }
         }
     }
 
@@ -1425,6 +1565,12 @@ class KotlinBLEBridge(
         // Scanner callbacks (if available)
         scanner?.onDeviceDiscovered = { device: BleDevice ->
             Log.d(TAG, "Device discovered: ${device.address} (${device.name}) RSSI=${device.rssi}")
+            // Forward to Python driver. Convert List<String>? → Array<String>? so
+            // Chaquopy auto-converts to a Python list at the boundary (matches v0.10.x).
+            val serviceUuidsArray = device.serviceUuids?.toTypedArray()
+            runCatching {
+                onDeviceDiscovered?.callAttr("__call__", device.address, device.name, device.rssi, serviceUuidsArray)
+            }.onFailure { Log.w(TAG, "Python onDeviceDiscovered threw for ${device.address}: ${it.message}") }
         }
 
         // GATT Client callbacks (central mode, if available)
@@ -1600,8 +1746,15 @@ class KotlinBLEBridge(
 
             val identityHash = addressToIdentity[address]
 
+            // ALWAYS notify Python of the connection — protocol decisions (timeout,
+            // duplicate handling, etc.) live in BLEInterface.py per v0.10.x parity.
+            // identityHash may be null at this point; handleIdentityReceived will
+            // re-fire when identity arrives if we register the pending connection below.
+            notifyPythonConnected(address, peer.mtu, isCentral, peer.isPeripheral, identityHash)
+
             // Track pending connection if identity not yet received
-            // When identity arrives via handleIdentityReceived, we'll update tracking
+            // When identity arrives via handleIdentityReceived, we'll fire onConnected
+            // again with the now-known identity.
             if (identityHash == null) {
                 pendingConnections[address] =
                     PendingConnection(
@@ -1791,6 +1944,15 @@ class KotlinBLEBridge(
 
         // Notify native listeners of connection state change
         notifyConnectionChange()
+
+        // Fire Python disconnect callback only when the peer is fully gone (both
+        // central + peripheral down). Partial disconnects keep the peer entry
+        // alive in `connectedPeers` and Python should not be told to forget it.
+        if (connectedPeers[address] == null) {
+            runCatching {
+                onDisconnected?.callAttr("__call__", address)
+            }.onFailure { Log.w(TAG, "Python onDisconnected threw for $address: ${it.message}") }
+        }
     }
 
     /**
@@ -1807,6 +1969,12 @@ class KotlinBLEBridge(
                 Log.d(TAG, "MTU updated for $address: ${peer.mtu}")
             }
         }
+        // Python driver sizes its fragmenter/reassembler on each MTU update.
+        // Fire outside the mutex so a slow Python callback doesn't stall other
+        // peers' connection callbacks waiting for the same lock.
+        runCatching {
+            onMtuNegotiated?.callAttr("__call__", address, mtu)
+        }.onFailure { Log.w(TAG, "Python onMtuNegotiated threw for $address: ${it.message}") }
     }
 
     /**
@@ -1851,6 +2019,13 @@ class KotlinBLEBridge(
             }
 
             Log.d(TAG, "Received ${fragment.size} byte fragment from $address")
+
+            // Forward the raw fragment to the Python driver. Reassembly (HDLC framing,
+            // out-of-order fragments) is handled inside `android_ble_driver.py` —
+            // Kotlin just delivers what arrived on the wire under the routed address.
+            runCatching {
+                onDataReceived?.callAttr("__call__", resolvedAddress, fragment)
+            }.onFailure { Log.w(TAG, "Python onDataReceived threw for $resolvedAddress: ${it.message}") }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing fragment from $address", e)
         }
@@ -1878,8 +2053,49 @@ class KotlinBLEBridge(
             return
         }
 
+        // MAC-rotation duplicate check (v0.10.x parity): ask Python whether this
+        // identity is already connected at a DIFFERENT address. Python is the
+        // source of truth for the (identity → live connection) registry; if it
+        // says duplicate, we drop the new connection rather than letting two
+        // GATT links to the same peer coexist. Safe log message format
+        // ("Duplicate identity rejected") so this doesn't trip the
+        // "Connection failed to" blacklist pattern downstream.
+        val duplicateCallback = onDuplicateIdentityDetected
+        if (duplicateCallback != null) {
+            try {
+                val identityBytes = identityHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                val isDuplicate = duplicateCallback.callAttr("__call__", address, identityBytes)
+                    ?.toBoolean() == true
+                if (isDuplicate) {
+                    Log.w(
+                        TAG,
+                        "Duplicate identity rejected for $address — identity ${identityHash.take(16)}… " +
+                            "already connected at different MAC (MAC rotation)",
+                    )
+                    scope.launch {
+                        if (isCentralConnection) {
+                            gattClient?.disconnect(address)
+                        } else {
+                            gattServer?.disconnectCentral(address)
+                        }
+                    }
+                    // Allow retry after the original side disconnects.
+                    processedIdentityCallbacks.remove(dedupeKey)
+                    return
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in duplicate-identity callback for $address: ${e.message}")
+                // Fall through to normal processing — a misbehaving callback
+                // shouldn't block the connection.
+            }
+        }
+
         // Track pending connection that was waiting for identity (race condition fix)
         var completedPending: PendingConnection? = null
+
+        // Track MAC-rotation address-change notification for Python (set inside mutex,
+        // fired outside so the Python callback doesn't hold peersMutex).
+        var addressChangeNotification: Pair<String, String>? = null
 
         peersMutex.withLock {
             // Update peer with identity if it exists
@@ -1929,6 +2145,10 @@ class KotlinBLEBridge(
                     Log.d(TAG, "Updated identity→address mapping: $identityHash → $address (central=${peerAtNewAddress.isCentral})")
 
                     if (existingAddress != null && existingAddress != address) {
+                        // Python needs the old→new redirect so its
+                        // `address_to_identity` map stays consistent and
+                        // outbound writes route to the live MAC.
+                        addressChangeNotification = Pair(existingAddress, address)
                         Log.i(TAG, "Address changed for identity $identityHash: $existingAddress → $address (central=${peerAtNewAddress.isCentral})")
                     }
                 } else {
@@ -1968,9 +2188,44 @@ class KotlinBLEBridge(
             Log.i(TAG, "Identity received from $address: $identityHash (isCentral=$isCentralConnection)")
         }
 
-        // Log pending connection completion for diagnostics
+        // Fire deferred onConnected for connections that were waiting for identity.
+        // Use the current peer's MTU / role flags if available (peer state may have
+        // mutated between pendingConnections capture and now, e.g. dual-connection).
         completedPending?.let { pending ->
-            Log.d(TAG, "Pending connection for $address completed - identity now available: $identityHash")
+            val currentPeer = connectedPeers[address]
+            Log.d(
+                TAG,
+                "Completing deferred connection notification for $address " +
+                    "(identity=${identityHash.take(16)}…, " +
+                    "central=${currentPeer?.isCentral ?: pending.isCentral}, " +
+                    "peripheral=${currentPeer?.isPeripheral ?: pending.isPeripheral})",
+            )
+            notifyPythonConnected(
+                address = pending.address,
+                mtu = currentPeer?.mtu ?: pending.mtu,
+                isCentral = currentPeer?.isCentral ?: pending.isCentral,
+                isPeripheral = currentPeer?.isPeripheral ?: pending.isPeripheral,
+                identityHash = identityHash,
+            )
+        }
+
+        // Always notify Python of the identity itself — Python's address_to_identity
+        // map indexes on this, and downstream routing depends on it being current.
+        runCatching {
+            onIdentityReceived?.callAttr("__call__", address, identityHash)
+        }.onFailure { Log.w(TAG, "Python onIdentityReceived threw for $address: ${it.message}") }
+
+        // Notify Python of address change for MAC-rotation handling. Only fired
+        // when the identity→address mapping actually moved (set inside the mutex
+        // section above); a no-op for first-seen identities.
+        addressChangeNotification?.let { (oldAddress, newAddress) ->
+            Log.d(
+                TAG,
+                "Notifying Python of MAC rotation: $oldAddress → $newAddress (identity=${identityHash.take(16)}…)",
+            )
+            runCatching {
+                onAddressChanged?.callAttr("__call__", oldAddress, newAddress, identityHash)
+            }.onFailure { Log.w(TAG, "Python onAddressChanged threw for $oldAddress→$newAddress: ${it.message}") }
         }
     }
 

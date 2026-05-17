@@ -91,6 +91,23 @@ dependencies {
     // applying the chaquopy plugin at :rns-backend-py module level.
     "pythonBackendImplementation"(project(":rns-backend-py"))
 
+    // PyObject is needed at COMPILE time on the shared `main` source set so
+    // `KotlinBLEBridge.kt` can declare its 8 setOn*(PyObject) callbacks
+    // (consumed by `android_ble_driver.py` at runtime in the python flavor).
+    // `compileOnly` keeps the chaquopy_java jar off the kotlinBackend flavor's
+    // runtime classpath; PyObject is only referenced in code paths the Python
+    // driver triggers, so the class never loads in a kotlinBackend process.
+    // Matches release/v0.10.x's bridge dispatch shape exactly — Chaquopy's
+    // SAM conversion does not handle Kotlin `fun interface` or generic
+    // `FunctionN` parameterised types ("Cannot convert function object to
+    // ...$Callback" / "kotlin.jvm.functions.Function4" observed at runtime),
+    // so PyObject is the only known-good seam type.
+    compileOnly("com.chaquo.python.runtime:chaquopy_java:17.0.0")
+    // Tests construct KotlinBLEBridge directly (and exercise its public surface),
+    // so PyObject needs to resolve at test runtime even though kotlinBackend's
+    // production runtime never loads the class.
+    testImplementation("com.chaquo.python.runtime:chaquopy_java:17.0.0")
+
     // Hilt
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)

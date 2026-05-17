@@ -125,6 +125,7 @@ data class SettingsState(
     // Privacy state
     val blockUnknownSenders: Boolean = false,
     val allowCallsFromContactsOnly: Boolean = false,
+    val allowVoiceCalls: Boolean = true,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -443,6 +444,7 @@ class SettingsViewModel
                             // Preserve privacy state from loadPrivacySettings()
                             blockUnknownSenders = _state.value.blockUnknownSenders,
                             allowCallsFromContactsOnly = _state.value.allowCallsFromContactsOnly,
+                            allowVoiceCalls = _state.value.allowVoiceCalls,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
@@ -1509,6 +1511,11 @@ class SettingsViewModel
                     _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.allowVoiceCallsFlow.collect { enabled ->
+                    _state.update { it.copy(allowVoiceCalls = enabled) }
+                }
+            }
         }
 
         /**
@@ -1533,6 +1540,20 @@ class SettingsViewModel
                 settingsRepository.saveAllowCallsFromContactsOnly(enabled)
                 _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
                 Log.d(TAG, "Calls-from-contacts-only ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the master allow-voice-calls setting.
+         * When disabled, the inbound LXST telephony destination is deregistered
+         * and no announces are sent; peers see this device as unreachable for
+         * calls. Outbound calls are unaffected.
+         */
+        fun setAllowVoiceCalls(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAllowVoiceCalls(enabled)
+                _state.update { it.copy(allowVoiceCalls = enabled) }
+                Log.d(TAG, "Allow voice calls ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

@@ -213,12 +213,25 @@ class PythonRnsRuntime(
                     return
                 }
 
-            // BiFunction<ByteArray, Int, PyObject> — single SAM so
+            // BiFunction<PyObject, PyObject, PyObject> — single SAM so
             // Chaquopy's `get_sam` doesn't trip on "multiple functional
-            // interfaces" (Kotlin's `(ByteArray, Int) -> PyObject` also
-            // implements Function2 + KCallable + KFunction).
+            // interfaces" (Kotlin's `(PyObject, PyObject) -> PyObject`
+            // also implements Function2 + KCallable + KFunction).
+            //
+            // Both params are PyObject (not Kotlin types) on purpose:
+            // Chaquopy's auto-conversion at SAM invocation time erases
+            // the generic type parameters at runtime, so a BiFunction
+            // declared as `<ByteArray, Int, PyObject>` actually receives
+            // `Object[]` (boxed bytes) instead of `byte[]` when Python
+            // hands in a `bytes` arg, causing
+            // `ClassCastException: Object[] cannot be cast to byte[]`
+            // inside the synthetic `apply` wrapper. Receiving PyObject
+            // and converting via `.toJava(...)` inside the lambda
+            // avoids the trap.
             val callback =
-                java.util.function.BiFunction<ByteArray, Int, PyObject> { workblock, stampCost ->
+                java.util.function.BiFunction<PyObject, PyObject, PyObject> { workblockPy, stampCostPy ->
+                    val workblock = workblockPy.toJava(ByteArray::class.java)
+                    val stampCost = stampCostPy.toJava(Int::class.java)
                     generateStampForPython(workblock, stampCost)
                 }
             lxStamper.callAttr("set_external_generator", callback)

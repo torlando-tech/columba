@@ -125,4 +125,31 @@ class PrivacyCardTest {
             "Anyone can send you messages, including unknown senders.",
         ).assertIsDisplayed()
     }
+
+    // ========== Calls-From-Contacts-Only Tests (Feature 1) ==========
+
+    @Test
+    fun privacyCard_displaysCallsFromContactsOnly_rowLabel() {
+        setUpCard(isExpanded = true)
+
+        composeTestRule.onNodeWithText("Calls from contacts only").assertIsDisplayed()
+    }
+
+    @Test
+    fun privacyCard_callsFromContactsOnly_displaysOnSubtitle_whenEnabled() {
+        setUpCard(isExpanded = true, allowCallsFromContactsOnly = true)
+
+        composeTestRule.onNodeWithText(
+            "Only contacts can call you. Other callers' link attempts are silently dropped.",
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun privacyCard_callsFromContactsOnly_displaysOffSubtitle_whenDisabled() {
+        setUpCard(isExpanded = true, allowCallsFromContactsOnly = false)
+
+        composeTestRule.onNodeWithText(
+            "Anyone can call you, including unknown callers.",
+        ).assertIsDisplayed()
+    }
 }

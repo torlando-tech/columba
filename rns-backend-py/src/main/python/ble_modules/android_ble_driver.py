@@ -558,22 +558,24 @@ class AndroidBLEDriver(BLEDriverInterface):
     # --- Internal Methods ---
 
     def _get_kotlin_bridge(self):
-        """Get KotlinBLEBridge instance from global wrapper."""
+        """Get KotlinBLEBridge from event_bridge.
+
+        Dual-build replacement for v0.10.x's
+        `reticulum_wrapper._global_wrapper_instance.kotlin_ble_bridge`
+        — that module was deleted in the slim-Python rewrite. The bridge
+        now lives in `event_bridge._ble_bridge`, populated by Kotlin via
+        `event_bridge.set_ble_bridge(...)` before Reticulum() construction.
+        """
         try:
-            # Import the global wrapper instance
-            import reticulum_wrapper
-            wrapper = reticulum_wrapper._global_wrapper_instance
+            import event_bridge
+            bridge = event_bridge.get_ble_bridge()
 
-            if wrapper is None:
-                RNS.log(f"{LOG_TAG}: No global wrapper instance found", RNS.LOG_ERROR)
+            if bridge is None:
+                RNS.log(f"{LOG_TAG}: No BLE bridge set. Call event_bridge.set_ble_bridge() from Kotlin first.", RNS.LOG_ERROR)
                 return None
 
-            if wrapper.kotlin_ble_bridge is None:
-                RNS.log(f"{LOG_TAG}: No BLE bridge set in wrapper. Call set_ble_bridge() from Kotlin first.", RNS.LOG_ERROR)
-                return None
-
-            RNS.log(f"{LOG_TAG}: Kotlin bridge acquired from wrapper", RNS.LOG_DEBUG)
-            return wrapper.kotlin_ble_bridge
+            RNS.log(f"{LOG_TAG}: Kotlin bridge acquired from event_bridge", RNS.LOG_DEBUG)
+            return bridge
 
         except Exception as e:
             RNS.log(f"{LOG_TAG}: Failed to get Kotlin bridge: {e}", RNS.LOG_ERROR)

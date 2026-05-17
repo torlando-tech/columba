@@ -71,6 +71,40 @@ class RnsConfigFileTest {
     }
 
     @Test
+    fun `AndroidBLE renders type AndroidBLE with max_connections and timing keys`() {
+        val ble = InterfaceConfig.AndroidBLE(
+            maxConnections = 5,
+            blePowerPreset = "battery_saver",
+            bleDiscoveryIntervalMs = 7000L,
+            bleScanDurationMs = 12000L,
+        )
+        val out = RnsConfigFile.build(cfg(interfaces = listOf(ble)))
+        // Bare type — matches the bundled AndroidBLE.py deployed by
+        // event_bridge.deploy_bundled_interfaces().
+        assertTrue(out.contains("type = AndroidBLE\n") || out.contains("type = AndroidBLE\r"))
+        // Parent BLEInterface reads `max_connections`, NOT `max_peers`.
+        assertTrue(out.contains("max_connections = 5"))
+        assertFalse(out.contains("max_peers"))
+        assertTrue(out.contains("ble_power_preset = battery_saver"))
+        assertTrue(out.contains("ble_discovery_interval_ms = 7000"))
+        assertTrue(out.contains("ble_scan_duration_ms = 12000"))
+    }
+
+    @Test
+    fun `AndroidBLE omits device_name when blank`() {
+        val ble = InterfaceConfig.AndroidBLE(deviceName = "")
+        val out = RnsConfigFile.build(cfg(interfaces = listOf(ble)))
+        assertFalse(out.contains("device_name"))
+    }
+
+    @Test
+    fun `AndroidBLE includes device_name when set`() {
+        val ble = InterfaceConfig.AndroidBLE(deviceName = "Columba1")
+        val out = RnsConfigFile.build(cfg(interfaces = listOf(ble)))
+        assertTrue(out.contains("device_name = Columba1"))
+    }
+
+    @Test
     fun `skipAutoInterface omits AutoInterface data_port and group_id`() {
         val customAuto = InterfaceConfig.AutoInterface(
             groupId = "test-group",

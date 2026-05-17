@@ -213,8 +213,18 @@ def reset_reticulum_for_restart():
     not stopped here — they exit their loops once `Transport._should_run` is
     False (set by `exit_handler()`); a fresh `Reticulum()` starts new ones.
     """
+    # Use raw print + sys.stdout flush so the diagnostic always reaches
+    # logcat even if RNS.log was monkey-patched or the loglevel got reset.
+    import sys
+    print("event_bridge.reset: ENTER", flush=True)
+    sys.stdout.flush()
+
     reticulum = RNS.Reticulum
     transport = RNS.Transport
+
+    iface_count = len(getattr(transport, "interfaces", []) or [])
+    print(f"event_bridge.reset: transport.interfaces has {iface_count} entries", flush=True)
+    sys.stdout.flush()
 
     # Explicit interface socket close BEFORE clearing the registry.
     # Upstream RNS's AutoInterface.detach() only flips boolean flags
@@ -225,25 +235,36 @@ def reset_reticulum_for_restart():
     # of the current registry so a half-broken interface can't take down
     # the cleanup loop.
     interfaces_snapshot = list(getattr(transport, "interfaces", []) or [])
-    for iface in interfaces_snapshot:
+    print(f"event_bridge.reset: iterating {len(interfaces_snapshot)} interface(s)", flush=True)
+    for idx, iface in enumerate(interfaces_snapshot):
+        attrs = [
+            a for a in (
+                "interface_servers", "discovery_socket",
+                "unicast_discovery_socket", "announce_socket",
+                "socket", "server",
+            ) if getattr(iface, a, None) is not None
+        ]
+        print(
+            f"event_bridge.reset: [{idx}] {iface.__class__.__name__} "
+            f"detached={getattr(iface, 'detached', None)} online={getattr(iface, 'online', None)} "
+            f"socket_attrs={attrs}",
+            flush=True,
+        )
         # AutoInterface: dict of ifname -> socketserver.UDPServer
         servers = getattr(iface, "interface_servers", None)
         if isinstance(servers, dict):
+            print(f"event_bridge.reset: [{idx}] interface_servers has {len(servers)} entries: {list(servers.keys())}", flush=True)
             for ifname, server in list(servers.items()):
                 try:
                     server.shutdown()
+                    print(f"event_bridge.reset: [{idx}] shutdown UDPServer on {ifname}", flush=True)
                 except Exception as e:  # noqa: BLE001
-                    RNS.log(
-                        f"event_bridge: UDPServer.shutdown on {ifname} failed: {e}",
-                        RNS.LOG_DEBUG,
-                    )
+                    print(f"event_bridge.reset: [{idx}] UDPServer.shutdown on {ifname} FAILED: {type(e).__name__}: {e}", flush=True)
                 try:
                     server.server_close()
+                    print(f"event_bridge.reset: [{idx}] server_close UDPServer on {ifname} (closed socket)", flush=True)
                 except Exception as e:  # noqa: BLE001
-                    RNS.log(
-                        f"event_bridge: UDPServer.server_close on {ifname} failed: {e}",
-                        RNS.LOG_DEBUG,
-                    )
+                    print(f"event_bridge.reset: [{idx}] UDPServer.server_close on {ifname} FAILED: {type(e).__name__}: {e}", flush=True)
             servers.clear()
         # AutoInterface also opens a peer-discovery socket on most platforms.
         for sock_attr in ("discovery_socket", "unicast_discovery_socket", "announce_socket"):
@@ -251,11 +272,9 @@ def reset_reticulum_for_restart():
             if sock is not None:
                 try:
                     sock.close()
+                    print(f"event_bridge.reset: [{idx}] closed {sock_attr}", flush=True)
                 except Exception as e:  # noqa: BLE001
-                    RNS.log(
-                        f"event_bridge: {sock_attr}.close failed: {e}",
-                        RNS.LOG_DEBUG,
-                    )
+                    print(f"event_bridge.reset: [{idx}] {sock_attr}.close FAILED: {type(e).__name__}: {e}", flush=True)
         # Generic interface socket-close — TCP/UDP interfaces expose
         # `.socket` (single socket) or `.server` (socketserver). Defensive
         # close so a future interface type doesn't reintroduce this bug.

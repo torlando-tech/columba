@@ -1859,12 +1859,39 @@ class SettingsRepository
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.ALLOW_VOICE_CALLS] = enabled
             }
-            // Write to SharedPreferences for cross-process access by the service
+            // Write to SharedPreferences so the :reticulum service can re-read
+            // the persisted value on next process start (the SharedPreferences
+            // change listener does NOT fire across processes — see Intent below).
             context
                 .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
                 .edit()
                 .putBoolean(KEY_ALLOW_VOICE_CALLS, enabled)
                 .apply()
+            // Signal the :reticulum service to apply the new state at runtime.
+            // SharedPreferences listeners only fire in the writing process on
+            // Android, so the persisted value alone isn't enough — without
+            // this Intent the service keeps the destination registered until
+            // its next cold start. Mirrors the existing ACTION_RESTART_BLE
+            // notification pattern.
+            try {
+                val intent =
+                    android.content.Intent(
+                        context,
+                        com.lxmf.messenger.service.ReticulumService::class.java,
+                    ).apply {
+                        action = com.lxmf.messenger.service.ReticulumService.ACTION_SET_ALLOW_VOICE_CALLS
+                        putExtra(
+                            com.lxmf.messenger.service.ReticulumService.EXTRA_ALLOW_VOICE_CALLS,
+                            enabled,
+                        )
+                    }
+                context.startService(intent)
+            } catch (e: Exception) {
+                android.util.Log.w(
+                    "SettingsRepository",
+                    "Failed to signal ReticulumService of Allow voice calls change: ${e.message}",
+                )
+            }
         }
 
         // Custom theme methods (delegated to CustomThemeRepository)

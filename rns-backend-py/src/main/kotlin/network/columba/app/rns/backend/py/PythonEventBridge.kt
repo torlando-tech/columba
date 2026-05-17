@@ -58,7 +58,21 @@ class PythonEventBridge {
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
-    private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 64)
+    // `replay = 8` holds the last few delivery proofs so an IPC subscriber
+    // that finishes attaching slightly after a delivery event fires (the
+    // post-cold-start window where LXMF may flush queued-message acks
+    // before MessagingViewModel re-subscribes through the AIDL pipe) still
+    // sees the event. Observed once today: a stamped message sat
+    // "pending" in the UI because the proof arrived during the
+    // subscribe-gap; the next fresh send hit a fully-subscribed pipe and
+    // updated correctly. A small replay window catches that race without
+    // adding noise — IPC clients drain it once on attach and ignore
+    // already-applied ids via the existing `isTerminalSuccessStatus`
+    // guard in `handleDeliveryStatusUpdate`.
+    private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(
+        replay = 8,
+        extraBufferCapacity = 64,
+    )
     private val _locationTelemetry = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceived = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 16)

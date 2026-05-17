@@ -1069,3 +1069,200 @@ class TestCallPathDiscovery:
             result = manager.call("abc123def456789012345678901234567890")
 
         assert result["success"] is False
+
+
+class TestCallManagerDisableEnableIncoming:
+    """Test disable_incoming / enable_incoming (Feature 2 plumbing)."""
+
+    def test_disable_incoming_nulls_destination(self):
+        """disable_incoming() should set self.destination to None."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager.initialize()
+        assert manager.destination is not None
+
+        manager.disable_incoming()
+        assert manager.destination is None
+
+    def test_disable_incoming_sets_flag(self):
+        """disable_incoming() should set _incoming_disabled True."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager.initialize()
+
+        manager.disable_incoming()
+        assert manager._incoming_disabled is True
+
+    def test_disable_incoming_calls_transport_deregister(self):
+        """disable_incoming() should call RNS.Transport.deregister_destination."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_dest = MagicMock()
+            mock_rns.Destination.return_value = mock_dest
+            manager.initialize()
+
+            manager.disable_incoming()
+            mock_rns.Transport.deregister_destination.assert_called_once_with(mock_dest)
+
+    def test_disable_incoming_tears_down_active_call(self):
+        """disable_incoming() should hangup any active call."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager.initialize()
+
+        mock_link = MagicMock()
+        mock_link.status = RNS.Link.ACTIVE
+        manager.active_call = mock_link
+        manager._active_call_identity = "deadbeef"
+
+        manager.disable_incoming()
+
+        assert manager.active_call is None
+        assert manager._active_call_identity is None
+        mock_link.teardown.assert_called_once()
+
+    def test_disable_incoming_is_idempotent(self):
+        """Calling disable_incoming() twice should be a no-op the second time."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            mock_rns.Destination.return_value = MagicMock()
+            manager.initialize()
+
+            manager.disable_incoming()
+            mock_rns.Transport.deregister_destination.reset_mock()
+
+            manager.disable_incoming()
+            mock_rns.Transport.deregister_destination.assert_not_called()
+
+    def test_enable_incoming_rebuilds_destination(self):
+        """enable_incoming() after disable should create a fresh destination."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager.initialize()
+
+        manager.disable_incoming()
+        assert manager.destination is None
+
+        manager.enable_incoming()
+        assert manager.destination is not None
+        assert manager._incoming_disabled is False
+
+    def test_enable_incoming_announces(self):
+        """enable_incoming() should announce the fresh destination."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        with patch('lxst_modules.call_manager.RNS') as mock_rns:
+            first_dest = MagicMock()
+            second_dest = MagicMock()
+            mock_rns.Destination.return_value = first_dest
+            manager.initialize()
+
+            mock_rns.Destination.return_value = second_dest
+            manager.disable_incoming()
+            manager.enable_incoming()
+
+            # New destination announce after enable
+            second_dest.announce.assert_called()
+
+    def test_enable_incoming_is_idempotent(self):
+        """Calling enable_incoming() when already enabled is a no-op."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager.initialize()
+
+        first_dest = manager.destination
+        manager.enable_incoming()  # already enabled
+        assert manager.destination is first_dest
+
+
+class TestCallManagerContactCheckGate:
+    """Test the silent-drop gate (Feature 1)."""
+
+    def test_should_silently_drop_returns_false_when_no_callback(self):
+        """No callback registered → allow everyone (fail open)."""
+        mock_identity = MagicMock()
+        mock_caller = MagicMock()
+        mock_caller.hash.hex.return_value = "deadbeef" * 4
+        manager = CallManager(mock_identity)
+
+        assert manager._should_silently_drop(mock_caller) is False
+
+    def test_should_silently_drop_when_callback_returns_false(self):
+        """Callback returns false (not a contact) → drop."""
+        mock_identity = MagicMock()
+        mock_caller = MagicMock()
+        mock_caller.hash.hex.return_value = "deadbeef" * 4
+        manager = CallManager(mock_identity)
+        manager.set_kotlin_contact_check_callback(lambda h: False)
+
+        assert manager._should_silently_drop(mock_caller) is True
+
+    def test_should_not_drop_when_callback_returns_true(self):
+        """Callback returns true (is a contact, or toggle off) → allow."""
+        mock_identity = MagicMock()
+        mock_caller = MagicMock()
+        mock_caller.hash.hex.return_value = "deadbeef" * 4
+        manager = CallManager(mock_identity)
+        manager.set_kotlin_contact_check_callback(lambda h: True)
+
+        assert manager._should_silently_drop(mock_caller) is False
+
+    def test_should_not_drop_when_callback_raises_fail_open(self):
+        """Callback raises → fail open (allow) — mirrors message-side semantic."""
+        mock_identity = MagicMock()
+        mock_caller = MagicMock()
+        mock_caller.hash.hex.return_value = "deadbeef" * 4
+
+        def bad_callback(h):
+            raise RuntimeError("Room DB exploded")
+
+        manager = CallManager(mock_identity)
+        manager.set_kotlin_contact_check_callback(bad_callback)
+
+        assert manager._should_silently_drop(mock_caller) is False
+
+    def test_caller_identified_silent_drop_sends_no_status_busy(self):
+        """When the gate fires, NO signals are sent to remote — pure silent drop."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager._initialized = True
+        # Toggle: caller is NOT a contact
+        manager.set_kotlin_contact_check_callback(lambda h: False)
+
+        mock_link = MagicMock()
+        mock_caller_identity = MagicMock()
+        mock_caller_identity.hash.hex.return_value = "deadbeef" * 4
+
+        with patch.object(manager, "_send_signal_to_remote") as send_signal_mock:
+            manager._CallManager__caller_identified(mock_link, mock_caller_identity)
+
+        # The gate fires before STATUS_RINGING/STATUS_BUSY; nothing should be sent.
+        send_signal_mock.assert_not_called()
+        # Link IS torn down so the originator sees the link drop.
+        mock_link.teardown.assert_called_once()
+        # No Kotlin notify should have fired either — active_call should not be set.
+        assert manager.active_call is None
+
+    def test_caller_identified_passes_through_when_callback_allows(self):
+        """When callback returns True, normal flow continues (STATUS_RINGING, notify)."""
+        mock_identity = MagicMock()
+        manager = CallManager(mock_identity)
+        manager._initialized = True
+        # Toggle ON, but caller IS a contact
+        manager.set_kotlin_contact_check_callback(lambda h: True)
+        manager._kotlin_call_bridge = MagicMock()
+        manager._kotlin_telephone_callback = MagicMock()
+
+        mock_link = MagicMock()
+        mock_caller_identity = MagicMock()
+        mock_caller_identity.hash.hex.return_value = "deadbeef" * 4
+
+        with patch.object(manager, "_send_signal_to_remote") as send_signal_mock:
+            manager._CallManager__caller_identified(mock_link, mock_caller_identity)
+
+        # Normal flow: STATUS_RINGING signalled, Kotlin notified, active_call set.
+        send_signal_mock.assert_called_with(STATUS_RINGING, mock_link)
+        assert manager.active_call is mock_link
+        manager._kotlin_call_bridge.onIncomingCall.assert_called_once()

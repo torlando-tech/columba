@@ -1100,6 +1100,122 @@ class SettingsRepositoryTest {
             assertTrue("Both should be true", methodValue)
         }
 
+    // ========== Allow Calls From Contacts Only (Privacy) Flow Tests ==========
+
+    @Test
+    fun allowCallsFromContactsOnlyFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.allowCallsFromContactsOnlyFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit (distinctUntilChanged)
+                repository.saveAllowCallsFromContactsOnly(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveAllowCallsFromContactsOnly(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getAllowCallsFromContactsOnly_matchesFlow() =
+        runTest {
+            // Set to a known value
+            repository.saveAllowCallsFromContactsOnly(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val flowValue = repository.allowCallsFromContactsOnlyFlow.first()
+            val methodValue = repository.getAllowCallsFromContactsOnly()
+
+            assertEquals("Flow and method should return same value", flowValue, methodValue)
+            assertTrue("Both should be true", methodValue)
+
+            // Reset for subsequent tests
+            repository.saveAllowCallsFromContactsOnly(false)
+        }
+
+    @Test
+    fun saveAllowCallsFromContactsOnly_writesCrossProcessPref() =
+        runTest {
+            repository.saveAllowCallsFromContactsOnly(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // The dual-write contract: the service-process accessor should see the change
+            @Suppress("DEPRECATION")
+            val crossProcess =
+                context.getSharedPreferences(
+                    "cross_process_settings",
+                    android.content.Context.MODE_MULTI_PROCESS,
+                )
+            assertTrue(
+                "Cross-process SharedPreferences should reflect saved value",
+                crossProcess.getBoolean("allow_calls_from_contacts_only", false),
+            )
+
+            // Reset for subsequent tests
+            repository.saveAllowCallsFromContactsOnly(false)
+        }
+
+    // ========== Allow Voice Calls (master) Flow Tests ==========
+
+    @Test
+    fun allowVoiceCallsFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.allowVoiceCallsFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                repository.saveAllowVoiceCalls(initial)
+                expectNoEvents()
+
+                repository.saveAllowVoiceCalls(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getAllowVoiceCalls_matchesFlow() =
+        runTest {
+            repository.saveAllowVoiceCalls(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val flowValue = repository.allowVoiceCallsFlow.first()
+            val methodValue = repository.getAllowVoiceCalls()
+
+            assertEquals("Flow and method should return same value", flowValue, methodValue)
+            assertFalse("Both should be false", methodValue)
+
+            // Reset for subsequent tests
+            repository.saveAllowVoiceCalls(true)
+        }
+
+    @Test
+    fun saveAllowVoiceCalls_writesCrossProcessPref() =
+        runTest {
+            repository.saveAllowVoiceCalls(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            @Suppress("DEPRECATION")
+            val crossProcess =
+                context.getSharedPreferences(
+                    "cross_process_settings",
+                    android.content.Context.MODE_MULTI_PROCESS,
+                )
+            // Cross-process should see false; the default (read with default=true) should
+            // therefore return false since the key is explicitly set.
+            assertFalse(
+                "Cross-process SharedPreferences should reflect saved value",
+                crossProcess.getBoolean("allow_voice_calls", true),
+            )
+
+            // Reset for subsequent tests
+            repository.saveAllowVoiceCalls(true)
+        }
+
     // ========== Telemetry Collector Flow Tests ==========
 
     @Test

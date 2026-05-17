@@ -299,6 +299,8 @@ fun SettingsScreen(
                 VoiceCallPermissionsCard(
                     isExpanded = state.cardExpansionStates[SettingsCardId.VOICE_CALL_PERMISSIONS.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.VOICE_CALL_PERMISSIONS, it) },
+                    allowVoiceCalls = state.allowVoiceCalls,
+                    onAllowVoiceCallsChange = { viewModel.setAllowVoiceCalls(it) },
                 )
 
                 AutoAnnounceCard(

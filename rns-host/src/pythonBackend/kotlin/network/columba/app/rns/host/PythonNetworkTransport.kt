@@ -40,9 +40,13 @@ class PythonNetworkTransport(
         /** `RNS.Link.ACTIVE` status constant. */
         const val LINK_ACTIVE = 2
 
-        /** Poll cadence + budget while waiting for link establishment. */
         const val LINK_POLL_MS = 100L
+
+        /** `Link.create` → ACTIVE budget once a path is resolved. */
         const val LINK_TIMEOUT_MS = 15_000L
+
+        /** Path-discovery budget. Matches upstream `LXST/Primitives/Telephony.py: WAIT_TIME = 70`. */
+        const val PATH_RESOLVE_TIMEOUT_MS = 70_000L
 
         /**
          * LXST wire-protocol msgpack map keys — MUST match NativeNetworkTransport
@@ -62,16 +66,7 @@ class PythonNetworkTransport(
     @Volatile
     private var signalCallback: ((Int) -> Unit)? = null
 
-    /**
-     * Local `RNS.Identity` used to prove ourselves to a remote peer.
-     *
-     * Set once by [PythonCallManager.setup] so [establishLink] can call
-     * `link.identify(localIdentity)` proactively after the outbound link
-     * reaches ACTIVE — mirrors `NativeNetworkTransport.setLocalIdentity` +
-     * the post-ACTIVE identify call. Without this, the v0.10.x
-     * "STATUS_AVAILABLE → callee triggers identify" handshake races with
-     * Kotlin callback installation on real devices.
-     */
+    /** Local identity for proactive identify after outbound link is ACTIVE. */
     @Volatile
     private var localIdentity: PyObject? = null
 
@@ -79,14 +74,7 @@ class PythonNetworkTransport(
         localIdentity = identity
     }
 
-    /**
-     * Tracks which link we're tearing down locally so the
-     * `set_link_closed_callback` handler can distinguish our own
-     * `teardownLink()` from a remote teardown and not echo
-     * STATUS_AVAILABLE back into our own Telephone (which is already
-     * handling our local hangup). Mirrors
-     * `NativeNetworkTransport.locallyClosingLink`.
-     */
+    /** The link we're tearing down locally — skip echoing STATUS_AVAILABLE for it. */
     @Volatile
     private var locallyClosingLink: PyObject? = null
 
@@ -99,28 +87,27 @@ class PythonNetworkTransport(
     override suspend fun establishLink(destinationHash: ByteArray): Boolean {
         return runCatching {
             val transport = runtime.rnsModule["Transport"] ?: error("RNS.Transport missing")
-            val pyHash = runtime.python.builtins.callAttr("bytes", destinationHash)
+            val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
+            val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+            val pyInputHash = runtime.python.builtins.callAttr("bytes", destinationHash)
 
-            // Request a path if we don't have one, then wait briefly for it.
-            if (transport.callAttr("has_path", pyHash)?.toJava(Boolean::class.javaObjectType) != true) {
-                transport.callAttr("request_path", pyHash)
-                var waited = 0L
-                while (waited < LINK_TIMEOUT_MS &&
-                    transport.callAttr("has_path", pyHash)?.toJava(Boolean::class.javaObjectType) != true
-                ) {
+            // Recall identity — path-independent, hits RNS's persisted cache.
+            // If unknown, request_path on the input hash to nudge an announce.
+            var identity = identityClass.callAttr("recall", pyInputHash)
+            if (identity == null) {
+                Log.d(TAG, "Identity not recalled, requesting path for ${destinationHash.toHexString().take(16)}")
+                transport.callAttr("request_path", pyInputHash)
+                val identityDeadline = System.currentTimeMillis() + PATH_RESOLVE_TIMEOUT_MS
+                while (identity == null && System.currentTimeMillis() < identityDeadline) {
                     Thread.sleep(LINK_POLL_MS)
-                    waited += LINK_POLL_MS
+                    identity = identityClass.callAttr("recall", pyInputHash)
+                }
+                if (identity == null) {
+                    Log.w(TAG, "establishLink: identity still unknown after ${PATH_RESOLVE_TIMEOUT_MS}ms")
+                    return@runCatching false
                 }
             }
 
-            // Recall the destination identity and build the OUT lxst.telephony destination.
-            val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
-            val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-            val identity = identityClass.callAttr("recall", pyHash)
-                ?: run {
-                    Log.w(TAG, "establishLink: no identity recalled for destination")
-                    return@runCatching false
-                }
             val destination = runtime.rnsModule.callAttr(
                 "Destination",
                 identity,
@@ -129,8 +116,30 @@ class PythonNetworkTransport(
                 "lxst",
                 "telephony",
             )
+            // has_path must run on the lxst.telephony destination's own
+            // hash — NOT the input hash. lxmf.delivery and lxst.telephony
+            // are separate destinations with separate hashes; a cached
+            // lxmf path doesn't imply lxst is reachable.
+            val lxstHash = destination["hash"]?.toJava(ByteArray::class.java)
+                ?: error("Destination has no hash")
+            val pyLxstHash = runtime.python.builtins.callAttr("bytes", lxstHash)
 
-            // Establish the link and poll until ACTIVE.
+            if (transport.callAttr("has_path", pyLxstHash)?.toJava(Boolean::class.javaObjectType) != true) {
+                Log.d(TAG, "No path to lxst.telephony destination, requesting…")
+                transport.callAttr("request_path", pyLxstHash)
+                val pathDeadline = System.currentTimeMillis() + PATH_RESOLVE_TIMEOUT_MS
+                var hasPath = false
+                while (!hasPath && System.currentTimeMillis() < pathDeadline) {
+                    Thread.sleep(LINK_POLL_MS)
+                    hasPath = transport.callAttr("has_path", pyLxstHash)
+                        ?.toJava(Boolean::class.javaObjectType) == true
+                }
+                if (!hasPath) {
+                    Log.w(TAG, "establishLink: no path to lxst.telephony after ${PATH_RESOLVE_TIMEOUT_MS}ms")
+                    return@runCatching false
+                }
+            }
+
             val link = runtime.rnsModule.callAttr("Link", destination)
             var waited = 0L
             while (waited < LINK_TIMEOUT_MS &&

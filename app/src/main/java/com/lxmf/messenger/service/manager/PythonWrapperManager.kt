@@ -8,6 +8,8 @@ import com.lxmf.messenger.crypto.StampGenerator
 import com.lxmf.messenger.reticulum.ble.bridge.KotlinBLEBridge
 import com.lxmf.messenger.reticulum.bridge.KotlinReticulumBridge
 import com.lxmf.messenger.reticulum.call.telephone.PythonNetworkTransport
+import com.lxmf.messenger.service.di.ServiceDatabaseProvider
+import com.lxmf.messenger.service.persistence.ServiceSettingsAccessor
 import com.lxmf.messenger.service.state.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,7 @@ class PythonWrapperManager(
     private val state: ServiceState,
     private val context: Context,
     private val scope: CoroutineScope,
+    private val settingsAccessor: ServiceSettingsAccessor,
 ) {
     // Thread-safety: Mutex protects wrapper state transitions (check-then-act patterns)
     private val wrapperLock = Mutex()
@@ -647,6 +650,108 @@ class PythonWrapperManager(
      * @return Telephone instance or null if not initialized
      */
     fun getTelephone(): Telephone? = telephone
+
+    /**
+     * Register the Kotlin-side contact-check callback with Python.
+     *
+     * Python's CallManager.__caller_identified invokes this synchronously
+     * once per incoming link to decide whether to silently drop the caller.
+     * Returning false drops the link with no signalling — the originator
+     * times out as if the called party were unreachable.
+     *
+     * Must be called after setupCallManager() — depends on callManagerPyObject.
+     *
+     * @return true if the callback was registered, false otherwise
+     */
+    fun setupContactCheckCallback(): Boolean {
+        val callManager =
+            callManagerPyObject ?: run {
+                Log.w(TAG, "Cannot setup contact-check callback: call_manager not initialized")
+                return false
+            }
+        return try {
+            // Wrap as java.util.function.Function to expose a single SAM to Chaquopy.
+            // A bare Kotlin method reference implements Function1 +
+            // KotlinGenericDeclaration (+ KFunction, KCallable, ...), and
+            // Chaquopy's get_sam aborts with "implements multiple functional
+            // interfaces" when Python invokes it — same trap as
+            // setStampGeneratorCallback / set_kotlin_telephone_callback.
+            val callback =
+                java.util.function.Function<String, Boolean> { identityHashHex ->
+                    isCallerInContacts(identityHashHex)
+                }
+            callManager.callAttr("set_kotlin_contact_check_callback", callback)
+            Log.d(TAG, "Kotlin contact-check callback registered with Python")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set contact-check callback: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Synchronous predicate: is this caller in the user's contacts?
+     *
+     * Called from Python via Chaquopy during __caller_identified.
+     *
+     * Logic:
+     * 1. If the "Calls from contacts only" toggle is OFF, return true
+     *    (no gate — every caller is allowed).
+     * 2. Otherwise, look up the caller's announce by identity hash to find
+     *    their destination hash, then check contacts table against the
+     *    active local identity.
+     * 3. Fails open on any DB error to avoid bricking calls — mirrors
+     *    ServicePersistenceManager.shouldBlockUnknownSender for messages.
+     *
+     * @param identityHashHex caller's identity hash as 32-char lowercase hex
+     * @return true if the caller is allowed through, false to silently drop
+     */
+    fun isCallerInContacts(identityHashHex: String): Boolean =
+        try {
+            // Toggle off → no gate, allow everyone
+            if (!settingsAccessor.getAllowCallsFromContactsOnly()) {
+                true
+            } else {
+                runBlocking(Dispatchers.IO) { // THREADING: blocking call back into Kotlin
+                    val database = ServiceDatabaseProvider.getDatabase(context)
+                    val announceDao = database.announceDao()
+                    val contactDao = database.contactDao()
+                    val localIdentityDao = database.localIdentityDao()
+
+                    val normalised = identityHashHex.lowercase()
+                    val announce = announceDao.getAnnounceByIdentityHash(normalised)
+                    if (announce == null) {
+                        Log.d(TAG, "Contact check: no announce for $normalised, treating as unknown")
+                        false
+                    } else {
+                        val activeIdentity = localIdentityDao.getActiveIdentitySync()
+                        if (activeIdentity == null) {
+                            // Fail open: no active identity means we can't isolate per-identity,
+                            // don't punish the user with a broken inbox.
+                            Log.w(TAG, "Contact check: no active local identity, failing open")
+                            true
+                        } else {
+                            val isContact =
+                                contactDao.contactExists(
+                                    announce.destinationHash,
+                                    activeIdentity.identityHash,
+                                )
+                            Log.d(
+                                TAG,
+                                "Contact check for ${normalised.take(16)}: " +
+                                    "destinationHash=${announce.destinationHash.take(16)}, isContact=$isContact",
+                            )
+                            isContact
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Fail open: any DB / IO error should not brick calls. The user can
+            // always tighten security by adding the caller as a contact.
+            Log.w(TAG, "Contact check failed for $identityHashHex, failing open: ${e.message}")
+            true
+        }
 
     /**
      * Set native Kotlin stamp generator callback.

@@ -145,15 +145,25 @@ internal object RnsConfigFile {
                 sb.appendLine("    mode = ${iface.mode}")
             }
             is InterfaceConfig.AndroidBLE -> {
-                // Same as RNode: bundled custom interface (ble_modules/
-                // android_ble_interface.py -> AndroidBLEInterface), needs
-                // interface-file deployment. See PINNED_VERSIONS.md.
-                sb.appendLine("    # AndroidBLE — bundled custom interface; needs interface-file deployment")
-                sb.appendLine("    type = AndroidBLEInterface")
+                // Bundled custom interface (ble_modules/android_ble_interface.py
+                // → AndroidBLEInterface). RNS Transport.find_interfaces() loads
+                // <configdir>/interfaces/<type>.py and then instantiates the
+                // matching class — `type = AndroidBLE` resolves to AndroidBLE.py
+                // which contains `class AndroidBLEInterface(BLEInterface)`.
+                // event_bridge.deploy_bundled_interfaces() writes the file.
+                sb.appendLine("    type = AndroidBLE")
                 sb.appendLine("    enabled = yes")
-                sb.appendLine("    max_peers = ${iface.maxConnections}")
+                if (iface.deviceName.isNotBlank()) {
+                    sb.appendLine("    device_name = ${iface.deviceName}")
+                }
+                // Parent BLEInterface reads `max_connections`, not `max_peers`.
+                sb.appendLine("    max_connections = ${iface.maxConnections}")
                 sb.appendLine("    mode = ${iface.mode}")
                 sb.appendLine("    ble_power_preset = ${iface.blePowerPreset}")
+                sb.appendLine("    ble_discovery_interval_ms = ${iface.bleDiscoveryIntervalMs}")
+                sb.appendLine("    ble_discovery_interval_idle_ms = ${iface.bleDiscoveryIntervalIdleMs}")
+                sb.appendLine("    ble_scan_duration_ms = ${iface.bleScanDurationMs}")
+                sb.appendLine("    ble_advertising_refresh_interval_ms = ${iface.bleAdvertisingRefreshIntervalMs}")
             }
         }
     }

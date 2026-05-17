@@ -90,6 +90,19 @@ class PythonRnsRuntime(
     /** opaque handle id -> live `RNS.Link`. Keyed to mirror `:rns-ipc`'s HandleRegistry. */
     val links = ConcurrentHashMap<Long, PyObject>()
 
+    /**
+     * KotlinBLEBridge instance for the bundled AndroidBLE custom interface.
+     *
+     * Set by `:rns-host`'s python-flavor module after construction (the bridge
+     * type lives in `:rns-host`, so this is typed `Any?` to keep the
+     * `:rns-backend-py` → `:rns-host` dep direction clean). On every [start]
+     * we forward this into `event_bridge.set_ble_bridge(...)` so the bundled
+     * `ble_modules.android_ble_driver` can resolve it when the BLE interface
+     * starts; null leaves BLE non-functional but won't break other interfaces.
+     */
+    @Volatile
+    var bleBridge: Any? = null
+
     private val running = AtomicBoolean(false)
 
     /** Guards [applyAndroidEnvPatches] so it runs exactly once per process. */
@@ -164,6 +177,18 @@ class PythonRnsRuntime(
         )
         storagePath = configDir.absolutePath
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
+
+        // RNS.Transport.find_interfaces() scans <configdir>/interfaces/ for
+        // custom interface .py files. Materialise the bundled ones (BLE
+        // stack) from the APK before constructing Reticulum so it can
+        // discover them. Idempotent + non-fatal on failure.
+        eventBridge.callAttr("deploy_bundled_interfaces", configDir.absolutePath)
+
+        // Hand the KotlinBLEBridge (if set by HostBackendModule) to
+        // android_ble_driver.py through event_bridge's accessor. Must run
+        // before Reticulum() — the AndroidBLE interface's start() path
+        // looks up the bridge during interface init.
+        eventBridge.callAttr("set_ble_bridge", bleBridge)
 
         // Construct the upstream Reticulum instance. RNS.Reticulum is a process
         // singleton — stop() must fully tear it down before a restart.

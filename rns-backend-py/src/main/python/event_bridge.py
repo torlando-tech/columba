@@ -95,6 +95,100 @@ def apply_android_env_patches():
     signal._columba_android_patched = True
 
 
+# Slot for the KotlinBLEBridge instance. Populated by Kotlin via
+# `set_ble_bridge(...)` after the bridge is constructed; consulted by
+# `ble_modules.android_ble_driver._get_kotlin_bridge()` at driver start.
+# Single-process state, so a module-level reference is sufficient.
+_ble_bridge = None
+
+
+def set_ble_bridge(bridge):
+    """Hand a KotlinBLEBridge instance to the Python-side BLE driver.
+
+    Replaces the legacy v0.10.x `reticulum_wrapper.set_ble_bridge` accessor.
+    The bridge must be set before the AndroidBLE interface initialises (i.e.
+    before `Reticulum()` is constructed) or the driver start path will fail
+    with `Failed to get KotlinBLEBridge`.
+    """
+    global _ble_bridge
+    _ble_bridge = bridge
+
+
+def get_ble_bridge():
+    return _ble_bridge
+
+
+def deploy_bundled_interfaces(storage_path):
+    """Materialise bundled custom-interface .py files into RNS's configdir
+    `interfaces/` (and `interfaces/drivers/`) before `Reticulum()` is built.
+
+    `RNS.Transport.find_interfaces()` discovers external interface modules by
+    scanning the filesystem under `<configdir>/interfaces/<type>.py`. Under
+    Chaquopy the BLE adapter sources live inside the APK (as `ble_modules` and
+    `ble_reticulum` packages), so RNS can't see them unless we extract bytes
+    with `pkgutil.get_data` and write them to the configdir first.
+
+    Ports the v0.10.x `_deploy_*` block from `reticulum_wrapper.initialize()`.
+    Idempotent — safe to call on every start. Failures are logged but
+    non-fatal: if BLE can't be deployed, the user's other interfaces still
+    come up.
+    """
+    import os
+    import pkgutil
+    import sys
+
+    interfaces_dir = os.path.join(storage_path, "interfaces")
+    drivers_dir = os.path.join(interfaces_dir, "drivers")
+    os.makedirs(drivers_dir, exist_ok=True)
+
+    # RNS loads external interface modules via `exec()` against a synthesised
+    # namespace, so they rely on `sys.path` to resolve sibling imports like
+    # `from BLEInterface import BLEInterface` in AndroidBLE.py. Add the
+    # interfaces dir up-front rather than relying on AndroidBLE.py's
+    # self-bootstrap (which has a HOME-env fallback hardcoded to the
+    # legacy v0.10.x package name).
+    if interfaces_dir not in sys.path:
+        sys.path.insert(0, interfaces_dir)
+
+    # (package, resource, dest_filename). The resource → dest rename for
+    # android_ble_interface.py → AndroidBLE.py matches the config-file
+    # `type = AndroidBLE` line (see RnsConfigFile.kt) — RNS resolves the
+    # type to a file of that name and the matching class inside it.
+    plan = [
+        ("ble_reticulum", "bluetooth_driver.py", interfaces_dir, "bluetooth_driver.py"),
+        ("ble_reticulum", "linux_bluetooth_driver.py", interfaces_dir, "linux_bluetooth_driver.py"),
+        ("ble_reticulum", "BLEFragmentation.py", interfaces_dir, "BLEFragmentation.py"),
+        ("ble_reticulum", "BLEGATTServer.py", interfaces_dir, "BLEGATTServer.py"),
+        ("ble_reticulum", "BLEInterface.py", interfaces_dir, "BLEInterface.py"),
+        ("ble_modules", "android_ble_interface.py", interfaces_dir, "AndroidBLE.py"),
+        ("ble_modules", "android_ble_driver.py", drivers_dir, "android_ble_driver.py"),
+    ]
+
+    # Drivers package marker — AndroidBLE.py imports from drivers.android_ble_driver.
+    init_path = os.path.join(drivers_dir, "__init__.py")
+    if not os.path.exists(init_path):
+        with open(init_path, "w") as f:
+            f.write("# Drivers package\n")
+
+    for package, resource, dest_dir, dest_name in plan:
+        dest = os.path.join(dest_dir, dest_name)
+        try:
+            data = pkgutil.get_data(package, resource)
+            if data is None:
+                RNS.log(
+                    f"event_bridge: pkgutil.get_data({package!r}, {resource!r}) returned None — skipping",
+                    RNS.LOG_WARNING,
+                )
+                continue
+            with open(dest, "wb") as f:
+                f.write(data)
+        except Exception as e:  # noqa: BLE001
+            RNS.log(
+                f"event_bridge: failed to deploy {package}/{resource} → {dest}: {e}",
+                RNS.LOG_ERROR,
+            )
+
+
 def reset_reticulum_for_restart():
     """Reset RNS.Reticulum + RNS.Transport process-global state so a fresh
     Reticulum() can be constructed after a stop — Columba's "Apply & Restart".

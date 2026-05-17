@@ -14,6 +14,7 @@ import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.backend.py.ChaquopyRnsBackend
+import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
 import tech.torlando.lxst.core.CallCoordinator
 import javax.inject.Singleton
 
@@ -51,7 +52,16 @@ object HostBackendModule {
         @ApplicationContext context: Context,
         callCoordinator: CallCoordinator,
     ): ChaquopyRnsBackend =
-        ChaquopyRnsBackend(appContext = context, callCoordinator = callCoordinator)
+        ChaquopyRnsBackend(appContext = context, callCoordinator = callCoordinator).also {
+            // The bundled AndroidBLE custom interface (deployed by
+            // event_bridge.deploy_bundled_interfaces) reaches into Kotlin via
+            // event_bridge.get_ble_bridge() at driver-start time. Stash the
+            // singleton here so PythonRnsRuntime.start can forward it before
+            // Reticulum() is constructed. KotlinBLEBridge.getInstance is
+            // process-singleton and idempotent — same instance the rest of
+            // the host uses (BleCoordinator, BleStatusRepository).
+            it.runtime.bleBridge = KotlinBLEBridge.getInstance(context)
+        }
 
     @Provides
     @Singleton

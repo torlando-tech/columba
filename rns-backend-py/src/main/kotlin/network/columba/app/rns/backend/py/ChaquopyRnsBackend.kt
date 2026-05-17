@@ -40,6 +40,32 @@ class ChaquopyRnsBackend(
     appContext: Context,
     callCoordinator: CallCoordinator,
 ) : RnsBackend {
+    init {
+        // Defense-in-depth A.10 assertion: this constructor MUST only run in
+        // the `:reticulum` FGS process. Constructing it elsewhere means the
+        // process-aware Hilt module
+        // (`network.columba.app.rns.host.di.ProcessAwareBackendModule`)
+        // resolved the local backend in the UI process, which would cause
+        // CPython to load + AutoInterface UDP sockets to bind in the wrong
+        // pid. Debug-only — release builds skip the check so a defensive bug
+        // never crashes the FGS.
+        if (BuildConfig.DEBUG) {
+            val processName = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                android.app.Application.getProcessName()
+            } else {
+                null
+            }
+            // Robolectric unit tests construct the backend directly without a
+            // real process; tolerate null (no Application context) and any
+            // process name containing ":reticulum".
+            check(processName == null || processName.contains(":reticulum")) {
+                "ChaquopyRnsBackend constructed in wrong process: pid=" +
+                    "${android.os.Process.myPid()} processName=$processName — " +
+                    "expected `:reticulum`. Check ProcessAwareBackendModule wiring."
+            }
+        }
+    }
+
     /** Shared PyObject runtime — registries + Reticulum/LXMRouter lifecycle. */
     val runtime: PythonRnsRuntime = PythonRnsRuntime(appContext)
 

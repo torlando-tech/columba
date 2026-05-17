@@ -106,15 +106,17 @@ class PythonRnsTelephony(
     // to whatever `CallController` the host wired in. The coordinator methods
     // are non-suspend; the suspend signatures are dictated by the contract.
 
+    /** Set by PythonCallManager — bypasses CallCoordinator which drops profileCode. */
+    @Volatile
+    var profileAwareCallHook: ((String, Int?) -> Unit)? = null
+
     override suspend fun initiateCall(
         destinationHash: String,
         profileCode: Int?,
     ): Result<Unit> =
-        // CallCoordinator.initiateCall has no profileCode parameter — the LXST
-        // codec profile is negotiated transport-side — so profileCode is
-        // accepted for contract parity but not forwarded.
         runCatching {
-            callCoordinator.initiateCall(destinationHash)
+            profileAwareCallHook?.invoke(destinationHash, profileCode)
+                ?: callCoordinator.initiateCall(destinationHash)
         }
 
     override suspend fun answerCall(): Result<Unit> =

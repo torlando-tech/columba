@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.backend.py.ChaquopyRnsBackend
 import network.columba.app.rns.backend.py.PyEventCallback
 import network.columba.app.rns.backend.py.PyTwoArgCallback
 import network.columba.app.rns.backend.py.PythonRnsRuntime
@@ -25,54 +26,30 @@ import tech.torlando.lxst.telephone.Profile
 import tech.torlando.lxst.telephone.Telephone
 
 /**
- * Python-flavor LXST telephony wiring — the [CallController] that lets
- * [CallCoordinator] drive a [Telephone] over [PythonNetworkTransport].
+ * Python-flavor LXST telephony — sibling of `NativeCallManager`. The
+ * audio stack (LXST-kt) is identical across backends; only the network
+ * transport differs ([PythonNetworkTransport] routes through Python RNS
+ * via Chaquopy). All call-state logic lives here in Kotlin per the
+ * slim-Python rule (`:rns-backend-py/CLAUDE.md`); `event_bridge.py`
+ * carries only the per-callback bridge primitives.
  *
- * Structural sibling of `:rns-backend-kt`'s `NativeCallManager`. The audio
- * stack ([Telephone] / [PacketRouter] / [AudioDevice]) is LXST-kt and
- * identical to the kotlin flavor — only the network transport differs
- * ([PythonNetworkTransport] routes through upstream Python RNS instead of
- * reticulum-kt). This is the "voice runs on LXST-kt regardless of backend"
- * decision from the dual-build plan.
- *
- * **Architectural choice** — v0.10.x had a single Python flavor and put
- * all of this logic in `python/lxst_modules/call_manager.py` (~800 LOC of
- * link state, identity verification, signalling, TX batching). The
- * dual-build's slim-Python rule (`rns-backend-py/CLAUDE.md`) explicitly
- * bans new `rns_*.py` facade files, so the v0.10.x behavior is ported
- * here in Kotlin instead. `event_bridge.py` carries only the thin
- * callback-bridge primitives needed to convert `RNS.Link` /
- * `RNS.Destination` Python callbacks into [PyEventCallback] /
- * [PyTwoArgCallback] invocations (same pattern as
- * `make_link_packet_handler` for inbound audio).
- *
- * Lifecycle: [setup] is called by `PythonRnsCore.initialize` after the
- * Python RNS stack is up and `wireEventBridge` has run — mirrors the
- * `NativeRnsBackendImpl.setupNativeTelephone` call site in `initialize`.
+ * Setup auto-fires when the backend reaches READY — observer pattern
+ * because `:rns-backend-py` can't call into `:rns-host` to do it inline.
  */
 class PythonCallManager(
     private val context: Context,
-    private val runtime: PythonRnsRuntime,
+    private val backend: ChaquopyRnsBackend,
     private val transport: PythonNetworkTransport,
     private val callCoordinator: CallCoordinator,
-    /**
-     * Backend status flow — we observe this to auto-trigger [setup] when
-     * `PythonRnsCore.initialize` flips status to `READY`. That's the
-     * earliest moment `runtime.localIdentity` is populated and the
-     * `lxst.telephony` destination can be registered.
-     */
-    private val backendStatusFlow: StateFlow<NetworkStatus>,
 ) : CallController {
+    private val runtime: PythonRnsRuntime = backend.runtime
+    private val backendStatusFlow: StateFlow<NetworkStatus> = backend.core.networkStatus
     private companion object {
         const val TAG = "PythonCallManager"
         const val LXST_APP_NAME = "lxst"
         const val LXST_ASPECT = "telephony"
 
-        /**
-         * LXST wire-protocol field IDs — match
-         * [NativeCallManager.packSignal] + [PythonNetworkTransport]
-         * (FIELD_SIGNALLING / FIELD_FRAMES). Frozen for Sideband interop.
-         */
+        /** LXST signalling field id — must match NativeCallManager + PythonNetworkTransport. */
         const val FIELD_SIGNALLING = 0x00
     }
 
@@ -84,19 +61,21 @@ class PythonCallManager(
     private var setupRan: Boolean = false
 
     init {
-        // Auto-run setup() when the backend reaches READY. Done from
-        // here (not from `:rns-backend-py.PythonRnsCore.initialize` where
-        // `NativeRnsBackendImpl.setupNativeTelephone` runs inline on the
-        // kotlin flavor) because `:rns-backend-py` can't depend on
-        // `:rns-host` — and PythonCallManager lives in `:rns-host`.
-        // Observing the public `networkStatus` flow keeps the layering
-        // clean and matches the eager setup behavior of the kotlin flavor.
+        // Auto-run setup() at backend READY (:rns-backend-py can't reach
+        // here, so observe its status flow instead of being called inline
+        // like NativeRnsBackendImpl.setupNativeTelephone). Also install
+        // the profile-aware call hook so PythonRnsTelephony.initiateCall
+        // can pass the codec profile through (default CallCoordinator
+        // path drops it).
         scope.launch {
             backendStatusFlow.filter { it == NetworkStatus.READY }.first()
             if (!setupRan) {
                 runCatching { setup() }.onFailure {
                     Log.e(TAG, "Auto-setup on backend READY failed", it)
                 }
+            }
+            backend.telephonyImpl.profileAwareCallHook = { destHex, profileCode ->
+                call(destHex, profileCode)
             }
         }
     }
@@ -134,22 +113,14 @@ class PythonCallManager(
             }
         setupRan = true
 
-        // 1. Provide local identity to transport for proactive identify on outbound links.
         transport.setLocalIdentity(localIdentity)
-
-        // 2. PacketRouter -> transport (outbound audio + signals from the audio pipeline).
         packetRouter.setPacketHandler(
             object : AudioPacketHandler {
                 override fun receiveAudioPacket(packet: ByteArray) = transport.sendPacket(packet)
-
                 override fun receiveSignal(signal: Int) = transport.sendSignal(signal)
             },
         )
-
-        // 3. transport -> PacketRouter (inbound audio).
         transport.setPacketCallback { data -> packetRouter.onInboundPacket(data) }
-
-        // 4. Telephone — its init block wires transport.signalCallback.
         telephone = Telephone(
             context = context,
             networkTransport = transport,
@@ -157,30 +128,13 @@ class PythonCallManager(
             networkPacketBridge = packetRouter,
             callBridge = callCoordinator,
         )
-
-        // 5. Register as CallController so CallCoordinator relays UI actions here.
         callCoordinator.setCallManager(this)
-
-        // 6. Register lxst.telephony IN destination so RNS routes incoming call links here.
         registerTelephonyDestination(localIdentity)
-
-        // 7. Announce immediately so peers can resolve a path to our telephony destination
-        //    even before the next LXMF auto-announce fires.
         announce()
 
         Log.i(TAG, "Python telephony stack ready")
     }
 
-    /**
-     * Build the IN `lxst.telephony` destination and hook the
-     * link-established callback through `event_bridge.py`. Mirrors
-     * `NativeCallManager.registerTelephonyDestination`.
-     *
-     * `set_proof_strategy(PROVE_NONE)` matches the v0.10.x Python flow
-     * (`call_manager.py:235`) — link establishment doesn't need
-     * cryptographic proof of identity; the per-call identify dance
-     * (`set_remote_identified_callback`) handles peer auth.
-     */
     private fun registerTelephonyDestination(localIdentity: PyObject) {
         try {
             val destClass = runtime.rnsModule["Destination"]
@@ -194,14 +148,13 @@ class PythonCallManager(
                 LXST_ASPECT,
             )
 
-            // Disable proof-of-identity-on-link — matches v0.10.x.
+            // PROVE_NONE: per-call identify-callback handles peer auth, no
+            // crypto proof on link establishment. Matches upstream LXST.
             destClass["PROVE_NONE"]?.let { proveNone ->
                 runCatching { destination.callAttr("set_proof_strategy", proveNone) }
                     .onFailure { Log.w(TAG, "set_proof_strategy(PROVE_NONE) failed", it) }
             }
 
-            // Wrap our Kotlin onInboundLinkEstablished as a Python closure
-            // (set_link_established_callback expects `callback(link)`).
             val onEstablished = PyEventCallback { linkPy ->
                 runCatching { onInboundLinkEstablished(linkPy) }
                     .onFailure { Log.e(TAG, "onInboundLinkEstablished threw", it) }
@@ -220,12 +173,7 @@ class PythonCallManager(
         }
     }
 
-    /**
-     * Announce the local `lxst.telephony` destination so remote peers can
-     * resolve a path to it (without a path, their `RNS.Transport.has_path`
-     * fails and `establishLink` returns false). Public so the caller can
-     * couple announces to LXMF reannounces.
-     */
+    /** Public so callers can couple lxst.telephony announces to LXMF reannounces. */
     fun announce(appData: ByteArray? = null) {
         val dest = telephonyDestination ?: run {
             Log.w(TAG, "Cannot announce lxst.telephony: destination not registered")
@@ -261,9 +209,9 @@ class PythonCallManager(
             return
         }
 
-        // Install callbacks BEFORE signalling availability — caller can identify
-        // immediately after STATUS_AVAILABLE and win the race against our
-        // callback registration otherwise. Mirrors the kt-flavor comment.
+        // Install identify + closed callbacks BEFORE STATUS_AVAILABLE —
+        // caller can identify immediately on receipt and win the race
+        // against our registration otherwise.
         val onIdentified = PyTwoArgCallback { linkPy, identityPy ->
             runCatching { onCallerIdentified(linkPy, identityPy) }
                 .onFailure { Log.e(TAG, "onCallerIdentified threw", it) }
@@ -282,15 +230,9 @@ class PythonCallManager(
         runCatching { link.callAttr("set_link_closed_callback", closedHandler) }
             .onFailure { Log.w(TAG, "set_link_closed_callback failed", it) }
 
-        // Tell the caller we're reachable so they call link.identify().
         sendSignalOnLink(link, Signalling.STATUS_AVAILABLE)
     }
 
-    /**
-     * RNS fires this once the inbound caller has proved their identity.
-     * Mirrors `NativeCallManager.onCallerIdentified` — accept the link
-     * into transport, notify `Telephone`, and signal `RINGING`.
-     */
     private fun onCallerIdentified(link: PyObject, identity: PyObject) {
         val identityHash = identity["hash"]
             ?.toJava(ByteArray::class.java)
@@ -305,26 +247,16 @@ class PythonCallManager(
             return
         }
 
-        // Accept the link into transport so signals + audio flow.
         transport.acceptInboundLink(link)
-
-        // Notify Telephone — sets isIncomingCall, activates ring tone,
-        // updates CallCoordinator so the UI shows the incoming-call screen.
         telephone.onIncomingCall(identityHash)
-
-        // Signal ringing to remote (dial tone trigger).
         transport.sendSignal(Signalling.STATUS_RINGING)
     }
 
     /**
-     * Send a single LXST signalling byte directly on a specific link.
-     * Used during the inbound handshake when the link is not yet
-     * promoted to [PythonNetworkTransport.activeLink], so we can't go
-     * through [PythonNetworkTransport.sendSignal].
-     *
-     * Wire format MUST match
-     * [PythonNetworkTransport.sendSignal] / `NativeCallManager.packSignal`:
-     * msgpack `{FIELD_SIGNALLING(0x00): [signal]}`.
+     * Send a signal directly on a specific link, bypassing
+     * [PythonNetworkTransport.sendSignal] which targets `activeLink`.
+     * Used during the inbound handshake before the link is accepted.
+     * Wire format must match the transport's sendSignal.
      */
     private fun sendSignalOnLink(link: PyObject, signal: Int) {
         runCatching {
@@ -341,9 +273,20 @@ class PythonCallManager(
     // ===== CallController — invoked by CallCoordinator on UI actions =====
 
     override fun call(destinationHash: String) {
+        call(destinationHash, null)
+    }
+
+    /** Profile-aware overload — invoked from PythonRnsTelephony via the hook. */
+    fun call(destinationHash: String, profileCode: Int?) {
         scope.launch {
             val destBytes = destinationHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-            telephone.call(destBytes, Profile.DEFAULT)
+            val profile = profileCode?.let { code ->
+                Profile.fromId(code).also {
+                    if (it == null) Log.w(TAG, "Unknown LXST profile code 0x${code.toString(16)}, defaulting")
+                }
+            } ?: Profile.DEFAULT
+            Log.i(TAG, "Calling with profile ${profile.abbreviation} (0x${profile.id.toString(16)})")
+            telephone.call(destBytes, profile)
         }
     }
 

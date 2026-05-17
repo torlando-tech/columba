@@ -4,6 +4,7 @@ import android.util.Log
 import com.chaquo.python.PyObject
 import network.columba.app.rns.backend.py.PyEventCallback
 import network.columba.app.rns.backend.py.PythonRnsRuntime
+import tech.torlando.lxst.audio.Signalling
 import tech.torlando.lxst.telephone.NetworkTransport
 
 /**
@@ -78,6 +79,17 @@ class PythonNetworkTransport(
         localIdentity = identity
     }
 
+    /**
+     * Tracks which link we're tearing down locally so the
+     * `set_link_closed_callback` handler can distinguish our own
+     * `teardownLink()` from a remote teardown and not echo
+     * STATUS_AVAILABLE back into our own Telephone (which is already
+     * handling our local hangup). Mirrors
+     * `NativeNetworkTransport.locallyClosingLink`.
+     */
+    @Volatile
+    private var locallyClosingLink: PyObject? = null
+
     override val isLinkActive: Boolean
         get() = activeLink?.let { link ->
             runCatching { link["status"]?.toJava(Int::class.javaObjectType) == LINK_ACTIVE }
@@ -131,6 +143,7 @@ class PythonNetworkTransport(
             if (active) {
                 activeLink = link
                 attachLinkPacketHandler(link)
+                attachLinkClosedHandler(link)
                 // Proactively identify so the callee can match us against
                 // its allow-list and ring its UI without waiting for a
                 // STATUS_AVAILABLE round-trip — mirrors
@@ -164,6 +177,11 @@ class PythonNetworkTransport(
     override fun teardownLink() {
         val link = activeLink ?: return
         activeLink = null
+        // Mark this teardown as locally initiated so the link-closed
+        // callback (if it fires synchronously) doesn't echo
+        // STATUS_AVAILABLE back into the Telephone state machine,
+        // which is already handling our local hangup.
+        locallyClosingLink = link
         runCatching { link.callAttr("teardown") }
             .onFailure { Log.w(TAG, "teardownLink failed", it) }
     }
@@ -247,6 +265,47 @@ class PythonNetworkTransport(
         Log.i(TAG, "Accepting inbound call link")
         activeLink = link
         attachLinkPacketHandler(link)
+        attachLinkClosedHandler(link)
+    }
+
+    /**
+     * Attach an RNS `set_link_closed_callback` to [link] that fires
+     * [Signalling.STATUS_AVAILABLE] into [signalCallback] on a
+     * *remote* teardown. The Telephone state machine treats
+     * STATUS_AVAILABLE as the canonical "call ended" trigger and
+     * tears down its own audio/UI. Local teardowns (our own
+     * [teardownLink] call) are filtered via [locallyClosingLink] to
+     * avoid double-handling — Telephone has already started its
+     * hangup path before [teardownLink] is invoked.
+     *
+     * Mirrors `NativeNetworkTransport.handleLinkClosed` /
+     * `installLinkCallbacks` from the kotlin flavor.
+     */
+    private fun attachLinkClosedHandler(link: PyObject) {
+        runCatching {
+            val sink = PyEventCallback { closedLinkPy ->
+                runCatching {
+                    val wasLocalTeardown = locallyClosingLink === link
+                    Log.i(
+                        TAG,
+                        "Link closed: localTeardown=$wasLocalTeardown",
+                    )
+                    if (wasLocalTeardown) {
+                        locallyClosingLink = null
+                    }
+                    if (activeLink === link) {
+                        activeLink = null
+                    }
+                    if (!wasLocalTeardown) {
+                        // Remote tore down — tell Telephone the call is over.
+                        signalCallback?.invoke(Signalling.STATUS_AVAILABLE)
+                    }
+                }.onFailure { Log.e(TAG, "link-closed dispatch failed", it) }
+            }
+            val handler = runtime.eventBridge.callAttr("make_link_closed_handler", sink)
+            link.callAttr("set_link_closed_callback", handler)
+            Log.i(TAG, "Attached RNS link-closed callback")
+        }.onFailure { Log.e(TAG, "failed to attach link-closed handler", it) }
     }
 
     private fun attachLinkPacketHandler(link: PyObject) {

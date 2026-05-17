@@ -83,15 +83,8 @@ class PythonRnsCore(
                     onLxmfDelivery = events.onLxmfDelivery,
                     onLxmfFailure = events.onLxmfFailure,
                 )
-
-                // LXST telephony setup is host-side: `PythonCallManager`
-                // (in :rns-host/pythonBackend/) subscribes to this
-                // [networkStatus] flow and runs its setup when it sees
-                // READY. We can't reach `:rns-host` from here without
-                // inverting the dep direction, and host-side observation
-                // keeps the layering clean — same shape as
-                // NativeRnsBackendImpl.setupNativeTelephone, just
-                // triggered by status rather than called inline.
+                // LXST telephony setup is host-side: PythonCallManager
+                // observes this networkStatus flow and runs setup() on READY.
                 _networkStatus.value = NetworkStatus.READY
             } catch (e: Throwable) {
                 _networkStatus.value = NetworkStatus.ERROR(e.message ?: "Python RNS init failed")

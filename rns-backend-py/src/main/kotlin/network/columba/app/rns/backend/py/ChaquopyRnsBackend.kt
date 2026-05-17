@@ -48,7 +48,9 @@ class ChaquopyRnsBackend(
 
     private val coreImpl = PythonRnsCore(runtime, events)
     private val lxmfImpl = PythonRnsLxmf(runtime, events)
-    private val telephonyImpl = PythonRnsTelephony(callCoordinator)
+
+    /** Concrete telephony impl — exposed so PythonCallManager can install its profile-aware hook. */
+    val telephonyImpl = PythonRnsTelephony(callCoordinator)
     private val telemetryImpl = PythonRnsTelemetry(runtime, events)
     private val nomadnetImpl = PythonRnsNomadnet(runtime)
     private val transportAdminImpl = PythonRnsTransportAdmin(runtime, events)

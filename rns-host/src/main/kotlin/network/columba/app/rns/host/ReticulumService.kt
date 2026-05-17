@@ -17,6 +17,7 @@ import kotlinx.coroutines.withTimeout
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
+import network.columba.app.rns.host.persistence.BackendInitializer
 import network.columba.app.rns.ipc.RnsBackendServer
 
 /**
@@ -51,6 +52,14 @@ class ReticulumService : Service() {
      */
     @Inject lateinit var rnsBackend: RnsBackend
 
+    /**
+     * Self-initializer that reads the snapshot UI persisted on its last
+     * successful `initialize()` and re-drives the backend through the same
+     * path. Lets `:reticulum` come back up under START_STICKY without needing
+     * the UI process alive to feed it config.
+     */
+    @Inject lateinit var backendInitializer: BackendInitializer
+
     // Coroutine scope for background tasks
     // Uses Dispatchers.Default for CPU-bound work (JSON parsing, orchestration)
     // SupervisorJob ensures child coroutine failures don't cancel the entire service
@@ -74,6 +83,19 @@ class ReticulumService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
+
+        // A.10: Confirm the local backend resolved in `:reticulum`. Touching
+        // the @Inject field triggered eager Hilt construction during
+        // super.onCreate() — the log line just makes that visible in logcat
+        // so on-device verification can grep for it. The DEBUG-only ctor
+        // assertion in ChaquopyRnsBackend / NativeRnsBackend already throws
+        // if the construction landed in the wrong process; this log is the
+        // success signal.
+        Log.i(
+            TAG,
+            "Pre-warmed RnsBackend in :reticulum pid=${android.os.Process.myPid()} " +
+                "-> ${rnsBackend::class.simpleName}",
+        )
 
         // Initialize all managers via dependency injection
         // Provide callbacks for health monitoring and network changes
@@ -152,6 +174,14 @@ class ReticulumService : Service() {
                     Log.d(TAG, "Reticulum shutdown complete")
                 },
             )
+
+        // A.10 follow-up: self-init from snapshot if UI isn't around to drive
+        // initialize() (OOM restart, force-stop recovery). No-op on first run
+        // (no snapshot yet). Idempotent if UI races us — `runtime.start()`
+        // already early-returns when running.
+        serviceScope.launch {
+            backendInitializer.initializeFromSnapshot(rnsBackend)
+        }
     }
 
     override fun onStartCommand(

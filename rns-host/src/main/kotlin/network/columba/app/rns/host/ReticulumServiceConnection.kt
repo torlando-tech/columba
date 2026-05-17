@@ -29,16 +29,12 @@ import network.columba.app.rns.ipc.RnsBackendClient
  * automatically, so a transient process loss looks like a single backend
  * outage rather than a stream tear-down.
  *
- * The Hilt module in `:app` consumes this in A.10 to provide a
- * `Flow<RnsBackend>` (or a single-shot bound instance, depending on the
- * binding semantics chosen there) to the UI's sub-interface providers.
- *
- * For Phase A.7 the underlying [ReticulumService.onBind] still returns the
- * legacy local [binder.ReticulumServiceBinder] (a liveness handle, not an
- * `IRnsBackend.Stub`). Until A.8 swaps that binder for the AIDL stub,
- * [bind] will short-circuit with `IllegalStateException` on first emit —
- * which is fine because [ReticulumServiceConnection] is not wired into
- * `ReticulumModule` until A.10.
+ * Consumed by [network.columba.app.rns.host.ipc.BoundRnsBackend] (A.10),
+ * which `stateIn`s this flow into a `StateFlow<RnsBackend?>` and hands the
+ * same reference to each `BoundRns*` sub-wrapper for republishing.
+ * [network.columba.app.rns.host.di.ProcessAwareBackendModule] decides per
+ * process whether to instantiate `BoundRnsBackend` (UI / TEST) or hand back
+ * the flavor-local backend (`:reticulum`).
  */
 object ReticulumServiceConnection {
     private const val TAG = "ReticulumServiceConn"

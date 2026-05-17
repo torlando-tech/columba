@@ -266,12 +266,12 @@ class ColumbaApplication : Application() {
         // `rns-dual-build-handoff.md` for the deviation rationale.
 
         // Mirror the protocol's networkStatus into the :reticulum service process so the
-        // foreground notification stays in sync. On the native stack the protocol lives in
-        // the app process — the service is just the notification/wake-lock host. When its
-        // state changes (INITIALIZING → READY, or later ERROR) we push it; we also persist
-        // the value via cross-process prefs so that if Android kills and restarts :reticulum
-        // on its own, onCreate() can restore the correct initial text instead of defaulting
-        // to SHUTDOWN / "Disconnected".
+        // foreground notification stays in sync. Post-A.10 the protocol lives in :reticulum
+        // and `rnsCore` here is the AIDL-proxied BoundRnsCore — its networkStatus republishes
+        // upstream via flatMapLatest, so this collector survives binder-death + START_STICKY
+        // recovery without resubscribing. We still persist via cross-process prefs so that if
+        // Android kills and restarts :reticulum, onCreate() can restore the correct initial
+        // text instead of defaulting to SHUTDOWN / "Disconnected".
         applicationScope.launch {
             rnsCore.networkStatus.collect { status ->
                 val serviceStatus = networkStatusToServiceString(status)
@@ -489,6 +489,16 @@ class ColumbaApplication : Application() {
                     .initialize(config)
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
+
+                        // A.10 follow-up: persist a sanitized snapshot so :reticulum can
+                        // self-init after OOM/force-stop restart when UI isn't around to
+                        // drive initialize(). Identity key is intentionally stripped — the
+                        // reader decrypts it on demand via Keystore + IdentityKeyProvider.
+                        network.columba.app.rns.host.persistence.ReticulumConfigSnapshot.write(
+                            context = this@ColumbaApplication,
+                            config = config,
+                            identityHashHex = activeIdentity?.identityHash,
+                        )
 
                         // networkStatus.collect (set up earlier) already pushes
                         // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no

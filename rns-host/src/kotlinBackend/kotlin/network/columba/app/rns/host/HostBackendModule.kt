@@ -12,6 +12,7 @@ import network.columba.app.rns.backend.kt.NativeRnsBackend
 import network.columba.app.rns.backend.kt.RNodeHostBridge
 import network.columba.app.rns.host.call.rnode.BluetoothLeConnection
 import network.columba.app.rns.host.call.rnode.ColumbaLogo
+import network.columba.app.rns.host.di.LocalBackend
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import java.io.InputStream
 import java.io.OutputStream
@@ -21,17 +22,20 @@ import javax.inject.Singleton
  * Kotlin-flavor backend wiring for `:rns-host`.
  *
  * Active when the `rnsImpl=kotlinBackend` flavor resolves. Provides
- * [NativeRnsBackend] (and its [RnsBackend] view) into the `:reticulum`-process
- * Hilt graph plus the [RNodeHostBridge] adapter that wraps `KotlinUSBBridge`
- * + `BluetoothLeConnection` so `:rns-backend-kt` can open serial streams to
+ * [NativeRnsBackend] under [LocalBackend] qualifier into the Hilt graph plus
+ * the [RNodeHostBridge] adapter that wraps `KotlinUSBBridge` +
+ * `BluetoothLeConnection` so `:rns-backend-kt` can open serial streams to
  * RNode hardware without depending on `:rns-host` itself (which would cycle
  * Gradle's project dep graph — see the [RNodeHostBridge] kdoc).
  *
- * Plan deviation #8: the handoff sketched a single `LxstCallBridge`. This
- * impl rolled the LXST call surface into `:rns-backend-kt` directly (the
- * `NativeNetworkTransport` + `NativeCallManager` files moved with the
- * protocol body), so only the RNode USB/BLE bridge surface needs a host-side
- * adapter.
+ * A.10: this module no longer provides the unqualified
+ * [network.columba.app.rns.api.RnsBackend] binding or the six sub-interface
+ * extractors. Those moved to
+ * [network.columba.app.rns.host.di.ProcessAwareBackendModule], which decides
+ * per process whether to resolve this local backend (in `:reticulum`) or
+ * return a [network.columba.app.rns.host.ipc.BoundRnsBackend] AIDL proxy
+ * (in UI / test). The flavor module's role is now purely to construct the
+ * concrete backend; the process branching is centralized.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -50,44 +54,16 @@ object HostBackendModule {
         bridge: RNodeHostBridge,
     ): NativeRnsBackend = NativeRnsBackend(appContext = context, rnodeHostBridge = bridge)
 
+    /**
+     * Flavor-local [RnsBackend] view of [NativeRnsBackend]. [LocalBackend]
+     * qualifier disambiguates from the process-aware unqualified
+     * [RnsBackend] binding in
+     * [network.columba.app.rns.host.di.ProcessAwareBackendModule].
+     */
     @Provides
     @Singleton
-    fun provideRnsBackend(native: NativeRnsBackend): RnsBackend = native
-
-    // Per-sub-interface providers live here (rather than in :app's ReticulumModule)
-    // so the single-source-binding rule is preserved — A.8 deviation #15 documented
-    // the duplicate-binding compile failure that motivates keeping these alongside
-    // the `RnsBackend` provider that backs them.
-
-    @Provides
-    @Singleton
-    fun provideRnsCore(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsCore =
-        rnsBackend.core
-
-    @Provides
-    @Singleton
-    fun provideRnsLxmf(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsLxmf =
-        rnsBackend.lxmf
-
-    @Provides
-    @Singleton
-    fun provideRnsTelephony(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsTelephony =
-        rnsBackend.telephony
-
-    @Provides
-    @Singleton
-    fun provideRnsTelemetry(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsTelemetry =
-        rnsBackend.telemetry
-
-    @Provides
-    @Singleton
-    fun provideRnsNomadnet(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsNomadnet =
-        rnsBackend.nomadnet
-
-    @Provides
-    @Singleton
-    fun provideRnsTransportAdmin(rnsBackend: RnsBackend): network.columba.app.rns.api.RnsTransportAdmin =
-        rnsBackend.transportAdmin
+    @LocalBackend
+    fun provideLocalRnsBackend(native: NativeRnsBackend): RnsBackend = native
 }
 
 /**

@@ -35,6 +35,30 @@ class NativeRnsBackend(
     appContext: Context? = null,
     rnodeHostBridge: RNodeHostBridge? = null,
 ) : RnsBackend {
+    init {
+        // Defense-in-depth A.10 assertion: this constructor MUST only run in
+        // the `:reticulum` FGS process. Constructing it elsewhere means the
+        // process-aware Hilt module
+        // (`network.columba.app.rns.host.di.ProcessAwareBackendModule`)
+        // resolved the local backend in the UI process, which would cause
+        // RNS interface threads to bind sockets in the wrong pid. Debug-only
+        // — release builds skip the check so a defensive bug never crashes
+        // the FGS. Tolerates null processName (unit tests have no
+        // Application context).
+        if (BuildConfig.DEBUG && appContext != null) {
+            val processName = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                android.app.Application.getProcessName()
+            } else {
+                null
+            }
+            check(processName == null || processName.contains(":reticulum")) {
+                "NativeRnsBackend constructed in wrong process: pid=" +
+                    "${android.os.Process.myPid()} processName=$processName — " +
+                    "expected `:reticulum`. Check ProcessAwareBackendModule wiring."
+            }
+        }
+    }
+
     /**
      * Internal worker holding all shared state and the actual reticulum-kt /
      * lxmf-kt / lxst-kt calls. Public for in-process callers that need the

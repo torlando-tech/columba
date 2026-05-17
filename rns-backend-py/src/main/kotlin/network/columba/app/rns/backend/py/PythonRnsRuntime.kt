@@ -112,9 +112,19 @@ class PythonRnsRuntime(
     val isRunning: Boolean get() = running.get()
 
     private fun ensureStarted() {
-        if (!Python.isStarted()) {
-            Log.i(TAG, "Starting Chaquopy Python interpreter")
-            Python.start(AndroidPlatform(appContext))
+        // A.10: A.10 exposed a long-latent TOCTOU race here — multiple binder
+        // threads from the AIDL pool can enter via different sub-interface
+        // methods (each one triggers `python` lazy init, which calls this
+        // function). Without the lock, both threads pass the `!isStarted()`
+        // check, both call `Python.start()`, and the loser throws "Python
+        // already started". Synchronising on the class (not `this`) avoids
+        // re-entrant deadlock with `start()`'s own @Synchronized monitor
+        // when its `eventBridge.callAttr(...)` path triggers the lazy.
+        synchronized(PythonRnsRuntime::class.java) {
+            if (!Python.isStarted()) {
+                Log.i(TAG, "Starting Chaquopy Python interpreter")
+                Python.start(AndroidPlatform(appContext))
+            }
         }
         applyAndroidEnvPatches()
     }

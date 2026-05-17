@@ -126,6 +126,18 @@ class PrivacyCardTest {
         ).assertIsDisplayed()
     }
 
+    // ========== Messages-From-Contacts-Only Tests ==========
+
+    @Test
+    fun privacyCard_displaysMessagesFromContactsOnly_rowLabel() {
+        // The block-unknown-senders toggle was moved out of the card header into
+        // the body so it's equal-billed with the calls toggle. Verify the row
+        // label renders alongside the existing description text.
+        setUpCard(isExpanded = true)
+
+        composeTestRule.onNodeWithText("Messages from contacts only").assertIsDisplayed()
+    }
+
     // ========== Calls-From-Contacts-Only Tests (Feature 1) ==========
 
     @Test

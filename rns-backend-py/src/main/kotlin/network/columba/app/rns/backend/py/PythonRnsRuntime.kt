@@ -192,49 +192,25 @@ class PythonRnsRuntime(
      * Register the native Kotlin [StampGenerator] as upstream LXMF's
      * external stamp generator.
      *
-     * Called from [start] once the `LXMF` module is loaded. The Python
-     * side stores the callback and invokes it from `LXStamper.generate_stamp`
-     * (torlando-tech fork; see `LXMF/LXStamper.py:109`). Best-effort —
-     * registration failure logs a warning and falls back to upstream's
-     * default generator, which works on desktop platforms but hangs on
-     * Android.
+     * Called from [start] once the `LXMF` module is loaded. Registration
+     * goes through `event_bridge.install_external_stamp_generator(...)`,
+     * which wraps the Kotlin callback in a Python closure before handing
+     * it to `LXStamper.set_external_generator(...)`. The Python-closure
+     * indirection avoids a Chaquopy quirk where SAM-callable invocation
+     * (`BiFunction.apply` from Python's `__call__`) boxes the args as
+     * `Object[]` instead of typed `byte[] / int`; routing through a
+     * Python closure that calls our typed `generate(...)` method makes
+     * Chaquopy apply the proper bytes→byte[] conversion.
+     *
+     * Best-effort — registration failure logs a warning and falls back
+     * to upstream's default generator, which works on desktop platforms
+     * but hangs on Android (Chaquopy lacks `sem_open`, Android kills
+     * idle helper processes, `multiprocessing.Manager` deadlocks).
      */
     private fun registerExternalStampGenerator() {
         try {
-            val lxStamper = lxmfModule["LXStamper"]
-                ?: run {
-                    Log.w(
-                        TAG,
-                        "LXMF.LXStamper not resolvable — external stamp " +
-                            "generator NOT registered. Stamps will use " +
-                            "upstream Python multiprocessing, which hangs " +
-                            "on Android.",
-                    )
-                    return
-                }
-
-            // BiFunction<PyObject, PyObject, PyObject> — single SAM so
-            // Chaquopy's `get_sam` doesn't trip on "multiple functional
-            // interfaces" (Kotlin's `(PyObject, PyObject) -> PyObject`
-            // also implements Function2 + KCallable + KFunction).
-            //
-            // Both params are PyObject (not Kotlin types) on purpose:
-            // Chaquopy's auto-conversion at SAM invocation time erases
-            // the generic type parameters at runtime, so a BiFunction
-            // declared as `<ByteArray, Int, PyObject>` actually receives
-            // `Object[]` (boxed bytes) instead of `byte[]` when Python
-            // hands in a `bytes` arg, causing
-            // `ClassCastException: Object[] cannot be cast to byte[]`
-            // inside the synthetic `apply` wrapper. Receiving PyObject
-            // and converting via `.toJava(...)` inside the lambda
-            // avoids the trap.
-            val callback =
-                java.util.function.BiFunction<PyObject, PyObject, PyObject> { workblockPy, stampCostPy ->
-                    val workblock = workblockPy.toJava(ByteArray::class.java)
-                    val stampCost = stampCostPy.toJava(Int::class.java)
-                    generateStampForPython(workblock, stampCost)
-                }
-            lxStamper.callAttr("set_external_generator", callback)
+            val callback = StampGeneratorCallback(stampGenerator)
+            eventBridge.callAttr("install_external_stamp_generator", callback)
             Log.i(TAG, "Native Kotlin stamp generator registered with LXMF.LXStamper")
         } catch (e: Exception) {
             Log.w(
@@ -243,49 +219,6 @@ class PythonRnsRuntime(
                 e,
             )
         }
-    }
-
-    /**
-     * Synchronous adapter Python calls when it needs a stamp.
-     *
-     * Python's `LXStamper.generate_stamp` invokes
-     * `external_generator(workblock, stamp_cost)` and expects a 2-tuple
-     * `(stamp_bytes, rounds)` back. We bridge that to the coroutine-based
-     * [StampGenerator.generateStamp] via `runBlocking` — the Python call
-     * site runs on an LXMF-internal thread and is already blocking on
-     * the result, so this doesn't deadlock the UI.
-     *
-     * Returns a Python `list` rather than a Kotlin `Pair` because
-     * Chaquopy serializes the Python tuple back through the `list`
-     * builtin most cleanly. The bytes are converted via Python's
-     * `bytes()` builtin so they expose the buffer protocol that
-     * `LXStamper` then concatenates with the workblock.
-     */
-    internal fun generateStampForPython(
-        workblock: ByteArray,
-        stampCost: Int,
-    ): PyObject {
-        Log.d(
-            TAG,
-            "External stamp generator invoked: cost=$stampCost, " +
-                "workblock=${workblock.size} bytes",
-        )
-
-        val result =
-            runBlocking(Dispatchers.Default) {
-                stampGenerator.generateStamp(workblock, stampCost)
-            }
-
-        Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")
-
-        val py = Python.getInstance()
-        val builtins = py.builtins
-        val stamp = result.stamp ?: ByteArray(0)
-        val pyBytes = builtins.callAttr("bytes", stamp)
-        val pyList = builtins.callAttr("list")
-        pyList.callAttr("append", pyBytes)
-        pyList.callAttr("append", result.rounds)
-        return pyList
     }
 
     /**
@@ -369,5 +302,63 @@ class PythonRnsRuntime(
                 network.columba.app.rns.api.RnsError.BackendNotReady,
             )
         }
+    }
+}
+
+/**
+ * Python-callable bridge to [StampGenerator].
+ *
+ * Exposed as a top-level class (not a lambda or BiFunction) because
+ * Chaquopy's SAM-callable dispatch (`JavaObject.__call__` → bridge
+ * apply) boxes args as `Object[]` instead of typed `byte[] / int`,
+ * causing `ClassCastException` in the synthetic apply wrapper. A
+ * normal class with a method whose JVM signature is
+ * `generate([B, I) -> Object` makes Chaquopy take its typed-method
+ * dispatch path (`JavaMethod.__call__`), which correctly converts
+ * Python `bytes → byte[]` and `int → int` before invocation.
+ *
+ * Invoked from Python via
+ * `event_bridge.install_external_stamp_generator(callback)`, which
+ * wraps this in a closure registered with
+ * `LXMF.LXStamper.set_external_generator(...)`.
+ *
+ * Returns a Python `list` rather than a Kotlin `Pair` because
+ * Chaquopy serializes Python tuples back through the `list` builtin
+ * most cleanly. The stamp bytes are wrapped via Python's `bytes()`
+ * builtin so they expose the buffer protocol that LXStamper then
+ * concatenates with the workblock.
+ */
+internal class StampGeneratorCallback(
+    private val generator: StampGenerator,
+) {
+    private companion object {
+        const val TAG = "StampGeneratorCallback"
+    }
+
+    fun generate(
+        workblock: ByteArray,
+        stampCost: Int,
+    ): PyObject {
+        Log.d(
+            TAG,
+            "External stamp generator invoked: cost=$stampCost, " +
+                "workblock=${workblock.size} bytes",
+        )
+
+        val result =
+            runBlocking(Dispatchers.Default) {
+                generator.generateStamp(workblock, stampCost)
+            }
+
+        Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")
+
+        val py = Python.getInstance()
+        val builtins = py.builtins
+        val stamp = result.stamp ?: ByteArray(0)
+        val pyBytes = builtins.callAttr("bytes", stamp)
+        val pyList = builtins.callAttr("list")
+        pyList.callAttr("append", pyBytes)
+        pyList.callAttr("append", result.rounds)
+        return pyList
     }
 }

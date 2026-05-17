@@ -1477,6 +1477,9 @@ class ReticulumServiceBinder(
             if (callManagerInitialized) {
                 registerCallCoordinatorListeners()
                 wrapperManager.setupTelephone()
+                // Register the contact-check predicate so Python can gate
+                // incoming links by the "Calls from contacts only" toggle.
+                wrapperManager.setupContactCheckCallback()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to setup CallManager: ${e.message}", e)

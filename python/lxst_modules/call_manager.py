@@ -537,6 +537,20 @@ class CallManager:
                 link.teardown()
                 return
 
+            # Silent-drop gate (Feature 1: "Calls from contacts only").
+            # Must run BEFORE _send_signal_to_remote(STATUS_RINGING) and BEFORE
+            # any Kotlin notify — the goal is for the caller to see "link
+            # established → nothing" so they fall through to their wait-time
+            # timeout, indistinguishable from "remote went away". We send NO
+            # signals (not even STATUS_BUSY) so non-contacts cannot distinguish
+            # "you are blocked" from "you are unreachable".
+            if self._should_silently_drop(identity):
+                try:
+                    link.teardown()
+                except Exception:
+                    pass
+                return
+
             if not self._is_allowed(identity):
                 RNS.log(f"Caller not allowed, signalling busy", RNS.LOG_DEBUG)
                 self._send_signal_to_remote(STATUS_BUSY, link)

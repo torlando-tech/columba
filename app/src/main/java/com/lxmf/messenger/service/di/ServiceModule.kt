@@ -89,8 +89,8 @@ object ServiceModule {
         val settingsAccessor = ServiceSettingsAccessor(context)
         val persistenceManager = ServicePersistenceManager(context, scope, settingsAccessor)
 
-        // Phase 2: Python wrapper (depends on state, context, scope)
-        val wrapperManager = PythonWrapperManager(state, context, scope)
+        // Phase 2: Python wrapper (depends on state, context, scope, settingsAccessor)
+        val wrapperManager = PythonWrapperManager(state, context, scope, settingsAccessor)
 
         // Phase 3: Health monitoring (depends on wrapperManager, scope)
         // Started after initialization completes (see ReticulumServiceBinder)

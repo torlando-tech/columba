@@ -77,11 +77,6 @@ class ReticulumServiceBinder(
     // RNode bridge - created lazily when needed
     private var rnodeBridge: KotlinRNodeBridge? = null
 
-    // Cross-process pref listener for the master "Allow voice calls" toggle.
-    // Held for service lifecycle so the SharedPreferences instance does not
-    // GC the listener — see SharedPreferences.registerOnSharedPreferenceChangeListener doc.
-    private var allowVoiceCallsPrefListener:
-        android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     // ===========================================
     // Lifecycle Methods
@@ -382,21 +377,6 @@ class ReticulumServiceBinder(
                 bleCoordinator.stopImmediate()
             } catch (e: Exception) {
                 Log.w(TAG, "Error during BLE immediate shutdown", e)
-            }
-
-            // Unregister the Allow-voice-calls cross-process pref listener
-            try {
-                allowVoiceCallsPrefListener?.let { listener ->
-                    @Suppress("DEPRECATION") // MODE_MULTI_PROCESS required to match the registration
-                    context
-                        .getSharedPreferences(
-                            ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
-                            Context.MODE_MULTI_PROCESS,
-                        ).unregisterOnSharedPreferenceChangeListener(listener)
-                }
-                allowVoiceCallsPrefListener = null
-            } catch (e: Exception) {
-                Log.w(TAG, "Error unregistering Allow voice calls listener", e)
             }
 
             // Update status
@@ -1503,10 +1483,11 @@ class ReticulumServiceBinder(
                 // Register the contact-check predicate so Python can gate
                 // incoming links by the "Calls from contacts only" toggle.
                 wrapperManager.setupContactCheckCallback()
-                // Apply the master "Allow voice calls" toggle's current state and
-                // start listening for cross-process changes.
+                // Apply the master "Allow voice calls" toggle's current state.
+                // Runtime changes are signalled via ACTION_SET_ALLOW_VOICE_CALLS
+                // because SharedPreferences.OnSharedPreferenceChangeListener does
+                // not fire across processes.
                 applyInitialAllowVoiceCallsState()
-                registerAllowVoiceCallsListener()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to setup CallManager: ${e.message}", e)
@@ -1534,34 +1515,17 @@ class ReticulumServiceBinder(
     }
 
     /**
-     * Subscribe to cross-process changes to the "Allow voice calls" toggle.
+     * Apply a runtime change to the master "Allow voice calls" toggle.
      *
-     * The UI process writes the new value via SettingsRepository.saveAllowVoiceCalls
-     * which dual-writes DataStore + MODE_MULTI_PROCESS SharedPreferences. The
-     * service process picks up the change via this listener and toggles the
-     * Python destination accordingly.
+     * Invoked from [ReticulumService.onStartCommand] when the UI process
+     * sends `ACTION_SET_ALLOW_VOICE_CALLS`. The Intent path is used instead
+     * of `SharedPreferences.OnSharedPreferenceChangeListener` because
+     * SharedPreferences change listeners only fire in the process that
+     * wrote the value — they do not propagate across processes on Android.
      */
-    @Suppress("DEPRECATION") // MODE_MULTI_PROCESS is deprecated but required for cross-process
-    private fun registerAllowVoiceCallsListener() {
-        try {
-            val prefs =
-                context.getSharedPreferences(
-                    ServiceSettingsAccessor.CROSS_PROCESS_PREFS_NAME,
-                    Context.MODE_MULTI_PROCESS,
-                )
-            val listener =
-                android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, changedKey ->
-                    if (changedKey == ServiceSettingsAccessor.KEY_ALLOW_VOICE_CALLS) {
-                        val allowed = sharedPrefs.getBoolean(changedKey, true)
-                        Log.i(TAG, "Allow voice calls toggle changed → $allowed")
-                        wrapperManager.setLxstIncomingEnabled(allowed)
-                    }
-                }
-            prefs.registerOnSharedPreferenceChangeListener(listener)
-            allowVoiceCallsPrefListener = listener
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to register Allow voice calls listener: ${e.message}", e)
-        }
+    fun setAllowVoiceCalls(allowed: Boolean) {
+        Log.i(TAG, "Allow voice calls runtime change → $allowed")
+        wrapperManager.setLxstIncomingEnabled(allowed)
     }
 
     /** Register listeners for IPC notification to UI process. */

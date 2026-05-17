@@ -36,6 +36,8 @@ class ReticulumService : Service() {
         const val ACTION_START = "com.lxmf.messenger.service.START"
         const val ACTION_STOP = "com.lxmf.messenger.service.STOP"
         const val ACTION_RESTART_BLE = "com.lxmf.messenger.RESTART_BLE"
+        const val ACTION_SET_ALLOW_VOICE_CALLS = "com.lxmf.messenger.SET_ALLOW_VOICE_CALLS"
+        const val EXTRA_ALLOW_VOICE_CALLS = "allow_voice_calls"
     }
 
     // Coroutine scope for background tasks
@@ -211,6 +213,20 @@ class ReticulumService : Service() {
             ACTION_RESTART_BLE -> {
                 // Restart BLE interface after permissions granted
                 handleRestartBle(intent)
+            }
+            ACTION_SET_ALLOW_VOICE_CALLS -> {
+                // UI process flipped the master "Allow voice calls" toggle.
+                // SharedPreferences.OnSharedPreferenceChangeListener does NOT
+                // fire across processes, so the UI explicitly signals the
+                // service via this Intent. The default `true` keeps existing
+                // behaviour if the extra is missing (e.g., stale broadcast).
+                val allowed = intent.getBooleanExtra(EXTRA_ALLOW_VOICE_CALLS, true)
+                Log.i(TAG, "Received ACTION_SET_ALLOW_VOICE_CALLS → $allowed")
+                if (::binder.isInitialized) {
+                    binder.setAllowVoiceCalls(allowed)
+                } else {
+                    Log.w(TAG, "Service not yet initialized — Allow voice calls state will be applied at setupCallManager")
+                }
             }
         }
 

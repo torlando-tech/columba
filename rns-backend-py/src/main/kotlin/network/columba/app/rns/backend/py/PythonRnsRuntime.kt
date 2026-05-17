@@ -139,8 +139,29 @@ class PythonRnsRuntime(
         }
         ensureStarted()
 
+        // Detect coexisting RNS apps on the device along two axes:
+        //  • TCP 37428 → another RNS is exposed as a shared instance
+        //    (Sideband by default). Join as RPC client and skip
+        //    interfaces — mirrors v0.10.x.
+        //  • UDP bind on AutoInterface data_port → another RNS holds
+        //    the multicast bind even though it's not exposing a
+        //    shared instance (another Columba running standalone).
+        //    Can't join, can't bind — render AutoInterface as disabled
+        //    so RNS doesn't crash trying to compete for the port.
+        val probe = network.columba.app.rns.api.util.SharedInstanceProbe
+        val shareInstance = probe.shouldShareInstance(config)
+        val skipAutoInterface = !shareInstance && !probe.isAutoInterfaceUsable()
+        val mode = when {
+            shareInstance -> "shared-client"
+            skipAutoInterface -> "own-instance (AutoInterface disabled — port held by another app)"
+            else -> "own-instance"
+        }
+        Log.i(TAG, "RNS instance mode: $mode")
+
         val configDir = File(config.storagePath, "reticulum").apply { mkdirs() }
-        File(configDir, "config").writeText(RnsConfigFile.build(config))
+        File(configDir, "config").writeText(
+            RnsConfigFile.build(config, shareInstance, skipAutoInterface),
+        )
         storagePath = configDir.absolutePath
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
 

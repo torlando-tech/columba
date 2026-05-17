@@ -562,6 +562,20 @@ class NativeRnsBackendImpl(
                 dozeThrottleMultiplier = 1.0f
                 Log.i(TAG, "Initializing native Reticulum stack")
 
+                // Heads-up if another RNS instance is on the device.
+                // reticulum-kt does not currently speak shared-instance RPC
+                // (the python flavor does); the warning makes a future
+                // multicast collision diagnosable instead of mysterious.
+                if (network.columba.app.rns.api.util.SharedInstanceProbe.shouldShareInstance(config)) {
+                    Log.w(
+                        TAG,
+                        "Another RNS instance detected on 127.0.0.1:" +
+                            "${network.columba.app.rns.api.util.SharedInstanceProbe.DEFAULT_PORT}; " +
+                            "reticulum-kt doesn't currently speak shared-instance RPC, so native " +
+                            "interfaces may collide. Consider preferOwnInstance=true or stopping the other RNS app.",
+                    )
+                }
+
                 initializePersistentStores(config.storagePath)
 
                 // Start Reticulum with a fresh in-memory transport identity so the

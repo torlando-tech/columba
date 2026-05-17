@@ -520,6 +520,57 @@ def deregister_callbacks():
     _announce_handler = None
 
 
+# --- LXMF external stamp generator bridge ----------------------------------
+
+def install_external_stamp_generator(java_callback):
+    """Register a Java callback as upstream LXMF's external stamp generator.
+
+    Bypasses Python LXMF's `multiprocessing.Manager` based stamp pipeline
+    which hangs on Android (Chaquopy lacks `sem_open`, Android kills idle
+    helper processes, the Manager deadlocks waiting on the dead worker).
+    The torlando-tech LXMF fork exposes `LXStamper.set_external_generator`
+    for exactly this — when set, `LXStamper.generate_stamp` calls
+    `external_generator(workblock, stamp_cost)` and gets `(stamp_bytes, rounds)`
+    back.
+
+    Why this wrapper instead of registering the Kotlin callback directly:
+    Chaquopy's `JavaObject.__call__` dispatcher on `BiFunction.apply`
+    boxes the args as `Object[]` instead of typed `byte[] / int` —
+    LXStamper line 111 then throws
+    `ClassCastException: Object[] cannot be cast to byte[]` inside the
+    synthetic apply, and the deferred-stamp worker thread dies. By going
+    through a Python closure that calls `java_callback.generate(...)`
+    via Chaquopy's typed-method path (not the SAM-callable path),
+    Chaquopy applies the proper `bytes → byte[]` / `int → int`
+    conversion before dispatching.
+
+    Kotlin contract: `java_callback` exposes a method named `generate`
+    with signature `(workblock: byte[], stampCost: int) -> List` where
+    the returned list is `[stamp_bytes, rounds]`. See
+    `PythonRnsRuntime.kt` `StampGeneratorCallback` for the implementation.
+    """
+    try:
+        from LXMF import LXStamper
+    except ImportError:
+        RNS.log(
+            "event_bridge: install_external_stamp_generator failed — "
+            "LXMF.LXStamper not importable",
+            RNS.LOG_ERROR,
+        )
+        return
+
+    def _wrapper(workblock, stamp_cost):
+        result = java_callback.generate(workblock, stamp_cost)
+        # `result` is a Java List exposed as a Python sequence; index access
+        # returns Python bytes for index 0 and Python int for index 1
+        # (Chaquopy auto-converts via the typed method's return signature).
+        stamp = result[0]
+        rounds = result[1]
+        return stamp, rounds
+
+    LXStamper.set_external_generator(_wrapper)
+
+
 # --- Per-Link packet bridge ------------------------------------------------
 
 def make_link_packet_handler(on_packet):

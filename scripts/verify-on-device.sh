@@ -7,13 +7,20 @@
 #
 # Usage:
 #   ./scripts/verify-on-device.sh              # Auto-detect device
-#   ./scripts/verify-on-device.sh 10.0.0.71    # Specify device IP
+#   ./scripts/verify-on-device.sh <ip>         # Specify device IP
 #   ./scripts/verify-on-device.sh --test-only  # Skip build, run tests only
+#
+# Environment:
+#   COLUMBA_PHONE_IPS  Space-separated list of fallback IPs to try when no
+#                      device is discovered via `adb devices`. Example:
+#                      `COLUMBA_PHONE_IPS="192.0.2.10 192.0.2.11"`.
+#                      Unset → no auto-fallback.
+#   JAVA_HOME          JDK used to run Gradle. If unset, Android Studio's
+#                      bundled JBR is auto-detected from common locations.
 #
 # Requirements:
 #   - ADB installed and in PATH
 #   - Device connected via USB or adb connect
-#   - For network devices: 10.0.0.x range (phones at .71 and .249)
 #
 
 set -e
@@ -38,6 +45,21 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Output directory for artifacts
 OUTPUT_DIR="/tmp/columba-verify"
 mkdir -p "$OUTPUT_DIR"
+
+# JAVA_HOME resolution: honour any explicit env, else try the bundled
+# Android Studio JBR at common locations. Gradle needs Java; if none of
+# the candidates exist the script lets Gradle surface its own error.
+if [[ -z "${JAVA_HOME:-}" ]]; then
+    for candidate in \
+        "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+        "$HOME/android-studio/jbr" \
+        "/opt/android-studio/jbr"; do
+        if [[ -d "$candidate" ]]; then
+            export JAVA_HOME="$candidate"
+            break
+        fi
+    done
+fi
 
 # Parse arguments
 TEST_ONLY=false
@@ -87,18 +109,21 @@ find_device() {
     DEVICE_COUNT=$(echo "$DEVICES" | grep -c . || echo "0")
 
     if [[ "$DEVICE_COUNT" -eq 0 ]]; then
-        log_warn "No devices found. Trying known IPs in 10.0.0.x range..."
-
-        # Try known phone IPs
-        for ip in "10.0.0.71" "10.0.0.249"; do
-            for port in 5555 5556 5557; do
-                if timeout 2 adb connect "${ip}:${port}" 2>/dev/null | grep -q "connected"; then
-                    DEVICE_SERIAL="${ip}:${port}"
-                    log_success "Connected to $DEVICE_SERIAL"
-                    return 0
-                fi
+        # Optional fallback IP list, configured via env. Skipped when unset
+        # so the script stays usable on dev boxes that don't know about
+        # the operator's LAN.
+        if [[ -n "${COLUMBA_PHONE_IPS:-}" ]]; then
+            log_warn "No devices found. Trying COLUMBA_PHONE_IPS fallbacks..."
+            for ip in $COLUMBA_PHONE_IPS; do
+                for port in 5555 5556 5557; do
+                    if timeout 2 adb connect "${ip}:${port}" 2>/dev/null | grep -q "connected"; then
+                        DEVICE_SERIAL="${ip}:${port}"
+                        log_success "Connected to $DEVICE_SERIAL"
+                        return 0
+                    fi
+                done
             done
-        done
+        fi
 
         log_error "No devices found. Connect a device via USB or run: adb connect <ip>:5555"
         return 1
@@ -121,9 +146,6 @@ build_apk() {
     fi
 
     log_info "Building noSentry debug APK..."
-
-    # Set JAVA_HOME for Android builds
-    export JAVA_HOME=/home/tyler/android-studio/jbr
 
     if ./gradlew assembleNoSentryDebug --quiet; then
         APK_PATH="app/build/outputs/apk/noSentry/debug/app-noSentry-universal-debug.apk"
@@ -170,8 +192,6 @@ install_apk() {
 # Run instrumented smoke tests
 run_smoke_tests() {
     log_info "Running smoke tests on $DEVICE_SERIAL..."
-
-    export JAVA_HOME=/home/tyler/android-studio/jbr
 
     # Build test APK first
     log_info "Building test APK..."

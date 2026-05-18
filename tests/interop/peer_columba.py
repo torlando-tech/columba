@@ -93,12 +93,12 @@ def _unescape(s: str) -> str:
 
 class ColumbaPeer:
     """ADB-driven Columba peer. Construct with the emulator serial and
-    optionally the host rnsd address (defaults to `10.0.0.145:4242`)."""
+    optionally the host rnsd address (defaults to `192.0.2.10:4242`)."""
 
     def __init__(
         self,
         serial: str,
-        rnsd_host: str = "10.0.0.145",
+        rnsd_host: str = "192.0.2.10",
         rnsd_port: int = 4242,
         prop_node_hex: Optional[str] = None,
     ):

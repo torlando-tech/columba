@@ -8,7 +8,7 @@ Configuration (all env-driven, all optional, sensible defaults baked in):
 
     COLUMBA_EMULATOR_SERIAL   adb serial of the Columba-side emulator
                               (defaults to first arm64 device seen).
-    COLUMBA_RNSD_HOST         host running rnsd (default `10.0.0.145`).
+    COLUMBA_RNSD_HOST         host running rnsd (default `192.0.2.10`).
     COLUMBA_RNSD_PORT         rnsd TCP port (default `4242`).
     COLUMBA_PROP_NODE_HEX     lxmd propagation node hash for propagation
                               tests (default matches the launch-agent
@@ -36,7 +36,7 @@ from peer_meshchatx import MeshChatXPeer  # noqa: E402
 from peer_sideband import SidebandPeer  # noqa: E402
 
 
-DEFAULT_RNSD_HOST = "10.0.0.145"
+DEFAULT_RNSD_HOST = "192.0.2.10"
 DEFAULT_RNSD_PORT = 4242
 DEFAULT_PROP_NODE_HEX = "33f2621f135146ce30f0767d811af2b6"
 DEFAULT_SIDEBAND_SRC = os.path.expanduser("~/repos/Sideband")

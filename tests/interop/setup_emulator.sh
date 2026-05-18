@@ -12,7 +12,7 @@
 #
 # Env vars (all optional):
 #   COLUMBA_EMULATOR_SERIAL   adb serial (default: first emulator)
-#   COLUMBA_RNSD_HOST         host rnsd IP (default 10.0.0.145)
+#   COLUMBA_RNSD_HOST         host rnsd IP (default 192.0.2.10)
 #   COLUMBA_RNSD_PORT         host rnsd port (default 4242)
 #   COLUMBA_PROP_NODE_HEX     lxmd hash (default 33f2621f135146ce30f0767d811af2b6)
 #
@@ -21,7 +21,7 @@
 set -euo pipefail
 
 SERIAL="${COLUMBA_EMULATOR_SERIAL:-}"
-HOST="${COLUMBA_RNSD_HOST:-10.0.0.145}"
+HOST="${COLUMBA_RNSD_HOST:-192.0.2.10}"
 PORT="${COLUMBA_RNSD_PORT:-4242}"
 PROP_NODE="${COLUMBA_PROP_NODE_HEX:-33f2621f135146ce30f0767d811af2b6}"
 PKG="network.columba.app.debug"

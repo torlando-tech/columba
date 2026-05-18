@@ -4,7 +4,7 @@
 # Defaults match the existing dev setup on this machine. Override via env:
 #
 #   COLUMBA_EMULATOR_SERIAL   adb serial (default: auto-detect first emulator)
-#   COLUMBA_RNSD_HOST         host rnsd IP (default 10.0.0.145)
+#   COLUMBA_RNSD_HOST         host rnsd IP (default 192.0.2.10)
 #   COLUMBA_RNSD_PORT         host rnsd port (default 4242)
 #   COLUMBA_PROP_NODE_HEX     lxmd hash for propagation tests
 #                             (default 33f2621f135146ce30f0767d811af2b6)

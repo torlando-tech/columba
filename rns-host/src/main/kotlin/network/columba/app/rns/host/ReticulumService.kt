@@ -42,6 +42,12 @@ class ReticulumService : Service() {
         const val ACTION_RESTART_BLE = "network.columba.app.RESTART_BLE"
         const val ACTION_UPDATE_NOTIFICATION = "network.columba.app.service.UPDATE_NOTIFICATION"
         const val EXTRA_NETWORK_STATUS = "network_status"
+
+        // Grace window for treating ACTION_STOP as a stale redelivery during an
+        // Apply & Restart. The original STOP intent travels at most a few seconds
+        // (the time between :reticulum dying and Android auto-restarting the FGS),
+        // so 5s is plenty of headroom while still failing fast for genuine STOPs.
+        private const val STALE_STOP_GRACE_MS = 5_000L
     }
 
     /**
@@ -79,6 +85,12 @@ class ReticulumService : Service() {
     // don't pay the construction cost (and the rnsBackend dependency wiring) in
     // the rare case the service runs only via startService (no bindService caller).
     private var aidlServer: RnsBackendServer? = null
+
+    // Process-start timestamp used to detect stale ACTION_STOP redeliveries during
+    // an Apply & Restart cycle. See onStartCommand's ACTION_STOP branch for the
+    // full rationale. SystemClock.elapsedRealtime is monotonic and includes
+    // sleep, so this is robust to wall-clock changes.
+    private val processStartElapsedRealtimeMs: Long = android.os.SystemClock.elapsedRealtime()
 
     override fun onCreate() {
         super.onCreate()
@@ -179,8 +191,23 @@ class ReticulumService : Service() {
         // initialize() (OOM restart, force-stop recovery). No-op on first run
         // (no snapshot yet). Idempotent if UI races us — `runtime.start()`
         // already early-returns when running.
-        serviceScope.launch {
-            backendInitializer.initializeFromSnapshot(rnsBackend)
+        //
+        // Apply-in-progress gate: when InterfaceConfigManager is mid-restart
+        // (is_applying_config=true), the on-disk snapshot is STALE relative to
+        // what the UI is about to push via initialize(). Running the snapshot
+        // self-init here would (a) bring the stack up on the old interface
+        // list, and (b) race with the UI's incoming initialize() such that
+        // PythonRnsRuntime.start sees running=true on the second call and
+        // silently drops the FRESH config. Skip self-init and let the UI drive.
+        val isApplyingConfig =
+            getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                .getBoolean("is_applying_config", false)
+        if (isApplyingConfig) {
+            Log.i(TAG, "Skipping snapshot self-init — apply-in-progress; UI will drive initialize()")
+        } else {
+            serviceScope.launch {
+                backendInitializer.initializeFromSnapshot(rnsBackend)
+            }
         }
     }
 
@@ -226,6 +253,42 @@ class ReticulumService : Service() {
                 managers.notificationManager.startForeground(this)
             }
             ACTION_STOP -> {
+                // Apply-in-progress gate: when the UI is mid-apply, the ACTION_STOP we
+                // ourselves sent in InterfaceConfigManager.applyInterfaceChanges Step 4
+                // targets the OLD :reticulum pid. Android, however, has no way to drop
+                // an in-flight startForegroundService intent if the receiver dies first
+                // — the intent gets requeued onto whichever :reticulum process spawns
+                // next (via START_STICKY auto-restart of the crashed service). That
+                // stale STOP then System.exits the freshly-spawned process before it
+                // can bind for the UI's pending initialize(), surfacing as the
+                // "Failed to initialize Reticulum: Backend not ready" toast in the
+                // Apply & Restart dialog (punch-list item 10).
+                //
+                // The fix: when is_applying_config is set on a NEWLY-spawned service
+                // (process is younger than the stale STOP could possibly target), treat
+                // ACTION_STOP as a redelivery and consume the startId without exiting.
+                // The UI driving the apply will send its own ACTION_START + initialize()
+                // shortly. The genuine non-apply STOP path (user-initiated shutdown,
+                // user-toggled service kill) is unaffected because is_applying_config
+                // is false in those scenarios.
+                val isApplyingConfig =
+                    getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                        .getBoolean("is_applying_config", false)
+                val processAgeMs = android.os.SystemClock.elapsedRealtime() - processStartElapsedRealtimeMs
+                if (isApplyingConfig && processAgeMs < STALE_STOP_GRACE_MS) {
+                    Log.w(
+                        TAG,
+                        "Ignoring ACTION_STOP: apply-in-progress and process is only " +
+                            "${processAgeMs}ms old (likely a redelivery of the STOP that " +
+                            "killed the prior :reticulum pid during Apply & Restart)",
+                    )
+                    // Consume the startId so Android doesn't see an outstanding start
+                    // request when we eventually do exit. We deliberately do NOT call
+                    // System.exit — the snapshot self-init in onCreate is already in
+                    // flight and the UI will follow up with its own initialize.
+                    return START_STICKY
+                }
+
                 // Shutdown and stop service
                 Log.d(TAG, "Received ACTION_STOP - forcing process exit")
 

@@ -56,6 +56,15 @@ internal object RnsConfigFile {
             }
         }
         sb.appendLine("  panic_on_interface_error = No")
+        // Interface-discovery settings (RNS 1.1.x). Upstream `RNS.Reticulum`
+        // reads these from `[reticulum]` at construction (Reticulum.py:551,584)
+        // — there is no live-update path, which is why the VM routes discovery
+        // toggle / autoconnect slider / IFAC-only switch through a full restart
+        // when `hotReloadInterfaces = false`. Emit them on every build so the
+        // next-restart Reticulum() picks them up; default of `discover = no`
+        // and `autoconnect = 0` mirrors upstream's own off-by-default.
+        sb.appendLine("  discover_interfaces = ${yesNo(config.discoverInterfaces)}")
+        sb.appendLine("  autoconnect_discovered_interfaces = ${config.autoconnectDiscoveredInterfaces}")
         sb.appendLine()
         sb.appendLine("[logging]")
         sb.appendLine("  loglevel = ${logLevel(config.logLevel)}")

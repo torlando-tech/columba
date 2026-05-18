@@ -105,6 +105,36 @@ class RnsConfigFileTest {
     }
 
     @Test
+    fun `discovery settings render in reticulum section`() {
+        // RNS 1.1.x reads `discover_interfaces` + `autoconnect_discovered_interfaces`
+        // from `[reticulum]` at construction (Reticulum.py:551,584). The values must
+        // appear under `[reticulum]`, not inside any interface section, or upstream
+        // won't pick them up.
+        val out =
+            RnsConfigFile.build(
+                cfg().copy(
+                    discoverInterfaces = true,
+                    autoconnectDiscoveredInterfaces = 7,
+                ),
+            )
+        assertTrue(out.contains("discover_interfaces = Yes"))
+        assertTrue(out.contains("autoconnect_discovered_interfaces = 7"))
+        val reticulumIdx = out.indexOf("[reticulum]")
+        val interfacesIdx = out.indexOf("[interfaces]")
+        val discoverIdx = out.indexOf("discover_interfaces")
+        // The discovery lines must be between [reticulum] and [interfaces], not
+        // floating inside an interface block.
+        assertTrue(reticulumIdx >= 0 && discoverIdx > reticulumIdx && discoverIdx < interfacesIdx)
+    }
+
+    @Test
+    fun `discovery defaults render as off`() {
+        val out = RnsConfigFile.build(cfg())
+        assertTrue(out.contains("discover_interfaces = No"))
+        assertTrue(out.contains("autoconnect_discovered_interfaces = 0"))
+    }
+
+    @Test
     fun `skipAutoInterface omits AutoInterface data_port and group_id`() {
         val customAuto = InterfaceConfig.AutoInterface(
             groupId = "test-group",

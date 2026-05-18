@@ -1230,6 +1230,24 @@ class InterfaceManagementViewModel
                                         hasPendingChanges = false,
                                         applyChangesError = null,
                                     )
+                                // Force-refresh the interface status list shortly
+                                // after RNS is ready. The 5s poll loop catches up
+                                // eventually, but on the Python backend the push
+                                // flows (interfaceStatusFlow / debugInfoFlow) don't
+                                // re-subscribe across the :reticulum process kill +
+                                // respawn that Apply&Restart does, so without this
+                                // the user sees stale offline cards for up to 5s.
+                                // Two-shot poll: 500ms catches builtin interfaces
+                                // that come up during Reticulum() construction;
+                                // 3500ms catches ColumbaRNodeInterface which runs
+                                // its start() (BLE connect + radio configure) in
+                                // a daemon thread spawned at the end of __init__.
+                                viewModelScope.launch(ioDispatcher) {
+                                    kotlinx.coroutines.delay(500)
+                                    fetchInterfaceStatus()
+                                    kotlinx.coroutines.delay(3000)
+                                    fetchInterfaceStatus()
+                                }
                             },
                         )
                     }.onSuccess {

@@ -191,4 +191,9 @@ internal class ServerRnsTelephony(
         impl.setPttActiveLocally(active)
         Bundle.EMPTY
     }
+
+    override fun setIncomingEnabled(enabled: Boolean, cb: IRnsResultCallback) = dispatch(cb, scope) {
+        impl.setIncomingEnabled(enabled)
+        Bundle.EMPTY
+    }
 }

@@ -153,6 +153,28 @@ interface RnsTelephony {
     suspend fun setPttActiveLocally(active: Boolean)
 
     /**
+     * Master toggle for inbound voice-call reachability.
+     *
+     * `false` → the backend deregisters the `lxst.telephony` destination
+     * (python: `Transport.deregister_destination(dest)` via Chaquopy;
+     * kotlin: [Transport.deregisterDestination] on reticulum-kt) and hangs
+     * up any active call. Subsequent peer call attempts time out without
+     * reaching this device. Outbound calls continue to work — they
+     * construct an ephemeral OUT destination per call.
+     *
+     * `true` → the backend re-registers the destination, re-announces it,
+     * and resumes accepting inbound link requests.
+     *
+     * Both states are persisted via `ServiceSettingsAccessor.getAllowVoiceCalls`
+     * so the desired state survives `:reticulum` restarts. This AIDL call
+     * is the runtime delivery path; the SharedPreferences write done by
+     * the UI handles the cold-start path.
+     *
+     * Idempotent — applying the same state twice is a no-op.
+     */
+    suspend fun setIncomingEnabled(enabled: Boolean)
+
+    /**
      * True when [callState] is currently in any non-terminal phase
      * (Connecting / Ringing / Incoming / Active). Derived from
      * [callState] — does not cross the AIDL boundary on every call.

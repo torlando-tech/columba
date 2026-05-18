@@ -184,6 +184,10 @@ internal class ClientRnsTelephony(
     override suspend fun setPttActiveLocally(active: Boolean) {
         awaitResult { cb -> remote.setPttActiveLocally(active, cb) }
     }
+
+    override suspend fun setIncomingEnabled(enabled: Boolean) {
+        awaitResult { cb -> remote.setIncomingEnabled(enabled, cb) }
+    }
 }
 
 /** Snapshot read for the [CallState] StateFlow. */

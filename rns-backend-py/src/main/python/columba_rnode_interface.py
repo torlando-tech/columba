@@ -638,6 +638,26 @@ class ColumbaRNodeInterface(Interface):
         if not self.detected:
             raise IOError("Could not detect RNode device")
 
+        # Race-safety wait for firmware_ok. The _detect() request bundles
+        # CMD_DETECT + CMD_FW_VERSION + CMD_PLATFORM + CMD_MCU into one
+        # 4-frame KISS payload. Under BLE GATT, the RNode responds with all
+        # 4 frames in a single notification (observed: 17-byte burst
+        # `c00846c0 c0500155c0 c04870c0 c04971c0`). _read_loop parses the
+        # bytes sequentially, setting self.detected = True on the first
+        # frame (DETECT) and self.firmware_ok = True on the second frame
+        # (FW_VERSION). The DETECT-watch loop above polls every 100ms — once
+        # detected flips, it exits immediately. Python's GIL can preempt
+        # _read_loop between those two writes (any bytecode boundary), so
+        # the main thread can grab the GIL, see detected=True, and proceed
+        # to the firmware_ok check below before _read_loop has finished
+        # parsing the FW_VERSION frame. v0.10.x reference has the same race
+        # but only on BLE — over Classic SPP / USB serial, frames arrive in
+        # separate reads with kernel delays between them, hiding the race.
+        # Short bounded wait closes it without inventing an Event mechanism.
+        fw_wait_start = time.time()
+        while not self.firmware_ok and (time.time() - fw_wait_start) < 1.0:
+            time.sleep(0.02)
+
         if not self.firmware_ok:
             raise IOError(f"Invalid firmware version: {self.maj_version}.{self.min_version}")
 

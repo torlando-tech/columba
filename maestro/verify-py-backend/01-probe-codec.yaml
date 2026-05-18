@@ -55,11 +55,14 @@ tags:
 
 # ConversationCard rows live under the "Chats" SearchableTopAppBar in a
 # LazyColumn. We can't use a stable testTag (the cards don't set one),
-# so tap the first card by index. ProfileIcon is the leading element of
-# each card; tapping the row triggers onChatClick -> navigates to
+# so tap the first card by position. The first card sits just below the
+# TopAppBar — use 22% which is centered on the card regardless of how
+# many cards follow (30% worked when there were 2+ cards but lands in
+# the empty area below a single card). ProfileIcon is the leading element
+# of each card; tapping the row triggers onChatClick -> navigates to
 # MessagingScreen.
 - tapOn:
-    point: "50%,30%"
+    point: "50%,22%"
 
 # MessagingScreen TopAppBar renders the Voice call icon button. Wait for
 # it to be visible; this also confirms we made it into a conversation.
@@ -83,15 +86,27 @@ tags:
 - waitForAnimationToEnd:
     timeout: 5000
 
-# Capture the broken state. Expected (broken) screenshot characteristics:
-#   - Recommended badge (star) sits on "Medium Quality" (CodecProfile.DEFAULT
-#     fallback when probe fails or returns null bandwidth).
-#   - No PathInfoSection card with hops / bitrate / MTU. linkState comes
-#     from conversationLinkState which is null when no active link exists,
-#     and the broken probe never establishes one.
-# v0.10.x reference would show a specific Opus tier (chosen from
-# next_hop_bitrate_bps) and a populated path-info row.
+# Capture the initial dialog state. In the broken state the visible top
+# of the option list shows the Recommended badge on "Medium Quality"
+# (CodecProfile.DEFAULT fallback). In the fixed state, with a fast
+# loopback path between the two emulators, the next-hop bitrate
+# heuristic pushes the recommendation up to "Maximum Quality" (Opus
+# high), which is below the fold in the default scroll position — so
+# the visible top of the list has NO Recommended badge.
 - takeScreenshot: 01-probe-codec-dialog
+
+# Scroll within the dialog's option list and capture again so the
+# Recommended badge is visible in both broken (top, Medium Quality)
+# and fixed (bottom, Maximum Quality) modes. The scroll target is the
+# scrollable Column inside the dialog body; a swipe from the lower
+# third up to the upper third moves the list past the fold.
+- swipe:
+    start: "50%,60%"
+    end: "50%,30%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 01-probe-codec-dialog-scrolled
 
 # Close the dialog cleanly so the next flow can start from a known state.
 - tapOn: "Cancel"

@@ -50,6 +50,15 @@ class PythonRnsCore(
 ) : RnsCore {
     private companion object {
         const val TAG = "PythonRnsCore"
+        /** Max time we wait for a path to appear during a probe (ms). */
+        const val PATH_WAIT_MS = 5_000L
+        /** Poll interval while waiting for a path (ms). */
+        const val PATH_POLL_MS = 250L
+        /** Poll interval while waiting for link establishment (ms). */
+        const val LINK_POLL_MS = 100L
+        /** Lower bound on the link-establishment wait — guards against
+         *  tiny caller timeouts that would race the link setup. */
+        const val MIN_LINK_WAIT_MS = 1_000L
     }
 
     private val _networkStatus = MutableStateFlow<NetworkStatus>(NetworkStatus.SHUTDOWN)
@@ -399,26 +408,412 @@ class PythonRnsCore(
         deliveryMethod: String,
     ): LinkSpeedProbeResult =
         pyCall {
-            // Honest minimal probe: report no_path when there's no route. A full
-            // probe (establish a link, measure handshake rate / RTT / MTU) is
-            // on-device integration work — UI degrades gracefully on "error".
-            val hasPath = transport().callAttr("has_path", destinationHash.toPyBytes())
+            // Mirrors release/v0.10.x reticulum_wrapper.probe_link_speed:
+            //  1. Propagated mode → look at outbound_propagation_link +
+            //     backchannel_links for measured rates; otherwise return
+            //     success+heuristics (next-hop bitrate, hops).
+            //  2. Direct mode → reuse an existing direct/backchannel link
+            //     if one is ACTIVE, else establish a fresh link inline.
+            //  3. Always fall back to success+heuristics when we have
+            //     hops or next-hop bitrate, even if establishment fails.
+            //     UI codec recommendation only returns DEFAULT on truly
+            //     useless results, so degrading to bare "no_path"/"error"
+            //     means a worse UX than necessary.
+            Log.d(
+                TAG,
+                "probeLinkSpeed: dest=${destinationHash.toHex().take(16)} " +
+                    "method=$deliveryMethod",
+            )
+            val result = probeLinkSpeedInternal(destinationHash, timeoutSeconds, deliveryMethod)
+            Log.d(
+                TAG,
+                "probeLinkSpeed: status=${result.status} hops=${result.hops} " +
+                    "nextHopBps=${result.nextHopBitrateBps} estRate=${result.establishmentRateBps} " +
+                    "expRate=${result.expectedRateBps} mtu=${result.linkMtu}",
+            )
+            result
+        }
+
+    /**
+     * Probe a destination's link speed. Returns a fully-populated
+     * [LinkSpeedProbeResult] suitable for codec / image-compression
+     * recommendation.
+     *
+     * Strategy mirrors release/v0.10.x's `reticulum_wrapper.probe_link_speed`:
+     *  - For `propagated`: prefer the outbound propagation link's measured
+     *    `expected_rate`; fall back to heuristics (hops + first-hop bitrate).
+     *  - For `direct`: prefer an existing ACTIVE link in
+     *    `LXMRouter.direct_links` / `LXMRouter.backchannel_links`; else try
+     *    to establish a fresh link; on failure, still return heuristics
+     *    when we have useful info (hops, next-hop bitrate).
+     *
+     * The "always degrade to heuristics" path matters: even when a peer
+     * doesn't accept link establishment, the path-table entry tells us
+     * how many hops away they are and how fast the local interface is,
+     * which is enough for a sane codec tier recommendation.
+     */
+    @Suppress("LongMethod", "ReturnCount", "CyclomaticComplexMethod")
+    private fun probeLinkSpeedInternal(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float,
+        deliveryMethod: String,
+    ): LinkSpeedProbeResult {
+        val pyHash = destinationHash.toPyBytes()
+        val transport = transport()
+        val linkClass = runtime.rnsModule["Link"] ?: error("RNS.Link missing")
+        val activeStatus = linkClass["ACTIVE"]?.toJava(Int::class.javaObjectType)
+
+        // -- Heuristics gatherers (no link required) ---------------------
+        fun heuristicHops(): Int? = runCatching {
+            val has = transport.callAttr("has_path", pyHash)
                 ?.toJava(Boolean::class.javaObjectType) ?: false
-            LinkSpeedProbeResult(
-                status = if (hasPath) "error" else "no_path",
+            if (!has) null else transport.callAttr("hops_to", pyHash)
+                ?.toJava(Int::class.javaObjectType)
+        }.getOrNull()
+
+        fun heuristicNextHopBitrate(): Long? = runCatching {
+            val iface = transport.callAttr("next_hop_interface", pyHash)
+                ?.takeIf { it.toString() != "None" }
+                ?: return@runCatching null
+            // Some interface impls expose `bitrate` as int; coerce via Number.
+            val raw = runCatching { iface.get("bitrate") }.getOrNull()
+                ?: return@runCatching null
+            if (raw.toString() == "None") null
+            else runCatching { raw.toJava(Long::class.javaObjectType) }.getOrNull()
+                ?: runCatching { raw.toJava(Int::class.javaObjectType)?.toLong() }.getOrNull()
+        }.getOrNull()
+
+        // -- Helpers that read live RNS.Link metrics ---------------------
+        fun linkIsActive(link: PyObject): Boolean {
+            val status = runCatching { link["status"]?.toJava(Int::class.javaObjectType) }
+                .getOrNull()
+            return status != null && status == activeStatus
+        }
+
+        fun pyLong(call: PyObject?): Long? {
+            if (call == null || call.toString() == "None") return null
+            return runCatching { call.toJava(Long::class.javaObjectType) }.getOrNull()
+                ?: runCatching { call.toJava(Int::class.javaObjectType)?.toLong() }.getOrNull()
+                ?: runCatching { call.toJava(Double::class.javaObjectType)?.toLong() }.getOrNull()
+        }
+
+        fun pyDouble(call: PyObject?): Double? {
+            if (call == null || call.toString() == "None") return null
+            return runCatching { call.toJava(Double::class.javaObjectType) }.getOrNull()
+                ?: runCatching { call.toJava(Float::class.javaObjectType)?.toDouble() }.getOrNull()
+        }
+
+        fun pyInt(call: PyObject?): Int? {
+            if (call == null || call.toString() == "None") return null
+            return runCatching { call.toJava(Int::class.javaObjectType) }.getOrNull()
+        }
+
+        // `deliveryMethod` is implicit context — LinkSpeedProbeResult does not
+        // carry a delivery_method field (the caller knows which method they
+        // asked for), unlike the v0.10.x Python `get_link_stats` which writes
+        // it into the response dict.
+        fun linkStats(
+            link: PyObject,
+            reused: Boolean,
+        ): LinkSpeedProbeResult {
+            val establishmentRate =
+                pyLong(runCatching { link.callAttr("get_establishment_rate") }.getOrNull())
+            val expectedRate =
+                pyLong(runCatching { link.callAttr("get_expected_rate") }.getOrNull())
+            val rtt = pyDouble(runCatching { link["rtt"] }.getOrNull())
+            val mtu = pyInt(runCatching { link.callAttr("get_mtu") }.getOrNull())
+                ?: pyInt(runCatching { link["mtu"] }.getOrNull())
+            return LinkSpeedProbeResult(
+                status = "success",
+                establishmentRateBps = establishmentRate,
+                expectedRateBps = expectedRate,
+                rttSeconds = rtt,
+                hops = heuristicHops(),
+                linkReused = reused,
+                nextHopBitrateBps = heuristicNextHopBitrate(),
+                linkMtu = mtu,
+                error = null,
+            )
+        }
+
+        // Find an existing link to this destination (either an outbound
+        // direct_link or an inbound backchannel_link — both reuse the same
+        // ACTIVE state for codec recommendation).
+        fun findExistingLink(): PyObject? {
+            val router = runtime.lxmRouter ?: return null
+            val candidates = listOf("direct_links", "backchannel_links")
+            for (attr in candidates) {
+                val dict = runCatching { router[attr]?.takeIf { it.toString() != "None" } }
+                    .getOrNull() ?: continue
+                val link = runCatching { dict.callAttr("get", pyHash) }
+                    .getOrNull()?.takeIf { it.toString() != "None" }
+                if (link != null) return link
+            }
+            return null
+        }
+
+        // -- Branch 1: propagated delivery ------------------------------
+        if (deliveryMethod == "propagated") {
+            val router = runtime.lxmRouter
+            // Look for a measured expected_rate on any existing link to this
+            // peer; that's our best estimate of real throughput.
+            val backchannelExpected = findExistingLink()?.let { link ->
+                if (linkIsActive(link)) {
+                    pyLong(runCatching { link.callAttr("get_expected_rate") }.getOrNull())
+                } else {
+                    null
+                }
+            }
+            val propLink = router?.get("outbound_propagation_link")
+                ?.takeIf { it.toString() != "None" }
+            if (propLink != null && linkIsActive(propLink)) {
+                Log.d(TAG, "probeLinkSpeed[propagated]: using outbound_propagation_link")
+                val stats = linkStats(propLink, reused = true)
+                // Prefer per-peer backchannel rate over the propagation
+                // link's, when available — it's specific to this destination.
+                return if (backchannelExpected != null && backchannelExpected > 0) {
+                    stats.copy(expectedRateBps = backchannelExpected)
+                } else {
+                    stats
+                }
+            }
+            // No active propagation link: heuristics-only success.
+            return LinkSpeedProbeResult(
+                status = "success",
+                establishmentRateBps = null,
+                expectedRateBps = backchannelExpected,
+                rttSeconds = null,
+                hops = heuristicHops(),
+                linkReused = false,
+                nextHopBitrateBps = heuristicNextHopBitrate(),
+                linkMtu = null,
+                error = null,
+            )
+        }
+
+        // -- Branch 2: direct delivery ----------------------------------
+        // Existing active link → reuse + return its measured stats.
+        findExistingLink()?.let { link ->
+            if (linkIsActive(link)) {
+                Log.d(TAG, "probeLinkSpeed[direct]: reusing existing link")
+                return linkStats(link, reused = true)
+            }
+        }
+
+        // No existing link — try to establish one inline. Mirrors
+        // reticulum_wrapper.establish_link from release/v0.10.x. Item 2 is
+        // fixing establishConversationLink in a sibling worktree; both
+        // methods need this same establish-link-with-callback machinery,
+        // so duplicating it here is acceptable until the dust settles.
+        val establishedResult = tryEstablishLink(destinationHash, timeoutSeconds)
+        val establishedLink = establishedResult.first
+        val establishError = establishedResult.second
+
+        if (establishedLink != null && linkIsActive(establishedLink)) {
+            Log.d(TAG, "probeLinkSpeed[direct]: established fresh link")
+            return linkStats(establishedLink, reused = false)
+        }
+
+        // Establishment failed. Always fall back to heuristics when we
+        // have useful info — this is the path that makes the UI codec
+        // recommendation non-trivial when the peer is unreachable but
+        // path-table data exists (the common emulator/local-mesh case).
+        val hops = heuristicHops()
+        val nextHopBps = heuristicNextHopBitrate()
+        if (hops != null || nextHopBps != null) {
+            Log.d(
+                TAG,
+                "probeLinkSpeed[direct]: establishment failed but heuristics available " +
+                    "(hops=$hops, nextHopBps=$nextHopBps)",
+            )
+            return LinkSpeedProbeResult(
+                status = "success",
                 establishmentRateBps = null,
                 expectedRateBps = null,
                 rttSeconds = null,
-                hops = if (hasPath) {
-                    transport().callAttr("hops_to", destinationHash.toPyBytes())
-                        ?.toJava(Int::class.javaObjectType)
-                } else {
-                    null
-                },
+                hops = hops,
                 linkReused = false,
-                error = if (hasPath) "probeLinkSpeed not yet implemented for python backend" else null,
+                nextHopBitrateBps = nextHopBps,
+                linkMtu = null,
+                error = null,
             )
         }
+
+        // Truly no info — return the most specific failure code.
+        val status = when {
+            establishError == null -> "no_path"
+            establishError.contains("Identity not known", ignoreCase = true) -> "no_identity"
+            establishError.contains("No path", ignoreCase = true) -> "no_path"
+            establishError.contains("Timeout", ignoreCase = true) -> "timeout"
+            else -> "failed"
+        }
+        return LinkSpeedProbeResult(
+            status = status,
+            establishmentRateBps = null,
+            expectedRateBps = null,
+            rttSeconds = null,
+            hops = null,
+            linkReused = false,
+            nextHopBitrateBps = null,
+            linkMtu = null,
+            error = establishError,
+        )
+    }
+
+    /**
+     * Attempt to establish a fresh `RNS.Link` to [destinationHash], waiting up
+     * to [timeoutSeconds] for the established callback to fire.
+     *
+     * Returns the live link (active or otherwise) + an error string when
+     * something went wrong. The link is registered under
+     * `LXMRouter.direct_links[recipient_dest.hash]` so subsequent reuse
+     * (in `probeLinkSpeed` or `establishConversationLink`) can find it; on
+     * failure the entry is cleaned up.
+     *
+     * Mirrors release/v0.10.x `reticulum_wrapper.establish_link` lines
+     * 6447-6727 — kept as a local helper rather than calling out to
+     * `establishLink` because that method (a) doesn't run a callback and
+     * (b) doesn't wait for ACTIVE state.
+     */
+    @Suppress(
+        "LongMethod",
+        "ReturnCount",
+        "TooGenericExceptionCaught",
+        "CyclomaticComplexMethod",
+    )
+    private fun tryEstablishLink(
+        destinationHash: ByteArray,
+        timeoutSeconds: Float,
+    ): Pair<PyObject?, String?> {
+        val router = runtime.lxmRouter
+            ?: return null to "Backend router not ready"
+        val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
+        val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+        val linkClass = runtime.rnsModule["Link"] ?: error("RNS.Link missing")
+        val activeStatus = linkClass["ACTIVE"]?.toJava(Int::class.javaObjectType)
+        val pyHash = destinationHash.toPyBytes()
+
+        // Recall identity. Try direct, then from_identity_hash variant.
+        val recipientIdentity = try {
+            identityClass.callAttr("recall", pyHash)
+                ?.takeIf { it.toString() != "None" }
+                ?: identityClass.callAttr("recall", pyHash, true)
+                    ?.takeIf { it.toString() != "None" }
+                ?: runtime.identities[destinationHash.toHex()]
+        } catch (e: Throwable) {
+            Log.w(TAG, "probeLinkSpeed: Identity.recall failed: ${e.message}")
+            null
+        }
+        if (recipientIdentity == null) {
+            return null to "Identity not known"
+        }
+
+        // Build the LXMF delivery destination (links go to the lxmf/delivery
+        // app destination, same as direct LXMF sends).
+        val recipientDest = try {
+            runtime.rnsModule.callAttr(
+                "Destination",
+                recipientIdentity,
+                destClass["OUT"] ?: error("Destination.OUT missing"),
+                destClass["SINGLE"] ?: error("Destination.SINGLE missing"),
+                "lxmf",
+                "delivery",
+            )
+        } catch (e: Throwable) {
+            return null to "Destination construction failed: ${e.message}"
+        }
+        val recipientDestHash = runCatching {
+            recipientDest["hash"]?.toJava(ByteArray::class.java)
+        }.getOrNull() ?: destinationHash
+        val recipientHashPy = recipientDestHash.toPyBytes()
+
+        val directLinks = router["direct_links"]?.takeIf { it.toString() != "None" }
+        val backchannelLinks = router["backchannel_links"]?.takeIf { it.toString() != "None" }
+
+        // Existing-link recheck under the *created* destination hash (links
+        // are keyed under recipient_dest.hash, which may differ from the
+        // input hash when callers pass an identity hash).
+        listOfNotNull(directLinks, backchannelLinks).forEach { dict ->
+            val existing = runCatching { dict.callAttr("get", recipientHashPy) }
+                .getOrNull()?.takeIf { it.toString() != "None" }
+            if (existing != null) {
+                val status = runCatching { existing["status"]?.toJava(Int::class.javaObjectType) }
+                    .getOrNull()
+                if (status == activeStatus) {
+                    return existing to null
+                }
+            }
+        }
+
+        // Wait for path if missing (up to 5s — keeps total probe latency
+        // bounded under the caller's timeoutSeconds budget).
+        val transport = transport()
+        var hasPath = runCatching {
+            transport.callAttr("has_path", recipientHashPy)
+                ?.toJava(Boolean::class.javaObjectType) ?: false
+        }.getOrNull() ?: false
+        if (!hasPath) {
+            runCatching { transport.callAttr("request_path", recipientHashPy) }
+            val pathDeadlineMs = System.currentTimeMillis() + PATH_WAIT_MS
+            while (!hasPath && System.currentTimeMillis() < pathDeadlineMs) {
+                Thread.sleep(PATH_POLL_MS)
+                hasPath = runCatching {
+                    transport.callAttr("has_path", recipientHashPy)
+                        ?.toJava(Boolean::class.javaObjectType) ?: false
+                }.getOrNull() ?: false
+            }
+            if (!hasPath) {
+                return null to "No path available"
+            }
+        }
+
+        // Create RNS.Link and poll status until ACTIVE — same pattern as
+        // PythonRnsNomadnet.establishLink. We deliberately skip the
+        // established_callback indirection: it would need a SAM-callable
+        // Kotlin->Python bridge (cf. StampGeneratorCallback), and the
+        // status field flips to ACTIVE inside link's internal handshake
+        // path before the callback returns, so polling sees the same
+        // state.
+        val link = try {
+            runtime.rnsModule.callAttr("Link", recipientDest)
+        } catch (e: Throwable) {
+            return null to "Link construction failed: ${e.message}"
+        }
+
+        // Register in router.direct_links so subsequent reuse sees this link.
+        runCatching {
+            directLinks?.callAttr("__setitem__", recipientHashPy, link)
+        }
+
+        val timeoutMs = (timeoutSeconds * 1000).toLong().coerceAtLeast(MIN_LINK_WAIT_MS)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        val closedStatus = linkClass["CLOSED"]?.toJava(Int::class.javaObjectType)
+        while (System.currentTimeMillis() < deadline) {
+            val status = runCatching { link["status"]?.toJava(Int::class.javaObjectType) }
+                .getOrNull()
+            if (status == activeStatus) {
+                // Identify on the link so the peer adds us to backchannel_links.
+                // Best-effort — failure doesn't break codec recommendation.
+                runCatching {
+                    val ourIdentity = runtime.localIdentity ?: router["identity"]
+                    if (ourIdentity != null && ourIdentity.toString() != "None") {
+                        link.callAttr("identify", ourIdentity)
+                    }
+                }
+                return link to null
+            }
+            if (status != null && closedStatus != null && status == closedStatus) {
+                runCatching { directLinks?.callAttr("pop", recipientHashPy, null) }
+                return null to "Link closed during establishment"
+            }
+            Thread.sleep(LINK_POLL_MS)
+        }
+
+        // Timeout.
+        runCatching { link.callAttr("teardown") }
+        runCatching { directLinks?.callAttr("pop", recipientHashPy, null) }
+        return null to "Timeout"
+    }
 
     override suspend fun isTransportEnabled(): Boolean =
         pyCall {

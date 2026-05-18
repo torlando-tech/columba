@@ -65,6 +65,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var rnsCore: RnsCore
     private lateinit var rnsLxmf: RnsLxmf
     private lateinit var rnsTransportAdmin: RnsTransportAdmin
+    private lateinit var rnsTelephony: network.columba.app.rns.api.RnsTelephony
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
@@ -107,6 +108,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         rnsCore = mockk()
         rnsLxmf = mockk()
         rnsTransportAdmin = mockk()
+        rnsTelephony = mockk(relaxed = true)
         interfaceConfigManager = mockk()
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
@@ -186,6 +188,8 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         // Privacy settings flows
         every { settingsRepository.blockUnknownSendersFlow } returns MutableStateFlow(false)
+        every { settingsRepository.allowCallsFromContactsOnlyFlow } returns MutableStateFlow(false)
+        every { settingsRepository.allowVoiceCallsFlow } returns MutableStateFlow(true)
 
         // Telemetry request settings flows
         every { settingsRepository.telemetryRequestEnabledFlow } returns MutableStateFlow(false)
@@ -236,6 +240,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             rnsCore = rnsCore,
             rnsLxmf = rnsLxmf,
             rnsTransportAdmin = rnsTransportAdmin,
+            rnsTelephony = rnsTelephony,
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,

@@ -27,6 +27,8 @@ fun PrivacyCard(
     onExpandedChange: (Boolean) -> Unit,
     blockUnknownSenders: Boolean,
     onBlockUnknownSendersChange: (Boolean) -> Unit,
+    allowCallsFromContactsOnly: Boolean,
+    onAllowCallsFromContactsOnlyChange: (Boolean) -> Unit,
     blockedPeerCount: Int = 0,
     onNavigateToBlockedUsers: () -> Unit = {},
 ) {
@@ -51,6 +53,40 @@ fun PrivacyCard(
                     "Anyone can send you messages, including unknown senders."
                 },
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Calls-from-contacts-only toggle row (independent of block_unknown_senders).
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Calls from contacts only",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
+            )
+            Switch(
+                checked = allowCallsFromContactsOnly,
+                onCheckedChange = onAllowCallsFromContactsOnlyChange,
+            )
+        }
+        Text(
+            text =
+                if (allowCallsFromContactsOnly) {
+                    "Only contacts can call you. Other callers' link attempts are silently dropped."
+                } else {
+                    "Anyone can call you, including unknown callers."
+                },
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 

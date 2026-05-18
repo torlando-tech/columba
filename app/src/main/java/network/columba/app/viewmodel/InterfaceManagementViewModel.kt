@@ -1194,9 +1194,23 @@ class InterfaceManagementViewModel
                             applyChangesError = null,
                         )
 
-                    // Run on IO dispatcher to avoid blocking UI with IPC calls
+                    // Run on IO dispatcher to avoid blocking UI with IPC calls.
+                    // Dismiss the spinner via onServiceReady (fires after RNS Step 9
+                    // critical-path init) rather than waiting for the suspend to return.
+                    // On a device with thousands of stored peers, Steps 10-12 (batched
+                    // peer/announce identity restore, managers) run for minutes after
+                    // RNS is already up and usable — blocking the UI on that bookkeeping
+                    // makes the "Apply Changes" modal look hung even though the user
+                    // could already act on the new config. The .onSuccess/.onFailure
+                    // branches still fire at the true end of the apply (Step 12) to
+                    // surface the final outcome toast / error banner.
                     withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        configManager.applyInterfaceChanges()
+                        configManager.applyInterfaceChanges(
+                            onServiceReady = {
+                                _state.value =
+                                    _state.value.copy(isApplyingChanges = false)
+                            },
+                        )
                     }.onSuccess {
                         _state.value =
                             _state.value.copy(

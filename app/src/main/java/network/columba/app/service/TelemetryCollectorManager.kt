@@ -354,8 +354,17 @@ class TelemetryCollectorManager
 
         /**
          * Enable or disable automatic telemetry sending.
+         *
+         * Gated on the master `Settings → Location Sharing` toggle: when
+         * the master flag is OFF, enabling group-telemetry sending is
+         * refused and the persisted state stays false. Disabling is
+         * always allowed.
          */
         suspend fun setEnabled(enabled: Boolean) {
+            if (enabled && !settingsRepository.locationSharingEnabledFlow.first()) {
+                Log.w(TAG, "TelemetryCollector.setEnabled(true) refused: master location sharing is OFF")
+                return
+            }
             settingsRepository.saveTelemetryCollectorEnabled(enabled)
         }
 

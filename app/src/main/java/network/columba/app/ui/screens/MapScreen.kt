@@ -220,6 +220,15 @@ fun MapScreen(
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
 
+    // Observe location-sharing refusals (master-gate OFF) and show Toast.
+    // The actual sharing-start call was already refused inside
+    // LocationSharingManager; this is purely user feedback.
+    LaunchedEffect(Unit) {
+        viewModel.locationSharingMessage.collect { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     // Debug logging for permission state
     Log.d(
         "MapScreen",

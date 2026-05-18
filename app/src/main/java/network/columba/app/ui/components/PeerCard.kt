@@ -302,11 +302,17 @@ fun InterfaceTypeIcon(
     interfaceType: String?,
     modifier: Modifier = Modifier,
 ) {
-    val type =
-        interfaceType?.let {
-            runCatching { InterfaceType.valueOf(it) }.getOrNull()
-        } ?: return
-
+    // `InterfaceType.fromName` handles every observed variant: new
+    // canonical storage values ("AUTO", "TCP_CLIENT", …), legacy storage
+    // values ("AUTO_INTERFACE", "ANDROID_BLE"), AND raw RNS interface
+    // toString output ("AutoInterfacePeer[wlan0/fe80::…]", …). Falls
+    // through to UNKNOWN for nulls / unrecognized strings, then
+    // `interfaceTypeIconData` returns null for UNKNOWN so the icon
+    // disappears gracefully without throwing. Previously this used
+    // `valueOf` which threw on every non-exact identifier match — every
+    // legacy-stored row + every raw runtime string hit the catch and
+    // the icon never rendered.
+    val type = InterfaceType.fromName(interfaceType)
     val data = interfaceTypeIconData(type) ?: return
 
     Icon(

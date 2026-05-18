@@ -194,6 +194,7 @@ class PythonEventBridge {
                 stampCost = stampCost,
                 stampCostFlexibility = stampFlex,
                 peeringCost = peeringCost,
+                receivingInterface = payload.dictStr("receiving_interface"),
             )
             _announces.tryEmit(event)
         }.onFailure { Log.e(TAG, "announce translation failed", it) }

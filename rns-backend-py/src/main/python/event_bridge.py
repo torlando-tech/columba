@@ -473,12 +473,41 @@ class _AnnounceHandler:
         # "unknown" aspect, and collide into the "Site" filter.
         if enrichment.get("aspect") is None:
             return
+        # Receiving interface annotation. RNS doesn't surface a per-announce
+        # `received_on` interface on `received_announce(...)` — we have to
+        # look it up from `Transport.path_table[destination_hash][5]` (the
+        # IDX_PT_RVCD_IF slot). Same fallback the LXMF delivery handler
+        # uses below. Without this every announce shipped to Kotlin had
+        # `receiving_interface = ""`, so 99% of `announces` rows landed
+        # with `receivingInterfaceType = "UNKNOWN"` and the announce-stream
+        # interface-type icon never rendered.
+        recv_iface_name = None
+        try:
+            path_entry = RNS.Transport.path_table.get(destination_hash)
+            if path_entry is not None and len(path_entry) > 5:
+                iface = path_entry[5]
+                if iface is not None:
+                    # `.name` is set on most Interface subclasses but blank
+                    # on AutoInterfacePeer (its `__init__` only writes
+                    # `ifname` + `addr`). Fall back to `__str__()` for those.
+                    recv_iface_name = (
+                        getattr(iface, "name", None)
+                        or str(iface)
+                        or type(iface).__name__
+                    )
+        except Exception as e:  # noqa: BLE001 — annotation is best-effort, never fatal
+            RNS.log(
+                f"event_bridge: receiving_interface lookup failed: {e}",
+                RNS.LOG_DEBUG,
+            )
+
         payload = {
             "destination_hash": _hex(destination_hash),
             "identity_hash": _hex(announced_identity.hash) if announced_identity is not None else None,
             "public_key": _hex(announced_identity.get_public_key()) if announced_identity is not None else None,
             "app_data": _hex(app_data),
             "announce_packet_hash": _hex(announce_packet_hash),
+            "receiving_interface": recv_iface_name,
         }
         payload.update(enrichment)
         _emit(_on_announce, payload)

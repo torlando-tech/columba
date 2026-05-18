@@ -147,11 +147,11 @@ internal object RnsConfigFile {
                 //     internal dispatch (Reticulum.py:900) picks it up.
                 //   • BLE / Classic / USB — upstream needs jnius for
                 //     Bluetooth (broken under Chaquopy). We bundle a
-                //     Columba-authored RNS.Interface (rnode_interface.py)
-                //     that bridges via KotlinRNodeBridge / KotlinUSBBridge.
-                //     Wiring is round 2 — currently writes the section but
-                //     RNS's external loader can't find the file because
-                //     deploy_bundled_interfaces doesn't yet copy it.
+                //     Columba-authored RNS.Interface
+                //     (columba_rnode_interface.py, deployed by
+                //     event_bridge.deploy_bundled_interfaces to
+                //     <configdir>/interfaces/ColumbaRNodeInterface.py) that
+                //     bridges via KotlinRNodeBridge / KotlinUSBBridge.
                 if (iface.connectionMode == "tcp") {
                     val host = iface.tcpHost
                     if (host.isNullOrBlank()) {
@@ -176,9 +176,10 @@ internal object RnsConfigFile {
                     sb.appendLine("    mode = ${iface.mode}")
                 } else {
                     // BLE / Classic / USB — bundled custom interface path.
-                    // Deployment + Hilt-wiring of KotlinRNodeBridge is
-                    // tracked separately (see RNode round-2 plan).
-                    sb.appendLine("    # RNode (${iface.connectionMode}) — bundled custom interface; needs round-2 wire-up")
+                    // ColumbaRNodeInterface bridges to KotlinRNodeBridge
+                    // (BLE/Classic) and KotlinUSBBridge (USB) on the Kotlin
+                    // side via event_bridge / usb_bridge slim-Python
+                    // accessors. See columba_rnode_interface.py.
                     sb.appendLine("    type = ColumbaRNodeInterface")
                     sb.appendLine("    enabled = yes")
                     sb.appendLine("    connection_mode = ${iface.connectionMode}")
@@ -186,12 +187,19 @@ internal object RnsConfigFile {
                         sb.appendLine("    target_device_name = ${iface.targetDeviceName}")
                     }
                     iface.usbDeviceId?.let { sb.appendLine("    usb_device_id = $it") }
+                    iface.usbVendorId?.let { sb.appendLine("    usb_vendor_id = $it") }
+                    iface.usbProductId?.let { sb.appendLine("    usb_product_id = $it") }
                     sb.appendLine("    frequency = ${iface.frequency}")
                     sb.appendLine("    bandwidth = ${iface.bandwidth}")
                     sb.appendLine("    txpower = ${iface.txPower}")
                     sb.appendLine("    spreadingfactor = ${iface.spreadingFactor}")
                     sb.appendLine("    codingrate = ${iface.codingRate}")
+                    iface.stAlock?.let { sb.appendLine("    st_alock = $it") }
+                    iface.ltAlock?.let { sb.appendLine("    lt_alock = $it") }
                     sb.appendLine("    mode = ${iface.mode}")
+                    if (iface.enableFramebuffer) sb.appendLine("    enable_framebuffer = yes")
+                    iface.networkName?.let { sb.appendLine("    network_name = $it") }
+                    iface.passphrase?.let { sb.appendLine("    passphrase = $it") }
                 }
             }
             is InterfaceConfig.AndroidBLE -> {

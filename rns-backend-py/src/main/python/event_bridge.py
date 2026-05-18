@@ -146,19 +146,25 @@ def get_ble_bridge():
     return _ble_bridge
 
 
-# Slot for the AndroidRNodeHostBridge instance (wraps KotlinRNodeBridge for
-# Classic/BLE + KotlinUSBBridge for USB-serial). Populated by Kotlin via
-# `set_rnode_bridge(...)` at runtime start, consulted by
-# `rnode_interface.ColumbaRNodeInterface._get_kotlin_bridge()` when the
-# interface's connection initialiser runs. Replaces the legacy v0.10.x
-# `reticulum_wrapper.kotlin_rnode_bridge` accessor — the dual-build's
-# slim-Python rule has no reticulum_wrapper to hold instance state.
+# Slot for the KotlinRNodeBridge instance (Classic SPP / BLE GATT to RNode
+# hardware). Populated by Kotlin via `set_rnode_bridge(...)` at runtime
+# start, consulted by `columba_rnode_interface.ColumbaRNodeInterface.
+# _get_kotlin_bridge()` when the interface's connection initialiser runs.
+# Replaces the legacy v0.10.x `reticulum_wrapper.kotlin_rnode_bridge`
+# accessor — the dual-build's slim-Python rule has no reticulum_wrapper to
+# hold instance state.
+#
+# USB-serial RNode connections use a separate slot in `usb_bridge.py`
+# (set_usb_bridge / get_usb_bridge) — the two bridge surfaces have different
+# constructor / method shapes so they're kept separate rather than wrapped.
 _rnode_bridge = None
 
 
 def set_rnode_bridge(bridge):
-    """Hand an AndroidRNodeHostBridge (or compatible duck-typed bridge with
-    `openBleSerial`/`openUsbSerial`) to the Python-side RNode interface."""
+    """Hand a `KotlinRNodeBridge` (or compatible duck-typed bridge exposing
+    `connect(deviceName, mode)` / `disconnect()` / `writeSync(bytes)` /
+    `read(): ByteArray` / `getRssi()` / `isConnected()`) to the Python-side
+    RNode interface."""
     global _rnode_bridge
     _rnode_bridge = bridge
 
@@ -211,15 +217,10 @@ def deploy_bundled_interfaces(storage_path):
         ("ble_reticulum", "BLEInterface.py", interfaces_dir, "BLEInterface.py"),
         ("ble_modules", "android_ble_interface.py", interfaces_dir, "AndroidBLE.py"),
         ("ble_modules", "android_ble_driver.py", drivers_dir, "android_ble_driver.py"),
-        # ColumbaRNodeInterface — Columba-authored RNS.Interface subclass that
-        # speaks KISS to RNode LoRa hardware over Bluetooth Classic/BLE/USB.
-        # The interface module sits at the top level of the slim Python tree
-        # rather than inside a package because it doesn't depend on a sibling
-        # package (unlike ble_modules.android_ble_driver). rnode_interface
-        # itself is a top-level module so we read its bytes via the `RNS`
-        # package's pkgutil context — pkgutil.get_data wants a package as
-        # first arg. Workaround: read the module's __file__ directly post-
-        # import. Done below the plan loop.
+        # ColumbaRNodeInterface deployment is handled separately below the
+        # loop — it lives at the top level of the slim Python tree (not
+        # inside a package) so `pkgutil.get_data` can't reach it. We read
+        # the module's __file__ post-import instead.
     ]
 
     # Drivers package marker — AndroidBLE.py imports from drivers.android_ble_driver.
@@ -246,13 +247,44 @@ def deploy_bundled_interfaces(storage_path):
                 RNS.LOG_ERROR,
             )
 
-    # NOTE: ColumbaRNodeInterface.py deployment intentionally deferred.
-    # TCP-mode RNode uses upstream `RNS.RNodeInterface` (which supports
-    # `port = tcp://host:port` natively) — no Columba file needed. BLE +
-    # USB modes WILL need a dedicated `columba_rnode_interface.py` here
-    # since upstream RNS's BLE path uses jnius (incompatible with
-    # Chaquopy) and there's no upstream USB-over-Android-bridge path
-    # at all. That work is round 2.
+    # ColumbaRNodeInterface — Columba-authored RNS.Interface subclass that
+    # speaks KISS to RNode LoRa hardware over Bluetooth Classic/BLE/USB.
+    # The interface module sits at the top level of the slim Python tree
+    # rather than inside a package because it doesn't depend on a sibling
+    # package (unlike ble_modules.android_ble_driver), so
+    # `pkgutil.get_data` (which needs a package as its first arg) can't
+    # reach it. Workaround: import the module to trigger Chaquopy's
+    # AssetExtract, then read bytes from the module's `__file__`. The
+    # destination is renamed snake_case → PascalCase
+    # (columba_rnode_interface.py → ColumbaRNodeInterface.py) so it
+    # matches the `type = ColumbaRNodeInterface` directive emitted by
+    # `RnsConfigFile.kt`. Failure is logged but non-fatal: BLE/USB RNode
+    # support is degraded, the rest of the stack still comes up.
+    try:
+        import columba_rnode_interface as _crni_mod
+        src_path = getattr(_crni_mod, "__file__", None)
+        if src_path is None:
+            RNS.log(
+                "event_bridge: columba_rnode_interface has no __file__ — "
+                "BLE/USB RNode interface will not be deployed",
+                RNS.LOG_ERROR,
+            )
+        else:
+            dest = os.path.join(interfaces_dir, "ColumbaRNodeInterface.py")
+            with open(src_path, "rb") as f:
+                data = f.read()
+            with open(dest, "wb") as f:
+                f.write(data)
+            RNS.log(
+                f"event_bridge: deployed ColumbaRNodeInterface.py "
+                f"({len(data)} bytes) to {dest}",
+                RNS.LOG_DEBUG,
+            )
+    except Exception as e:  # noqa: BLE001
+        RNS.log(
+            f"event_bridge: failed to deploy ColumbaRNodeInterface.py: {e}",
+            RNS.LOG_ERROR,
+        )
 
 
 def reset_reticulum_for_restart():

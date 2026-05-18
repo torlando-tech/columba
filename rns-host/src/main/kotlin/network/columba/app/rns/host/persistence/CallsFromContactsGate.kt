@@ -19,16 +19,21 @@ import network.columba.app.rns.host.di.ServiceDatabaseProvider
  * indistinguishable from "remote went away" — no `STATUS_BUSY`, no
  * `STATUS_REJECTED`, no notification on this device.
  *
- * The lookup walks the same two indices used elsewhere in the persistence
- * layer (see [ServicePersistenceManager.shouldBlockUnknownSender]):
+ * The lookup runs as a single indexed JOIN — `contactExistsByIdentityHash`
+ * walks contacts → announces by `destinationHash` and filters on
+ * `computedIdentityHash`. The earlier two-step shape (`getAnnounceByIdentityHash`
+ * then `contactExists(announce.destinationHash, owner)`) silently dropped
+ * contacts whose peer announces both an LXMF and an LXST destination —
+ * `LIMIT 1` could return the LXST row while the contact-add flow only stores
+ * the LXMF row, so the (dest, owner) check failed even though the peer was a
+ * known contact. The JOIN considers every cross-linked destination at once.
  *
- *   1. `announceDao.getAnnounceByIdentityHash(identityHashHex)` to translate
- *      the inbound RNS identity hash into the destination hash the contacts
- *      table is keyed on. No announce → treat as unknown (drop).
- *   2. `localIdentityDao.getActiveIdentitySync()` to find the current
+ *   1. `localIdentityDao.getActiveIdentitySync()` to find the current
  *      active local identity. Missing → fail open (allow).
- *   3. `contactDao.contactExists(announce.destinationHash, active.identityHash)`
- *      to confirm the (destination, owner) pair is in the contacts table.
+ *   2. `contactDao.contactExistsByIdentityHash(callerIdentity, owner)`
+ *      returns true if ANY announce row with `computedIdentityHash =
+ *      callerIdentity` has a `destinationHash` in the contacts table for
+ *      this owner.
  *
  * Any other exception inside the gate logs and returns `false` (allow). This
  * mirrors the fail-open semantics of `block_unknown_senders` for messages so
@@ -46,7 +51,6 @@ class CallsFromContactsGate(
     }
 
     private val database: ColumbaDatabase by lazy { ServiceDatabaseProvider.getDatabase(context) }
-    private val announceDao by lazy { database.announceDao() }
     private val contactDao by lazy { database.contactDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
 
@@ -69,24 +73,18 @@ class CallsFromContactsGate(
                 // sync-on-receive shape.
                 runBlocking(Dispatchers.IO) { // THREADING: allowed — inbound-link callback requires synchronous gate decision
                     val normalised = identityHashHex.lowercase()
-                    val announce = announceDao.getAnnounceByIdentityHash(normalised)
-                    if (announce == null) {
-                        Log.d(TAG, "Drop: no announce for $normalised")
-                        true
+                    val active = localIdentityDao.getActiveIdentitySync()
+                    if (active == null) {
+                        // No active local identity — fail open. We can't
+                        // meaningfully check contacts without an owner.
+                        Log.w(TAG, "Allow: no active local identity, contacts check skipped")
+                        false
                     } else {
-                        val active = localIdentityDao.getActiveIdentitySync()
-                        if (active == null) {
-                            // No active local identity — fail open. We can't
-                            // meaningfully check contacts without an owner.
-                            Log.w(TAG, "Allow: no active local identity, contacts check skipped")
-                            false
-                        } else {
-                            val known = contactDao.contactExists(announce.destinationHash, active.identityHash)
-                            if (!known) {
-                                Log.d(TAG, "Drop: ${announce.destinationHash.take(16)} not a contact of ${active.identityHash.take(16)}")
-                            }
-                            !known
+                        val known = contactDao.contactExistsByIdentityHash(normalised, active.identityHash)
+                        if (!known) {
+                            Log.d(TAG, "Drop: no contact for identity ${normalised.take(16)} (owner ${active.identityHash.take(16)})")
                         }
+                        !known
                     }
                 }
             }

@@ -8,10 +8,8 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import network.columba.app.data.db.ColumbaDatabase
-import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.ContactDao
 import network.columba.app.data.db.dao.LocalIdentityDao
-import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import org.junit.After
@@ -31,27 +29,13 @@ import org.junit.Test
 class CallsFromContactsGateTest {
     private lateinit var context: Context
     private lateinit var database: ColumbaDatabase
-    private lateinit var announceDao: AnnounceDao
     private lateinit var contactDao: ContactDao
     private lateinit var localIdentityDao: LocalIdentityDao
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var gate: CallsFromContactsGate
 
     private val callerIdentityHash = "abcdef0123456789abcdef0123456789"
-    private val callerDestinationHash = "deadbeefcafef00ddeadbeefcafef00d"
     private val ownerIdentityHash = "0011223344556677001122334455667700"
-
-    private val sampleAnnounce =
-        AnnounceEntity(
-            destinationHash = callerDestinationHash,
-            peerName = "Caller",
-            publicKey = ByteArray(32),
-            appData = null,
-            hops = 1,
-            lastSeenTimestamp = 0L,
-            nodeType = "LXMF_PEER",
-            receivingInterface = null,
-        )
 
     private val sampleIdentity =
         LocalIdentityEntity(
@@ -69,12 +53,10 @@ class CallsFromContactsGateTest {
     fun setup() {
         context = mockk(relaxed = true)
         database = mockk()
-        announceDao = mockk()
         contactDao = mockk()
         localIdentityDao = mockk()
         settingsAccessor = mockk()
 
-        every { database.announceDao() } returns announceDao
         every { database.contactDao() } returns contactDao
         every { database.localIdentityDao() } returns localIdentityDao
 
@@ -98,9 +80,13 @@ class CallsFromContactsGateTest {
     }
 
     @Test
-    fun `shouldSilentlyDrop returns true when toggle on and no announce known`() {
+    fun `shouldSilentlyDrop returns true when toggle on and no destination for identity matches a contact`() {
+        // contactExistsByIdentityHash returns false when there is no
+        // (announce, contact) join for this identity — including the "no
+        // announces at all" case.
         every { settingsAccessor.getAllowCallsFromContactsOnly() } returns true
-        coEvery { announceDao.getAnnounceByIdentityHash(any()) } returns null
+        coEvery { localIdentityDao.getActiveIdentitySync() } returns sampleIdentity
+        coEvery { contactDao.contactExistsByIdentityHash(callerIdentityHash, ownerIdentityHash) } returns false
 
         assertTrue(gate.shouldSilentlyDrop(callerIdentityHash))
     }
@@ -108,21 +94,25 @@ class CallsFromContactsGateTest {
     @Test
     fun `shouldSilentlyDrop returns false when caller is a known contact`() {
         every { settingsAccessor.getAllowCallsFromContactsOnly() } returns true
-        coEvery { announceDao.getAnnounceByIdentityHash(callerIdentityHash) } returns sampleAnnounce
         coEvery { localIdentityDao.getActiveIdentitySync() } returns sampleIdentity
-        coEvery { contactDao.contactExists(callerDestinationHash, ownerIdentityHash) } returns true
+        coEvery { contactDao.contactExistsByIdentityHash(callerIdentityHash, ownerIdentityHash) } returns true
 
         assertFalse(gate.shouldSilentlyDrop(callerIdentityHash))
     }
 
     @Test
-    fun `shouldSilentlyDrop returns true when announce exists but contact lookup misses`() {
+    fun `shouldSilentlyDrop allows caller when only their LXMF destination is in contacts but call arrives over LXST`() {
+        // Regression for the multi-destination bug: same peer publishes BOTH
+        // an `lxmf.delivery` and an `lxst.telephony` announce sharing one
+        // computedIdentityHash. The contact row stores only the LXMF
+        // destination. contactExistsByIdentityHash's JOIN must find the
+        // cross-link and return true regardless of which destination the
+        // inbound call's link is keyed to.
         every { settingsAccessor.getAllowCallsFromContactsOnly() } returns true
-        coEvery { announceDao.getAnnounceByIdentityHash(callerIdentityHash) } returns sampleAnnounce
         coEvery { localIdentityDao.getActiveIdentitySync() } returns sampleIdentity
-        coEvery { contactDao.contactExists(callerDestinationHash, ownerIdentityHash) } returns false
+        coEvery { contactDao.contactExistsByIdentityHash(callerIdentityHash, ownerIdentityHash) } returns true
 
-        assertTrue(gate.shouldSilentlyDrop(callerIdentityHash))
+        assertFalse(gate.shouldSilentlyDrop(callerIdentityHash))
     }
 
     @Test
@@ -131,7 +121,6 @@ class CallsFromContactsGateTest {
         // Allowing the call through is safer than silently dropping every
         // inbound during the first-launch / identity-rotation window.
         every { settingsAccessor.getAllowCallsFromContactsOnly() } returns true
-        coEvery { announceDao.getAnnounceByIdentityHash(callerIdentityHash) } returns sampleAnnounce
         coEvery { localIdentityDao.getActiveIdentitySync() } returns null
 
         assertFalse(gate.shouldSilentlyDrop(callerIdentityHash))
@@ -140,28 +129,18 @@ class CallsFromContactsGateTest {
     @Test
     fun `shouldSilentlyDrop normalises identity hash to lowercase before lookup`() {
         every { settingsAccessor.getAllowCallsFromContactsOnly() } returns true
-        coEvery { announceDao.getAnnounceByIdentityHash(callerIdentityHash) } returns sampleAnnounce
         coEvery { localIdentityDao.getActiveIdentitySync() } returns sampleIdentity
-        coEvery { contactDao.contactExists(callerDestinationHash, ownerIdentityHash) } returns true
+        coEvery { contactDao.contactExistsByIdentityHash(callerIdentityHash, ownerIdentityHash) } returns true
 
         // Uppercase + mixed-case inputs both reduce to the same lowercase lookup.
         assertFalse(gate.shouldSilentlyDrop(callerIdentityHash.uppercase()))
     }
 
     @Test
-    fun `shouldSilentlyDrop fails open when announce DAO throws`() {
-        every { settingsAccessor.getAllowCallsFromContactsOnly() } returns true
-        coEvery { announceDao.getAnnounceByIdentityHash(any()) } throws RuntimeException("Room boom")
-
-        assertFalse(gate.shouldSilentlyDrop(callerIdentityHash))
-    }
-
-    @Test
     fun `shouldSilentlyDrop fails open when contact DAO throws`() {
         every { settingsAccessor.getAllowCallsFromContactsOnly() } returns true
-        coEvery { announceDao.getAnnounceByIdentityHash(callerIdentityHash) } returns sampleAnnounce
         coEvery { localIdentityDao.getActiveIdentitySync() } returns sampleIdentity
-        coEvery { contactDao.contactExists(any(), any()) } throws RuntimeException("Room boom")
+        coEvery { contactDao.contactExistsByIdentityHash(any(), any()) } throws RuntimeException("Room boom")
 
         assertFalse(gate.shouldSilentlyDrop(callerIdentityHash))
     }

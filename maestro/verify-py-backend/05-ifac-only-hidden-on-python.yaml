@@ -1,0 +1,71 @@
+# 05-ifac-only-hidden-on-python: regression guard for the capability
+# gate that hides the "IFAC-protected interfaces only" Switch on
+# backends that don't actually enforce the filter.
+#
+# Background: PythonRnsTransportAdmin.setAutoconnectIfacOnly() is a
+# documented no-op (upstream Python RNS has no autoconnect_ifac_only
+# knob — Reticulum() silently ignores any such config option). Showing
+# the Switch on the Python flavor was a UI lie. Reticulum-kt does
+# enforce the filter at NativeRnsBackendImpl.createAutoconnectInterface,
+# so the Switch is shown on the kotlin flavor only.
+#
+# The gate lives at DiscoveredInterfacesScreen.kt around the
+# `if (autoconnectCount > 0 && ifacFilterSupported)` block, driven by
+# LocalCapabilities.current.interfaces.autoconnectIfacOnlyFilter
+# (declared in InterfaceCaps, true in NATIVE_CAPABILITIES, false in
+# PYTHON_CAPABILITIES).
+#
+# This flow asserts the gate is working on the Python backend. It
+# should ALWAYS FAIL on the kotlin backend (the Switch is visible
+# there) — run it only against a python-flavor APK install.
+#
+# Pre-condition: app onboarded, Interface Discovery enabled with
+# autoconnect > 0 (otherwise the IFAC sub-block is hidden for an
+# unrelated reason and this flow's assertion gives a false-positive
+# pass). The 03-04-05-discovery-toggles flow leaves the device in
+# this state, so run that first if starting from a fresh device.
+
+appId: network.columba.app.debug
+name: 05-ifac-only-hidden-on-python
+tags:
+  - py-backend
+  - punch-list-5
+  - regression
+---
+- launchApp:
+    appId: network.columba.app.debug
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- assertVisible: "Network"
+- tapOn: "Network"
+- scrollUntilVisible:
+    element:
+      text: "Manage Interfaces"
+    direction: DOWN
+- tapOn: "Manage Interfaces"
+- scrollUntilVisible:
+    element:
+      text: "Interface Discovery"
+    direction: DOWN
+- tapOn: "Interface Discovery"
+- extendedWaitUntil:
+    visible: "Discovered Interfaces"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Visual evidence for review.
+- takeScreenshot: 05-ifac-hidden-state
+
+# Sanity guard: the "Auto-connect limit" slider IS visible (proves
+# discovery is on and autoconnect > 0, so the IFAC block WOULD render
+# absent the capability gate). Without this, an empty card from any
+# other reason would silently satisfy the assertNotVisible below.
+- assertVisible: "Auto-connect limit"
+
+# The actual gate assertion. Pre-fix this would FAIL because the
+# Switch is visible alongside the slider.
+- assertNotVisible: "IFAC-protected interfaces only"

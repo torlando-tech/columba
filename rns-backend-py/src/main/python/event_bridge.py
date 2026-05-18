@@ -251,40 +251,53 @@ def deploy_bundled_interfaces(storage_path):
     # speaks KISS to RNode LoRa hardware over Bluetooth Classic/BLE/USB.
     # The interface module sits at the top level of the slim Python tree
     # rather than inside a package because it doesn't depend on a sibling
-    # package (unlike ble_modules.android_ble_driver), so
-    # `pkgutil.get_data` (which needs a package as its first arg) can't
-    # reach it. Workaround: import the module to trigger Chaquopy's
-    # AssetExtract, then read bytes from the module's `__file__`. The
-    # destination is renamed snake_case → PascalCase
-    # (columba_rnode_interface.py → ColumbaRNodeInterface.py) so it
-    # matches the `type = ColumbaRNodeInterface` directive emitted by
-    # `RnsConfigFile.kt`. Failure is logged but non-fatal: BLE/USB RNode
-    # support is degraded, the rest of the stack still comes up.
+    # package (unlike ble_modules.android_ble_driver), so `pkgutil.get_data`
+    # (which needs a package as its first arg) can't reach it.
+    #
+    # Use `inspect.getsource()` which delegates to the module's loader's
+    # `get_source()` (PEP 302) — works for both filesystem-imported modules
+    # and Chaquopy's in-zip AssetFinder loader (whose __file__ points into
+    # the app.imy archive and is not open()-able with the regular file API).
+    # An earlier attempt to use open(__file__) silently failed because the
+    # zip path is a synthetic location; the .pyc gets cached on disk but the
+    # source never does. Stick with the loader API.
+    #
+    # The destination is renamed snake_case → PascalCase
+    # (columba_rnode_interface.py → ColumbaRNodeInterface.py) so it matches
+    # the `type = ColumbaRNodeInterface` directive emitted by RnsConfigFile.
+    # Failure is logged but non-fatal: BLE/USB RNode support is degraded,
+    # the rest of the stack still comes up. Bumped to LOG_NOTICE +
+    # unconditional print so the success/failure is visible in `python.
+    # stdout` even before RNS's logfile machinery is up (deploy runs before
+    # Reticulum()).
+    import inspect
+    import traceback
     try:
         import columba_rnode_interface as _crni_mod
-        src_path = getattr(_crni_mod, "__file__", None)
-        if src_path is None:
-            RNS.log(
-                "event_bridge: columba_rnode_interface has no __file__ — "
-                "BLE/USB RNode interface will not be deployed",
-                RNS.LOG_ERROR,
-            )
-        else:
-            dest = os.path.join(interfaces_dir, "ColumbaRNodeInterface.py")
-            with open(src_path, "rb") as f:
-                data = f.read()
-            with open(dest, "wb") as f:
-                f.write(data)
-            RNS.log(
-                f"event_bridge: deployed ColumbaRNodeInterface.py "
-                f"({len(data)} bytes) to {dest}",
-                RNS.LOG_DEBUG,
-            )
+        src = inspect.getsource(_crni_mod)
+        dest = os.path.join(interfaces_dir, "ColumbaRNodeInterface.py")
+        with open(dest, "w") as f:
+            f.write(src)
+        RNS.log(
+            f"event_bridge: deployed ColumbaRNodeInterface.py "
+            f"({len(src)} bytes) to {dest}",
+            RNS.LOG_NOTICE,
+        )
+        print(
+            f"event_bridge: deployed ColumbaRNodeInterface.py "
+            f"({len(src)} bytes)",
+            flush=True,
+        )
     except Exception as e:  # noqa: BLE001
         RNS.log(
             f"event_bridge: failed to deploy ColumbaRNodeInterface.py: {e}",
             RNS.LOG_ERROR,
         )
+        print(
+            f"event_bridge: FAILED to deploy ColumbaRNodeInterface.py: {e}",
+            flush=True,
+        )
+        traceback.print_exc()
 
 
 def reset_reticulum_for_restart():

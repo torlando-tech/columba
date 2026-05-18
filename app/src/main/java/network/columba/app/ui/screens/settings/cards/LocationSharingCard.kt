@@ -136,11 +136,17 @@ fun LocationSharingCard(
             )
         },
     ) {
-        // Description
+        // Description — communicates master-gate semantics:
+        //   ON  = sharing is allowed (you can share from conversations)
+        //   OFF = hard kill-switch (active sessions stop, future shares refused)
+        // The toggle does NOT auto-flip when you share from a conversation;
+        // it's a permission gate, not a status indicator. Active sharing is
+        // shown separately in the "Currently sharing with" section below.
         Text(
             text =
-                "Share your real-time location with contacts. " +
-                    "When disabled, all active sharing sessions will be stopped.",
+                "Allow this app to share your location. " +
+                    "When off, location sharing is blocked everywhere — including " +
+                    "active sessions, conversations, and the group tracker.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

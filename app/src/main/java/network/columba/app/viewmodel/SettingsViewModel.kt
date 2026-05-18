@@ -232,9 +232,6 @@ class SettingsViewModel
         val capabilities: StateFlow<network.columba.app.rns.api.BackendCapabilities> =
             rnsBackend.capabilities
 
-        // Track group telemetry state before toggle-off so we can restore it on toggle-on
-        private var groupTelemetryWasEnabled = false
-
         // Track when we first noticed shared instance disconnected
         private var sharedInstanceDisconnectedTime: Long? = null
         private var sharedInstanceMonitorJob: Job? = null
@@ -1631,15 +1628,18 @@ class SettingsViewModel
          * Called unconditionally to ensure settings persist across navigation.
          */
         private fun loadLocationSharingSettings() {
-            // Location sharing toggle reflects EITHER individual sharing OR group telemetry send
+            // Master gate: this toggle is a hard kill-switch for ANY outbound
+            // location data — per-conversation sharing AND group-telemetry
+            // sends. The toggle's display state mirrors the persisted user
+            // preference (`locationSharingEnabledFlow`) directly, NOT a
+            // computed status of "is something currently sharing". Per-call
+            // sharing actions consult this flag at start-time and refuse when
+            // it's off (see LocationSharingManager.startSharing). Active
+            // sessions are surfaced separately via the "Currently sharing
+            // with" section under the toggle.
             viewModelScope.launch {
-                combine(
-                    settingsRepository.locationSharingEnabledFlow,
-                    telemetryCollectorManager.isEnabled,
-                ) { individualEnabled, groupSendEnabled ->
-                    individualEnabled || groupSendEnabled
-                }.collect { combined ->
-                    _state.update { it.copy(locationSharingEnabled = combined) }
+                settingsRepository.locationSharingEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(locationSharingEnabled = enabled) }
                 }
             }
             viewModelScope.launch {
@@ -1688,14 +1688,14 @@ class SettingsViewModel
         fun setLocationSharingEnabled(enabled: Boolean) {
             viewModelScope.launch {
                 if (!enabled) {
-                    // Save group telemetry state before disabling so we can restore on re-enable
-                    groupTelemetryWasEnabled = telemetryCollectorManager.isEnabled.value
+                    // Hard kill-switch: stop everything currently sharing.
+                    // Per-conversation sessions get cease messages + removed,
+                    // group telemetry sends pause. Re-enabling later does NOT
+                    // auto-resume — under master-gate semantics the toggle is
+                    // a gate, not a status mirror. The user has to explicitly
+                    // re-start any sharing they want.
                     stopAllSharing()
                     telemetryCollectorManager.setEnabled(false)
-                } else if (groupTelemetryWasEnabled) {
-                    // Restore group telemetry if it was enabled before the toggle was turned off
-                    telemetryCollectorManager.setEnabled(true)
-                    groupTelemetryWasEnabled = false
                 }
                 settingsRepository.saveLocationSharingEnabled(enabled)
                 Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")

@@ -121,12 +121,30 @@ class LocationSharingManager
                 }
             }
 
+        // Master gate cache. `Settings → Location Sharing` is a hard
+        // kill-switch — when OFF, [startSharing] refuses and outbound
+        // telemetry pauses regardless of which call site triggered it.
+        // Cached as a volatile field so `startSharing` (non-suspend, called
+        // from synchronous UI handlers) can read it without blocking. The
+        // init collector below keeps it in sync with the persisted flag.
+        @Volatile
+        private var masterEnabled: Boolean = true
+
         init {
             // Start listening for incoming location telemetry
             startListeningForLocationTelemetry()
 
             // Start periodic cleanup of expired locations
             startMaintenanceLoop()
+
+            // Mirror the persisted master-gate flag into the cache. Default
+            // starts permissive (true) so a brand-new install lets the user
+            // share before this collector has emitted its first value.
+            scope.launch {
+                settingsRepository.locationSharingEnabledFlow.collect { enabled ->
+                    masterEnabled = enabled
+                }
+            }
         }
 
         /**
@@ -142,6 +160,16 @@ class LocationSharingManager
             displayNames: Map<String, String>,
             duration: SharingDuration,
         ) {
+            // Master gate. Refuse every outbound sharing attempt while the
+            // settings toggle is OFF — covers per-conversation, multi-contact,
+            // and any future call site. Emit a SharingEvent so UI can show
+            // a snackbar / toast instead of a silent no-op.
+            if (!masterEnabled) {
+                Log.w(TAG, "startSharing blocked: Location Sharing is OFF in Settings")
+                scope.launch { _sharingEvents.emit(SharingEvent.Blocked) }
+                return
+            }
+
             val startTime = System.currentTimeMillis()
             val endTime = duration.calculateEndTime(startTime)
 
@@ -326,10 +354,23 @@ class LocationSharingManager
                 scope.launch {
                     try {
                         if (useGms) {
+                            // Active location sharing implies the user wants
+                            // accuracy ("Precise" in the precision picker
+                            // means radius=0 and they expect a real GPS fix,
+                            // not a Wi-Fi/cell-tower-positioning fallback).
+                            // `PRIORITY_BALANCED_POWER_ACCURACY` was producing
+                            // 600m+ fixes indoors that drift kilometers
+                            // between colocated peers — the network-positioning
+                            // signal is too noisy for "share my location with
+                            // someone in the same room" to look right.
+                            // `PRIORITY_HIGH_ACCURACY` engages GPS, which is
+                            // the right power/accuracy trade for the lifetime
+                            // of an active share (foreground service is
+                            // already running, user is actively engaged).
                             val locationRequest =
                                 LocationRequest
                                     .Builder(
-                                        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                        Priority.PRIORITY_HIGH_ACCURACY,
                                         LOCATION_UPDATE_INTERVAL_MS,
                                     ).apply {
                                         setMinUpdateIntervalMillis(LOCATION_MIN_UPDATE_INTERVAL_MS)
@@ -634,4 +675,11 @@ sealed class SharingEvent {
     data class Error(
         val message: String,
     ) : SharingEvent()
+
+    /**
+     * Emitted when a [LocationSharingManager.startSharing] call is refused
+     * because the master `Settings → Location Sharing` toggle is OFF. UI
+     * can show a snackbar pointing the user back to Settings.
+     */
+    data object Blocked : SharingEvent()
 }

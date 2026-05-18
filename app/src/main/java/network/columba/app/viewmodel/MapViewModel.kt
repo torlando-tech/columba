@@ -10,9 +10,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -319,7 +322,28 @@ class MapViewModel
                     initialValue = emptyList(),
                 )
 
+        // User-facing feedback from location-sharing actions. Fires when
+        // `LocationSharingManager` refuses an outbound share (master-gate
+        // off). MapScreen collects this and shows a Snackbar pointing back
+        // to Settings.
+        private val _locationSharingMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val locationSharingMessage: SharedFlow<String> = _locationSharingMessage.asSharedFlow()
+
         init {
+            // Translate LocationSharingManager events into user-visible
+            // messages. Currently only `Blocked` (master-gate refused).
+            viewModelScope.launch {
+                locationSharingManager.sharingEvents.collect { event ->
+                    when (event) {
+                        is network.columba.app.service.SharingEvent.Blocked ->
+                            _locationSharingMessage.emit(
+                                "Location sharing is off. Enable it in Settings → Location Sharing.",
+                            )
+                        else -> Unit
+                    }
+                }
+            }
+
             // Resolve initial map style (with null location)
             resolveMapStyle(null, null)
 

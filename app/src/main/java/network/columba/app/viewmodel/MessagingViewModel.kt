@@ -225,6 +225,13 @@ class MessagingViewModel
         private val _sharedImageError = MutableSharedFlow<String>()
         val sharedImageError: SharedFlow<String> = _sharedImageError.asSharedFlow()
 
+        // User-facing feedback from location-sharing actions. Fires when
+        // `LocationSharingManager` refuses an outbound share (master-gate
+        // off, currently the only Blocked source). MessagingScreen
+        // collects this and shows a Snackbar pointing back to Settings.
+        private val _locationSharingMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val locationSharingMessage: SharedFlow<String> = _locationSharingMessage.asSharedFlow()
+
         // Image quality selection dialog state
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
@@ -738,6 +745,23 @@ class MessagingViewModel
                     _isTransportEnabled.value = rnsCore.isTransportEnabled()
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to check transport status", e)
+                }
+            }
+
+            // Translate LocationSharingManager events into user-visible
+            // messages. `Blocked` is the only one MessagingScreen needs
+            // today (master-gate refused a share); other events
+            // (Started/Stopped/Error/SessionsExpired) are surfaced
+            // elsewhere or don't need explicit UI in this context.
+            viewModelScope.launch {
+                locationSharingManager.sharingEvents.collect { event ->
+                    when (event) {
+                        is network.columba.app.service.SharingEvent.Blocked ->
+                            _locationSharingMessage.emit(
+                                "Location sharing is off. Enable it in Settings → Location Sharing.",
+                            )
+                        else -> Unit
+                    }
                 }
             }
 

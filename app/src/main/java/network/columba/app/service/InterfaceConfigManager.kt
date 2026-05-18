@@ -374,40 +374,50 @@ class InterfaceConfigManager
 
                     // Signal caller that service is usable (before post-init bookkeeping)
                     onServiceReady?.invoke()
+                    Unit // Hint inference: function return is Result<Unit>.
+                } // withTimeout — wraps ONLY the critical-path RNS restart (Steps 1-9).
+                // Post-init bookkeeping (Steps 10-12) runs outside the timeout: by
+                // this point RNS is up and the user-facing apply has succeeded.
+                // Identity restoration on devices with thousands of stored peers
+                // can take 45-60s on its own, which used to trip the apply-wide
+                // 60s timeout and incorrectly mark the apply as failed even though
+                // RNS was healthy. The is_applying_config flag (cleared in the
+                // outer .also) stays set across these steps too, so the stale-
+                // STOP gate in ReticulumService keeps fielding any redelivered
+                // STOP cascades from the Step-4 shutdown.
 
-                    // Step 10: Restore peer identities (uses batched loading to prevent OOM)
-                    Log.d(TAG, "Step 10: Batch restoring peer identities...")
-                    try {
-                        restorePeerIdentitiesInBatches()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error batch restoring peer identities", e)
-                        // Not fatal - continue
-                    }
+                // Step 10: Restore peer identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10: Batch restoring peer identities...")
+                try {
+                    restorePeerIdentitiesInBatches()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error batch restoring peer identities", e)
+                    // Not fatal - continue
+                }
 
-                    // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
-                    Log.d(TAG, "Step 10b: Batch restoring announce identities...")
-                    try {
-                        restoreAnnounceIdentitiesInBatches()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error batch restoring announce identities", e)
-                        // Not fatal - continue
-                    }
+                // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10b: Batch restoring announce identities...")
+                try {
+                    restoreAnnounceIdentitiesInBatches()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error batch restoring announce identities", e)
+                    // Not fatal - continue
+                }
 
-                    // Step 11: Restart message collector
-                    Log.d(TAG, "Step 11: Starting message collector...")
-                    messageCollector.startCollecting()
-                    Log.d(TAG, "✓ Message collector started")
+                // Step 11: Restart message collector
+                Log.d(TAG, "Step 11: Starting message collector...")
+                messageCollector.startCollecting()
+                Log.d(TAG, "✓ Message collector started")
 
-                    // Step 12: Restart managers (same as ColumbaApplication.onCreate)
-                    Log.d(TAG, "Step 12: Restarting managers...")
-                    autoAnnounceManager.start()
-                    identityResolutionManager.start(applicationScope)
-                    propagationNodeManager.start()
-                    Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
+                // Step 12: Restart managers (same as ColumbaApplication.onCreate)
+                Log.d(TAG, "Step 12: Restarting managers...")
+                autoAnnounceManager.start()
+                identityResolutionManager.start(applicationScope)
+                propagationNodeManager.start()
+                Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
 
-                    Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
-                    Unit // Hint inference: function return is Result<Unit>, not Result<Int> from Log.i.
-                } // withTimeout
+                Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
+                Unit // Hint inference: function return is Result<Unit>, not Result<Int> from Log.i.
             }.also {
                 // Always clear the apply flag — even when initialize() failed or the
                 // withTimeout fired. Keeping it set across the whole apply (Step 3 → here)

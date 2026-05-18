@@ -136,6 +136,55 @@ class ServiceSettingsAccessorTest {
         assertTrue(accessor.getBlockUnknownSenders())
     }
 
+    // ========== getAllowCallsFromContactsOnly() Tests ==========
+
+    @Test
+    fun `getAllowCallsFromContactsOnly returns false by default`() {
+        assertFalse(accessor.getAllowCallsFromContactsOnly())
+    }
+
+    @Test
+    fun `getAllowCallsFromContactsOnly returns true when set`() {
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY, true).apply()
+
+        assertTrue(accessor.getAllowCallsFromContactsOnly())
+    }
+
+    @Test
+    fun `getAllowCallsFromContactsOnly reflects changes between calls`() {
+        assertFalse(accessor.getAllowCallsFromContactsOnly())
+
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY, true).apply()
+
+        assertTrue(accessor.getAllowCallsFromContactsOnly())
+    }
+
+    // ========== getAllowVoiceCalls() Tests ==========
+
+    @Test
+    fun `getAllowVoiceCalls returns true by default`() {
+        // Default is true so an upgrading user still receives calls without
+        // touching the toggle.
+        assertTrue(accessor.getAllowVoiceCalls())
+    }
+
+    @Test
+    fun `getAllowVoiceCalls returns false when explicitly set to false`() {
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_ALLOW_VOICE_CALLS, false).apply()
+
+        assertFalse(accessor.getAllowVoiceCalls())
+    }
+
+    @Test
+    fun `getAllowVoiceCalls reflects changes between calls`() {
+        // First call returns the true default
+        assertTrue(accessor.getAllowVoiceCalls())
+
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_ALLOW_VOICE_CALLS, false).apply()
+
+        assertFalse(accessor.getAllowVoiceCalls())
+    }
+
     // ========== Cross-process key constants Tests ==========
 
     @Test
@@ -146,6 +195,8 @@ class ServiceSettingsAccessorTest {
     @Test
     fun `companion object exposes correct key constants`() {
         assertEquals("block_unknown_senders", ServiceSettingsAccessor.KEY_BLOCK_UNKNOWN_SENDERS)
+        assertEquals("allow_calls_from_contacts_only", ServiceSettingsAccessor.KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY)
+        assertEquals("allow_voice_calls", ServiceSettingsAccessor.KEY_ALLOW_VOICE_CALLS)
         assertEquals("network_change_announce_time", ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME)
         assertEquals("last_auto_announce_time", ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME)
     }

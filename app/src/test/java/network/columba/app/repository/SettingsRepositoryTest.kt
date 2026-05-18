@@ -1100,6 +1100,73 @@ class SettingsRepositoryTest {
             assertTrue("Both should be true", methodValue)
         }
 
+    // ========== Allow Calls From Contacts Only Flow Tests ==========
+
+    @Test
+    fun allowCallsFromContactsOnlyFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.allowCallsFromContactsOnlyFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveAllowCallsFromContactsOnly(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveAllowCallsFromContactsOnly(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getAllowCallsFromContactsOnly_matchesFlow() =
+        runTest {
+            repository.saveAllowCallsFromContactsOnly(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val flowValue = repository.allowCallsFromContactsOnlyFlow.first()
+            val methodValue = repository.getAllowCallsFromContactsOnly()
+
+            assertEquals("Flow and method should return same value", flowValue, methodValue)
+            assertTrue("Both should be true after save(true)", methodValue)
+        }
+
+    // ========== Allow Voice Calls (master) Flow Tests ==========
+
+    @Test
+    fun allowVoiceCallsFlow_emitsOnlyOnChange() =
+        runTest {
+            repository.allowVoiceCallsFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+
+                // Save same value - should NOT emit
+                repository.saveAllowVoiceCalls(initial)
+                expectNoEvents()
+
+                // Save opposite value - should emit
+                repository.saveAllowVoiceCalls(!initial)
+                assertEquals(!initial, awaitItem())
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getAllowVoiceCalls_matchesFlow() =
+        runTest {
+            // Default is true; flip to false then assert both sources agree.
+            repository.saveAllowVoiceCalls(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val flowValue = repository.allowVoiceCallsFlow.first()
+            val methodValue = repository.getAllowVoiceCalls()
+
+            assertEquals("Flow and method should return same value", flowValue, methodValue)
+            assertFalse("Both should be false after save(false)", methodValue)
+        }
+
     // ========== Telemetry Collector Flow Tests ==========
 
     @Test

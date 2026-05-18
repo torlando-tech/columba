@@ -17,6 +17,7 @@ import network.reticulum.common.DestinationType
 import network.reticulum.destination.Destination
 import network.reticulum.identity.Identity
 import network.reticulum.link.Link
+import network.reticulum.transport.Transport
 import tech.torlando.lxst.audio.Signalling
 import tech.torlando.lxst.core.AudioDevice
 import tech.torlando.lxst.core.AudioPacketHandler
@@ -63,6 +64,7 @@ class NativeCallManager(
     private val context: Context,
     private val deliveryIdentity: Identity,
     val transport: NativeNetworkTransport,
+    private val callPrivacyBridge: CallPrivacyBridge? = null,
 ) : CallController {
     companion object {
         private const val TAG = "NativeCallManager"
@@ -88,6 +90,18 @@ class NativeCallManager(
      * Held to prevent GC and to allow cleanup on [shutdown].
      */
     private var telephonyDestination: Destination? = null
+
+    /**
+     * Master incoming-calls toggle state. Mirrors `:rns-host/pythonBackend`'s
+     * sibling. Read by [onInboundLinkEstablished] as a TOCTOU guard against
+     * an inbound link that crossed the wire just before [disableIncoming]
+     * ran; written only inside [incomingLock].
+     */
+    @Volatile
+    private var incomingDisabled: Boolean = false
+
+    /** Serialises [disableIncoming] / [enableIncoming] transitions. */
+    private val incomingLock = Any()
 
     // ===== Initialization =====
 
@@ -135,6 +149,15 @@ class NativeCallManager(
         // Announce immediately so peers can resolve a path to our telephony destination
         // even before the next coupled LXMF auto-announce fires.
         announce()
+
+        // Cold-start application of the persisted master toggle. If the user
+        // turned voice calls OFF before the last process tear-down (or before
+        // this fresh-start), apply that now — register+immediately-deregister
+        // is marginally wasteful but lets re-enable share one helper.
+        if (callPrivacyBridge?.getAllowVoiceCalls() == false) {
+            Log.i(TAG, "Cold-start: Allow voice calls = false, deregistering destination")
+            disableIncoming()
+        }
 
         Log.i(TAG, "Native telephony stack ready")
     }
@@ -198,6 +221,17 @@ class NativeCallManager(
     private fun onInboundLinkEstablished(link: Link) {
         Log.i(TAG, "Inbound call link arrived")
 
+        // Defense-in-depth TOCTOU guard: an inbound link may have been
+        // admitted by reticulum-kt's Transport in the brief window before
+        // deregisterDestination returned. Drop it silently — STATUS_AVAILABLE
+        // has not yet been sent, so the caller sees the same "remote went
+        // away" timeout as the toggle-off path below.
+        if (incomingDisabled) {
+            Log.d(TAG, "Inbound link but incoming disabled, silently tearing down")
+            link.teardown()
+            return
+        }
+
         if (telephone.isCallActive()) {
             Log.w(TAG, "Line busy — signalling busy and rejecting inbound link")
             link.send(packSignal(Signalling.STATUS_BUSY))
@@ -247,6 +281,18 @@ class NativeCallManager(
     ) {
         val identityHash = identity.hexHash
         Log.i(TAG, "Caller identified: ${identityHash.take(16)}")
+
+        // Calls-from-contacts-only gate. Fires BEFORE STATUS_RINGING and
+        // BEFORE Telephone.onIncomingCall, so the originator only sees a
+        // wait-time timeout (no STATUS_BUSY / STATUS_REJECTED) and this
+        // device shows no UI / no ringtone. Sibling of the same gate in
+        // PythonCallManager; both share the same CallsFromContactsGate
+        // singleton via the CallPrivacyBridge adapter.
+        if (callPrivacyBridge?.shouldSilentlyDrop(identityHash) == true) {
+            Log.i(TAG, "Calls-only-from-contacts: dropping ${identityHash.take(16)}")
+            link.teardown()
+            return
+        }
 
         if (telephone.isCallActive()) {
             Log.w(TAG, "Line became busy after identify — signalling busy")
@@ -308,6 +354,53 @@ class NativeCallManager(
 
     override fun setSpeaker(enabled: Boolean) {
         audioBridge.setSpeakerphoneOn(enabled)
+    }
+
+    // ===== Master incoming-calls toggle =====
+
+    /**
+     * Apply [setIncomingEnabled] for this manager.
+     *
+     * Invoked by [NativeRnsBackendImpl.setIncomingEnabledHook] (wired in
+     * [NativeRnsBackendImpl.setupNativeTelephone] once this manager is
+     * constructed) when the UI calls `RnsTelephony.setIncomingEnabled(...)`
+     * across the AIDL boundary.
+     *
+     * Idempotent — applying the same state twice is a no-op.
+     */
+    fun setIncomingEnabled(enabled: Boolean) {
+        if (enabled) enableIncoming() else disableIncoming()
+    }
+
+    private fun disableIncoming() = synchronized(incomingLock) {
+        if (incomingDisabled) return@synchronized
+        incomingDisabled = true
+        telephonyDestination?.let { dest ->
+            try {
+                Transport.deregisterDestination(dest)
+                Log.i(TAG, "lxst.telephony destination deregistered")
+            } catch (e: Exception) {
+                Log.w(TAG, "deregisterDestination failed", e)
+            }
+        }
+        telephonyDestination = null
+        if (::telephone.isInitialized && telephone.isCallActive()) {
+            // Hang up before the link's transport state goes away so the
+            // remote sees a clean drop (hangup signal sent over the active
+            // call link, not the destination).
+            try {
+                telephone.hangup()
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored hangup error during disableIncoming: ${e.message}")
+            }
+        }
+    }
+
+    private fun enableIncoming() = synchronized(incomingLock) {
+        if (!incomingDisabled && telephonyDestination != null) return@synchronized
+        incomingDisabled = false
+        registerTelephonyDestination()
+        announce()
     }
 
     // ===== Lifecycle =====

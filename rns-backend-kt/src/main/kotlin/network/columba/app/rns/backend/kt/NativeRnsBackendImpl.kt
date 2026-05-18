@@ -92,6 +92,13 @@ class NativeRnsBackendImpl(
      * May be null in unit-test mode.
      */
     private val rnodeHostBridge: RNodeHostBridge? = null,
+    /**
+     * Bridge into `:rns-host`-side privacy state for inbound voice calls.
+     * Supplied by the kotlinBackend Hilt module wrapping `CallsFromContactsGate`
+     * + `ServiceSettingsAccessor`. Null in unit-test mode → all calls are
+     * allowed through (preserves the pre-feature behaviour).
+     */
+    private val callPrivacyBridge: CallPrivacyBridge? = null,
 ) : network.columba.app.rns.api.RnsCore,
     network.columba.app.rns.api.RnsLxmf,
     network.columba.app.rns.api.RnsTelephony,
@@ -2017,9 +2024,20 @@ class NativeRnsBackendImpl(
 
     private fun setupNativeTelephone(identity: NativeIdentity) {
         val ctx = appContext ?: return
-        val manager = NativeCallManager(ctx, identity, callTransport)
+        val manager = NativeCallManager(
+            context = ctx,
+            deliveryIdentity = identity,
+            transport = callTransport,
+            callPrivacyBridge = callPrivacyBridge,
+        )
         manager.setup()
         callManager = manager
+        // Wire the AIDL master-toggle hook now that the manager exists.
+        // Until this point setIncomingEnabledHook is null and the stub on
+        // this class logs + returns. The Hilt eager-init path constructs
+        // NativeRnsBackend at app start, but setupNativeTelephone runs
+        // later inside initialize() after Reticulum + identity are ready.
+        setIncomingEnabledHook = manager::setIncomingEnabled
         Log.i(TAG, "📞 Native Telephone ready")
     }
 

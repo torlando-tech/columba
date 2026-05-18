@@ -8,11 +8,14 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.backend.kt.CallPrivacyBridge
 import network.columba.app.rns.backend.kt.NativeRnsBackend
 import network.columba.app.rns.backend.kt.RNodeHostBridge
 import network.columba.app.rns.host.call.rnode.BluetoothLeConnection
 import network.columba.app.rns.host.call.rnode.ColumbaLogo
 import network.columba.app.rns.host.di.LocalBackend
+import network.columba.app.rns.host.persistence.CallsFromContactsGate
+import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import java.io.InputStream
 import java.io.OutputStream
@@ -47,12 +50,38 @@ object HostBackendModule {
     fun provideRNodeHostBridge(@ApplicationContext context: Context): RNodeHostBridge =
         AndroidRNodeHostBridge(context)
 
+    /**
+     * Bridge adapter wrapping the shared [CallsFromContactsGate] +
+     * [ServiceSettingsAccessor] (provided by [network.columba.app.rns.host.di.PersistenceModule])
+     * behind the [CallPrivacyBridge] interface that `:rns-backend-kt`
+     * declares. `:rns-backend-kt` cannot import these classes directly
+     * (Gradle dep graph would cycle), so we adapt here.
+     */
+    @Provides
+    @Singleton
+    fun provideCallPrivacyBridge(
+        contactsGate: CallsFromContactsGate,
+        settingsAccessor: ServiceSettingsAccessor,
+    ): CallPrivacyBridge =
+        object : CallPrivacyBridge {
+            override fun shouldSilentlyDrop(identityHashHex: String): Boolean =
+                contactsGate.shouldSilentlyDrop(identityHashHex)
+
+            override fun getAllowVoiceCalls(): Boolean = settingsAccessor.getAllowVoiceCalls()
+        }
+
     @Provides
     @Singleton
     fun provideNativeRnsBackend(
         @ApplicationContext context: Context,
         bridge: RNodeHostBridge,
-    ): NativeRnsBackend = NativeRnsBackend(appContext = context, rnodeHostBridge = bridge)
+        callPrivacyBridge: CallPrivacyBridge,
+    ): NativeRnsBackend =
+        NativeRnsBackend(
+            appContext = context,
+            rnodeHostBridge = bridge,
+            callPrivacyBridge = callPrivacyBridge,
+        )
 
     /**
      * Flavor-local [RnsBackend] view of [NativeRnsBackend]. [LocalBackend]

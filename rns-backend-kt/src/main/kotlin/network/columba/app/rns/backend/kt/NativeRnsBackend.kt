@@ -34,6 +34,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 class NativeRnsBackend(
     appContext: Context? = null,
     rnodeHostBridge: RNodeHostBridge? = null,
+    callPrivacyBridge: CallPrivacyBridge? = null,
 ) : RnsBackend {
     init {
         // Defense-in-depth A.10 assertion: this constructor MUST only run in
@@ -68,6 +69,7 @@ class NativeRnsBackend(
     val impl: NativeRnsBackendImpl = NativeRnsBackendImpl(
         appContext = appContext,
         rnodeHostBridge = rnodeHostBridge,
+        callPrivacyBridge = callPrivacyBridge,
     )
 
     override val core: RnsCore = impl

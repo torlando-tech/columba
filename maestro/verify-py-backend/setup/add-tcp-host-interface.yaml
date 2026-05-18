@@ -1,0 +1,103 @@
+# setup/add-tcp-host-interface.yaml — add a TCP Client interface pointing
+# at the host's RNS shared instance (10.0.2.2:4242 from an emulator) so
+# the test app can reach the host's NomadNet test node + cross-emulator
+# peers. Restarts Reticulum via Apply & Restart at the end.
+#
+# Pre-condition: app onboarded; previous network state may be whatever.
+# Host RNS shared instance is expected to be listening on 10.0.2.2:4242
+# (the lxmd-as-shared-instance host on Torlando's Mac binds 4242). Adjust
+# the target_host literal at the openWizard step if porting to other
+# hosts.
+#
+# ============================================================
+# STATUS: KNOWN-INCOMPLETE — needs a Choose Server step + Next
+# ============================================================
+# The TCP Client wizard has FOUR screens, not two:
+#
+#   1. Select Interface Type (lists TCP Client)            ← handled here
+#   2. Choose Server (community presets + "Custom" tile)   ← NOT handled
+#   3. Review Settings (Interface Name / Target Host /
+#      Target Port + IFAC sub-section)                     ← NOT reached
+#   4. Save → returns to Network Interfaces screen
+#
+# Step 2's "Custom" tile is below a list of ~9 community servers that
+# can't be reached via scrollUntilVisible (Maestro 1.39 quirk: vertical
+# LazyColumn inside a wizard doesn't expose the bottom row as scrollable
+# semantics). The peer-rig setup agent's working version used a manual
+# `repeat`-with-condition `swipe` loop to walk to the bottom — see
+# /tmp/verify-py-backend/results/tcp-add-5556 for a working baseline run
+# (if not garbage-collected). Reconstruct from those screenshots and
+# wire up steps 2 + 3 before relying on this flow.
+#
+# Until completed, this flow will FAIL after tapping "TCP Client" — the
+# `extendedWaitUntil: "IP Address"` step won't match because the wizard
+# is still on the Choose Server screen at that point.
+
+appId: network.columba.app.debug
+name: setup-add-tcp-host-interface
+tags:
+  - py-backend
+  - setup
+  - work-in-progress
+---
+- launchApp:
+    appId: network.columba.app.debug
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- assertVisible: "Network"
+- tapOn: "Network"
+- scrollUntilVisible:
+    element:
+      text: "Manage Interfaces"
+    direction: DOWN
+- tapOn: "Manage Interfaces"
+- extendedWaitUntil:
+    visible: "Network Interfaces"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Add Interface"
+- extendedWaitUntil:
+    visible: "Select Interface Type"
+    timeout: 5000
+- tapOn: "TCP Client"
+
+# TODO(setup-add-tcp): step 2 (Choose Server) + step 3 (Review Settings)
+# missing. See the STATUS block at the top of this file.
+- extendedWaitUntil:
+    visible: "IP Address"
+    timeout: 5000
+
+- tapOn:
+    text: "IP Address or Hostname"
+- inputText: "10.0.2.2"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Save"
+    direction: DOWN
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Network Interfaces"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Apply & Restart"
+    direction: DOWN
+- tapOn: "Apply & Restart"
+- extendedWaitUntil:
+    visible:
+      text: ".*Applying interface changes restarts Reticulum.*"
+    timeout: 5000
+- tapOn:
+    text: "Apply & Restart"
+    index: 1
+- extendedWaitUntil:
+    visible: "Network Interfaces"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: tcp-add-final

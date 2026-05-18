@@ -68,6 +68,7 @@ class SettingsViewModelTest {
     private lateinit var rnsCore: RnsCore
     private lateinit var rnsLxmf: RnsLxmf
     private lateinit var rnsTransportAdmin: RnsTransportAdmin
+    private lateinit var rnsTelephony: network.columba.app.rns.api.RnsTelephony
     private lateinit var interfaceConfigManager: InterfaceConfigManager
     private lateinit var propagationNodeManager: PropagationNodeManager
     private lateinit var locationSharingManager: LocationSharingManager
@@ -112,6 +113,7 @@ class SettingsViewModelTest {
         rnsCore = mockk()
         rnsLxmf = mockk()
         rnsTransportAdmin = mockk()
+        rnsTelephony = mockk(relaxed = true) // setAllowVoiceCalls fires setIncomingEnabled
         interfaceConfigManager = mockk()
         propagationNodeManager = mockk()
         locationSharingManager = mockk()
@@ -180,6 +182,8 @@ class SettingsViewModelTest {
         every { settingsRepository.incomingMessageSizeLimitKbFlow } returns flowOf(500)
         every { settingsRepository.notificationsEnabledFlow } returns flowOf(true)
         every { settingsRepository.blockUnknownSendersFlow } returns flowOf(false)
+        every { settingsRepository.allowCallsFromContactsOnlyFlow } returns flowOf(false)
+        every { settingsRepository.allowVoiceCallsFlow } returns flowOf(true)
         every { settingsRepository.telemetryCollectorEnabledFlow } returns flowOf(false)
         every { settingsRepository.telemetryCollectorAddressFlow } returns flowOf(null)
         every { settingsRepository.telemetrySendIntervalSecondsFlow } returns flowOf(60)
@@ -272,6 +276,7 @@ class SettingsViewModelTest {
             rnsCore = rnsCore,
             rnsLxmf = rnsLxmf,
             rnsTransportAdmin = rnsTransportAdmin,
+            rnsTelephony = rnsTelephony,
             interfaceConfigManager = interfaceConfigManager,
             propagationNodeManager = propagationNodeManager,
             locationSharingManager = locationSharingManager,
@@ -1600,6 +1605,7 @@ class SettingsViewModelTest {
                     rnsCore = serviceRnsCore,
                     rnsLxmf = rnsLxmf,
                     rnsTransportAdmin = rnsTransportAdmin,
+                    rnsTelephony = rnsTelephony,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
@@ -1651,6 +1657,7 @@ class SettingsViewModelTest {
                     rnsCore = serviceRnsCore,
                     rnsLxmf = rnsLxmf,
                     rnsTransportAdmin = rnsTransportAdmin,
+                    rnsTelephony = rnsTelephony,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
@@ -2280,6 +2287,7 @@ class SettingsViewModelTest {
                     rnsCore = serviceRnsCore,
                     rnsLxmf = rnsLxmf,
                     rnsTransportAdmin = serviceRnsTransportAdmin,
+                    rnsTelephony = rnsTelephony,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,
@@ -2328,6 +2336,7 @@ class SettingsViewModelTest {
                     rnsCore = serviceRnsCore,
                     rnsLxmf = rnsLxmf,
                     rnsTransportAdmin = rnsTransportAdmin,
+                    rnsTelephony = rnsTelephony,
                     interfaceConfigManager = interfaceConfigManager,
                     propagationNodeManager = propagationNodeManager,
                     locationSharingManager = locationSharingManager,

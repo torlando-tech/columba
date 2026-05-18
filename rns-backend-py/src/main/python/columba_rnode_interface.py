@@ -363,6 +363,42 @@ class ColumbaRNodeInterface(Interface):
 
         RNS.log(f"ColumbaRNodeInterface '{self.name}' initialized", RNS.LOG_DEBUG)
 
+        # Trigger the actual hardware connection in a daemon thread. In
+        # v0.10.x, this was driven by `reticulum_wrapper.initialize()`
+        # post-Reticulum-construct (the wrapper would call start() on each
+        # custom interface). Slim-python doesn't have a wrapper, and RNS's
+        # external-interface loader (Reticulum.py:1020) only calls __init__
+        # + final_init — it does NOT call start() on non-RNodeMulti
+        # interfaces. So if we don't kick off start() here, the interface
+        # stays registered-but-offline forever.
+        #
+        # Daemon thread (not synchronous) because start() can take seconds
+        # (BLE scan + GATT connect) and RNS iterates interfaces in a single
+        # for-loop — blocking here would delay every subsequent interface's
+        # init and trip the apply-changes timeout. start() itself spawns
+        # the read thread + configure_device and returns when the device
+        # is ready (or False on failure); the daemon wrapper just keeps
+        # that error surface from killing the process.
+        threading.Thread(
+            target=self._safe_start, name=f"ColumbaRNode-start-{self.name}", daemon=True,
+        ).start()
+
+    def _safe_start(self):
+        """Wraps start() so a connection failure in the daemon thread doesn't
+        leak an uncaught exception. Errors are already logged by start();
+        this just catches anything start() let through and keeps the
+        interface in a sane (offline) state."""
+        try:
+            self.start()
+        except Exception as e:  # noqa: BLE001
+            RNS.log(
+                f"ColumbaRNodeInterface[{self.name}] start() raised: {e} — interface staying offline",
+                RNS.LOG_ERROR,
+            )
+            import traceback
+            traceback.print_exc()
+            self.online = False
+
     def _get_kotlin_bridge(self):
         """Resolve the Kotlin BLE/Classic bridge via event_bridge.
 

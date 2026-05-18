@@ -186,6 +186,16 @@ fun SettingsScreen(
         }
     }
 
+    // Observe master-gate refusals from TelemetryCollectorManager and
+    // surface as a Snackbar. The "Share with group" toggle is also
+    // preemptively disabled in the card UI when master is off; this is
+    // belt-and-suspenders for any other path that hits the gate.
+    LaunchedEffect(Unit) {
+        viewModel.telemetryCollectorMessage.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
     // Show Snackbar when shared instance becomes available (ephemeral notification)
     LaunchedEffect(state.sharedInstanceAvailable) {
         if (state.sharedInstanceAvailable && !state.preferOwnInstance) {

@@ -16,8 +16,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -118,6 +121,16 @@ class TelemetryCollectorManager
 
         private val _isEnabled = MutableStateFlow(false)
         val isEnabled: StateFlow<Boolean> = _isEnabled.asStateFlow()
+
+        // Fires when [setEnabled] is called with `enabled = true` while the
+        // master `Settings → Location Sharing` toggle is OFF. UI subscribes
+        // and surfaces a Toast pointing the user back to the master gate.
+        // Currently the only refusal vector — the toggle row in the
+        // settings card is preemptively disabled when master is off, so
+        // this should only fire if some other code path manages to call
+        // setEnabled(true) through the gate.
+        private val _setEnabledRefused = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+        val setEnabledRefused: SharedFlow<Unit> = _setEnabledRefused.asSharedFlow()
 
         private val _sendIntervalSeconds = MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS)
         val sendIntervalSeconds: StateFlow<Int> = _sendIntervalSeconds.asStateFlow()
@@ -363,6 +376,7 @@ class TelemetryCollectorManager
         suspend fun setEnabled(enabled: Boolean) {
             if (enabled && !settingsRepository.locationSharingEnabledFlow.first()) {
                 Log.w(TAG, "TelemetryCollector.setEnabled(true) refused: master location sharing is OFF")
+                _setEnabledRefused.tryEmit(Unit)
                 return
             }
             settingsRepository.saveTelemetryCollectorEnabled(enabled)

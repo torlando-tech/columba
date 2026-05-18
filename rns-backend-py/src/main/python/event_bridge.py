@@ -34,13 +34,19 @@ The Kotlin sub-impls attach them at the point they create those objects.
 import json
 import signal
 
+import LXMF
 import RNS
 
-# `_LXMF_METHOD_PROPAGATED` upstream — the int the failure-callback retry
-# path assigns to `desired_method` when escalating a failed DIRECT/OPPORTUNISTIC
-# send to propagation. Mirrors `LXMF/LXMessage.py` PROPAGATED = 0x03. Inlined
-# (rather than `import LXMF`) so this module's slim-Python budget stays tight.
-_LXMF_METHOD_PROPAGATED = 0x03
+# Sideband FIELD_COMMANDS sub-command IDs. NOT in upstream LXMF — these
+# are Sideband-specific command identifiers carried inside an LXMF
+# FIELD_COMMANDS frame; the wire format is `[{cmd_id: [args...]}, ...]`.
+_COMMAND_TELEMETRY_REQUEST = 0x01
+
+# How long collected telemetry entries are kept on the host before
+# eviction. Mirrors `release/v0.10.x`'s `telemetry_retention_seconds`
+# (24h) — long enough to survive infrequent group-tracker sync cycles,
+# short enough that stale fixes don't accumulate forever.
+_COLLECTOR_RETENTION_SECONDS = 24 * 60 * 60
 
 # Telemeter encode/decode used to live here (~190 lines of Columba-
 # authored Python). It moved to `rns-api/.../util/TelemeterCodec.kt`
@@ -582,9 +588,309 @@ def _signal_metrics(interface_obj):
     return rssi, snr
 
 
+# ----------------------------------------------------------------------------
+# Telemetry collector / host-mode state. When `_collector_enabled` is True the
+# inbound delivery callback below mirrors any FIELD_TELEMETRY message into
+# `_collected_telemetry`, and responds to FIELD_COMMANDS requests from
+# allow-listed identities with FIELD_TELEMETRY_STREAM. State held module-level
+# so an "Apply & Restart" lifecycle re-applies via Kotlin's
+# `PythonRnsTelemetry` re-calling the setters at init.
+#
+# Mirrors `release/v0.10.x`'s
+# `reticulum_wrapper.set_telemetry_collector_enabled / store_own_telemetry /
+# set_telemetry_allowed_requesters` exactly. The dual-build hosts the same
+# responder logic in this Python module rather than in a Kotlin Chaquopy
+# bridge because the LXMF response (`router.handle_outbound`) needs the
+# live `RNS.Destination` / `RNS.Identity.recall` Python objects — staying
+# on the Python side avoids a JNI round-trip per request.
+# ----------------------------------------------------------------------------
+_collector_enabled = False
+# {hex_source_hash: {"timestamp": int, "packed_telemetry": bytes,
+#                    "appearance": list_or_None, "received_at": float}}
+_collected_telemetry = {}
+# Set of lowercase 32-char hex identity hashes allowed to request the
+# stream. Empty set means "block all requests" (matches Sideband + the UI
+# warning in LocationSharingCard's AllowedRequestersSection).
+_collector_allowed_requesters = set()
+
+
+def _local_lxmf_destination():
+    """Return the host's local LXMF delivery `RNS.Destination`, or None.
+
+    `LXMRouter` exposes registered delivery destinations as a
+    `delivery_destinations` dict (keyed by destination hash, value is the
+    `RNS.Destination` instance). Columba registers exactly one identity
+    per process via `LXMRouter.register_delivery_identity` — we want that
+    sole destination as both the `source` for outbound LXMessages and the
+    key (its `hexhash`) for storing the host's own telemetry. Returns the
+    first registered destination, or None when the router hasn't built
+    one yet (early-init race).
+    """
+    if _lxmf_router is None:
+        return None
+    try:
+        dests = getattr(_lxmf_router, "delivery_destinations", None)
+        if not dests:
+            return None
+        # `delivery_destinations` is a dict — values() handles both
+        # legacy list shape (defensive) and the documented dict shape.
+        for d in dests.values() if isinstance(dests, dict) else dests:
+            return d
+        return None
+    except Exception as e:  # noqa: BLE001 — defensive; never wedge on a missing attr
+        RNS.log(f"event_bridge: _local_lxmf_destination failed: {e}", RNS.LOG_DEBUG)
+        return None
+
+
+def set_collector_enabled(enabled):
+    """Toggle telemetry-host mode. Called by `PythonRnsTelemetry.setTelemetryCollectorMode`.
+
+    On disable, drop any collected telemetry so a stale set doesn't get
+    served the next time the host re-enables. Idempotent.
+    """
+    global _collector_enabled
+    _collector_enabled = bool(enabled)
+    if not _collector_enabled:
+        _collected_telemetry.clear()
+    RNS.log(
+        f"event_bridge: telemetry collector mode -> {_collector_enabled}",
+        RNS.LOG_DEBUG,
+    )
+
+
+def set_collector_allowed_requesters(hashes_iter):
+    """Replace the allow-list of requester identity hashes. Lowercased here
+    so the inbound-command check can match without re-normalising.
+
+    Empty set is allowed and means "block all" — matches Sideband.
+    """
+    global _collector_allowed_requesters
+    _collector_allowed_requesters = {str(h).lower() for h in hashes_iter if h}
+    RNS.log(
+        f"event_bridge: telemetry allowed-requesters -> "
+        f"{len(_collector_allowed_requesters)} entries",
+        RNS.LOG_DEBUG,
+    )
+
+
+def store_own_telemetry(packed_bytes, timestamp_seconds, appearance):
+    """Fold the host's own latest telemetry into the collected set so it
+    rides out in FIELD_TELEMETRY_STREAM responses to group members.
+
+    Called by `PythonRnsTelemetry.storeOwnTelemetry` whenever the host
+    runs its periodic / Send-Now path with `collectorAddress == self`.
+    Keyed by the host's local LXMF destination hash.
+
+    `appearance` is the FIELD_ICON_APPEARANCE list `[icon_name, fg_bytes,
+    bg_bytes]` or None.
+    """
+    if not _collector_enabled:
+        # Host mode flipped off between the Kotlin send and this call —
+        # silently ignore. The Kotlin side already gates this earlier
+        # but the race exists at process startup.
+        return
+    delivery_dest = _local_lxmf_destination()
+    if delivery_dest is None:
+        RNS.log(
+            "event_bridge: store_own_telemetry skipped — no local LXMF delivery destination",
+            RNS.LOG_DEBUG,
+        )
+        return
+    own_hash_hex = delivery_dest.hexhash
+    packed = bytes(packed_bytes) if not isinstance(packed_bytes, (bytes, bytearray)) else bytes(packed_bytes)
+    appearance_list = None
+    if appearance is not None:
+        try:
+            # Chaquopy may hand over a List<Object>; normalise to a real Python list
+            # so the eventual msgpack encode doesn't choke on jvm types.
+            appearance_list = list(appearance)
+            # bytes fields inside the appearance list (fg + bg color bytes) likewise.
+            appearance_list = [
+                bytes(v) if isinstance(v, (bytes, bytearray)) or hasattr(v, "__iter__") and not isinstance(v, str) else v
+                for v in appearance_list
+            ]
+        except Exception as e:  # noqa: BLE001 — appearance is optional
+            RNS.log(f"event_bridge: appearance normalisation failed: {e}", RNS.LOG_DEBUG)
+            appearance_list = None
+    _store_telemetry_for_collector(own_hash_hex, packed, int(timestamp_seconds), appearance_list)
+
+
+def _store_telemetry_for_collector(source_hash_hex, packed_telemetry, timestamp, appearance):
+    """Internal: insert/update one entry in the collected set.
+
+    Called from `store_own_telemetry` for the host's own location AND
+    from `_lxmf_delivery_callback` for inbound member telemetry while
+    host mode is on.
+    """
+    import time as _time
+    _collected_telemetry[source_hash_hex] = {
+        "timestamp": int(timestamp),
+        "packed_telemetry": packed_telemetry,
+        "appearance": appearance,
+        "received_at": _time.time(),
+    }
+
+
+def _cleanup_expired_collected_telemetry():
+    """Evict collector entries older than `_COLLECTOR_RETENTION_SECONDS`.
+    Called immediately before building a stream response so the bytes on
+    the wire stay bounded.
+    """
+    import time as _time
+    now = _time.time()
+    expired = [k for k, v in _collected_telemetry.items()
+               if now - v.get("received_at", 0) > _COLLECTOR_RETENTION_SECONDS]
+    for k in expired:
+        _collected_telemetry.pop(k, None)
+
+
+def _send_telemetry_stream_response(requester_hash_bytes, requester_identity, timebase):
+    """Build + handoff a FIELD_TELEMETRY_STREAM LXMessage to the requester.
+
+    `requester_hash_bytes` is the source_hash of the inbound request
+    (the requester's LXMF delivery hash). `requester_identity` is the
+    `RNS.Identity` instance, looked up via `RNS.Identity.recall`.
+    `timebase` is the request's timebase int — entries with
+    `received_at >= timebase` are included (0 / None means "all").
+
+    Mirrors `release/v0.10.x`'s shape so a Columba <-> Columba host /
+    member pair on either branch interops over the same wire format.
+    """
+    delivery_dest = _local_lxmf_destination()
+    if delivery_dest is None:
+        RNS.log(
+            "event_bridge: stream response skipped — no local LXMF delivery destination",
+            RNS.LOG_WARNING,
+        )
+        return
+    try:
+        _cleanup_expired_collected_telemetry()
+        entries = []
+        for source_hash_hex, entry in _collected_telemetry.items():
+            received_at = entry.get("received_at", 0)
+            if timebase and received_at < timebase:
+                continue
+            entries.append([
+                bytes.fromhex(source_hash_hex),
+                int(entry.get("timestamp", 0)),
+                entry.get("packed_telemetry", b""),
+                entry.get("appearance"),
+            ])
+
+        RNS.log(
+            f"event_bridge: telemetry stream response to "
+            f"{requester_hash_bytes.hex()[:16]} — {len(entries)} entries (timebase={timebase})",
+            RNS.LOG_DEBUG,
+        )
+
+        destination = RNS.Destination(
+            requester_identity,
+            RNS.Destination.OUT,
+            RNS.Destination.SINGLE,
+            "lxmf",
+            "delivery",
+        )
+        fields = {LXMF.FIELD_TELEMETRY_STREAM: entries}
+        lxmessage = LXMF.LXMessage(
+            destination,
+            delivery_dest,
+            "",
+            fields=fields,
+            desired_method=LXMF.LXMessage.DIRECT,
+        )
+        _lxmf_router.handle_outbound(lxmessage)
+    except Exception as e:  # noqa: BLE001 — never wedge the delivery thread
+        RNS.log(f"event_bridge: telemetry stream response failed: {e}", RNS.LOG_ERROR)
+
+
+def _maybe_handle_telemetry_request(message):
+    """Inspect an inbound LXMessage for a Sideband telemetry request command.
+
+    Returns True if the message was consumed by the collector responder
+    (no further processing needed — the delivery callback should skip
+    chat emission). Returns False otherwise.
+    """
+    if not _collector_enabled:
+        return False
+    fields = getattr(message, "fields", None)
+    if not fields or LXMF.FIELD_COMMANDS not in fields:
+        return False
+    commands = fields[LXMF.FIELD_COMMANDS]
+    if not isinstance(commands, list):
+        return False
+    handled = False
+    for command_dict in commands:
+        if not isinstance(command_dict, dict):
+            continue
+        if _COMMAND_TELEMETRY_REQUEST not in command_dict:
+            continue
+        args = command_dict[_COMMAND_TELEMETRY_REQUEST]
+        timebase = args[0] if isinstance(args, (list, tuple)) and len(args) > 0 else 0
+        # Sideband sometimes packs args[1] = is_collector_request; we
+        # respond to any telemetry request from an allow-listed requester.
+        requester_hash = _hex(getattr(message, "source_hash", None))
+        if not requester_hash:
+            continue
+        if requester_hash not in _collector_allowed_requesters:
+            RNS.log(
+                f"event_bridge: telemetry request BLOCKED from "
+                f"{requester_hash[:16]} (not in allow-list; have "
+                f"{len(_collector_allowed_requesters)} entries)",
+                RNS.LOG_DEBUG,
+            )
+            handled = True
+            continue
+        requester_identity = RNS.Identity.recall(message.source_hash) or \
+            RNS.Identity.recall(message.source_hash, from_identity_hash=True)
+        if requester_identity is None:
+            RNS.log(
+                f"event_bridge: telemetry request from {requester_hash[:16]} "
+                "had no recallable identity — dropping",
+                RNS.LOG_WARNING,
+            )
+            handled = True
+            continue
+        _send_telemetry_stream_response(message.source_hash, requester_identity, timebase)
+        handled = True
+    return handled
+
+
+def _maybe_collect_inbound_telemetry(message):
+    """Mirror an inbound member's FIELD_TELEMETRY into `_collected_telemetry`
+    while host mode is on, so subsequent FIELD_COMMANDS requests see it.
+    """
+    if not _collector_enabled:
+        return
+    fields = getattr(message, "fields", None)
+    if not fields or LXMF.FIELD_TELEMETRY not in fields:
+        return
+    source_hash = getattr(message, "source_hash", None)
+    if source_hash is None:
+        return
+    source_hash_hex = _hex(source_hash)
+    packed = fields[LXMF.FIELD_TELEMETRY]
+    if not isinstance(packed, (bytes, bytearray)):
+        return
+    timestamp = getattr(message, "timestamp", None) or 0
+    appearance = fields.get(LXMF.FIELD_ICON_APPEARANCE)
+    _store_telemetry_for_collector(source_hash_hex, bytes(packed), int(timestamp), appearance)
+
+
 def _lxmf_delivery_callback(message):
     """LXMRouter delivery callback. `message` is an upstream LXMessage."""
     try:
+        # Telemetry collector / host-mode hooks. Run BEFORE the usual
+        # message-emit path so a telemetry-stream request is consumed
+        # silently (no chat row) and so an inbound FIELD_TELEMETRY from a
+        # group member is folded into our collected set in time to be
+        # served by the next FIELD_COMMANDS response.
+        _maybe_collect_inbound_telemetry(message)
+        if _maybe_handle_telemetry_request(message):
+            # Pure command-frame request — Sideband never carries chat
+            # content alongside one. Skip the rest of the delivery handler
+            # so this never appears as a user-visible message.
+            return
+
         # Post-reassembly inbound size cap — see set_incoming_message_size_limit().
         if _incoming_message_size_limit_kb > 0:
             packed = getattr(message, "packed", None)
@@ -897,7 +1203,7 @@ def attach_lxmessage_callbacks(
             and not getattr(msg, "_columba_propagation_retry_attempted", False)
             and _lxmf_router is not None
             and getattr(_lxmf_router, "outbound_propagation_node", None) is not None
-            and getattr(msg, "desired_method", None) != _LXMF_METHOD_PROPAGATED
+            and getattr(msg, "desired_method", None) != LXMF.LXMessage.PROPAGATED
         ):
             msg._columba_propagation_retry_attempted = True
             # Clear retry flag so a second failure doesn't loop.
@@ -911,7 +1217,7 @@ def attach_lxmessage_callbacks(
             msg.propagation_packed = None
             msg.propagation_stamp = None
             msg.defer_propagation_stamp = True
-            msg.desired_method = _LXMF_METHOD_PROPAGATED
+            msg.desired_method = LXMF.LXMessage.PROPAGATED
             try:
                 _lxmf_router.handle_outbound(msg)
                 _emit(on_retrying_propagated, {"hash": _hex(getattr(msg, "hash", None))})

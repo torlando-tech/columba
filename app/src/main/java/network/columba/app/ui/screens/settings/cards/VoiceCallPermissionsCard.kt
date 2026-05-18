@@ -30,6 +30,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -148,26 +149,37 @@ fun VoiceCallPermissionsCard(
                     )
                 }
 
-                // Master "Allow voice calls" switch — placed to the left of
-                // the chevron so it stays visible whether the card is
-                // expanded or collapsed. When OFF, the inbound LXST
-                // destination is deregistered via the RnsTelephony AIDL
-                // surface; outbound calls still work.
-                Switch(
-                    checked = allowVoiceCalls,
-                    onCheckedChange = onAllowVoiceCallsChange,
-                )
-
-                Icon(
-                    imageVector =
-                        if (isExpanded) {
-                            Icons.Default.KeyboardArrowUp
-                        } else {
-                            Icons.Default.KeyboardArrowDown
-                        },
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = contentColor,
-                )
+                // Right-side controls: Switch + chevron. Wrapped in a
+                // nested Row that mirrors CollapsibleSettingsCard's layout
+                // (used by Notifications + Auto Announce + Privacy) so the
+                // toggle visually lines up with theirs — without this the
+                // outer SpaceBetween row distributes space between every
+                // pair and the Switch ends up floating mid-row. The chevron
+                // also goes through an IconButton for matching ~12dp inset
+                // padding, otherwise the bare Icon hugs the card's right
+                // edge and reads as misaligned next to the other cards'
+                // chevrons.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Switch(
+                        checked = allowVoiceCalls,
+                        onCheckedChange = onAllowVoiceCallsChange,
+                    )
+                    IconButton(onClick = { onExpandedChange(!isExpanded) }) {
+                        Icon(
+                            imageVector =
+                                if (isExpanded) {
+                                    Icons.Default.KeyboardArrowUp
+                                } else {
+                                    Icons.Default.KeyboardArrowDown
+                                },
+                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            tint = contentColor,
+                        )
+                    }
+                }
             }
 
             // Expanded content with animation

@@ -276,6 +276,18 @@ class PythonEventBridge {
     ) {
         runCatching {
             val fields = JSONObject(fieldsJson)
+
+            // FIELD_TELEMETRY_STREAM (0x03) — collector-host response with
+            // a list of `[source_hash_bytes, timestamp, packed_telemetry,
+            // appearance]` entries. Sent by a group-tracker host in
+            // response to a FIELD_COMMANDS telemetry request. Each entry
+            // gets its OWN source hash (the original telemetry author),
+            // NOT the LXMessage sender (which is the collector relaying
+            // for everyone). Re-emit each entry as a separate
+            // LocationTelemetry so the UI's per-peer marker logic stays
+            // simple — one entry, one peer pin.
+            handleTelemetryStream(fields)
+
             val telemetryHex = fields.optString(FIELD_TELEMETRY_KEY, "")
             if (telemetryHex.isBlank()) return@runCatching
             val telemetryBytes = telemetryHex.hexToBytes() ?: return@runCatching
@@ -319,6 +331,63 @@ class PythonEventBridge {
                 ),
             )
         }.onFailure { Log.w(TAG, "location telemetry assembly failed", it) }
+    }
+
+    /**
+     * Unpack a FIELD_TELEMETRY_STREAM payload into individual
+     * [LocationTelemetry] emissions, one per entry. The stream wire
+     * format (defined by Sideband, re-used by Columba) is:
+     *
+     *   [
+     *     [source_hash: bytes, timestamp: int, packed_telemetry: bytes,
+     *      appearance: [icon_name: str, fg: bytes, bg: bytes] | null],
+     *     ...
+     *   ]
+     *
+     * `event_bridge.py:_jsonable` hex-encodes the bytes fields before
+     * passing through JSON, so this reads everything as JSON strings /
+     * arrays and decodes the hex back out per-entry.
+     *
+     * Per-entry source_hash is what the map / DB key on, NOT the
+     * LXMessage sender (which is the collector relaying everyone's
+     * positions). Without this de-aliasing, every received stream entry
+     * would overwrite the collector's pin instead of populating each
+     * group member's.
+     */
+    private fun handleTelemetryStream(fields: JSONObject) {
+        val streamArr = fields.optJSONArray(FIELD_TELEMETRY_STREAM_KEY) ?: return
+        for (i in 0 until streamArr.length()) {
+            val entry = streamArr.optJSONArray(i) ?: continue
+            if (entry.length() < 3) continue
+            // [0] source_hash (hex-encoded bytes from _jsonable)
+            val entrySourceHex = entry.optString(0, "").takeIf { it.isNotBlank() } ?: continue
+            // [1] timestamp seconds (Telemeter convention is seconds; we
+            //     multiply to ms for the LocationTelemetry.ts contract)
+            val entryTsSeconds = entry.optLong(1, 0L)
+            // [2] packed Telemeter bytes (hex)
+            val packedHex = entry.optString(2, "").takeIf { it.isNotBlank() } ?: continue
+            val packedBytes = packedHex.hexToBytes() ?: continue
+            val decoded = TelemeterCodec.unpackLocationTelemetry(packedBytes) ?: continue
+            // [3] appearance (optional; null or [name, fg_hex, bg_hex])
+            val appearance =
+                entry.opt(3)?.let { raw ->
+                    when (raw) {
+                        JSONObject.NULL -> null
+                        is org.json.JSONArray -> {
+                            val parts = (0 until raw.length()).map { raw.opt(it) }
+                            AppDataParser.parseIconAppearance(parts)
+                        }
+                        else -> null
+                    }
+                }
+            _locationTelemetry.tryEmit(
+                decoded.copy(
+                    ts = if (entryTsSeconds > 0) entryTsSeconds * 1000L else decoded.ts,
+                    sourceHash = entrySourceHex.lowercase(),
+                    appearance = appearance,
+                ),
+            )
+        }
     }
 
     /**

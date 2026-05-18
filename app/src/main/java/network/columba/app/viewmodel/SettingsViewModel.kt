@@ -8,8 +8,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -2003,7 +2006,24 @@ class SettingsViewModel
                     _state.update { it.copy(isRequestingTelemetry = requesting) }
                 }
             }
+            // Mirror master-gate refusals from TelemetryCollectorManager
+            // into a user-facing message flow. SettingsScreen renders Toast.
+            viewModelScope.launch {
+                telemetryCollectorManager.setEnabledRefused.collect {
+                    _telemetryCollectorMessage.emit(
+                        "Location sharing is off. Enable it above (master toggle) to share with a group.",
+                    )
+                }
+            }
         }
+
+        // User-facing feedback for telemetry-collector actions blocked by
+        // the master `Settings → Location Sharing` toggle. SettingsScreen
+        // subscribes and renders a Toast. Belt-and-suspenders alongside
+        // the preemptive UI disable in LocationSharingCard's
+        // TelemetryCollectorSection.
+        private val _telemetryCollectorMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val telemetryCollectorMessage: SharedFlow<String> = _telemetryCollectorMessage.asSharedFlow()
 
         /**
          * Set the telemetry collector enabled state.

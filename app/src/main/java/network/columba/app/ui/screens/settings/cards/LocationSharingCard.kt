@@ -239,6 +239,7 @@ fun LocationSharingCard(
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         TelemetryCollectorSection(
+            masterEnabled = enabled,
             enabled = telemetryCollectorEnabled,
             collectorAddress = telemetryCollectorAddress,
             sendIntervalSeconds = telemetrySendIntervalSeconds,
@@ -577,6 +578,7 @@ internal fun getPrecisionRadiusDisplayText(radiusMeters: Int): String =
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TelemetryCollectorSection(
+    masterEnabled: Boolean,
     enabled: Boolean,
     collectorAddress: String?,
     sendIntervalSeconds: Int,
@@ -654,7 +656,13 @@ private fun TelemetryCollectorSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        // Enable toggle
+        // Enable toggle. Disabled when the master location-sharing toggle
+        // (top of this card) is off — `LocationSharingManager` +
+        // `TelemetryCollectorManager` both gate outbound location data
+        // through that flag, so the share toggle here is non-functional
+        // and silently refuses. Disabling here keeps the user from tapping
+        // a toggle that "doesn't react" and surfaces a hint pointing them
+        // back to the master.
         Row(
             modifier =
                 Modifier
@@ -662,6 +670,7 @@ private fun TelemetryCollectorSection(
                     .clickable(
                         interactionSource = null,
                         indication = null,
+                        enabled = masterEnabled,
                     ) { onEnabledChange(!enabled) },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -671,16 +680,28 @@ private fun TelemetryCollectorSection(
                     text = "Share with group",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
+                    color =
+                        if (masterEnabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 )
                 Text(
-                    text = "Automatically share your location",
+                    text =
+                        if (masterEnabled) {
+                            "Automatically share your location"
+                        } else {
+                            "Enable Location Sharing above first"
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Switch(
-                checked = enabled,
+                checked = enabled && masterEnabled,
                 onCheckedChange = null,
+                enabled = masterEnabled,
             )
         }
 

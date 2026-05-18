@@ -132,26 +132,67 @@ internal object RnsConfigFile {
                 sb.appendLine("    mode = ${iface.mode}")
             }
             is InterfaceConfig.RNode -> {
-                // The RNode interface ships as a bundled custom interface
-                // (rnode_interface.py -> ColumbaRNodeInterface). It must be
-                // deployed into the RNS interfaces directory before
-                // Transport.find_interfaces() can load it — on-device work.
-                sb.appendLine("    # RNode — bundled custom interface; needs interface-file deployment")
-                sb.appendLine("    type = ColumbaRNodeInterface")
-                sb.appendLine("    enabled = yes")
-                sb.appendLine("    connection_mode = ${iface.connectionMode}")
-                if (iface.targetDeviceName.isNotBlank()) {
-                    sb.appendLine("    target_device_name = ${iface.targetDeviceName}")
+                // RNode interface emission splits by connection_mode because
+                // the Python and Kotlin worlds have different paths to RNode
+                // hardware:
+                //
+                //   • TCP — upstream RNS ships `RNS.Interfaces.Android.
+                //     RNodeInterface` which natively speaks TCP to an
+                //     `rnodeserver`-style bridge (hardcoded port 7633). RNS's
+                //     conditional import in Reticulum.py:43 dispatches to the
+                //     Android variant on android, and the variant treats
+                //     `tcp_host = <ip>` as "use TCP, connect to this host on
+                //     port 7633". No jnius, no Kotlin bridge needed — pure
+                //     sockets. We emit `type = RNodeInterface` so RNS's
+                //     internal dispatch (Reticulum.py:900) picks it up.
+                //   • BLE / Classic / USB — upstream needs jnius for
+                //     Bluetooth (broken under Chaquopy). We bundle a
+                //     Columba-authored RNS.Interface (rnode_interface.py)
+                //     that bridges via KotlinRNodeBridge / KotlinUSBBridge.
+                //     Wiring is round 2 — currently writes the section but
+                //     RNS's external loader can't find the file because
+                //     deploy_bundled_interfaces doesn't yet copy it.
+                if (iface.connectionMode == "tcp") {
+                    val host = iface.tcpHost
+                    if (host.isNullOrBlank()) {
+                        sb.appendLine("    # TCP RNode missing tcp_host — interface skipped")
+                        return
+                    }
+                    sb.appendLine("    type = RNodeInterface")
+                    sb.appendLine("    enabled = yes")
+                    sb.appendLine("    tcp_host = $host")
+                    // tcp_port: upstream's Android RNodeInterface hardcodes
+                    // TARGET_PORT = 7633. The UI captures iface.tcpPort but
+                    // RNS will use 7633 regardless. Logged as a comment for
+                    // future-reader awareness.
+                    if (iface.tcpPort != 7633) {
+                        sb.appendLine("    # NOTE: tcpPort=${iface.tcpPort} from UI, but upstream RNS hardcodes 7633")
+                    }
+                    sb.appendLine("    frequency = ${iface.frequency}")
+                    sb.appendLine("    bandwidth = ${iface.bandwidth}")
+                    sb.appendLine("    txpower = ${iface.txPower}")
+                    sb.appendLine("    spreadingfactor = ${iface.spreadingFactor}")
+                    sb.appendLine("    codingrate = ${iface.codingRate}")
+                    sb.appendLine("    mode = ${iface.mode}")
+                } else {
+                    // BLE / Classic / USB — bundled custom interface path.
+                    // Deployment + Hilt-wiring of KotlinRNodeBridge is
+                    // tracked separately (see RNode round-2 plan).
+                    sb.appendLine("    # RNode (${iface.connectionMode}) — bundled custom interface; needs round-2 wire-up")
+                    sb.appendLine("    type = ColumbaRNodeInterface")
+                    sb.appendLine("    enabled = yes")
+                    sb.appendLine("    connection_mode = ${iface.connectionMode}")
+                    if (iface.targetDeviceName.isNotBlank()) {
+                        sb.appendLine("    target_device_name = ${iface.targetDeviceName}")
+                    }
+                    iface.usbDeviceId?.let { sb.appendLine("    usb_device_id = $it") }
+                    sb.appendLine("    frequency = ${iface.frequency}")
+                    sb.appendLine("    bandwidth = ${iface.bandwidth}")
+                    sb.appendLine("    txpower = ${iface.txPower}")
+                    sb.appendLine("    spreadingfactor = ${iface.spreadingFactor}")
+                    sb.appendLine("    codingrate = ${iface.codingRate}")
+                    sb.appendLine("    mode = ${iface.mode}")
                 }
-                iface.tcpHost?.let { sb.appendLine("    tcp_host = $it") }
-                sb.appendLine("    tcp_port = ${iface.tcpPort}")
-                iface.usbDeviceId?.let { sb.appendLine("    usb_device_id = $it") }
-                sb.appendLine("    frequency = ${iface.frequency}")
-                sb.appendLine("    bandwidth = ${iface.bandwidth}")
-                sb.appendLine("    txpower = ${iface.txPower}")
-                sb.appendLine("    spreadingfactor = ${iface.spreadingFactor}")
-                sb.appendLine("    codingrate = ${iface.codingRate}")
-                sb.appendLine("    mode = ${iface.mode}")
             }
             is InterfaceConfig.AndroidBLE -> {
                 // Bundled custom interface (ble_modules/android_ble_interface.py

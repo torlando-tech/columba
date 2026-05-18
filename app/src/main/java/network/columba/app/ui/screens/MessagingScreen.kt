@@ -832,12 +832,42 @@ fun MessagingScreen(
                         // Online status indicator - combines link activity, delivery proofs, and announces
                         val lastSeenFromAnnounce = announceInfo?.lastSeenTimestamp ?: 0L
                         val lastActivityFromLink = conversationLinkState?.lastActivityTimestamp ?: 0L
-                        val lastActivity = maxOf(lastSeenFromAnnounce, lastActivityFromLink)
                         val hasActiveLink = conversationLinkState?.isActive == true
                         val isEstablishing = conversationLinkState?.isEstablishing == true
+
+                        // A failed link probe is a STRONGER negative signal than
+                        // a recent announce is a positive one: it proves we just
+                        // actively tried to reach the peer and couldn't. The
+                        // announce only proved the peer existed at announce time;
+                        // failure proves the path is broken right now. Suppress
+                        // the optimistic "recent activity" indicator when a
+                        // recent failure is on record.
+                        //
+                        // ConversationLinkManager stamps lastActivityTimestamp
+                        // even on the failure path (line ~286), so the timestamp
+                        // alone can't distinguish success-recent from
+                        // failure-recent — `error != null` is the discriminator.
+                        val recentLinkFailure =
+                            conversationLinkState?.error != null &&
+                                lastActivityFromLink > 0 &&
+                                System.currentTimeMillis() - lastActivityFromLink < (5 * 60 * 1000L)
+
+                        // "Last successful activity" — drives the relative-time
+                        // display and the hasRecentActivity check. When the most
+                        // recent link state is an error, the link's
+                        // lastActivityTimestamp is a failure marker (not real
+                        // activity), so fall back to the announce timestamp.
+                        val lastSuccessfulActivity =
+                            if (conversationLinkState?.error == null) {
+                                maxOf(lastSeenFromAnnounce, lastActivityFromLink)
+                            } else {
+                                lastSeenFromAnnounce
+                            }
+                        val lastActivity = lastSuccessfulActivity
                         val hasRecentActivity =
-                            lastActivity > 0 &&
-                                System.currentTimeMillis() - lastActivity < (5 * 60 * 1000L) // 5 minutes
+                            !recentLinkFailure &&
+                                lastSuccessfulActivity > 0 &&
+                                System.currentTimeMillis() - lastSuccessfulActivity < (5 * 60 * 1000L)
 
                         // Debug logging
                         android.util.Log.d(

@@ -471,7 +471,7 @@ class MigrationImporter
                     // Derive interface type from receivingInterface if not present (backward compatibility)
                     val interfaceType =
                         announce.receivingInterfaceType
-                            ?: InterfaceType.fromInterfaceName(announce.receivingInterface).name
+                            ?: InterfaceType.fromName(announce.receivingInterface).storageName
 
                     val decodedPublicKey = Base64.decode(announce.publicKey, Base64.NO_WRAP)
                     AnnounceEntity(

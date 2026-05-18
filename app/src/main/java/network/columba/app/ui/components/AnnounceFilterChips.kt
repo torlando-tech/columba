@@ -29,9 +29,10 @@ private val ALL_ASPECTS = setOf(AspectChip.PEER, AspectChip.NODE, AspectChip.REL
 
 private val INTERFACE_OPTIONS: List<Pair<InterfaceType, String>> =
     listOf(
-        InterfaceType.AUTO_INTERFACE to "Local",
+        InterfaceType.AUTO to "Local",
         InterfaceType.TCP_CLIENT to "TCP",
-        InterfaceType.ANDROID_BLE to "Bluetooth",
+        InterfaceType.TCP_SERVER to "TCP Server",
+        InterfaceType.BLE to "Bluetooth",
         InterfaceType.RNODE to "RNode",
         InterfaceType.UNKNOWN to "Other",
     )

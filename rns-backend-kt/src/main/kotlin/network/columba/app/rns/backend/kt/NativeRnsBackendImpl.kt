@@ -1041,8 +1041,26 @@ class NativeRnsBackendImpl(
             receivedInterface = receivingInterfaceName,
             receivedRssi = message.receivedRssi,
             receivedSnr = message.receivedSnr,
+            deliveryMethod = nativeDeliveryMethodName(message.method),
         )
     }
+
+    /**
+     * Map an inbound `LXMessage.method` (reticulum-kt's `DeliveryMethod`
+     * enum) to the lowercase-string vocabulary the UI + persistence layer
+     * use for outbound (`MessageEntity.deliveryMethod`,
+     * `MessageDetailScreen.getDeliveryMethodInfo`). Returning null for an
+     * unset method keeps the UI's null-guarded card hidden rather than
+     * rendering "Unknown".
+     */
+    private fun nativeDeliveryMethodName(method: NativeDeliveryMethod?): String? =
+        when (method) {
+            NativeDeliveryMethod.OPPORTUNISTIC -> "opportunistic"
+            NativeDeliveryMethod.DIRECT -> "direct"
+            NativeDeliveryMethod.PROPAGATED -> "propagated"
+            NativeDeliveryMethod.PAPER -> "paper"
+            else -> null
+        }
 
     override val locationTelemetryFlow = _locationTelemetryFlow.asSharedFlow()
 
@@ -1286,17 +1304,17 @@ class NativeRnsBackendImpl(
     ): Result<PropagationState> =
         try {
             val r = router ?: return Result.success(PropagationState.IDLE)
-            // Sideband's `request_lxmf_sync` idle guard: only start a fresh
-            // sync when the router is IDLE or a previous sync has reached
-            // COMPLETE. Re-firing mid-`PR_LINK_ESTABLISHING` / `PR_RECEIVING`
-            // would thrash the outbound link.
-            val currentState = r.propagationTransferState
-            val isInTransit = currentState.ordinal in
-                PropagationState.STATE_PATH_REQUESTED until PropagationState.STATE_COMPLETE
-            if (isInTransit) {
-                Log.i(TAG, "Propagation sync already in flight (state=$currentState); not re-triggering")
-                return Result.success(readPropagationState(r))
-            }
+            // No external idle-guard. Upstream LXMRouter's
+            // `requestMessagesFromPropagationNode` handles being called
+            // while a previous request is in flight — it re-uses the
+            // existing outbound link if alive, or tears down + rebuilds
+            // if not. Matches `release/v0.10.x` + the python sibling.
+            // An earlier port of Sideband's `request_lxmf_sync` idle
+            // check was load-bearing in the wrong direction: when
+            // upstream got stuck at `PR_REQUEST_SENT` (propagation node
+            // unresponsive, link silently lost), the guard permanently
+            // locked out every retry — manual or periodic — until the
+            // process restarted.
             val activeNode = r.getActivePropagationNode()
             val propNodeCount = r.getPropagationNodes().size
             Log.d(TAG, "Propagation sync: activeNode=${activeNode?.hexHash?.take(12)}, totalPropNodes=$propNodeCount")

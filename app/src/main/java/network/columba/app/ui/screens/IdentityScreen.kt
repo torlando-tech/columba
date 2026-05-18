@@ -468,8 +468,13 @@ fun InterfacesCard(
                 )
             } else {
                 interfaces.forEach { iface ->
-                    // RNode interfaces are clickable to navigate to stats screen
-                    val isRNode = iface.type.contains("RNode", ignoreCase = true)
+                    // RNode interfaces are clickable to navigate to stats screen.
+                    // Use the canonical classifier so this captures every
+                    // observed RNode variant (RNodeInterface,
+                    // RNodeMultiInterface, ColumbaRNodeInterface, KISS-framed
+                    // RNode, ...) — see `InterfaceType.fromName`.
+                    val isRNode = network.columba.app.data.model.InterfaceType.fromName(iface.type) ==
+                        network.columba.app.data.model.InterfaceType.RNODE
                     InterfaceRow(
                         iface = iface,
                         onClick =

@@ -222,6 +222,12 @@ class MessageCollector
                                 // Signal quality metrics (RNode/BLE; null on TCP/Auto/propagated)
                                 receivedRssi = receivedMessage.receivedRssi,
                                 receivedSnr = receivedMessage.receivedSnr,
+                                // LXMF delivery method ("opportunistic" / "direct" / "propagated"
+                                // / "paper"). Surfaced in MessageDetailScreen for received
+                                // messages — most of the path-info cards (hop count, interface,
+                                // RSSI/SNR) are null for propagation-fetched messages, so
+                                // without this the detail screen renders essentially empty.
+                                deliveryMethod = receivedMessage.deliveryMethod,
                                 // Local reception time for sort ordering
                                 receivedAt = now,
                             )
@@ -400,7 +406,7 @@ class MessageCollector
                                     timestamp = announce.timestamp,
                                     nodeType = announce.nodeType.name,
                                     receivingInterface = announce.receivingInterface,
-                                    receivingInterfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface).name,
+                                    receivingInterfaceType = InterfaceType.fromName(announce.receivingInterface).storageName,
                                     aspect = announce.aspect,
                                     stampCost = announce.stampCost,
                                     stampCostFlexibility = announce.stampCostFlexibility,
@@ -433,7 +439,7 @@ class MessageCollector
                                     destinationHash = peerHash,
                                     peerName = peerName,
                                     hops = announce.hops,
-                                    interfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface),
+                                    interfaceType = InterfaceType.fromName(announce.receivingInterface),
                                     receivingInterface = announce.receivingInterface,
                                 )
                                 Log.d(TAG, "Posted notification for announce")

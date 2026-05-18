@@ -281,9 +281,10 @@ data class InterfaceTypeIconData(
 @Composable
 fun interfaceTypeIconData(type: InterfaceType): InterfaceTypeIconData? =
     when (type) {
-        InterfaceType.AUTO_INTERFACE -> InterfaceTypeIconData(Icons.Default.Wifi, "WiFi")
+        InterfaceType.AUTO -> InterfaceTypeIconData(Icons.Default.Wifi, "WiFi")
         InterfaceType.TCP_CLIENT -> InterfaceTypeIconData(Icons.Default.Public, "Internet")
-        InterfaceType.ANDROID_BLE -> InterfaceTypeIconData(Icons.Default.Bluetooth, "Bluetooth")
+        InterfaceType.TCP_SERVER -> InterfaceTypeIconData(Icons.Default.Public, "Internet")
+        InterfaceType.BLE -> InterfaceTypeIconData(Icons.Default.Bluetooth, "Bluetooth")
         InterfaceType.RNODE ->
             InterfaceTypeIconData(
                 ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna),

@@ -836,11 +836,27 @@ def attach_lxmessage_callbacks(
     """
     def _delivered(msg):
         msg_hash_hex = _hex(getattr(msg, "hash", None))
+        # Carry method + desired_method through so the Kotlin side can
+        # distinguish PROPAGATED (success means "stored on the relay")
+        # from DIRECT/OPPORTUNISTIC (success means "ack from recipient").
+        # NativeMessageSender on the kotlin backend does the same split via
+        # NativeDeliveryMethod; the python flavor must surface enough state
+        # for PythonEventBridge.handleLxmfDelivered to make the same call.
+        # Without these fields a PROPAGATED success gets stamped "delivered"
+        # in the UI (✓✓) instead of "propagated" (✓).
+        method = getattr(msg, "method", None)
+        desired = getattr(msg, "desired_method", None)
+        payload = {
+            "hash": msg_hash_hex,
+            "method": method if method is not None else -1,
+            "desired_method": desired if desired is not None else -1,
+        }
         RNS.log(
-            f"event_bridge: _delivered fired for {msg_hash_hex}",
+            f"event_bridge: _delivered fired for {msg_hash_hex} "
+            f"(method={method}, desired={desired})",
             RNS.LOG_DEBUG,
         )
-        _emit(on_delivered, {"hash": msg_hash_hex})
+        _emit(on_delivered, payload)
 
     def _failed(msg):
         # Sideband pattern: if try_propagation_on_fail was set on the message

@@ -147,7 +147,7 @@ class AnnounceStreamViewModel
                                 val matchesInterface =
                                     selectedInterfaces.isEmpty() ||
                                         selectedInterfaces.contains(
-                                            InterfaceType.fromInterfaceName(announce.receivingInterface),
+                                            InterfaceType.fromName(announce.receivingInterface),
                                         )
 
                                 matchesTypeOrAudio && matchesInterface
@@ -316,7 +316,7 @@ class AnnounceStreamViewModel
                             timestamp = announce.timestamp,
                             nodeType = announce.nodeType.name,
                             receivingInterface = announce.receivingInterface,
-                            receivingInterfaceType = InterfaceType.fromInterfaceName(announce.receivingInterface).name,
+                            receivingInterfaceType = InterfaceType.fromName(announce.receivingInterface).storageName,
                             aspect = announce.aspect,
                             stampCost = announce.stampCost,
                             stampCostFlexibility = announce.stampCostFlexibility,

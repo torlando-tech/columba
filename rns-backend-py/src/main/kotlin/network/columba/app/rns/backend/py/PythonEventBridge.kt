@@ -45,6 +45,36 @@ class PythonEventBridge {
     private companion object {
         const val TAG = "PythonEventBridge"
 
+        /**
+         * Upstream `LXMF.LXMessage.PROPAGATED` = 0x03. Inlined (rather than
+         * importing LXMF Kotlin bindings) because this bridge only needs the
+         * integer for the delivery-status branch — distinguishing "stored on
+         * the relay" from "ack'd by recipient". Matches the matching
+         * `_LXMF_METHOD_PROPAGATED` constant in `event_bridge.py`.
+         */
+        const val LXMF_METHOD_OPPORTUNISTIC = 0x01
+        const val LXMF_METHOD_DIRECT = 0x02
+        const val LXMF_METHOD_PROPAGATED = 0x03
+        const val LXMF_METHOD_PAPER = 0x04
+
+        /**
+         * Map an upstream `LXMessage.method` int to the lowercase-string
+         * vocabulary the UI + persistence layer already use for outbound
+         * messages (see `MessageEntity.deliveryMethod`,
+         * `MessageDetailScreen.getDeliveryMethodInfo`). Keeps inbound and
+         * outbound rendering paths sharing one set of labels — null when the
+         * method is unknown so the UI's null-guarded card disappears
+         * gracefully rather than rendering "Unknown".
+         */
+        fun lxmfMethodName(method: Int?): String? =
+            when (method) {
+                LXMF_METHOD_OPPORTUNISTIC -> "opportunistic"
+                LXMF_METHOD_DIRECT -> "direct"
+                LXMF_METHOD_PROPAGATED -> "propagated"
+                LXMF_METHOD_PAPER -> "paper"
+                else -> null
+            }
+
         // event_bridge.py emits the field map as `json.dumps({str(k): ...})`,
         // so JSON-keyed lookups need the stringified form of every LXMF field
         // ID. Derived from `LxmfFields` so the source-of-truth values live in
@@ -201,6 +231,7 @@ class PythonEventBridge {
                 receivedInterface = payload.dictStr("receiving_interface"),
                 receivedRssi = payload.dictInt("rssi"),
                 receivedSnr = payload.dictDouble("snr")?.toFloat(),
+                deliveryMethod = lxmfMethodName(payload.dictInt("method")),
             )
 
             // Side-channels always route — independent of the chat-emit
@@ -341,12 +372,25 @@ class PythonEventBridge {
 
     private fun handleLxmfDelivered(payload: PyObject) {
         runCatching {
-            // Mirrors NativeMessageSender — "delivered" is the same status
-            // string the kotlin backend emits on a delivery proof.
+            // Mirrors `NativeMessageSender.installDeliveryCallbacks`: same
+            // upstream-LXMF callback fires for both PROPAGATED (success ==
+            // "stored on the relay node") and DIRECT/OPPORTUNISTIC (success
+            // == "ack from recipient"). The split is by `method`, not state.
+            // Without this distinction the UI would render ✓✓ ("delivered")
+            // for every PROPAGATED send the moment it lands on the relay,
+            // misrepresenting the actual delivery promise.
+            val method = payload.dictInt("method") ?: -1
+            val desired = payload.dictInt("desired_method") ?: -1
+            val status =
+                if (method == LXMF_METHOD_PROPAGATED || desired == LXMF_METHOD_PROPAGATED) {
+                    "propagated"
+                } else {
+                    "delivered"
+                }
             _deliveryStatus.tryEmit(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "delivered",
+                    status = status,
                     timestamp = System.currentTimeMillis(),
                 ),
             )

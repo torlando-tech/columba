@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
+import network.columba.app.data.model.InterfaceType
 
 data class InterfaceInfo(
     val icon: ImageVector,
@@ -75,30 +76,40 @@ private fun extractInterfaceType(interfaceName: String): String = interfaceName.
 internal fun categorizeInterface(interfaceName: String): InterfaceCategory = categorizeInterface(interfaceName, host = null)
 
 /**
- * Determine the interface category based on the interface name and optional host.
- * The host is used to distinguish Yggdrasil TCP interfaces from regular TCP.
+ * Determine the interface category for UI display purposes (icon, color,
+ * marker style) based on the interface name and optional host.
+ *
+ * Sources the transport classification from the canonical
+ * [InterfaceType] (single source of truth — see
+ * `network.columba.app.data.model.InterfaceType.fromName`), then layers
+ * on UI-only sub-categories ([InterfaceCategory.YGGDRASIL] from host
+ * inspection, [InterfaceCategory.I2P] / [InterfaceCategory.SERIAL] from
+ * legacy substring matches that don't map to a configurable
+ * [InterfaceType]).
+ *
+ * `host` is used to distinguish Yggdrasil TCP traffic (IPv6 in 0200::/7)
+ * from regular TCP for the map-pin coloring.
  */
 internal fun categorizeInterface(
     interfaceName: String,
     host: String?,
 ): InterfaceCategory {
     val lowerName = interfaceName.lowercase()
-    return when {
-        lowerName.contains("autointerface") ||
-            lowerName.contains("auto discovery") ||
-            lowerName.startsWith("auto") -> InterfaceCategory.AUTO
-        lowerName.contains("i2p") -> InterfaceCategory.I2P
-        lowerName.contains("rnode") ||
-            lowerName.contains("lora") ||
-            lowerName.contains("weave") ||
-            lowerName.contains("kiss") -> InterfaceCategory.LORA
-        lowerName.contains("ble") ||
-            lowerName.contains("bluetooth") ||
-            lowerName.contains("androidble") -> InterfaceCategory.BLUETOOTH
-        lowerName.contains("tcp") || lowerName.contains("backbone") ->
-            if (isYggdrasilHost(host)) InterfaceCategory.YGGDRASIL else InterfaceCategory.TCP
-        lowerName.contains("serial") -> InterfaceCategory.SERIAL
-        else -> InterfaceCategory.UNKNOWN
+
+    // UI-only sub-categories not represented in the canonical enum.
+    // Checked first because their substrings can also match the broader
+    // TCP / BLE rules below (e.g. "i2p" interfaces are TCP under the hood).
+    if (lowerName.contains("i2p")) return InterfaceCategory.I2P
+    if (lowerName.contains("serial")) return InterfaceCategory.SERIAL
+
+    return when (InterfaceType.fromName(interfaceName)) {
+        InterfaceType.AUTO -> InterfaceCategory.AUTO
+        InterfaceType.TCP_CLIENT,
+        InterfaceType.TCP_SERVER,
+        -> if (isYggdrasilHost(host)) InterfaceCategory.YGGDRASIL else InterfaceCategory.TCP
+        InterfaceType.BLE -> InterfaceCategory.BLUETOOTH
+        InterfaceType.RNODE -> InterfaceCategory.LORA
+        InterfaceType.UNKNOWN -> InterfaceCategory.UNKNOWN
     }
 }
 

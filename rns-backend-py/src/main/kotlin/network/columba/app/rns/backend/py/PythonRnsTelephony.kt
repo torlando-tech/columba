@@ -186,6 +186,29 @@ class PythonRnsTelephony(
         callCoordinator.setPttActiveLocally(active)
     }
 
+    /**
+     * Wired by `PythonCallManager`'s init block so the manager can react to
+     * the toggle without `PythonRnsTelephony` itself needing to know about
+     * Chaquopy / `Transport.deregister_destination`. Same single-listener
+     * shape used by every other `*Hook` on this class — the manager owns the
+     * destination lifecycle, this class owns the AIDL contract.
+     *
+     * Null between class construction and PythonCallManager init — the
+     * implementation logs and treats the call as a no-op rather than
+     * crashing the binder thread.
+     */
+    @Volatile
+    var setIncomingEnabledHook: ((Boolean) -> Unit)? = null
+
+    override suspend fun setIncomingEnabled(enabled: Boolean) {
+        val hook = setIncomingEnabledHook
+        if (hook == null) {
+            Log.w(TAG, "setIncomingEnabled($enabled) before PythonCallManager wired hook")
+        } else {
+            hook(enabled)
+        }
+    }
+
     // ==================== One-shot snapshot ====================
 
     override suspend fun getCallState(): Result<VoiceCallState> =

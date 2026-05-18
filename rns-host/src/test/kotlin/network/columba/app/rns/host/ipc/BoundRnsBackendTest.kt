@@ -290,6 +290,7 @@ class BoundRnsBackendTest {
         override suspend fun setSpeakerLocally(enabled: Boolean) {}
         override suspend fun setPttModeLocally(enabled: Boolean) {}
         override suspend fun setPttActiveLocally(active: Boolean) {}
+        override suspend fun setIncomingEnabled(enabled: Boolean) {}
     }
 
     private class FakeRnsTransportAdmin : RnsTransportAdmin {

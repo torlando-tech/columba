@@ -201,6 +201,22 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `setIncomingEnabled round-trips both true and false through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        client.telephony.setIncomingEnabled(false)
+        advanceUntilIdle()
+        assertEquals(false, fake.telephony.incomingEnabled)
+
+        client.telephony.setIncomingEnabled(true)
+        advanceUntilIdle()
+        assertEquals(true, fake.telephony.incomingEnabled)
+
+        assertEquals(2, fake.telephony.setIncomingEnabledCalls)
+    }
+
+    @Test
     fun `capabilities observer pushes mutations into the client StateFlow`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
@@ -263,6 +279,8 @@ private class FakeRnsTelephony : RnsTelephony {
     var nextAnswerResult: Result<Unit> = Result.success(Unit)
     var hangupCount = 0
     var declineCount = 0
+    var setIncomingEnabledCalls = 0
+    var incomingEnabled: Boolean? = null
     var nextCallState: Result<VoiceCallState> = Result.success(
         VoiceCallState("IDLE", isActive = false, isMuted = false, remoteIdentity = null, profile = null),
     )
@@ -308,6 +326,10 @@ private class FakeRnsTelephony : RnsTelephony {
     override suspend fun setSpeakerLocally(enabled: Boolean) { _isSpeakerOn.value = enabled }
     override suspend fun setPttModeLocally(enabled: Boolean) { _isPttMode.value = enabled }
     override suspend fun setPttActiveLocally(active: Boolean) { _isPttActive.value = active }
+    override suspend fun setIncomingEnabled(enabled: Boolean) {
+        setIncomingEnabledCalls++
+        incomingEnabled = enabled
+    }
 }
 
 private class FakeRnsLxmf : RnsLxmf {

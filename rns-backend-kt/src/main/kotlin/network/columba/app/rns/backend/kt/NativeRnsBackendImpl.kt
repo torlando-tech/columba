@@ -2108,6 +2108,24 @@ class NativeRnsBackendImpl(
         callCoordinator.setPttActiveLocally(active)
     }
 
+    /**
+     * Master incoming-calls toggle. Wired to [NativeCallManager] in
+     * `setupNativeTelephone` once the call manager is constructed
+     * (commit 5). Until then this is a no-op log so the AIDL boundary
+     * compiles end-to-end.
+     */
+    @Volatile
+    var setIncomingEnabledHook: ((Boolean) -> Unit)? = null
+
+    override suspend fun setIncomingEnabled(enabled: Boolean) {
+        val hook = setIncomingEnabledHook
+        if (hook == null) {
+            Log.w(TAG, "setIncomingEnabled($enabled) before NativeCallManager wired hook")
+        } else {
+            hook(enabled)
+        }
+    }
+
     override suspend fun getCallState(): Result<VoiceCallState> =
         runCatching {
             val coordinator =

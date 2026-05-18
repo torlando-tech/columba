@@ -1,8 +1,9 @@
 // AIDL surface mirroring the Kotlin RnsTelephony interface (LXST voice).
 //
 // Bundle key conventions for IRnsResultCallback payloads:
-//   - getCallState   → "state": VoiceCallState
-//   - Result<Unit>   → Bundle.EMPTY
+//   - getCallState      → "state": VoiceCallState
+//   - setIncomingEnabled→ Bundle.EMPTY
+//   - Result<Unit>      → Bundle.EMPTY
 //
 // profileCode is a nullable int — represented as (value, hasValue) for AIDL
 // since boxed Int isn't supported. Pass hasValue=false to mean null.
@@ -79,4 +80,15 @@ oneway interface IRnsTelephony {
     void setSpeakerLocally(boolean enabled, in IRnsResultCallback cb);
     void setPttModeLocally(boolean enabled, in IRnsResultCallback cb);
     void setPttActiveLocally(boolean active, in IRnsResultCallback cb);
+
+    // ==================== Master incoming-calls toggle ====================
+    //
+    // setIncomingEnabled(false) deregisters the lxst.telephony destination
+    // in :reticulum so peers cannot reach this device for inbound calls
+    // (outbound is unaffected — outbound creates an ephemeral OUT
+    // destination per call). setIncomingEnabled(true) re-registers and
+    // re-announces. Idempotent on both sides.
+    //
+    // Mirrors RnsTelephony.setIncomingEnabled on the Kotlin side.
+    void setIncomingEnabled(boolean enabled, in IRnsResultCallback cb);
 }

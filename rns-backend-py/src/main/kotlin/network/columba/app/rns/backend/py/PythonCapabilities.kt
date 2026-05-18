@@ -30,6 +30,13 @@ import network.columba.app.rns.api.BackendCapabilities.Versions
  *   [Support.EXPERIMENTAL] pending the A.11 parity test — not this one.)
  * - **`sharedInstanceAvailabilityChecks = true`** — upstream RNS can probe
  *   for a co-located shared `rnsd` instance.
+ * - **`autoconnectIfacOnlyFilter = false`** — upstream Python RNS has no
+ *   knob that filters auto-connect by IFAC presence; reticulum-kt does. UI
+ *   hides the IFAC-only Switch on this backend so the toggle doesn't
+ *   silently lie about its runtime effect. Implementing the filter on the
+ *   Python flavor needs a Columba-authored wrapper around
+ *   `RNS.Discovery.autoconnect()` in `event_bridge.py` (slim-Python rule —
+ *   no `rns_*.py` facade); tracked as a post-release follow-up.
  */
 val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
     backendId = BackendId.PYTHON_CHAQUOPY,
@@ -46,6 +53,7 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
     ),
     interfaces = InterfaceCaps(
         hotReloadInterfaces = false,
+        autoconnectIfacOnlyFilter = false,
         degradationHint =
             "The Python backend cannot hot-reload interfaces — applying changes " +
                 "restarts Reticulum (briefly disconnecting from peers).",

@@ -10,6 +10,8 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.backend.py.ChaquopyRnsBackend
 import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
 import network.columba.app.rns.host.di.LocalBackend
+import network.columba.app.rns.host.persistence.CallsFromContactsGate
+import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import tech.torlando.lxst.core.CallCoordinator
 import javax.inject.Singleton
 
@@ -78,12 +80,16 @@ object HostBackendModule {
         backend: ChaquopyRnsBackend,
         transport: PythonNetworkTransport,
         callCoordinator: CallCoordinator,
+        settingsAccessor: ServiceSettingsAccessor,
+        contactsGate: CallsFromContactsGate,
     ): PythonCallManager =
         PythonCallManager(
             context = context,
             backend = backend,
             transport = transport,
             callCoordinator = callCoordinator,
+            settingsAccessor = settingsAccessor,
+            contactsGate = contactsGate,
         )
 
     /**

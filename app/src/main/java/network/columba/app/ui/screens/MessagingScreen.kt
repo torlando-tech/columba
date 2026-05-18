@@ -892,7 +892,7 @@ fun MessagingScreen(
                             val dotContentDescription = when {
                                 isEstablishing -> "Connecting"
                                 hasActiveLink -> "Online — link active"
-                                hasRecentActivity -> "Online — recent activity"
+                                hasRecentActivity -> "Last seen recently"
                                 else -> "Offline"
                             }
                             Row(
@@ -928,13 +928,26 @@ fun MessagingScreen(
                                     )
                                 }
 
-                                // Status text
+                                // Status text. "Online" is reserved for an
+                                // ACTIVE LINK only — that's the one signal
+                                // proving the peer is reachable right now.
+                                //
+                                // Announce-only presence (hasRecentActivity)
+                                // is a weaker signal: announces in RNS's
+                                // announce_table get re-emitted to newly-
+                                // connected interfaces with reception
+                                // timestamp = NOW, so a peer who hasn't
+                                // launched the app since our last reconnect
+                                // can still appear "fresh" via cache
+                                // replay. The honest label there is
+                                // "Last seen X ago" — the user can read
+                                // the relative time and decide whether to
+                                // expect a reply.
                                 val statusText =
                                     when {
                                         isEstablishing -> "Connecting..."
                                         hasActiveLink -> "Online"
-                                        hasRecentActivity -> "Online"
-                                        lastActivity > 0 -> formatRelativeTime(lastActivity)
+                                        lastActivity > 0 -> "Last seen ${formatRelativeTime(lastActivity).lowercase()}"
                                         else -> ""
                                     }
                                 Text(

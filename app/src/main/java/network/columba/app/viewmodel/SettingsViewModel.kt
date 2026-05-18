@@ -129,6 +129,8 @@ data class SettingsState(
     val notificationsEnabled: Boolean = true,
     // Privacy state
     val blockUnknownSenders: Boolean = false,
+    val allowCallsFromContactsOnly: Boolean = false,
+    val allowVoiceCalls: Boolean = true,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -186,6 +188,7 @@ class SettingsViewModel
         private val rnsCore: RnsCore,
         private val rnsLxmf: RnsLxmf,
         private val rnsTransportAdmin: RnsTransportAdmin,
+        private val rnsTelephony: network.columba.app.rns.api.RnsTelephony,
         private val interfaceConfigManager: network.columba.app.service.InterfaceConfigManager,
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: network.columba.app.service.LocationSharingManager,
@@ -470,6 +473,8 @@ class SettingsViewModel
                             notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve privacy state from loadPrivacySettings()
                             blockUnknownSenders = _state.value.blockUnknownSenders,
+                            allowCallsFromContactsOnly = _state.value.allowCallsFromContactsOnly,
+                            allowVoiceCalls = _state.value.allowVoiceCalls,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
@@ -1520,6 +1525,16 @@ class SettingsViewModel
                     _state.update { it.copy(blockUnknownSenders = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.allowCallsFromContactsOnlyFlow.collect { enabled ->
+                    _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.allowVoiceCallsFlow.collect { enabled ->
+                    _state.update { it.copy(allowVoiceCalls = enabled) }
+                }
+            }
         }
 
         /**
@@ -1531,6 +1546,43 @@ class SettingsViewModel
                 settingsRepository.saveBlockUnknownSenders(enabled)
                 _state.update { it.copy(blockUnknownSenders = enabled) }
                 Log.d(TAG, "Block unknown senders ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the calls-from-contacts-only setting.
+         * When enabled, only contacts can establish incoming voice calls; non-contact
+         * callers' link attempts are silently dropped in `:reticulum` after caller
+         * identification. No runtime AIDL signal needed — the gate reads the cross-process
+         * SharedPreferences value per-call.
+         */
+        fun setAllowCallsFromContactsOnly(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAllowCallsFromContactsOnly(enabled)
+                _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
+                Log.d(TAG, "Calls-from-contacts-only ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the master allow-voice-calls setting.
+         * When disabled, the inbound LXST telephony destination is deregistered in
+         * `:reticulum` and no announces are sent; peers see this device as unreachable
+         * for calls. Outbound calls are unaffected.
+         *
+         * Runtime delivery rides the new `RnsTelephony.setIncomingEnabled` AIDL call —
+         * the SharedPreferences write done by `saveAllowVoiceCalls` exists only for the
+         * cold-start path (`:reticulum` reads it after restart). If the AIDL call fails
+         * the cold-start path eventually applies the desired state, so failures are logged
+         * rather than surfaced.
+         */
+        fun setAllowVoiceCalls(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAllowVoiceCalls(enabled)
+                _state.update { it.copy(allowVoiceCalls = enabled) }
+                runCatching { rnsTelephony.setIncomingEnabled(enabled) }
+                    .onFailure { Log.w(TAG, "setIncomingEnabled($enabled) AIDL call failed", it) }
+                Log.d(TAG, "Allow voice calls ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

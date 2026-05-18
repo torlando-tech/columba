@@ -191,6 +191,15 @@ class ColumbaRNodeInterface(Interface):
     # MTU) matches the v0.10.x reference and prevents this truncation.
     HW_MTU = 500
 
+    # Mirrors upstream RNS.Interfaces.RNodeInterface.DEFAULT_IFAC_SIZE.
+    # Reticulum.py:1050 falls back to `interface.DEFAULT_IFAC_SIZE` when no
+    # `ifac_size` is configured on the interface — it's a per-interface-type
+    # class attribute on the upstream RNode interface (not defined on the
+    # `Interface` base), so subclassing `Interface.Interface` alone doesn't
+    # inherit it. Without this, RNS panics with `AttributeError` during
+    # external-interface init and the whole interface bring-up fails.
+    DEFAULT_IFAC_SIZE = 8
+
     def __init__(self, owner, configuration):
         """
         Initialize the RNode interface from upstream RNS's loader contract.

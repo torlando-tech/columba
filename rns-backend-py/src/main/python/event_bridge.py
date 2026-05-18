@@ -1290,7 +1290,21 @@ def make_nomadnet_response_capture():
     cap = SimpleNamespace(
         done=False,
         response_bytes=None,
-        metadata_bytes=None,
+        # True iff the upstream `RequestReceipt.metadata` was non-None — the
+        # "/file/ response" signal. NomadNet sets metadata on file responses
+        # only (NomadNet node.py `Request.file_handler`); `/page/` responses
+        # leave it None. The Kotlin consumer keys "render as file" on this
+        # flag, independent of whether a `"name"` key was present.
+        has_metadata=False,
+        # Server-advertised file name bytes from the metadata dict's `"name"`
+        # key (utf-8). Empty bytes when the metadata dict has no `"name"` key,
+        # or when `has_metadata` is False. Replaces the previous
+        # `metadata_bytes` (a msgpack-roundtripped blob) — upstream
+        # `RequestReceipt.metadata` is already a Python dict at the property
+        # accessor, so packing it just to make Kotlin unpack it on-device was
+        # unnecessary work. The Kotlin consumer
+        # (`PythonRnsNomadnet.buildPageResult`) only ever needed the name.
+        metadata_name_bytes=b"",
         error=None,
     )
 
@@ -1303,12 +1317,24 @@ def make_nomadnet_response_capture():
                 cap.response_bytes = bytes(r)
             else:
                 cap.response_bytes = b"" if r is None else bytes(str(r), "utf-8")
+            # Extract just the server-advertised file name from the metadata
+            # dict. Upstream RNS exposes `receipt.metadata` as the unpacked
+            # dict (msgpack happens lazily inside the property accessor), so
+            # we read `m["name"]` directly. v0.10.x reference behavior:
+            # python/rns_api.py:_save_file_response — name defaults to
+            # b"download" when the key is absent; bytes are decoded
+            # utf-8/errors="replace" on the Kotlin side.
             m = getattr(receipt, "metadata", None)
-            if isinstance(m, (bytes, bytearray)):
-                cap.metadata_bytes = bytes(m)
-            elif m is not None:
-                import umsgpack
-                cap.metadata_bytes = umsgpack.packb(m)
+            if m is not None:
+                cap.has_metadata = True
+            if isinstance(m, dict):
+                name_raw = m.get("name", b"")
+                if isinstance(name_raw, bytes):
+                    cap.metadata_name_bytes = bytes(name_raw)
+                elif isinstance(name_raw, str):
+                    cap.metadata_name_bytes = name_raw.encode("utf-8")
+                else:
+                    cap.metadata_name_bytes = str(name_raw).encode("utf-8")
         except Exception as e:  # noqa: BLE001
             cap.error = str(e)
         finally:

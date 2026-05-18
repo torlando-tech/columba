@@ -1,0 +1,235 @@
+# Reproduces punch-list items 3, 4, and 5: the three Discovered-Interfaces
+# admin toggles that are silent no-ops on the Python backend.
+#
+# All three transport-admin methods invoked by DiscoveredInterfacesViewModel
+# are bodyless on the Python flavor:
+#   - PythonRnsTransportAdmin.setDiscoveryEnabled
+#       (rns-backend-py/.../PythonRnsTransportAdmin.kt:95)
+#   - PythonRnsTransportAdmin.setAutoconnectLimit
+#       (rns-backend-py/.../PythonRnsTransportAdmin.kt:107)
+#   - PythonRnsTransportAdmin.setAutoconnectIfacOnly
+#       (rns-backend-py/.../PythonRnsTransportAdmin.kt:116)
+#
+# DiscoveredInterfacesViewModel (app/.../viewmodel/DiscoveredInterfacesViewModel.kt:200,261,297,320)
+# happily persists the new value to DataStore and then asks the admin to apply
+# it live. On Python, the admin call is a no-op and the underlying
+# Reticulum() instance (python/reticulum_wrapper.py) only reads
+# discover_interfaces / autoconnect_discovered_interfaces / autoconnect_ifac_only
+# from the config file at startup — so without a full Reticulum restart the
+# new values never reach the running stack.
+#
+# Reference (working v0.10.x): `git show
+# origin/release/v0.10.x:app/src/main/java/com/lxmf/messenger/viewmodel/DiscoveredInterfacesViewModel.kt`
+# lines 256-302 — there, changing the autoconnect count called
+# interfaceConfigManager.applyInterfaceChanges() (full Reticulum restart) so the
+# new value made it into the config and the next-boot wrapper picked it up.
+#
+# Preconditions:
+#   - App is already onboarded (start destination resolves to Screen.Chats).
+#   - Python build of network.columba.app.debug is installed on emulator-5554.
+#   - The orchestration layer (NOT this flow) is responsible for:
+#       BEFORE: adb -s emulator-5554 shell run-as network.columba.app.debug \
+#                 cat files/reticulum/config > /tmp/config-before.txt
+#       AFTER:  force-stop, relaunch (separately so the wrapper re-reads
+#               config), then dump again to /tmp/config-after.txt
+#       Bug confirmation: `diff /tmp/config-before.txt /tmp/config-after.txt`
+#       shows NONE of the toggled values made it into the on-disk config,
+#       because the Python admin never triggered a restart and the wrapper
+#       never persists hot-update values back to the file.
+#
+# Evidence: five takeScreenshot artifacts (Maestro cannot read pixel colors or
+# diff config files). The screenshots prove the UI accepted each change
+# (DataStore-backed state flipped), while the orchestration-layer config diff
+# proves the values never reached Reticulum.
+#
+# Selector notes (no testTags on the relevant Compose nodes):
+#   - The Switch / Slider composables in DiscoverySettingsCard are bare
+#     Material3 components with no semantic label and no `Modifier.clickable`
+#     on the surrounding Row. Tapping the "Interface Discovery" text or its
+#     row is a no-op — only the Switch handle is interactive. We therefore
+#     drive the toggles via positional taps and the slider via a swipe. The
+#     percentages below were derived from the live Maestro hierarchy on a
+#     1080x1920 / density 420 emulator:
+#       - Discovery Switch bounds: [859,315][996,441]  -> center 86%, 19.7%
+#       - Auto-connect SeekBar bounds: [58,625][1022,741] -> y center 35.6%
+#       - IFAC-only Switch bounds: [859,767][996,893] -> center 86%, 43.2%
+#     These coordinates are inherently fragile (any layout change above the
+#     card shifts them) but are the only reliable handles until testTags are
+#     added.
+
+appId: network.columba.app.debug
+---
+# Reset the activity stack so we always start from Screen.Chats regardless of
+# where a previous flow left the app. clearState would wipe onboarding and
+# break the precondition, so use stopApp instead.
+- launchApp:
+    appId: network.columba.app.debug
+    stopApp: true
+    clearState: false
+
+# Wait for the Chats screen to render. The TopAppBar title is "Chats" (from
+# ChatsScreen.kt, via Screen.Chats.title). 30s budget covers cold-start
+# Reticulum init on the Python flavor.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+
+# Navigate to the Settings tab. MainActivity.kt bottom nav lists
+# Screen.Chats, Screen.Contacts, Screen.Map, Screen.Settings; the tab label is
+# the literal string "Settings" (MainActivity.kt:566). On the Chats screen
+# "Settings" is unambiguous (only one text node).
+- tapOn: "Settings"
+
+# Confirm we're on the Settings screen. TopAppBar title is "Settings"
+# (SettingsScreen.kt:219). Use extendedWaitUntil for Compose recomposition
+# tolerance.
+- extendedWaitUntil:
+    visible: "Network"
+    timeout: 5000
+
+# Expand the Network card so the "Manage Interfaces" button becomes tappable.
+# NetworkCard is a CollapsibleSettingsCard with title "Network"
+# (settings/cards/NetworkCard.kt:48). Default expansion state is driven by
+# SettingsCardId.NETWORK in the persisted card-expansion map, so it may or may
+# not already be open — tapping the title row is idempotent only when collapsed,
+# so we use scrollUntilVisible on the inner button as the actual gate.
+- tapOn: "Network"
+
+# The "Manage Interfaces" button lives inside the expanded NetworkCard body
+# (NetworkCard.kt:108). Scroll the settings list until it's on-screen, then
+# tap it. scrollUntilVisible handles both "card was already collapsed and our
+# tap above opened it" and "card was already open and we no-op'd above".
+- scrollUntilVisible:
+    element:
+      text: "Manage Interfaces"
+    direction: DOWN
+    timeout: 5000
+
+- tapOn: "Manage Interfaces"
+
+# Confirm we landed on the Interface Management screen. Its TopAppBar title is
+# "Network Interfaces" (InterfaceManagementScreen.kt:156).
+- extendedWaitUntil:
+    visible: "Network Interfaces"
+    timeout: 5000
+
+# Tap the "Interface Discovery" summary card to drill into the
+# DiscoveredInterfacesScreen. DiscoveredInterfacesSummaryCard
+# (InterfaceManagementScreen.kt:1372) is itself a clickable Card with the
+# literal title text "Interface Discovery" (line 1419).
+- scrollUntilVisible:
+    element:
+      text: "Interface Discovery"
+    direction: DOWN
+    timeout: 5000
+
+- tapOn: "Interface Discovery"
+
+# Confirm we're on the DiscoveredInterfacesScreen. TopAppBar title is
+# "Discovered Interfaces" (DiscoveredInterfacesScreen.kt:166).
+- extendedWaitUntil:
+    visible: "Discovered Interfaces"
+    timeout: 10000
+
+# Allow the DiscoverySettingsCard to settle. loadDiscoverySettings()
+# (DiscoveredInterfacesViewModel.kt:186) reads DataStore on a background
+# dispatcher, then updates state — give it a beat so the Switch reflects the
+# persisted value rather than its initial composition default.
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Screenshot #1: state of the screen BEFORE any toggles. This is the baseline
+# the orchestration-layer config diff compares against.
+- takeScreenshot: 03-04-05-initial-state
+
+# -----------------------------------------------------------------------------
+# Item 3 — Discovery toggle
+# -----------------------------------------------------------------------------
+# The "Interface Discovery" header sits inside DiscoverySettingsCard
+# (DiscoveredInterfacesScreen.kt:409) and is paired with a Material3 Switch
+# (line 438) whose onCheckedChange invokes viewModel.toggleDiscovery(). That
+# VM method (DiscoveredInterfacesViewModel.kt:226) persists the new value to
+# DataStore and then calls transportAdmin.setDiscoveryEnabled(newEnabled) —
+# which is the no-op on Python.
+#
+# Tapping the "Interface Discovery" text does NOT toggle: the surrounding
+# Row has no Modifier.clickable. Only the Switch handle (right edge of the
+# row) is interactive. Tap via point — the Switch bounds were [859,315]
+# [996,441] in the live hierarchy, center at (86%, 19.7%).
+- tapOn:
+    point: "86%,19%"
+
+# Give toggleDiscovery() time to finish its IO work. The VM also flips
+# isRestarting = true briefly while applying — on Python that flips back almost
+# immediately because the admin call returns instantly.
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Screenshot for item 3 — confirms the Switch visually flipped (UI accepted
+# the change) and the "Auto-connect limit" sub-controls appeared (they only
+# render when isSettingEnabled is true, DiscoveredInterfacesScreen.kt:491).
+- takeScreenshot: 03-discovery-after-toggle
+
+# -----------------------------------------------------------------------------
+# Item 4 — Autoconnect count slider
+# -----------------------------------------------------------------------------
+# After toggleDiscovery() enabled discovery, autoconnectCount defaults to 3
+# (DiscoveredInterfacesViewModel.kt:237: "if (savedCount >= 0) savedCount else 3").
+# We move the slider to a distinctly different value so the orchestration-layer
+# config diff has an unambiguous expected value to grep for.
+#
+# Target value: 7. The Slider is valueRange 0f..10f with steps = 9 (10 stops).
+# Compose's Slider exposes itself as android.widget.SeekBar with bounds
+# [58,625][1022,741] (live hierarchy on 1080x1920) — y center ≈ 35.6%. Swiping
+# from x=8% to x=72% along y=36% lands the thumb at 7 (verified on
+# emulator-5554).
+- swipe:
+    start: "8%,36%"
+    end: "72%,36%"
+    duration: 800
+
+# The Slider's onValueChangeFinished (DiscoveredInterfacesScreen.kt:521) fires
+# only on release, then VM.setAutoconnectCount() does its DataStore write and
+# the no-op transportAdmin.setAutoconnectLimit() call. Give it a beat.
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Screenshot for item 4 — the row "Auto-connect limit ... <N>" should now show
+# a value > 0 and distinctly different from the initial-state screenshot.
+# The exact landed value depends on the swipe accuracy but will be in the
+# 5..9 range, which is sufficient for the diff check.
+- takeScreenshot: 04-autoconnect-after-change
+
+# -----------------------------------------------------------------------------
+# Item 5 — IFAC-only sub-toggle
+# -----------------------------------------------------------------------------
+# The IFAC-only Switch only renders when autoconnectCount > 0
+# (DiscoveredInterfacesScreen.kt:534). The slider swipe above guarantees we're
+# above 0, so the row is now present. The row's label is
+# "IFAC-protected interfaces only" (line 550). Tapping the label is a no-op
+# (same Modifier.clickable absence as the discovery row), so we tap the
+# Switch by point. Switch bounds were [859,767][996,893] -> center (86%, 43.2%).
+- tapOn:
+    point: "86%,43%"
+
+# Wait for the VM's IO work to settle. toggleAutoconnectIfacOnly() does not
+# set isRestarting, so the only thing to wait for is the DataStore write.
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Screenshot for item 5 — confirms the IFAC-only Switch flipped.
+- takeScreenshot: 05-ifac-only-after-toggle
+
+# Final settle window for any pending recompositions or debounced VM work
+# (the slider in particular can fire onValueChangeFinished multiple times if
+# the swipe is jittery; this guarantees the last fire has fully drained
+# through the IO dispatcher to DataStore).
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Final screenshot — the full DiscoverySettingsCard with all three new values
+# visible. The orchestration layer pairs this with the post-relaunch config
+# dump: the on-screen values WILL match what was set here (UI state is loaded
+# from DataStore), but the config file WILL NOT — proving the admin no-ops
+# never reached Reticulum.
+- takeScreenshot: 03-04-05-final-ui-state

@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -121,6 +122,30 @@ class DiscoveredInterfacesViewModel
         init {
             loadDiscoveredInterfaces()
             loadDiscoverySettings()
+            // Re-load whenever the RNS backend transitions to READY. This
+            // covers two races:
+            //   • App opens this screen while the backend is still
+            //     INITIALIZING (e.g. just after launch or right after an
+            //     Apply & Restart). The first loadDiscoveredInterfaces()
+            //     races the `RNS.Reticulum()` constructor's config parse
+            //     and reads stale defaults (`should_autoconnect_discovered
+            //     _interfaces()` returns False until the class attribute
+            //     is set from config).
+            //   • A toggle drives a restart through applyInterfaceChanges
+            //     — that returns when `initialize()` succeeds, but the
+            //     Python `__init__` may still be settling the class-level
+            //     attributes for a few ms. Re-poll on READY guarantees the
+            //     UI reflects the post-restart runtime state.
+            // The networkStatus StateFlow is .stateIn-shared so this never
+            // triggers a fresh upstream subscription cost.
+            viewModelScope.launch {
+                rnsBackend.core.networkStatus
+                    .filter { it is network.columba.app.rns.api.model.NetworkStatus.READY }
+                    .collect {
+                        Log.d(TAG, "networkStatus → READY, re-loading discovery state")
+                        loadDiscoveredInterfaces()
+                    }
+            }
         }
 
         /**

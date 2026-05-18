@@ -940,30 +940,28 @@ fun MessagingScreen(
                     }
                 },
                 actions = {
-                    // Voice call button
+                    // Voice call button — opens the codec dialog
+                    // immediately, then a LaunchedEffect on the dialog
+                    // block (below) fires the link-speed probe. The
+                    // dialog's PathInfoSection renders a spinner while
+                    // the probe is in flight; the recommendation tier
+                    // updates when it completes. No blocking on the
+                    // button itself — instant UI feedback.
                     IconButton(
                         onClick = {
-                            scope.launch {
-                                isProbingLinkSpeed = true
-                                recommendedCodecProfile = viewModel.getRecommendedCodecProfile()
-                                isProbingLinkSpeed = false
-                                showCodecSelectionDialog = true
-                            }
+                            // Reset to DEFAULT so a stale recommendation
+                            // from a prior open doesn't flash before the
+                            // fresh probe lands.
+                            recommendedCodecProfile = CodecProfile.DEFAULT
+                            isProbingLinkSpeed = true
+                            showCodecSelectionDialog = true
                         },
-                        enabled = !isProbingLinkSpeed,
                     ) {
-                        if (isProbingLinkSpeed) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Call,
-                                contentDescription = "Voice call",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Voice call",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
 
                     // Location sharing button
@@ -1651,11 +1649,20 @@ fun MessagingScreen(
         )
     }
 
-    // Codec selection dialog for voice calls
+    // Codec selection dialog for voice calls. Fires the link-speed
+    // probe via LaunchedEffect when the dialog enters composition (and
+    // re-fires on re-open). isProbingLinkSpeed flips to false when the
+    // probe completes; PathInfoSection swaps its spinner for the
+    // recommendation tier at the same moment.
     if (showCodecSelectionDialog) {
+        LaunchedEffect(Unit) {
+            recommendedCodecProfile = viewModel.getRecommendedCodecProfile()
+            isProbingLinkSpeed = false
+        }
         CodecSelectionDialog(
             recommendedProfile = recommendedCodecProfile,
             linkState = conversationLinkState,
+            isProbing = isProbingLinkSpeed,
             onDismiss = { showCodecSelectionDialog = false },
             onProfileSelected = { profile ->
                 showCodecSelectionDialog = false

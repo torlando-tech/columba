@@ -50,12 +50,18 @@ class PythonRnsCore(
 ) : RnsCore {
     private companion object {
         const val TAG = "PythonRnsCore"
+        // Conversation-link + probe timing knobs (mirrors v0.10.x
+        // `establish_link` / `probe_link_speed`).
+
         /** Max time we wait for a path to appear during a probe (ms). */
         const val PATH_WAIT_MS = 5_000L
+
         /** Poll interval while waiting for a path (ms). */
-        const val PATH_POLL_MS = 250L
+        const val PATH_POLL_MS = 100L
+
         /** Poll interval while waiting for link establishment (ms). */
         const val LINK_POLL_MS = 100L
+
         /** Lower bound on the link-establishment wait — guards against
          *  tiny caller timeouts that would race the link setup. */
         const val MIN_LINK_WAIT_MS = 1_000L
@@ -822,34 +828,444 @@ class PythonRnsCore(
         }
 
     // ==================== Conversation Link Management ====================
+    //
+    // Mirrors release/v0.10.x `reticulum_wrapper.py` `establish_link` /
+    // `close_link` / `get_link_status` (lines 6447-6909) directly against
+    // upstream RNS/LXMF via `PyObject.callAttr(...)` — no Python facade
+    // (slim-Python rule). The router's `direct_links` / `backchannel_links`
+    // dicts and `Transport.active_links` are the canonical link registry;
+    // we read/write them in place rather than maintaining a parallel
+    // Kotlin map so reuse detection works across the broader LXMF code
+    // paths that also touch these dicts.
 
+    // Mirrors v0.10.x establish_link() shape 1:1 — 13 numbered steps in
+    // sequence (reuse check, identity recall, destination construct,
+    // reuse re-check, path request, link construct, wait loop, identify,
+    // post-fail cleanup). Splitting it makes each step harder to map back
+    // to the reference, so we keep it linear and suppress the size /
+    // complexity / return-count warnings instead.
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount", "NestedBlockDepth")
     override suspend fun establishConversationLink(
         destinationHash: ByteArray,
         timeoutSeconds: Float,
     ): Result<ConversationLinkResult> =
         pyResult {
-            // Conversation links drive the online-status indicator. A minimal
-            // honest result: report whether a path exists. Full link
-            // establishment + rate measurement is on-device follow-up.
-            val hasPath = transport().callAttr("has_path", destinationHash.toPyBytes())
+            val router = runtime.lxmRouter
+                ?: throw RnsException(RnsError.BackendNotReady)
+
+            val destHash = destinationHash
+            val destHashPy = destHash.toPyBytes()
+            val destHashHex = destHash.toHex()
+            Log.i(TAG, "establishConversationLink: ${destHashHex.take(16)}...")
+
+            // ---- 1. Reuse check against the input dest_hash. ----
+            // Look in direct_links (outgoing) + backchannel_links (incoming)
+            // under both bytes and hex keys (v0.10.x stored under either
+            // depending on call path), then fall back to scanning
+            // Transport.active_links for matching remote identity.
+            var existing = findExistingLink(router, destHashPy, destHashHex)
+            if (existing != null) {
+                if (linkIsActive(existing)) {
+                    Log.i(TAG, "establishConversationLink: existing active link to ${destHashHex.take(16)}")
+                    return@pyResult buildLinkStats(existing, alreadyExisted = true, hashForPath = destHashPy)
+                }
+                // Stale — clean up from both dicts under both key shapes
+                // before we try to make a fresh one.
+                pruneLink(router, destHashPy, destHashHex)
+                existing = null
+            }
+
+            // ---- 2. Identity recall. ----
+            // Try as destination hash, then as identity hash, then the
+            // local cache. If none yield an identity we can't construct
+            // a destination — fail with "Identity not known" and let the
+            // UI keep showing "Connecting…"/last-seen.
+            val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
+            val recipientIdentity = recallIdentity(identityClass, destHashPy, destHashHex)
+                ?: return@pyResult ConversationLinkResult(isActive = false, error = "Identity not known")
+
+            // ---- 3. Construct lxmf.delivery destination. ----
+            // Same shape as LXMF DIRECT delivery (and as
+            // `PythonRnsLxmf.resolveRecipientDestination`). Recipient
+            // dest hash may differ from input dest_hash, so re-check
+            // reuse against the new hash.
+            val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+            val recipientDest = runtime.rnsModule.callAttr(
+                "Destination",
+                recipientIdentity,
+                destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
+                destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
+                "lxmf",
+                "delivery",
+            ) ?: throw RnsException(RnsError.Generic("RNS.Destination returned None", null))
+            val createdHashPy = recipientDest["hash"] ?: error("recipient_dest.hash missing")
+            val createdHash = createdHashPy.toJava(ByteArray::class.java)
+            val createdHashHex = createdHash.toHex()
+
+            existing = findExistingLink(router, createdHashPy, createdHashHex)
+            if (existing != null) {
+                if (linkIsActive(existing)) {
+                    Log.i(TAG, "establishConversationLink: existing active link (via created hash) to ${createdHashHex.take(16)}")
+                    return@pyResult buildLinkStats(existing, alreadyExisted = true, hashForPath = createdHashPy)
+                }
+                pruneLink(router, createdHashPy, createdHashHex)
+                existing = null
+            }
+
+            // ---- 4. Path check + request. ----
+            // Reticulum needs a known path before Link() will progress;
+            // request a path and wait up to 5s for it to arrive.
+            val transport = transport()
+            var hasPath = transport.callAttr("has_path", createdHashPy)
                 ?.toJava(Boolean::class.javaObjectType) ?: false
-            ConversationLinkResult(
-                isActive = false,
-                hops = if (hasPath) {
-                    transport().callAttr("hops_to", destinationHash.toPyBytes())
-                        ?.toJava(Int::class.javaObjectType)
-                } else {
-                    null
-                },
-                error = if (hasPath) null else "no path to destination",
-            )
+            if (!hasPath) {
+                Log.d(TAG, "establishConversationLink: requesting path to ${createdHashHex.take(16)}")
+                runCatching { transport.callAttr("request_path", createdHashPy) }
+                    .onFailure { Log.w(TAG, "request_path failed", it) }
+                val pathDeadline = System.currentTimeMillis() + PATH_WAIT_MS
+                while (!hasPath && System.currentTimeMillis() < pathDeadline) {
+                    Thread.sleep(PATH_POLL_MS)
+                    hasPath = transport.callAttr("has_path", createdHashPy)
+                        ?.toJava(Boolean::class.javaObjectType) ?: false
+                }
+            }
+            if (!hasPath) {
+                Log.w(TAG, "establishConversationLink: no path available to ${createdHashHex.take(16)}")
+                return@pyResult ConversationLinkResult(isActive = false, error = "No path available")
+            }
+
+            // ---- 5. Construct the RNS.Link. ----
+            // v0.10.x passes an `established_callback`; the wait loop
+            // also checks `link.status == ACTIVE`, so we can rely on
+            // the status field and skip the callback (Chaquopy callback
+            // wiring is heavier than needed here).
+            val link = runtime.rnsModule.callAttr("Link", recipientDest)
+                ?: throw RnsException(RnsError.Generic("RNS.Link returned None", null))
+
+            // Store immediately under the created destination's hash so
+            // concurrent callers see this link and don't open a parallel
+            // one. We use __setitem__ to set a bytes key directly.
+            runCatching {
+                router["direct_links"]?.callAttr("__setitem__", createdHashPy, link)
+            }.onFailure { Log.w(TAG, "store direct_links failed", it) }
+
+            try {
+                // ---- 6. Wait for ACTIVE / CLOSED / timeout. ----
+                val linkClass = runtime.rnsModule["Link"] ?: error("RNS.Link class missing")
+                val activeConst = linkClass["ACTIVE"]?.toJava(Int::class.javaObjectType)
+                    ?: error("RNS.Link.ACTIVE missing")
+                val closedConst = linkClass["CLOSED"]?.toJava(Int::class.javaObjectType)
+                    ?: error("RNS.Link.CLOSED missing")
+                val timeoutMs = (timeoutSeconds * 1000f).toLong().coerceAtLeast(0L)
+                val deadline = System.currentTimeMillis() + timeoutMs
+                while (System.currentTimeMillis() < deadline) {
+                    val status = link["status"]?.toJava(Int::class.javaObjectType) ?: -1
+                    if (status == activeConst) {
+                        // ---- 7. Identify on the link so the peer's LXMRouter ----
+                        // adds us to their backchannel_links via
+                        // delivery_remote_identified — this is the bit
+                        // missing from the prior stub.
+                        runCatching {
+                            runtime.localIdentity?.let { link.callAttr("identify", it) }
+                        }.onFailure { Log.w(TAG, "link.identify failed (non-fatal)", it) }
+                        Log.i(TAG, "establishConversationLink: ACTIVE to ${createdHashHex.take(16)}")
+                        return@pyResult buildLinkStats(link, alreadyExisted = false, hashForPath = createdHashPy)
+                    }
+                    if (status == closedConst) {
+                        Log.w(TAG, "establishConversationLink: link closed during establishment")
+                        return@pyResult ConversationLinkResult(isActive = false, error = "Link closed")
+                    }
+                    Thread.sleep(LINK_POLL_MS)
+                }
+                // Timeout
+                runCatching { link.callAttr("teardown") }
+                    .onFailure { Log.w(TAG, "teardown after timeout failed", it) }
+                Log.i(TAG, "establishConversationLink: timeout to ${createdHashHex.take(16)} (peer may be offline)")
+                ConversationLinkResult(isActive = false, error = "Timeout")
+            } finally {
+                // v0.10.x parity: clean up if the link didn't reach ACTIVE.
+                // Only remove if it's still our link (not replaced by a
+                // concurrent call).
+                val finalStatus = runCatching {
+                    link["status"]?.toJava(Int::class.javaObjectType) ?: -1
+                }.getOrDefault(-1)
+                val activeConst = runCatching {
+                    runtime.rnsModule["Link"]?.get("ACTIVE")?.toJava(Int::class.javaObjectType) ?: -1
+                }.getOrDefault(-1)
+                if (finalStatus != activeConst) {
+                    runCatching {
+                        val stored = router["direct_links"]?.callAttr("get", createdHashPy)
+                        if (stored != null && stored.toString() == link.toString()) {
+                            router["direct_links"]?.callAttr("__delitem__", createdHashPy)
+                        }
+                    }.onFailure { Log.d(TAG, "post-fail prune skipped: ${it.message}") }
+                }
+            }
         }
 
     override suspend fun closeConversationLink(destinationHash: ByteArray): Result<Boolean> =
-        pyResult { false }
+        pyResult {
+            val router = runtime.lxmRouter ?: return@pyResult false
+            val destHashPy = destinationHash.toPyBytes()
+            val destHashHex = destinationHash.toHex()
+
+            // First, try input hash; if not found fall back to recall+rebuild
+            // (handles the "input dest_hash != recipient_dest.hash" case).
+            var link = findExistingLink(router, destHashPy, destHashHex)
+            var keyBytesPy: PyObject? = destHashPy
+            var keyHex: String = destHashHex
+
+            if (link == null) {
+                val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
+                val identity = recallIdentity(identityClass, destHashPy, destHashHex)
+                if (identity != null) {
+                    val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+                    val recipientDest = runtime.rnsModule.callAttr(
+                        "Destination",
+                        identity,
+                        destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
+                        destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
+                        "lxmf",
+                        "delivery",
+                    )
+                    if (recipientDest != null) {
+                        val createdHashPy = recipientDest["hash"]
+                        if (createdHashPy != null) {
+                            keyBytesPy = createdHashPy
+                            keyHex = createdHashPy.toJava(ByteArray::class.java).toHex()
+                            link = findExistingLink(router, createdHashPy, keyHex)
+                        }
+                    }
+                }
+            }
+
+            if (link == null) {
+                Log.d(TAG, "closeConversationLink: no link to ${destHashHex.take(16)}")
+                return@pyResult false
+            }
+
+            val wasActive = linkIsActive(link)
+            if (wasActive) {
+                Log.i(TAG, "closeConversationLink: tearing down link to ${keyHex.take(16)}")
+                runCatching { link.callAttr("teardown") }
+                    .onFailure { Log.w(TAG, "teardown failed", it) }
+            }
+            if (keyBytesPy != null) {
+                pruneLink(router, keyBytesPy, keyHex)
+            }
+            wasActive
+        }
 
     override suspend fun getConversationLinkStatus(destinationHash: ByteArray): ConversationLinkResult =
-        pyCall { ConversationLinkResult(isActive = false) }
+        pyCall {
+            val router = runtime.lxmRouter ?: return@pyCall ConversationLinkResult(isActive = false)
+            val destHashPy = destinationHash.toPyBytes()
+            val destHashHex = destinationHash.toHex()
+
+            // Reuse search order: direct_links + backchannel_links under
+            // bytes/hex, then Transport.active_links scan, then fall
+            // back to recall+rebuild via created destination.
+            var link = findExistingLink(router, destHashPy, destHashHex)
+            var hashForPath: PyObject = destHashPy
+            if (link == null) {
+                val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
+                val identity = recallIdentity(identityClass, destHashPy, destHashHex)
+                if (identity != null) {
+                    val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+                    val recipientDest = runtime.rnsModule.callAttr(
+                        "Destination",
+                        identity,
+                        destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
+                        destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
+                        "lxmf",
+                        "delivery",
+                    )
+                    if (recipientDest != null) {
+                        val createdHashPy = recipientDest["hash"]
+                        if (createdHashPy != null) {
+                            val createdHex = createdHashPy.toJava(ByteArray::class.java).toHex()
+                            link = findExistingLink(router, createdHashPy, createdHex)
+                            if (link != null) hashForPath = createdHashPy
+                        }
+                    }
+                }
+            }
+
+            if (link != null && linkIsActive(link)) {
+                buildLinkStats(link, alreadyExisted = true, hashForPath = hashForPath)
+            } else {
+                ConversationLinkResult(isActive = false)
+            }
+        }
+
+    // ---- Conversation-link helpers ----
+
+    /**
+     * Look up a live `RNS.Link` for [hashPy] across the LXMF router's
+     * `direct_links` + `backchannel_links` (under both bytes and hex
+     * keys, since v0.10.x stored under either depending on call path)
+     * and `RNS.Transport.active_links` (iterate + match
+     * `link.get_remote_identity()` to the lxmf.delivery destination of
+     * the target). Returns null if no match.
+     */
+    // Each lookup short-circuits with an early return when it finds a
+    // match — refactoring to a single exit makes the search harder to
+    // read, so we suppress the return-count + complexity warnings.
+    @Suppress("ReturnCount", "CyclomaticComplexMethod", "LoopWithTooManyJumpStatements", "NestedBlockDepth")
+    private fun findExistingLink(router: PyObject, hashPy: PyObject, hashHex: String): PyObject? {
+        // direct_links[bytes] then direct_links[hex]
+        router["direct_links"]?.let { dl ->
+            dl.callAttr("get", hashPy)?.takeIfNotNone()?.let { return it }
+            dl.callAttr("get", hashHex)?.takeIfNotNone()?.let { return it }
+        }
+        // backchannel_links[bytes] then backchannel_links[hex]
+        router["backchannel_links"]?.let { bl ->
+            bl.callAttr("get", hashPy)?.takeIfNotNone()?.let { return it }
+            bl.callAttr("get", hashHex)?.takeIfNotNone()?.let { return it }
+        }
+        // Transport.active_links scan — for incoming links not yet in
+        // backchannel_links. Match on the remote identity's
+        // lxmf.delivery destination hash.
+        runCatching {
+            val transport = transport()
+            val activeLinks = transport["active_links"]?.takeIfNotNone() ?: return@runCatching
+            val activeConst = runtime.rnsModule["Link"]?.get("ACTIVE")
+                ?.toJava(Int::class.javaObjectType) ?: return@runCatching
+            val destClass = runtime.rnsModule["Destination"] ?: return@runCatching
+            val outConst = destClass["OUT"] ?: return@runCatching
+            val singleConst = destClass["SINGLE"] ?: return@runCatching
+            val hashBytes = hashPy.toJava(ByteArray::class.java)
+            for (active in activeLinks.asList()) {
+                val status = active["status"]?.toJava(Int::class.javaObjectType) ?: continue
+                if (status != activeConst) continue
+                val remoteIdentity = runCatching { active.callAttr("get_remote_identity") }
+                    .getOrNull()?.takeIfNotNone() ?: continue
+                val remoteDest = runCatching {
+                    runtime.rnsModule.callAttr(
+                        "Destination",
+                        remoteIdentity,
+                        outConst,
+                        singleConst,
+                        "lxmf",
+                        "delivery",
+                    )
+                }.getOrNull() ?: continue
+                val remoteHash = remoteDest["hash"]?.toJava(ByteArray::class.java) ?: continue
+                if (remoteHash.contentEquals(hashBytes)) {
+                    Log.d(TAG, "findExistingLink: matched via Transport.active_links for ${hashHex.take(16)}")
+                    return active
+                }
+            }
+        }.onFailure { Log.d(TAG, "active_links scan failed: ${it.message}") }
+        return null
+    }
+
+    /** Returns true iff `link.status == RNS.Link.ACTIVE`. */
+    private fun linkIsActive(link: PyObject): Boolean = runCatching {
+        val activeConst = runtime.rnsModule["Link"]?.get("ACTIVE")
+            ?.toJava(Int::class.javaObjectType) ?: return false
+        val status = link["status"]?.toJava(Int::class.javaObjectType) ?: return false
+        status == activeConst
+    }.getOrDefault(false)
+
+    /**
+     * Remove a stale link entry from `router.direct_links` and
+     * `router.backchannel_links` under both bytes and hex keys.
+     */
+    private fun pruneLink(router: PyObject, hashPy: PyObject, hashHex: String) {
+        listOf("direct_links", "backchannel_links").forEach { name ->
+            runCatching {
+                val dict = router[name] ?: return@runCatching
+                dict.callAttr("pop", hashPy, null)
+                dict.callAttr("pop", hashHex, null)
+            }.onFailure { Log.d(TAG, "$name prune skipped: ${it.message}") }
+        }
+    }
+
+    /**
+     * Recall the live `RNS.Identity` for a target hash by trying:
+     *   1. `Identity.recall(hash)` — destination-hash path (LXMF default)
+     *   2. `Identity.recall(hash, from_identity_hash=True)` — identity-hash path
+     *   3. The runtime's local identity cache (seeded by announces /
+     *      `restorePeerIdentities`).
+     * Returns null only when all three strategies miss.
+     */
+    private fun recallIdentity(
+        identityClass: PyObject,
+        hashPy: PyObject,
+        hashHex: String,
+    ): PyObject? {
+        runCatching { identityClass.callAttr("recall", hashPy) }
+            .getOrNull()?.takeIfNotNone()?.let { return it }
+        runCatching {
+            // RNS.Identity.recall(target_hash, from_identity_hash=False)
+            // positional second arg works (keyword would need
+            // `**kwargs`-style; positional is the cleaner Chaquopy path).
+            identityClass.callAttr("recall", hashPy, true)
+        }.getOrNull()?.takeIfNotNone()?.let { return it }
+        return runtime.identities[hashHex]
+    }
+
+    /**
+     * Build [ConversationLinkResult] from a live ACTIVE `RNS.Link`.
+     * Mirrors v0.10.x `get_full_link_stats`. Reads
+     * `link.get_establishment_rate() / get_expected_rate() / rtt / mtu`
+     * defensively (older RNS versions don't expose mtu) and pairs them
+     * with `Transport.hops_to` + `next_hop_interface.bitrate` keyed by
+     * [hashForPath] (which may be the original input hash or the
+     * recipient destination's hash when those differ).
+     */
+    private fun buildLinkStats(
+        link: PyObject,
+        alreadyExisted: Boolean,
+        hashForPath: PyObject,
+    ): ConversationLinkResult {
+        val establishmentRate = runCatching {
+            link.callAttr("get_establishment_rate")?.toJava(Long::class.javaObjectType)
+        }.getOrNull()
+        val expectedRate = runCatching {
+            link.callAttr("get_expected_rate")?.toJava(Long::class.javaObjectType)
+        }.getOrNull()
+        val rtt = runCatching {
+            link["rtt"]?.toJava(Double::class.javaObjectType)
+        }.getOrNull()
+        val mtu = runCatching {
+            link["mtu"]?.toJava(Int::class.javaObjectType)
+        }.getOrNull()
+
+        val transport = transport()
+        val hasPath = runCatching {
+            transport.callAttr("has_path", hashForPath)?.toJava(Boolean::class.javaObjectType)
+        }.getOrNull() ?: false
+        val hops = if (hasPath) {
+            runCatching {
+                transport.callAttr("hops_to", hashForPath)?.toJava(Int::class.javaObjectType)
+            }.getOrNull()
+        } else {
+            null
+        }
+        val nextHopBitrate = if (hasPath) {
+            runCatching {
+                transport.callAttr("next_hop_interface", hashForPath)
+                    ?.takeIfNotNone()
+                    ?.get("bitrate")
+                    ?.toJava(Long::class.javaObjectType)
+            }.getOrNull()
+        } else {
+            null
+        }
+
+        return ConversationLinkResult(
+            isActive = true,
+            establishmentRateBps = establishmentRate,
+            expectedRateBps = expectedRate,
+            nextHopBitrateBps = nextHopBitrate,
+            rttSeconds = rtt,
+            hops = hops,
+            linkMtu = mtu,
+            alreadyExisted = alreadyExisted,
+        )
+    }
 
     // ==================== Announce handling ====================
 

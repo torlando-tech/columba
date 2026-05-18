@@ -838,7 +838,6 @@ fun MessagingScreen(
                         val hasRecentActivity =
                             lastActivity > 0 &&
                                 System.currentTimeMillis() - lastActivity < (5 * 60 * 1000L) // 5 minutes
-                        val isOnline = hasActiveLink || hasRecentActivity
 
                         // Debug logging
                         android.util.Log.d(
@@ -848,6 +847,24 @@ fun MessagingScreen(
                         )
 
                         if (lastActivity > 0 || hasActiveLink || isEstablishing) {
+                            // Differentiate the dot when the source is a live
+                            // link (solid MeshConnected + link icon) vs just a
+                            // recent announce / proof (MeshConnected at 60%
+                            // alpha + no link icon). Same color family so the
+                            // "online" affordance still reads at a glance, but
+                            // the alpha + icon split lets a user tell whether
+                            // they have a live link or just a recent announce.
+                            val dotTint = when {
+                                hasActiveLink -> MeshConnected
+                                hasRecentActivity -> MeshConnected.copy(alpha = 0.6f)
+                                else -> MeshOffline
+                            }
+                            val dotContentDescription = when {
+                                isEstablishing -> "Connecting"
+                                hasActiveLink -> "Online — link active"
+                                hasRecentActivity -> "Online — recent activity"
+                                else -> "Offline"
+                            }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -868,15 +885,15 @@ fun MessagingScreen(
                                     )
                                     Icon(
                                         imageVector = Icons.Default.Circle,
-                                        contentDescription = null,
+                                        contentDescription = dotContentDescription,
                                         tint = MeshConnected.copy(alpha = alpha),
                                         modifier = Modifier.size(8.dp),
                                     )
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.Circle,
-                                        contentDescription = null,
-                                        tint = if (isOnline) MeshConnected else MeshOffline,
+                                        contentDescription = dotContentDescription,
+                                        tint = dotTint,
                                         modifier = Modifier.size(8.dp),
                                     )
                                 }
@@ -896,7 +913,12 @@ fun MessagingScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
 
-                                // Link indicator icon when link is active
+                                // Link indicator icon when link is active.
+                                // Only shown for hasActiveLink (not for
+                                // hasRecentActivity) so the icon presence is
+                                // the second visual disambiguator on top of
+                                // the dot's alpha — a glanceable "live link"
+                                // signal vs "recent announce".
                                 if (hasActiveLink) {
                                     Icon(
                                         imageVector = Icons.Default.Link,

@@ -1109,6 +1109,13 @@ class MessagingViewModel
                 }
             }
 
+            // Open a conversation link to drive the online-status dot.
+            // ConversationLinkManager dedupes concurrent / already-active
+            // calls, so this is safe to call on every entry. The link
+            // attempt finishes in <= LINK_ESTABLISHMENT_TIMEOUT_SECONDS
+            // (5s) — the TopAppBar dot reflects the live state.
+            conversationLinkManager.openConversationLink(destinationHash)
+
             Log.d(TAG, "Switched to conversation $destinationHash ($peerName)")
         }
 

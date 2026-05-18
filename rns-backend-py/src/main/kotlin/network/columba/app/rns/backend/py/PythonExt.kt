@@ -63,6 +63,19 @@ fun Map<*, *>.toPyDict(): PyObject {
 fun ByteArray.toPyBytes(): PyObject =
     Python.getInstance().builtins.callAttr("bytes", this)
 
+/**
+ * Returns this [PyObject] only if it is not Python `None`, else null.
+ *
+ * Chaquopy returns a non-null Java [PyObject] wrapper even when the Python
+ * value is `None` (e.g. `dict.get(missing_key)` returns Python `None`,
+ * which Chaquopy wraps as a `PyObject` whose `toString() == "None"`).
+ * This helper folds the "None wrapper" case into Kotlin null, so call
+ * sites can use `?.` chains uniformly instead of mixing `== null` checks
+ * with `.toString() != "None"` checks.
+ */
+fun PyObject.takeIfNotNone(): PyObject? =
+    takeIf { it.toString() != "None" }
+
 // --- Python dict accessors -------------------------------------------------
 // `event_bridge.py` payloads (and many upstream return values) are Python
 // dicts. `dict.get(k)` returns Python None -> Kotlin null for a missing key,

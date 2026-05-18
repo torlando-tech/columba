@@ -37,6 +37,7 @@ import network.columba.app.service.AppUpdateResult
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.util.SystemInfo
 import java.util.Locale
+import androidx.core.net.toUri
 
 @Composable
 fun AboutCard(
@@ -158,7 +159,7 @@ fun AboutCard(
                 )
                 TextButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/torlando-tech/columba/blob/main/LICENSE.md"))
+                        val intent = Intent(Intent.ACTION_VIEW, "https://github.com/torlando-tech/columba/blob/main/LICENSE.md".toUri())
                         context.startActivity(intent)
                     },
                 ) {
@@ -237,7 +238,7 @@ fun AboutCard(
                             )
                             TextButton(
                                 onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.htmlUrl))
+                                    val intent = Intent(Intent.ACTION_VIEW, result.htmlUrl.toUri())
                                     context.startActivity(intent)
                                 },
                             ) {
@@ -343,7 +344,7 @@ private fun LinkButton(
 ) {
     TextButton(
         onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
             context.startActivity(intent)
         },
         modifier = Modifier.fillMaxWidth(),

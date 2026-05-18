@@ -100,6 +100,28 @@ def apply_android_env_patches():
     signal.signal = _safe_signal
     signal._columba_android_patched = True
 
+    # Bump TCPConnection.CONNECT_TIMEOUT for the Android RNodeInterface.
+    # Upstream hardcodes both to 5.0s as a class constant
+    # (RNS/Interfaces/Android/RNodeInterface.py:1871-1872). T-Beam-class
+    # RNodes (e.g. T-Beam Supreme on firmware 1.85) running their own
+    # WiFi-hosted TCP listener can take 6-10s to SYN+ACK on first
+    # connect — slower than upstream's desktop-tuned default, fast
+    # enough that 15s is plenty. Without this bump the phone gives up
+    # before the T-Beam responds and the interface logs
+    # "TCP connection ... could not be established: timed out" on a
+    # reachable + listening RNode. Idempotent: re-imports of the
+    # interface module reuse the patched class.
+    try:
+        import RNS.Interfaces.Android.RNodeInterface as _android_rnode_iface
+        _android_rnode_iface.TCPConnection.CONNECT_TIMEOUT = 15.0
+        _android_rnode_iface.TCPConnection.INITIAL_CONNECT_TIMEOUT = 15.0
+    except Exception as e:  # noqa: BLE001
+        RNS.log(
+            f"event_bridge: failed to bump Android RNodeInterface TCP "
+            f"connect timeout (non-fatal): {e}",
+            RNS.LOG_WARNING,
+        )
+
 
 # Slot for the KotlinBLEBridge instance. Populated by Kotlin via
 # `set_ble_bridge(...)` after the bridge is constructed; consulted by

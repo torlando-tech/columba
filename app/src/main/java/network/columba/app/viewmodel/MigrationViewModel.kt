@@ -263,16 +263,31 @@ class MigrationViewModel
                             // Show restarting dialog while service restarts
                             _uiState.value = MigrationUiState.RestartingService(result)
 
-                            // Restart the service to load imported data
+                            // Restart the service to load imported data. Dismiss the
+                            // RestartingService modal at Step 9 (RNS ready) instead
+                            // of waiting for Step 12 — Step 10's batch peer-identity
+                            // restoration runs for MINUTES on a fresh import (just
+                            // ingested N identities + their peer graphs), and Torlando
+                            // hit the spinner-forever bug while testing data import.
+                            // Same fix pattern as Manage Interfaces Apply (32e6549f)
+                            // and identity-switch (7dab6d68).
                             Log.i(TAG, "Restarting service after import...")
                             withContext(Dispatchers.IO) {
-                                interfaceConfigManager.applyInterfaceChanges()
+                                interfaceConfigManager.applyInterfaceChanges(
+                                    onServiceReady = {
+                                        Log.i(TAG, "Service ready (Step 9) - dismissing migration restart modal")
+                                        _uiState.value = MigrationUiState.ImportComplete(result)
+                                    },
+                                )
                             }.onSuccess {
-                                Log.i(TAG, "Service restarted successfully")
+                                Log.i(TAG, "Service restart fully complete (Step 12)")
+                                // Defense-in-depth: re-assert ImportComplete in case
+                                // onServiceReady didn't fire (shouldn't happen on the
+                                // success path).
                                 _uiState.value = MigrationUiState.ImportComplete(result)
                             }.onFailure { e ->
                                 Log.e(TAG, "Service restart failed", e)
-                                // Still mark as complete since import succeeded
+                                // Still mark as complete since import succeeded.
                                 _uiState.value = MigrationUiState.ImportComplete(result)
                             }
                         }

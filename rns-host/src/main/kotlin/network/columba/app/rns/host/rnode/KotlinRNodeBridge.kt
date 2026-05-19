@@ -410,11 +410,31 @@ class KotlinRNodeBridge(
             }
 
         if (isConnected.get()) {
-            Log.w(TAG, "Already connected to $connectedDeviceName")
             if (connectedDeviceName == deviceName && connectionMode == requestedMode) {
-                return true // Already connected to this device with same mode
+                Log.d(TAG, "Already connected to $deviceName ($mode) - idempotent connect()")
+                return true
             }
-            disconnect() // Disconnect from current device first
+            // Different device or different mode requested. Refusing rather
+            // than disconnecting+reconnecting protects against two
+            // ColumbaRNodeInterface.start() threads racing — the previously-
+            // observed pattern was both python interfaces' start() firing in
+            // the same millisecond, both racing through connect(), the
+            // second one's disconnect() killing the first's working GATT,
+            // and both python interfaces then reading from the same broken
+            // shared buffer (both reporting offline within seconds). User-
+            // visible result: neither RNode works after Apply & Restart.
+            //
+            // Returning false here lets the second python interface bail
+            // out cleanly; it logs an instructive error ("only one BLE/
+            // Classic RNode at a time") and stays offline. The first
+            // interface keeps its GATT and works normally.
+            Log.w(
+                TAG,
+                "Refusing connect to '$deviceName' ($mode) — bridge already serving " +
+                    "'$connectedDeviceName' ($connectionMode). Only one BLE/Classic RNode " +
+                    "at a time.",
+            )
+            return false
         }
 
         val adapter =

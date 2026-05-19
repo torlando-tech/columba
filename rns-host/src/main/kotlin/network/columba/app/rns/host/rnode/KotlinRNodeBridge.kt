@@ -66,6 +66,26 @@ interface RNodeErrorListener {
 }
 
 /**
+ * Functional interface for RNode connection-state notifications consumed by
+ * ColumbaRNodeInterface (Python). Fires when the bridge transitions between
+ * connected and disconnected — distinct from RNodeOnlineStatusListener which
+ * fires after the higher-level RNode-protocol "online" handshake completes
+ * (radio detected, firmware OK, configured).
+ *
+ * Python-side consumer: ColumbaRNodeInterface._on_connection_state_changed
+ * calls _set_online(False) + _start_reconnection_loop() on disconnect. Without
+ * this callback wired, a BLE GATT disconnect terminates at the bridge and the
+ * Python interface keeps reporting online=true forever, and no reconnect loop
+ * fires.
+ *
+ * `fun interface` (Kotlin SAM) so Chaquopy adapts a Python bound method
+ * directly to the listener type.
+ */
+fun interface RNodeConnectionStateListener {
+    fun onConnectionStateChanged(connected: Boolean, deviceName: String?)
+}
+
+/**
  * Listener interface for RNode online status changes.
  * Implement this to receive notifications when RNode connects or disconnects.
  * This enables event-driven UI updates for the network interfaces display.
@@ -217,6 +237,13 @@ class KotlinRNodeBridge(
     // Kotlin online status listeners (for UI notification)
     private val onlineStatusListeners = mutableListOf<RNodeOnlineStatusListener>()
 
+    // Python-side connection-state callback. Single slot (not a list) because
+    // the consumer is ColumbaRNodeInterface._on_connection_state_changed —
+    // there's one Python interface per bridge instance at a time. `fun
+    // interface` makes Chaquopy adapt a Python callable directly to the SAM.
+    @Volatile
+    private var connectionStateListener: RNodeConnectionStateListener? = null
+
     /**
      * Register a Kotlin listener for RNode error events.
      * Listeners will be called on a background thread when errors occur.
@@ -289,6 +316,19 @@ class KotlinRNodeBridge(
         synchronized(onlineStatusListeners) {
             onlineStatusListeners.remove(listener)
         }
+    }
+
+    /**
+     * Set (or clear with null) the connection-state callback.
+     *
+     * Python registers this via `ColumbaRNodeInterface.start()` after the
+     * initial `connect()` succeeds; the bridge then invokes it from
+     * [handleDisconnect] (BLE GATT drop, Classic stream EOF) and from the
+     * connect-success path. Without this wiring the python interface keeps
+     * believing it's online after the radio is yanked.
+     */
+    fun setOnConnectionStateChanged(listener: RNodeConnectionStateListener?) {
+        connectionStateListener = listener
     }
 
     /**
@@ -452,6 +492,12 @@ class KotlinRNodeBridge(
 
             Log.i(TAG, "Connected to $deviceName via Bluetooth Classic")
 
+            try {
+                connectionStateListener?.onConnectionStateChanged(true, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener (classic connect)", e)
+            }
+
             // Start read thread
             startClassicReadThread()
 
@@ -561,6 +607,12 @@ class KotlinRNodeBridge(
             isConnected.set(true)
 
             Log.d(TAG, "████ RNODE BLE SUCCESS ████ deviceName=$deviceName MTU=$bleMtu")
+
+            try {
+                connectionStateListener?.onConnectionStateChanged(true, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener (BLE connect)", e)
+            }
 
             true
         } catch (e: Exception) {
@@ -1243,6 +1295,15 @@ class KotlinRNodeBridge(
             connectionMode = null
             connectedDeviceName = null
             readBuffer.clear()
+
+            // Notify python interface so it can flip self.online = False,
+            // notify the kotlin notification listener (ServiceNotificationManager
+            // posts the heads-up alert), and kick off the reconnection loop.
+            try {
+                connectionStateListener?.onConnectionStateChanged(false, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener (disconnect)", e)
+            }
         }
     }
 

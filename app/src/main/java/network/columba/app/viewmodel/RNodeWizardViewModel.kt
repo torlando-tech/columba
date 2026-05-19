@@ -35,9 +35,9 @@ import network.columba.app.data.model.ModemPreset
 import network.columba.app.data.model.RNodeRegionalPreset
 import network.columba.app.data.model.RNodeRegionalPresets
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.ble.util.BlePairingHandler
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
+import network.columba.app.rns.host.ble.util.BlePairingHandler
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.RssiThrottler
 import network.columba.app.util.validation.DeviceNameValidator
@@ -255,7 +255,7 @@ class RNodeWizardViewModel
         private val configManager: InterfaceConfigManager,
     ) : ViewModel() {
         private val flasher by lazy {
-            network.columba.app.reticulum.flasher
+            network.columba.app.rns.host.flasher
                 .RNodeFlasher(context)
         }
 
@@ -283,7 +283,7 @@ class RNodeWizardViewModel
 
         // USB bridge (singleton from reticulum module)
         private val usbBridge by lazy {
-            network.columba.app.reticulum.usb.KotlinUSBBridge
+            network.columba.app.rns.host.usb.KotlinUSBBridge
                 .getInstance(context)
         }
 
@@ -3592,9 +3592,9 @@ class RNodeWizardViewModel
             val band =
                 when {
                     frequencyHz < 500_000_000 ->
-                        network.columba.app.reticulum.flasher.FrequencyBand.BAND_433
+                        network.columba.app.rns.host.flasher.FrequencyBand.BAND_433
                     else ->
-                        network.columba.app.reticulum.flasher.FrequencyBand.BAND_868_915
+                        network.columba.app.rns.host.flasher.FrequencyBand.BAND_868_915
                 }
 
             Log.i(TAG, "Applying transport mode: freq=$frequencyHz bw=$bandwidthHz sf=$sf cr=$cr txp=$txp")

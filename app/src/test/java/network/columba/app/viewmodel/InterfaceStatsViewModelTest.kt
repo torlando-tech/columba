@@ -8,7 +8,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -43,7 +43,7 @@ class InterfaceStatsViewModelTest {
 
     private lateinit var savedStateHandle: SavedStateHandle
     private lateinit var interfaceRepository: InterfaceRepository
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var reticulumProtocol: RnsTransportAdmin
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var context: Context
     private lateinit var usbManager: UsbManager
@@ -115,7 +115,7 @@ class InterfaceStatsViewModelTest {
         return InterfaceStatsViewModel(
             savedStateHandle = savedStateHandle,
             interfaceRepository = interfaceRepository,
-            reticulumProtocol = reticulumProtocol,
+            transportAdmin = reticulumProtocol,
             configManager = configManager,
             context = context,
         )

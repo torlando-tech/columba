@@ -47,7 +47,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         run: |
-          ./gradlew :app:assembleSentryRelease :app:assembleNoSentryRelease --no-daemon --stacktrace
+          ./gradlew :app:assembleSentryKotlinBackendRelease :app:assembleNoSentryKotlinBackendRelease --no-daemon --stacktrace
           echo "✓ Release APKs built successfully"
 
       - name: Extract signing certificate fingerprints

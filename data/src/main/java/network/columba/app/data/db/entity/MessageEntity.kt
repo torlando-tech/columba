@@ -43,6 +43,13 @@ data class MessageEntity(
     // Fields are stored as JSON: {"6": "hex_image_data", "7": "hex_audio_data"}
     // Key is LXMF field type: 5=FILE_ATTACHMENTS, 6=IMAGE, 7=AUDIO, 15=RENDERER
     val fieldsJson: String? = null,
+    // Per-target-message reactions aggregation (DB-local, never on the wire).
+    // Shape: {"👍": ["sender_hex_1", "sender_hex_2"], "❤️": ["sender_hex_3"]}
+    // The wire format is fields[0x10] = {reaction_to, emoji, sender} per-event;
+    // the receiver routes those events into this column on the *target* message.
+    // Migrated v1→v2 from the prior fields[16].reactions overload — see
+    // MIGRATION_1_2 in ColumbaDatabase.
+    val reactionsJson: String? = null,
     // Delivery method used when sending: "opportunistic", "direct", or "propagated"
     val deliveryMethod: String? = null,
     // Error message if delivery failed (when status == "failed")

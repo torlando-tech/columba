@@ -14,18 +14,20 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.manager.InterfaceTransportObserver
-import network.columba.app.service.manager.filterByTransport
+import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONObject
@@ -178,14 +180,30 @@ class InterfaceManagementViewModel
         private val interfaceRepository: InterfaceRepository,
         private val configManager: InterfaceConfigManager,
         private val bleStatusRepository: BleStatusRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val transportAdmin: RnsTransportAdmin,
         private val transportObserver: InterfaceTransportObserver,
+        private val rnsBackend: RnsBackend,
     ) : ViewModel() {
         companion object {
             private const val TAG = "InterfaceMgmtVM"
 
             // Made internal var to allow injecting test dispatcher
             internal var ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+
+            // Interface online-status poll cadence while this screen is open.
+            // The kotlin backend also pushes status via interfaceStatusFlow /
+            // debugInfoFlow; the Python backend's RNS has no interface-status
+            // event stream, so this poll is its only refresh path.
+            private const val INTERFACE_STATUS_POLL_INTERVAL_MS = 5_000L
+
+            /**
+             * Controls whether the interface-status poll loop runs. Set to false
+             * in unit tests so `advanceUntilIdle()` does not spin forever on the
+             * `while (isActive) { … delay … }` loop — same pattern as
+             * `SettingsViewModel.enableMonitors`.
+             * @suppress VisibleForTesting
+             */
+            internal var enableStatusPolling = true
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -219,17 +237,33 @@ class InterfaceManagementViewModel
         /**
          * Observe interface status change events.
          *
+         * - a poll loop calls `fetchInterfaceStatus()` every
+         *   [INTERFACE_STATUS_POLL_INTERVAL_MS] while this screen is open
          * - `interfaceStatusFlow` provides lightweight online/offline updates
          * - `debugInfoFlow` provides full transport interface snapshots including spawned peers
-         * - one initial fetch seeds the state before the first event arrives
+         *
+         * The kotlin backend pushes status through the two flows; the Python
+         * backend's RNS has no interface-status event stream, so on that backend
+         * the flows stay idle and the poll is the only refresh — without it an
+         * interface that comes online *after* the initial fetch (e.g. after an
+         * "Apply & Restart") stays shown as offline. The poll is a harmless
+         * periodic re-sync on the kotlin backend.
          */
         private fun observeInterfaceStatusChanges() {
             viewModelScope.launch(ioDispatcher) {
-                fetchInterfaceStatus()
+                if (enableStatusPolling) {
+                    while (isActive) {
+                        fetchInterfaceStatus()
+                        kotlinx.coroutines.delay(INTERFACE_STATUS_POLL_INTERVAL_MS)
+                    }
+                } else {
+                    // Unit tests: a single fetch, no infinite poll loop.
+                    fetchInterfaceStatus()
+                }
             }
 
             viewModelScope.launch(ioDispatcher) {
-                reticulumProtocol.interfaceStatusFlow.collect { statusJson ->
+                transportAdmin.interfaceStatusFlow.collect { statusJson ->
                     try {
                         parseAndUpdateInterfaceStatus(statusJson)
                     } catch (e: Exception) {
@@ -239,7 +273,7 @@ class InterfaceManagementViewModel
             }
 
             viewModelScope.launch(ioDispatcher) {
-                reticulumProtocol.debugInfoFlow.collect { debugInfoJson ->
+                transportAdmin.debugInfoFlow.collect { debugInfoJson ->
                     try {
                         parseAndUpdateDebugInfo(debugInfoJson)
                     } catch (e: Exception) {
@@ -306,8 +340,8 @@ class InterfaceManagementViewModel
         private fun loadDiscoveredInterfacesCount() {
             viewModelScope.launch(ioDispatcher) {
                 try {
-                    val discoveryEnabled = reticulumProtocol.isDiscoveryEnabled()
-                    val discovered = reticulumProtocol.getDiscoveredInterfaces()
+                    val discoveryEnabled = transportAdmin.isDiscoveryEnabled()
+                    val discovered = transportAdmin.getDiscoveredInterfaces()
                     val availableCount = discovered.count { it.status == "available" }
                     val unknownCount = discovered.count { it.status == "unknown" }
                     val staleCount = discovered.count { it.status == "stale" }
@@ -345,7 +379,7 @@ class InterfaceManagementViewModel
         @Suppress("UNCHECKED_CAST")
         private suspend fun fetchInterfaceStatus() {
             try {
-                val debugInfo = reticulumProtocol.getDebugInfo()
+                val debugInfo = transportAdmin.getDebugInfo()
                 val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return
 
                 val statusMap = mutableMapOf<String, Boolean>()
@@ -1106,13 +1140,26 @@ class InterfaceManagementViewModel
         private var syncJob: kotlinx.coroutines.Job? = null
 
         private fun syncNativeInterfaces() {
+            // The Python backend can't hot-reload interfaces — upstream RNS reads
+            // them from its config file at construction
+            // (capabilities.interfaces.hotReloadInterfaces = false), so
+            // RnsTransportAdmin.reloadInterfaces() is a documented no-op there.
+            // Calling it would silently do nothing and leave no Apply button.
+            // Instead, mark the change pending: the UI surfaces an
+            // "Apply & Restart" action that drives applyChanges() (config rewrite
+            // + shutdown + reinitialise). On the kotlin backend hotReloadInterfaces
+            // is true and the change applies live below.
+            if (!rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                _state.update { it.copy(hasPendingChanges = true) }
+                return
+            }
             syncJob?.cancel()
             syncJob =
                 viewModelScope.launch(ioDispatcher) {
                     try {
                         val configs = interfaceRepository.enabledInterfaces.first()
                         val filtered = filterByTransport(configs, transportObserver.currentTransport())
-                        reticulumProtocol.reloadInterfaces(filtered)
+                        transportAdmin.reloadInterfaces(filtered)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()
                         kotlinx.coroutines.delay(4000)
@@ -1190,7 +1237,7 @@ class InterfaceManagementViewModel
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     Log.i(TAG, "User triggered RNode reconnection")
-                    reticulumProtocol.reconnectRNodeInterface()
+                    transportAdmin.reconnectRNodeInterface()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error reconnecting RNode interface", e)
                 }

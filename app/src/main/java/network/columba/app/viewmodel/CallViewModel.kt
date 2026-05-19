@@ -5,7 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,19 +16,21 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.CallState
 import java.util.Locale
 import javax.inject.Inject
 
 /**
  * ViewModel for voice call screens.
  *
- * Observes CallCoordinator state and provides UI-friendly state for
- * VoiceCallScreen and IncomingCallScreen.
+ * Observes call state via [RnsTelephony] (the `:rns-api` seam) and uses
+ * the same surface for the network IPC actions (initiate / answer /
+ * hangup / mute / speaker / decline) and the local-state mutators
+ * (setConnecting / setEnded / setMutedLocally / setSpeakerLocally /
+ * setPttModeLocally / setPttActiveLocally).
  *
- * Uses ReticulumProtocol for call actions (IPC to service process)
- * and CallCoordinator for local state management.
+ * Replaces A.9's split between the legacy `ReticulumProtocol` (for IPC)
+ * and `CallCoordinator` (for in-process state). Post-A.10 there is one
+ * seam contract that survives the AIDL boundary.
  */
 @Suppress("TooManyFunctions") // Call + PTT controls require many small action methods
 @HiltViewModel
@@ -36,24 +39,22 @@ class CallViewModel
     constructor(
         private val contactRepository: ContactRepository,
         private val announceRepository: AnnounceRepository,
-        private val protocol: ReticulumProtocol,
+        private val telephony: RnsTelephony,
     ) : ViewModel() {
         companion object {
             private const val TAG = "CallViewModel"
         }
 
-        private val callBridge = CallCoordinator.getInstance()
-
         // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
         private val muteMutex = Mutex()
 
-        // Expose call state from bridge
-        val callState: StateFlow<CallState> = callBridge.callState
-        val isMuted: StateFlow<Boolean> = callBridge.isMuted
-        val isSpeakerOn: StateFlow<Boolean> = callBridge.isSpeakerOn
-        val isPttMode: StateFlow<Boolean> = callBridge.isPttMode
-        val isPttActive: StateFlow<Boolean> = callBridge.isPttActive
-        val remoteIdentity: StateFlow<String?> = callBridge.remoteIdentity
+        // Expose call state from telephony seam
+        val callState: StateFlow<CallState> = telephony.callState
+        val isMuted: StateFlow<Boolean> = telephony.isMuted
+        val isSpeakerOn: StateFlow<Boolean> = telephony.isSpeakerOn
+        val isPttMode: StateFlow<Boolean> = telephony.isPttMode
+        val isPttActive: StateFlow<Boolean> = telephony.isPttActive
+        val remoteIdentity: StateFlow<String?> = telephony.remoteIdentity
 
         // Call duration (updated every second during active call)
         private val _callDuration = MutableStateFlow(0L)
@@ -96,7 +97,7 @@ class CallViewModel
 
             // Resolve peer name from identity
             viewModelScope.launch {
-                callBridge.remoteIdentity.filterNotNull().collect { hash ->
+                telephony.remoteIdentity.filterNotNull().collect { hash ->
                     resolvePeerName(hash)
                 }
             }
@@ -168,7 +169,7 @@ class CallViewModel
 
         /**
          * Initiate an outgoing call.
-         * Uses ReticulumProtocol for IPC to service process where Python runs.
+         * Uses RnsTelephony for IPC + state updates.
          * Retries if CallManager not yet initialized (can take time after app install).
          *
          * @param destinationHash Hex string of destination identity hash
@@ -183,19 +184,18 @@ class CallViewModel
             _isConnecting.value = true
             resolvePeerNameSync(destinationHash)
 
-            // Update local state
-            callBridge.setConnecting(destinationHash)
-
-            // Initiate call via service IPC with retry for CallManager initialization
+            // Update local state then initiate via service IPC with retry for CallManager init
             viewModelScope.launch {
+                telephony.setConnecting(destinationHash)
+
                 var retryCount = 0
                 val maxRetries = 10
                 val retryDelayMs = 1000L
 
                 while (retryCount < maxRetries) {
-                    Log.w(TAG, "📞 Calling protocol.initiateCall() (attempt ${retryCount + 1}/$maxRetries)...")
-                    val result = protocol.initiateCall(destinationHash, profileCode)
-                    Log.w(TAG, "📞 protocol.initiateCall() returned: success=${result.isSuccess}")
+                    Log.w(TAG, "📞 Calling telephony.initiateCall() (attempt ${retryCount + 1}/$maxRetries)...")
+                    val result = telephony.initiateCall(destinationHash, profileCode)
+                    Log.w(TAG, "📞 telephony.initiateCall() returned: success=${result.isSuccess}")
 
                     if (result.isSuccess) {
                         Log.w(TAG, "📞✅ Call initiated successfully!")
@@ -217,7 +217,7 @@ class CallViewModel
                     // Non-retryable error or max retries reached
                     Log.e(TAG, "📞❌ Failed to initiate call: $errorMsg")
                     _isConnecting.value = false
-                    callBridge.setEnded()
+                    telephony.setEnded()
                     return@launch
                 }
             }
@@ -231,12 +231,11 @@ class CallViewModel
 
         /**
          * Answer an incoming call.
-         * Uses ReticulumProtocol for IPC to service process.
          */
         fun answerCall() {
             Log.d(TAG, "Answering call")
             viewModelScope.launch {
-                val result = protocol.answerCall()
+                val result = telephony.answerCall()
                 if (result.isFailure) {
                     Log.e(TAG, "Failed to answer call: ${result.exceptionOrNull()?.message}")
                 }
@@ -253,13 +252,12 @@ class CallViewModel
 
         /**
          * End the current call.
-         * Uses ReticulumProtocol for IPC to service process.
          */
         fun endCall() {
             Log.d(TAG, "Ending call")
             viewModelScope.launch {
-                protocol.hangupCall()
-                callBridge.setEnded()
+                telephony.hangupCall()
+                telephony.setEnded()
             }
         }
 
@@ -267,10 +265,10 @@ class CallViewModel
          * Toggle microphone mute.
          */
         fun toggleMute() {
-            val newMuted = !callBridge.isMuted.value
-            callBridge.setMutedLocally(newMuted)
+            val newMuted = !telephony.isMuted.value
             viewModelScope.launch {
-                muteMutex.withLock { protocol.setCallMuted(newMuted) }
+                telephony.setMutedLocally(newMuted)
+                muteMutex.withLock { telephony.setCallMuted(newMuted) }
             }
         }
 
@@ -278,10 +276,10 @@ class CallViewModel
          * Toggle speaker/earpiece.
          */
         fun toggleSpeaker() {
-            val newSpeaker = !callBridge.isSpeakerOn.value
-            callBridge.setSpeakerLocally(newSpeaker)
+            val newSpeaker = !telephony.isSpeakerOn.value
             viewModelScope.launch {
-                protocol.setCallSpeaker(newSpeaker)
+                telephony.setSpeakerLocally(newSpeaker)
+                telephony.setCallSpeaker(newSpeaker)
             }
         }
 
@@ -292,18 +290,20 @@ class CallViewModel
          * and hold the PTT button (on-screen or Bluetooth headset) to transmit.
          */
         fun togglePttMode() {
-            val newMode = !callBridge.isPttMode.value
-            callBridge.setPttModeLocally(newMode)
-            if (newMode) {
-                // Entering PTT: mute transmit
-                callBridge.setMutedLocally(true)
-                callBridge.setPttActiveLocally(false)
-                viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(true) } }
-            } else {
-                // Leaving PTT: unmute transmit (full duplex)
-                callBridge.setMutedLocally(false)
-                callBridge.setPttActiveLocally(false)
-                viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(false) } }
+            val newMode = !telephony.isPttMode.value
+            viewModelScope.launch {
+                telephony.setPttModeLocally(newMode)
+                if (newMode) {
+                    // Entering PTT: mute transmit
+                    telephony.setMutedLocally(true)
+                    telephony.setPttActiveLocally(false)
+                    muteMutex.withLock { telephony.setCallMuted(true) }
+                } else {
+                    // Leaving PTT: unmute transmit (full duplex)
+                    telephony.setMutedLocally(false)
+                    telephony.setPttActiveLocally(false)
+                    muteMutex.withLock { telephony.setCallMuted(false) }
+                }
             }
         }
 
@@ -313,17 +313,19 @@ class CallViewModel
          * @param active true when pressed (transmitting), false when released (listening)
          */
         fun setPttActive(active: Boolean) {
-            if (!callBridge.isPttMode.value) return
+            if (!telephony.isPttMode.value) return
             if (callState.value !is CallState.Active) return
-            callBridge.setPttActiveLocally(active)
-            callBridge.setMutedLocally(!active)
-            viewModelScope.launch { muteMutex.withLock { protocol.setCallMuted(!active) } }
+            viewModelScope.launch {
+                telephony.setPttActiveLocally(active)
+                telephony.setMutedLocally(!active)
+                muteMutex.withLock { telephony.setCallMuted(!active) }
+            }
         }
 
         /**
          * Check if there's an active call.
          */
-        fun hasActiveCall(): Boolean = callBridge.hasActiveCall()
+        fun hasActiveCall(): Boolean = telephony.hasActiveCall()
 
         /**
          * Format duration as MM:SS string.

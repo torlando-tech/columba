@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,9 +14,11 @@ import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.protocol.DeliveryMethod
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
@@ -67,7 +70,7 @@ import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import network.columba.app.data.repository.Message as DataMessage
-import network.columba.app.reticulum.model.Message as ReticulumMessage
+import network.columba.app.rns.api.model.Message as ReticulumMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -76,7 +79,9 @@ class MessagingViewModel
     @Inject
     constructor(
         @param:dagger.hilt.android.qualifiers.ApplicationContext private val applicationContext: Context,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
+        private val rnsLxmf: RnsLxmf,
+        private val rnsTransportAdmin: RnsTransportAdmin,
         private val conversationRepository: network.columba.app.data.repository.ConversationRepository,
         private val announceRepository: network.columba.app.data.repository.AnnounceRepository,
         private val contactRepository: network.columba.app.data.repository.ContactRepository,
@@ -583,15 +588,15 @@ class MessagingViewModel
                     val senderHash = identity.hash.joinToString("") { "%02x".format(it) }
 
                     // Update local database with the reaction (optimistic update)
-                    val updatedFieldsJson =
-                        addReactionToFieldsJson(
-                            message.fieldsJson,
+                    val updatedReactionsJson =
+                        mergeReactionIntoJson(
+                            message.reactionsJson,
                             emoji,
                             senderHash,
                         )
 
-                    // Save the updated fieldsJson to database
-                    conversationRepository.updateMessageReactions(messageId, updatedFieldsJson)
+                    // Save the updated reactions blob to the dedicated column
+                    conversationRepository.updateMessageReactions(messageId, updatedReactionsJson)
 
                     Log.d(
                         TAG,
@@ -600,7 +605,7 @@ class MessagingViewModel
 
                     // Send reaction via LXMF protocol
                     val result =
-                        reticulumProtocol.sendReaction(
+                        rnsLxmf.sendReaction(
                             destinationHash = destHashBytes,
                             targetMessageId = messageId,
                             emoji = emoji,
@@ -682,9 +687,9 @@ class MessagingViewModel
                                 .computeIdentityHash(it)
                         }
                     blockedPeerRepository.blockPeer(peerHash, peerIdentityHash, currentPeerName, blackholeEnabled)
-                    reticulumProtocol.blockDestination(peerHash)
+                    rnsCore.blockDestination(peerHash)
                     if (blackholeEnabled && peerIdentityHash != null) {
-                        reticulumProtocol.blackholeIdentity(peerIdentityHash)
+                        rnsCore.blackholeIdentity(peerIdentityHash)
                     }
                     if (deleteConversation) {
                         conversationRepository.deleteConversation(peerHash)
@@ -730,7 +735,7 @@ class MessagingViewModel
         init {
             viewModelScope.launch {
                 try {
-                    _isTransportEnabled.value = reticulumProtocol.isTransportEnabled()
+                    _isTransportEnabled.value = rnsCore.isTransportEnabled()
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to check transport status", e)
                 }
@@ -749,7 +754,7 @@ class MessagingViewModel
             // Safe to enable now that identity loading is lazy (doesn't crash init)
             viewModelScope.launch {
                 try {
-                    reticulumProtocol.observeDeliveryStatus().collect { update ->
+                    rnsLxmf.observeDeliveryStatus().collect { update ->
                         try {
                             Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.status}")
                             handleDeliveryStatusUpdate(update)
@@ -767,7 +772,7 @@ class MessagingViewModel
             // Collect incoming reactions and update target messages
             viewModelScope.launch {
                 try {
-                    reticulumProtocol.reactionReceivedFlow.collect { reactionJson ->
+                    rnsTransportAdmin.reactionReceivedFlow.collect { reactionJson ->
                         try {
                             handleIncomingReaction(reactionJson)
                         } catch (e: Exception) {
@@ -805,7 +810,7 @@ class MessagingViewModel
 
             // Try to load identity
             return try {
-                val identity = reticulumProtocol.getLxmfIdentity().getOrThrow()
+                val identity = rnsLxmf.getLxmfIdentity().getOrThrow()
                 sourceIdentity = identity
                 // Cache the identity hash for reaction ownership checks
                 val hashHex = identity.hash.joinToString("") { "%02x".format(it) }
@@ -818,7 +823,7 @@ class MessagingViewModel
             }
         }
 
-        private suspend fun handleDeliveryStatusUpdate(update: network.columba.app.reticulum.protocol.DeliveryStatusUpdate) {
+        private suspend fun handleDeliveryStatusUpdate(update: network.columba.app.rns.api.model.DeliveryStatusUpdate) {
             try {
                 // Retry mechanism to handle race condition where delivery proof arrives
                 // before database transaction completes
@@ -916,7 +921,7 @@ class MessagingViewModel
                         .chunked(2)
                         .map { it.toInt(16).toByte() }
                         .toByteArray()
-                val sentInterface = reticulumProtocol.getNextHopInterfaceName(destHashBytes)
+                val sentInterface = rnsCore.getNextHopInterfaceName(destHashBytes)
                 if (sentInterface != null) {
                     conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
                 }
@@ -953,16 +958,17 @@ class MessagingViewModel
                     return
                 }
 
-                // Add the reaction to the message's fieldsJson
-                val updatedFieldsJson =
-                    addReactionToFieldsJson(
-                        targetMessage.fieldsJson,
+                // Aggregate the reaction into the dedicated DB column on
+                // the target message (NOT the carrier message; reactions
+                // attach to the message being reacted *to*).
+                val updatedReactionsJson =
+                    mergeReactionIntoJson(
+                        targetMessage.reactionsJson,
                         emoji,
                         senderHash,
                     )
 
-                // Save the updated fieldsJson to database
-                conversationRepository.updateMessageReactions(targetMessageId, updatedFieldsJson)
+                conversationRepository.updateMessageReactions(targetMessageId, updatedReactionsJson)
 
                 Log.d(TAG, "😀 Reaction $emoji added to message ${targetMessageId.take(16)}... from ${senderHash.take(16)}...")
             } catch (e: Exception) {
@@ -1037,7 +1043,7 @@ class MessagingViewModel
             activeConversationManager.setActive(destinationHash)
 
             // Enable fast polling (1s) for active conversation
-            reticulumProtocol.setConversationActive(true)
+            rnsLxmf.setConversationActive(true)
 
             // Request path for this conversation peer if we don't have one
             viewModelScope.launch(Dispatchers.IO) {
@@ -1162,7 +1168,7 @@ class MessagingViewModel
                             val fg = activeId.iconForegroundColor
                             val bg = activeId.iconBackgroundColor
                             if (name != null && fg != null && bg != null) {
-                                network.columba.app.reticulum.protocol.IconAppearance(
+                                network.columba.app.rns.api.model.IconAppearance(
                                     iconName = name,
                                     foregroundColor = fg,
                                     backgroundColor = bg,
@@ -1173,7 +1179,7 @@ class MessagingViewModel
                         }
 
                     val result =
-                        reticulumProtocol.sendLxmfMessageWithMethod(
+                        rnsLxmf.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
                             content = sanitized,
                             sourceIdentity = identity,
@@ -1183,6 +1189,19 @@ class MessagingViewModel
                             imageFormat = imageFormat,
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
                             replyToMessageId = replyToId,
+                            // MeshChatX-interop reply format ships the
+                            // quoted content inline (fields[0x31]) so
+                            // recipients render the preview even when
+                            // they don't have the original in their
+                            // local store (cross-app interop, or peer
+                            // history aged out). We pull it from local
+                            // DB at send time the same way MeshChatX
+                            // does.
+                            replyQuotedContent = replyToId?.let { id ->
+                                runCatching {
+                                    conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
+                                }.getOrNull()
+                            },
                             iconAppearance = iconAppearance,
                         )
 
@@ -1208,7 +1227,7 @@ class MessagingViewModel
 
         @Suppress("LongParameterList") // Refactoring to data class would add unnecessary complexity
         private suspend fun handleSendSuccess(
-            receipt: network.columba.app.reticulum.protocol.MessageReceipt,
+            receipt: network.columba.app.rns.api.model.MessageReceipt,
             sanitized: String,
             destinationHash: String,
             imageData: ByteArray?,
@@ -1240,7 +1259,7 @@ class MessagingViewModel
             // Query outbound interface immediately after send (best-effort)
             val sentInterface =
                 try {
-                    reticulumProtocol.getNextHopInterfaceName(receipt.destinationHash)
+                    rnsCore.getNextHopInterfaceName(receipt.destinationHash)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to query sent interface: ${e.message}")
                     null
@@ -1636,15 +1655,38 @@ class MessagingViewModel
                         _replyPreviewCache.update { it + (messageId to uiPreview) }
                         Log.d(TAG, "Loaded reply preview for message ${messageId.take(16)}")
                     } else {
-                        // Mark as loaded with a "deleted message" placeholder
-                        val deletedPreview =
-                            network.columba.app.ui.model.ReplyPreviewUi(
-                                messageId = replyToMessageId,
-                                senderName = "",
-                                contentPreview = "Message deleted",
+                        // Local DB doesn't have the original — try the
+                        // MeshChatX-style inline quote (fields[0x31])
+                        // attached to the replying message. That field
+                        // carries the original sender's content bytes
+                        // verbatim, so cross-app interop / aged-out
+                        // peer-history cases still render a preview
+                        // instead of "Message deleted".
+                        val replyingMessage = conversationRepository.getMessageById(messageId)
+                        val inlineQuote =
+                            network.columba.app.ui.model.parseReplyQuoteFromFields(
+                                replyingMessage?.fieldsJson,
                             )
-                        _replyPreviewCache.update { it + (messageId to deletedPreview) }
-                        Log.d(TAG, "Reply target message not found: ${replyToMessageId.take(16)}")
+                        val fallbackPreview =
+                            if (inlineQuote != null && inlineQuote.isNotEmpty()) {
+                                network.columba.app.ui.model.ReplyPreviewUi(
+                                    messageId = replyToMessageId,
+                                    senderName = "",
+                                    contentPreview = inlineQuote,
+                                )
+                            } else {
+                                network.columba.app.ui.model.ReplyPreviewUi(
+                                    messageId = replyToMessageId,
+                                    senderName = "",
+                                    contentPreview = "Message deleted",
+                                )
+                            }
+                        _replyPreviewCache.update { it + (messageId to fallbackPreview) }
+                        Log.d(
+                            TAG,
+                            "Reply target ${replyToMessageId.take(16)} not in local store; " +
+                                "using ${if (inlineQuote != null) "inline quote (${inlineQuote.length} chars)" else "deleted placeholder"}",
+                        )
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading reply preview for $messageId", e)
@@ -1911,7 +1953,7 @@ class MessagingViewModel
                         val fg = activeId.iconForegroundColor
                         val bg = activeId.iconBackgroundColor
                         if (name != null && fg != null && bg != null) {
-                            network.columba.app.reticulum.protocol.IconAppearance(
+                            network.columba.app.rns.api.model.IconAppearance(
                                 iconName = name,
                                 foregroundColor = fg,
                                 backgroundColor = bg,
@@ -1924,7 +1966,7 @@ class MessagingViewModel
                 Log.d(TAG, "Sending shared image to $destinationHash (${imageData.size} bytes, format=$imageFormat)")
 
                 val result =
-                    reticulumProtocol.sendLxmfMessageWithMethod(
+                    rnsLxmf.sendLxmfMessageWithMethod(
                         destinationHash = destHashBytes,
                         content = sanitized,
                         sourceIdentity = identity,
@@ -2070,7 +2112,7 @@ class MessagingViewModel
                     Log.d(TAG, "Temporarily increasing incoming size limit from ${originalLimitKb}KB to ${newLimitKb}KB for ${fileSizeKb}KB file")
 
                     // Update Python layer temporarily (don't persist to DataStore)
-                    reticulumProtocol.setIncomingMessageSizeLimit(newLimitKb)
+                    rnsLxmf.setIncomingMessageSizeLimit(newLimitKb)
                     Log.d(TAG, "Python layer updated with temporary size limit")
 
                     // Trigger sync to fetch the file (silent = no toast)
@@ -2104,7 +2146,7 @@ class MessagingViewModel
                 } finally {
                     // Always revert the size limit when done
                     if (originalLimitKb != null) {
-                        reticulumProtocol.setIncomingMessageSizeLimit(originalLimitKb)
+                        rnsLxmf.setIncomingMessageSizeLimit(originalLimitKb)
                         Log.d(TAG, "Size limit reverted to ${originalLimitKb}KB")
                     }
                 }
@@ -2171,7 +2213,7 @@ class MessagingViewModel
 
                     // Send the message
                     val result =
-                        reticulumProtocol.sendLxmfMessageWithMethod(
+                        rnsLxmf.sendLxmfMessageWithMethod(
                             destinationHash = destHashBytes,
                             content = failedMessage.content,
                             sourceIdentity = identity,
@@ -2271,7 +2313,7 @@ class MessagingViewModel
 
         private suspend fun probeAndRecommendCodec(destHashBytes: ByteArray): CodecProfile =
             try {
-                val probe = reticulumProtocol.probeLinkSpeed(destHashBytes, 5.0f, "direct")
+                val probe = rnsCore.probeLinkSpeed(destHashBytes, 5.0f, "direct")
                 if (probe.isSuccess) CodecProfile.recommendFromProbe(probe) else CodecProfile.DEFAULT
             } catch (e: Exception) {
                 Log.e(TAG, "Error probing link speed for codec recommendation", e)
@@ -2298,7 +2340,7 @@ class MessagingViewModel
             activeConversationManager.setActive(null)
 
             // Disable fast polling when conversation screen is closed
-            reticulumProtocol.setConversationActive(false)
+            rnsLxmf.setConversationActive(false)
             Log.d(TAG, "ViewModel cleared - disabled fast polling")
         }
     }
@@ -2487,7 +2529,7 @@ private fun ByteArray.toHexString(): String {
 private val HEX_CHARS = "0123456789abcdef".toCharArray()
 
 private fun resolveActualDestHash(
-    receipt: network.columba.app.reticulum.protocol.MessageReceipt,
+    receipt: network.columba.app.rns.api.model.MessageReceipt,
     fallbackHash: String,
 ): String =
     if (receipt.destinationHash.isNotEmpty()) {
@@ -2516,59 +2558,42 @@ private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? =
     }
 
 /**
- * Add a reaction to the fieldsJson of a message.
+ * Merge an `(emoji, sender)` event into a target message's
+ * `reactionsJson` aggregation blob.
  *
- * Updates or creates the Field 16 "reactions" dictionary, adding the sender hash
- * to the specified emoji's list of senders. If the sender already reacted with
- * this emoji, the reaction is not duplicated.
+ * Shape: flat `{emoji: [senderHex, ...]}` — no field-16 wrapper since
+ * the column is a dedicated DB surface, not an overload of the LXMF
+ * fields map.
  *
- * @param fieldsJson The existing fieldsJson string (can be null)
- * @param emoji The emoji reaction to add
- * @param senderHash The hex hash of the sender adding the reaction
- * @return The updated fieldsJson string with the reaction added
+ * Idempotent for the same `(emoji, sender)` pair (won't duplicate the
+ * sender hash). Tolerant of malformed input — a JSON-unparseable
+ * existing blob is reset to a fresh single-entry blob.
  */
-private fun addReactionToFieldsJson(
-    fieldsJson: String?,
+@VisibleForTesting
+internal fun mergeReactionIntoJson(
+    reactionsJson: String?,
     emoji: String,
     senderHash: String,
 ): String {
     val json =
-        if (fieldsJson.isNullOrEmpty()) {
+        if (reactionsJson.isNullOrEmpty()) {
             org.json.JSONObject()
         } else {
             try {
-                org.json.JSONObject(fieldsJson)
+                org.json.JSONObject(reactionsJson)
             } catch (e: Exception) {
-                Log.w(HELPER_TAG, "Failed to parse fieldsJson, creating new: ${e.message}")
+                Log.w(HELPER_TAG, "Failed to parse reactionsJson, creating new: ${e.message}")
                 org.json.JSONObject()
             }
         }
 
-    // Get or create Field 16 (app extensions)
-    val field16 =
-        if (json.has("16")) {
-            json.getJSONObject("16")
-        } else {
-            org.json.JSONObject().also { json.put("16", it) }
-        }
-
-    // Get or create reactions dictionary
-    val reactions =
-        if (field16.has("reactions")) {
-            field16.getJSONObject("reactions")
-        } else {
-            org.json.JSONObject().also { field16.put("reactions", it) }
-        }
-
-    // Get or create the sender list for this emoji
     val senderList =
-        if (reactions.has(emoji)) {
-            reactions.getJSONArray(emoji)
+        if (json.has(emoji)) {
+            json.getJSONArray(emoji)
         } else {
-            org.json.JSONArray().also { reactions.put(emoji, it) }
+            org.json.JSONArray().also { json.put(emoji, it) }
         }
 
-    // Add sender if not already present (avoid duplicates)
     var alreadyReacted = false
     for (i in 0 until senderList.length()) {
         if (senderList.optString(i) == senderHash) {

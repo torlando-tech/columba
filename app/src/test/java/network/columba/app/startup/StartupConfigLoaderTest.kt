@@ -4,8 +4,8 @@ import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.model.InterfaceConfig
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -71,7 +71,7 @@ class StartupConfigLoaderTest {
         // Default to WIFI_LIKE so existing tests' AutoInterface (default WIFI_ONLY) passes
         // the filter unchanged. Tests can override to assert filter behaviour.
         io.mockk.every { transportObserver.currentTransport() } returns
-            network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
+            network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
 
         // Default stubs for settings that most tests don't override
         coEvery { settingsRepository.getBatteryProfile() } returns BatteryProfile.BALANCED

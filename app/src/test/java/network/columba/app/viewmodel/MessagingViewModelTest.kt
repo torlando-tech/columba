@@ -16,10 +16,12 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.protocol.DeliveryStatusUpdate
-import network.columba.app.reticulum.protocol.MessageReceipt
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.IdentityResolutionManager
@@ -77,7 +79,9 @@ class MessagingViewModelTest {
     private lateinit var testDispatcher: TestDispatcher
 
     private lateinit var applicationContext: Context
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var rnsCore: RnsCore
+    private lateinit var rnsLxmf: RnsLxmf
+    private lateinit var rnsTransportAdmin: RnsTransportAdmin
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
@@ -109,7 +113,9 @@ class MessagingViewModelTest {
 
         applicationContext = mockk(relaxed = true)
         every { applicationContext.cacheDir } returns java.io.File(System.getProperty("java.io.tmpdir"), "test_cache").apply { mkdirs() }
-        reticulumProtocol = mockk()
+        rnsCore = mockk()
+        rnsLxmf = mockk()
+        rnsTransportAdmin = mockk()
         conversationRepository = mockk()
         announceRepository = mockk()
         contactRepository = mockk()
@@ -168,17 +174,17 @@ class MessagingViewModelTest {
         every { locationSharingManager.stopSharing(any()) } just Runs
 
         // Mock default behaviors
-        coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
-        every { reticulumProtocol.setConversationActive(any()) } just Runs
+        coEvery { rnsLxmf.getLxmfIdentity() } returns Result.success(testIdentity)
+        every { rnsLxmf.setConversationActive(any()) } just Runs
         coEvery { conversationRepository.getConversation(any()) } returns null
         coEvery { conversationRepository.getPeerPublicKey(any()) } returns null
         coEvery { conversationRepository.markConversationAsRead(any()) } just Runs
 
         // Mock delivery status observer (returns empty flow by default)
-        every { reticulumProtocol.observeDeliveryStatus() } returns flowOf()
+        every { rnsLxmf.observeDeliveryStatus() } returns flowOf()
 
         // Mock reaction received flow (returns empty flow by default)
-        every { reticulumProtocol.reactionReceivedFlow } returns MutableSharedFlow()
+        every { rnsTransportAdmin.reactionReceivedFlow } returns MutableSharedFlow()
 
         // Mock database methods needed by delivery status handler
         coEvery { conversationRepository.getMessageById(any()) } returns null
@@ -218,7 +224,9 @@ class MessagingViewModelTest {
             viewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -243,7 +251,9 @@ class MessagingViewModelTest {
     private fun createTestViewModel(): MessagingViewModel =
         MessagingViewModel(
             applicationContext,
-            reticulumProtocol,
+            rnsCore,
+            rnsLxmf,
+            rnsTransportAdmin,
             conversationRepository,
             announceRepository,
             contactRepository,
@@ -289,7 +299,7 @@ class MessagingViewModelTest {
             coVerify { conversationRepository.markConversationAsRead(testPeerHash) }
 
             // Verify: Fast polling enabled
-            verify { reticulumProtocol.setConversationActive(true) }
+            verify { rnsLxmf.setConversationActive(true) }
         }
 
     @Test
@@ -314,7 +324,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -342,7 +352,7 @@ class MessagingViewModelTest {
 
             // Verify: Protocol sendLxmfMessageWithMethod was called
             coVerify {
-                reticulumProtocol.sendLxmfMessageWithMethod(
+                rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = "Test message",
                     sourceIdentity = testIdentity,
@@ -359,7 +369,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Mock failed LXMF send
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
 
             coEvery {
@@ -397,7 +407,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -414,7 +424,7 @@ class MessagingViewModelTest {
 
             // Verify: Destination hash was converted to bytes
             coVerify {
-                reticulumProtocol.sendLxmfMessageWithMethod(
+                rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash =
                         match {
                             // "abcdef0123456789abcdef0123456789" -> 16 bytes
@@ -503,7 +513,7 @@ class MessagingViewModelTest {
             // This avoids crashes when LXMF router isn't ready yet
             // Send a message to trigger identity loading
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(MessageReceipt(ByteArray(32), 3000L, testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()))
 
             coEvery {
@@ -515,7 +525,7 @@ class MessagingViewModelTest {
 
             assertTrue("sendMessage should complete without error", result.isSuccess)
             // Verify the protocol was called to get identity
-            coVerify { reticulumProtocol.getLxmfIdentity() }
+            coVerify { rnsLxmf.getLxmfIdentity() }
         }
 
     @Test
@@ -524,11 +534,13 @@ class MessagingViewModelTest {
             // Clear existing mocks and create new ones that fail identity loading
             clearAllMocks()
 
-            val failingProtocol: ReticulumProtocol = mockk()
-            coEvery { failingProtocol.getLxmfIdentity() } returns Result.failure(Exception("No identity"))
-            every { failingProtocol.setConversationActive(any()) } just Runs
-            every { failingProtocol.observeDeliveryStatus() } returns flowOf()
-            every { failingProtocol.reactionReceivedFlow } returns MutableSharedFlow()
+            val failingRnsCore: RnsCore = mockk()
+            val failingRnsLxmf: RnsLxmf = mockk()
+            val failingRnsTransportAdmin: RnsTransportAdmin = mockk()
+            coEvery { failingRnsLxmf.getLxmfIdentity() } returns Result.failure(Exception("No identity"))
+            every { failingRnsLxmf.setConversationActive(any()) } just Runs
+            every { failingRnsLxmf.observeDeliveryStatus() } returns flowOf()
+            every { failingRnsTransportAdmin.reactionReceivedFlow } returns MutableSharedFlow()
 
             val failingRepository: ConversationRepository = mockk()
             every { failingRepository.getMessages(any()) } returns flowOf(emptyList())
@@ -572,7 +584,9 @@ class MessagingViewModelTest {
             val viewModelWithoutIdentity =
                 MessagingViewModel(
                     applicationContext,
-                    failingProtocol,
+                    failingRnsCore,
+                    failingRnsLxmf,
+                    failingRnsTransportAdmin,
                     failingRepository,
                     failingAnnounceRepository,
                     failingContactRepository,
@@ -595,7 +609,7 @@ class MessagingViewModelTest {
             assertTrue("sendMessage should complete without error", result.isSuccess)
 
             // Verify: sendLxmfMessageWithMethod was NOT called
-            coVerify(exactly = 0) { failingProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { failingRnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
 
             // Verify: saveMessage was NOT called
             coVerify(exactly = 0) { failingRepository.saveMessage(any(), any(), any(), any()) }
@@ -654,7 +668,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved to database
@@ -679,7 +693,7 @@ class MessagingViewModelTest {
 
             // Verify: No protocol call made
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Verify: No save to database
@@ -703,7 +717,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -727,7 +741,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -754,7 +768,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol NOT called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message NOT saved
@@ -774,7 +788,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -793,7 +807,7 @@ class MessagingViewModelTest {
 
             // Assert: Message was trimmed before sending
             coVerify {
-                reticulumProtocol.sendLxmfMessageWithMethod(
+                rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = "Test message", // Trimmed
                     sourceIdentity = testIdentity,
@@ -826,7 +840,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -846,7 +860,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called (message is valid)
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message was saved
@@ -867,7 +881,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -886,7 +900,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Message was saved
@@ -913,7 +927,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -938,7 +952,7 @@ class MessagingViewModelTest {
             // Assert: Protocol was called with image data
             // Note: Empty content is replaced with single space for Sideband compatibility
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(
+                rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = " ", // Single space for Sideband compatibility
                     sourceIdentity = testIdentity,
@@ -966,7 +980,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -990,7 +1004,7 @@ class MessagingViewModelTest {
 
             // Verify protocol was called
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Image was cleared after successful send
@@ -1005,7 +1019,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a retrying_propagated status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database
             val testMessageHash = "test_message_hash_123"
@@ -1025,7 +1039,9 @@ class MessagingViewModelTest {
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
                 applicationContext,
-                reticulumProtocol,
+                rnsCore,
+                rnsLxmf,
+                rnsTransportAdmin,
                 conversationRepository,
                 announceRepository,
                 contactRepository,
@@ -1077,7 +1093,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a delivered status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database
             val testMessageHash = "delivered_message_hash"
@@ -1097,7 +1113,9 @@ class MessagingViewModelTest {
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
                 applicationContext,
-                reticulumProtocol,
+                rnsCore,
+                rnsLxmf,
+                rnsTransportAdmin,
                 conversationRepository,
                 announceRepository,
                 contactRepository,
@@ -1145,7 +1163,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database with "pending" status (non-terminal)
             // Note: Issue #257 fix prevents status degradation from terminal states
@@ -1167,7 +1185,9 @@ class MessagingViewModelTest {
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
                 applicationContext,
-                reticulumProtocol,
+                rnsCore,
+                rnsLxmf,
+                rnsTransportAdmin,
                 conversationRepository,
                 announceRepository,
                 contactRepository,
@@ -1215,7 +1235,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a status update for unknown message
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message does NOT exist in database (returns null after retries)
             val unknownMessageHash = "unknown_message_hash"
@@ -1225,7 +1245,9 @@ class MessagingViewModelTest {
             // Create a new ViewModel to pick up the mocked flow
             MessagingViewModel(
                 applicationContext,
-                reticulumProtocol,
+                rnsCore,
+                rnsLxmf,
+                rnsTransportAdmin,
                 conversationRepository,
                 announceRepository,
                 contactRepository,
@@ -1275,7 +1297,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database with 'propagated' status
             val testMessageHash = "propagated_msg_spurious_fail"
@@ -1297,7 +1319,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -1340,7 +1364,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database with 'sent' status
             val testMessageHash = "sent_msg_spurious_fail"
@@ -1362,7 +1386,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -1405,7 +1431,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database with 'delivered' status
             val testMessageHash = "delivered_msg_spurious_fail"
@@ -1427,7 +1453,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -1470,7 +1498,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database with 'pending' status (not terminal)
             val testMessageHash = "pending_msg_legit_fail"
@@ -1492,7 +1520,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -1535,7 +1565,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow that emits a delivered status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             // Mock the message exists in database with 'sent' status
             val testMessageHash = "sent_msg_upgrade_to_delivered"
@@ -1557,7 +1587,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -1601,7 +1633,7 @@ class MessagingViewModelTest {
     fun `propagated status is blocked when message is already delivered`() =
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             val testMessageHash = "delivered_msg_spurious_propagated"
             val existingMessage =
@@ -1621,7 +1653,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -1660,7 +1694,7 @@ class MessagingViewModelTest {
     fun `retrying_propagated status is blocked when message is already delivered`() =
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             val testMessageHash = "delivered_msg_spurious_retrying"
             val existingMessage =
@@ -1680,7 +1714,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -1719,7 +1755,7 @@ class MessagingViewModelTest {
     fun `sent status is blocked when message is already delivered`() =
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
-            every { reticulumProtocol.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
 
             val testMessageHash = "delivered_msg_spurious_sent"
             val existingMessage =
@@ -1739,7 +1775,9 @@ class MessagingViewModelTest {
             val testViewModel =
                 MessagingViewModel(
                     applicationContext,
-                    reticulumProtocol,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
                     conversationRepository,
                     announceRepository,
                     contactRepository,
@@ -2712,7 +2750,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -2737,7 +2775,7 @@ class MessagingViewModelTest {
             // Protocol should be called with file attachments
             // Note: Empty content is replaced with single space for Sideband compatibility
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(
+                rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = " ", // Single space for Sideband compatibility
                     sourceIdentity = testIdentity,
@@ -2761,7 +2799,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery {
@@ -2784,7 +2822,7 @@ class MessagingViewModelTest {
 
             // Verify protocol was called
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // File attachments should be cleared after successful send
@@ -3392,7 +3430,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -3445,7 +3483,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -3477,7 +3515,7 @@ class MessagingViewModelTest {
 
             // Verify protocol was called
             coVerify(exactly = 1) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
 
             // Assert: Pending reply was cleared after successful send
@@ -3496,7 +3534,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -3812,7 +3850,7 @@ class MessagingViewModelTest {
             assertTrue("sendReaction should complete without error", result.isSuccess)
 
             // Assert: Protocol send was never called
-            coVerify(exactly = 0) { reticulumProtocol.sendReaction(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { rnsLxmf.sendReaction(any(), any(), any(), any()) }
         }
 
     @Test
@@ -3842,7 +3880,7 @@ class MessagingViewModelTest {
             val mockReceipt = mockk<MessageReceipt>()
             every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
             coEvery {
-                reticulumProtocol.sendReaction(any(), any(), any(), any())
+                rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
 
             // Mock updateMessageReactions
@@ -3857,7 +3895,7 @@ class MessagingViewModelTest {
 
             // Assert: Protocol was called with correct parameters
             coVerify {
-                reticulumProtocol.sendReaction(
+                rnsLxmf.sendReaction(
                     destinationHash = any(),
                     targetMessageId = "test-msg-id",
                     emoji = "👍",
@@ -3867,7 +3905,7 @@ class MessagingViewModelTest {
         }
 
     @Test
-    fun `sendReaction updates message fieldsJson in database`() =
+    fun `sendReaction writes flat reactionsJson blob to reactionsJson column`() =
         runViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
@@ -3886,6 +3924,7 @@ class MessagingViewModelTest {
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = null,
                 )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
@@ -3893,27 +3932,25 @@ class MessagingViewModelTest {
             val mockReceipt = mockk<MessageReceipt>()
             every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
             coEvery {
-                reticulumProtocol.sendReaction(any(), any(), any(), any())
+                rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act
             viewModel.sendReaction("test-msg-id", "👍")
             advanceUntilIdle()
 
-            // Assert: Database was updated with reaction in fieldsJson
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            assertTrue(json.has("16"))
-            val field16 = json.getJSONObject("16")
-            assertTrue(field16.has("reactions"))
-            val reactions = field16.getJSONObject("reactions")
-            assertTrue(reactions.has("👍"))
+            // Assert: Database was updated with the flat reactions blob
+            // (DB v2+ shape — no field-16 wrapper).
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("👍"))
+            assertEquals(1, json.getJSONArray("👍").length())
         }
 
     @Test
@@ -3943,7 +3980,7 @@ class MessagingViewModelTest {
             val mockReceipt = mockk<MessageReceipt>()
             every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
             coEvery {
-                reticulumProtocol.sendReaction(any(), any(), any(), any())
+                rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
             coEvery { conversationRepository.updateMessageReactions(any(), any()) } just Runs
 
@@ -3985,7 +4022,7 @@ class MessagingViewModelTest {
 
             // Mock protocol failure
             coEvery {
-                reticulumProtocol.sendReaction(any(), any(), any(), any())
+                rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
             coEvery { conversationRepository.updateMessageReactions(any(), any()) } just Runs
 
@@ -4005,13 +4042,15 @@ class MessagingViewModelTest {
         }
 
     @Test
-    fun `sendReaction adds reaction to existing fieldsJson with reply_to`() =
+    fun `sendReaction does not touch fieldsJson when the target has reply metadata`() =
         runViewModelTest {
+            // DB v2 split: reply metadata stays in fieldsJson / dedicated
+            // `replyToMessageId` column, reactions live in reactionsJson.
+            // The two never collide, so reactions for a reply-message
+            // only need to update reactionsJson.
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Setup: Mock message that already has a reply_to in field 16
-            val existingFieldsJson = """{"16": {"reply_to": "original-msg-id"}}"""
             val testMessage =
                 MessageEntity(
                     id = "test-msg-id",
@@ -4021,38 +4060,33 @@ class MessagingViewModelTest {
                     timestamp = System.currentTimeMillis(),
                     isFromMe = false,
                     status = "delivered",
-                    fieldsJson = existingFieldsJson,
+                    fieldsJson = null,
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = "original-msg-id",
+                    reactionsJson = null,
                 )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
-            // Mock protocol
             val mockReceipt = mockk<MessageReceipt>()
             every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
             coEvery {
-                reticulumProtocol.sendReaction(any(), any(), any(), any())
+                rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedReactionsJson))
             } just Runs
 
-            // Act
             viewModel.sendReaction("test-msg-id", "❤️")
             advanceUntilIdle()
 
-            // Assert: Both reply_to and reactions are preserved
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val field16 = json.getJSONObject("16")
-            assertEquals("original-msg-id", field16.getString("reply_to"))
-            assertTrue(field16.has("reactions"))
-            val reactions = field16.getJSONObject("reactions")
-            assertTrue(reactions.has("❤️"))
+            // Assert: only the reactions blob is touched.
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("❤️"))
+            assertEquals(1, json.length()) // no other keys leaked in
         }
 
     @Test
@@ -4061,8 +4095,8 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Setup: Mock message that already has a 👍 reaction from someone else
-            val existingFieldsJson = """{"16": {"reactions": {"👍": ["other-sender-hash"]}}}"""
+            // Setup: target message already has a 👍 reaction from another peer
+            val existingReactionsJson = """{"👍": ["other-sender-hash"]}"""
             val testMessage =
                 MessageEntity(
                     id = "test-msg-id",
@@ -4072,10 +4106,11 @@ class MessagingViewModelTest {
                     timestamp = System.currentTimeMillis(),
                     isFromMe = false,
                     status = "delivered",
-                    fieldsJson = existingFieldsJson,
+                    fieldsJson = null,
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = existingReactionsJson,
                 )
             coEvery { conversationRepository.getMessageById("test-msg-id") } returns testMessage
 
@@ -4083,13 +4118,13 @@ class MessagingViewModelTest {
             val mockReceipt = mockk<MessageReceipt>()
             every { mockReceipt.messageHash } returns ByteArray(16) { it.toByte() }
             coEvery {
-                reticulumProtocol.sendReaction(any(), any(), any(), any())
+                rnsLxmf.sendReaction(any(), any(), any(), any())
             } returns Result.success(mockReceipt)
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("test-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act
@@ -4097,10 +4132,9 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // Assert: Both senders are in the reaction list
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val reactions = json.getJSONObject("16").getJSONObject("reactions")
-            val thumbsUp = reactions.getJSONArray("👍")
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            val thumbsUp = json.getJSONArray("👍")
             assertEquals(2, thumbsUp.length())
             assertEquals("other-sender-hash", thumbsUp.getString(0))
             // Our sender hash is derived from testIdentity
@@ -4113,7 +4147,7 @@ class MessagingViewModelTest {
         runTest {
             // Setup: Create a flow to emit reactions BEFORE ViewModel creation
             val reactionFlow = MutableSharedFlow<String>()
-            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+            every { rnsTransportAdmin.reactionReceivedFlow } returns reactionFlow
 
             val viewModel = createTestViewModel()
             advanceUntilIdle()
@@ -4135,13 +4169,14 @@ class MessagingViewModelTest {
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = null,
                 )
             coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act: Emit incoming reaction
@@ -4149,12 +4184,11 @@ class MessagingViewModelTest {
             reactionFlow.emit(reactionJson)
             advanceUntilIdle()
 
-            // Assert: Database was updated
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val reactions = json.getJSONObject("16").getJSONObject("reactions")
-            assertTrue(reactions.has("😂"))
-            val senders = reactions.getJSONArray("😂")
+            // Assert: Database was updated with flat reactionsJson blob
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("😂"))
+            val senders = json.getJSONArray("😂")
             assertEquals("remote-sender-hash", senders.getString(0))
         }
 
@@ -4163,7 +4197,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow to emit reactions
             val reactionFlow = MutableSharedFlow<String>()
-            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+            every { rnsTransportAdmin.reactionReceivedFlow } returns reactionFlow
 
             advanceUntilIdle()
 
@@ -4190,7 +4224,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Setup: Create a flow to emit reactions
             val reactionFlow = MutableSharedFlow<String>()
-            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+            every { rnsTransportAdmin.reactionReceivedFlow } returns reactionFlow
 
             advanceUntilIdle()
 
@@ -4220,7 +4254,7 @@ class MessagingViewModelTest {
         runTest {
             // Setup: Create a flow to emit reactions BEFORE ViewModel creation
             val reactionFlow = MutableSharedFlow<String>()
-            every { reticulumProtocol.reactionReceivedFlow } returns reactionFlow
+            every { rnsTransportAdmin.reactionReceivedFlow } returns reactionFlow
 
             val viewModel = createTestViewModel()
             advanceUntilIdle()
@@ -4228,8 +4262,8 @@ class MessagingViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
 
-            // Setup: Mock target message that already has reactions
-            val existingFieldsJson = """{"16": {"reactions": {"👍": ["sender-1"]}}}"""
+            // Setup: target message already has a 👍 reaction from sender-1
+            val existingReactionsJson = """{"👍": ["sender-1"]}"""
             val targetMessage =
                 MessageEntity(
                     id = "target-msg-id",
@@ -4239,17 +4273,18 @@ class MessagingViewModelTest {
                     timestamp = System.currentTimeMillis(),
                     isFromMe = true,
                     status = "delivered",
-                    fieldsJson = existingFieldsJson,
+                    fieldsJson = null,
                     deliveryMethod = null,
                     errorMessage = null,
                     replyToMessageId = null,
+                    reactionsJson = existingReactionsJson,
                 )
             coEvery { conversationRepository.getMessageById("target-msg-id") } returns targetMessage
 
-            // Capture the fieldsJson update
-            val capturedFieldsJson = slot<String>()
+            // Capture the reactionsJson update
+            val capturedReactionsJson = slot<String>()
             coEvery {
-                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedFieldsJson))
+                conversationRepository.updateMessageReactions("target-msg-id", capture(capturedReactionsJson))
             } just Runs
 
             // Act: Emit incoming reaction with different emoji
@@ -4257,14 +4292,13 @@ class MessagingViewModelTest {
             reactionFlow.emit(reactionJson)
             advanceUntilIdle()
 
-            // Assert: Both reactions exist
-            assertTrue(capturedFieldsJson.isCaptured)
-            val json = org.json.JSONObject(capturedFieldsJson.captured)
-            val reactions = json.getJSONObject("16").getJSONObject("reactions")
-            assertTrue(reactions.has("👍"))
-            assertTrue(reactions.has("❤️"))
-            assertEquals(1, reactions.getJSONArray("👍").length())
-            assertEquals(1, reactions.getJSONArray("❤️").length())
+            // Assert: Both reactions exist in the flat blob
+            assertTrue(capturedReactionsJson.isCaptured)
+            val json = org.json.JSONObject(capturedReactionsJson.captured)
+            assertTrue(json.has("👍"))
+            assertTrue(json.has("❤️"))
+            assertEquals(1, json.getJSONArray("👍").length())
+            assertEquals(1, json.getJSONArray("❤️").length())
         }
 
     // ========== IMAGE STATE TESTS ==========
@@ -4434,7 +4468,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -4457,7 +4491,7 @@ class MessagingViewModelTest {
     fun `isSending is false after failed send`() =
         runViewModelTest {
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -4490,7 +4524,7 @@ class MessagingViewModelTest {
 
             // Protocol should not be called
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
         }
 
@@ -4520,7 +4554,7 @@ class MessagingViewModelTest {
 
             // Protocol should not be called for non-failed messages
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
         }
 
@@ -4551,7 +4585,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
@@ -4567,7 +4601,7 @@ class MessagingViewModelTest {
 
             // Should call protocol to resend
             coVerify {
-                reticulumProtocol.sendLxmfMessageWithMethod(
+                rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = "Test message",
                     sourceIdentity = testIdentity,
@@ -4604,7 +4638,7 @@ class MessagingViewModelTest {
 
             // Mock send failure
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.failure(Exception("Network error"))
 
             val result = runCatching { viewModel.retryFailedMessage("msg-123") }
@@ -4646,7 +4680,7 @@ class MessagingViewModelTest {
 
             // Protocol should not be called due to invalid hash
             coVerify(exactly = 0) {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             }
         }
 
@@ -4658,8 +4692,8 @@ class MessagingViewModelTest {
             // Mock settings to return current limit
             coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 500
 
-            // Mock protocol as NativeReticulumProtocol
-            every { reticulumProtocol.setIncomingMessageSizeLimit(any()) } just Runs
+            // Mock the LXMF seam
+            every { rnsLxmf.setIncomingMessageSizeLimit(any()) } just Runs
 
             // Mock sync completion - immediate return
             val syncingFlow = MutableStateFlow(false)
@@ -4678,7 +4712,7 @@ class MessagingViewModelTest {
             coVerify { propagationNodeManager.triggerSync(silent = true) }
 
             // Verify size limit was increased
-            verify { reticulumProtocol.setIncomingMessageSizeLimit(match { it > 500 }) }
+            verify { rnsLxmf.setIncomingMessageSizeLimit(match { it > 500 }) }
         }
 
     @Test
@@ -4687,7 +4721,7 @@ class MessagingViewModelTest {
             val originalLimit = 500
             coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns originalLimit
 
-            every { reticulumProtocol.setIncomingMessageSizeLimit(any()) } just Runs
+            every { rnsLxmf.setIncomingMessageSizeLimit(any()) } just Runs
 
             // Mock sync that completes quickly
             val syncingFlow = MutableStateFlow(false)
@@ -4704,7 +4738,7 @@ class MessagingViewModelTest {
 
             assertTrue("fetchPendingFile should complete without error", result.isSuccess)
             // Verify size limit was reverted to original
-            verify { reticulumProtocol.setIncomingMessageSizeLimit(originalLimit) }
+            verify { rnsLxmf.setIncomingMessageSizeLimit(originalLimit) }
         }
 
     // ========== SYNC STATE DELEGATION TESTS ==========
@@ -4782,7 +4816,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
 
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
@@ -4802,7 +4836,7 @@ class MessagingViewModelTest {
 
             // Verify protocol was called with file attachments
             coVerify {
-                reticulumProtocol.sendLxmfMessageWithMethod(
+                rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
                     content = "Message with attachment",
                     sourceIdentity = testIdentity,
@@ -4831,7 +4865,7 @@ class MessagingViewModelTest {
                     destinationHash = destHashBytes,
                 )
             coEvery {
-                reticulumProtocol.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(testReceipt)
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
 

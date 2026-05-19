@@ -7,6 +7,10 @@ plugins {
     id("com.google.devtools.ksp") version "2.3.6" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20" apply false
     id("io.sentry.android.gradle") version "6.1.0" apply false
+    // Chaquopy — applied ONLY by :rns-backend-py (module-level, never at :app level)
+    // so the kotlinBackend flavor's classpath is never polluted with the Python
+    // runtime. Version matches release/v0.10.x's proven config.
+    id("com.chaquo.python") version "17.0.0" apply false
     id("app.cash.paparazzi") version "1.3.5" apply false
     id("jacoco")
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"

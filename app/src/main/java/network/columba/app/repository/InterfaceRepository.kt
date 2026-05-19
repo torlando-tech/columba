@@ -5,10 +5,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.database.entity.InterfaceEntity
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
-import network.columba.app.reticulum.model.toJsonString
-import network.columba.app.reticulum.model.typeName
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.model.toJsonString
+import network.columba.app.rns.api.model.typeName
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONException

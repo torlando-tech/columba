@@ -44,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -67,15 +68,18 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.ble.util.BlePermissionManager
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import network.columba.app.service.ReticulumService
+import network.columba.app.rns.host.ble.util.BlePermissionManager
+import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.ReticulumService
 import network.columba.app.ui.components.BlePermissionBottomSheet
+import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.OfflineModeBanner
 import network.columba.app.ui.screens.AnnounceDetailScreen
 import network.columba.app.ui.screens.AnnounceStreamScreen
@@ -117,8 +121,7 @@ import network.columba.app.viewmodel.OnboardingViewModel
 import network.columba.app.viewmodel.SettingsViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.CallState
+import network.columba.app.rns.api.model.CallState
 import javax.inject.Inject
 
 /**
@@ -148,7 +151,7 @@ class MainActivity : ComponentActivity() {
     lateinit var crashReportManager: CrashReportManager
 
     @Inject
-    lateinit var reticulumProtocol: ReticulumProtocol
+    lateinit var transportAdmin: RnsTransportAdmin
 
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
@@ -292,11 +295,18 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "Onboarding status resolved: completed=${resolved.hasCompletedOnboarding}")
             }
 
-            ColumbaNavigation(
-                pendingNavigation = pendingNavigation,
-                interfaceRepository = interfaceRepository,
-                crashReportManager = crashReportManager,
-            )
+            // Provide the active backend's capabilities into LocalCapabilities
+            // above the whole UI tree so any screen can capability-gate without
+            // prop-drilling (Phase D). settingsViewModel is the Activity-scoped
+            // instance, so this is the same StateFlow the gated screens read.
+            val capabilities by settingsViewModel.capabilities.collectAsState()
+            CompositionLocalProvider(LocalCapabilities provides capabilities) {
+                ColumbaNavigation(
+                    pendingNavigation = pendingNavigation,
+                    interfaceRepository = interfaceRepository,
+                    crashReportManager = crashReportManager,
+                )
+            }
         }
 
         // Initialize JankStats for frame monitoring (Phase 1 Plan 01-03)
@@ -429,7 +439,7 @@ class MainActivity : ComponentActivity() {
                         Log.d(TAG, "🔌 USB permission already granted, triggering reconnect")
                         lastUsbReconnectAttempted = true
                         try {
-                            reticulumProtocol.reconnectRNodeInterface()
+                            transportAdmin.reconnectRNodeInterface()
                         } catch (e: Exception) {
                             Log.e(TAG, "🔌 Error triggering RNode reconnect", e)
                         }
@@ -919,9 +929,17 @@ fun ColumbaNavigation(
             }
     }
 
-    // Observe CallBridge state for incoming calls and navigate to IncomingCallScreen
-    val callBridge = remember { CallCoordinator.getInstance() }
-    val callState by callBridge.callState.collectAsState()
+    // Observe call state for incoming calls and navigate to IncomingCallScreen.
+    // Composable functions can't @Inject, so the RnsTelephony seam singleton is
+    // reached through Hilt's RnsTelephonyEntryPoint. Replaces the A.9-era
+    // CallCoordinatorEntryPoint now that the call observable surface lives on
+    // RnsTelephony and survives the AIDL boundary.
+    val telephony = remember(context) {
+        EntryPointAccessors
+            .fromApplication(context.applicationContext, RnsTelephonyEntryPoint::class.java)
+            .telephony()
+    }
+    val callState by telephony.callState.collectAsState()
 
     LaunchedEffect(callState) {
         when (val state = callState) {
@@ -1519,7 +1537,7 @@ fun ColumbaNavigation(
                                         isDisablingTransport = true
                                         coroutineScope.launch {
                                             val flasher =
-                                                network.columba.app.reticulum.flasher
+                                                network.columba.app.rns.host.flasher
                                                     .RNodeFlasher(context)
                                             val success = flasher.tncModeController.disableTncMode(usbDeviceId)
                                             isDisablingTransport = false

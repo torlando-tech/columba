@@ -20,7 +20,7 @@ import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
 import network.columba.app.ui.screens.onboarding.OnboardingState

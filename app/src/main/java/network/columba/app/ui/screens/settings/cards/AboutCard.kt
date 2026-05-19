@@ -37,6 +37,7 @@ import network.columba.app.service.AppUpdateResult
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.util.SystemInfo
 import java.util.Locale
+import androidx.core.net.toUri
 
 @Composable
 fun AboutCard(
@@ -147,7 +148,7 @@ fun AboutCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = "GNU AGPLv3",
+                    text = "MPL 2.0",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -158,7 +159,7 @@ fun AboutCard(
                 )
                 TextButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/torlando-tech/columba/blob/main/LICENSE.md"))
+                        val intent = Intent(Intent.ACTION_VIEW, "https://github.com/torlando-tech/columba/blob/main/LICENSE.md".toUri())
                         context.startActivity(intent)
                     },
                 ) {
@@ -237,7 +238,7 @@ fun AboutCard(
                             )
                             TextButton(
                                 onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.htmlUrl))
+                                    val intent = Intent(Intent.ACTION_VIEW, result.htmlUrl.toUri())
                                     context.startActivity(intent)
                                 },
                             ) {
@@ -310,9 +311,15 @@ private fun InfoRow(
     label: String,
     value: String,
 ) {
+    // The label keeps its natural width; the value takes the remaining space and
+    // is right-aligned. Without the weight, a long value (e.g. the Python
+    // flavor's "Reticulum 1.1.9 (torlando-tech fork)") and the label both claim
+    // their full intrinsic width and crowd/overlap under SpaceBetween — instead
+    // a long value now wraps within its column.
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top,
     ) {
         Text(
             text = label,
@@ -323,6 +330,8 @@ private fun InfoRow(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -335,7 +344,7 @@ private fun LinkButton(
 ) {
     TextButton(
         onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
             context.startActivity(intent)
         },
         modifier = Modifier.fillMaxWidth(),

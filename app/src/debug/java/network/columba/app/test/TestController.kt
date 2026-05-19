@@ -14,21 +14,26 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.model.NetworkRestriction
-import network.columba.app.reticulum.protocol.DeliveryMethod
-import network.columba.app.reticulum.protocol.DeliveryStatusUpdate
-import network.columba.app.reticulum.protocol.ReceivedMessage
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.IconAppearance
+import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelemetry
+import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.service.InterfaceConfigManager
+import java.io.File
 
 /**
  * Debug-only test surface for the columba phone harness.
  *
  * Lazy-initialized on the first broadcast received by [TestReceiver]. Binds
- * to [ReticulumProtocol] via Hilt's entry-point pattern (the protocol is a
- * singleton across the app), then subscribes to the inbound message and
+ * to [RnsCore] + [RnsLxmf] via Hilt's entry-point pattern (sub-interfaces are
+ * singletons across the app), then subscribes to the inbound message and
  * delivery-status flows. Each broadcast action invokes one of the methods
  * below, which logs a structured `event=… key=…` line under the
  * [LOGCAT_TAG] tag for the harness to parse.
@@ -42,7 +47,9 @@ object TestController {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface TestEntryPoint {
-        fun reticulumProtocol(): ReticulumProtocol
+        fun rnsCore(): RnsCore
+        fun rnsLxmf(): RnsLxmf
+        fun rnsTelemetry(): RnsTelemetry
         fun interfaceRepository(): InterfaceRepository
         fun interfaceConfigManager(): InterfaceConfigManager
     }
@@ -65,7 +72,9 @@ object TestController {
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + launchErrorHandler,
     )
-    private var protocol: ReticulumProtocol? = null
+    private var rnsCore: RnsCore? = null
+    private var rnsLxmf: RnsLxmf? = null
+    private var rnsTelemetry: RnsTelemetry? = null
     private var interfaceRepo: InterfaceRepository? = null
     private var interfaceConfigManager: InterfaceConfigManager? = null
     private val rxQueue = mutableListOf<ReceivedMessage>()
@@ -83,11 +92,13 @@ object TestController {
             context.applicationContext,
             TestEntryPoint::class.java,
         )
-        protocol = ep.reticulumProtocol()
+        rnsCore = ep.rnsCore()
+        rnsLxmf = ep.rnsLxmf()
+        rnsTelemetry = ep.rnsTelemetry()
         interfaceRepo = ep.interfaceRepository()
         interfaceConfigManager = ep.interfaceConfigManager()
         receiveJob = scope.launch {
-            protocol!!.observeMessages().collect { msg ->
+            rnsLxmf!!.observeMessages().collect { msg ->
                 synchronized(rxLock) { rxQueue.add(msg) }
                 // `source=stream` distinguishes real-time observer logs
                 // from the queue drain emitted by handleGetRx (where lines
@@ -104,13 +115,46 @@ object TestController {
             }
         }
         deliveryJob = scope.launch {
-            protocol!!.observeDeliveryStatus().collect { upd ->
+            rnsLxmf!!.observeDeliveryStatus().collect { upd ->
                 // DeliveryStatusUpdate.messageHash is already a hex string;
                 // status is one of "delivered" | "failed" | "retrying_propagated"
                 val idHex = upd.messageHash
                 val stateName = upd.status.uppercase()
                 synchronized(deliveryLock) { deliveryStates[idHex] = stateName }
                 Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$stateName")
+            }
+        }
+        // Surface FIELD_TELEMETRY entries on received LXMF messages.
+        // Post-Phase-2 the flow emits typed `LocationTelemetry`; the
+        // interop harness still parses the JSON log shape, so we
+        // re-serialize on the way out — one JSON encode per inbound
+        // telemetry, paid only in debug builds.
+        scope.launch {
+            rnsTelemetry!!.locationTelemetryFlow.collect { telemetry ->
+                val obj = org.json.JSONObject().apply {
+                    put("type", telemetry.type)
+                    put("lat", telemetry.lat)
+                    put("lng", telemetry.lng)
+                    put("acc", telemetry.acc.toDouble())
+                    put("ts", telemetry.ts)
+                    if (telemetry.altitude != 0.0) put("altitude", telemetry.altitude)
+                    if (telemetry.speed != 0.0) put("speed", telemetry.speed)
+                    if (telemetry.bearing != 0.0) put("bearing", telemetry.bearing)
+                    telemetry.expires?.let { put("expires", it) }
+                    if (telemetry.cease) put("cease", true)
+                    if (telemetry.approxRadius > 0) put("approxRadius", telemetry.approxRadius)
+                    telemetry.sourceHash?.let { put("source_hash", it) }
+                    telemetry.appearance?.let { a ->
+                        put(
+                            "appearance",
+                            org.json.JSONObject()
+                                .put("icon_name", a.iconName)
+                                .put("foreground_color", a.foregroundColor)
+                                .put("background_color", a.backgroundColor),
+                        )
+                    }
+                }
+                Log.i(LOGCAT_TAG, "rx_location source=stream json=${escape(obj.toString())}")
             }
         }
         initialized = true
@@ -120,8 +164,8 @@ object TestController {
     fun handleGetDest(context: Context) {
         ensureInit(context)
         scope.launch {
-            val dest = protocol!!.getLxmfDestination().getOrNull()
-            val identity = protocol!!.getLxmfIdentity().getOrNull()
+            val dest = rnsLxmf!!.getLxmfDestination().getOrNull()
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull()
             // Prefer the LXMF destination hash (what peers route to).
             // Fall back to identity hash if destination isn't ready.
             val hex = dest?.hexHash ?: dest?.hash?.toHex() ?: identity?.hash?.toHex()
@@ -144,7 +188,7 @@ object TestController {
                 return@launch
             }
             val has = try {
-                protocol!!.hasPath(toBytes)
+                rnsCore!!.hasPath(toBytes)
             } catch (e: Throwable) {
                 Log.i(LOGCAT_TAG, "has_path to=$toHex result=err msg=${escape(e.message ?: "")}")
                 return@launch
@@ -158,6 +202,7 @@ object TestController {
         method: DeliveryMethod,
         toHex: String,
         text: String,
+        tryPropagationOnFail: Boolean = false,
     ) {
         ensureInit(context)
         scope.launch {
@@ -165,16 +210,16 @@ object TestController {
                 Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=bad_hex to=$toHex")
                 return@launch
             }
-            val identity = protocol!!.getLxmfIdentity().getOrNull() ?: run {
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull() ?: run {
                 Log.i(LOGCAT_TAG, "msg_send_err method=$method reason=no_active_identity")
                 return@launch
             }
-            val result = protocol!!.sendLxmfMessageWithMethod(
+            val result = rnsLxmf!!.sendLxmfMessageWithMethod(
                 destinationHash = toBytes,
                 content = text,
                 sourceIdentity = identity,
                 deliveryMethod = method,
-                tryPropagationOnFail = false,
+                tryPropagationOnFail = tryPropagationOnFail,
             )
             result.onSuccess { receipt ->
                 val idHex = receipt.messageHash.toHex()
@@ -193,6 +238,241 @@ object TestController {
                     "msg_send_err method=$method to=$toHex reason=${escape(err.message ?: err::class.simpleName ?: "unknown")}",
                 )
             }
+        }
+    }
+
+    /**
+     * Send a Sideband-shape location-telemetry message via `RnsTelemetry`.
+     * `locationJson` is the raw JSON payload from the broadcast extra
+     * — TestController parses it into a typed `LocationTelemetry` for
+     * the post-Phase-2 typed `sendLocationTelemetry` surface.
+     */
+    fun handleSendLocation(
+        context: Context,
+        toHex: String,
+        locationJson: String,
+    ) {
+        ensureInit(context)
+        scope.launch {
+            val toBytes = toHex.fromHex() ?: run {
+                Log.i(LOGCAT_TAG, "loc_send_err reason=bad_hex to=$toHex")
+                return@launch
+            }
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull() ?: run {
+                Log.i(LOGCAT_TAG, "loc_send_err reason=no_active_identity")
+                return@launch
+            }
+            val telemetry = parseTestLocationJson(locationJson) ?: run {
+                Log.i(
+                    LOGCAT_TAG,
+                    "loc_send_err to=$toHex reason=bad_location_json bytes=${locationJson.length}",
+                )
+                return@launch
+            }
+            val result = rnsTelemetry!!.sendLocationTelemetry(
+                destinationHash = toBytes,
+                telemetry = telemetry,
+                sourceIdentity = identity,
+                iconAppearance = null,
+            )
+            result.onSuccess { receipt ->
+                Log.i(
+                    LOGCAT_TAG,
+                    "loc_sent id=${receipt.messageHash.toHex()} to=$toHex bytes=${locationJson.length}",
+                )
+            }.onFailure { err ->
+                Log.i(
+                    LOGCAT_TAG,
+                    "loc_send_err to=$toHex reason=${escape(err.message ?: err::class.simpleName ?: "unknown")}",
+                )
+            }
+        }
+    }
+
+    /**
+     * Parse the test-broadcast JSON shape into a [LocationTelemetry].
+     * The interop suite + manual `adb shell am broadcast SEND_LOCATION`
+     * callers pass arbitrary JSON; this maps known keys
+     * (`lat`/`lng`/`acc`/`ts`/`expires`/`cease`/`approxRadius`/
+     * `altitude`/`speed`/`bearing`) into the typed payload. Defaults
+     * absorb missing keys without faulting the test.
+     */
+    private fun parseTestLocationJson(
+        json: String,
+    ): network.columba.app.rns.api.model.LocationTelemetry? = runCatching {
+        val o = org.json.JSONObject(json)
+        network.columba.app.rns.api.model.LocationTelemetry(
+            lat = o.optDouble("lat", 0.0),
+            lng = o.optDouble("lng", o.optDouble("lon", 0.0)),
+            acc = o.optDouble("acc", o.optDouble("accuracy", 0.0)).toFloat(),
+            ts = o.optLong("ts", System.currentTimeMillis()),
+            altitude = o.optDouble("altitude", o.optDouble("alt", 0.0)),
+            speed = o.optDouble("speed", 0.0),
+            bearing = o.optDouble("bearing", 0.0),
+            expires = if (o.has("expires") && !o.isNull("expires")) o.getLong("expires") else null,
+            cease = o.optBoolean("cease", false),
+            approxRadius = o.optInt("approxRadius", 0),
+        )
+    }.getOrNull()
+
+    /**
+     * Send a text + `FIELD_IMAGE` payload via DIRECT. Used by the
+     * Columba↔Sideband interop suite — the suite stages the image bytes
+     * into `path` via `adb push` then broadcasts SEND_IMAGE.
+     */
+    fun handleSendImage(
+        context: Context,
+        toHex: String,
+        text: String,
+        path: String,
+        imageFormat: String,
+    ) {
+        sendRichPayload(context, "img", toHex, text) { identity, toBytes ->
+            val bytes = readStagedFile(path) ?: return@sendRichPayload Result.failure(
+                IllegalArgumentException("image_file_unreadable path=$path"),
+            )
+            rnsLxmf!!.sendLxmfMessageWithMethod(
+                destinationHash = toBytes,
+                content = text,
+                sourceIdentity = identity,
+                deliveryMethod = DeliveryMethod.DIRECT,
+                imageData = bytes,
+                imageFormat = imageFormat,
+            )
+        }
+    }
+
+    /**
+     * Send a text + `FIELD_FILE_ATTACHMENTS` payload via DIRECT. `name` is
+     * the on-wire filename Sideband / Columba surfaces in the receive UI.
+     */
+    fun handleSendFile(
+        context: Context,
+        toHex: String,
+        text: String,
+        path: String,
+        name: String,
+    ) {
+        sendRichPayload(context, "file", toHex, text) { identity, toBytes ->
+            val bytes = readStagedFile(path) ?: return@sendRichPayload Result.failure(
+                IllegalArgumentException("file_unreadable path=$path"),
+            )
+            rnsLxmf!!.sendLxmfMessageWithMethod(
+                destinationHash = toBytes,
+                content = text,
+                sourceIdentity = identity,
+                deliveryMethod = DeliveryMethod.DIRECT,
+                fileAttachments = listOf(name to bytes),
+            )
+        }
+    }
+
+    /**
+     * Send a text + `FIELD_AUDIO` payload via DIRECT. `FIELD_AUDIO` carries
+     * `[codec_tag_int, audio_bytes]` — Sideband sets the same shape.
+     */
+    fun handleSendAudio(
+        context: Context,
+        toHex: String,
+        text: String,
+        path: String,
+        codecTag: Int,
+    ) {
+        sendRichPayload(context, "audio", toHex, text) { identity, toBytes ->
+            val bytes = readStagedFile(path) ?: return@sendRichPayload Result.failure(
+                IllegalArgumentException("audio_file_unreadable path=$path"),
+            )
+            rnsLxmf!!.sendLxmfMessageWithMethod(
+                destinationHash = toBytes,
+                content = text,
+                sourceIdentity = identity,
+                deliveryMethod = DeliveryMethod.DIRECT,
+                // The Kt + Py backends both pass `extraFields` through
+                // verbatim into the LXMessage's fields dict — match
+                // upstream LXMF's `FIELD_AUDIO = [codec_int, bytes]` shape.
+                extraFields = mapOf(LxmfFields.FIELD_AUDIO to listOf(codecTag, bytes)),
+            )
+        }
+    }
+
+    /**
+     * Send a text payload with `FIELD_ICON_APPEARANCE` set. The icon
+     * appearance is the same triple Sideband / Columba surface in the UI
+     * for sender chrome.
+     */
+    fun handleSendIcon(
+        context: Context,
+        toHex: String,
+        text: String,
+        iconName: String,
+        fgHex: String,
+        bgHex: String,
+    ) {
+        sendRichPayload(context, "icon", toHex, text) { identity, toBytes ->
+            rnsLxmf!!.sendLxmfMessageWithMethod(
+                destinationHash = toBytes,
+                content = text,
+                sourceIdentity = identity,
+                deliveryMethod = DeliveryMethod.DIRECT,
+                iconAppearance = IconAppearance(
+                    iconName = iconName,
+                    foregroundColor = fgHex.uppercase(),
+                    backgroundColor = bgHex.uppercase(),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Shared boilerplate for the rich-payload SEND_* handlers: resolve
+     * `toBytes` + identity, await the result, emit a `msg_sent` / `msg_send_err`
+     * line under a per-shape event tag (`img_sent`, `file_sent`, `audio_sent`,
+     * `icon_sent`).
+     */
+    private fun sendRichPayload(
+        context: Context,
+        eventTag: String,
+        toHex: String,
+        text: String,
+        sender: suspend (network.columba.app.rns.api.model.Identity, ByteArray) -> Result<network.columba.app.rns.api.model.MessageReceipt>,
+    ) {
+        ensureInit(context)
+        scope.launch {
+            val toBytes = toHex.fromHex() ?: run {
+                Log.i(LOGCAT_TAG, "${eventTag}_send_err reason=bad_hex to=$toHex")
+                return@launch
+            }
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull() ?: run {
+                Log.i(LOGCAT_TAG, "${eventTag}_send_err reason=no_active_identity")
+                return@launch
+            }
+            val result = sender(identity, toBytes)
+            result.onSuccess { receipt ->
+                val idHex = receipt.messageHash.toHex()
+                Log.i(LOGCAT_TAG, "${eventTag}_sent id=$idHex to=$toHex")
+                synchronized(deliveryLock) {
+                    deliveryStates.putIfAbsent(idHex, "OUTBOUND")
+                }
+            }.onFailure { err ->
+                Log.i(
+                    LOGCAT_TAG,
+                    "${eventTag}_send_err to=$toHex reason=${escape(err.message ?: err::class.simpleName ?: "unknown")}",
+                )
+            }
+        }
+    }
+
+    /**
+     * Read a staged-payload file from /sdcard/Download (or similar). Returns
+     * null if the file is missing or unreadable — the caller turns that into
+     * a structured `msg_send_err`.
+     */
+    private fun readStagedFile(path: String): ByteArray? {
+        return try {
+            val f = File(path)
+            if (!f.isFile) null else f.readBytes()
+        } catch (_: Throwable) {
+            null
         }
     }
 
@@ -238,11 +518,11 @@ object TestController {
     fun handleAnnounce(context: Context) {
         ensureInit(context)
         scope.launch {
-            val dest = protocol!!.getLxmfDestination().getOrNull() ?: run {
+            val dest = rnsLxmf!!.getLxmfDestination().getOrNull() ?: run {
                 Log.i(LOGCAT_TAG, "announce_err reason=no_active_destination")
                 return@launch
             }
-            val result = protocol!!.announceDestination(dest)
+            val result = rnsCore!!.announceDestination(dest)
             if (result.isSuccess) {
                 Log.i(LOGCAT_TAG, "announced dest=${dest.hexHash}")
             } else {
@@ -351,7 +631,7 @@ object TestController {
                 Log.i(LOGCAT_TAG, "prop_node_err reason=bad_hex hex=$hex")
                 return@launch
             }
-            val res = protocol!!.setOutboundPropagationNode(bytes)
+            val res = rnsLxmf!!.setOutboundPropagationNode(bytes)
             if (res.isSuccess) {
                 Log.i(
                     LOGCAT_TAG,
@@ -372,12 +652,12 @@ object TestController {
     fun handleSyncProp(context: Context) {
         ensureInit(context)
         scope.launch {
-            val identity = protocol!!.getLxmfIdentity().getOrNull()
+            val identity = rnsLxmf!!.getLxmfIdentity().getOrNull()
             if (identity?.privateKey == null) {
                 Log.i(LOGCAT_TAG, "prop_sync_err reason=no_active_identity_priv")
                 return@launch
             }
-            val res = protocol!!.requestMessagesFromPropagationNode(
+            val res = rnsLxmf!!.requestMessagesFromPropagationNode(
                 identityPrivateKey = identity.privateKey,
             )
             if (res.isSuccess) {

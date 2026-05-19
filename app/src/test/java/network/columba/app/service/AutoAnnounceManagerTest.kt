@@ -4,7 +4,7 @@ import android.app.Application
 import app.cash.turbine.test
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -42,7 +42,7 @@ class AutoAnnounceManagerTest {
     private lateinit var testScope: TestScope
     private lateinit var mockSettingsRepository: SettingsRepository
     private lateinit var mockIdentityRepository: IdentityRepository
-    private lateinit var mockReticulumProtocol: ReticulumProtocol
+    private lateinit var mockRnsCore: RnsCore
     private lateinit var manager: AutoAnnounceManager
 
     @Before
@@ -52,7 +52,7 @@ class AutoAnnounceManagerTest {
 
         mockSettingsRepository = mockk()
         mockIdentityRepository = mockk()
-        mockReticulumProtocol = mockk()
+        mockRnsCore = mockk()
 
         // Default mock behaviors - stub all flows used by AutoAnnounceManager
         every { mockSettingsRepository.autoAnnounceEnabledFlow } returns flowOf(false)
@@ -64,7 +64,7 @@ class AutoAnnounceManagerTest {
             AutoAnnounceManager(
                 mockSettingsRepository,
                 mockIdentityRepository,
-                mockReticulumProtocol,
+                mockRnsCore,
                 testScope,
             )
     }
@@ -283,7 +283,7 @@ class AutoAnnounceManagerTest {
                 AutoAnnounceManager(
                     mockSettingsRepository,
                     mockIdentityRepository,
-                    mockReticulumProtocol,
+                    mockRnsCore,
                     testScope,
                 )
 

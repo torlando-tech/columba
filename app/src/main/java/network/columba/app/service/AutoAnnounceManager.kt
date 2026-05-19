@@ -4,7 +4,7 @@ import android.util.Log
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,7 +31,7 @@ class AutoAnnounceManager
     constructor(
         private val settingsRepository: SettingsRepository,
         private val identityRepository: IdentityRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
         companion object {
@@ -128,7 +128,7 @@ class AutoAnnounceManager
                     val effectiveDisplayName = displayName ?: "Anonymous Peer"
                     Log.d(TAG, "Triggering auto-announce...")
 
-                    val result = reticulumProtocol.triggerAutoAnnounce(effectiveDisplayName)
+                    val result = rnsCore.triggerAutoAnnounce(effectiveDisplayName)
 
                     if (result.isSuccess) {
                         // Update last announce timestamp

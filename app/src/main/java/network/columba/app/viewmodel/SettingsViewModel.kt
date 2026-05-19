@@ -26,9 +26,12 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.RelayInfo
@@ -179,7 +182,10 @@ class SettingsViewModel
         @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
         private val settingsRepository: SettingsRepository,
         private val identityRepository: IdentityRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsBackend: RnsBackend,
+        private val rnsCore: RnsCore,
+        private val rnsLxmf: RnsLxmf,
+        private val rnsTransportAdmin: RnsTransportAdmin,
         private val interfaceConfigManager: network.columba.app.service.InterfaceConfigManager,
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: network.columba.app.service.LocationSharingManager,
@@ -215,6 +221,14 @@ class SettingsViewModel
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+        /**
+         * The active RNS backend's capabilities — forwards [RnsBackend.capabilities].
+         * `ColumbaNavigation` provides this into `LocalCapabilities` above the
+         * NavHost so any screen can capability-gate its UI (Phase D).
+         */
+        val capabilities: StateFlow<network.columba.app.rns.api.BackendCapabilities> =
+            rnsBackend.capabilities
+
         // Track group telemetry state before toggle-off so we can restore it on toggle-on
         private var groupTelemetryWasEnabled = false
 
@@ -245,7 +259,12 @@ class SettingsViewModel
             startSyncStateMonitor()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
-                if (reticulumProtocol.supportsSharedInstanceAvailabilityChecks) {
+                // supportsSharedInstanceAvailabilityChecks was a kotlin-backend-always-false
+                // capability flag on the legacy ReticulumProtocol. Phase D's BackendCapabilities
+                // gating replaces this; until then hard-code to false to preserve current
+                // behavior on the kotlin backend (the only impl today).
+                @Suppress("ConstantConditionIf")
+                if (false) {
                     startSharedInstanceAvailabilityMonitor()
                 }
                 startRelayMonitor()
@@ -572,7 +591,7 @@ class SettingsViewModel
             while (attemptCount < MAX_RETRIES) {
                 try {
                     // Get identity
-                    val identityResult = reticulumProtocol.getLxmfIdentity()
+                    val identityResult = rnsLxmf.getLxmfIdentity()
                     if (!identityResult.isSuccess) {
                         Log.w(TAG, "Identity result was not successful on attempt ${attemptCount + 1}")
                         attemptCount++
@@ -593,7 +612,7 @@ class SettingsViewModel
                     }
 
                     // Get destination
-                    val destinationResult = reticulumProtocol.getLxmfDestination()
+                    val destinationResult = rnsLxmf.getLxmfDestination()
                     if (!destinationResult.isSuccess) {
                         Log.w(TAG, "Destination result was not successful on attempt ${attemptCount + 1}")
                         attemptCount++
@@ -645,12 +664,15 @@ class SettingsViewModel
                     var bleVer: String? = null
                     var lxstVer: String? = null
 
-                    // Retry up to 3 times if versions are null (service might not be bound yet)
+                    // Retry up to 3 times if versions are null (service might not be bound yet).
+                    // BackendCapabilities.versions is the seam contract — reads the StateFlow's
+                    // current value each retry so a late-bound backend's version snapshot lands.
                     repeat(3) { attempt ->
-                        rnsVersion = reticulumProtocol.getReticulumVersion()
-                        lxmfVer = reticulumProtocol.getLxmfVersion()
-                        bleVer = reticulumProtocol.getBleReticulumVersion()
-                        lxstVer = reticulumProtocol.getLxstVersion()
+                        val versions = rnsBackend.capabilities.value.versions
+                        rnsVersion = versions.reticulum
+                        lxmfVer = versions.lxmf
+                        bleVer = versions.bleReticulum
+                        lxstVer = versions.lxst
 
                         val hasAnyVersion =
                             rnsVersion != null ||
@@ -800,7 +822,7 @@ class SettingsViewModel
                     // Get display name
                     val displayName = state.value.displayName
 
-                    val result = reticulumProtocol.triggerAutoAnnounce(displayName)
+                    val result = rnsCore.triggerAutoAnnounce(displayName)
 
                     if (result.isSuccess) {
                         // Update last announce timestamp
@@ -905,16 +927,15 @@ class SettingsViewModel
                         .commit()
 
                     // Unbind FIRST to prevent auto-rebind if the service process crashes.
-                    // Do NOT call reticulumProtocol.shutdown() — its async Python cleanup can
-                    // crash the service process before ACTION_STOP is delivered, triggering
-                    // the protocol's auto-rebind which restarts the service.
-                    // ACTION_STOP will handle shutdown internally in the service process.
-                    reticulumProtocol.unbindService()
+                    // Do NOT call rnsCore.shutdown() — its async cleanup can crash the
+                    // service process before ACTION_STOP is delivered, triggering auto-rebind
+                    // which restarts the service. ACTION_STOP handles shutdown internally
+                    // in the service process. unbindService() was a legacy no-op.
 
                     // Send ACTION_STOP to actually stop the foreground service and remove notification
                     val stopIntent =
-                        android.content.Intent(context, network.columba.app.service.ReticulumService::class.java).apply {
-                            action = network.columba.app.service.ReticulumService.ACTION_STOP
+                        android.content.Intent(context, network.columba.app.rns.host.ReticulumService::class.java).apply {
+                            action = network.columba.app.rns.host.ReticulumService.ACTION_STOP
                         }
                     androidx.core.content.ContextCompat
                         .startForegroundService(context, stopIntent)
@@ -1101,7 +1122,7 @@ class SettingsViewModel
                     delay(INIT_DELAY_MS * 2)
 
                     // Monitor the service's network status for logging
-                    reticulumProtocol.networkStatus.collect { status ->
+                    rnsCore.networkStatus.collect { status ->
                         _state.update { it.copy(networkStatus = status) }
                         val currentState = _state.value
 
@@ -1171,10 +1192,10 @@ class SettingsViewModel
                         val currentState = _state.value
 
                         // Only monitor when not restarting and network is ready
-                        val networkReady = reticulumProtocol.networkStatus.value is NetworkStatus.READY
+                        val networkReady = rnsCore.networkStatus.value is NetworkStatus.READY
                         if (!currentState.isRestarting && networkReady) {
                             // Query service for shared instance availability
-                            val isOnline = reticulumProtocol.isSharedInstanceAvailable()
+                            val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
 
                             // Update sharedInstanceOnline if changed
                             if (isOnline != currentState.sharedInstanceOnline) {
@@ -1538,7 +1559,7 @@ class SettingsViewModel
                     // Apply the change to the running stack first; only persist and update the
                     // displayed state after it succeeds. If setBatteryProfile throws we don't want
                     // DataStore and the UI to disagree with the actual runtime behaviour.
-                    reticulumProtocol.setBatteryProfile(profile)
+                    rnsTransportAdmin.setBatteryProfile(profile)
                     settingsRepository.saveBatteryProfile(profile)
                     _state.update { it.copy(batteryProfile = profile) }
                     Log.d(TAG, "Battery profile set to $profile")
@@ -1688,7 +1709,7 @@ class SettingsViewModel
                 Log.d(TAG, "Incoming message size limit set to: ${limitKb}KB")
 
                 // Apply the change at runtime via the protocol
-                reticulumProtocol.setIncomingMessageSizeLimit(limitKb)
+                rnsLxmf.setIncomingMessageSizeLimit(limitKb)
             }
         }
 

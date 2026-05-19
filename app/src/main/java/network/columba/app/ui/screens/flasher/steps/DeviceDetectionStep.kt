@@ -29,9 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import network.columba.app.reticulum.flasher.FrequencyBand
-import network.columba.app.reticulum.flasher.RNodeBoard
-import network.columba.app.reticulum.flasher.RNodeDeviceInfo
+import network.columba.app.rns.host.flasher.FrequencyBand
+import network.columba.app.rns.host.flasher.RNodeBoard
+import network.columba.app.rns.host.flasher.RNodeDeviceInfo
 
 /**
  * Step 2: Device Detection

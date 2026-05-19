@@ -15,8 +15,10 @@ import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.IdentityResolutionManager
@@ -74,7 +76,9 @@ class MessagingViewModelImageLoadingTest {
         )
 
     private lateinit var applicationContext: android.content.Context
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var rnsCore: RnsCore
+    private lateinit var rnsLxmf: RnsLxmf
+    private lateinit var rnsTransportAdmin: RnsTransportAdmin
     private lateinit var conversationRepository: ConversationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var contactRepository: ContactRepository
@@ -96,7 +100,9 @@ class MessagingViewModelImageLoadingTest {
             viewModel =
                 MessagingViewModel(
                     applicationContext = applicationContext,
-                    reticulumProtocol = reticulumProtocol,
+                    rnsCore = rnsCore,
+                    rnsLxmf = rnsLxmf,
+                    rnsTransportAdmin = rnsTransportAdmin,
                     conversationRepository = conversationRepository,
                     announceRepository = announceRepository,
                     contactRepository = contactRepository,
@@ -125,7 +131,9 @@ class MessagingViewModelImageLoadingTest {
         ImageCache.clear()
 
         applicationContext = mockk(relaxed = true)
-        reticulumProtocol = mockk()
+        rnsCore = mockk()
+        rnsLxmf = mockk()
+        rnsTransportAdmin = mockk()
         conversationRepository = mockk()
         announceRepository = mockk()
         contactRepository = mockk()
@@ -174,10 +182,10 @@ class MessagingViewModelImageLoadingTest {
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
         coEvery { propagationNodeManager.triggerSync() } just Runs
         coEvery { propagationNodeManager.triggerSync(silent = any()) } just Runs
-        coEvery { reticulumProtocol.getLxmfIdentity() } returns Result.success(testIdentity)
-        every { reticulumProtocol.setConversationActive(any()) } just Runs
-        every { reticulumProtocol.observeDeliveryStatus() } returns flowOf()
-        every { reticulumProtocol.reactionReceivedFlow } returns MutableSharedFlow()
+        coEvery { rnsLxmf.getLxmfIdentity() } returns Result.success(testIdentity)
+        every { rnsLxmf.setConversationActive(any()) } just Runs
+        every { rnsLxmf.observeDeliveryStatus() } returns flowOf()
+        every { rnsTransportAdmin.reactionReceivedFlow } returns MutableSharedFlow()
     }
 
     @After

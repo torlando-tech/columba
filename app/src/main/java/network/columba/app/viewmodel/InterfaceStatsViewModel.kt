@@ -13,7 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.InterfaceReconnectSignal
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -72,7 +72,7 @@ class InterfaceStatsViewModel
     constructor(
         savedStateHandle: SavedStateHandle,
         private val interfaceRepository: InterfaceRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val transportAdmin: RnsTransportAdmin,
         private val configManager: InterfaceConfigManager,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
@@ -106,7 +106,7 @@ class InterfaceStatsViewModel
                             viewModelScope.launch {
                                 Log.d(TAG, "Triggering RNode reconnect after permission granted")
                                 signalReconnecting()
-                                reticulumProtocol.reconnectRNodeInterface()
+                                transportAdmin.reconnectRNodeInterface()
                             }
                         }
                     }
@@ -206,7 +206,7 @@ class InterfaceStatsViewModel
 
             try {
                 // Get interface online status from the protocol
-                val interfaceStats = reticulumProtocol.getInterfaceStats(entity.name)
+                val interfaceStats = transportAdmin.getInterfaceStats(entity.name)
                 val isOnline = interfaceStats?.get("online") as? Boolean ?: false
                 val rxBytes = (interfaceStats?.get("rxb") as? Number)?.toLong() ?: 0L
                 val txBytes = (interfaceStats?.get("txb") as? Number)?.toLong() ?: 0L
@@ -316,7 +316,7 @@ class InterfaceStatsViewModel
                 // Trigger reconnect since we have permission
                 viewModelScope.launch {
                     signalReconnecting()
-                    reticulumProtocol.reconnectRNodeInterface()
+                    transportAdmin.reconnectRNodeInterface()
                 }
                 return
             }

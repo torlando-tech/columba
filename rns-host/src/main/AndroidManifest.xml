@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        ReticulumService runs in the :reticulum process so the RNS stack
+        survives UI-process OOM kills. Manifest merger pulls this declaration
+        into :app at assembly time; :app's own manifest no longer declares
+        the service.
+
+        foregroundServiceType=connectedDevice|microphone covers BLE / USB
+        peripherals (connectedDevice) and LXST voice calls (microphone).
+    -->
+    <application>
+        <service
+            android:name="network.columba.app.rns.host.ReticulumService"
+            android:enabled="true"
+            android:exported="false"
+            android:process=":reticulum"
+            android:foregroundServiceType="connectedDevice|microphone" />
+    </application>
+</manifest>

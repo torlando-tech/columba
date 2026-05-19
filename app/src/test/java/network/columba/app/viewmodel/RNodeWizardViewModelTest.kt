@@ -12,7 +12,7 @@ import network.columba.app.data.model.FrequencyRegions
 import network.columba.app.data.model.ModemPreset
 import network.columba.app.data.model.RNodeRegionalPreset
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks

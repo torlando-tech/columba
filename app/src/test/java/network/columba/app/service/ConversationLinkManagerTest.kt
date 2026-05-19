@@ -363,9 +363,9 @@ class ConversationLinkManagerTest {
     fun `refreshAllLinkStatuses does not cleanup entry that becomes active during refresh`() =
         kotlinx.coroutines.test.runTest {
             // Given: A mock protocol that returns "active" when queried
-            val mockProtocol = io.mockk.mockk<network.columba.app.reticulum.protocol.ReticulumProtocol>()
+            val mockProtocol = io.mockk.mockk<network.columba.app.rns.api.RnsCore>()
             io.mockk.coEvery { mockProtocol.getConversationLinkStatus(any()) } returns
-                network.columba.app.reticulum.protocol.ConversationLinkResult(
+                network.columba.app.rns.api.model.ConversationLinkResult(
                     isActive = true, // Peer established link to us!
                     establishmentRateBps = 100_000L,
                     expectedRateBps = null,

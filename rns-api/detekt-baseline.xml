@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ReturnCount:AppDataParser.kt$AppDataParser$fun parseIconAppearance(field: List&lt;Any?&gt;?): IconAppearance?</ID>
+  </CurrentIssues>
+</SmellBaseline>

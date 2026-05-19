@@ -55,7 +55,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import network.columba.app.call.PttMediaSessionManager
 import network.columba.app.viewmodel.CallViewModel
-import tech.torlando.lxst.core.CallState
+import network.columba.app.rns.api.model.CallState
 
 /**
  * Voice call screen for active/outgoing calls.

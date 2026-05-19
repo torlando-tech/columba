@@ -150,12 +150,7 @@ class PythonRnsCore(
             runtime.identities[model.hash.toHex()] = pyId
             // Contract: callers hand `key_data` to IdentityKeyProvider for
             // Keystore-wrapped storage — the raw key never touches disk here.
-            mapOf(
-                "hash_hex" to model.hash.toHex(),
-                "display_name" to displayName,
-                "key_data" to (model.privateKey ?: ByteArray(0)),
-                "public_key" to model.publicKey,
-            )
+            buildIdentityResult(pyId, model, displayName)
         }
 
     override suspend fun importIdentityFile(fileData: ByteArray, displayName: String): Map<String, Any> =
@@ -167,13 +162,53 @@ class PythonRnsCore(
                 ?: throw RnsException(RnsError.Generic("Identity.from_bytes returned None", null))
             val model = pyId.toModelIdentity()
             runtime.identities[model.hash.toHex()] = pyId
-            mapOf(
-                "hash_hex" to model.hash.toHex(),
-                "display_name" to displayName,
-                "key_data" to (model.privateKey ?: ByteArray(0)),
-                "public_key" to model.publicKey,
-            )
+            buildIdentityResult(pyId, model, displayName)
         }
+
+    /**
+     * Assemble the map returned by create/import identity calls.
+     *
+     * Must match the kotlin backend's [NativeRnsBackendImpl.buildIdentityResult]
+     * key shape — `IdentityManagerViewModel` reads the same keys regardless of
+     * which backend is active, and previously this function returned `hash_hex`
+     * (vs the VM's expected `identity_hash`), causing every import to fail
+     * silently with "No identity_hash in result" surfaced only to the UI
+     * dialog (no logcat).
+     *
+     * `destination_hash` is the LXMF delivery destination hash for this
+     * identity — derivable purely from identity + aspect tuple, but we go
+     * through `RNS.Destination(...)` so the destination becomes a real RNS
+     * object the runtime can announce later. The kotlin backend computes the
+     * same hash via `NativeDestination.create(..., "lxmf", "delivery")`.
+     */
+    private fun buildIdentityResult(
+        pyId: PyObject,
+        model: Identity,
+        displayName: String,
+    ): Map<String, Any> {
+        val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+        val pyDelivery = runtime.rnsModule.callAttr(
+            "Destination",
+            pyId,
+            destClass["IN"],
+            destClass["SINGLE"],
+            "lxmf",
+            "delivery",
+        )
+        val destinationHashHex = pyDelivery["hash"]?.toJava(ByteArray::class.java)?.toHex().orEmpty()
+        return mapOf(
+            "success" to true,
+            "identity_hash" to model.hash.toHex(),
+            "destination_hash" to destinationHashHex,
+            "display_name" to displayName,
+            "public_key" to model.publicKey,
+            "key_data" to (model.privateKey ?: ByteArray(0)),
+            // Empty path signals "no file on disk" to callers that still read
+            // LocalIdentityEntity.filePath — the key is Keystore-wrapped in the
+            // Room blob via IdentityKeyProvider, no plaintext on disk.
+            "file_path" to "",
+        )
+    }
 
     override suspend fun exportIdentityFile(keyData: ByteArray, filePath: String): ByteArray =
         pyCall {

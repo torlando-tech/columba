@@ -292,6 +292,13 @@ jobs:
           distribution: temurin
           java-version: 25
 
+      - name: Set up Python 3.11
+        # Required by Chaquopy's `installDebugPythonRequirements` task on
+        # :rns-backend-py — Chaquopy 17 only accepts buildPython 3.11.
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:

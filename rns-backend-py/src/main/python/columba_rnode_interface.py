@@ -1270,11 +1270,32 @@ class ColumbaRNodeInterface(Interface):
         with self._read_lock:
             old_status = self.online
             self.online = is_online
-        if old_status != is_online and self._on_online_status_changed:
-            try:
-                self._on_online_status_changed(is_online)
-            except Exception as e:  # noqa: BLE001
-                RNS.log(f"Error in online status callback: {e}", RNS.LOG_ERROR)
+        if old_status != is_online:
+            # Existing in-Python observer chain (callbacks registered by other
+            # python-side code that wants the live online state).
+            if self._on_online_status_changed:
+                try:
+                    self._on_online_status_changed(is_online)
+                except Exception as e:  # noqa: BLE001
+                    RNS.log(f"Error in online status callback: {e}", RNS.LOG_ERROR)
+            # Notify the Kotlin RNodeBridge so ServiceNotificationManager can
+            # raise / dismiss its "RNode Disconnected" heads-up notification.
+            # ReticulumService.onCreate registers an RNodeOnlineStatusListener
+            # against the bridge singleton.
+            #
+            # USB-mode interfaces don't share the BLE/Classic kotlin_bridge —
+            # for those, KotlinUSBBridge fires its own UsbConnectionListener
+            # on ACTION_USB_DEVICE_DETACHED system broadcast, which converges
+            # in the same notification path. Filter here to avoid invoking a
+            # bridge method that doesn't exist on KotlinUSBBridge.
+            if self.connection_mode != self.MODE_USB and self.kotlin_bridge is not None:
+                try:
+                    self.kotlin_bridge.notifyOnlineStatusChanged(is_online, self.name)
+                except Exception as e:  # noqa: BLE001
+                    RNS.log(
+                        f"Failed to notify kotlin bridge of online status change: {e}",
+                        RNS.LOG_DEBUG,
+                    )
 
     def _start_reconnection_loop(self):
         """Start a background thread to attempt reconnection."""

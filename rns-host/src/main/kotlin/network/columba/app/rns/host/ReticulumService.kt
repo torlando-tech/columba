@@ -18,6 +18,10 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
 import network.columba.app.rns.host.persistence.BackendInitializer
+import network.columba.app.rns.host.rnode.KotlinRNodeBridge
+import network.columba.app.rns.host.rnode.RNodeOnlineStatusListener
+import network.columba.app.rns.host.usb.KotlinUSBBridge
+import network.columba.app.rns.host.usb.UsbConnectionListener
 import network.columba.app.rns.ipc.RnsBackendServer
 
 /**
@@ -154,6 +158,64 @@ class ReticulumService : Service() {
 
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
+
+        // Wire RNode disconnect notifications. ServiceNotificationManager.
+        // updateRNodeStatus already owns the heads-up alert (CHANNEL_ID_RNODE,
+        // IMPORTANCE_HIGH) and the foreground-notification text suffix; we
+        // just need to fire it on the right signals. v0.10.x wired this in
+        // ReticulumServiceBinder.kt:235-243; dual-build never carried it
+        // over, so RNode disconnect was silent across both backends.
+        //
+        // BLE / Classic path: ColumbaRNodeInterface._set_online (Python)
+        // calls kotlin_bridge.notifyOnlineStatusChanged on every connect /
+        // disconnect, which fans out to our listener here.
+        //
+        // USB path: KotlinUSBBridge owns a BroadcastReceiver for
+        // ACTION_USB_DEVICE_DETACHED (already exists) and fires
+        // UsbConnectionListener callbacks. We track hasActiveUsbRNode so we
+        // only post the notification for disconnects that follow a real
+        // RNode-mode USB attach — onUsbConnected only fires for SUPPORTED_VIDS
+        // (FTDI / CP210x / etc.) so a non-RNode charger pull doesn't trigger
+        // a spurious notification. Interface name is the placeholder
+        // "RNode (USB)" rather than the configured InterfaceConfig name —
+        // querying the interfaces DB from here would require a cross-module
+        // dep we don't currently have, and the user only ever has one USB
+        // RNode plugged in at a time on a phone in practice.
+        KotlinRNodeBridge.getInstance(this).addOnlineStatusListener(
+            object : RNodeOnlineStatusListener {
+                override fun onRNodeOnlineStatusChanged(isOnline: Boolean, interfaceName: String) {
+                    Log.d(TAG, "RNode online status changed: [$interfaceName] online=$isOnline")
+                    managers.notificationManager.updateRNodeStatus(isOnline, interfaceName)
+                }
+            },
+        )
+        var hasActiveUsbRNode = false
+        KotlinUSBBridge.getInstance(this).addConnectionListener(
+            object : UsbConnectionListener {
+                override fun onUsbConnected(deviceId: Int) {
+                    // Supported-VID USB device attached. Mark that we have a
+                    // USB RNode candidate and dismiss any stale disconnect
+                    // notification from a previous cable pull.
+                    hasActiveUsbRNode = true
+                    managers.notificationManager.updateRNodeStatus(true, "RNode (USB)")
+                }
+
+                override fun onUsbDisconnected(deviceId: Int) {
+                    // Only post the notification if we previously saw a
+                    // supported-VID attach in this process lifetime; avoids
+                    // spurious notifications for non-RNode USB devices.
+                    if (hasActiveUsbRNode) {
+                        hasActiveUsbRNode = false
+                        Log.d(TAG, "USB RNode detached: deviceId=$deviceId")
+                        managers.notificationManager.updateRNodeStatus(false, "RNode (USB)")
+                    }
+                }
+
+                override fun onUsbPermissionGranted(deviceId: Int) {}
+
+                override fun onUsbPermissionDenied(deviceId: Int) {}
+            },
+        )
 
         // Restore the last persisted network status written by the app process. If Android
         // restarted the :reticulum process on its own (START_STICKY), the native stack in

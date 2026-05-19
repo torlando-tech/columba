@@ -2,13 +2,13 @@ package network.columba.app.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import network.columba.app.reticulum.model.Destination
-import network.columba.app.reticulum.model.DestinationType
-import network.columba.app.reticulum.model.Direction
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.model.PacketReceipt
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.Destination
+import network.columba.app.rns.api.model.DestinationType
+import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.PacketReceipt
+import network.columba.app.rns.api.RnsCore
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -37,7 +37,7 @@ class MainViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var reticulumProtocol: RnsCore
     private lateinit var viewModel: MainViewModel
     private lateinit var mockNetworkStatus: MutableStateFlow<NetworkStatus>
 

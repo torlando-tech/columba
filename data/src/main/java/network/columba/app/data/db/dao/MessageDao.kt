@@ -139,6 +139,19 @@ interface MessageDao {
         fieldsJson: String?,
     )
 
+    @Query(
+        """
+        UPDATE messages
+        SET reactionsJson = :reactionsJson
+        WHERE id = :messageId AND identityHash = :identityHash
+        """,
+    )
+    suspend fun updateMessageReactionsJson(
+        messageId: String,
+        identityHash: String,
+        reactionsJson: String?,
+    )
+
     // Paging3 method for infinite scroll
 
     /**

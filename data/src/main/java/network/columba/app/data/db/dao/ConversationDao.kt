@@ -111,6 +111,25 @@ interface ConversationDao {
         identityHash: String,
     ): ConversationEntity?
 
+    /**
+     * All (peerHash, peerName) pairs across every identity — used by the
+     * map screen to resolve display names for peers we have a chat row
+     * for but who aren't in contacts and don't have a current announce.
+     *
+     * Not scoped to identity because the map surface shows locations
+     * from any identity's peers (mirroring `getLatestLocationsPerSenderUnfiltered`).
+     * One row per (peerHash, identityHash) tuple — callers dedupe on
+     * peerHash. Excludes rows with blank peerNames since those are
+     * placeholders not worth surfacing.
+     */
+    @Query(
+        """
+        SELECT DISTINCT peerHash, peerName FROM conversations
+        WHERE peerName IS NOT NULL AND TRIM(peerName) != ''
+        """,
+    )
+    fun getAllPeerNameLookups(): Flow<List<ConversationPeerNameLookup>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConversation(conversation: ConversationEntity)
 
@@ -183,3 +202,14 @@ interface ConversationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertConversations(conversations: List<ConversationEntity>)
 }
+
+/**
+ * Lightweight projection used by [ConversationDao.getAllPeerNameLookups].
+ * Public-by-design — the map screen ingests the flow directly through the
+ * DAO without a repository layer (mirrors how contacts and announces feed
+ * the same `combine` block).
+ */
+data class ConversationPeerNameLookup(
+    val peerHash: String,
+    val peerName: String,
+)

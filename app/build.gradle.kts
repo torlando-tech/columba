@@ -131,7 +131,7 @@ android {
         }
     }
 
-    flavorDimensions += "telemetry"
+    flavorDimensions += listOf("telemetry", "rnsImpl")
 
     productFlavors {
         create("sentry") {
@@ -145,7 +145,30 @@ android {
             // Empty DSN - Sentry fully disabled (no init, no network calls)
             buildConfigField("String", "SENTRY_DSN", "\"\"")
         }
+
+        // RNS backend selection. `kotlinBackend` ships reticulum-kt / lxmf-kt /
+        // lxst-kt natively (default). `pythonBackend` ships upstream Python
+        // RNS/LXMF via Chaquopy — wired in Phase B; the flavor exists today so
+        // `:rns-host`'s flavor-aware source sets resolve at configuration time.
+        create("kotlinBackend") {
+            dimension = "rnsImpl"
+            isDefault = true
+            buildConfigField("String", "RNS_IMPL", "\"kotlin\"")
+        }
+        create("pythonBackend") {
+            dimension = "rnsImpl"
+            buildConfigField("String", "RNS_IMPL", "\"python\"")
+        }
     }
+
+    // No `missingDimensionStrategy("rnsImpl", ...)` here: `:app` and `:rns-host`
+    // both declare the `rnsImpl` dimension with the same flavor names, so Gradle
+    // matches `:app:<x>BackendDebug` -> `:rns-host:<x>BackendDebug` by name.
+    // A `missingDimensionStrategy` in `defaultConfig` would instead pin *every*
+    // `:app` variant — including `pythonBackend` — to one `:rns-host` flavor,
+    // silently shipping the wrong backend. Task-name ambiguity
+    // (`:app:assembleNoSentryDebug`) is resolved by always qualifying the task
+    // with the `rnsImpl` flavor, not by this strategy.
 
     // Track whether release signing is configured
     val releaseSigningConfigured =
@@ -363,7 +386,13 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
     implementation(libs.lxst.kt)
-    implementation(project(":reticulum"))
+    // :rns-api — the backend-seam contract (value types, sub-interfaces, AIDL).
+    // Was reaching :app transitively through :reticulum until A.12 deleted that
+    // module; declared directly now since :app imports network.columba.app.rns.api.*
+    // throughout. :rns-host (below) still brings the peripheral types + the
+    // reticulum-kt/lxmf-kt/lxst-kt/usb-serial stack via its api() edges.
+    implementation(project(":rns-api"))
+    implementation(project(":rns-host"))
     implementation(project(":micron"))
 
     // Core
@@ -457,6 +486,12 @@ dependencies {
     testImplementation(libs.test.core)
     testImplementation("androidx.test.ext:junit:1.1.5")
     testImplementation("org.json:json:20231013") // Real JSON implementation for unit tests
+    // chaquopy_java is compileOnly on :rns-host (kotlinBackend flavor must not
+    // pull it in). MockK reflectively subclasses KotlinBLEBridge in unit tests
+    // — silently fails on the PyObject-typed setOn* callback fields when the
+    // chaquopy runtime class isn't resolvable. Pulling it onto the test
+    // classpath here keeps the SUT's bridge surface (PyObject fields) intact.
+    testImplementation("com.chaquo.python.runtime:chaquopy_java:17.0.0")
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.espresso)
     // Note: mockk-android removed - requires minSdk 26 but project uses 24

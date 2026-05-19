@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.data.db.entity.BlockedPeerEntity
 import network.columba.app.data.repository.BlockedPeerRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +18,7 @@ class BlockedUsersViewModel
     @Inject
     constructor(
         private val blockedPeerRepository: BlockedPeerRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
     ) : ViewModel() {
         companion object {
             private const val TAG = "BlockedUsersViewModel"
@@ -46,10 +46,10 @@ class BlockedUsersViewModel
             viewModelScope.launch {
                 try {
                     blockedPeerRepository.unblockPeer(peer.peerHash)
-                    reticulumProtocol.unblockDestination(peer.peerHash)
+                    rnsCore.unblockDestination(peer.peerHash)
                     val identityHash = peer.peerIdentityHash
                     if (peer.isBlackholeEnabled && identityHash != null) {
-                        reticulumProtocol.unblackholeIdentity(identityHash)
+                        rnsCore.unblackholeIdentity(identityHash)
                     }
                     Log.d(TAG, "Unblocked user ${peer.peerHash.take(16)}")
                 } catch (e: Exception) {
@@ -68,9 +68,9 @@ class BlockedUsersViewModel
                     val identityHash = peer.peerIdentityHash
                     if (identityHash != null) {
                         if (enabled) {
-                            reticulumProtocol.blackholeIdentity(identityHash)
+                            rnsCore.blackholeIdentity(identityHash)
                         } else {
-                            reticulumProtocol.unblackholeIdentity(identityHash)
+                            rnsCore.unblackholeIdentity(identityHash)
                         }
                     }
                     Log.d(TAG, "Toggled blackhole for ${peer.peerHash.take(16)} to $enabled")

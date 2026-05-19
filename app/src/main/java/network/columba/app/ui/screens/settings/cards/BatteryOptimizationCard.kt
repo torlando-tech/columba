@@ -49,7 +49,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import network.columba.app.reticulum.model.BatteryProfile
+import network.columba.app.rns.api.BackendCapabilities
+import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.util.BatteryOptimizationManager
 
 @Composable
@@ -63,6 +65,16 @@ fun BatteryOptimizationCard(
     val lifecycleOwner = LocalLifecycleOwner.current
     var isExempted by remember { mutableStateOf(false) }
     var isCheckingStatus by remember { mutableStateOf(true) }
+
+    // The in-app battery PROFILE picker tunes reticulum-kt's BLE-scan /
+    // multicast-lock / AutoInterface aggressiveness — the Python backend has no
+    // equivalent runtime knob (PYTHON_CAPABILITIES.performance.batteryProfileTuning
+    // = UNSUPPORTED), so the picker is simply hidden there (matching the
+    // release/v0.10.x layout — no replacement notice). The Android
+    // battery-optimization *exemption* section below is OS-level and stays on
+    // both backends.
+    val batteryProfileTuningSupported =
+        LocalCapabilities.current.performance.batteryProfileTuning == BackendCapabilities.Support.FULL
 
     fun refreshStatus() {
         isExempted = BatteryOptimizationManager.isIgnoringBatteryOptimizations(context)
@@ -157,56 +169,61 @@ fun BatteryOptimizationCard(
                 exit = shrinkVertically(animationSpec = tween(durationMillis = 300)),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Choose how aggressively Columba should run native Reticulum in the background. Changes apply immediately.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor,
-                    )
+                    if (batteryProfileTuningSupported) {
+                        Text(
+                            text = "Choose how aggressively Columba should run native Reticulum in the background. Changes apply immediately.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                        )
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f)),
-                    ) {
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            BatteryProfile.entries.forEach { profile ->
-                                Row(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .selectable(
-                                                selected = batteryProfile == profile,
-                                                onClick = { onBatteryProfileChange(profile) },
-                                                role = Role.RadioButton,
-                                            ).padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    RadioButton(
-                                        selected = batteryProfile == profile,
-                                        onClick = null,
-                                    )
-                                    Column(
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f)),
+                        ) {
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                BatteryProfile.entries.forEach { profile ->
+                                    Row(
                                         modifier =
                                             Modifier
-                                                .padding(start = 16.dp)
-                                                .weight(1f),
+                                                .fillMaxWidth()
+                                                .selectable(
+                                                    selected = batteryProfile == profile,
+                                                    onClick = { onBatteryProfileChange(profile) },
+                                                    role = Role.RadioButton,
+                                                ).padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Text(
-                                            text = profile.displayName,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = contentColor,
+                                        RadioButton(
+                                            selected = batteryProfile == profile,
+                                            onClick = null,
                                         )
-                                        Text(
-                                            text = profile.description,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = contentColor.copy(alpha = 0.9f),
-                                        )
+                                        Column(
+                                            modifier =
+                                                Modifier
+                                                    .padding(start = 16.dp)
+                                                    .weight(1f),
+                                        ) {
+                                            Text(
+                                                text = profile.displayName,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = contentColor,
+                                            )
+                                            Text(
+                                                text = profile.description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = contentColor.copy(alpha = 0.9f),
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
+                        HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
                     }
-
-                    HorizontalDivider(color = contentColor.copy(alpha = 0.2f))
+                    // When the backend has no in-app battery profile (Python),
+                    // the picker + its divider are simply omitted — the card
+                    // then matches the release/v0.10.x layout: just the Android
+                    // battery-optimization exemption section below.
 
                     if (isCheckingStatus) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))

@@ -1,0 +1,6 @@
+# Test harness deps. RNS + LXMF come from the Sideband source tree's
+# requirements; the host venv already has them installed for the
+# pre-existing lxmd / rnsd / nomadnet daemons, so this file pins only
+# what's specific to running the pytest suite.
+pytest>=8.0
+pytest-timeout>=2.3

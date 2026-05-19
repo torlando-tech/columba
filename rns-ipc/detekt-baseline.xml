@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>EmptyFunctionBlock:RnsBackendIpcRoundTripTest.kt$FakeRnsCore${}</ID>
+    <ID>EmptyFunctionBlock:RnsBackendIpcRoundTripTest.kt$FakeRnsLxmf${}</ID>
+    <ID>EmptyFunctionBlock:RnsBackendIpcRoundTripTest.kt$FakeRnsNomadnet${}</ID>
+    <ID>EmptyFunctionBlock:RnsBackendIpcRoundTripTest.kt$FakeRnsTransportAdmin${}</ID>
+    <ID>LoopWithTooManyJumpStatements:MapBundling.kt$for</ID>
+    <ID>LoopWithTooManyJumpStatements:ServerRnsLxmf.kt$for</ID>
+    <ID>MatchingDeclarationName:ServerFlowBridge.kt$ObserverHub&lt;T, C : Any&gt;</ID>
+    <ID>SwallowedException:ClientRnsCore.kt$e: android.os.RemoteException</ID>
+    <ID>SwallowedException:ClientRnsTelephony.kt$e: android.os.RemoteException</ID>
+    <ID>SwallowedException:ServerFlowBridge.kt$ObserverHub$e: RemoteException</ID>
+    <ID>TooGenericExceptionCaught:ServerDispatch.kt$e: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -15,9 +15,10 @@ import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.LogLevel
-import network.columba.app.reticulum.model.ReticulumConfig
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.LogLevel
+import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.MessageCollector
 import network.columba.app.service.PropagationNodeManager
@@ -42,13 +43,19 @@ class ColumbaApplication : Application() {
     }
 
     @Inject
-    lateinit var reticulumProtocol: ReticulumProtocol
+    lateinit var rnsCore: RnsCore
+
+    @Inject
+    lateinit var rnsLxmf: RnsLxmf
+
+    @Inject
+    lateinit var rnsTelephony: network.columba.app.rns.api.RnsTelephony
 
     // Cross-process SharedPreferences wrapper shared with the :reticulum process.
     // Constructed lazily rather than via Hilt because it only needs a Context and has
     // no other dependencies — this avoids adding a module binding for a single call site.
     private val serviceSettingsAccessor by lazy {
-        network.columba.app.service.persistence
+        network.columba.app.rns.host.persistence
             .ServiceSettingsAccessor(this)
     }
 
@@ -247,34 +254,26 @@ class ColumbaApplication : Application() {
             registerExistingCompanionDevices()
         }
 
-        // Set up the alternative relay handler for propagation failover
-        reticulumProtocol.alternativeRelayHandler = { excludeHashes ->
-            val relay = propagationNodeManager.getAlternativeRelay(excludeHashes)
-            if (relay != null) {
-                android.util.Log.d("ColumbaApplication", "Providing alternative relay: ${relay.destinationHash.take(16)}")
-                relay.destinationHash.hexStringToByteArray()
-            } else {
-                android.util.Log.d("ColumbaApplication", "No alternative relay available")
-                null
-            }
-        }
-
-        // Set up the reinitialization callback for when Android kills the service
-        // and we successfully rebind but Reticulum needs to be restarted
-        reticulumProtocol.onServiceNeedsInitialization = {
-            android.util.Log.i("ColumbaApplication", "Service needs reinitialization after rebind - starting initialization")
-            initializeReticulumService(reticulumProtocol)
-        }
+        // Mutable-closure registration for `alternativeRelayHandler` and
+        // `onServiceNeedsInitialization` was removed in A.10 — the legacy
+        // protocol interface declared these as `var` with
+        // no-op default setters, and no production implementation ever
+        // overrode them, so the assignments were dead code. The plan's
+        // replacement is explicit `register*Handler` / `register*Listener`
+        // AIDL callbacks on `RnsCore`, to be added when the native backend
+        // actually wires propagation failover and rebind-reinit invocation
+        // sites (Phase B alongside the python flavor restoration). See
+        // `rns-dual-build-handoff.md` for the deviation rationale.
 
         // Mirror the protocol's networkStatus into the :reticulum service process so the
-        // foreground notification stays in sync. On the native stack the protocol lives in
-        // the app process — the service is just the notification/wake-lock host. When its
-        // state changes (INITIALIZING → READY, or later ERROR) we push it; we also persist
-        // the value via cross-process prefs so that if Android kills and restarts :reticulum
-        // on its own, onCreate() can restore the correct initial text instead of defaulting
-        // to SHUTDOWN / "Disconnected".
+        // foreground notification stays in sync. Post-A.10 the protocol lives in :reticulum
+        // and `rnsCore` here is the AIDL-proxied BoundRnsCore — its networkStatus republishes
+        // upstream via flatMapLatest, so this collector survives binder-death + START_STICKY
+        // recovery without resubscribing. We still persist via cross-process prefs so that if
+        // Android kills and restarts :reticulum, onCreate() can restore the correct initial
+        // text instead of defaulting to SHUTDOWN / "Disconnected".
         applicationScope.launch {
-            reticulumProtocol.networkStatus.collect { status ->
+            rnsCore.networkStatus.collect { status ->
                 val serviceStatus = networkStatusToServiceString(status)
                 // applicationScope runs on Dispatchers.Default; commit() is a synchronous
                 // disk write, so move the persistence hop to IO to keep StrictMode quiet
@@ -295,14 +294,19 @@ class ColumbaApplication : Application() {
                 if (isApplyingConfig) {
                     android.util.Log.d("ColumbaApp", "Config apply flag set - checking service...")
                     // Bind to service to check status
-                    reticulumProtocol.bindService()
+                    // bindService() was a legacy no-op on the kotlin backend
 
                     // Check if service is actually being configured, or if the flag is stale
                     // from a crashed/failed previous config apply
                     // Use timeout to prevent ANR if service is slow
                     val status =
                         withTimeoutOrNull(IPC_TIMEOUT_MS) {
-                            reticulumProtocol.getStatus().getOrNull()
+                            // getStatus() was a legacy no-op returning "ready" on kotlin
+                            // backend — the legacy "READY" string comparison below never
+                            // matched, so this is dead-code branch on the current backend.
+                            // Phase B's python flavor must re-add a real status check.
+                            null
+
                         }
                     android.util.Log.d("ColumbaApplication", "Service status with config flag set: $status")
 
@@ -324,7 +328,7 @@ class ColumbaApplication : Application() {
 
                 // Bind to service first (skip if already bound above for config flag check)
                 if (!isApplyingConfig) {
-                    reticulumProtocol.bindService()
+                    // bindService() was a legacy no-op on the kotlin backend
                 }
                 android.util.Log.d("ColumbaApplication", "Successfully bound to ReticulumService")
 
@@ -342,10 +346,12 @@ class ColumbaApplication : Application() {
 
                 // Check if service is already initialized (handle service process surviving app restart)
                 // Use timeout to prevent ANR if service is slow
-                val currentStatus =
-                    withTimeoutOrNull(IPC_TIMEOUT_MS) {
-                        reticulumProtocol.getStatus().getOrNull()
-                    }
+                // getStatus() was a legacy no-op returning "ready" on kotlin backend —
+                // the legacy "READY" comparison below never matched (case sensitivity), so
+                // this entire "already initialized" branch was dead code on the kotlin
+                // backend. Always fall through to fresh initialization. Phase B's python
+                // flavor must wire a real service-status probe when it lands.
+                val currentStatus: String? = null
                 android.util.Log.d("ColumbaApplication", "Service status after binding: $currentStatus")
 
                 if (currentStatus == "READY") {
@@ -355,7 +361,7 @@ class ColumbaApplication : Application() {
                     // This catches mismatches from interrupted identity switches or data imports
                     val serviceIdentity =
                         withTimeoutOrNull(IPC_TIMEOUT_MS) {
-                            reticulumProtocol
+                            rnsLxmf
                                 .getLxmfIdentity()
                                 .getOrNull()
                         }
@@ -479,10 +485,20 @@ class ColumbaApplication : Application() {
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
                     )
 
-                reticulumProtocol
+                rnsCore
                     .initialize(config)
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
+
+                        // A.10 follow-up: persist a sanitized snapshot so :reticulum can
+                        // self-init after OOM/force-stop restart when UI isn't around to
+                        // drive initialize(). Identity key is intentionally stripped — the
+                        // reader decrypts it on demand via Keystore + IdentityKeyProvider.
+                        network.columba.app.rns.host.persistence.ReticulumConfigSnapshot.write(
+                            context = this@ColumbaApplication,
+                            config = config,
+                            identityHashHex = activeIdentity?.identityHash,
+                        )
 
                         // networkStatus.collect (set up earlier) already pushes
                         // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no
@@ -501,15 +517,15 @@ class ColumbaApplication : Application() {
                                     android.util.Log.d("ColumbaApplication", "Active identity already in Room: ${existingActive.identityHash.take(8)}")
                                 } else {
                                     // No active identity in Room — create one from the native stack
-                                    val identity = reticulumProtocol.getLxmfIdentity().getOrNull()
-                                    val destination = reticulumProtocol.getLxmfDestination().getOrNull()
+                                    val identity = rnsLxmf.getLxmfIdentity().getOrNull()
+                                    val destination = rnsLxmf.getLxmfDestination().getOrNull()
                                     val idHash = identity?.hash?.joinToString("") { "%02x".format(it) }
                                     val destHash = destination?.hash?.joinToString("") { "%02x".format(it) }
 
                                     if (idHash != null && destHash != null) {
                                         // Get the full 64-byte keypair directly from the protocol
                                         // (bypasses the Columba model which only carries 32-byte sigPrv)
-                                        val keyData = reticulumProtocol.getFullIdentityKey()
+                                        val keyData = rnsCore.getFullIdentityKey()
 
                                         val result =
                                             identityRepository.createIdentity(
@@ -538,7 +554,7 @@ class ColumbaApplication : Application() {
                             }
                         }
 
-                        restorePeerIdentities(reticulumProtocol)
+                        restorePeerIdentities(rnsCore)
 
                         // Start the message collector service after Reticulum is ready
                         messageCollector.startCollecting()
@@ -578,11 +594,11 @@ class ColumbaApplication : Application() {
         // Shutdown and unbind from service when app terminates
         applicationScope.launch {
             try {
-                reticulumProtocol.shutdown()
+                rnsCore.shutdown()
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error shutting down Reticulum", e)
             }
-            reticulumProtocol.unbindService()
+            // unbindService() was a legacy no-op on the kotlin backend
         }
     }
 
@@ -590,13 +606,13 @@ class ColumbaApplication : Application() {
      * Map the protocol's sealed NetworkStatus to the string vocabulary that
      * ServiceNotificationManager.getStatusTexts already branches on.
      */
-    private fun networkStatusToServiceString(status: network.columba.app.reticulum.model.NetworkStatus): String =
+    private fun networkStatusToServiceString(status: network.columba.app.rns.api.model.NetworkStatus): String =
         when (status) {
-            is network.columba.app.reticulum.model.NetworkStatus.READY -> "READY"
-            is network.columba.app.reticulum.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
-            is network.columba.app.reticulum.model.NetworkStatus.CONNECTING -> "CONNECTING"
-            is network.columba.app.reticulum.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
-            is network.columba.app.reticulum.model.NetworkStatus.ERROR -> "ERROR:${status.message}"
+            is network.columba.app.rns.api.model.NetworkStatus.READY -> "READY"
+            is network.columba.app.rns.api.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
+            is network.columba.app.rns.api.model.NetworkStatus.CONNECTING -> "CONNECTING"
+            is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+            is network.columba.app.rns.api.model.NetworkStatus.ERROR -> "ERROR:${status.message}"
         }
 
     /**
@@ -606,9 +622,9 @@ class ColumbaApplication : Application() {
     private fun updateServiceNotification(status: String) {
         try {
             val intent =
-                android.content.Intent(this, network.columba.app.service.ReticulumService::class.java).apply {
-                    action = network.columba.app.service.ReticulumService.ACTION_UPDATE_NOTIFICATION
-                    putExtra(network.columba.app.service.ReticulumService.EXTRA_NETWORK_STATUS, status)
+                android.content.Intent(this, network.columba.app.rns.host.ReticulumService::class.java).apply {
+                    action = network.columba.app.rns.host.ReticulumService.ACTION_UPDATE_NOTIFICATION
+                    putExtra(network.columba.app.rns.host.ReticulumService.EXTRA_NETWORK_STATUS, status)
                 }
             // startForegroundService also spins up the :reticulum process if it isn't running.
             // ReticulumService.onStartCommand guards on ::managers.isInitialized and returns
@@ -712,9 +728,9 @@ class ColumbaApplication : Application() {
      * This is called both during normal app startup and when the service needs
      * reinitialization after being killed by Android and successfully rebound.
      *
-     * @param protocol The ReticulumProtocol instance to initialize
+     * @param rnsCore The RnsCore instance to initialize
      */
-    private suspend fun initializeReticulumService(protocol: ReticulumProtocol) {
+    private suspend fun initializeReticulumService(rnsCore: RnsCore) {
         try {
             android.util.Log.d("ColumbaApplication", "initializeReticulumService: Loading configuration from database...")
 
@@ -782,7 +798,7 @@ class ColumbaApplication : Application() {
                     autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
                 )
 
-            protocol
+            rnsCore
                 .initialize(config)
                 .onSuccess {
                     android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
@@ -790,7 +806,7 @@ class ColumbaApplication : Application() {
                     // networkStatus.collect (set up in onCreate) handles the READY
                     // notification push.
 
-                    restorePeerIdentities(protocol)
+                    restorePeerIdentities(rnsCore)
 
                     // Start the message collector and other services after Reticulum is ready
                     messageCollector.startCollecting()
@@ -869,19 +885,19 @@ class ColumbaApplication : Application() {
     }
 
     /** Helper to restore peer identities in background after Reticulum initialization. */
-    private fun restorePeerIdentities(protocol: ReticulumProtocol) {
+    private fun restorePeerIdentities(rnsCore: RnsCore) {
         applicationScope.launch(Dispatchers.IO) {
             try {
-                val restoredContactIdentityHashes = restoreContactIdentities(protocol)
+                val restoredContactIdentityHashes = restoreContactIdentities(rnsCore)
                 delay(PEER_IDENTITY_BULK_RESTORE_DELAY_MS)
-                restorePeerIdentitiesInBatches(protocol, restoredContactIdentityHashes)
+                restorePeerIdentitiesInBatches(rnsCore, restoredContactIdentityHashes)
             } catch (e: Exception) {
                 android.util.Log.e("ColumbaApplication", "Error restoring peer identities", e)
             }
         }
     }
 
-    private suspend fun restoreContactIdentities(protocol: ReticulumProtocol): Set<String> {
+    private suspend fun restoreContactIdentities(rnsCore: RnsCore): Set<String> {
         val contactIdentities = contactRepository.getRestorableContactIdentitiesForActiveIdentity()
         if (contactIdentities.isEmpty()) {
             android.util.Log.d("ColumbaApplication", "No restorable contact identities found")
@@ -893,7 +909,7 @@ class ColumbaApplication : Application() {
 
         contactIdentities.chunked(batchSize).forEachIndexed { index, chunk ->
             try {
-                val result = protocol.restorePeerIdentities(chunk)
+                val result = rnsCore.restorePeerIdentities(chunk)
                 result
                     .onSuccess { count ->
                         android.util.Log.d(
@@ -925,7 +941,7 @@ class ColumbaApplication : Application() {
      * Uses pagination to load peer identities in manageable chunks.
      */
     private suspend fun restorePeerIdentitiesInBatches(
-        protocol: ReticulumProtocol,
+        rnsCore: RnsCore,
         alreadyRestoredIdentityHashes: Set<String>,
     ) {
         val batchSize = 500 // Process 500 peer identities at a time to limit memory usage
@@ -965,7 +981,7 @@ class ColumbaApplication : Application() {
             val batchCount = rawBatch.size
             try {
                 if (batch.isNotEmpty()) {
-                    protocol
+                    rnsCore
                         .restorePeerIdentities(batch)
                         .onSuccess { count ->
                             totalRestored += count

@@ -5,9 +5,11 @@ import android.location.Location
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.protocol.MessageReceipt
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.util.LocationCompat
 import io.mockk.Runs
 import io.mockk.coEvery
@@ -47,7 +49,9 @@ class TelemetryCollectorManagerTest {
 
     private lateinit var mockContext: Context
     private lateinit var mockSettingsRepository: SettingsRepository
-    private lateinit var mockReticulumProtocol: ReticulumProtocol
+    private lateinit var mockRnsCore: RnsCore
+    private lateinit var mockRnsLxmf: RnsLxmf
+    private lateinit var mockRnsTelemetry: RnsTelemetry
     private lateinit var mockIdentityRepository: network.columba.app.data.repository.IdentityRepository
     private lateinit var manager: TelemetryCollectorManager
 
@@ -68,7 +72,9 @@ class TelemetryCollectorManagerTest {
     fun setup() {
         mockContext = mockk(relaxed = true)
         mockSettingsRepository = mockk()
-        mockReticulumProtocol = mockk()
+        mockRnsCore = mockk()
+        mockRnsLxmf = mockk()
+        mockRnsTelemetry = mockk()
         mockIdentityRepository = mockk()
 
         // Default: no active identity (no icon appearance)
@@ -84,7 +90,7 @@ class TelemetryCollectorManagerTest {
         every { mockSettingsRepository.telemetryRequestIntervalSecondsFlow } returns requestIntervalFlow
         every { mockSettingsRepository.lastTelemetryRequestTimeFlow } returns lastRequestTimeFlow
         every { mockSettingsRepository.telemetryAllowedRequestersFlow } returns allowedRequestersFlow
-        every { mockReticulumProtocol.networkStatus } returns networkStatusFlow
+        every { mockRnsCore.networkStatus } returns networkStatusFlow
 
         // Setup save methods
         coEvery { mockSettingsRepository.saveTelemetryCollectorAddress(any()) } just Runs
@@ -94,7 +100,7 @@ class TelemetryCollectorManagerTest {
         coEvery { mockSettingsRepository.saveTelemetryHostModeEnabled(any()) } just Runs
 
         // Setup protocol methods for host mode
-        coEvery { mockReticulumProtocol.setTelemetryCollectorMode(any()) } returns Result.success(Unit)
+        coEvery { mockRnsTelemetry.setTelemetryCollectorMode(any()) } returns Result.success(Unit)
     }
 
     @After
@@ -109,7 +115,9 @@ class TelemetryCollectorManagerTest {
         TelemetryCollectorManager(
             context = mockContext,
             settingsRepository = mockSettingsRepository,
-            reticulumProtocol = mockReticulumProtocol,
+            rnsCore = mockRnsCore,
+            rnsLxmf = mockRnsLxmf,
+            rnsTelemetry = mockRnsTelemetry,
             identityRepository = mockIdentityRepository,
             scope = testScope,
         )
@@ -488,7 +496,7 @@ class TelemetryCollectorManagerTest {
                         lastUsedTimestamp = 1L,
                         isActive = true,
                     )
-                coEvery { mockReticulumProtocol.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)
+                coEvery { mockRnsTelemetry.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)
 
                 manager = createManager()
                 manager.start()
@@ -503,10 +511,10 @@ class TelemetryCollectorManagerTest {
                 val result = manager.sendTelemetryNow()
 
                 assertEquals(TelemetrySendResult.Success, result)
-                coVerify(atLeast = 1) { mockReticulumProtocol.setTelemetryCollectorMode(true) }
-                coVerify(exactly = 1) { mockReticulumProtocol.storeOwnTelemetry(any(), any()) }
+                coVerify(atLeast = 1) { mockRnsTelemetry.setTelemetryCollectorMode(true) }
+                coVerify(exactly = 1) { mockRnsTelemetry.storeOwnTelemetry(any(), any()) }
                 coVerify(exactly = 0) {
-                    mockReticulumProtocol.sendLocationTelemetry(any(), any(), any(), any())
+                    mockRnsTelemetry.sendLocationTelemetry(any(), any(), any(), any())
                 }
 
                 manager.stop()
@@ -533,19 +541,21 @@ class TelemetryCollectorManagerTest {
                     callback(location)
                 }
 
-                val serviceProtocol = mockk<ReticulumProtocol>()
-                every { serviceProtocol.networkStatus } returns networkStatusFlow
-                coEvery { serviceProtocol.setTelemetryCollectorMode(any()) } returns Result.success(Unit)
-                coEvery { serviceProtocol.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)
-                coEvery { serviceProtocol.getLxmfIdentity() } returns
+                val serviceRnsCore = mockk<RnsCore>()
+                val serviceRnsLxmf = mockk<RnsLxmf>()
+                val serviceRnsTelemetry = mockk<RnsTelemetry>()
+                every { serviceRnsCore.networkStatus } returns networkStatusFlow
+                coEvery { serviceRnsTelemetry.setTelemetryCollectorMode(any()) } returns Result.success(Unit)
+                coEvery { serviceRnsTelemetry.storeOwnTelemetry(any(), any()) } returns Result.success(Unit)
+                coEvery { serviceRnsLxmf.getLxmfIdentity() } returns
                     Result.success(
-                        network.columba.app.reticulum.model.Identity(
+                        network.columba.app.rns.api.model.Identity(
                             hash = ByteArray(16) { 0x01 },
                             publicKey = ByteArray(32) { 0x02 },
                             privateKey = null,
                         ),
                     )
-                coEvery { serviceProtocol.sendLocationTelemetry(any(), any(), any(), any()) } returns
+                coEvery { serviceRnsTelemetry.sendLocationTelemetry(any(), any(), any(), any()) } returns
                     Result.success(
                         MessageReceipt(
                             messageHash = ByteArray(16) { 0x11 },
@@ -570,7 +580,9 @@ class TelemetryCollectorManagerTest {
                     TelemetryCollectorManager(
                         context = mockContext,
                         settingsRepository = mockSettingsRepository,
-                        reticulumProtocol = serviceProtocol,
+                        rnsCore = serviceRnsCore,
+                        rnsLxmf = serviceRnsLxmf,
+                        rnsTelemetry = serviceRnsTelemetry,
                         identityRepository = mockIdentityRepository,
                         scope = testScope,
                     )
@@ -584,8 +596,8 @@ class TelemetryCollectorManagerTest {
                 val result = manager.sendTelemetryNow()
 
                 assertEquals(TelemetrySendResult.Success, result)
-                coVerify(exactly = 1) { serviceProtocol.sendLocationTelemetry(any(), any(), any(), any()) }
-                coVerify(exactly = 0) { serviceProtocol.storeOwnTelemetry(any(), any()) }
+                coVerify(exactly = 1) { serviceRnsTelemetry.sendLocationTelemetry(any(), any(), any(), any()) }
+                coVerify(exactly = 0) { serviceRnsTelemetry.storeOwnTelemetry(any(), any()) }
 
                 manager.stop()
             } finally {
@@ -842,7 +854,7 @@ class TelemetryCollectorManagerTest {
 
             // Verify Python sync was called
             assertTrue("isHostModeEnabled should be true", manager.isHostModeEnabled.value)
-            coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
+            coVerify { mockRnsTelemetry.setTelemetryCollectorMode(true) }
 
             // Disable host mode - simulate the flow update
             hostModeEnabledFlow.value = false
@@ -850,7 +862,7 @@ class TelemetryCollectorManagerTest {
 
             // Verify Python sync was called with false
             assertFalse("isHostModeEnabled should be false", manager.isHostModeEnabled.value)
-            coVerify { mockReticulumProtocol.setTelemetryCollectorMode(false) }
+            coVerify { mockRnsTelemetry.setTelemetryCollectorMode(false) }
 
             manager.stop()
         }
@@ -872,7 +884,7 @@ class TelemetryCollectorManagerTest {
 
             // Verify Python layer was synced and state updated
             assertTrue("isHostModeEnabled should reflect flow update", manager.isHostModeEnabled.value)
-            coVerify { mockReticulumProtocol.setTelemetryCollectorMode(true) }
+            coVerify { mockRnsTelemetry.setTelemetryCollectorMode(true) }
 
             manager.stop()
         }
@@ -881,7 +893,7 @@ class TelemetryCollectorManagerTest {
     fun `setHostModeEnabled handles Python sync failure gracefully`() =
         testScope.runTest {
             // Setup Python sync to fail
-            coEvery { mockReticulumProtocol.setTelemetryCollectorMode(any()) } returns
+            coEvery { mockRnsTelemetry.setTelemetryCollectorMode(any()) } returns
                 Result.failure(RuntimeException("Python error"))
 
             manager = createManager()

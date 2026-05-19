@@ -7,8 +7,8 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.model.ConnectionType
-import network.columba.app.reticulum.ble.bridge.KotlinBLEBridge
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.test.BleTestFixtures
 import io.mockk.clearAllMocks
 import io.mockk.every
@@ -42,7 +42,7 @@ import kotlin.time.Duration.Companion.seconds
 @OptIn(ExperimentalCoroutinesApi::class)
 class BleStatusRepositoryTest {
     private val testDispatcher = StandardTestDispatcher()
-    private lateinit var mockProtocol: ReticulumProtocol
+    private lateinit var mockProtocol: RnsTransportAdmin
     private lateinit var mockContext: Context
     private lateinit var mockBridge: KotlinBLEBridge
     private lateinit var repository: BleStatusRepository
@@ -57,7 +57,7 @@ class BleStatusRepositoryTest {
         defaultBleConnectionsFlow = MutableSharedFlow(replay = 1)
 
         // Mock protocol with explicit stubs (no relaxed)
-        mockProtocol = mockk<ReticulumProtocol>()
+        mockProtocol = mockk<RnsTransportAdmin>()
         every { mockProtocol.getBleConnectionDetails() } returns "[]"
         every { mockProtocol.bleConnectionsFlow } returns defaultBleConnectionsFlow
 
@@ -145,7 +145,7 @@ class BleStatusRepositoryTest {
     fun getConnectedPeers_returns_empty_list_when_protocol_is_not_NativeReticulumProtocol() =
         runTest {
             // Given
-            val wrongProtocol = mockk<ReticulumProtocol>()
+            val wrongProtocol = mockk<RnsTransportAdmin>()
             repository = BleStatusRepository(mockContext, wrongProtocol)
 
             // When

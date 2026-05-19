@@ -10,7 +10,7 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.Conversation
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import io.mockk.*
@@ -49,7 +49,7 @@ class ChatsViewModelTest {
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var blockedPeerRepository: BlockedPeerRepository
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var reticulumProtocol: RnsCore
     private lateinit var viewModel: ChatsViewModel
 
     private val testConversation1 =

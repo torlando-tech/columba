@@ -211,6 +211,7 @@ class MigrationExporter
                     status = msg.status,
                     isRead = msg.isRead,
                     fieldsJson = msg.fieldsJson,
+                    reactionsJson = msg.reactionsJson,
                 )
             }
 

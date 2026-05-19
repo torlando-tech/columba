@@ -1,0 +1,375 @@
+package network.columba.app.rns.backend.kt
+
+import network.columba.app.rns.api.model.ConversationLinkResult
+import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.DiscoveredInterface
+import network.columba.app.rns.api.model.FailedInterface
+import network.columba.app.rns.api.model.IconAppearance
+import network.columba.app.rns.api.model.LocationTelemetry
+import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.rns.api.model.PropagationState
+import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.VoiceCallState
+
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
+import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.TelemeterCodec
+import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
+import network.reticulum.lxmf.LXMessage
+import org.json.JSONObject
+
+internal class NativeTelemetryHandler(
+    private val scopeProvider: () -> CoroutineScope,
+    private val locationTelemetryFlow: MutableSharedFlow<LocationTelemetry>,
+    private val deliveryIdentityProvider: () -> NativeIdentity?,
+    private val sendMessageFn: suspend (ByteArray, String, DeliveryMethod, Map<Int, Any>?) -> Unit,
+    private val storedTelemetry: java.util.concurrent.ConcurrentHashMap<String, StoredTelemetryEntry>,
+    private val telemetryCollectorEnabledProvider: () -> Boolean,
+    private val telemetryAllowedRequestersProvider: () -> Set<String>,
+) {
+    companion object {
+        private const val TAG = "NativeReticulumProtocol"
+        private const val LOCATION_SHARE_TYPE = "location_share"
+        // Upstream LXMF FIELD_CUSTOM_META — Sideband ignores this field entirely
+        // (zero refs in sbapp/sideband/core.py). Previously 0x70 (Columba-
+        // invented unassigned ID, risked collision with future upstream
+        // assignments). See LocationTelemetry.COLUMBA_META_FIELD_ID for the
+        // shared canonical value.
+        private const val FIELD_COLUMBA_META = 0xFD
+        private const val LEGACY_LOCATION_FIELD = 7
+    }
+
+    data class StoredTelemetryEntry(
+        val timestampSeconds: Long,
+        val packedTelemetry: ByteArray,
+        val appearanceField: List<Any>? = null,
+        val receivedAtMillis: Long = System.currentTimeMillis(),
+    )
+
+    /**
+     * Route inbound telemetry side-channels (FIELD_TELEMETRY,
+     * FIELD_TELEMETRY_STREAM, FIELD_CUSTOM_META, legacy LOCATION) to
+     * `locationTelemetryFlow`. Always runs — the chat-emit gate is a
+     * separate concern handled by
+     * `ReceivedMessage.isUserVisibleChatMessage()` in :rns-api.
+     */
+    fun handleIncomingTelemetry(
+        message: LXMessage,
+        timestamp: Long,
+    ) {
+        val fields = message.fields
+        var locationEvent: JSONObject? = null
+
+        locationEvent = processFieldTelemetry(fields, message.sourceHash, timestamp, locationEvent)
+
+        val telemetryStream = fields[LxmfFields.FIELD_TELEMETRY_STREAM] as? List<*>
+        if (telemetryStream != null) {
+            val streamEntries =
+                telemetryStream
+                    .mapNotNull { it as? List<*> }
+                    .mapNotNull { entry -> unpackTelemetryStreamEntry(entry) }
+            Log.d(TAG, "Telemetry stream received with ${streamEntries.size} entries")
+            streamEntries.forEach { entryJson ->
+                jsonToLocationTelemetry(entryJson, appearanceFromFields = null)
+                    ?.let { locationTelemetryFlow.tryEmit(it) }
+            }
+        }
+
+        locationEvent = processMetaField(fields, timestamp, locationEvent)
+        if (locationEvent == null) {
+            locationEvent = parseJsonField(fields[LEGACY_LOCATION_FIELD])
+        }
+
+        if (locationEvent != null) {
+            locationEvent.put("source_hash", message.sourceHash.toHex())
+            val appearance = extractIconAppearance(fields)
+            Log.d(TAG, "Emitting location telemetry: $locationEvent")
+            // Convert the internal JSONObject (kept as a working buffer
+            // because the multi-stage merge across FIELD_TELEMETRY +
+            // FIELD_CUSTOM_META + FIELD_ICON_APPEARANCE is easier with
+            // mutable JSON than with immutable data classes) into the
+            // typed `LocationTelemetry` the RnsTelemetry contract emits.
+            jsonToLocationTelemetry(locationEvent, appearance)?.let {
+                locationTelemetryFlow.tryEmit(it)
+            }
+        }
+    }
+
+    /**
+     * Convert the working JSONObject (assembled from FIELD_TELEMETRY +
+     * FIELD_CUSTOM_META + FIELD_ICON_APPEARANCE + the LXMessage envelope)
+     * into the typed `LocationTelemetry`. Returns null on a malformed
+     * payload — the stream tolerates one bad entry rather than wedging.
+     */
+    private fun jsonToLocationTelemetry(
+        json: JSONObject,
+        appearanceFromFields: IconAppearance?,
+    ): LocationTelemetry? = runCatching {
+        LocationTelemetry(
+            type = json.optString("type", LocationTelemetry.TYPE_LOCATION_SHARE),
+            lat = json.optDouble("lat", 0.0),
+            lng = json.optDouble("lng", 0.0),
+            acc = json.optDouble("acc", 0.0).toFloat(),
+            ts = json.optLong("ts", 0L),
+            altitude = json.optDouble("altitude", 0.0),
+            speed = json.optDouble("speed", 0.0),
+            bearing = json.optDouble("bearing", 0.0),
+            expires = if (json.has("expires") && !json.isNull("expires")) json.getLong("expires") else null,
+            cease = json.optBoolean("cease", false),
+            approxRadius = json.optInt("approxRadius", 0),
+            sourceHash = json.optString("source_hash", "").ifBlank { null }?.lowercase(),
+            appearance = appearanceFromFields,
+        )
+    }.getOrElse {
+        Log.w(TAG, "JSON -> LocationTelemetry conversion failed: ${it.message}")
+        null
+    }
+
+    private fun processFieldTelemetry(
+        fields: Map<Int, Any>,
+        sourceHash: ByteArray,
+        timestamp: Long,
+        existing: JSONObject?,
+    ): JSONObject? {
+        val telemetryField = fields[LxmfFields.FIELD_TELEMETRY] ?: return existing
+        val locationEvent = unpackLocationTelemetryField(telemetryField) ?: return existing
+        Log.d(TAG, "Telemetry received in FIELD_TELEMETRY from ${sourceHash.toHex().take(16)}")
+
+        if (telemetryCollectorEnabledProvider()) {
+            val packedTelemetry = telemetryField as? ByteArray
+            if (packedTelemetry != null) {
+                storeTelemetryForCollector(
+                    sourceHashHex = sourceHash.toHex(),
+                    packedTelemetry = packedTelemetry,
+                    timestampSeconds = (locationEvent.optLong("ts", timestamp) / 1000L),
+                    appearanceField = sanitizeAppearanceField(fields[LxmfFields.FIELD_ICON_APPEARANCE]),
+                )
+            }
+        }
+        return locationEvent
+    }
+
+    private fun processMetaField(
+        fields: Map<Int, Any>,
+        timestamp: Long,
+        existing: JSONObject?,
+    ): JSONObject? {
+        val metaField = fields[FIELD_COLUMBA_META]
+        val metaJson = parseJsonField(metaField) ?: return existing
+
+        if (metaJson.optBoolean("cease", false)) {
+            return JSONObject()
+                .put("type", LOCATION_SHARE_TYPE)
+                .put("cease", true)
+                .put("ts", metaJson.optLong("ts", timestamp))
+        }
+        if (existing != null) {
+            if (metaJson.has("expires") && !metaJson.isNull("expires")) {
+                existing.put("expires", metaJson.getLong("expires"))
+            }
+            if (metaJson.has("approxRadius") && !metaJson.isNull("approxRadius")) {
+                existing.put("approxRadius", metaJson.getInt("approxRadius"))
+            }
+        }
+        return existing
+    }
+
+    fun handleTelemetryCommands(message: LXMessage) {
+        val commandList =
+            (message.fields[LxmfFields.FIELD_COMMANDS] as? List<*>)
+                ?.takeIf { telemetryCollectorEnabledProvider() }
+                ?: return
+        var hasTelemetryRequest = false
+        var timebaseMillis: Long? = null
+
+        commandList.forEach { entry ->
+            when (entry) {
+                is Map<*, *> -> {
+                    when {
+                        entry["cmd"] == "get_telemetry" -> {
+                            hasTelemetryRequest = true
+                        }
+                        entry["cmd"] == "set_timebase" -> {
+                            timebaseMillis = (entry["timebase"] as? Number)?.toLong()
+                        }
+                        entry.keys.any { (it as? Number)?.toInt() == 0x01 } -> {
+                            hasTelemetryRequest = true
+                            val args = entry.entries.firstOrNull { (it.key as? Number)?.toInt() == 0x01 }?.value as? List<*>
+                            timebaseMillis = (args?.getOrNull(0) as? Number)?.toLong()
+                        }
+                    }
+                }
+            }
+        }
+
+        val senderHex = message.sourceHash.toHex()
+        if (!hasTelemetryRequest || senderHex !in telemetryAllowedRequestersProvider()) {
+            if (hasTelemetryRequest) {
+                Log.d(TAG, "Telemetry request from $senderHex denied — not in allowed requesters")
+            }
+            return
+        }
+
+        val entriesToSend =
+            storedTelemetry
+                .filterValues { entry -> timebaseMillis == null || entry.receivedAtMillis >= timebaseMillis!! }
+                .map { (sourceHashHex, entry) ->
+                    val row = mutableListOf<Any>(sourceHashHex.hexToBytes(), entry.timestampSeconds, entry.packedTelemetry)
+                    entry.appearanceField?.let { row.add(it) }
+                    row
+                }
+
+        Log.d(TAG, "Responding to telemetry request from $senderHex with ${entriesToSend.size} entries")
+        scopeProvider().launch {
+            try {
+                if (deliveryIdentityProvider() == null) return@launch
+
+                sendMessageFn(
+                    message.sourceHash,
+                    "",
+                    DeliveryMethod.DIRECT,
+                    mapOf(LxmfFields.FIELD_TELEMETRY_STREAM to entriesToSend),
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send telemetry response: ${e.message}")
+            }
+        }
+    }
+
+    fun unpackLocationTelemetryField(field: Any): JSONObject? =
+        when (field) {
+            is String -> runCatching { JSONObject(field) }.getOrNull()
+            is ByteArray -> unpackLocationFromMsgpack(field)
+            else -> null
+        }
+
+    /**
+     * Decode a `FIELD_TELEMETRY` (Telemeter msgpack) payload into the
+     * JSONObject buffer the receive path's multi-stage merge uses.
+     * Delegates to the shared `TelemeterCodec` so there's exactly one
+     * implementation of the bit-format across both backends — drift
+     * here would only be visible in a peer-to-peer interop test, by
+     * which time it's already shipped.
+     *
+     * Falls back to JSON-in-bytes parsing for legacy Columba peers
+     * that pre-date the Telemeter-format migration.
+     */
+    private fun unpackLocationFromMsgpack(data: ByteArray): JSONObject? {
+        val decoded = TelemeterCodec.unpackLocationTelemetry(data)
+        if (decoded != null) {
+            return JSONObject()
+                .put("type", LOCATION_SHARE_TYPE)
+                .put("lat", decoded.lat)
+                .put("lng", decoded.lng)
+                .put("acc", decoded.acc.toDouble())
+                .put("ts", decoded.ts)
+                .put("altitude", decoded.altitude)
+                .put("speed", decoded.speed)
+                .put("bearing", decoded.bearing)
+        }
+        // Legacy JSON-in-bytes fallback — pre-Phase-1 Columba peers
+        // sent JSON instead of Telemeter msgpack. Drop on next major.
+        return runCatching { JSONObject(String(data, Charsets.UTF_8)) }.getOrNull()
+    }
+
+    private fun unpackTelemetryStreamEntry(entry: List<*>): JSONObject? {
+        if (entry.size < 3) return null
+
+        val sourceHash =
+            when (val source = entry[0]) {
+                is ByteArray -> source.toHex()
+                is String -> source
+                else -> null
+            }
+        val telemetryField = entry[2]
+        val telemetry = telemetryField?.let { unpackLocationTelemetryField(it) }
+        if (sourceHash == null || telemetry == null) return null
+
+        val entryTimestampSeconds = (entry[1] as? Number)?.toLong()
+        if (entryTimestampSeconds != null && entryTimestampSeconds > 0) {
+            telemetry.put("ts", entryTimestampSeconds * 1000L)
+        }
+        telemetry.put("source_hash", sourceHash.lowercase())
+
+        val appearance = sanitizeAppearanceField(entry.getOrNull(3))
+        if (appearance != null) {
+            telemetry.put(
+                "appearance",
+                JSONObject()
+                    .put("icon_name", appearance[0] as String)
+                    .put("foreground_color", (appearance[1] as ByteArray).toHex())
+                    .put("background_color", (appearance[2] as ByteArray).toHex()),
+            )
+        }
+
+        return telemetry
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    fun sanitizeAppearanceField(field: Any?): List<Any>? {
+        val list = field as? List<*>
+        if (list == null || list.size < 3) return null
+        val name = list[0] as? String
+        val fg = list[1] as? ByteArray
+        val bg = list[2] as? ByteArray
+        return if (name != null && fg != null && bg != null) listOf(name, fg, bg) else null
+    }
+
+    fun extractIconAppearance(fields: Map<Int, Any>): IconAppearance? {
+        val iconField = fields[LxmfFields.FIELD_ICON_APPEARANCE] as? List<*> ?: return null
+        return AppDataParser.parseIconAppearance(iconField)
+    }
+
+    fun storeTelemetryForCollector(
+        sourceHashHex: String,
+        packedTelemetry: ByteArray,
+        timestampSeconds: Long,
+        appearanceField: List<Any>? = null,
+    ) {
+        storedTelemetry[sourceHashHex] =
+            StoredTelemetryEntry(
+                timestampSeconds = timestampSeconds,
+                packedTelemetry = packedTelemetry,
+                appearanceField = appearanceField,
+                receivedAtMillis = System.currentTimeMillis(),
+            )
+        Log.d(TAG, "Stored telemetry for collector from ${sourceHashHex.take(16)}")
+    }
+
+    /**
+     * Pack a JSON-shape location into Telemeter bytes. Delegates to
+     * the shared `TelemeterCodec` so there's one implementation of
+     * the wire format. Kept as a JSONObject thin wrapper for the
+     * `storeOwnTelemetry` path (which still hands JSON in via its
+     * `String` AIDL contract).
+     */
+    fun packLocationTelemetry(locationData: JSONObject): ByteArray =
+        TelemeterCodec.packLocationTelemetry(
+            LocationTelemetry(
+                lat = locationData.getDouble("lat"),
+                lng = locationData.getDouble("lng"),
+                acc = locationData.optDouble("acc", 0.0).toFloat(),
+                ts = locationData.optLong("ts", System.currentTimeMillis()),
+                altitude = locationData.optDouble("altitude", 0.0),
+                speed = locationData.optDouble("speed", 0.0),
+                bearing = locationData.optDouble("bearing", 0.0),
+            ),
+        )
+
+    private fun parseJsonField(field: Any?): JSONObject? =
+        try {
+            when (field) {
+                is String -> JSONObject(field)
+                is ByteArray -> JSONObject(String(field, Charsets.UTF_8))
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+}

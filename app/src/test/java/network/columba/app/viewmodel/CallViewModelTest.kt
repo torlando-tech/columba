@@ -1,4 +1,4 @@
-// NoVerifyOnlyTests: PTT tests verify side effects (IPC calls to bridge/protocol) which is the correct behavior
+// NoVerifyOnlyTests: PTT tests verify side effects (IPC calls to telephony) which is the correct behavior
 @file:Suppress("NoVerifyOnlyTests")
 
 package network.columba.app.viewmodel
@@ -6,18 +6,14 @@ package network.columba.app.viewmodel
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
-import io.mockk.Runs
+import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallState
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkObject
 import io.mockk.slot
-import io.mockk.unmockkObject
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,25 +27,26 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.CallState
 
 /**
  * Unit tests for CallViewModel.
  *
- * Tests call state observation, UI actions, and helper methods.
- * Uses UnconfinedTestDispatcher to avoid infinite loop issues with the duration timer.
+ * Tests call state observation, UI actions, and helper methods. Mocks the
+ * [RnsTelephony] seam (A.10 replaced the prior `CallCoordinator` injection)
+ * to drive call state and capture optimistic-state mutator calls.
+ *
+ * Uses UnconfinedTestDispatcher to avoid infinite loop issues with the
+ * duration timer.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CallViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var mockContactRepository: ContactRepository
     private lateinit var mockAnnounceRepository: AnnounceRepository
-    private lateinit var mockProtocol: ReticulumProtocol
-    private lateinit var mockCallCoordinator: CallCoordinator
+    private lateinit var mockTelephony: RnsTelephony
     private lateinit var viewModel: CallViewModel
 
-    // StateFlows for mocking CallCoordinator
+    // StateFlows backing the mocked RnsTelephony
     private lateinit var callStateFlow: MutableStateFlow<CallState>
     private lateinit var isMutedFlow: MutableStateFlow<Boolean>
     private lateinit var isSpeakerOnFlow: MutableStateFlow<Boolean>
@@ -67,8 +64,7 @@ class CallViewModelTest {
         Dispatchers.setMain(testDispatcher)
         mockContactRepository = mockk()
         mockAnnounceRepository = mockk()
-        mockProtocol = mockk()
-        mockCallCoordinator = mockk()
+        mockTelephony = mockk()
 
         // Initialize state flows
         callStateFlow = MutableStateFlow<CallState>(CallState.Idle)
@@ -78,16 +74,14 @@ class CallViewModelTest {
         isPttActiveFlow = MutableStateFlow(false)
         remoteIdentityFlow = MutableStateFlow<String?>(null)
 
-        // Mock CallCoordinator singleton
-        mockkObject(CallCoordinator.Companion)
-        every { CallCoordinator.getInstance() } returns mockCallCoordinator
-        every { mockCallCoordinator.callState } returns callStateFlow
-        every { mockCallCoordinator.isMuted } returns isMutedFlow
-        every { mockCallCoordinator.isSpeakerOn } returns isSpeakerOnFlow
-        every { mockCallCoordinator.isPttMode } returns isPttModeFlow
-        every { mockCallCoordinator.isPttActive } returns isPttActiveFlow
-        every { mockCallCoordinator.remoteIdentity } returns remoteIdentityFlow
-        every { mockCallCoordinator.hasActiveCall() } answers {
+        // RnsTelephony surface
+        every { mockTelephony.callState } returns callStateFlow
+        every { mockTelephony.isMuted } returns isMutedFlow
+        every { mockTelephony.isSpeakerOn } returns isSpeakerOnFlow
+        every { mockTelephony.isPttMode } returns isPttModeFlow
+        every { mockTelephony.isPttActive } returns isPttActiveFlow
+        every { mockTelephony.remoteIdentity } returns remoteIdentityFlow
+        every { mockTelephony.hasActiveCall() } answers {
             when (callStateFlow.value) {
                 is CallState.Connecting,
                 is CallState.Ringing,
@@ -98,35 +92,48 @@ class CallViewModelTest {
             }
         }
 
-        // Stub void methods on CallCoordinator
-        every { mockCallCoordinator.setConnecting(capture(connectingHashSlot)) } just Runs
-        // setEnded() must update the state flow to stop the duration timer loop
-        every { mockCallCoordinator.setEnded() } answers { callStateFlow.value = CallState.Ended }
-        every { mockCallCoordinator.setMutedLocally(capture(mutedSlot)) } just Runs
-        every { mockCallCoordinator.setSpeakerLocally(capture(speakerSlot)) } just Runs
-        every { mockCallCoordinator.setPttModeLocally(any()) } just Runs
-        every { mockCallCoordinator.setPttActiveLocally(any()) } just Runs
+        // suspend mutators (RnsTelephony exposes these as suspend across the AIDL seam)
+        coEvery { mockTelephony.setConnecting(capture(connectingHashSlot)) } answers {
+            // Mirror host-side behavior: setting Connecting flips the state and identity.
+            remoteIdentityFlow.value = connectingHashSlot.captured
+            callStateFlow.value = CallState.Connecting(connectingHashSlot.captured)
+        }
+        coEvery { mockTelephony.setEnded() } answers {
+            callStateFlow.value = CallState.Ended
+        }
+        coEvery { mockTelephony.setMutedLocally(capture(mutedSlot)) } answers {
+            isMutedFlow.value = mutedSlot.captured
+        }
+        coEvery { mockTelephony.setSpeakerLocally(capture(speakerSlot)) } answers {
+            isSpeakerOnFlow.value = speakerSlot.captured
+        }
+        coEvery { mockTelephony.setPttModeLocally(any()) } answers {
+            isPttModeFlow.value = firstArg()
+        }
+        coEvery { mockTelephony.setPttActiveLocally(any()) } answers {
+            isPttActiveFlow.value = firstArg()
+        }
 
-        // Stub protocol methods with default success returns
-        coEvery { mockProtocol.initiateCall(any(), any()) } returns Result.success(Unit)
-        coEvery { mockProtocol.answerCall() } returns Result.success(Unit)
-        coEvery { mockProtocol.hangupCall() } just Runs
-        coEvery { mockProtocol.setCallMuted(any()) } just Runs
-        coEvery { mockProtocol.setCallSpeaker(any()) } just Runs
+        // Network IPC actions — default success.
+        coEvery { mockTelephony.initiateCall(any(), any()) } returns Result.success(Unit)
+        coEvery { mockTelephony.answerCall() } returns Result.success(Unit)
+        coEvery { mockTelephony.hangupCall() } answers { }
+        coEvery { mockTelephony.declineCall() } answers { }
+        coEvery { mockTelephony.setCallMuted(any()) } answers { }
+        coEvery { mockTelephony.setCallSpeaker(any()) } answers { }
 
         // Stub repository methods
         coEvery { mockContactRepository.getContact(any()) } returns null
         coEvery { mockAnnounceRepository.getAnnounce(any()) } returns null
         coEvery { mockAnnounceRepository.findByIdentityHash(any()) } returns null
 
-        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockProtocol)
+        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockTelephony)
     }
 
     @After
     fun tearDown() {
         // Transition to Idle to stop any running duration timer
         callStateFlow.value = CallState.Idle
-        unmockkObject(CallCoordinator.Companion)
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -134,22 +141,22 @@ class CallViewModelTest {
     // ========== Call State Tests ==========
 
     @Test
-    fun `callState exposes CallCoordinator callState`() {
+    fun `callState exposes telephony callState`() {
         assertEquals(callStateFlow, viewModel.callState)
     }
 
     @Test
-    fun `isMuted exposes CallCoordinator isMuted`() {
+    fun `isMuted exposes telephony isMuted`() {
         assertEquals(isMutedFlow, viewModel.isMuted)
     }
 
     @Test
-    fun `isSpeakerOn exposes CallCoordinator isSpeakerOn`() {
+    fun `isSpeakerOn exposes telephony isSpeakerOn`() {
         assertEquals(isSpeakerOnFlow, viewModel.isSpeakerOn)
     }
 
     @Test
-    fun `remoteIdentity exposes CallCoordinator remoteIdentity`() {
+    fun `remoteIdentity exposes telephony remoteIdentity`() {
         assertEquals(remoteIdentityFlow, viewModel.remoteIdentity)
     }
 
@@ -179,7 +186,7 @@ class CallViewModelTest {
     // ========== UI Action Tests ==========
 
     @Test
-    fun `initiateCall updates bridge with correct hash`() =
+    fun `initiateCall updates telephony with correct hash`() =
         runTest {
             val testHash = "abc123def456789012345678901234567890"
             viewModel.initiateCall(testHash)
@@ -189,9 +196,9 @@ class CallViewModelTest {
         }
 
     @Test
-    fun `answerCall returns success when protocol succeeds`() =
+    fun `answerCall returns success when telephony succeeds`() =
         runTest {
-            coEvery { mockProtocol.answerCall() } returns Result.success(Unit)
+            coEvery { mockTelephony.answerCall() } returns Result.success(Unit)
 
             viewModel.answerCall()
             testDispatcher.scheduler.advanceUntilIdle()
@@ -466,12 +473,12 @@ class CallViewModelTest {
     // ========== Push-to-Talk Tests ==========
 
     @Test
-    fun `isPttMode exposes CallCoordinator isPttMode`() {
+    fun `isPttMode exposes telephony isPttMode`() {
         assertEquals(isPttModeFlow, viewModel.isPttMode)
     }
 
     @Test
-    fun `isPttActive exposes CallCoordinator isPttActive`() {
+    fun `isPttActive exposes telephony isPttActive`() {
         assertEquals(isPttActiveFlow, viewModel.isPttActive)
     }
 
@@ -479,28 +486,28 @@ class CallViewModelTest {
     fun `togglePttMode enables PTT and mutes transmit`() =
         runTest {
             isPttModeFlow.value = false
-            every { mockCallCoordinator.isPttMode } returns isPttModeFlow
 
             viewModel.togglePttMode()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-            verify { mockCallCoordinator.setPttModeLocally(true) }
-            verify { mockCallCoordinator.setMutedLocally(true) }
-            verify { mockCallCoordinator.setPttActiveLocally(false) }
-            coVerify { mockProtocol.setCallMuted(true) }
+            coVerify { mockTelephony.setPttModeLocally(true) }
+            coVerify { mockTelephony.setMutedLocally(true) }
+            coVerify { mockTelephony.setPttActiveLocally(false) }
+            coVerify { mockTelephony.setCallMuted(true) }
         }
 
     @Test
     fun `togglePttMode disables PTT and unmutes transmit`() =
         runTest {
             isPttModeFlow.value = true
-            every { mockCallCoordinator.isPttMode } returns isPttModeFlow
 
             viewModel.togglePttMode()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-            verify { mockCallCoordinator.setPttModeLocally(false) }
-            verify { mockCallCoordinator.setMutedLocally(false) }
-            verify { mockCallCoordinator.setPttActiveLocally(false) }
-            coVerify { mockProtocol.setCallMuted(false) }
+            coVerify { mockTelephony.setPttModeLocally(false) }
+            coVerify { mockTelephony.setMutedLocally(false) }
+            coVerify { mockTelephony.setPttActiveLocally(false) }
+            coVerify { mockTelephony.setCallMuted(false) }
         }
 
     @Test
@@ -508,16 +515,20 @@ class CallViewModelTest {
         runTest {
             isPttModeFlow.value = true
             callStateFlow.value = CallState.Active("test-hash")
-            every { mockCallCoordinator.isPttMode } returns isPttModeFlow
-
+            // setPttActive's guard requires callState == Active, which also starts the
+            // VM's `while(true) { delay(1000) }` duration timer. Stop that timer BEFORE
+            // any scheduler drain — `advanceUntilIdle()` against a live infinite timer
+            // never returns. `setPttActive`'s viewModelScope.launch runs eagerly on the
+            // UnconfinedTestDispatcher so its mock calls are already recorded; the
+            // `runCurrent()` below just flushes the muteMutex hop without advancing
+            // virtual time into the (now-cancelled) timer's delay.
             viewModel.setPttActive(true)
-
-            verify { mockCallCoordinator.setPttActiveLocally(true) }
-            verify { mockCallCoordinator.setMutedLocally(false) }
-            coVerify { mockProtocol.setCallMuted(false) }
-
-            // Cancel the duration timer so runTest can complete
             callStateFlow.value = CallState.Idle
+            testDispatcher.scheduler.runCurrent()
+
+            coVerify { mockTelephony.setPttActiveLocally(true) }
+            coVerify { mockTelephony.setMutedLocally(false) }
+            coVerify { mockTelephony.setCallMuted(false) }
         }
 
     @Test
@@ -525,27 +536,25 @@ class CallViewModelTest {
         runTest {
             isPttModeFlow.value = true
             callStateFlow.value = CallState.Active("test-hash")
-            every { mockCallCoordinator.isPttMode } returns isPttModeFlow
-
+            // See `setPttActive pressed` — stop the duration timer before draining.
             viewModel.setPttActive(false)
-
-            verify { mockCallCoordinator.setPttActiveLocally(false) }
-            verify { mockCallCoordinator.setMutedLocally(true) }
-            coVerify { mockProtocol.setCallMuted(true) }
-
-            // Cancel the duration timer so runTest can complete
             callStateFlow.value = CallState.Idle
+            testDispatcher.scheduler.runCurrent()
+
+            coVerify { mockTelephony.setPttActiveLocally(false) }
+            coVerify { mockTelephony.setMutedLocally(true) }
+            coVerify { mockTelephony.setCallMuted(true) }
         }
 
     @Test
     fun `setPttActive is ignored when PTT mode off`() =
         runTest {
             isPttModeFlow.value = false
-            every { mockCallCoordinator.isPttMode } returns isPttModeFlow
 
             viewModel.setPttActive(true)
+            testDispatcher.scheduler.runCurrent()
 
-            verify(exactly = 0) { mockCallCoordinator.setPttActiveLocally(any()) }
-            verify(exactly = 0) { mockCallCoordinator.setMutedLocally(any()) }
+            coVerify(exactly = 0) { mockTelephony.setPttActiveLocally(any()) }
+            coVerify(exactly = 0) { mockTelephony.setMutedLocally(any()) }
         }
 }

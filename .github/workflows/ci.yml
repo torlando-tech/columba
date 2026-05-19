@@ -217,7 +217,7 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             echo "Dependency resolution attempt $attempt/3..."
-            if ./gradlew :app:dependencies --configuration noSentryDebugUnitTestRuntimeClasspath -q 2>/dev/null; then
+            if ./gradlew :app:dependencies --configuration noSentryKotlinBackendDebugUnitTestRuntimeClasspath -q 2>/dev/null; then
               echo "Dependencies resolved successfully."
               break
             fi
@@ -234,7 +234,7 @@ jobs:
         # AIDL and JaCoCo caching issues are handled by clean steps above
         # NOTE: For app module, only run noSentry variant (sentry/noSentry share the same test code,
         # differing only in SENTRY_DSN buildConfigField which tests don't exercise).
-        run: ./gradlew :app:testNoSentryDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4
+        run: ./gradlew :app:testNoSentryKotlinBackendDebugUnitTest -PtestShard=${{ matrix.shard }} -PtestShardTotal=4 --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()
@@ -292,6 +292,13 @@ jobs:
           distribution: temurin
           java-version: 25
 
+      - name: Set up Python 3.11
+        # Required by Chaquopy's `installDebugPythonRequirements` task on
+        # :rns-backend-py — Chaquopy 17 only accepts buildPython 3.11.
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
@@ -324,8 +331,8 @@ jobs:
             robolectric-4.16-
             robolectric-
 
-      - name: Run reticulum, data, and micron module tests
-        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
+      - name: Run RNS, data, and micron module tests
+        run: ./gradlew :rns-api:testDebugUnitTest :rns-ipc:testDebugUnitTest :rns-host:testKotlinBackendDebugUnitTest :rns-host:testPythonBackendDebugUnitTest :rns-backend-kt:testDebugUnitTest :rns-backend-py:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()
@@ -398,8 +405,8 @@ jobs:
       - name: Pre-build test APKs
         run: |
           echo "Building APKs before starting emulator..."
-          ./gradlew :app:assembleNoSentryDebugAndroidTest --stacktrace --max-workers=2
-          ./gradlew :app:assembleNoSentryDebug --stacktrace --max-workers=2
+          ./gradlew :app:assembleNoSentryKotlinBackendDebugAndroidTest --stacktrace --max-workers=2
+          ./gradlew :app:assembleNoSentryKotlinBackendDebug --stacktrace --max-workers=2
           echo "APKs built successfully"
 
       - name: AVD cache
@@ -445,7 +452,7 @@ jobs:
             echo "Emulator is responsive, starting tests..."
             # Run smoke tests and integration tests
             # Use test orchestrator for isolation (configured in build.gradle.kts)
-            ./gradlew :app:connectedNoSentryDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace
+            ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace
 
       - name: Upload instrumented test results
         if: always()

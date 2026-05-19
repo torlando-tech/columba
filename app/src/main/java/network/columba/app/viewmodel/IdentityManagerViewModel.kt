@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.Base32
 import java.util.zip.GZIPInputStream
@@ -36,7 +36,7 @@ class IdentityManagerViewModel
         @ApplicationContext private val context: Context,
         private val identityRepository: IdentityRepository,
         private val identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
         private val interfaceConfigManager: InterfaceConfigManager,
     ) : ViewModel() {
         /**
@@ -81,7 +81,7 @@ class IdentityManagerViewModel
 
                     // Call Python service to create identity file
                     Log.d(TAG, "createNewIdentity: Calling Python service...")
-                    val result = reticulumProtocol.createIdentityWithName(displayName)
+                    val result = rnsCore.createIdentityWithName(displayName)
                     Log.d(TAG, "createNewIdentity: Python service returned: ${result.keys}")
 
                     if (result.containsKey("error")) {
@@ -288,7 +288,7 @@ class IdentityManagerViewModel
                         }
 
                     // Import via Python service
-                    val result = reticulumProtocol.importIdentityFile(fileData, displayName)
+                    val result = rnsCore.importIdentityFile(fileData, displayName)
 
                     if (result.containsKey("error")) {
                         _uiState.value =
@@ -369,7 +369,7 @@ class IdentityManagerViewModel
                                 )
                             return@launch
                         }
-                    val fileData = reticulumProtocol.exportIdentityFile(keyData, filePath)
+                    val fileData = rnsCore.exportIdentityFile(keyData, filePath)
 
                     if (fileData.isEmpty()) {
                         _uiState.value = IdentityManagerUiState.Error("Failed to export identity")
@@ -424,7 +424,7 @@ class IdentityManagerViewModel
                     }
 
                     // Import via Python service (same path as file import)
-                    val result = reticulumProtocol.importIdentityFile(fileData, displayName)
+                    val result = rnsCore.importIdentityFile(fileData, displayName)
 
                     if (result.containsKey("error")) {
                         _uiState.value =
@@ -498,7 +498,7 @@ class IdentityManagerViewModel
                         }
                     val fileData =
                         withContext(Dispatchers.IO) {
-                            reticulumProtocol.exportIdentityFile(keyData, filePath)
+                            rnsCore.exportIdentityFile(keyData, filePath)
                         }
 
                     if (fileData.isEmpty()) {
@@ -551,7 +551,7 @@ class IdentityManagerViewModel
 
                     // Import via Python service (same path as file import)
                     _uiState.value = IdentityManagerUiState.Loading("Importing identity...")
-                    val result = reticulumProtocol.importIdentityFile(fileData, displayName)
+                    val result = rnsCore.importIdentityFile(fileData, displayName)
 
                     if (result.containsKey("error")) {
                         _uiState.value =

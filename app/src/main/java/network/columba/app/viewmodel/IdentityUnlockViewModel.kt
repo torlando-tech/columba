@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.RnsCore
 import javax.inject.Inject
 
 private const val TAG = "IdentityUnlockVM"
@@ -34,7 +34,7 @@ class IdentityUnlockViewModel
         @ApplicationContext private val context: Context,
         private val identityRepository: IdentityRepository,
         private val settingsRepository: SettingsRepository,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<IdentityUnlockUiState>(IdentityUnlockUiState.Idle)
         val uiState: StateFlow<IdentityUnlockUiState> = _uiState.asStateFlow()
@@ -79,7 +79,7 @@ class IdentityUnlockViewModel
                         return@launch
                     }
 
-                val parse = reticulumProtocol.importIdentityFile(fileData, active.displayName)
+                val parse = rnsCore.importIdentityFile(fileData, active.displayName)
                 if (parse["success"] != true) {
                     _uiState.value =
                         IdentityUnlockUiState.Error(
@@ -218,7 +218,7 @@ class IdentityUnlockViewModel
          * Delete the undecryptable identity and restart the process. The running
          * ReticulumService still holds the old identity in native memory, and
          * the app's auto-create-identity path only fires during cold startup
-         * (`ColumbaApplication.onCreate` → `reticulumProtocol.initialize`). If
+         * (`ColumbaApplication.onCreate` → `rnsCore.initialize`). If
          * we tried to navigate to onboarding in-process, OnboardingViewModel's
          * `completeOnboarding` would find no active identity in Room and the
          * user's chosen display name would silently drop on the floor. Killing

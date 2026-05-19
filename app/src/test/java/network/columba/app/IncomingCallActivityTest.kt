@@ -3,13 +3,16 @@ package network.columba.app
 import android.app.Application
 import android.content.Intent
 import android.view.WindowManager
+import dagger.hilt.android.EntryPointAccessors
+import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.notifications.CallNotificationHelper
-import io.mockk.Runs
+import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallState
+import io.mockk.coEvery
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,8 +29,6 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
-import tech.torlando.lxst.core.CallCoordinator
-import tech.torlando.lxst.core.CallState
 
 /**
  * Unit tests for IncomingCallActivity.
@@ -44,6 +45,11 @@ import tech.torlando.lxst.core.CallState
  * UnconfinedTestDispatcher overrides Dispatchers.Main so that lifecycleScope
  * coroutines (repeatOnLifecycle + StateFlow.collect) dispatch eagerly on the
  * current thread rather than posting to the looper.
+ *
+ * A.10 swapped the entry-point target from `CallCoordinatorEntryPoint` to
+ * [RnsTelephonyEntryPoint] — the activity now observes call state through
+ * the seam contract that survives the AIDL boundary instead of the
+ * in-process LXST singleton.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -52,29 +58,35 @@ class IncomingCallActivityTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var context: Application
     private lateinit var callStateFlow: MutableStateFlow<CallState>
-    private lateinit var mockCallCoordinator: CallCoordinator
+    private lateinit var mockTelephony: RnsTelephony
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         context = RuntimeEnvironment.getApplication()
 
-        // Mock CallCoordinator singleton so the activity sees Incoming state
-        // (default Idle would auto-finish the activity)
+        // Mock RnsTelephony so the activity sees Incoming state
+        // (default Idle would auto-finish the activity). The activity reaches
+        // the seam singleton via Hilt's RnsTelephonyEntryPoint, so the test
+        // stubs the entry-point chain.
         callStateFlow = MutableStateFlow<CallState>(CallState.Incoming("abc123def456"))
-        mockCallCoordinator = mockk()
-        every { mockCallCoordinator.callState } returns callStateFlow
-        every { mockCallCoordinator.answerCall() } just Runs
-        every { mockCallCoordinator.declineCall() } just Runs
+        mockTelephony = mockk()
+        every { mockTelephony.callState } returns callStateFlow
+        coEvery { mockTelephony.answerCall() } returns Result.success(Unit)
+        coEvery { mockTelephony.declineCall() } answers { }
 
-        mockkObject(CallCoordinator.Companion)
-        every { CallCoordinator.getInstance() } returns mockCallCoordinator
+        val mockEntryPoint = mockk<RnsTelephonyEntryPoint>()
+        every { mockEntryPoint.telephony() } returns mockTelephony
+        mockkStatic(EntryPointAccessors::class)
+        every {
+            EntryPointAccessors.fromApplication(any<android.content.Context>(), RnsTelephonyEntryPoint::class.java)
+        } returns mockEntryPoint
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        unmockkObject(CallCoordinator.Companion)
+        unmockkStatic(EntryPointAccessors::class)
     }
 
     private fun buildCallIntent(

@@ -2,11 +2,11 @@ package network.columba.app.viewmodel
 
 import android.content.Context
 import android.util.Log
-import network.columba.app.reticulum.flasher.FirmwareDownloader
-import network.columba.app.reticulum.flasher.FirmwareSource
-import network.columba.app.reticulum.flasher.FrequencyBand
-import network.columba.app.reticulum.flasher.RNodeBoard
-import network.columba.app.reticulum.flasher.RNodeFlasher
+import network.columba.app.rns.host.flasher.FirmwareDownloader
+import network.columba.app.rns.host.flasher.FirmwareSource
+import network.columba.app.rns.host.flasher.FrequencyBand
+import network.columba.app.rns.host.flasher.RNodeBoard
+import network.columba.app.rns.host.flasher.RNodeFlasher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
@@ -199,7 +199,7 @@ internal class FlasherTncHelper(
     // ==================== Flash Completion ====================
 
     fun handleFlashComplete(
-        deviceInfo: network.columba.app.reticulum.flasher.RNodeDeviceInfo?,
+        deviceInfo: network.columba.app.rns.host.flasher.RNodeDeviceInfo?,
         tncConfigOnlyMode: Boolean,
     ): Boolean {
         val currentState = state.value

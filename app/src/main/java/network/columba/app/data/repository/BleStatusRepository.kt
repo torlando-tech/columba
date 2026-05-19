@@ -6,8 +6,8 @@ import android.util.Log
 import network.columba.app.data.model.BleConnectionInfo
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.model.ConnectionType
-import network.columba.app.reticulum.ble.bridge.KotlinBLEBridge
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
+import network.columba.app.rns.api.RnsTransportAdmin
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -26,7 +26,7 @@ class BleStatusRepository
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val transportAdmin: RnsTransportAdmin,
     ) {
         companion object {
             private const val TAG = "BleStatusRepository"
@@ -43,9 +43,9 @@ class BleStatusRepository
          * @return Flow emitting BleConnectionsState
          */
         fun getConnectedPeersFlow(): Flow<BleConnectionsState> {
-            // Get the event-driven flow from ReticulumProtocol
+            // Get the event-driven flow from the transport-admin seam
             val connectionEventsFlow =
-                reticulumProtocol
+                transportAdmin
                     .bleConnectionsFlow
                     .onStart { emit("[]") } // Initial empty state
                     .map { json -> parseConnectionsJson(json) }
@@ -146,7 +146,7 @@ class BleStatusRepository
             try {
                 // Get connection details from service via IPC
                 Log.d(TAG, "Calling service.getBleConnectionDetails()")
-                val jsonString = reticulumProtocol.getBleConnectionDetails()
+                val jsonString = transportAdmin.getBleConnectionDetails()
                 Log.d(TAG, "Received JSON: $jsonString")
 
                 // Parse JSON array

@@ -19,11 +19,13 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.LogLevel
-import network.columba.app.reticulum.model.ReticulumConfig
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.LogLevel
+import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.ReticulumService
 import network.columba.app.service.manager.InterfaceTransportObserver
-import network.columba.app.service.manager.filterByTransport
+import network.columba.app.rns.host.manager.filterByTransport
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,7 +47,8 @@ class InterfaceConfigManager
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-        private val reticulumProtocol: ReticulumProtocol,
+        private val rnsCore: RnsCore,
+        private val rnsTransportAdmin: RnsTransportAdmin,
         private val interfaceRepository: InterfaceRepository,
         private val identityRepository: IdentityRepository,
         private val identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider,
@@ -123,12 +126,12 @@ class InterfaceConfigManager
                     try {
                         try {
                             withTimeout(2000L) {
-                                reticulumProtocol.shutdown().getOrNull()
+                                rnsCore.shutdown().getOrNull()
                             }
                         } catch (e: TimeoutCancellationException) {
                             Log.w(TAG, "Shutdown timed out after 2s, proceeding with unbind", e)
                         }
-                        reticulumProtocol.unbindService()
+                        // unbindService() was a legacy no-op on the kotlin backend
                     } catch (e: Exception) {
                         Log.w(TAG, "Error during service shutdown", e)
                     }
@@ -214,7 +217,7 @@ class InterfaceConfigManager
 
                     // Step 8: Bind to the new service
                     Log.d(TAG, "Step 8: Binding to new service instance...")
-                    reticulumProtocol.bindService()
+                    // bindService() was a legacy no-op on the kotlin backend
                     Log.d(TAG, "✓ Bound to new service")
 
                     // Step 9: Initialize Reticulum with new config
@@ -320,7 +323,7 @@ class InterfaceConfigManager
                             autoconnectIfacOnly = autoconnectIfacOnly,
                         )
 
-                    reticulumProtocol
+                    rnsCore
                         .initialize(config)
                         .onSuccess {
                             Log.d(TAG, "✓ Reticulum initialized successfully")
@@ -386,7 +389,7 @@ class InterfaceConfigManager
          */
         fun isReticulumRunning(): Boolean =
             try {
-                val status = reticulumProtocol.networkStatus.value
+                val status = rnsCore.networkStatus.value
                 status.toString().contains("RUNNING") || status.toString().contains("READY")
             } catch (e: Exception) {
                 false
@@ -423,7 +426,7 @@ class InterfaceConfigManager
          *
          * @return RSSI in dBm, or -100 if not connected or not available
          */
-        fun getRNodeRssi(): Int = reticulumProtocol.getRNodeRssi()
+        fun getRNodeRssi(): Int = rnsTransportAdmin.getRNodeRssi()
 
         /**
          * Generic batched restoration to prevent OOM when loading large tables across the
@@ -493,7 +496,7 @@ class InterfaceConfigManager
             restoreInBatches(
                 label = "peer identities",
                 fetchBatch = { limit, offset -> conversationRepository.getPeerIdentitiesBatch(limit, offset) },
-                processBatch = { batch -> reticulumProtocol.restorePeerIdentities(batch) },
+                processBatch = { batch -> rnsCore.restorePeerIdentities(batch) },
             )
         }
 
@@ -503,7 +506,7 @@ class InterfaceConfigManager
                 fetchBatch = { limit, offset -> database.announceDao().getAnnouncesBatch(limit, offset) },
                 processBatch = { batch ->
                     val identities = batch.map { it.destinationHash to it.publicKey }
-                    reticulumProtocol.restoreAnnounceIdentities(identities)
+                    rnsCore.restoreAnnounceIdentities(identities)
                 },
             )
         }

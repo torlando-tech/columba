@@ -16,6 +16,8 @@ class ColumbaRuleSetProvider : RuleSetProvider {
             listOf(
                 BleLoggingTagRule(config),
                 DiscardedConcurrencyReturnRule(config),
+                NoCallCoordinatorGetInstanceOutsideHostRule(config),
+                NoRnsFacadeInPythonBackend(config),
                 NoRelaxedMocksRule(config),
                 NoVerifyOnlyTestsRule(config),
                 StateFlowPollingLoopRule(config),

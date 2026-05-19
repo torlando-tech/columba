@@ -1,0 +1,422 @@
+package network.columba.app.rns.backend.py
+
+import android.content.Context
+import android.util.Log
+import network.columba.app.rns.api.util.StampGenerator
+import network.columba.app.rns.api.util.toHex
+import com.chaquo.python.PyObject
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import network.columba.app.rns.api.model.ReticulumConfig
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Runtime state holder for the Python flavor.
+ *
+ * Owns the Chaquopy `Python` interpreter handle, the cached upstream module
+ * objects (`RNS`, `LXMF`, `event_bridge`), the live `Reticulum` / `LXMRouter`
+ * instances after [start], and the registries that map Columba's stable
+ * hash/handle keys back to the live upstream PyObject references (an
+ * `RNS.Identity` / `RNS.Destination` / `RNS.Link` can't cross the AIDL seam,
+ * so the seam carries the hash/handle and this runtime resolves it).
+ *
+ * The six `PythonRns*` sub-impls hold a shared instance of this and call
+ * upstream RNS/LXMF directly through these PyObjects — there is no Python
+ * facade. See the module CLAUDE.md.
+ *
+ * Threading: every method here is expected to be called from
+ * `Dispatchers.IO` (the sub-impls wrap their calls in [pyResult] / [pyCall]).
+ * The registries are [ConcurrentHashMap] because event-bridge callbacks fire
+ * on RNS internal threads.
+ */
+class PythonRnsRuntime(
+    private val appContext: Context,
+    private val stampGenerator: StampGenerator = StampGenerator(),
+) {
+    private companion object {
+        const val TAG = "PythonRnsRuntime"
+    }
+
+    /** Chaquopy interpreter. Starting it is idempotent + guarded by [ensureStarted]. */
+    val python: Python by lazy {
+        ensureStarted()
+        Python.getInstance()
+    }
+
+    /** Cached upstream `RNS` package object. */
+    val rnsModule: PyObject by lazy { python.getModule("RNS") }
+
+    /** Cached upstream `LXMF` package object. */
+    val lxmfModule: PyObject by lazy { python.getModule("LXMF") }
+
+    /** Cached Columba-authored `event_bridge` module — the one Python file with logic. */
+    val eventBridge: PyObject by lazy { python.getModule("event_bridge") }
+
+    /** Live `RNS.Reticulum()` instance after [start]; null before/after. */
+    @Volatile
+    var reticulumInstance: PyObject? = null
+        private set
+
+    /** Live `LXMF.LXMRouter(...)` instance after [start]; null before/after. */
+    @Volatile
+    var lxmRouter: PyObject? = null
+        private set
+
+    /** The local delivery `RNS.Identity` (from [ReticulumConfig.deliveryIdentityKey]). */
+    @Volatile
+    var localIdentity: PyObject? = null
+        private set
+
+    /** The local LXMF delivery `RNS.Destination` registered on [lxmRouter]. */
+    @Volatile
+    var localDestination: PyObject? = null
+        private set
+
+    /** Absolute path of the RNS config dir written by [start]; null before/after. */
+    @Volatile
+    var storagePath: String? = null
+        private set
+
+    /** hex identity hash -> live `RNS.Identity`. Seeded by restore + announce events. */
+    val identities = ConcurrentHashMap<String, PyObject>()
+
+    /** hex destination hash -> live `RNS.Destination`. */
+    val destinations = ConcurrentHashMap<String, PyObject>()
+
+    /** opaque handle id -> live `RNS.Link`. Keyed to mirror `:rns-ipc`'s HandleRegistry. */
+    val links = ConcurrentHashMap<Long, PyObject>()
+
+    /**
+     * KotlinBLEBridge instance for the bundled AndroidBLE custom interface.
+     *
+     * Set by `:rns-host`'s python-flavor module after construction (the bridge
+     * type lives in `:rns-host`, so this is typed `Any?` to keep the
+     * `:rns-backend-py` → `:rns-host` dep direction clean). On every [start]
+     * we forward this into `event_bridge.set_ble_bridge(...)` so the bundled
+     * `ble_modules.android_ble_driver` can resolve it when the BLE interface
+     * starts; null leaves BLE non-functional but won't break other interfaces.
+     */
+    @Volatile
+    var bleBridge: Any? = null
+
+    private val running = AtomicBoolean(false)
+
+    /** Guards [applyAndroidEnvPatches] so it runs exactly once per process. */
+    private val envPatched = AtomicBoolean(false)
+
+    /** True once [start] has completed and the stack is live. */
+    val isRunning: Boolean get() = running.get()
+
+    private fun ensureStarted() {
+        // A.10: A.10 exposed a long-latent TOCTOU race here — multiple binder
+        // threads from the AIDL pool can enter via different sub-interface
+        // methods (each one triggers `python` lazy init, which calls this
+        // function). Without the lock, both threads pass the `!isStarted()`
+        // check, both call `Python.start()`, and the loser throws "Python
+        // already started". Synchronising on the class (not `this`) avoids
+        // re-entrant deadlock with `start()`'s own @Synchronized monitor
+        // when its `eventBridge.callAttr(...)` path triggers the lazy.
+        synchronized(PythonRnsRuntime::class.java) {
+            if (!Python.isStarted()) {
+                Log.i(TAG, "Starting Chaquopy Python interpreter")
+                Python.start(AndroidPlatform(appContext))
+            }
+        }
+        applyAndroidEnvPatches()
+    }
+
+    /**
+     * Neutralise upstream-RNS behaviour that breaks under Chaquopy *before* the
+     * first `RNS.Reticulum()` is constructed. `Reticulum.__init__` ends by
+     * registering SIGINT/SIGTERM handlers via `signal.signal()`, which raises
+     * `ValueError` off Python's main thread — and every PyObject call here runs
+     * on `Dispatchers.IO`, so without this `__init__` aborts after Transport +
+     * interfaces are up but before it returns. Idempotent; the Python side also
+     * guards against a double-apply.
+     */
+    private fun applyAndroidEnvPatches() {
+        if (envPatched.compareAndSet(false, true)) {
+            Python.getInstance().getModule("event_bridge")
+                .callAttr("apply_android_env_patches")
+            Log.i(TAG, "Applied Android/Chaquopy env patches")
+        }
+    }
+
+    /**
+     * Bring the Python RNS/LXMF stack up: write the RNS `config` file from
+     * [config], construct `Reticulum(configdir)`, load the delivery identity,
+     * construct the `LXMRouter`, and register the delivery destination.
+     *
+     * [wireEventBridge] must be called afterwards to attach the Kotlin event
+     * sinks.
+     */
+    @Synchronized
+    fun start(config: ReticulumConfig) {
+        if (running.get()) {
+            Log.w(TAG, "start() called while already running — ignoring")
+            return
+        }
+        ensureStarted()
+
+        // Detect coexisting RNS apps on the device along two axes:
+        //  • TCP 37428 → another RNS is exposed as a shared instance
+        //    (Sideband by default). Join as RPC client and skip
+        //    interfaces — mirrors v0.10.x.
+        //  • UDP bind on AutoInterface data_port → another RNS holds
+        //    the multicast bind even though it's not exposing a
+        //    shared instance (another Columba running standalone).
+        //    Can't join, can't bind — render AutoInterface as disabled
+        //    so RNS doesn't crash trying to compete for the port.
+        val probe = network.columba.app.rns.api.util.SharedInstanceProbe
+        val shareInstance = probe.shouldShareInstance(config)
+        val skipAutoInterface = !shareInstance && !probe.isAutoInterfaceUsable()
+        val mode = when {
+            shareInstance -> "shared-client"
+            skipAutoInterface -> "own-instance (AutoInterface disabled — port held by another app)"
+            else -> "own-instance"
+        }
+        Log.i(TAG, "RNS instance mode: $mode")
+
+        val configDir = File(config.storagePath, "reticulum").apply { mkdirs() }
+        File(configDir, "config").writeText(
+            RnsConfigFile.build(config, shareInstance, skipAutoInterface),
+        )
+        storagePath = configDir.absolutePath
+        Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
+
+        // RNS.Transport.find_interfaces() scans <configdir>/interfaces/ for
+        // custom interface .py files. Materialise the bundled ones (BLE
+        // stack) from the APK before constructing Reticulum so it can
+        // discover them. Idempotent + non-fatal on failure.
+        eventBridge.callAttr("deploy_bundled_interfaces", configDir.absolutePath)
+
+        // Hand the KotlinBLEBridge (if set by HostBackendModule) to
+        // android_ble_driver.py through event_bridge's accessor. Must run
+        // before Reticulum() — the AndroidBLE interface's start() path
+        // looks up the bridge during interface init.
+        eventBridge.callAttr("set_ble_bridge", bleBridge)
+
+        // Construct the upstream Reticulum instance. RNS.Reticulum is a process
+        // singleton — stop() must fully tear it down before a restart.
+        reticulumInstance = rnsModule.callAttr("Reticulum", configDir.absolutePath)
+
+        // Delivery identity. The 64-byte private key is held in memory only;
+        // RNS.Identity.from_bytes() reconstructs the keypair.
+        val identityClass = rnsModule["Identity"]
+            ?: error("RNS.Identity not resolvable")
+        val identity =
+            config.deliveryIdentityKey?.let { key ->
+                identityClass.callAttr("from_bytes", key.toPyBytes())
+            } ?: config.identityFilePath?.let { path ->
+                identityClass.callAttr("from_file", path)
+            } ?: identityClass.call() // fresh keys — Python `RNS.Identity()`; caller persists
+        localIdentity = identity
+        // RNS.Identity.hash is an attribute. Cache the live identity under its
+        // hex hash so recallIdentity / sends can resolve it without a re-derive.
+        identity["hash"]?.let { identities[it.toJava(ByteArray::class.java).toHex()] = identity }
+
+        // LXMF router + delivery destination.
+        val lxmfStorage = File(config.storagePath, "lxmf").apply { mkdirs() }
+        val router = lxmfModule.callAttr("LXMRouter", identity, lxmfStorage.absolutePath)
+        lxmRouter = router
+        localDestination = router.callAttr(
+            "register_delivery_identity",
+            identity,
+            config.displayName ?: "",
+        )
+
+        // Bypass upstream LXMF's multiprocessing-based stamp generation,
+        // which hangs on Android (Chaquopy lacks `sem_open` and the
+        // platform aggressively kills idle helper processes). The
+        // torlando-tech LXMF fork exposes `LXStamper.set_external_generator`
+        // for exactly this case — we hand it a Kotlin coroutine-based
+        // generator wrapped in a BiFunction (Chaquopy's `get_sam` rejects
+        // bound method references because they implement multiple
+        // functional interfaces; BiFunction is a single, unambiguous SAM).
+        // Ported from release/v0.10.x's `PythonWrapperManager.setStampGeneratorCallback`.
+        registerExternalStampGenerator()
+
+        running.set(true)
+        Log.i(TAG, "Python RNS/LXMF stack started")
+    }
+
+    /**
+     * Register the native Kotlin [StampGenerator] as upstream LXMF's
+     * external stamp generator.
+     *
+     * Called from [start] once the `LXMF` module is loaded. Registration
+     * goes through `event_bridge.install_external_stamp_generator(...)`,
+     * which wraps the Kotlin callback in a Python closure before handing
+     * it to `LXStamper.set_external_generator(...)`. The Python-closure
+     * indirection avoids a Chaquopy quirk where SAM-callable invocation
+     * (`BiFunction.apply` from Python's `__call__`) boxes the args as
+     * `Object[]` instead of typed `byte[] / int`; routing through a
+     * Python closure that calls our typed `generate(...)` method makes
+     * Chaquopy apply the proper bytes→byte[] conversion.
+     *
+     * Best-effort — registration failure logs a warning and falls back
+     * to upstream's default generator, which works on desktop platforms
+     * but hangs on Android (Chaquopy lacks `sem_open`, Android kills
+     * idle helper processes, `multiprocessing.Manager` deadlocks).
+     */
+    private fun registerExternalStampGenerator() {
+        try {
+            val callback = StampGeneratorCallback(stampGenerator)
+            eventBridge.callAttr("install_external_stamp_generator", callback)
+            Log.i(TAG, "Native Kotlin stamp generator registered with LXMF.LXStamper")
+        } catch (e: Exception) {
+            Log.w(
+                TAG,
+                "Failed to register external stamp generator with LXMF.LXStamper: ${e.message}",
+                e,
+            )
+        }
+    }
+
+    /**
+     * Attach the Kotlin event sinks to upstream RNS/LXMF via `event_bridge.py`.
+     * Call once after [start]. The five callbacks are supplied by
+     * `PythonEventBridge`.
+     */
+    fun wireEventBridge(
+        onAnnounce: PyEventCallback,
+        onPacket: PyEventCallback,
+        onLinkEvent: PyEventCallback,
+        onLxmfDelivery: PyEventCallback,
+        onLxmfFailure: PyEventCallback,
+    ) {
+        eventBridge.callAttr(
+            "register_callbacks",
+            rnsModule["Transport"],
+            lxmRouter,
+            onAnnounce,
+            onPacket,
+            onLinkEvent,
+            onLxmfDelivery,
+            onLxmfFailure,
+        )
+        Log.i(TAG, "Event bridge wired")
+    }
+
+    /**
+     * Tear the stack down. Best-effort — RNS 1.1.x has no clean per-instance
+     * shutdown, so this deregisters the event bridge, asks RNS to run its exit
+     * handler, and drops every cached reference. The "Apply & Restart" flow
+     * (Phase B verification) exercises start->stop->start; restart correctness
+     * is on-device integration work.
+     */
+    @Synchronized
+    fun stop() {
+        if (!running.get()) return
+        runCatching { eventBridge.callAttr("deregister_callbacks") }
+            .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
+        runCatching {
+            // RNS.Reticulum.exit_handler() flushes path tables + closes
+            // interfaces without the os._exit() that RNS.exit() would do.
+            rnsModule["Reticulum"]?.callAttr("exit_handler")
+        }.onFailure { Log.w(TAG, "Reticulum exit_handler failed", it) }
+        Log.i(TAG, "About to call event_bridge.reset_reticulum_for_restart")
+        runCatching {
+            // exit_handler() detaches interfaces + persists path data but does
+            // NOT clear RNS's process-global singleton / Transport-registry
+            // state — a fresh start() would then hit OSError("Attempt to
+            // reinitialise Reticulum") and KeyError("...already registered
+            // destination"). This clears it (ported from release/v0.10.x's
+            // reticulum_wrapper.shutdown()). Separate runCatching so it runs
+            // even if exit_handler() above threw.
+            eventBridge.callAttr("reset_reticulum_for_restart")
+        }.onFailure { Log.w(TAG, "Reticulum state reset for restart failed", it) }
+        Log.i(TAG, "Returned from event_bridge.reset_reticulum_for_restart")
+
+        identities.clear()
+        destinations.clear()
+        links.clear()
+        localDestination = null
+        localIdentity = null
+        storagePath = null
+        lxmRouter = null
+        reticulumInstance = null
+        running.set(false)
+        Log.i(TAG, "Python RNS/LXMF stack stopped")
+    }
+
+    /** Resolve a destination hex hash to its live `RNS.Destination`, or throw [identityNotFound]. */
+    fun requireDestination(hexHash: String): PyObject =
+        destinations[hexHash] ?: featureUnsupportedDestination(hexHash)
+
+    private fun featureUnsupportedDestination(hexHash: String): Nothing =
+        throw network.columba.app.rns.api.RnsException(
+            network.columba.app.rns.api.RnsError.IdentityNotFound(hexHash),
+        )
+
+    /** Throw [network.columba.app.rns.api.RnsError.BackendNotReady] if [start] hasn't run. */
+    fun requireRunning() {
+        if (!running.get()) {
+            throw network.columba.app.rns.api.RnsException(
+                network.columba.app.rns.api.RnsError.BackendNotReady,
+            )
+        }
+    }
+}
+
+/**
+ * Python-callable bridge to [StampGenerator].
+ *
+ * Exposed as a top-level class (not a lambda or BiFunction) because
+ * Chaquopy's SAM-callable dispatch (`JavaObject.__call__` → bridge
+ * apply) boxes args as `Object[]` instead of typed `byte[] / int`,
+ * causing `ClassCastException` in the synthetic apply wrapper. A
+ * normal class with a method whose JVM signature is
+ * `generate([B, I) -> Object` makes Chaquopy take its typed-method
+ * dispatch path (`JavaMethod.__call__`), which correctly converts
+ * Python `bytes → byte[]` and `int → int` before invocation.
+ *
+ * Invoked from Python via
+ * `event_bridge.install_external_stamp_generator(callback)`, which
+ * wraps this in a closure registered with
+ * `LXMF.LXStamper.set_external_generator(...)`.
+ *
+ * Returns a Python `list` rather than a Kotlin `Pair` because
+ * Chaquopy serializes Python tuples back through the `list` builtin
+ * most cleanly. The stamp bytes are wrapped via Python's `bytes()`
+ * builtin so they expose the buffer protocol that LXStamper then
+ * concatenates with the workblock.
+ */
+internal class StampGeneratorCallback(
+    private val generator: StampGenerator,
+) {
+    private companion object {
+        const val TAG = "StampGeneratorCallback"
+    }
+
+    fun generate(
+        workblock: ByteArray,
+        stampCost: Int,
+    ): PyObject {
+        Log.d(
+            TAG,
+            "External stamp generator invoked: cost=$stampCost, " +
+                "workblock=${workblock.size} bytes",
+        )
+
+        val result =
+            runBlocking(Dispatchers.Default) {
+                generator.generateStamp(workblock, stampCost)
+            }
+
+        Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")
+
+        val py = Python.getInstance()
+        val builtins = py.builtins
+        val stamp = result.stamp ?: ByteArray(0)
+        val pyBytes = builtins.callAttr("bytes", stamp)
+        val pyList = builtins.callAttr("list")
+        pyList.callAttr("append", pyBytes)
+        pyList.callAttr("append", result.rounds)
+        return pyList
+    }
+}

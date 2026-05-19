@@ -3,13 +3,15 @@ package network.columba.app.viewmodel
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.Destination
-import network.columba.app.reticulum.model.DestinationType
-import network.columba.app.reticulum.model.Direction
-import network.columba.app.reticulum.model.Identity
-import network.columba.app.reticulum.model.NetworkStatus
-import network.columba.app.reticulum.protocol.FailedInterface
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.Destination
+import network.columba.app.rns.api.model.DestinationType
+import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.FailedInterface
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -38,7 +40,7 @@ import org.junit.Test
  * Unit tests for DebugViewModel's event-driven debug info updates.
  *
  * Tests that the ViewModel correctly:
- * - Observes debugInfoFlow from NativeReticulumProtocol
+ * - Observes debugInfoFlow from RnsTransportAdmin
  * - Parses debug info JSON and updates state
  * - Handles malformed JSON gracefully
  */
@@ -54,7 +56,9 @@ class DebugViewModelEventDrivenTest {
     @Suppress("NoRelaxedMocks") // Android Context with many system service methods
     private val mockContext: android.content.Context = mockk(relaxed = true)
 
-    private lateinit var mockProtocol: ReticulumProtocol
+    private lateinit var mockRnsCore: RnsCore
+    private lateinit var mockRnsLxmf: RnsLxmf
+    private lateinit var mockRnsTransportAdmin: RnsTransportAdmin
     private lateinit var mockSettingsRepo: SettingsRepository
     private lateinit var mockIdentityRepo: IdentityRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
@@ -62,10 +66,16 @@ class DebugViewModelEventDrivenTest {
 
     private val debugInfoFlow = MutableSharedFlow<String>(replay = 1)
 
-    private fun buildViewModel(protocol: ReticulumProtocol = mockProtocol): DebugViewModel =
+    private fun buildViewModel(
+        rnsCore: RnsCore = mockRnsCore,
+        rnsLxmf: RnsLxmf = mockRnsLxmf,
+        rnsTransportAdmin: RnsTransportAdmin = mockRnsTransportAdmin,
+    ): DebugViewModel =
         DebugViewModel(
             mockContext,
-            protocol,
+            rnsCore,
+            rnsLxmf,
+            rnsTransportAdmin,
             mockSettingsRepo,
             mockIdentityRepo,
             mockInterfaceConfigManager,
@@ -78,23 +88,25 @@ class DebugViewModelEventDrivenTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        mockProtocol = mockk(relaxed = true)
+        mockRnsCore = mockk(relaxed = true)
+        mockRnsLxmf = mockk(relaxed = true)
+        mockRnsTransportAdmin = mockk(relaxed = true)
         mockSettingsRepo = mockk(relaxed = true)
         mockIdentityRepo = mockk(relaxed = true)
         mockInterfaceConfigManager = mockk(relaxed = true)
         mockInterfaceRepository = mockk(relaxed = true)
 
         // Setup debugInfoFlow
-        every { mockProtocol.debugInfoFlow } returns debugInfoFlow
+        every { mockRnsTransportAdmin.debugInfoFlow } returns debugInfoFlow
 
         // Setup networkStatus
-        every { mockProtocol.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
+        every { mockRnsCore.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
 
         // Setup getDebugInfo for initial fetch (suspend function)
-        coEvery { mockProtocol.getDebugInfo() } returns emptyMap()
+        coEvery { mockRnsTransportAdmin.getDebugInfo() } returns emptyMap()
 
         // Setup getFailedInterfaces (suspend function)
-        coEvery { mockProtocol.getFailedInterfaces() } returns emptyList()
+        coEvery { mockRnsTransportAdmin.getFailedInterfaces() } returns emptyList()
 
         // Setup identity repository
         coEvery { mockIdentityRepo.activeIdentity } returns flowOf(null)
@@ -116,10 +128,10 @@ class DebugViewModelEventDrivenTest {
                 appName = "lxmf",
                 aspects = listOf("delivery"),
             )
-        coEvery { mockProtocol.getLxmfIdentity() } returns Result.success(mockIdentity)
-        coEvery { mockProtocol.getLxmfDestination() } returns Result.success(mockDestination)
+        coEvery { mockRnsLxmf.getLxmfIdentity() } returns Result.success(mockIdentity)
+        coEvery { mockRnsLxmf.getLxmfDestination() } returns Result.success(mockDestination)
         // Also mock createIdentity in case the code falls back to it
-        coEvery { mockProtocol.createIdentity() } returns Result.success(mockIdentity)
+        coEvery { mockRnsCore.createIdentity() } returns Result.success(mockIdentity)
     }
 
     @After
@@ -205,13 +217,13 @@ class DebugViewModelEventDrivenTest {
     @Test
     fun `observeDebugInfo falls back to fetchDebugInfo for non-ServiceProtocol`() =
         runTest(testDispatcher) {
-            // Given - use a non-NativeReticulumProtocol mock
+            // Given - a plain RnsTransportAdmin mock (no strangler-fig variants post-A.10)
             // Protocol with many methods - relaxed mock is appropriate
             @Suppress("NoRelaxedMocks")
-            val nonServiceProtocol = mockk<ReticulumProtocol>(relaxed = true)
+            val nonServiceTransportAdmin = mockk<RnsTransportAdmin>(relaxed = true)
             var getDebugInfoCalled = false
-            every { nonServiceProtocol.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
-            coEvery { nonServiceProtocol.getDebugInfo() } answers {
+            
+            coEvery { nonServiceTransportAdmin.getDebugInfo() } answers {
                 getDebugInfoCalled = true
                 mapOf(
                     "initialized" to true,
@@ -220,10 +232,10 @@ class DebugViewModelEventDrivenTest {
                     "interfaces" to emptyList<Map<String, Any>>(),
                 )
             }
-            coEvery { nonServiceProtocol.getFailedInterfaces() } returns emptyList()
+            coEvery { nonServiceTransportAdmin.getFailedInterfaces() } returns emptyList()
 
             // When - create ViewModel with non-service protocol
-            val viewModel = buildViewModel(nonServiceProtocol)
+            val viewModel = buildViewModel(rnsTransportAdmin = nonServiceTransportAdmin)
             advanceUntilIdle()
 
             // Then - should have called getDebugInfo for fallback
@@ -266,7 +278,7 @@ class DebugViewModelEventDrivenTest {
                     FailedInterface(name = "RNode", error = "USB not connected"),
                     FailedInterface(name = "TCP", error = "Connection refused"),
                 )
-            coEvery { mockProtocol.getFailedInterfaces() } returns failedInterfaces
+            coEvery { mockRnsTransportAdmin.getFailedInterfaces() } returns failedInterfaces
 
             val viewModel = buildViewModel()
 
@@ -286,7 +298,7 @@ class DebugViewModelEventDrivenTest {
         runTest(testDispatcher) {
             // Given - set network status to ERROR
             val errorStatus = NetworkStatus.ERROR("Test error message")
-            every { mockProtocol.networkStatus } returns MutableStateFlow(errorStatus)
+            every { mockRnsCore.networkStatus } returns MutableStateFlow(errorStatus)
 
             val viewModel = buildViewModel()
 
@@ -347,8 +359,8 @@ class DebugViewModelEventDrivenTest {
     fun `generateShareText returns null when publicKey is null`() =
         runTest(testDispatcher) {
             // Given - make identity loading fail so publicKey remains null
-            coEvery { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
-            coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
+            coEvery { mockRnsLxmf.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
+            coEvery { mockRnsCore.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
 
             val viewModel = buildViewModel()
             advanceUntilIdle()
@@ -364,8 +376,8 @@ class DebugViewModelEventDrivenTest {
     fun `generateShareText returns null when destinationHash is null`() =
         runTest(testDispatcher) {
             // Given - make destination loading fail so destinationHash remains null
-            coEvery { mockProtocol.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
-            coEvery { mockProtocol.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
+            coEvery { mockRnsLxmf.getLxmfIdentity() } returns Result.failure(RuntimeException("No identity"))
+            coEvery { mockRnsCore.createIdentity() } returns Result.failure(RuntimeException("Cannot create identity"))
 
             val viewModel = buildViewModel()
             advanceUntilIdle()
@@ -384,7 +396,7 @@ class DebugViewModelEventDrivenTest {
         runTest(testDispatcher) {
             // Given - create a mutable network status flow
             val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
-            every { mockProtocol.networkStatus } returns networkStatusFlow
+            every { mockRnsCore.networkStatus } returns networkStatusFlow
 
             val viewModel = buildViewModel()
 
@@ -417,7 +429,7 @@ class DebugViewModelEventDrivenTest {
         runTest(testDispatcher) {
             // Given - network is READY
             val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
-            every { mockProtocol.networkStatus } returns networkStatusFlow
+            every { mockRnsCore.networkStatus } returns networkStatusFlow
 
             val viewModel = buildViewModel()
 

@@ -10,8 +10,10 @@ import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
 import network.columba.app.data.repository.BleStatusRepository
 import network.columba.app.repository.InterfaceRepository
-import network.columba.app.reticulum.model.InterfaceConfig
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.BackendCapabilities
+import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -22,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -50,8 +53,9 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var configManager: InterfaceConfigManager
     private lateinit var bleStatusRepository: BleStatusRepository
-    private lateinit var serviceProtocol: ReticulumProtocol
+    private lateinit var serviceProtocol: RnsTransportAdmin
     private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
+    private lateinit var rnsBackend: RnsBackend
     private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
     private lateinit var debugInfoFlow: MutableSharedFlow<String>
     private lateinit var viewModel: InterfaceManagementViewModel
@@ -62,6 +66,9 @@ class InterfaceManagementViewModelStatusEventTest {
 
         // Use test dispatcher for IO operations
         InterfaceManagementViewModel.ioDispatcher = testDispatcher
+        // Disable the interface-status poll loop so advanceUntilIdle() doesn't
+        // spin forever on its `while (isActive) { … delay … }`.
+        InterfaceManagementViewModel.enableStatusPolling = false
 
         interfaceRepository = mockk()
         configManager = mockk()
@@ -69,7 +76,19 @@ class InterfaceManagementViewModelStatusEventTest {
         serviceProtocol = mockk()
         transportObserver = mockk()
         every { transportObserver.currentTransport() } returns
-            network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
+            network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
+
+        // These tests were written against the kotlin backend's hot-reload
+        // behaviour — stub capabilities with hotReloadInterfaces = true so
+        // syncNativeInterfaces() keeps taking the live-reload path rather than
+        // the Python "mark pending" path (Phase D).
+        rnsBackend = mockk()
+        every { rnsBackend.capabilities } returns
+            MutableStateFlow(
+                BackendCapabilities.UNKNOWN.copy(
+                    interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = true),
+                ),
+            )
 
         // Mock repository flows
         every { interfaceRepository.allInterfaceEntities } returns flowOf(emptyList())
@@ -123,6 +142,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -141,6 +161,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -160,6 +181,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -182,6 +204,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -215,6 +238,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -238,7 +262,7 @@ class InterfaceManagementViewModelStatusEventTest {
     fun `non-NativeReticulumProtocol does not crash`() =
         runTest {
             // Use a generic ReticulumProtocol mock instead of NativeReticulumProtocol
-            val genericProtocol: ReticulumProtocol = mockk()
+            val genericProtocol: RnsTransportAdmin = mockk()
             every { genericProtocol.interfaceStatusFlow } returns MutableSharedFlow()
             every { genericProtocol.debugInfoFlow } returns MutableSharedFlow()
             coEvery { genericProtocol.getDebugInfo() } returns emptyMap()
@@ -252,6 +276,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     genericProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -295,6 +320,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -342,6 +368,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -388,6 +415,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -441,6 +469,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -501,6 +530,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -559,6 +589,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -620,6 +651,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -658,6 +690,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -686,6 +719,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -730,6 +764,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -760,6 +795,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -790,6 +826,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -814,6 +851,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -861,6 +899,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -888,6 +927,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -925,6 +965,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -964,6 +1005,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -1007,6 +1049,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -1035,6 +1078,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -1062,6 +1106,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()
@@ -1088,6 +1133,7 @@ class InterfaceManagementViewModelStatusEventTest {
                     bleStatusRepository,
                     serviceProtocol,
                     transportObserver,
+                    rnsBackend,
                 )
 
             advanceUntilIdle()

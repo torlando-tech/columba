@@ -63,7 +63,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.launch
 import network.columba.app.data.repository.Announce
-import network.columba.app.reticulum.model.NodeType
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.ui.components.AnnounceFilterChips
 import network.columba.app.ui.components.NodeTypeBadge
 import network.columba.app.ui.components.OtherBadge

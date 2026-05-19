@@ -29,8 +29,9 @@ import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.reticulum.model.BatteryProfile
-import network.columba.app.reticulum.protocol.ReticulumProtocol
+import network.columba.app.rns.api.model.BatteryProfile
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsTransportAdmin
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -49,7 +50,8 @@ class InterfaceConfigManagerTest {
     private lateinit var testScope: TestScope
 
     private lateinit var context: Context
-    private lateinit var reticulumProtocol: ReticulumProtocol
+    private lateinit var rnsCore: RnsCore
+    private lateinit var rnsTransportAdmin: RnsTransportAdmin
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var identityRepository: IdentityRepository
     private lateinit var identityKeyProvider: network.columba.app.data.crypto.IdentityKeyProvider
@@ -74,7 +76,8 @@ class InterfaceConfigManagerTest {
         testScope = TestScope(testDispatcher)
 
         context = mockk(relaxed = true)
-        reticulumProtocol = mockk()
+        rnsCore = mockk()
+        rnsTransportAdmin = mockk()
         interfaceRepository = mockk()
         identityRepository = mockk()
         identityKeyProvider = mockk()
@@ -87,7 +90,7 @@ class InterfaceConfigManagerTest {
         propagationNodeManager = mockk()
         transportObserver = mockk()
         every { transportObserver.currentTransport() } returns
-            network.columba.app.service.manager.CurrentTransport.WIFI_LIKE
+            network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
         applicationScope = testScope.backgroundScope
 
         // Setup SharedPreferences mock
@@ -135,10 +138,8 @@ class InterfaceConfigManagerTest {
         coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns emptyList()
 
         // Setup protocol mock
-        every { reticulumProtocol.unbindService() } just Runs
-        coEvery { reticulumProtocol.bindService() } returns Unit
-        coEvery { reticulumProtocol.shutdown() } returns Result.success(Unit)
-        coEvery { reticulumProtocol.initialize(any()) } returns Result.success(Unit)
+        coEvery { rnsCore.shutdown() } returns Result.success(Unit)
+        coEvery { rnsCore.initialize(any()) } returns Result.success(Unit)
 
         // Setup manager mocks (start/stop methods)
         every { messageCollector.stopCollecting() } just Runs
@@ -153,7 +154,8 @@ class InterfaceConfigManagerTest {
         manager =
             InterfaceConfigManager(
                 context = context,
-                reticulumProtocol = reticulumProtocol,
+                rnsCore = rnsCore,
+                rnsTransportAdmin = rnsTransportAdmin,
                 interfaceRepository = interfaceRepository,
                 identityRepository = identityRepository,
                 identityKeyProvider = identityKeyProvider,
@@ -197,7 +199,7 @@ class InterfaceConfigManagerTest {
 
             assertTrue("Should fail when identity requires password", result.isFailure)
             // Service must not be reinitialized without a key.
-            coVerify(exactly = 0) { reticulumProtocol.initialize(any()) }
+            coVerify(exactly = 0) { rnsCore.initialize(any()) }
             // is_applying_config must be cleared so a follow-up apply in the same
             // session doesn't short-circuit on a stale flag.
             verify { sharedPrefsEditor.putBoolean("is_applying_config", false) }
@@ -226,7 +228,7 @@ class InterfaceConfigManagerTest {
             assertTrue("Should fail when key decryption returns failure", result.isFailure)
             // Refusing to start with a null key protects against silently rotating
             // onto a fresh ephemeral identity.
-            coVerify(exactly = 0) { reticulumProtocol.initialize(any()) }
+            coVerify(exactly = 0) { rnsCore.initialize(any()) }
             verify { sharedPrefsEditor.putBoolean("is_applying_config", false) }
         }
 
@@ -387,7 +389,7 @@ class InterfaceConfigManagerTest {
             // Then: Should succeed and config should have enableTransport = true
             assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify {
-                reticulumProtocol.initialize(
+                rnsCore.initialize(
                     match { config ->
                         config.enableTransport == true
                     },
@@ -407,7 +409,7 @@ class InterfaceConfigManagerTest {
             // Then: Should succeed and config should have enableTransport = false
             assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify {
-                reticulumProtocol.initialize(
+                rnsCore.initialize(
                     match { config ->
                         config.enableTransport == false
                     },
@@ -421,12 +423,12 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - calls restorePeerIdentities when peer identities exist`() =
         runTest {
             // Given: NativeReticulumProtocol with peer identities
-            val serviceProtocol = mockk<ReticulumProtocol>()
-            coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
-            coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
-            coEvery { serviceProtocol.bindService() } just Runs
-            coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(5)
-            coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(0)
+            val serviceRnsCore = mockk<RnsCore>()
+            val serviceRnsTransportAdmin = mockk<RnsTransportAdmin>(relaxed = true)
+            coEvery { serviceRnsCore.shutdown() } returns Result.success(Unit)
+            coEvery { serviceRnsCore.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceRnsCore.restorePeerIdentities(any()) } returns Result.success(5)
+            coEvery { serviceRnsCore.restoreAnnounceIdentities(any()) } returns Result.success(0)
 
             val peerIdentities =
                 listOf(
@@ -438,7 +440,8 @@ class InterfaceConfigManagerTest {
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
                     context = context,
-                    reticulumProtocol = serviceProtocol,
+                    rnsCore = serviceRnsCore,
+                    rnsTransportAdmin = serviceRnsTransportAdmin,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
                     identityKeyProvider = identityKeyProvider,
@@ -458,19 +461,19 @@ class InterfaceConfigManagerTest {
 
             // Then: Should succeed and restorePeerIdentities should be called
             assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
-            coVerify { serviceProtocol.restorePeerIdentities(peerIdentities) }
+            coVerify { serviceRnsCore.restorePeerIdentities(peerIdentities) }
         }
 
     @Test
     fun `applyInterfaceChanges - calls restoreAnnounceIdentities when announces exist`() =
         runTest {
             // Given: NativeReticulumProtocol with announce identities
-            val serviceProtocol = mockk<ReticulumProtocol>()
-            coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
-            coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
-            coEvery { serviceProtocol.bindService() } just Runs
-            coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(3)
-            coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(0)
+            val serviceRnsCore = mockk<RnsCore>()
+            val serviceRnsTransportAdmin = mockk<RnsTransportAdmin>(relaxed = true)
+            coEvery { serviceRnsCore.shutdown() } returns Result.success(Unit)
+            coEvery { serviceRnsCore.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceRnsCore.restoreAnnounceIdentities(any()) } returns Result.success(3)
+            coEvery { serviceRnsCore.restorePeerIdentities(any()) } returns Result.success(0)
 
             val announces =
                 listOf(
@@ -504,7 +507,8 @@ class InterfaceConfigManagerTest {
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
                     context = context,
-                    reticulumProtocol = serviceProtocol,
+                    rnsCore = serviceRnsCore,
+                    rnsTransportAdmin = serviceRnsTransportAdmin,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
                     identityKeyProvider = identityKeyProvider,
@@ -525,7 +529,7 @@ class InterfaceConfigManagerTest {
             // Then: Should succeed and restoreAnnounceIdentities should be called
             assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
             coVerify {
-                serviceProtocol.restoreAnnounceIdentities(
+                serviceRnsCore.restoreAnnounceIdentities(
                     match { list ->
                         list.size == 2 &&
                             list[0].first == "destHash1" &&
@@ -539,17 +543,18 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - skips restorePeerIdentities when list is empty`() =
         runTest {
             // Given: NativeReticulumProtocol with no peer identities
-            val serviceProtocol = mockk<ReticulumProtocol>()
-            coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
-            coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
-            coEvery { serviceProtocol.bindService() } just Runs
+            val serviceRnsCore = mockk<RnsCore>()
+            val serviceRnsTransportAdmin = mockk<RnsTransportAdmin>(relaxed = true)
+            coEvery { serviceRnsCore.shutdown() } returns Result.success(Unit)
+            coEvery { serviceRnsCore.initialize(any()) } returns Result.success(Unit)
 
             coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns emptyList()
 
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
                     context = context,
-                    reticulumProtocol = serviceProtocol,
+                    rnsCore = serviceRnsCore,
+                    rnsTransportAdmin = serviceRnsTransportAdmin,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
                     identityKeyProvider = identityKeyProvider,
@@ -569,17 +574,17 @@ class InterfaceConfigManagerTest {
 
             // Then: Should succeed and restorePeerIdentities should NOT be called
             assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
-            coVerify(exactly = 0) { serviceProtocol.restorePeerIdentities(any()) }
+            coVerify(exactly = 0) { serviceRnsCore.restorePeerIdentities(any()) }
         }
 
     @Test
     fun `applyInterfaceChanges - skips restoreAnnounceIdentities when list is empty`() =
         runTest {
             // Given: NativeReticulumProtocol with no announces
-            val serviceProtocol = mockk<ReticulumProtocol>()
-            coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
-            coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
-            coEvery { serviceProtocol.bindService() } just Runs
+            val serviceRnsCore = mockk<RnsCore>()
+            val serviceRnsTransportAdmin = mockk<RnsTransportAdmin>(relaxed = true)
+            coEvery { serviceRnsCore.shutdown() } returns Result.success(Unit)
+            coEvery { serviceRnsCore.initialize(any()) } returns Result.success(Unit)
 
             val announceDao = mockk<AnnounceDao>()
             every { database.announceDao() } returns announceDao
@@ -588,7 +593,8 @@ class InterfaceConfigManagerTest {
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
                     context = context,
-                    reticulumProtocol = serviceProtocol,
+                    rnsCore = serviceRnsCore,
+                    rnsTransportAdmin = serviceRnsTransportAdmin,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
                     identityKeyProvider = identityKeyProvider,
@@ -608,19 +614,19 @@ class InterfaceConfigManagerTest {
 
             // Then: Should succeed and restoreAnnounceIdentities should NOT be called
             assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
-            coVerify(exactly = 0) { serviceProtocol.restoreAnnounceIdentities(any()) }
+            coVerify(exactly = 0) { serviceRnsCore.restoreAnnounceIdentities(any()) }
         }
 
     @Test
     fun `applyInterfaceChanges - continues when restorePeerIdentities fails`() =
         runTest {
             // Given: NativeReticulumProtocol where restorePeerIdentities fails
-            val serviceProtocol = mockk<ReticulumProtocol>()
-            coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
-            coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
-            coEvery { serviceProtocol.bindService() } just Runs
-            coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.failure(Exception("Test failure"))
-            coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.success(0)
+            val serviceRnsCore = mockk<RnsCore>()
+            val serviceRnsTransportAdmin = mockk<RnsTransportAdmin>(relaxed = true)
+            coEvery { serviceRnsCore.shutdown() } returns Result.success(Unit)
+            coEvery { serviceRnsCore.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceRnsCore.restorePeerIdentities(any()) } returns Result.failure(Exception("Test failure"))
+            coEvery { serviceRnsCore.restoreAnnounceIdentities(any()) } returns Result.success(0)
 
             val peerIdentities = listOf(Pair("hash1", byteArrayOf(1, 2, 3)))
             coEvery { conversationRepository.getPeerIdentitiesBatch(any(), any()) } returns peerIdentities
@@ -628,7 +634,8 @@ class InterfaceConfigManagerTest {
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
                     context = context,
-                    reticulumProtocol = serviceProtocol,
+                    rnsCore = serviceRnsCore,
+                    rnsTransportAdmin = serviceRnsTransportAdmin,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
                     identityKeyProvider = identityKeyProvider,
@@ -657,12 +664,12 @@ class InterfaceConfigManagerTest {
     fun `applyInterfaceChanges - continues when restoreAnnounceIdentities fails`() =
         runTest {
             // Given: NativeReticulumProtocol where restoreAnnounceIdentities fails
-            val serviceProtocol = mockk<ReticulumProtocol>()
-            coEvery { serviceProtocol.shutdown() } returns Result.success(Unit)
-            coEvery { serviceProtocol.initialize(any()) } returns Result.success(Unit)
-            coEvery { serviceProtocol.bindService() } just Runs
-            coEvery { serviceProtocol.restoreAnnounceIdentities(any()) } returns Result.failure(Exception("Test failure"))
-            coEvery { serviceProtocol.restorePeerIdentities(any()) } returns Result.success(0)
+            val serviceRnsCore = mockk<RnsCore>()
+            val serviceRnsTransportAdmin = mockk<RnsTransportAdmin>(relaxed = true)
+            coEvery { serviceRnsCore.shutdown() } returns Result.success(Unit)
+            coEvery { serviceRnsCore.initialize(any()) } returns Result.success(Unit)
+            coEvery { serviceRnsCore.restoreAnnounceIdentities(any()) } returns Result.failure(Exception("Test failure"))
+            coEvery { serviceRnsCore.restorePeerIdentities(any()) } returns Result.success(0)
 
             val announces =
                 listOf(
@@ -685,7 +692,8 @@ class InterfaceConfigManagerTest {
             val managerWithServiceProtocol =
                 InterfaceConfigManager(
                     context = context,
-                    reticulumProtocol = serviceProtocol,
+                    rnsCore = serviceRnsCore,
+                    rnsTransportAdmin = serviceRnsTransportAdmin,
                     interfaceRepository = interfaceRepository,
                     identityRepository = identityRepository,
                     identityKeyProvider = identityKeyProvider,

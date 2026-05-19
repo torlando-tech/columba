@@ -19,6 +19,7 @@ import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.TelemeterCodec
 import network.columba.app.rns.api.util.hexToBytes
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -358,37 +359,38 @@ class PythonEventBridge {
         val streamArr = fields.optJSONArray(FIELD_TELEMETRY_STREAM_KEY) ?: return
         for (i in 0 until streamArr.length()) {
             val entry = streamArr.optJSONArray(i) ?: continue
-            if (entry.length() < 3) continue
-            // [0] source_hash (hex-encoded bytes from _jsonable)
-            val entrySourceHex = entry.optString(0, "").takeIf { it.isNotBlank() } ?: continue
-            // [1] timestamp seconds (Telemeter convention is seconds; we
-            //     multiply to ms for the LocationTelemetry.ts contract)
-            val entryTsSeconds = entry.optLong(1, 0L)
-            // [2] packed Telemeter bytes (hex)
-            val packedHex = entry.optString(2, "").takeIf { it.isNotBlank() } ?: continue
-            val packedBytes = packedHex.hexToBytes() ?: continue
-            val decoded = TelemeterCodec.unpackLocationTelemetry(packedBytes) ?: continue
-            // [3] appearance (optional; null or [name, fg_hex, bg_hex])
-            val appearance =
-                entry.opt(3)?.let { raw ->
-                    when (raw) {
-                        JSONObject.NULL -> null
-                        is org.json.JSONArray -> {
-                            val parts = (0 until raw.length()).map { raw.opt(it) }
-                            AppDataParser.parseIconAppearance(parts)
-                        }
-                        else -> null
-                    }
-                }
-            _locationTelemetry.tryEmit(
-                decoded.copy(
-                    ts = if (entryTsSeconds > 0) entryTsSeconds * 1000L else decoded.ts,
-                    sourceHash = entrySourceHex.lowercase(),
-                    appearance = appearance,
-                ),
-            )
+            parseTelemetryStreamEntry(entry)?.let { _locationTelemetry.tryEmit(it) }
         }
     }
+
+    // Entry layout from event_bridge.py's collector relay:
+    //   [0] source_hash (hex-encoded bytes from _jsonable)
+    //   [1] timestamp in seconds (Telemeter convention is seconds; we multiply
+    //       to ms for the LocationTelemetry.ts contract)
+    //   [2] packed Telemeter bytes (hex)
+    //   [3] appearance (optional; null or [name, fg_hex, bg_hex])
+    private fun parseTelemetryStreamEntry(entry: JSONArray): LocationTelemetry? {
+        if (entry.length() < 3) return null
+        val entrySourceHex = entry.optString(0, "").takeIf { it.isNotBlank() } ?: return null
+        val packedBytes =
+            entry.optString(2, "").takeIf { it.isNotBlank() }?.hexToBytes()
+        val decoded = packedBytes?.let { TelemeterCodec.unpackLocationTelemetry(it) }
+        return decoded?.copy(
+            ts = entry.optLong(1, 0L).takeIf { it > 0 }?.let { it * 1000L } ?: decoded.ts,
+            sourceHash = entrySourceHex.lowercase(),
+            appearance = parseTelemetryStreamAppearance(entry.opt(3)),
+        )
+    }
+
+    private fun parseTelemetryStreamAppearance(raw: Any?): IconAppearance? =
+        when (raw) {
+            null, JSONObject.NULL -> null
+            is JSONArray -> {
+                val parts = (0 until raw.length()).map { raw.opt(it) }
+                AppDataParser.parseIconAppearance(parts)
+            }
+            else -> null
+        }
 
     /**
      * Reaction-channel routing — `FIELD_REACTION` (0x10) is a

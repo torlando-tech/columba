@@ -62,32 +62,37 @@ enum class InterfaceType(
          * Returns [UNKNOWN] for null, blank, `"None"`, or anything else.
          */
         fun fromName(rawName: String?): InterfaceType {
-            if (rawName.isNullOrBlank() || rawName == "None") return UNKNOWN
-
+            val raw = rawName?.takeUnless { it.isBlank() || it == "None" } ?: return UNKNOWN
             // Exact-match legacy storage values first (cheap, deterministic)
             // so the parser stays correct against pre-rename DB rows.
-            when (rawName) {
-                "AUTO_INTERFACE", "AUTO" -> return AUTO
-                "TCP_CLIENT" -> return TCP_CLIENT
-                "TCP_SERVER" -> return TCP_SERVER
-                "ANDROID_BLE", "BLE" -> return BLE
-                "RNODE" -> return RNODE
-                "UNKNOWN" -> return UNKNOWN
-            }
+            return EXACT_STORAGE_NAMES[raw] ?: classifyByPattern(raw.lowercase())
+        }
 
-            val name = rawName.lowercase()
-            return when {
-                // Order matters — "tcpserver" must be checked before
-                // the looser "tcp*" patterns. "rnode" must be checked
-                // before BLE-keyword fallback because the BLE-attached
-                // RNode driver string is `ColumbaRNodeInterface` which
-                // contains neither "BLE" nor "Bluetooth".
+        // Exact-match storage names. Kept as a Map so the classification path
+        // stays a single Map lookup before falling through to substring matching.
+        private val EXACT_STORAGE_NAMES =
+            mapOf(
+                "AUTO_INTERFACE" to AUTO,
+                "AUTO" to AUTO,
+                "TCP_CLIENT" to TCP_CLIENT,
+                "TCP_SERVER" to TCP_SERVER,
+                "ANDROID_BLE" to BLE,
+                "BLE" to BLE,
+                "RNODE" to RNODE,
+                "UNKNOWN" to UNKNOWN,
+            )
+
+        // Order matters — "tcpserver" must be checked before the looser "tcp*"
+        // patterns. "rnode" must be checked before BLE-keyword fallback because
+        // the BLE-attached RNode driver string is `ColumbaRNodeInterface` which
+        // contains neither "BLE" nor "Bluetooth". KISSInterface is RNode's
+        // serial wire framing; "lora" / "weave" cover legacy and downstream
+        // LoRa interface variants that all bottom out at RNode hardware.
+        private fun classifyByPattern(name: String): InterfaceType =
+            when {
                 name.contains("autointerface") ||
                     name.contains("autointerfacepeer") ||
                     name.contains("auto discovery") -> AUTO
-                // KISSInterface is RNode's serial wire framing; "lora" /
-                // "weave" cover legacy and downstream LoRa interface
-                // variants that all bottom out at RNode hardware.
                 name.contains("rnode") ||
                     name.contains("kiss") ||
                     name.contains("lora") ||
@@ -101,7 +106,6 @@ enum class InterfaceType(
                     name.contains("bluetooth") -> BLE
                 else -> UNKNOWN
             }
-        }
 
         /**
          * Legacy alias: pre-existing call sites used [fromInterfaceName].

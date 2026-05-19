@@ -19,6 +19,7 @@ import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.TelemeterCodec
 import network.columba.app.rns.api.util.hexToBytes
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -44,6 +45,36 @@ import org.json.JSONObject
 class PythonEventBridge {
     private companion object {
         const val TAG = "PythonEventBridge"
+
+        /**
+         * Upstream `LXMF.LXMessage.PROPAGATED` = 0x03. Inlined (rather than
+         * importing LXMF Kotlin bindings) because this bridge only needs the
+         * integer for the delivery-status branch — distinguishing "stored on
+         * the relay" from "ack'd by recipient". Matches the matching
+         * `_LXMF_METHOD_PROPAGATED` constant in `event_bridge.py`.
+         */
+        const val LXMF_METHOD_OPPORTUNISTIC = 0x01
+        const val LXMF_METHOD_DIRECT = 0x02
+        const val LXMF_METHOD_PROPAGATED = 0x03
+        const val LXMF_METHOD_PAPER = 0x04
+
+        /**
+         * Map an upstream `LXMessage.method` int to the lowercase-string
+         * vocabulary the UI + persistence layer already use for outbound
+         * messages (see `MessageEntity.deliveryMethod`,
+         * `MessageDetailScreen.getDeliveryMethodInfo`). Keeps inbound and
+         * outbound rendering paths sharing one set of labels — null when the
+         * method is unknown so the UI's null-guarded card disappears
+         * gracefully rather than rendering "Unknown".
+         */
+        fun lxmfMethodName(method: Int?): String? =
+            when (method) {
+                LXMF_METHOD_OPPORTUNISTIC -> "opportunistic"
+                LXMF_METHOD_DIRECT -> "direct"
+                LXMF_METHOD_PROPAGATED -> "propagated"
+                LXMF_METHOD_PAPER -> "paper"
+                else -> null
+            }
 
         // event_bridge.py emits the field map as `json.dumps({str(k): ...})`,
         // so JSON-keyed lookups need the stringified form of every LXMF field
@@ -164,6 +195,7 @@ class PythonEventBridge {
                 stampCost = stampCost,
                 stampCostFlexibility = stampFlex,
                 peeringCost = peeringCost,
+                receivingInterface = payload.dictStr("receiving_interface"),
             )
             _announces.tryEmit(event)
         }.onFailure { Log.e(TAG, "announce translation failed", it) }
@@ -201,6 +233,7 @@ class PythonEventBridge {
                 receivedInterface = payload.dictStr("receiving_interface"),
                 receivedRssi = payload.dictInt("rssi"),
                 receivedSnr = payload.dictDouble("snr")?.toFloat(),
+                deliveryMethod = lxmfMethodName(payload.dictInt("method")),
             )
 
             // Side-channels always route — independent of the chat-emit
@@ -244,6 +277,18 @@ class PythonEventBridge {
     ) {
         runCatching {
             val fields = JSONObject(fieldsJson)
+
+            // FIELD_TELEMETRY_STREAM (0x03) — collector-host response with
+            // a list of `[source_hash_bytes, timestamp, packed_telemetry,
+            // appearance]` entries. Sent by a group-tracker host in
+            // response to a FIELD_COMMANDS telemetry request. Each entry
+            // gets its OWN source hash (the original telemetry author),
+            // NOT the LXMessage sender (which is the collector relaying
+            // for everyone). Re-emit each entry as a separate
+            // LocationTelemetry so the UI's per-peer marker logic stays
+            // simple — one entry, one peer pin.
+            handleTelemetryStream(fields)
+
             val telemetryHex = fields.optString(FIELD_TELEMETRY_KEY, "")
             if (telemetryHex.isBlank()) return@runCatching
             val telemetryBytes = telemetryHex.hexToBytes() ?: return@runCatching
@@ -288,6 +333,64 @@ class PythonEventBridge {
             )
         }.onFailure { Log.w(TAG, "location telemetry assembly failed", it) }
     }
+
+    /**
+     * Unpack a FIELD_TELEMETRY_STREAM payload into individual
+     * [LocationTelemetry] emissions, one per entry. The stream wire
+     * format (defined by Sideband, re-used by Columba) is:
+     *
+     *   [
+     *     [source_hash: bytes, timestamp: int, packed_telemetry: bytes,
+     *      appearance: [icon_name: str, fg: bytes, bg: bytes] | null],
+     *     ...
+     *   ]
+     *
+     * `event_bridge.py:_jsonable` hex-encodes the bytes fields before
+     * passing through JSON, so this reads everything as JSON strings /
+     * arrays and decodes the hex back out per-entry.
+     *
+     * Per-entry source_hash is what the map / DB key on, NOT the
+     * LXMessage sender (which is the collector relaying everyone's
+     * positions). Without this de-aliasing, every received stream entry
+     * would overwrite the collector's pin instead of populating each
+     * group member's.
+     */
+    private fun handleTelemetryStream(fields: JSONObject) {
+        val streamArr = fields.optJSONArray(FIELD_TELEMETRY_STREAM_KEY) ?: return
+        for (i in 0 until streamArr.length()) {
+            val entry = streamArr.optJSONArray(i) ?: continue
+            parseTelemetryStreamEntry(entry)?.let { _locationTelemetry.tryEmit(it) }
+        }
+    }
+
+    // Entry layout from event_bridge.py's collector relay:
+    //   [0] source_hash (hex-encoded bytes from _jsonable)
+    //   [1] timestamp in seconds (Telemeter convention is seconds; we multiply
+    //       to ms for the LocationTelemetry.ts contract)
+    //   [2] packed Telemeter bytes (hex)
+    //   [3] appearance (optional; null or [name, fg_hex, bg_hex])
+    private fun parseTelemetryStreamEntry(entry: JSONArray): LocationTelemetry? {
+        if (entry.length() < 3) return null
+        val entrySourceHex = entry.optString(0, "").takeIf { it.isNotBlank() } ?: return null
+        val packedBytes =
+            entry.optString(2, "").takeIf { it.isNotBlank() }?.hexToBytes()
+        val decoded = packedBytes?.let { TelemeterCodec.unpackLocationTelemetry(it) }
+        return decoded?.copy(
+            ts = entry.optLong(1, 0L).takeIf { it > 0 }?.let { it * 1000L } ?: decoded.ts,
+            sourceHash = entrySourceHex.lowercase(),
+            appearance = parseTelemetryStreamAppearance(entry.opt(3)),
+        )
+    }
+
+    private fun parseTelemetryStreamAppearance(raw: Any?): IconAppearance? =
+        when (raw) {
+            null, JSONObject.NULL -> null
+            is JSONArray -> {
+                val parts = (0 until raw.length()).map { raw.opt(it) }
+                AppDataParser.parseIconAppearance(parts)
+            }
+            else -> null
+        }
 
     /**
      * Reaction-channel routing — `FIELD_REACTION` (0x10) is a
@@ -341,12 +444,25 @@ class PythonEventBridge {
 
     private fun handleLxmfDelivered(payload: PyObject) {
         runCatching {
-            // Mirrors NativeMessageSender — "delivered" is the same status
-            // string the kotlin backend emits on a delivery proof.
+            // Mirrors `NativeMessageSender.installDeliveryCallbacks`: same
+            // upstream-LXMF callback fires for both PROPAGATED (success ==
+            // "stored on the relay node") and DIRECT/OPPORTUNISTIC (success
+            // == "ack from recipient"). The split is by `method`, not state.
+            // Without this distinction the UI would render ✓✓ ("delivered")
+            // for every PROPAGATED send the moment it lands on the relay,
+            // misrepresenting the actual delivery promise.
+            val method = payload.dictInt("method") ?: -1
+            val desired = payload.dictInt("desired_method") ?: -1
+            val status =
+                if (method == LXMF_METHOD_PROPAGATED || desired == LXMF_METHOD_PROPAGATED) {
+                    "propagated"
+                } else {
+                    "delivered"
+                }
             _deliveryStatus.tryEmit(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "delivered",
+                    status = status,
                     timestamp = System.currentTimeMillis(),
                 ),
             )

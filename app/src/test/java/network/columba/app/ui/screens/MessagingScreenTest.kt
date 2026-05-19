@@ -106,6 +106,8 @@ class MessagingScreenTest {
         every { mockViewModel.draftText } returns MutableStateFlow(null)
         // Shared image error mock (share pictures feature)
         every { mockViewModel.sharedImageError } returns MutableSharedFlow()
+        // Location-sharing refusal message (master-gate OFF Toast)
+        every { mockViewModel.locationSharingMessage } returns MutableSharedFlow()
         // Recent photos mock (share pictures feature)
         every { mockViewModel.recentPhotos } returns MutableStateFlow(emptyList())
         // Message font scale mock (text size dialog)

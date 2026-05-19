@@ -116,4 +116,8 @@ internal class BoundRnsTelephony(
     override suspend fun setPttActiveLocally(active: Boolean) {
         awaitBound().telephony.setPttActiveLocally(active)
     }
+
+    override suspend fun setIncomingEnabled(enabled: Boolean) {
+        awaitBound().telephony.setIncomingEnabled(enabled)
+    }
 }

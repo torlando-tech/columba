@@ -538,6 +538,16 @@ fun MessagingScreen(
         }
     }
 
+    // Observe location-sharing refusals (master-gate OFF) and show Toast
+    // pointing the user back to Settings. The actual `startSharing` call
+    // was already refused inside LocationSharingManager — this is purely
+    // user feedback so the tap doesn't feel silently dropped.
+    LaunchedEffect(Unit) {
+        viewModel.locationSharingMessage.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
     // Compose-level clock for refreshing relative timestamps ("Just now" → "5 min ago").
     // Reading this state in the item composable triggers recomposition of visible items only —
     // unlike the old _messagesRefreshTrigger / viewModel.refreshTimestamps() approach, this

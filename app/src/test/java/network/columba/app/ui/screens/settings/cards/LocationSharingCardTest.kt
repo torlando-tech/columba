@@ -321,7 +321,7 @@ class LocationSharingCardTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Share your real-time location with contacts.", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Allow this app to share your location.", substring = true).assertIsDisplayed()
     }
 
     @Test

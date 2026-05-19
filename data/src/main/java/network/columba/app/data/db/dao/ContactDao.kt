@@ -117,6 +117,37 @@ interface ContactDao {
     ): Boolean
 
     /**
+     * Check if a contact exists for ANY destination owned by the peer
+     * whose RNS identity hash matches [callerIdentityHash], scoped to the
+     * given local-owner [ownerIdentityHash].
+     *
+     * Same peer can have multiple announce rows — typically one
+     * `lxmf.delivery` destination and one `lxst.telephony` destination
+     * — sharing a single `computedIdentityHash`. Contact-add flows
+     * (`addContactFromConversation`, etc.) only store the LXMF
+     * destination, but inbound LXST calls identify by the same RNS
+     * identity. A "do I know this peer?" check must therefore consider
+     * any destination cross-linked under that identity hash, not just
+     * the first row that happens to come back.
+     *
+     * Used by `CallsFromContactsGate.shouldSilentlyDrop` (`:rns-host`).
+     */
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM contacts c
+            INNER JOIN announces a ON a.destinationHash = c.destinationHash
+            WHERE a.computedIdentityHash = :callerIdentityHash
+              AND c.identityHash = :ownerIdentityHash
+        )
+        """,
+    )
+    suspend fun contactExistsByIdentityHash(
+        callerIdentityHash: String,
+        ownerIdentityHash: String,
+    ): Boolean
+
+    /**
      * Get contact existence as Flow (for observing star button state)
      */
     @Query(

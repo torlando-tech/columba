@@ -134,6 +134,8 @@ class SettingsRepository
 
             // Privacy preferences
             val BLOCK_UNKNOWN_SENDERS = booleanPreferencesKey("block_unknown_senders")
+            val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
+            val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
 
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
@@ -1692,6 +1694,8 @@ class SettingsRepository
             // Cross-process SharedPreferences keys (for settings read by the service)
             const val CROSS_PROCESS_PREFS_NAME = "cross_process_settings"
             const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
+            const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
+            const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
 
             /** Default telemetry send interval: 5 minutes */
             const val DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS = 300
@@ -1887,6 +1891,94 @@ class SettingsRepository
                 .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
                 .edit()
                 .putBoolean(KEY_BLOCK_UNKNOWN_SENDERS, enabled)
+                .apply()
+        }
+
+        /**
+         * Flow of the calls-from-contacts-only setting.
+         *
+         * When enabled, inbound LXST link requests whose source identity is not in the
+         * user's contacts list are silently dropped after identification (no STATUS_RINGING
+         * to the originator, no UI surface on this device).
+         *
+         * Defaults to false (allow calls from anyone — preserves existing behaviour).
+         */
+        val allowCallsFromContactsOnlyFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_CALLS_FROM_CONTACTS_ONLY] ?: false
+                }.distinctUntilChanged()
+
+        /** Get the calls-from-contacts-only setting (non-flow). */
+        suspend fun getAllowCallsFromContactsOnly(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_CALLS_FROM_CONTACTS_ONLY] ?: false
+                }.first()
+
+        /**
+         * Save the calls-from-contacts-only setting.
+         *
+         * Dual-writes DataStore (UI-side flow) + MODE_MULTI_PROCESS SharedPreferences
+         * (service-side reads each inbound link). No runtime signal is needed because the
+         * `:reticulum` call manager reads the SharedPreferences value on every
+         * `onCallerIdentified` — same pattern as [saveBlockUnknownSenders].
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun saveAllowCallsFromContactsOnly(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ALLOW_CALLS_FROM_CONTACTS_ONLY] = enabled
+            }
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY, enabled)
+                .apply()
+        }
+
+        /**
+         * Flow of the master "Allow voice calls" setting.
+         *
+         * When false, the `lxst.telephony` Destination is deregistered from the network
+         * (peers cannot reach it; new link requests fail at Transport with no application
+         * code running on this side). Outbound calls remain functional regardless — only
+         * the inbound destination is affected.
+         *
+         * Defaults to true (incoming voice calls accepted — preserves existing behaviour).
+         */
+        val allowVoiceCallsFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_VOICE_CALLS] ?: true
+                }.distinctUntilChanged()
+
+        /** Get the master allow-voice-calls setting (non-flow). */
+        suspend fun getAllowVoiceCalls(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.ALLOW_VOICE_CALLS] ?: true
+                }.first()
+
+        /**
+         * Save the master allow-voice-calls setting.
+         *
+         * Dual-writes DataStore + MODE_MULTI_PROCESS SharedPreferences. The
+         * SharedPreferences value is what `:reticulum` reads at cold-start (post
+         * START_STICKY restart) to apply the persisted state before the first announce.
+         * Runtime delivery to the live `:reticulum` process happens via the AIDL
+         * `RnsTelephony.setIncomingEnabled(boolean)` call from the ViewModel — not from
+         * here — because `SharedPreferences.OnSharedPreferenceChangeListener` does not
+         * fire across processes (a v0.10.x port lesson).
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun saveAllowVoiceCalls(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.ALLOW_VOICE_CALLS] = enabled
+            }
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_ALLOW_VOICE_CALLS, enabled)
                 .apply()
         }
 

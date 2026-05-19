@@ -36,10 +36,12 @@ class PrivacyCardTest {
     // ========== Callback Tracking Variables ==========
 
     private var blockUnknownSendersChanged: Boolean? = null
+    private var allowCallsFromContactsOnlyChanged: Boolean? = null
 
     @Before
     fun resetCallbackTrackers() {
         blockUnknownSendersChanged = null
+        allowCallsFromContactsOnlyChanged = null
     }
 
     // ========== Setup Helper ==========
@@ -47,6 +49,7 @@ class PrivacyCardTest {
     private fun setUpCard(
         isExpanded: Boolean = true,
         blockUnknownSenders: Boolean = false,
+        allowCallsFromContactsOnly: Boolean = false,
     ) {
         composeTestRule.setContent {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -55,6 +58,8 @@ class PrivacyCardTest {
                     onExpandedChange = {},
                     blockUnknownSenders = blockUnknownSenders,
                     onBlockUnknownSendersChange = { blockUnknownSendersChanged = it },
+                    allowCallsFromContactsOnly = allowCallsFromContactsOnly,
+                    onAllowCallsFromContactsOnlyChange = { allowCallsFromContactsOnlyChanged = it },
                 )
             }
         }
@@ -118,6 +123,35 @@ class PrivacyCardTest {
 
         composeTestRule.onNodeWithText(
             "Anyone can send you messages, including unknown senders.",
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun privacyCard_displaysMessagesFromContactsOnly_rowLabel() {
+        // The block-unknown-senders toggle was moved out of the card header into
+        // the body so it's equal-billed with the calls toggle. Verify the row
+        // label renders alongside the existing description text.
+        setUpCard(isExpanded = true)
+
+        composeTestRule.onNodeWithText("Messages from contacts only").assertIsDisplayed()
+    }
+
+    @Test
+    fun privacyCard_displaysCallsFromContactsOnly_rowLabelAndOffDescription() {
+        setUpCard(isExpanded = true, allowCallsFromContactsOnly = false)
+
+        composeTestRule.onNodeWithText("Calls from contacts only").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Anyone can call you, including unknown callers.",
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun privacyCard_displaysCallsFromContactsOnly_onDescription() {
+        setUpCard(isExpanded = true, allowCallsFromContactsOnly = true)
+
+        composeTestRule.onNodeWithText(
+            "Only contacts can call you. Other callers' link attempts are silently dropped.",
         ).assertIsDisplayed()
     }
 }

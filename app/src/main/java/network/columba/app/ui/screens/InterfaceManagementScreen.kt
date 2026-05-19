@@ -597,7 +597,7 @@ fun InterfaceCard(
             // interface-type → icon mapping shared with announce cards
             // (see PeerCard.interfaceTypeIconData) so there's one source of truth.
             val typeLabel = getInterfaceTypeLabel(interfaceEntity.type)
-            val iconData = interfaceTypeIconData(InterfaceType.fromInterfaceName(interfaceEntity.type))
+            val iconData = interfaceTypeIconData(InterfaceType.fromName(interfaceEntity.type))
             Icon(
                 imageVector = iconData?.imageVector ?: Icons.Default.SettingsInputAntenna,
                 contentDescription = "$typeLabel interface",

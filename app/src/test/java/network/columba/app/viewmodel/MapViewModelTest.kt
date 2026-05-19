@@ -16,6 +16,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -105,6 +106,7 @@ class MapViewModelTest {
         every { conversationDao.getAllPeerNameLookups() } returns flowOf(emptyList())
         every { locationSharingManager.isSharing } returns MutableStateFlow(false)
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+        every { locationSharingManager.sharingEvents } returns MutableSharedFlow()
         every { locationSharingManager.startSharing(any(), any(), any()) } just Runs
         every { locationSharingManager.stopSharing(any()) } just Runs
         every { settingsRepository.hasDismissedLocationPermissionSheetFlow } returns flowOf(false)

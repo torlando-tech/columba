@@ -3,6 +3,12 @@ package network.columba.app.rns.backend.py
 import android.util.Log
 import com.chaquo.python.PyObject
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.float
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelemetry
@@ -124,14 +130,15 @@ class PythonRnsTelemetry(
 
     override suspend fun setTelemetryCollectorMode(enabled: Boolean): Result<Unit> =
         pyResult {
-            // Honest minimal impl: track the mode flag backend-side so a restart
-            // re-applies it. Wiring the upstream LXMF FIELD_TELEMETRY_STREAM
-            // responder (the LXMRouter delivery callback that inspects inbound
-            // FIELD_COMMANDS and replies with the stored stream) is on-device
-            // follow-up — it needs the upstream responder path verified live.
-            // TODO(on-device): full collector-host wiring against upstream LXMF.
+            // Push state into event_bridge — the actual LXMF FIELD_COMMANDS
+            // responder + collected-telemetry store live there (Python-side
+            // because the response path needs `RNS.Identity.recall` +
+            // `RNS.Destination` + `router.handle_outbound`, all native
+            // Python objects). Kotlin retains a mirror flag for the
+            // `storeOwnTelemetry` re-sync check on send paths.
             collectorHostModeEnabled = enabled
-            Log.i(TAG, "telemetry collector host mode -> $enabled (responder wiring is on-device follow-up)")
+            runtime.eventBridge.callAttr("set_collector_enabled", enabled)
+            Log.i(TAG, "telemetry collector host mode -> $enabled")
         }
 
     override suspend fun storeOwnTelemetry(
@@ -139,27 +146,56 @@ class PythonRnsTelemetry(
         iconAppearance: IconAppearance?,
     ): Result<Unit> =
         pyResult {
-            // Honest minimal impl: keep the host's own latest telemetry so it can
-            // be folded into FIELD_TELEMETRY_STREAM responses once the responder
-            // is wired. Keyed by the local delivery identity hash.
-            // TODO(on-device): full collector-host wiring against upstream LXMF.
+            // Pack the JSON into a Sideband-compatible FIELD_TELEMETRY
+            // blob via the shared `TelemeterCodec`, then hand it to
+            // `event_bridge.store_own_telemetry` so it lands in the same
+            // `_collected_telemetry` dict the FIELD_COMMANDS responder
+            // serves. Keyed in event_bridge by the local delivery
+            // destination hash — no need to pass the key from here.
+            val parsed = Json.parseToJsonElement(locationJson).jsonObject
+            val telemetry =
+                LocationTelemetry(
+                    lat = parsed["lat"]?.jsonPrimitive?.double ?: 0.0,
+                    lng = parsed["lng"]?.jsonPrimitive?.double ?: 0.0,
+                    acc = parsed["acc"]?.jsonPrimitive?.float ?: 0f,
+                    ts = parsed["ts"]?.jsonPrimitive?.long ?: System.currentTimeMillis(),
+                    altitude = parsed["altitude"]?.jsonPrimitive?.double ?: 0.0,
+                    speed = parsed["speed"]?.jsonPrimitive?.double ?: 0.0,
+                    bearing = parsed["bearing"]?.jsonPrimitive?.double ?: 0.0,
+                )
+            val packedBytes = TelemeterCodec.packLocationTelemetry(telemetry)
+            val tsSeconds = telemetry.ts / 1000L
+            val appearancePy =
+                iconAppearance?.let { it.toPyField() }
+                    ?: runtime.python.getBuiltins().get("None")
+            runtime.eventBridge.callAttr(
+                "store_own_telemetry",
+                packedBytes.toPyBytes(),
+                tsSeconds,
+                appearancePy,
+            )
+            // Keep the local mirror so a debug `ownTelemetry` inspection
+            // still shows what was last stored — the canonical store now
+            // lives Python-side.
             val key = runtime.localIdentity
                 ?.get("hash")
                 ?.toJava(ByteArray::class.java)
                 ?.toHex()
                 ?: "local"
             ownTelemetry[key] = locationJson
-            Log.d(TAG, "stored own telemetry for $key (${locationJson.length} chars)")
+            Log.d(TAG, "stored own telemetry for $key (${packedBytes.size} packed bytes)")
         }
 
     override suspend fun setTelemetryAllowedRequesters(allowedHashes: Set<String>): Result<Unit> =
         pyResult {
-            // Honest minimal impl: maintain the allow-set backend-side so a
-            // restart re-applies it. The responder that actually filters inbound
-            // FIELD_COMMANDS requests against this set is on-device follow-up.
-            // TODO(on-device): full collector-host wiring against upstream LXMF.
+            // Push allow-set into event_bridge so the responder's
+            // permission check (run on the LXMRouter delivery thread) sees
+            // it without a JNI hop per request. Kotlin retains a mirror
+            // for state inspection.
             allowedRequesters.clear()
             allowedRequesters.addAll(allowedHashes)
+            val pySet = runtime.python.getBuiltins().callAttr("set", allowedHashes.toTypedArray())
+            runtime.eventBridge.callAttr("set_collector_allowed_requesters", pySet)
             Log.i(TAG, "telemetry allowed-requesters set updated: ${allowedRequesters.size} entries")
         }
 

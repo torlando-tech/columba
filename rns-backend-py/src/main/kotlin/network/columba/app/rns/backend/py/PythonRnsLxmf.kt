@@ -446,17 +446,19 @@ class PythonRnsLxmf(
         pyResult {
             val router = runtime.lxmRouter
                 ?: throw RnsException(RnsError.BackendNotReady)
-            // Sideband's `request_lxmf_sync` idle guard: only start a fresh
-            // sync when the router is IDLE or a previous sync has reached
-            // COMPLETE. Re-firing mid-`PR_LINK_ESTABLISHING` / `PR_RECEIVING`
-            // would thrash the outbound link.
-            val pre = readPropagationState(router)
-            val isInTransit = pre.state in
-                PropagationState.STATE_PATH_REQUESTED until PropagationState.STATE_COMPLETE
-            if (isInTransit) {
-                Log.i(TAG, "Propagation sync already in flight (state=${pre.stateName}); not re-triggering")
-                return@pyResult pre.also { _propagationStateFlow.tryEmit(it) }
-            }
+            // No external idle-guard. Upstream `LXMRouter.request_messages_from_propagation_node`
+            // already handles being called while a previous request is in
+            // flight — it re-uses the existing outbound link if alive, or
+            // tears down + rebuilds if not. Matches `release/v0.10.x`'s
+            // `reticulum_wrapper.request_messages_from_propagation_node`
+            // shape, which has shipped without this guard since the
+            // propagation feature went GA. An earlier port of Sideband's
+            // `request_lxmf_sync` idle check was added here and turned out
+            // to be load-bearing in the wrong direction: when upstream's
+            // state machine got stuck at `PR_REQUEST_SENT` (propagation
+            // node unresponsive, link silently lost), the guard permanently
+            // locked out every retry — manual or periodic — until the
+            // process restarted.
 
             // The sync runs as the identity that owns the delivery destination.
             // identityPrivateKey lets a caller sync as a different identity; if

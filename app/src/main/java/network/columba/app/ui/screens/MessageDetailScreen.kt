@@ -192,7 +192,21 @@ fun MessageDetailScreen(
                         )
                     }
                 } else {
-                    // Received message info: hop count and receiving interface
+                    // Received message info: delivery method, hop count, receiving interface.
+
+                    // Delivery method card. Especially important for propagation-fetched
+                    // messages — hop count / interface / signal metrics are all null for
+                    // those, so without this card the detail screen renders empty below
+                    // the two timestamps.
+                    msg.deliveryMethod?.let { method ->
+                        val methodInfo = getDeliveryMethodInfo(method)
+                        MessageInfoCard(
+                            icon = methodInfo.icon,
+                            title = "Delivery Method",
+                            content = methodInfo.text,
+                            subtitle = methodInfo.subtitle,
+                        )
+                    }
 
                     // Hop count card (only if available)
                     msg.receivedHopCount?.let { hops ->

@@ -62,3 +62,33 @@ interface RNodeHostBridge {
      */
     fun rnodeFramebufferData(): ByteArray?
 }
+
+/**
+ * Tiny bridge into `:rns-host`-side privacy state for the LXST inbound-call
+ * path. Mirrors [RNodeHostBridge] in shape — `:rns-backend-kt` cannot
+ * import `:rns-host` (would cycle the Gradle dep graph), so this interface
+ * lives here and the adapter implementing it lives in
+ * `:rns-host/src/kotlinBackend/.../HostBackendModule.kt`, wrapping
+ * `CallsFromContactsGate` + `ServiceSettingsAccessor`.
+ *
+ * Both methods are called from the reticulum-kt callback thread on every
+ * inbound link / caller-identified event. They must be fast + safe to call
+ * synchronously — the gate uses `runBlocking(Dispatchers.IO)` internally,
+ * marked `// THREADING: allowed` per the audit-script convention.
+ */
+interface CallPrivacyBridge {
+    /**
+     * @return `true` → silently tear down the inbound link (no signal back
+     * to the originator, no UI surface on this device). `false` → let the
+     * call ring through. Reads the `allow_calls_from_contacts_only` toggle
+     * on every call so live UI toggles take effect immediately.
+     */
+    fun shouldSilentlyDrop(identityHashHex: String): Boolean
+
+    /**
+     * @return current persisted value of `allow_voice_calls` (default true).
+     * Read at `NativeCallManager.setup()` to apply the master toggle's
+     * last value before the first announce goes out.
+     */
+    fun getAllowVoiceCalls(): Boolean
+}

@@ -25,4 +25,12 @@ data class ReceivedMessage(
     // Signal quality metrics (from RNode/BLE — null for TCP/AutoInterface).
     val receivedRssi: Int? = null,
     val receivedSnr: Float? = null,
+    // LXMF delivery method this message arrived via:
+    //   "opportunistic" — single-packet, no link
+    //   "direct"        — link-based with retries
+    //   "propagated"    — fetched from a propagation node
+    //   null            — pre-feature messages or backend couldn't determine
+    // Mirrors the string vocabulary already used for outbound on
+    // `MessageEntity.deliveryMethod` and `MessageDetailScreen.getDeliveryMethodInfo`.
+    val deliveryMethod: String? = null,
 ) : Parcelable

@@ -8,8 +8,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -129,6 +132,8 @@ data class SettingsState(
     val notificationsEnabled: Boolean = true,
     // Privacy state
     val blockUnknownSenders: Boolean = false,
+    val allowCallsFromContactsOnly: Boolean = false,
+    val allowVoiceCalls: Boolean = true,
     // Incoming message size limit (default 1MB)
     val incomingMessageSizeLimitKb: Int = 1024,
     // Image compression state
@@ -186,6 +191,7 @@ class SettingsViewModel
         private val rnsCore: RnsCore,
         private val rnsLxmf: RnsLxmf,
         private val rnsTransportAdmin: RnsTransportAdmin,
+        private val rnsTelephony: network.columba.app.rns.api.RnsTelephony,
         private val interfaceConfigManager: network.columba.app.service.InterfaceConfigManager,
         private val propagationNodeManager: PropagationNodeManager,
         private val locationSharingManager: network.columba.app.service.LocationSharingManager,
@@ -228,9 +234,6 @@ class SettingsViewModel
          */
         val capabilities: StateFlow<network.columba.app.rns.api.BackendCapabilities> =
             rnsBackend.capabilities
-
-        // Track group telemetry state before toggle-off so we can restore it on toggle-on
-        private var groupTelemetryWasEnabled = false
 
         // Track when we first noticed shared instance disconnected
         private var sharedInstanceDisconnectedTime: Long? = null
@@ -470,6 +473,8 @@ class SettingsViewModel
                             notificationsEnabled = _state.value.notificationsEnabled,
                             // Preserve privacy state from loadPrivacySettings()
                             blockUnknownSenders = _state.value.blockUnknownSenders,
+                            allowCallsFromContactsOnly = _state.value.allowCallsFromContactsOnly,
+                            allowVoiceCalls = _state.value.allowVoiceCalls,
                             // Preserve message size limit from loadLocationSharingSettings()
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
@@ -1520,6 +1525,16 @@ class SettingsViewModel
                     _state.update { it.copy(blockUnknownSenders = enabled) }
                 }
             }
+            viewModelScope.launch {
+                settingsRepository.allowCallsFromContactsOnlyFlow.collect { enabled ->
+                    _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.allowVoiceCallsFlow.collect { enabled ->
+                    _state.update { it.copy(allowVoiceCalls = enabled) }
+                }
+            }
         }
 
         /**
@@ -1531,6 +1546,43 @@ class SettingsViewModel
                 settingsRepository.saveBlockUnknownSenders(enabled)
                 _state.update { it.copy(blockUnknownSenders = enabled) }
                 Log.d(TAG, "Block unknown senders ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the calls-from-contacts-only setting.
+         * When enabled, only contacts can establish incoming voice calls; non-contact
+         * callers' link attempts are silently dropped in `:reticulum` after caller
+         * identification. No runtime AIDL signal needed — the gate reads the cross-process
+         * SharedPreferences value per-call.
+         */
+        fun setAllowCallsFromContactsOnly(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAllowCallsFromContactsOnly(enabled)
+                _state.update { it.copy(allowCallsFromContactsOnly = enabled) }
+                Log.d(TAG, "Calls-from-contacts-only ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the master allow-voice-calls setting.
+         * When disabled, the inbound LXST telephony destination is deregistered in
+         * `:reticulum` and no announces are sent; peers see this device as unreachable
+         * for calls. Outbound calls are unaffected.
+         *
+         * Runtime delivery rides the new `RnsTelephony.setIncomingEnabled` AIDL call —
+         * the SharedPreferences write done by `saveAllowVoiceCalls` exists only for the
+         * cold-start path (`:reticulum` reads it after restart). If the AIDL call fails
+         * the cold-start path eventually applies the desired state, so failures are logged
+         * rather than surfaced.
+         */
+        fun setAllowVoiceCalls(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveAllowVoiceCalls(enabled)
+                _state.update { it.copy(allowVoiceCalls = enabled) }
+                runCatching { rnsTelephony.setIncomingEnabled(enabled) }
+                    .onFailure { Log.w(TAG, "setIncomingEnabled($enabled) AIDL call failed", it) }
+                Log.d(TAG, "Allow voice calls ${if (enabled) "enabled" else "disabled"}")
             }
         }
 
@@ -1579,15 +1631,18 @@ class SettingsViewModel
          * Called unconditionally to ensure settings persist across navigation.
          */
         private fun loadLocationSharingSettings() {
-            // Location sharing toggle reflects EITHER individual sharing OR group telemetry send
+            // Master gate: this toggle is a hard kill-switch for ANY outbound
+            // location data — per-conversation sharing AND group-telemetry
+            // sends. The toggle's display state mirrors the persisted user
+            // preference (`locationSharingEnabledFlow`) directly, NOT a
+            // computed status of "is something currently sharing". Per-call
+            // sharing actions consult this flag at start-time and refuse when
+            // it's off (see LocationSharingManager.startSharing). Active
+            // sessions are surfaced separately via the "Currently sharing
+            // with" section under the toggle.
             viewModelScope.launch {
-                combine(
-                    settingsRepository.locationSharingEnabledFlow,
-                    telemetryCollectorManager.isEnabled,
-                ) { individualEnabled, groupSendEnabled ->
-                    individualEnabled || groupSendEnabled
-                }.collect { combined ->
-                    _state.update { it.copy(locationSharingEnabled = combined) }
+                settingsRepository.locationSharingEnabledFlow.collect { enabled ->
+                    _state.update { it.copy(locationSharingEnabled = enabled) }
                 }
             }
             viewModelScope.launch {
@@ -1636,14 +1691,14 @@ class SettingsViewModel
         fun setLocationSharingEnabled(enabled: Boolean) {
             viewModelScope.launch {
                 if (!enabled) {
-                    // Save group telemetry state before disabling so we can restore on re-enable
-                    groupTelemetryWasEnabled = telemetryCollectorManager.isEnabled.value
+                    // Hard kill-switch: stop everything currently sharing.
+                    // Per-conversation sessions get cease messages + removed,
+                    // group telemetry sends pause. Re-enabling later does NOT
+                    // auto-resume — under master-gate semantics the toggle is
+                    // a gate, not a status mirror. The user has to explicitly
+                    // re-start any sharing they want.
                     stopAllSharing()
                     telemetryCollectorManager.setEnabled(false)
-                } else if (groupTelemetryWasEnabled) {
-                    // Restore group telemetry if it was enabled before the toggle was turned off
-                    telemetryCollectorManager.setEnabled(true)
-                    groupTelemetryWasEnabled = false
                 }
                 settingsRepository.saveLocationSharingEnabled(enabled)
                 Log.d(TAG, "Location sharing ${if (enabled) "enabled" else "disabled"}")
@@ -1951,7 +2006,24 @@ class SettingsViewModel
                     _state.update { it.copy(isRequestingTelemetry = requesting) }
                 }
             }
+            // Mirror master-gate refusals from TelemetryCollectorManager
+            // into a user-facing message flow. SettingsScreen renders Toast.
+            viewModelScope.launch {
+                telemetryCollectorManager.setEnabledRefused.collect {
+                    _telemetryCollectorMessage.emit(
+                        "Location sharing is off. Enable it above (master toggle) to share with a group.",
+                    )
+                }
+            }
         }
+
+        // User-facing feedback for telemetry-collector actions blocked by
+        // the master `Settings → Location Sharing` toggle. SettingsScreen
+        // subscribes and renders a Toast. Belt-and-suspenders alongside
+        // the preemptive UI disable in LocationSharingCard's
+        // TelemetryCollectorSection.
+        private val _telemetryCollectorMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val telemetryCollectorMessage: SharedFlow<String> = _telemetryCollectorMessage.asSharedFlow()
 
         /**
          * Set the telemetry collector enabled state.

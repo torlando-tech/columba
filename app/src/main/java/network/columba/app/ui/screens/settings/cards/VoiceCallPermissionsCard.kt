@@ -30,7 +30,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +54,8 @@ import kotlinx.coroutines.delay
 fun VoiceCallPermissionsCard(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    allowVoiceCalls: Boolean,
+    onAllowVoiceCallsChange: (Boolean) -> Unit,
 ) {
     // Not relevant below Android 10 — background activity launch restrictions
     // only became an issue starting with Q
@@ -145,16 +149,37 @@ fun VoiceCallPermissionsCard(
                     )
                 }
 
-                Icon(
-                    imageVector =
-                        if (isExpanded) {
-                            Icons.Default.KeyboardArrowUp
-                        } else {
-                            Icons.Default.KeyboardArrowDown
-                        },
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = contentColor,
-                )
+                // Right-side controls: Switch + chevron. Wrapped in a
+                // nested Row that mirrors CollapsibleSettingsCard's layout
+                // (used by Notifications + Auto Announce + Privacy) so the
+                // toggle visually lines up with theirs — without this the
+                // outer SpaceBetween row distributes space between every
+                // pair and the Switch ends up floating mid-row. The chevron
+                // also goes through an IconButton for matching ~12dp inset
+                // padding, otherwise the bare Icon hugs the card's right
+                // edge and reads as misaligned next to the other cards'
+                // chevrons.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Switch(
+                        checked = allowVoiceCalls,
+                        onCheckedChange = onAllowVoiceCallsChange,
+                    )
+                    IconButton(onClick = { onExpandedChange(!isExpanded) }) {
+                        Icon(
+                            imageVector =
+                                if (isExpanded) {
+                                    Icons.Default.KeyboardArrowUp
+                                } else {
+                                    Icons.Default.KeyboardArrowDown
+                                },
+                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            tint = contentColor,
+                        )
+                    }
+                }
             }
 
             // Expanded content with animation
@@ -166,6 +191,17 @@ fun VoiceCallPermissionsCard(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    if (!allowVoiceCalls) {
+                        // Master toggle is OFF — let the user know inbound is
+                        // disabled before they see (and worry about) the
+                        // permission-status content below.
+                        Text(
+                            text = "Incoming voice calls are currently disabled. Outgoing calls still work.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = contentColor,
+                        )
+                    }
                     if (isCheckingStatus) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else if (allGranted) {

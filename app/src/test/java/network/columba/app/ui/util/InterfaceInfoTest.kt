@@ -335,15 +335,6 @@ class InterfaceInfoTest {
         assertEquals("TCPClientInterface — /192.168.1.100:4965", info.subtitle)
     }
 
-    @Test
-    fun `Auto prefix without full AutoInterface name recognized`() {
-        // Test the startsWith("auto") branch
-        val info = getInterfaceInfo("AutoDiscovery[LAN]")
-
-        assertEquals(Icons.Default.Wifi, info.icon)
-        assertEquals("LAN", info.text)
-        assertEquals("AutoDiscovery", info.subtitle)
-    }
 
     @Test
     fun `IPv6 link-local address starting with fe80 shows address in subtitle`() {

@@ -320,11 +320,64 @@ class PythonRnsCore(
 
     override suspend fun getNextHopInterfaceName(destinationHash: ByteArray): String? =
         pyCall {
-            // RNS.Transport.next_hop_interface returns the Interface object; .name
-            // is its formatted name (e.g. "TCPInterface[Server/1.2.3.4:4242]").
-            transport().callAttr("next_hop_interface", destinationHash.toPyBytes())
-                ?.get("name")?.toString()
+            val transport = transport()
+            val pyHash = destinationHash.toPyBytes()
+
+            // Strategy 1 — Standard `RNS.Transport.next_hop_interface` lookup.
+            // Returns the interface the destination's path is cached on.
+            // For AutoInterface, the path-table stores the per-peer
+            // `AutoInterfacePeer` (a subclass whose `.name` attribute is
+            // empty — its `__str__` carries the useful `wlan0/fe80::…`
+            // info instead). For everything else `.name` is populated.
+            val rawIface = transport.callAttr("next_hop_interface", pyHash)
+            val name1 = rawIface?.let { pyInterfaceName(it) }
+            if (name1 != null) return@pyCall name1
+
+            // Strategy 2 — Fall back to `LXMRouter.outbound_propagation_link`
+            // when querying the configured propagation node. The link is
+            // long-lived and reused across syncs; its `attached_interface`
+            // is the interface the propagation packets physically travel
+            // over even when `path_table[prop_node_hash]` happens to be
+            // empty.
+            val router = runtime.lxmRouter ?: return@pyCall null
+            val propNode = runCatching {
+                router.callAttr("get_outbound_propagation_node")
+                    ?.toJava(ByteArray::class.java)
+            }.getOrNull()
+            if (propNode == null || !propNode.contentEquals(destinationHash)) {
+                return@pyCall null
+            }
+            val propLink = router["outbound_propagation_link"]?.takeIf { it.toString() != "None" }
+                ?: return@pyCall null
+            val attached = propLink["attached_interface"]?.takeIf { it.toString() != "None" }
+                ?: return@pyCall null
+            pyInterfaceName(attached)
         }
+
+    /**
+     * Best-effort interface-name extraction from a Python `Interface`-like
+     * object. Tries `.name` first (set by classes that override it —
+     * `AutoInterface`, `TCPInterface`, `RNodeInterface`, …); falls back to
+     * `__str__()` (always set, includes useful disambiguators like
+     * `wlan0/fe80::…` for `AutoInterfacePeer`); finally to the class name.
+     * Returns null only when the input is null or every accessor yielded
+     * blank / `"None"`.
+     *
+     * Necessary because Reticulum's `AutoInterfacePeer` doesn't set
+     * `self.name` — its `__init__` only sets `self.ifname` + `self.addr`.
+     * Reading `.name` returns the Interface base class's empty default,
+     * so the original one-liner `.get("name")?.toString()` always
+     * produced null for propagation-link traffic on AutoInterface.
+     */
+    private fun pyInterfaceName(iface: com.chaquo.python.PyObject): String? {
+        val nameAttr = iface.get("name")?.toString()?.takeIf { it.isNotBlank() && it != "None" }
+        if (nameAttr != null) return nameAttr
+        val strRepr = iface.toString().takeIf { it.isNotBlank() && it != "None" }
+        if (strRepr != null) return strRepr
+        return iface.callAttr("__class__")?.get("__name__")
+            ?.toString()
+            ?.takeIf { it.isNotBlank() && it != "None" }
+    }
 
     override suspend fun getPathTableHashes(): List<String> =
         pyCall {

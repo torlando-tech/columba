@@ -225,6 +225,13 @@ class MessagingViewModel
         private val _sharedImageError = MutableSharedFlow<String>()
         val sharedImageError: SharedFlow<String> = _sharedImageError.asSharedFlow()
 
+        // User-facing feedback from location-sharing actions. Fires when
+        // `LocationSharingManager` refuses an outbound share (master-gate
+        // off, currently the only Blocked source). MessagingScreen
+        // collects this and shows a Snackbar pointing back to Settings.
+        private val _locationSharingMessage = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val locationSharingMessage: SharedFlow<String> = _locationSharingMessage.asSharedFlow()
+
         // Image quality selection dialog state
         private val _qualitySelectionState = MutableStateFlow<QualitySelectionState?>(null)
         val qualitySelectionState: StateFlow<QualitySelectionState?> = _qualitySelectionState.asStateFlow()
@@ -741,6 +748,23 @@ class MessagingViewModel
                 }
             }
 
+            // Translate LocationSharingManager events into user-visible
+            // messages. `Blocked` is the only one MessagingScreen needs
+            // today (master-gate refused a share); other events
+            // (Started/Stopped/Error/SessionsExpired) are surfaced
+            // elsewhere or don't need explicit UI in this context.
+            viewModelScope.launch {
+                locationSharingManager.sharingEvents.collect { event ->
+                    when (event) {
+                        is network.columba.app.service.SharingEvent.Blocked ->
+                            _locationSharingMessage.emit(
+                                "Location sharing is off. Enable it in Settings → Location Sharing.",
+                            )
+                        else -> Unit
+                    }
+                }
+            }
+
             // NOTE: Message collection has been moved to MessageCollector service
             // which runs at application level to ensure messages are collected
             // even when no conversations are open.
@@ -887,11 +911,13 @@ class MessagingViewModel
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
-                    // Enrich sentInterface on delivery — only on successful delivery,
-                    // where the routing table still reflects the actual send path.
-                    // Other statuses (failed, retrying_propagated) carry too much
-                    // routing ambiguity to produce accurate interface data.
-                    if (update.status == "delivered") {
+                    // Enrich sentInterface on a terminal-success state — the
+                    // routing table still reflects the actual send path. For
+                    // DIRECT/OPPORTUNISTIC this fires on "delivered"; for
+                    // PROPAGATED on "propagated" (the propagation-node-accepted
+                    // analogue). Failed / retrying paths carry too much routing
+                    // ambiguity to produce accurate interface data.
+                    if (update.status == "delivered" || update.status == "propagated") {
                         enrichSentInterfaceOnDelivery(message, update.messageHash)
                     }
 
@@ -905,23 +931,34 @@ class MessagingViewModel
         }
 
         /**
-         * Enrich sentInterface on delivery if it wasn't captured at send time.
-         * Skips propagated messages: they route through the propagation node
-         * (a different hash than conversationHash), so querying conversationHash
-         * would return the wrong interface or null.
+         * Enrich sentInterface on a terminal-success status if it wasn't
+         * captured at send time. For PROPAGATED messages the recipient hash
+         * has no direct next-hop — the message physically went over the
+         * interface reaching the propagation node — so we query the
+         * configured outbound propagation node hash instead. Other delivery
+         * methods query the recipient (conversationHash) as usual.
          */
         private suspend fun enrichSentInterfaceOnDelivery(
             message: network.columba.app.data.db.entity.MessageEntity,
             messageHash: String,
         ) {
-            if (!message.isFromMe || message.sentInterface != null || message.deliveryMethod == "propagated") return
+            if (!message.isFromMe || message.sentInterface != null) return
             try {
-                val destHashBytes =
-                    message.conversationHash
-                        .chunked(2)
-                        .map { it.toInt(16).toByte() }
-                        .toByteArray()
-                val sentInterface = rnsCore.getNextHopInterfaceName(destHashBytes)
+                val lookupHash =
+                    if (message.deliveryMethod == "propagated") {
+                        runCatching { rnsLxmf.getOutboundPropagationNode().getOrNull() }
+                            .getOrNull()
+                            ?.chunked(2)
+                            ?.map { it.toInt(16).toByte() }
+                            ?.toByteArray()
+                            ?: return // no propagation node configured → nothing useful to query
+                    } else {
+                        message.conversationHash
+                            .chunked(2)
+                            .map { it.toInt(16).toByte() }
+                            .toByteArray()
+                    }
+                val sentInterface = rnsCore.getNextHopInterfaceName(lookupHash)
                 if (sentInterface != null) {
                     conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
                 }
@@ -1256,10 +1293,33 @@ class MessagingViewModel
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
 
-            // Query outbound interface immediately after send (best-effort)
+            // Query outbound interface immediately after send (best-effort).
+            // For PROPAGATED sends the recipient hash has no direct next-hop
+            // — the message physically went over whatever interface reaches
+            // the propagation node. Query that hash instead so the detail
+            // screen shows a meaningful "Sent Via" for propagation messages
+            // too. Falls back to the recipient hash for direct/opportunistic.
+            val lookupHashForInterface =
+                if (deliveryMethodString == "propagated") {
+                    val propHash = runCatching { rnsLxmf.getOutboundPropagationNode().getOrNull() }
+                        .getOrNull()
+                    Log.i(TAG, "sendSuccess: propagated path, outboundPropagationNode=$propHash")
+                    propHash
+                        ?.chunked(2)
+                        ?.map { it.toInt(16).toByte() }
+                        ?.toByteArray()
+                        ?: receipt.destinationHash
+                } else {
+                    receipt.destinationHash
+                }
             val sentInterface =
                 try {
-                    rnsCore.getNextHopInterfaceName(receipt.destinationHash)
+                    val r = rnsCore.getNextHopInterfaceName(lookupHashForInterface)
+                    Log.i(
+                        TAG,
+                        "sendSuccess: getNextHopInterfaceName(${lookupHashForInterface.joinToString("") { "%02x".format(it) }.take(16)}) = $r (method=$deliveryMethodString)",
+                    )
+                    r
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to query sent interface: ${e.message}")
                     null

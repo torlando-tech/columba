@@ -279,7 +279,7 @@ class AnnounceStreamViewModelTest {
                     timestamp = 1000L,
                     nodeType = "NODE",
                     receivingInterface = "ble0",
-                    receivingInterfaceType = "ANDROID_BLE",
+                    receivingInterfaceType = "BLE",
                     aspect = any(),
                     stampCost = any(),
                     stampCostFlexibility = any(),

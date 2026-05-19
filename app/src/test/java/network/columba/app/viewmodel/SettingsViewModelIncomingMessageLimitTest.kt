@@ -108,7 +108,10 @@ class SettingsViewModelIncomingMessageLimitTest {
         rnsCore = mockk()
         rnsLxmf = mockk()
         rnsTransportAdmin = mockk()
-        rnsTelephony = mockk(relaxed = true)
+        rnsTelephony = mockk()
+        // setAllowVoiceCalls fires setIncomingEnabled — stubbed as no-op since the test
+        // covers incoming-message-limit logic, not the telephony AIDL round-trip.
+        coEvery { rnsTelephony.setIncomingEnabled(any()) } just Runs
         interfaceConfigManager = mockk()
         propagationNodeManager = mockk()
         locationSharingManager = mockk()

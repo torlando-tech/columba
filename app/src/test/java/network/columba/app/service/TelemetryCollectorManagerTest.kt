@@ -66,6 +66,7 @@ class TelemetryCollectorManagerTest {
     private val requestIntervalFlow = MutableStateFlow(SettingsRepository.DEFAULT_TELEMETRY_REQUEST_INTERVAL_SECONDS)
     private val lastRequestTimeFlow = MutableStateFlow<Long?>(null)
     private val allowedRequestersFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val locationSharingEnabledFlow = MutableStateFlow(true)
 
     @Suppress("NoRelaxedMocks") // Android Context requires relaxed mock
     @Before
@@ -90,6 +91,7 @@ class TelemetryCollectorManagerTest {
         every { mockSettingsRepository.telemetryRequestIntervalSecondsFlow } returns requestIntervalFlow
         every { mockSettingsRepository.lastTelemetryRequestTimeFlow } returns lastRequestTimeFlow
         every { mockSettingsRepository.telemetryAllowedRequestersFlow } returns allowedRequestersFlow
+        every { mockSettingsRepository.locationSharingEnabledFlow } returns locationSharingEnabledFlow
         every { mockRnsCore.networkStatus } returns networkStatusFlow
 
         // Setup save methods

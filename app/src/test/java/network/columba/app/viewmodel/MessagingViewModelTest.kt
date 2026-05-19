@@ -152,6 +152,7 @@ class MessagingViewModelTest {
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+        every { locationSharingManager.sharingEvents } returns MutableSharedFlow()
 
         // Mock default contact repository behavior
         every { contactRepository.hasContactFlow(any()) } returns flowOf(false)
@@ -576,6 +577,7 @@ class MessagingViewModelTest {
 
             val failingLocationSharingManager: LocationSharingManager = mockk()
             every { failingLocationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+            every { failingLocationSharingManager.sharingEvents } returns MutableSharedFlow()
             every { failingLocationSharingManager.startSharing(any(), any(), any()) } just Runs
             every { failingLocationSharingManager.stopSharing(any()) } just Runs
 

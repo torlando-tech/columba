@@ -153,6 +153,7 @@ class MessagingViewModelImageLoadingTest {
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
+        every { locationSharingManager.sharingEvents } returns MutableSharedFlow()
 
         // Mock activeConversationManager
         every { activeConversationManager.setActive(any()) } just Runs

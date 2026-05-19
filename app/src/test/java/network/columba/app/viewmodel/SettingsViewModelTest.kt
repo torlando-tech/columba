@@ -113,7 +113,10 @@ class SettingsViewModelTest {
         rnsCore = mockk()
         rnsLxmf = mockk()
         rnsTransportAdmin = mockk()
-        rnsTelephony = mockk(relaxed = true) // setAllowVoiceCalls fires setIncomingEnabled
+        rnsTelephony = mockk()
+        // setAllowVoiceCalls fires setIncomingEnabled — stubbed as no-op since the test
+        // covers VM-state behavior, not the AIDL round-trip.
+        coEvery { rnsTelephony.setIncomingEnabled(any()) } just Runs
         interfaceConfigManager = mockk()
         propagationNodeManager = mockk()
         locationSharingManager = mockk()

@@ -4,9 +4,12 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.paging.PagingData
 import io.mockk.Runs
 import io.mockk.every
@@ -212,11 +215,15 @@ class AnnounceStreamScreenTest {
             AnnounceStreamScreen(viewModel = mockViewModel)
         }
 
-        composeTestRule.onNodeWithText("Local").assertIsDisplayed()
-        composeTestRule.onNodeWithText("TCP").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Bluetooth").assertIsDisplayed()
-        composeTestRule.onNodeWithText("RNode").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Other").assertIsDisplayed()
+        // Interface chip row is a LazyRow; later chips ("Other") sit past the
+        // default test viewport. Scroll the row to surface each chip before
+        // asserting. `hasScrollAction()` matches both chip rows (aspect + interface)
+        // — index [1] selects the interface row, which is second in the column.
+        val interfaceRow = composeTestRule.onAllNodes(hasScrollAction())[1]
+        listOf("Local", "TCP", "TCP Server", "Bluetooth", "RNode", "Other").forEach { label ->
+            interfaceRow.performScrollToNode(hasText(label))
+            composeTestRule.onNodeWithText(label).assertIsDisplayed()
+        }
     }
 
     @Test

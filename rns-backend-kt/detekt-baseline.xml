@@ -1,0 +1,8 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>FunctionOnlyReturningConstant:NativeRnsBackendImpl.kt$NativeRnsBackendImpl$fun getBleReticulumVersion(): String?</ID>
+    <ID>MatchingDeclarationName:HostBridges.kt$RNodeHostBridge</ID>
+  </CurrentIssues>
+</SmellBaseline>

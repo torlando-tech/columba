@@ -56,7 +56,7 @@ dependencies {
     implementation(libs.paging.runtime)
 
     // Compose runtime (for @Stable annotation on data classes used in Compose UI)
-    implementation("androidx.compose.runtime:runtime:1.11.1")
+    implementation("androidx.compose.runtime:runtime:1.11.2")
 
     // Testing
     testImplementation(libs.junit)

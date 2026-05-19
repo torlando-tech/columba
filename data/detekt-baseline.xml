@@ -3,14 +3,14 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:EnrichedContact.kt$EnrichedContact$override fun equals(other: Any?): Boolean</ID>
-    <ID>LongMethod:DatabaseModule.kt$DatabaseModule.&lt;no name provided&gt;$override fun migrate(database: SupportSQLiteDatabase)</ID>
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( id: Long, name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
     <ID>LongParameterList:CustomThemeRepository.kt$CustomThemeRepository$( name: String, description: String, seedPrimary: Int, seedSecondary: Int, seedTertiary: Int, lightColors: ThemeColorSet, darkColors: ThemeColorSet, baseTheme: String? = null, )</ID>
-    <ID>MaxLineLength:DatabaseModule.kt$DatabaseModule$.</ID>
+    <ID>LoopWithTooManyJumpStatements:ColumbaDatabase.kt$ColumbaDatabase.Companion.&lt;no name provided&gt;$while</ID>
     <ID>SwallowedException:EnrichedContact.kt$EnrichedContact$e: Exception</ID>
     <ID>TooManyFunctions:AnnounceRepository.kt$AnnounceRepository</ID>
     <ID>TooManyFunctions:ContactRepository.kt$ContactRepository</ID>
     <ID>TooManyFunctions:ConversationRepository.kt$ConversationRepository</ID>
+    <ID>TooManyFunctions:MessageDao.kt$MessageDao</ID>
     <ID>UseCheckOrError:ConversationRepository.kt$ConversationRepository$throw IllegalStateException("No active identity found")</ID>
   </CurrentIssues>
 </SmellBaseline>

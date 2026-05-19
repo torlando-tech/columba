@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:RnsConfigFile.kt$RnsConfigFile$private fun renderInterface( sb: StringBuilder, iface: InterfaceConfig, skipAutoInterface: Boolean = false, )</ID>
+    <ID>LongMethod:RnsConfigFile.kt$RnsConfigFile$private fun renderInterface( sb: StringBuilder, iface: InterfaceConfig, skipAutoInterface: Boolean = false, )</ID>
+    <ID>LoopWithTooManyJumpStatements:PythonRnsLxmf.kt$PythonRnsLxmf$while</ID>
+    <ID>SwallowedException:PythonExt.kt$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PythonExt.kt$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PythonRnsNomadnet.kt$PythonRnsNomadnet$e: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>

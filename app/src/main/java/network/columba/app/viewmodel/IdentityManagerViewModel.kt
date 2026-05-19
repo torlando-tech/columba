@@ -169,10 +169,29 @@ class IdentityManagerViewModel
                             _uiState.value = IdentityManagerUiState.Loading("Restarting service...")
 
                             interfaceConfigManager
-                                .applyInterfaceChanges()
-                                .onSuccess {
-                                    Log.d(TAG, "Service restarted with new identity")
-                                    _uiState.value = IdentityManagerUiState.Success("Identity switched successfully")
+                                .applyInterfaceChanges(
+                                    onServiceReady = {
+                                        // Flip the spinner to Success once RNS is
+                                        // up with the new identity (Step 9), not
+                                        // when the full apply (Steps 10-12) finishes.
+                                        // Step 10 batch-restores peer identities,
+                                        // which can take minutes on devices with
+                                        // thousands of stored peers — blocking the
+                                        // identity-switch UI on that bookkeeping
+                                        // makes the spinner look hung even though
+                                        // the user can already act on the new
+                                        // identity. Same fix pattern as the Manage
+                                        // Interfaces Apply button (32e6549f /
+                                        // 8b39a66b).
+                                        Log.d(TAG, "Service restarted with new identity (Step 9 complete)")
+                                        _uiState.value = IdentityManagerUiState.Success("Identity switched successfully")
+                                    },
+                                ).onSuccess {
+                                    // Defense-in-depth: re-set Success in case
+                                    // onServiceReady didn't fire (shouldn't happen
+                                    // on the success path but harmless to idempotently
+                                    // re-assert).
+                                    Log.d(TAG, "Service restart fully complete")
                                 }.onFailure { e ->
                                     Log.e(TAG, "Failed to restart service", e)
                                     _uiState.value =

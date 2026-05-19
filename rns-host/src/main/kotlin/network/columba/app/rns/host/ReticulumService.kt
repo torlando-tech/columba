@@ -189,8 +189,17 @@ class ReticulumService : Service() {
                 }
             },
         )
-        var hasActiveUsbRNode = false
-        KotlinUSBBridge.getInstance(this).addConnectionListener(
+        val usbBridge = KotlinUSBBridge.getInstance(this)
+        // Seed hasActiveUsbRNode from devices already attached when the
+        // service starts. Without this, an RNode plugged in BEFORE the
+        // service starts (typical: user plugs cable, then launches app)
+        // gets no notification on unplug because ACTION_USB_DEVICE_ATTACHED
+        // fired before our BroadcastReceiver was registered, leaving the
+        // flag false and the disconnect path guarded out. Verified on Fold
+        // tonight: "USB device disconnected unexpectedly: 1002" with
+        // connectedDeviceId=null and no preceding onUsbConnected.
+        var hasActiveUsbRNode = usbBridge.getConnectedUsbDevices().isNotEmpty()
+        usbBridge.addConnectionListener(
             object : UsbConnectionListener {
                 override fun onUsbConnected(deviceId: Int) {
                     // Supported-VID USB device attached. Mark that we have a
@@ -202,7 +211,9 @@ class ReticulumService : Service() {
 
                 override fun onUsbDisconnected(deviceId: Int) {
                     // Only post the notification if we previously saw a
-                    // supported-VID attach in this process lifetime; avoids
+                    // supported-VID attach in this process lifetime (either
+                    // via onUsbConnected mid-flight, or via the
+                    // getConnectedUsbDevices() seed at startup); avoids
                     // spurious notifications for non-RNode USB devices.
                     if (hasActiveUsbRNode) {
                         hasActiveUsbRNode = false

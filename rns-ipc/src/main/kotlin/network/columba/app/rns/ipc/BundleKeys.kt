@@ -13,7 +13,17 @@ internal object BundleKeys {
     const val IDENTITY = "identity"
     const val KEY_DATA = "key_data"
     const val DISPLAY_NAME = "display_name"
-    const val IDENTITY_HASH_HEX = "identity_hash_hex"
+    // Identity create / import result keys. Names must match what
+    // IdentityManagerViewModel reads from the reconstructed Map (see
+    // IdentityManagerViewModel.kt:96-103) — previously the bundle was
+    // using "identity_hash_hex" while the VM was reading "identity_hash",
+    // making every create/import path silently fail with the error only
+    // visible in the in-dialog IdentityManagerUiState. Single source of
+    // truth: kotlin backend's NativeRnsBackendImpl.buildIdentityResult.
+    const val IDENTITY_HASH = "identity_hash"
+    const val DESTINATION_HASH = "destination_hash"
+    const val FILE_PATH = "file_path"
+    const val PUBLIC_KEY = "public_key"
     const val DESTINATION = "destination"
     const val RECEIPT = "receipt"
     const val LINK = "link"

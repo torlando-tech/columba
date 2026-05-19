@@ -240,8 +240,19 @@ internal class ServerRnsCore(
 
 private fun Map<String, Any>.toIdentityKeyBundle(): Bundle {
     val bundle = Bundle()
+    // Marshal the full create/import result map across AIDL. The set here
+    // mirrors what NativeRnsBackendImpl.buildIdentityResult + PythonRnsCore.
+    // buildIdentityResult produce, and is the same set IdentityManagerViewModel
+    // reads on the other side. Pre-fix, only KEY_DATA / DISPLAY_NAME /
+    // (the wrongly-named) IDENTITY_HASH_HEX were carried — VM threw
+    // "No identity_hash in result" because (a) the bundle didn't carry
+    // identity_hash at all, (b) it didn't carry destination_hash or
+    // file_path either.
     (this[BundleKeys.KEY_DATA] as? ByteArray)?.let { bundle.putByteArray(BundleKeys.KEY_DATA, it) }
     (this[BundleKeys.DISPLAY_NAME] as? String)?.let { bundle.putString(BundleKeys.DISPLAY_NAME, it) }
-    (this[BundleKeys.IDENTITY_HASH_HEX] as? String)?.let { bundle.putString(BundleKeys.IDENTITY_HASH_HEX, it) }
+    (this[BundleKeys.IDENTITY_HASH] as? String)?.let { bundle.putString(BundleKeys.IDENTITY_HASH, it) }
+    (this[BundleKeys.DESTINATION_HASH] as? String)?.let { bundle.putString(BundleKeys.DESTINATION_HASH, it) }
+    (this[BundleKeys.FILE_PATH] as? String)?.let { bundle.putString(BundleKeys.FILE_PATH, it) }
+    (this[BundleKeys.PUBLIC_KEY] as? ByteArray)?.let { bundle.putByteArray(BundleKeys.PUBLIC_KEY, it) }
     return bundle
 }

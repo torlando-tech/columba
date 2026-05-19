@@ -486,6 +486,12 @@ dependencies {
     testImplementation(libs.test.core)
     testImplementation("androidx.test.ext:junit:1.1.5")
     testImplementation("org.json:json:20231013") // Real JSON implementation for unit tests
+    // chaquopy_java is compileOnly on :rns-host (kotlinBackend flavor must not
+    // pull it in). MockK reflectively subclasses KotlinBLEBridge in unit tests
+    // — silently fails on the PyObject-typed setOn* callback fields when the
+    // chaquopy runtime class isn't resolvable. Pulling it onto the test
+    // classpath here keeps the SUT's bridge surface (PyObject fields) intact.
+    testImplementation("com.chaquo.python.runtime:chaquopy_java:17.0.0")
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.espresso)
     // Note: mockk-android removed - requires minSdk 26 but project uses 24

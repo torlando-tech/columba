@@ -250,7 +250,7 @@ class NomadNetBrowserViewModelTest {
             val formDataSlot = slot<String>()
             coEvery {
                 protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
-            } returns Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/result.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -273,7 +273,7 @@ class NomadNetBrowserViewModelTest {
             val formDataSlot = slot<String>()
             coEvery {
                 protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
-            } returns Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/result.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -297,7 +297,7 @@ class NomadNetBrowserViewModelTest {
             val formDataSlot = slot<String>()
             coEvery {
                 protocol.requestNomadnetPage(any(), any(), capture(formDataSlot), any())
-            } returns Result.success(ReticulumProtocol.NomadnetPageResult(simplePage, "/page/result.mu"))
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/result.mu"))
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()

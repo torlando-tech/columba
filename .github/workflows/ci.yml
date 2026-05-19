@@ -324,8 +324,8 @@ jobs:
             robolectric-4.16-
             robolectric-
 
-      - name: Run reticulum, data, and micron module tests
-        run: ./gradlew :reticulum:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
+      - name: Run RNS, data, and micron module tests
+        run: ./gradlew :rns-api:testDebugUnitTest :rns-ipc:testDebugUnitTest :rns-host:testKotlinBackendDebugUnitTest :rns-host:testPythonBackendDebugUnitTest :rns-backend-kt:testDebugUnitTest :rns-backend-py:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()

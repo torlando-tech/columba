@@ -478,6 +478,36 @@ class ColumbaRNodeInterface(Interface):
             return False
 
         mode_str = "BLE" if self.connection_mode == self.MODE_BLE else "Bluetooth Classic"
+
+        # The KotlinRNodeBridge is a process-wide singleton with one
+        # connectedDeviceName / one GATT client / one shared read buffer at a
+        # time. If a sibling ColumbaRNodeInterface has already won the
+        # connect-race (two interfaces' start() threads can fire in the same
+        # millisecond because RNS spawns them in the interface-init for-loop),
+        # calling bridge.connect() again clobbers the first connection's state
+        # AND has both python interfaces reading from the same byte stream,
+        # which corrupts both. Bail out cleanly so the first one keeps
+        # working and this one stays offline. (Architectural constraint
+        # inherited from v0.10.x — same single-bridge design.)
+        try:
+            if (
+                hasattr(self.kotlin_bridge, "isConnected")
+                and self.kotlin_bridge.isConnected()
+                and hasattr(self.kotlin_bridge, "getConnectedDeviceName")
+            ):
+                already = self.kotlin_bridge.getConnectedDeviceName()
+                if already and already != self.target_device_name:
+                    RNS.log(
+                        f"Cannot start - KotlinRNodeBridge already serving '{already}'; "
+                        f"only one BLE/Classic RNode at a time. '{self.target_device_name}' "
+                        f"staying offline. To use this RNode, disable the other one "
+                        f"and Apply & Restart.",
+                        RNS.LOG_ERROR,
+                    )
+                    return False
+        except Exception as e:  # noqa: BLE001
+            RNS.log(f"Bridge contention check failed (continuing): {e}", RNS.LOG_DEBUG)
+
         RNS.log(f"Connecting to RNode '{self.target_device_name}' via {mode_str}...", RNS.LOG_INFO)
 
         # Connect via Kotlin bridge with specified mode
@@ -780,11 +810,25 @@ class ColumbaRNodeInterface(Interface):
 
     def _validate_radio_state(self):
         """Validate that radio state matches configuration."""
-        # Wait a moment for state to be reported back
-        time.sleep(0.3)
+        # Poll for radio state with timeout — different RNode hardware reports
+        # state at different speeds. T-Beam Supreme answers within ~300ms;
+        # Heltec V3 (ESP32-S3) and T114 (nRF52) can take 1-2 seconds to
+        # transition to RADIO_STATE_ON and emit the CMD_RADIO_STATE frame.
+        # Original v0.10.x code did a single sleep(0.3) which is too short
+        # for the slower variants — observed "Radio state not ON: None" on
+        # Fold tonight with the Heltec E517. Poll for up to 5s, checking
+        # every 100ms, then proceed with whatever state we have for the
+        # final validation pass below.
+        validation_deadline = time.time() + 5.0
+        while time.time() < validation_deadline:
+            with self._read_lock:
+                r_state_poll = self.r_state
+            if r_state_poll == KISS.RADIO_STATE_ON:
+                break
+            time.sleep(0.1)
 
-        # Read radio state under lock for thread safety
-        # The read loop updates these from a background thread
+        # Read all reported radio state under lock for thread safety.
+        # The read loop updates these from a background thread.
         with self._read_lock:
             r_frequency = self.r_frequency
             r_bandwidth = self.r_bandwidth

@@ -3091,12 +3091,22 @@ class RNodeWizardViewModel
                                 Log.d(TAG, "Pairing successful for ${device.name}")
                             }
                             BluetoothDevice.BOND_NONE -> {
+                                // BOND_NONE after a pair attempt is almost always
+                                // "RNode wasn't in pairing mode" rather than a
+                                // cancelled / mistyped PIN — in practice the
+                                // system pair dialog never appears because the
+                                // RNode rejects the pair request when not in
+                                // pairing mode. Surface user-actionable
+                                // instructions instead of a generic retry hint.
                                 _state.update {
                                     it.copy(
                                         pairingError =
-                                            "Pairing was cancelled or the PIN was " +
-                                                "incorrect. Try again and enter the PIN shown " +
-                                                "on the RNode.",
+                                            "Ensure your RNode has Bluetooth enabled " +
+                                                "and is in pairing mode. Hold the user " +
+                                                "button on the RNode for at least 5 " +
+                                                "seconds — a 6-digit PIN will appear on " +
+                                                "the screen while pairing mode is active. " +
+                                                "Then tap Pair again.",
                                     )
                                 }
                             }

@@ -18,6 +18,10 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
 import network.columba.app.rns.host.persistence.BackendInitializer
+import network.columba.app.rns.host.rnode.KotlinRNodeBridge
+import network.columba.app.rns.host.rnode.RNodeOnlineStatusListener
+import network.columba.app.rns.host.usb.KotlinUSBBridge
+import network.columba.app.rns.host.usb.UsbConnectionListener
 import network.columba.app.rns.ipc.RnsBackendServer
 
 /**
@@ -42,6 +46,12 @@ class ReticulumService : Service() {
         const val ACTION_RESTART_BLE = "network.columba.app.RESTART_BLE"
         const val ACTION_UPDATE_NOTIFICATION = "network.columba.app.service.UPDATE_NOTIFICATION"
         const val EXTRA_NETWORK_STATUS = "network_status"
+
+        // Grace window for treating ACTION_STOP as a stale redelivery during an
+        // Apply & Restart. The original STOP intent travels at most a few seconds
+        // (the time between :reticulum dying and Android auto-restarting the FGS),
+        // so 5s is plenty of headroom while still failing fast for genuine STOPs.
+        private const val STALE_STOP_GRACE_MS = 5_000L
     }
 
     /**
@@ -79,6 +89,12 @@ class ReticulumService : Service() {
     // don't pay the construction cost (and the rnsBackend dependency wiring) in
     // the rare case the service runs only via startService (no bindService caller).
     private var aidlServer: RnsBackendServer? = null
+
+    // Process-start timestamp used to detect stale ACTION_STOP redeliveries during
+    // an Apply & Restart cycle. See onStartCommand's ACTION_STOP branch for the
+    // full rationale. SystemClock.elapsedRealtime is monotonic and includes
+    // sleep, so this is robust to wall-clock changes.
+    private val processStartElapsedRealtimeMs: Long = android.os.SystemClock.elapsedRealtime()
 
     override fun onCreate() {
         super.onCreate()
@@ -143,6 +159,78 @@ class ReticulumService : Service() {
         // Create notification channel
         managers.notificationManager.createNotificationChannel()
 
+        // Wire RNode disconnect notifications. ServiceNotificationManager.
+        // updateRNodeStatus already owns the heads-up alert (CHANNEL_ID_RNODE,
+        // IMPORTANCE_HIGH) and the foreground-notification text suffix; we
+        // just need to fire it on the right signals. v0.10.x wired this in
+        // ReticulumServiceBinder.kt:235-243; dual-build never carried it
+        // over, so RNode disconnect was silent across both backends.
+        //
+        // BLE / Classic path: ColumbaRNodeInterface._set_online (Python)
+        // calls kotlin_bridge.notifyOnlineStatusChanged on every connect /
+        // disconnect, which fans out to our listener here.
+        //
+        // USB path: KotlinUSBBridge owns a BroadcastReceiver for
+        // ACTION_USB_DEVICE_DETACHED (already exists) and fires
+        // UsbConnectionListener callbacks. We track hasActiveUsbRNode so we
+        // only post the notification for disconnects that follow a real
+        // RNode-mode USB attach — onUsbConnected only fires for SUPPORTED_VIDS
+        // (FTDI / CP210x / etc.) so a non-RNode charger pull doesn't trigger
+        // a spurious notification. Interface name is the placeholder
+        // "RNode (USB)" rather than the configured InterfaceConfig name —
+        // querying the interfaces DB from here would require a cross-module
+        // dep we don't currently have, and the user only ever has one USB
+        // RNode plugged in at a time on a phone in practice.
+        KotlinRNodeBridge.getInstance(this).addOnlineStatusListener(
+            object : RNodeOnlineStatusListener {
+                override fun onRNodeOnlineStatusChanged(isOnline: Boolean, interfaceName: String) {
+                    Log.d(TAG, "RNode online status changed: [$interfaceName] online=$isOnline")
+                    managers.notificationManager.updateRNodeStatus(isOnline, interfaceName)
+                }
+            },
+        )
+        val usbBridge = KotlinUSBBridge.getInstance(this)
+        // Seed hasActiveUsbRNode from devices already attached when the
+        // service starts. Without this, an RNode plugged in BEFORE the
+        // service starts (typical: user plugs cable, then launches app)
+        // gets no notification on unplug because ACTION_USB_DEVICE_ATTACHED
+        // fired before our BroadcastReceiver was registered, leaving the
+        // flag false and the disconnect path guarded out. Verified on Fold
+        // tonight: "USB device disconnected unexpectedly: 1002" with
+        // connectedDeviceId=null and no preceding onUsbConnected.
+        var hasActiveUsbRNode = usbBridge.getConnectedUsbDevices().isNotEmpty()
+        usbBridge.addConnectionListener(
+            object : UsbConnectionListener {
+                override fun onUsbConnected(deviceId: Int) {
+                    // Supported-VID USB device attached. Mark that we have a
+                    // USB RNode candidate and dismiss any stale disconnect
+                    // notification from a previous cable pull.
+                    hasActiveUsbRNode = true
+                    managers.notificationManager.updateRNodeStatus(true, "RNode (USB)")
+                }
+
+                override fun onUsbDisconnected(deviceId: Int) {
+                    // Only post the notification if we previously saw a
+                    // supported-VID attach in this process lifetime (either
+                    // via onUsbConnected mid-flight, or via the
+                    // getConnectedUsbDevices() seed at startup); avoids
+                    // spurious notifications for non-RNode USB devices.
+                    if (hasActiveUsbRNode) {
+                        hasActiveUsbRNode = false
+                        Log.d(TAG, "USB RNode detached: deviceId=$deviceId")
+                        managers.notificationManager.updateRNodeStatus(false, "RNode (USB)")
+                    }
+                }
+
+                // Permission grants and denials are surfaced by KotlinUSBBridge
+                // for the USB-driver layer but the service has no notification
+                // surface tied to them — RNode detach is the load-bearing event.
+                override fun onUsbPermissionGranted(deviceId: Int) = Unit
+
+                override fun onUsbPermissionDenied(deviceId: Int) = Unit
+            },
+        )
+
         // Restore the last persisted network status written by the app process. If Android
         // restarted the :reticulum process on its own (START_STICKY), the native stack in
         // the app process is still READY, and without this restore the first notification
@@ -179,8 +267,23 @@ class ReticulumService : Service() {
         // initialize() (OOM restart, force-stop recovery). No-op on first run
         // (no snapshot yet). Idempotent if UI races us — `runtime.start()`
         // already early-returns when running.
-        serviceScope.launch {
-            backendInitializer.initializeFromSnapshot(rnsBackend)
+        //
+        // Apply-in-progress gate: when InterfaceConfigManager is mid-restart
+        // (is_applying_config=true), the on-disk snapshot is STALE relative to
+        // what the UI is about to push via initialize(). Running the snapshot
+        // self-init here would (a) bring the stack up on the old interface
+        // list, and (b) race with the UI's incoming initialize() such that
+        // PythonRnsRuntime.start sees running=true on the second call and
+        // silently drops the FRESH config. Skip self-init and let the UI drive.
+        val isApplyingConfig =
+            getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                .getBoolean("is_applying_config", false)
+        if (isApplyingConfig) {
+            Log.i(TAG, "Skipping snapshot self-init — apply-in-progress; UI will drive initialize()")
+        } else {
+            serviceScope.launch {
+                backendInitializer.initializeFromSnapshot(rnsBackend)
+            }
         }
     }
 
@@ -204,14 +307,15 @@ class ReticulumService : Service() {
         val notInitialized = !::managers.isInitialized || !::binder.isInitialized
 
         if (isUserShutdownRestart || notInitialized) {
-            if (isUserShutdownRestart) {
+            return if (isUserShutdownRestart) {
                 Log.i(TAG, "User shutdown flag set - stopping service instead of restarting")
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
-                return START_NOT_STICKY
+                START_NOT_STICKY
+            } else {
+                Log.w(TAG, "onStartCommand called before onCreate completed - will retry after init")
+                START_STICKY
             }
-            Log.w(TAG, "onStartCommand called before onCreate completed - will retry after init")
-            return START_STICKY
         }
 
         when (intent?.action) {
@@ -226,6 +330,42 @@ class ReticulumService : Service() {
                 managers.notificationManager.startForeground(this)
             }
             ACTION_STOP -> {
+                // Apply-in-progress gate: when the UI is mid-apply, the ACTION_STOP we
+                // ourselves sent in InterfaceConfigManager.applyInterfaceChanges Step 4
+                // targets the OLD :reticulum pid. Android, however, has no way to drop
+                // an in-flight startForegroundService intent if the receiver dies first
+                // — the intent gets requeued onto whichever :reticulum process spawns
+                // next (via START_STICKY auto-restart of the crashed service). That
+                // stale STOP then System.exits the freshly-spawned process before it
+                // can bind for the UI's pending initialize(), surfacing as the
+                // "Failed to initialize Reticulum: Backend not ready" toast in the
+                // Apply & Restart dialog (punch-list item 10).
+                //
+                // The fix: when is_applying_config is set on a NEWLY-spawned service
+                // (process is younger than the stale STOP could possibly target), treat
+                // ACTION_STOP as a redelivery and consume the startId without exiting.
+                // The UI driving the apply will send its own ACTION_START + initialize()
+                // shortly. The genuine non-apply STOP path (user-initiated shutdown,
+                // user-toggled service kill) is unaffected because is_applying_config
+                // is false in those scenarios.
+                val isApplyingConfig =
+                    getSharedPreferences("columba_prefs", MODE_PRIVATE)
+                        .getBoolean("is_applying_config", false)
+                val processAgeMs = android.os.SystemClock.elapsedRealtime() - processStartElapsedRealtimeMs
+                if (isApplyingConfig && processAgeMs < STALE_STOP_GRACE_MS) {
+                    Log.w(
+                        TAG,
+                        "Ignoring ACTION_STOP: apply-in-progress and process is only " +
+                            "${processAgeMs}ms old (likely a redelivery of the STOP that " +
+                            "killed the prior :reticulum pid during Apply & Restart)",
+                    )
+                    // Consume the startId so Android doesn't see an outstanding start
+                    // request when we eventually do exit. We deliberately do NOT call
+                    // System.exit — the snapshot self-init in onCreate is already in
+                    // flight and the UI will follow up with its own initialize.
+                    return START_STICKY
+                }
+
                 // Shutdown and stop service
                 Log.d(TAG, "Received ACTION_STOP - forcing process exit")
 

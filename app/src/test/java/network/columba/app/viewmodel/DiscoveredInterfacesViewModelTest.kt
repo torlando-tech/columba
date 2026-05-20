@@ -7,8 +7,10 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.rns.api.model.DiscoveredInterface
+import network.columba.app.rns.api.BackendCapabilities
+import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -56,9 +58,20 @@ class DiscoveredInterfacesViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var interfaceRepository: InterfaceRepository
     private lateinit var interfaceConfigManager: InterfaceConfigManager
+    private lateinit var rnsBackend: RnsBackend
     private lateinit var viewModel: DiscoveredInterfacesViewModel
 
     private val bootstrapNamesFlow = MutableStateFlow<List<String>>(emptyList())
+
+    // Default = kotlin backend (hotReloadInterfaces = true). Individual tests
+    // that exercise the python-backend restart path replace this StateFlow's
+    // value before constructing the VM.
+    private val capabilitiesFlow =
+        MutableStateFlow(
+            BackendCapabilities.UNKNOWN.copy(
+                interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = true),
+            ),
+        )
 
     @Before
     fun setup() {
@@ -84,6 +97,9 @@ class DiscoveredInterfacesViewModelTest {
         interfaceRepository = mockk(relaxed = true)
         @Suppress("NoRelaxedMocks") // Manager has many config methods; explicit stubs provided for tested methods
         interfaceConfigManager = mockk(relaxed = true)
+        @Suppress("NoRelaxedMocks") // Backend has many capability/sub-binding members
+        rnsBackend = mockk(relaxed = true)
+        every { rnsBackend.capabilities } returns capabilitiesFlow
 
         // Default mock responses
         coEvery { reticulumProtocol.isDiscoveryEnabled() } returns false
@@ -113,10 +129,21 @@ class DiscoveredInterfacesViewModelTest {
             reticulumProtocol,
             settingsRepository,
             interfaceRepository,
+            rnsBackend,
+            interfaceConfigManager,
         )
 
+    /** Switch capability snapshot to the python-backend profile (hot-reload off). */
+    private fun useRestartOnlyBackend() {
+        capabilitiesFlow.value =
+            BackendCapabilities.UNKNOWN.copy(
+                interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = false),
+            )
+    }
+
     /**
-     * Legacy helper retained for older tests; direct native hot-apply no longer uses it.
+     * Helper for python-backend tests: stubs `applyInterfaceChanges` so that
+     * the VM treats the restart as successful and invokes `onServiceReady`.
      */
     private fun mockApplyInterfaceChangesSuccess() {
         coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
@@ -1301,6 +1328,91 @@ class DiscoveredInterfacesViewModelTest {
             assertFalse(viewModel.state.value.autoconnectIfacOnly)
             coVerify { settingsRepository.saveAutoconnectIfacOnly(false) }
             coVerify { reticulumProtocol.setAutoconnectIfacOnly(false) }
+        }
+
+    // ========== Python-backend (restart-only) routing ==========
+    // When `BackendCapabilities.interfaces.hotReloadInterfaces` is false, the
+    // discovery toggle, autoconnect slider and IFAC-only switch must route
+    // through `InterfaceConfigManager.applyInterfaceChanges()` so the
+    // RNS config file is rebuilt from DataStore and Reticulum() is reconstructed
+    // (upstream RNS only reads discovery settings at startup). Punch-list items
+    // 3 / 4 / 5 in pre-python-dual-backend-release.md, v0.10.x parity.
+
+    @Test
+    fun `toggleDiscovery on restart-only backend triggers applyInterfaceChanges`() =
+        runTest {
+            useRestartOnlyBackend()
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.discoverInterfacesEnabled)
+            coVerify { settingsRepository.saveDiscoverInterfacesEnabled(true) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `setAutoconnectCount on restart-only backend triggers applyInterfaceChanges`() =
+        runTest {
+            useRestartOnlyBackend()
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectCount(7)
+            advanceUntilIdle()
+
+            assertEquals(7, viewModel.state.value.autoconnectCount)
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(7) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `toggleAutoconnectIfacOnly on restart-only backend triggers applyInterfaceChanges`() =
+        runTest {
+            useRestartOnlyBackend()
+            coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.toggleAutoconnectIfacOnly()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.autoconnectIfacOnly)
+            coVerify { settingsRepository.saveAutoconnectIfacOnly(true) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `restart-only backend surfaces applyInterfaceChanges failure as error`() =
+        runTest {
+            useRestartOnlyBackend()
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns
+                Result.failure(RuntimeException("Restart blew up"))
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            // The helper rethrows so toggleDiscovery's own catch block sets the
+            // method-specific error message ("Failed to update discovery settings")
+            // and the subsequent loadDiscoveredInterfaces() refresh is skipped
+            // (which would otherwise clear errorMessage).
+            assertTrue(
+                viewModel.state.value.errorMessage
+                    ?.contains("Failed to update discovery settings") == true,
+            )
+            assertFalse(viewModel.state.value.isRestarting)
         }
 
     // ========== Helper Functions ==========

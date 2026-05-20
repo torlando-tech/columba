@@ -1,0 +1,113 @@
+# Punch-list item 1: PythonRnsCore.probeLinkSpeed stub
+#
+# Reproduces the broken state of PythonRnsCore.probeLinkSpeed (returns
+# status="no_path" / "error", never measures rate/RTT/MTU) by capturing
+# the codec/quality selection dialog launched from a conversation's voice
+# call button. With the broken probe, MessagingViewModel.getRecommendedCodecProfile()
+# falls back to CodecProfile.DEFAULT (Medium Quality / Opus) and the dialog's
+# PathInfoSection has no link-state data to display.
+#
+# v0.10.x reference behavior (python/reticulum_wrapper.py probe_link_speed,
+# lines 6231-6445 of origin/release/v0.10.x): returns status="success" with
+# hops + next_hop_bitrate_bps even without an active link, so the dialog
+# shows a specific Opus tier recommendation and a populated PathInfoSection.
+#
+# Preconditions (must be true before running this flow):
+#   - App network.columba.app.debug installed on emulator-5554 (python build).
+#   - Onboarding already completed (so launchApp lands on the Chats screen,
+#     not the Welcome wizard or IdentityUnlock screen).
+#   - At least one existing conversation visible in the chat list. The flow
+#     taps the first ConversationCard; without one it will fail at the
+#     "Voice call" step because there is no MessagingScreen to enter.
+#
+# Selectors used (no testTags on the relevant composables, so falling back
+# to contentDescription / visible text):
+#   - "Voice call"            -> IconButton contentDescription in MessagingScreen
+#                                TopAppBar actions (MessagingScreen.kt:941).
+#   - "Select Call Quality"   -> AlertDialog title from CodecSelectionDialog.kt:38
+#                                via QualitySelectionDialog.
+#   - "Cancel"                -> AlertDialog dismissButton in
+#                                QualitySelectionDialog.kt:166.
+
+appId: network.columba.app.debug
+name: 01-probe-codec
+tags:
+  - py-backend
+  - punch-list-1
+---
+- launchApp:
+    appId: network.columba.app.debug
+    clearKeychain: false
+    stopApp: false
+
+# Settle on the Chats screen. If onboarding hasn't been completed, the
+# "Chats" title won't appear and the flow will fail here with a clear
+# message telling the test runner the environment isn't set up.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
+
+# Tap the first conversation in the list. We anchor on the timestamp
+# column being absent for empty state; the absence assert below makes the
+# failure mode obvious when no conversation exists.
+- assertNotVisible: "No conversations yet"
+- assertNotVisible: "Messages from peers will appear here"
+
+# ConversationCard rows live under the "Chats" SearchableTopAppBar in a
+# LazyColumn. We can't use a stable testTag (the cards don't set one),
+# so tap the first card by position. The first card sits just below the
+# TopAppBar — use 22% which is centered on the card regardless of how
+# many cards follow (30% worked when there were 2+ cards but lands in
+# the empty area below a single card). ProfileIcon is the leading element
+# of each card; tapping the row triggers onChatClick -> navigates to
+# MessagingScreen.
+- tapOn:
+    point: "50%,22%"
+
+# MessagingScreen TopAppBar renders the Voice call icon button. Wait for
+# it to be visible; this also confirms we made it into a conversation.
+- extendedWaitUntil:
+    visible: "Voice call"
+    timeout: 10000
+
+# Trigger getRecommendedCodecProfile() -> PythonRnsCore.probeLinkSpeed.
+# In the broken state this returns immediately with status="no_path" or
+# "error" and the dialog shows the DEFAULT (Medium Quality) recommendation.
+- tapOn: "Voice call"
+
+# Wait for the codec/quality selection dialog. CodecSelectionDialog wraps
+# QualitySelectionDialog with title="Select Call Quality".
+- extendedWaitUntil:
+    visible: "Select Call Quality"
+    timeout: 10000
+
+# Let the dialog finish its enter animation before screenshotting so the
+# PathInfoSection (or its absence) is in its final state.
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Capture the initial dialog state. In the broken state the visible top
+# of the option list shows the Recommended badge on "Medium Quality"
+# (CodecProfile.DEFAULT fallback). In the fixed state, with a fast
+# loopback path between the two emulators, the next-hop bitrate
+# heuristic pushes the recommendation up to "Maximum Quality" (Opus
+# high), which is below the fold in the default scroll position — so
+# the visible top of the list has NO Recommended badge.
+- takeScreenshot: 01-probe-codec-dialog
+
+# Scroll within the dialog's option list and capture again so the
+# Recommended badge is visible in both broken (top, Medium Quality)
+# and fixed (bottom, Maximum Quality) modes. The scroll target is the
+# scrollable Column inside the dialog body; a swipe from the lower
+# third up to the upper third moves the list past the fold.
+- swipe:
+    start: "50%,60%"
+    end: "50%,30%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 01-probe-codec-dialog-scrolled
+
+# Close the dialog cleanly so the next flow can start from a known state.
+- tapOn: "Cancel"
+- assertNotVisible: "Select Call Quality"

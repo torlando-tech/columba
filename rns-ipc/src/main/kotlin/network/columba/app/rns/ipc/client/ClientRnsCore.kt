@@ -301,10 +301,13 @@ internal class ClientRnsCore(
     }
 
     private fun identityKeyMapFromBundle(bundle: android.os.Bundle): Map<String, Any> {
-        val map = LinkedHashMap<String, Any>(3)
+        val map = LinkedHashMap<String, Any>(6)
         bundle.getByteArray(BundleKeys.KEY_DATA)?.let { map[BundleKeys.KEY_DATA] = it }
         bundle.getString(BundleKeys.DISPLAY_NAME)?.let { map[BundleKeys.DISPLAY_NAME] = it }
-        bundle.getString(BundleKeys.IDENTITY_HASH_HEX)?.let { map[BundleKeys.IDENTITY_HASH_HEX] = it }
+        bundle.getString(BundleKeys.IDENTITY_HASH)?.let { map[BundleKeys.IDENTITY_HASH] = it }
+        bundle.getString(BundleKeys.DESTINATION_HASH)?.let { map[BundleKeys.DESTINATION_HASH] = it }
+        bundle.getString(BundleKeys.FILE_PATH)?.let { map[BundleKeys.FILE_PATH] = it }
+        bundle.getByteArray(BundleKeys.PUBLIC_KEY)?.let { map[BundleKeys.PUBLIC_KEY] = it }
         return map
     }
 }

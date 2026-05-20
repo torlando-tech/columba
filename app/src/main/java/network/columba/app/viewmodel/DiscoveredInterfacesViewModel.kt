@@ -5,13 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -103,6 +106,8 @@ class DiscoveredInterfacesViewModel
         private val transportAdmin: RnsTransportAdmin,
         private val settingsRepository: SettingsRepository,
         private val interfaceRepository: InterfaceRepository,
+        private val rnsBackend: RnsBackend,
+        private val configManager: InterfaceConfigManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "DiscoveredIfacesVM"
@@ -117,6 +122,30 @@ class DiscoveredInterfacesViewModel
         init {
             loadDiscoveredInterfaces()
             loadDiscoverySettings()
+            // Re-load whenever the RNS backend transitions to READY. This
+            // covers two races:
+            //   • App opens this screen while the backend is still
+            //     INITIALIZING (e.g. just after launch or right after an
+            //     Apply & Restart). The first loadDiscoveredInterfaces()
+            //     races the `RNS.Reticulum()` constructor's config parse
+            //     and reads stale defaults (`should_autoconnect_discovered
+            //     _interfaces()` returns False until the class attribute
+            //     is set from config).
+            //   • A toggle drives a restart through applyInterfaceChanges
+            //     — that returns when `initialize()` succeeds, but the
+            //     Python `__init__` may still be settling the class-level
+            //     attributes for a few ms. Re-poll on READY guarantees the
+            //     UI reflects the post-restart runtime state.
+            // The networkStatus StateFlow is .stateIn-shared so this never
+            // triggers a fresh upstream subscription cost.
+            viewModelScope.launch {
+                rnsBackend.core.networkStatus
+                    .filter { it is network.columba.app.rns.api.model.NetworkStatus.READY }
+                    .collect {
+                        Log.d(TAG, "networkStatus → READY, re-loading discovery state")
+                        loadDiscoveredInterfaces()
+                    }
+            }
         }
 
         /**
@@ -256,10 +285,10 @@ class DiscoveredInterfacesViewModel
                     }
                     Log.d(TAG, "Discovery settings saved: enabled=$newEnabled, autoconnect=$newAutoconnect")
 
-                    // Apply discovery setting directly (no service restart needed on native stack)
                     Log.d(TAG, "Applying discovery setting: enabled=$newEnabled")
-                    transportAdmin.setDiscoveryEnabled(newEnabled)
-                    _state.update { it.copy(isRestarting = false) }
+                    applyDiscoverySettingsChange {
+                        transportAdmin.setDiscoveryEnabled(newEnabled)
+                    }
                     Log.d(TAG, "Discovery setting applied successfully")
                     loadDiscoveredInterfaces()
                 } catch (e: Exception) {
@@ -293,13 +322,17 @@ class DiscoveredInterfacesViewModel
                     settingsRepository.saveAutoconnectDiscoveredCount(clampedCount)
                     Log.d(TAG, "Autoconnect count saved: $clampedCount")
 
-                    // Apply directly without restart (native stack supports hot update)
-                    transportAdmin.setAutoconnectLimit(clampedCount)
+                    applyDiscoverySettingsChange {
+                        transportAdmin.setAutoconnectLimit(clampedCount)
+                    }
                     loadDiscoveredInterfaces()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set autoconnect count", e)
                     _state.update {
-                        it.copy(errorMessage = "Failed to update autoconnect count: ${e.message}")
+                        it.copy(
+                            isRestarting = false,
+                            errorMessage = "Failed to update autoconnect count: ${e.message}",
+                        )
                     }
                 }
             }
@@ -317,15 +350,59 @@ class DiscoveredInterfacesViewModel
                     val newValue = !_state.value.autoconnectIfacOnly
                     _state.update { it.copy(autoconnectIfacOnly = newValue) }
                     settingsRepository.saveAutoconnectIfacOnly(newValue)
-                    transportAdmin.setAutoconnectIfacOnly(newValue)
+                    applyDiscoverySettingsChange {
+                        transportAdmin.setAutoconnectIfacOnly(newValue)
+                    }
                     Log.d(TAG, "Autoconnect IFAC-only: $newValue")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to toggle autoconnect IFAC-only", e)
                     _state.update {
-                        it.copy(errorMessage = "Failed to update IFAC-only setting: ${e.message}")
+                        it.copy(
+                            isRestarting = false,
+                            errorMessage = "Failed to update IFAC-only setting: ${e.message}",
+                        )
                     }
                 }
             }
+        }
+
+        /**
+         * Apply a discovery-settings change, routing through the right path for
+         * the active backend.
+         *
+         * - **Kotlin backend** (`hotReloadInterfaces = true`): the transport-admin
+         *   call applies live to the running Reticulum-kt instance — invoke
+         *   [hotApply] and clear any pending restart-banner state.
+         * - **Python backend** (`hotReloadInterfaces = false`): upstream RNS
+         *   reads discovery / autoconnect / IFAC-only settings from the on-disk
+         *   config file at `Reticulum()` construction; `transportAdmin.set*` is
+         *   a documented no-op there. The only way to apply is to rebuild the
+         *   config from DataStore and shutdown+reinitialise via
+         *   [InterfaceConfigManager.applyInterfaceChanges]. This mirrors the
+         *   v0.10.x flow that used a single-stack restart for these toggles.
+         *
+         * Callers must persist the new value to DataStore *before* invoking this
+         * helper — on the Python path, `applyInterfaceChanges` re-reads from
+         * DataStore (`InterfaceConfigManager.kt` step 9) when rebuilding the
+         * RNS config, so DataStore is the source of truth at restart time.
+         */
+        private suspend fun applyDiscoverySettingsChange(hotApply: suspend () -> Unit) {
+            if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                hotApply()
+                _state.update { it.copy(isRestarting = false) }
+                return
+            }
+            // Python backend: full service restart required for discovery /
+            // autoconnect settings to take effect (config-file-gated).
+            _state.update { it.copy(isRestarting = true) }
+            val result =
+                configManager.applyInterfaceChanges(
+                    onServiceReady = { _state.update { it.copy(isRestarting = false) } },
+                )
+            // Rethrow so the caller's catch block sets a method-appropriate
+            // error message and skips the post-success `loadDiscoveredInterfaces()`
+            // refresh (which would clobber `errorMessage` via its own state.update).
+            result.getOrThrow()
         }
 
         /**

@@ -1194,9 +1194,62 @@ class InterfaceManagementViewModel
                             applyChangesError = null,
                         )
 
-                    // Run on IO dispatcher to avoid blocking UI with IPC calls
+                    // Run on IO dispatcher to avoid blocking UI with IPC calls.
+                    // Dismiss the spinner AND clear the pending-changes flag via
+                    // onServiceReady (fires after RNS Step 9 critical-path init)
+                    // rather than waiting for the suspend to return.
+                    //
+                    // On a device with thousands of stored peers, Steps 10-12 (batched
+                    // peer/announce identity restore, managers) run for minutes after
+                    // RNS is already up and usable — blocking the UI on that bookkeeping
+                    // makes the "Apply Changes" modal look hung. Worse: if the
+                    // viewModelScope's child supervisor job cancels mid-restore (as
+                    // observed on Fold with 1800+ peers — "Job was cancelled" at
+                    // batch 5 of restorePeerIdentitiesInBatches), the inner try/catch
+                    // in InterfaceConfigManager swallows the cancellation and the
+                    // function returns Result.success — but the surrounding
+                    // viewModelScope state can leave `.onSuccess`'s synchronous
+                    // _state.copy write stale relative to concurrent flow emissions
+                    // from the interfaces table. Result: hasPendingChanges briefly
+                    // clears then gets re-set by a stale flow emission, and the
+                    // Apply button never goes away.
+                    //
+                    // Clearing hasPendingChanges in onServiceReady means the moment
+                    // RNS confirms it's up with the new config, the user's apply
+                    // intent is recorded as satisfied. Steps 10-12 are bookkeeping;
+                    // they don't invalidate the apply.
+                    //
+                    // The .onSuccess branch is now defense-in-depth (idempotent
+                    // re-clear) + the success toast.
                     withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        configManager.applyInterfaceChanges()
+                        configManager.applyInterfaceChanges(
+                            onServiceReady = {
+                                _state.value =
+                                    _state.value.copy(
+                                        isApplyingChanges = false,
+                                        hasPendingChanges = false,
+                                        applyChangesError = null,
+                                    )
+                                // Force-refresh the interface status list shortly
+                                // after RNS is ready. The 5s poll loop catches up
+                                // eventually, but on the Python backend the push
+                                // flows (interfaceStatusFlow / debugInfoFlow) don't
+                                // re-subscribe across the :reticulum process kill +
+                                // respawn that Apply&Restart does, so without this
+                                // the user sees stale offline cards for up to 5s.
+                                // Two-shot poll: 500ms catches builtin interfaces
+                                // that come up during Reticulum() construction;
+                                // 3500ms catches ColumbaRNodeInterface which runs
+                                // its start() (BLE connect + radio configure) in
+                                // a daemon thread spawned at the end of __init__.
+                                viewModelScope.launch(ioDispatcher) {
+                                    kotlinx.coroutines.delay(500)
+                                    fetchInterfaceStatus()
+                                    kotlinx.coroutines.delay(3000)
+                                    fetchInterfaceStatus()
+                                }
+                            },
+                        )
                     }.onSuccess {
                         _state.value =
                             _state.value.copy(

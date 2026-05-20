@@ -1,0 +1,31 @@
+# setup/just-open-discovery.yaml — navigate from Chats to the Discovered
+# Interfaces screen and idle there with two screenshots (immediate + 8s).
+# Useful as a diagnostic helper when investigating Interface Discovery
+# state transitions or post-restart UI lag — does NOT toggle anything.
+#
+# Pre-condition: app onboarded.
+#
+# Output: two screenshots in the current working dir at maestro launch
+# time (run-flow.sh `cd`s into the per-run screenshots dir so they land
+# alongside the rest of the artifacts).
+
+appId: network.columba.app.debug
+name: setup-just-open-discovery
+tags:
+  - py-backend
+  - setup
+---
+- launchApp: { stopApp: true }
+- extendedWaitUntil: { visible: "Chats", timeout: 30000 }
+- tapOn: "Settings"
+- assertVisible: "Network"
+- tapOn: "Network"
+- scrollUntilVisible: { element: { text: "Manage Interfaces" }, direction: DOWN }
+- tapOn: "Manage Interfaces"
+- scrollUntilVisible: { element: { text: "Interface Discovery" }, direction: DOWN }
+- tapOn: "Interface Discovery"
+- extendedWaitUntil: { visible: "Discovered Interfaces", timeout: 10000 }
+- waitForAnimationToEnd: { timeout: 2000 }
+- takeScreenshot: just-opened-discovery
+- waitForAnimationToEnd: { timeout: 8000 }
+- takeScreenshot: 8s-later

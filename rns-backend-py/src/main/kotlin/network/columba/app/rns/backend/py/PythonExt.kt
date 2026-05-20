@@ -63,6 +63,19 @@ fun Map<*, *>.toPyDict(): PyObject {
 fun ByteArray.toPyBytes(): PyObject =
     Python.getInstance().builtins.callAttr("bytes", this)
 
+/**
+ * Returns this [PyObject] only if it is not Python `None`, else null.
+ *
+ * Chaquopy returns a non-null Java [PyObject] wrapper even when the Python
+ * value is `None` (e.g. `dict.get(missing_key)` returns Python `None`,
+ * which Chaquopy wraps as a `PyObject` whose `toString() == "None"`).
+ * This helper folds the "None wrapper" case into Kotlin null, so call
+ * sites can use `?.` chains uniformly instead of mixing `== null` checks
+ * with `.toString() != "None"` checks.
+ */
+fun PyObject.takeIfNotNone(): PyObject? =
+    takeIf { it.toString() != "None" }
+
 // --- Python dict accessors -------------------------------------------------
 // `event_bridge.py` payloads (and many upstream return values) are Python
 // dicts. `dict.get(k)` returns Python None -> Kotlin null for a missing key,
@@ -72,9 +85,27 @@ fun PyObject.dictGet(key: String): PyObject? = callAttr("get", key)
 
 fun PyObject.dictStr(key: String): String? = dictGet(key)?.toString()
 
-fun PyObject.dictInt(key: String): Int? = dictGet(key)?.toJava(Int::class.javaObjectType)
+fun PyObject.dictInt(key: String): Int? {
+    val v = dictGet(key) ?: return null
+    // Chaquopy `toJava(Int)` is strict — a Python float for the same key
+    // would throw TypeError, breaking the caller's whole flow even though
+    // the value is numerically representable. Many upstream RNS payloads
+    // mix int and float for the "should-be-an-int" fields (e.g. hop count
+    // is sometimes float when computed from rate math). Be permissive:
+    // try Long first, then Double-→-Int.
+    return runCatching { v.toJava(Long::class.javaObjectType).toInt() }.getOrNull()
+        ?: runCatching { v.toJava(Double::class.javaObjectType).toInt() }.getOrNull()
+}
 
-fun PyObject.dictLong(key: String): Long? = dictGet(key)?.toJava(Long::class.javaObjectType)
+fun PyObject.dictLong(key: String): Long? {
+    val v = dictGet(key) ?: return null
+    // Same float-tolerance fix as dictInt — `getDiscoveredInterfaces`
+    // crashed loadDiscoveredInterfaces because `last_heard` arrived as a
+    // Python float (Unix timestamp from time.time()) but the JSON
+    // schema asks for a Long. Fall back to Double-→-Long.
+    return runCatching { v.toJava(Long::class.javaObjectType) }.getOrNull()
+        ?: runCatching { v.toJava(Double::class.javaObjectType).toLong() }.getOrNull()
+}
 
 fun PyObject.dictDouble(key: String): Double? = dictGet(key)?.toJava(Double::class.javaObjectType)
 

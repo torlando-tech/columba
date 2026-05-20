@@ -240,6 +240,17 @@ class ServiceNotificationManager(
                         .setAutoCancel(true)
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setCategory(NotificationCompat.CATEGORY_STATUS)
+                        // Explicit setGroup escapes Samsung OneUI's eager
+                        // autogroup, which on Fold tonight was wrapping
+                        // both the foreground service notification and
+                        // this alert under `g:Aggregate_NormalNotificationSection`
+                        // — the system demoted the autogroup's effective
+                        // importance to LOW (=2), suppressing the heads-up
+                        // peek AND visually folding the alert into the
+                        // service notification in the shade. Distinct
+                        // group key keeps the alert standalone so the
+                        // IMPORTANCE_HIGH channel actually fires heads-up.
+                        .setGroup("rnode_disconnect_alert")
                         .build()
 
                 // Query the system for ground truth — covers autoCancel tap, user swipe,

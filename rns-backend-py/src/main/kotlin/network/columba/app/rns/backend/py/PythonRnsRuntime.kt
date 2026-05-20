@@ -103,6 +103,38 @@ class PythonRnsRuntime(
     @Volatile
     var bleBridge: Any? = null
 
+    /**
+     * `KotlinRNodeBridge` instance for the bundled ColumbaRNodeInterface
+     * (Classic SPP + BLE GATT to RNode LoRa hardware).
+     *
+     * Set by `:rns-host`'s python-flavor module after construction (the bridge
+     * type lives in `:rns-host`, so this is typed `Any?` to keep the
+     * `:rns-backend-py` → `:rns-host` dep direction clean). On every [start]
+     * we forward this into `event_bridge.set_rnode_bridge(...)` so the bundled
+     * `ColumbaRNodeInterface` can resolve it when its `__init__` runs during
+     * `Reticulum()` construction. Null leaves BLE/Classic RNode non-functional
+     * but won't break other interfaces.
+     *
+     * USB-serial RNode is wired separately through the `usb_bridge.py` slim-
+     * Python module — different bridge surface (KotlinUSBBridge), different
+     * accessor.
+     */
+    @Volatile
+    var rnodeHostBridge: Any? = null
+
+    /**
+     * `KotlinUSBBridge` instance for the bundled ColumbaRNodeInterface in
+     * USB-serial mode.
+     *
+     * Forwarded into `usb_bridge.set_usb_bridge(...)` at [start] (sibling slot
+     * to `event_bridge.set_rnode_bridge` — the BLE/Classic bridge surface and
+     * the USB-serial bridge surface are different shapes so they're kept
+     * separate). Null leaves USB-mode RNode non-functional but won't break
+     * other interfaces.
+     */
+    @Volatile
+    var usbBridge: Any? = null
+
     private val running = AtomicBoolean(false)
 
     /** Guards [applyAndroidEnvPatches] so it runs exactly once per process. */
@@ -199,6 +231,22 @@ class PythonRnsRuntime(
         // before Reticulum() — the AndroidBLE interface's start() path
         // looks up the bridge during interface init.
         eventBridge.callAttr("set_ble_bridge", bleBridge)
+
+        // Hand the KotlinRNodeBridge (Classic + BLE GATT) to
+        // columba_rnode_interface.py via event_bridge's set_rnode_bridge
+        // accessor. Must run before Reticulum() so the bundled
+        // ColumbaRNodeInterface can resolve it when its __init__ runs
+        // during Transport.find_interfaces() execution at Reticulum
+        // construction. Null bridge leaves BLE/Classic RNode degraded;
+        // other interfaces (TCP RNode via upstream, BLE, etc.) keep working.
+        eventBridge.callAttr("set_rnode_bridge", rnodeHostBridge)
+
+        // Hand the KotlinUSBBridge (USB-serial RNode) to the slim-Python
+        // usb_bridge.py via its set_usb_bridge accessor. Same lifecycle
+        // requirement as the BLE bridge above — must be set before
+        // Reticulum() so the USB-mode interface init can resolve it.
+        val usbBridgeModule = python.getModule("usb_bridge")
+        usbBridgeModule.callAttr("set_usb_bridge", usbBridge)
 
         // Construct the upstream Reticulum instance. RNS.Reticulum is a process
         // singleton — stop() must fully tear it down before a restart.

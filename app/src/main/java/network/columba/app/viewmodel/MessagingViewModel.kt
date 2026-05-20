@@ -1109,6 +1109,20 @@ class MessagingViewModel
                 }
             }
 
+            // Intentionally NOT opening a conversation link here.
+            //
+            // Reticulum metadata-protection rule: a private user action
+            // (opening a chat) MUST NOT generate network traffic. Link
+            // establishment is gated on intent-to-transmit — codec dialog
+            // open (probeLinkSpeed in getRecommendedCodecProfile), image
+            // attachment (processImageWithCompression /
+            // processSharedImages), and file attachment (addFileAttachment).
+            //
+            // The TopAppBar dot still reflects real link state because
+            // ConversationLinkManager observes peer-initiated incoming
+            // links + announce activity passively; we just don't poke the
+            // network ourselves on chat-open.
+
             Log.d(TAG, "Switched to conversation $destinationHash ($peerName)")
         }
 
@@ -1405,6 +1419,15 @@ class MessagingViewModel
                 val currentFiles = _selectedFileAttachments.value
                 _selectedFileAttachments.value = currentFiles + attachment
                 Log.d(TAG, "Added file attachment: ${attachment.filename} (${attachment.sizeBytes} bytes)")
+
+                // Intent-to-transmit: the user has selected a file to send, so a
+                // link will be needed momentarily. Triggering establishment here
+                // is the earliest point where the network broadcast is justified
+                // by an explicit user action (and matches the image-attach
+                // pattern in processImageWithCompression).
+                _currentConversation.value?.let { destHash ->
+                    conversationLinkManager.openConversationLink(destHash)
+                }
             }
         }
 
@@ -2365,6 +2388,12 @@ class MessagingViewModel
             val destHashBytes = destHash?.let { validateDestinationHash(it) }
 
             return if (destHashBytes != null) {
+                // Intent-to-transmit: user opened the voice-call quality
+                // picker, so link establishment is justified. Driving
+                // ConversationLinkManager here keeps the TopAppBar dot's
+                // "link active" indicator consistent with what
+                // probeLinkSpeed will reuse (or establish) under the hood.
+                conversationLinkManager.openConversationLink(destHash)
                 probeAndRecommendCodec(destHashBytes)
             } else {
                 CodecProfile.DEFAULT

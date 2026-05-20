@@ -832,13 +832,42 @@ fun MessagingScreen(
                         // Online status indicator - combines link activity, delivery proofs, and announces
                         val lastSeenFromAnnounce = announceInfo?.lastSeenTimestamp ?: 0L
                         val lastActivityFromLink = conversationLinkState?.lastActivityTimestamp ?: 0L
-                        val lastActivity = maxOf(lastSeenFromAnnounce, lastActivityFromLink)
                         val hasActiveLink = conversationLinkState?.isActive == true
                         val isEstablishing = conversationLinkState?.isEstablishing == true
+
+                        // A failed link probe is a STRONGER negative signal than
+                        // a recent announce is a positive one: it proves we just
+                        // actively tried to reach the peer and couldn't. The
+                        // announce only proved the peer existed at announce time;
+                        // failure proves the path is broken right now. Suppress
+                        // the optimistic "recent activity" indicator when a
+                        // recent failure is on record.
+                        //
+                        // ConversationLinkManager stamps lastActivityTimestamp
+                        // even on the failure path (line ~286), so the timestamp
+                        // alone can't distinguish success-recent from
+                        // failure-recent — `error != null` is the discriminator.
+                        val recentLinkFailure =
+                            conversationLinkState?.error != null &&
+                                lastActivityFromLink > 0 &&
+                                System.currentTimeMillis() - lastActivityFromLink < (5 * 60 * 1000L)
+
+                        // "Last successful activity" — drives the relative-time
+                        // display and the hasRecentActivity check. When the most
+                        // recent link state is an error, the link's
+                        // lastActivityTimestamp is a failure marker (not real
+                        // activity), so fall back to the announce timestamp.
+                        val lastSuccessfulActivity =
+                            if (conversationLinkState?.error == null) {
+                                maxOf(lastSeenFromAnnounce, lastActivityFromLink)
+                            } else {
+                                lastSeenFromAnnounce
+                            }
+                        val lastActivity = lastSuccessfulActivity
                         val hasRecentActivity =
-                            lastActivity > 0 &&
-                                System.currentTimeMillis() - lastActivity < (5 * 60 * 1000L) // 5 minutes
-                        val isOnline = hasActiveLink || hasRecentActivity
+                            !recentLinkFailure &&
+                                lastSuccessfulActivity > 0 &&
+                                System.currentTimeMillis() - lastSuccessfulActivity < (5 * 60 * 1000L)
 
                         // Debug logging
                         android.util.Log.d(
@@ -848,6 +877,24 @@ fun MessagingScreen(
                         )
 
                         if (lastActivity > 0 || hasActiveLink || isEstablishing) {
+                            // Differentiate the dot when the source is a live
+                            // link (solid MeshConnected + link icon) vs just a
+                            // recent announce / proof (MeshConnected at 60%
+                            // alpha + no link icon). Same color family so the
+                            // "online" affordance still reads at a glance, but
+                            // the alpha + icon split lets a user tell whether
+                            // they have a live link or just a recent announce.
+                            val dotTint = when {
+                                hasActiveLink -> MeshConnected
+                                hasRecentActivity -> MeshConnected.copy(alpha = 0.6f)
+                                else -> MeshOffline
+                            }
+                            val dotContentDescription = when {
+                                isEstablishing -> "Connecting"
+                                hasActiveLink -> "Online — link active"
+                                hasRecentActivity -> "Last seen recently"
+                                else -> "Offline"
+                            }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -868,26 +915,39 @@ fun MessagingScreen(
                                     )
                                     Icon(
                                         imageVector = Icons.Default.Circle,
-                                        contentDescription = null,
+                                        contentDescription = dotContentDescription,
                                         tint = MeshConnected.copy(alpha = alpha),
                                         modifier = Modifier.size(8.dp),
                                     )
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.Circle,
-                                        contentDescription = null,
-                                        tint = if (isOnline) MeshConnected else MeshOffline,
+                                        contentDescription = dotContentDescription,
+                                        tint = dotTint,
                                         modifier = Modifier.size(8.dp),
                                     )
                                 }
 
-                                // Status text
+                                // Status text. "Online" is reserved for an
+                                // ACTIVE LINK only — that's the one signal
+                                // proving the peer is reachable right now.
+                                //
+                                // Announce-only presence (hasRecentActivity)
+                                // is a weaker signal: announces in RNS's
+                                // announce_table get re-emitted to newly-
+                                // connected interfaces with reception
+                                // timestamp = NOW, so a peer who hasn't
+                                // launched the app since our last reconnect
+                                // can still appear "fresh" via cache
+                                // replay. The honest label there is
+                                // "Last seen X ago" — the user can read
+                                // the relative time and decide whether to
+                                // expect a reply.
                                 val statusText =
                                     when {
                                         isEstablishing -> "Connecting..."
                                         hasActiveLink -> "Online"
-                                        hasRecentActivity -> "Online"
-                                        lastActivity > 0 -> formatRelativeTime(lastActivity)
+                                        lastActivity > 0 -> "Last seen ${formatRelativeTime(lastActivity).lowercase()}"
                                         else -> ""
                                     }
                                 Text(
@@ -896,7 +956,12 @@ fun MessagingScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
 
-                                // Link indicator icon when link is active
+                                // Link indicator icon when link is active.
+                                // Only shown for hasActiveLink (not for
+                                // hasRecentActivity) so the icon presence is
+                                // the second visual disambiguator on top of
+                                // the dot's alpha — a glanceable "live link"
+                                // signal vs "recent announce".
                                 if (hasActiveLink) {
                                     Icon(
                                         imageVector = Icons.Default.Link,
@@ -918,30 +983,28 @@ fun MessagingScreen(
                     }
                 },
                 actions = {
-                    // Voice call button
+                    // Voice call button — opens the codec dialog
+                    // immediately, then a LaunchedEffect on the dialog
+                    // block (below) fires the link-speed probe. The
+                    // dialog's PathInfoSection renders a spinner while
+                    // the probe is in flight; the recommendation tier
+                    // updates when it completes. No blocking on the
+                    // button itself — instant UI feedback.
                     IconButton(
                         onClick = {
-                            scope.launch {
-                                isProbingLinkSpeed = true
-                                recommendedCodecProfile = viewModel.getRecommendedCodecProfile()
-                                isProbingLinkSpeed = false
-                                showCodecSelectionDialog = true
-                            }
+                            // Reset to DEFAULT so a stale recommendation
+                            // from a prior open doesn't flash before the
+                            // fresh probe lands.
+                            recommendedCodecProfile = CodecProfile.DEFAULT
+                            isProbingLinkSpeed = true
+                            showCodecSelectionDialog = true
                         },
-                        enabled = !isProbingLinkSpeed,
                     ) {
-                        if (isProbingLinkSpeed) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Call,
-                                contentDescription = "Voice call",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Voice call",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
 
                     // Location sharing button
@@ -1629,11 +1692,20 @@ fun MessagingScreen(
         )
     }
 
-    // Codec selection dialog for voice calls
+    // Codec selection dialog for voice calls. Fires the link-speed
+    // probe via LaunchedEffect when the dialog enters composition (and
+    // re-fires on re-open). isProbingLinkSpeed flips to false when the
+    // probe completes; PathInfoSection swaps its spinner for the
+    // recommendation tier at the same moment.
     if (showCodecSelectionDialog) {
+        LaunchedEffect(Unit) {
+            recommendedCodecProfile = viewModel.getRecommendedCodecProfile()
+            isProbingLinkSpeed = false
+        }
         CodecSelectionDialog(
             recommendedProfile = recommendedCodecProfile,
             linkState = conversationLinkState,
+            isProbing = isProbingLinkSpeed,
             onDismiss = { showCodecSelectionDialog = false },
             onProfileSelected = { profile ->
                 showCodecSelectionDialog = false

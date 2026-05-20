@@ -268,22 +268,36 @@ class OnboardingViewModel
                     // Mark onboarding as completed - this is critical and will throw if it fails
                     settingsRepository.markOnboardingCompleted()
 
-                    // Restart service to apply changes
+                    // Restart service to apply changes. Flip UI to "done" at Step 9
+                    // (RNS ready) rather than after the full apply — on a fresh
+                    // install Step 10 (peer-restore) is empty so this is a no-op,
+                    // but if onboarding is being re-run on an existing install
+                    // (rare but possible via Settings > Reset Onboarding) Step 10
+                    // can run for minutes. Same fix pattern as the rest of the
+                    // applyInterfaceChanges callers in this branch.
                     Log.d(TAG, "Restarting service to apply onboarding settings...")
                     interfaceConfigManager
-                        .applyInterfaceChanges()
-                        .onSuccess {
-                            Log.d(TAG, "Service restarted with new settings")
+                        .applyInterfaceChanges(
+                            onServiceReady = {
+                                Log.d(TAG, "Service ready (Step 9) - dismissing onboarding spinner")
+                                _state.value =
+                                    _state.value.copy(
+                                        isSaving = false,
+                                        hasCompletedOnboarding = true,
+                                    )
+                            },
+                        ).onSuccess {
+                            Log.d(TAG, "Service restart fully complete (Step 12)")
                         }.onFailure { error ->
                             Log.w(TAG, "Failed to restart service (settings saved but may need manual restart)", error)
                             hasWarnings = true
+                            // Failure path: still unblock UI so user isn't stuck.
+                            _state.value =
+                                _state.value.copy(
+                                    isSaving = false,
+                                    hasCompletedOnboarding = true,
+                                )
                         }
-
-                    _state.value =
-                        _state.value.copy(
-                            isSaving = false,
-                            hasCompletedOnboarding = true,
-                        )
 
                     if (hasWarnings) {
                         Log.w(TAG, "Onboarding completed with warnings - some settings may need manual configuration")

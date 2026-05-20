@@ -36,6 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import network.columba.app.ui.screens.onboarding.OnboardingInterfaceType
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
+
 
 /**
  * Connectivity page - allows user to select which network interfaces to enable.
@@ -72,7 +75,7 @@ fun ConnectivityPage(
 
         // Title
         Text(
-            text = "How will you connect?",
+            text = stringResource(R.string.connection_methods),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -83,7 +86,7 @@ fun ConnectivityPage(
 
         // Subtitle
         Text(
-            text = "Select the networks you'd like to use:",
+            text = stringResource(R.string.connection_methods_description),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -108,8 +111,8 @@ fun ConnectivityPage(
             icon = Icons.Default.Bluetooth,
             statusText =
                 when {
-                    blePermissionsDenied -> "Permissions denied"
-                    blePermissionsGranted -> "Permissions granted"
+                    blePermissionsDenied -> stringResource(R.string.permission_denied)
+                    blePermissionsGranted -> stringResource(R.string.permission_granted)
                     else -> null
                 },
             statusIsError = blePermissionsDenied,
@@ -137,7 +140,7 @@ fun ConnectivityPage(
 
         // Helper text
         Text(
-            text = "You can configure these later in Settings",
+            text = stringResource(R.string.configure_in_settings),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -158,7 +161,7 @@ fun ConnectivityPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Back")
+                Text(stringResource(R.string.back))
             }
 
             Button(
@@ -169,7 +172,7 @@ fun ConnectivityPage(
                         .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Text("Continue")
+                Text(stringResource(R.string.nextAction))
             }
         }
 

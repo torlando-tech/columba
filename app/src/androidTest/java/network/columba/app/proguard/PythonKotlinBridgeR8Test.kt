@@ -44,36 +44,44 @@ class PythonKotlinBridgeR8Test {
         InstrumentationRegistry.getInstrumentation().targetContext.classLoader
     }
 
-    /** Fully-qualified names of every @Keep'd bridge Chaquopy resolves by name. */
-    private val bridgeClasses = listOf(
-        "network.columba.app.rns.host.rnode.KotlinRNodeBridge",
-        "network.columba.app.rns.host.ble.bridge.KotlinBLEBridge",
-        "network.columba.app.rns.host.usb.KotlinUSBBridge",
-        "network.columba.app.rns.backend.py.PythonEventBridge",
-    )
-
     /**
-     * Method names Python calls on the bridges, harvested from the bridge call
-     * sites in `rns-backend-py/src/main/python` (e.g. `self.kotlin_bridge.connect(...)`,
-     * `self.usb_bridge.findDeviceByVidPid(...)`). Every one must remain a declared,
-     * un-renamed method on at least one kept bridge class.
+     * Each @Keep'd bridge FQCN -> the method names Python resolves on *that class*
+     * by name, harvested from the call sites in `rns-backend-py/src/main/python`
+     * (e.g. `self.kotlin_bridge.connect(...)`, `self.usb_bridge.findDeviceByVidPid(...)`).
+     *
+     * The map is keyed per class on purpose: several names (`connect`, `disconnect`,
+     * `read`, `isConnected`, ...) exist on more than one bridge, so checking against
+     * the union of all classes' methods would let a name stripped from one bridge
+     * pass as long as another bridge still has it — masking a real per-class break.
+     *
+     * PythonEventBridge maps to an empty set: Python invokes it indirectly through
+     * `PyEventCallback` objects passed to `register_callbacks` (see PythonRnsRuntime),
+     * not by its own `handle*` method names, so only its class survival is asserted.
      */
-    private val pythonCalledMethods = setOf(
-        "configurePower", "connect", "connectAsync", "disconnect", "disconnectAsync",
-        "disconnectCentralAsync", "disconnectPeripheralAsync", "ensureAdvertising",
-        "findDeviceByVidPid", "getConnectedDeviceName", "getPeerRssi", "isConnected",
-        "notifyBluetoothPin", "notifyOnlineStatusChanged", "read", "requestIdentityResync",
-        "sendAsync", "setIdentity", "setOnAddressChanged", "setOnConnected",
-        "setOnConnectionStateChanged", "setOnDataReceived", "setOnDeviceDiscovered",
-        "setOnDisconnected", "setOnDuplicateIdentityDetected", "setOnIdentityReceived",
-        "setOnMtuNegotiated", "shouldConnect", "startAdvertisingAsync", "startAsync",
-        "startScanningAsync", "stopAdvertisingAsync", "stopAsync", "stopScanningAsync",
+    private val bridgeMethods: Map<String, Set<String>> = mapOf(
+        "network.columba.app.rns.host.rnode.KotlinRNodeBridge" to setOf(
+            "connect", "disconnect", "getConnectedDeviceName", "isConnected",
+            "notifyOnlineStatusChanged", "read", "setOnConnectionStateChanged",
+        ),
+        "network.columba.app.rns.host.ble.bridge.KotlinBLEBridge" to setOf(
+            "configurePower", "connect", "connectAsync", "disconnect", "disconnectAsync",
+            "disconnectCentralAsync", "disconnectPeripheralAsync", "ensureAdvertising",
+            "getPeerRssi", "requestIdentityResync", "sendAsync", "setIdentity",
+            "setOnAddressChanged", "setOnConnected", "setOnDataReceived", "setOnDeviceDiscovered",
+            "setOnDisconnected", "setOnDuplicateIdentityDetected", "setOnIdentityReceived",
+            "setOnMtuNegotiated", "shouldConnect", "startAdvertisingAsync", "startAsync",
+            "startScanningAsync", "stopAdvertisingAsync", "stopAsync", "stopScanningAsync",
+        ),
+        "network.columba.app.rns.host.usb.KotlinUSBBridge" to setOf(
+            "connect", "disconnect", "findDeviceByVidPid", "isConnected", "notifyBluetoothPin", "read",
+        ),
+        "network.columba.app.rns.backend.py.PythonEventBridge" to emptySet(),
     )
 
     @Test
     fun bridgeClassesAndMethodsSurviveR8() {
-        val loaded = bridgeClasses.map { fqcn ->
-            try {
+        bridgeMethods.forEach { (fqcn, expectedMethods) ->
+            val cls = try {
                 Class.forName(fqcn, false, targetClassLoader)
             } catch (e: ClassNotFoundException) {
                 throw AssertionError(
@@ -82,16 +90,16 @@ class PythonKotlinBridgeR8Test {
                     e,
                 )
             }
-        }
 
-        // Every Python-called method name must still be declared (and un-renamed)
-        // on at least one kept bridge class.
-        val keptMethodNames = loaded.flatMap { cls -> cls.declaredMethods.map { it.name } }.toSet()
-        val missing = pythonCalledMethods - keptMethodNames
-        assertTrue(
-            "R8 stripped/renamed Python-called bridge methods: $missing. The owning " +
-                "bridge class must be @Keep-annotated so its members survive obfuscation.",
-            missing.isEmpty(),
-        )
+            // Assert per class (not across the union) so a name stripped from this
+            // bridge isn't masked by the same name surviving on a different one.
+            val declared = cls.declaredMethods.map { it.name }.toSet()
+            val missing = expectedMethods - declared
+            assertTrue(
+                "R8 stripped/renamed Python-called methods on $fqcn: $missing. " +
+                    "The class must be @Keep-annotated so its members survive obfuscation.",
+                missing.isEmpty(),
+            )
+        }
     }
 }

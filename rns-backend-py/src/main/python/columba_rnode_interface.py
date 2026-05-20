@@ -528,6 +528,29 @@ class ColumbaRNodeInterface(Interface):
         except Exception as e:  # noqa: BLE001
             RNS.log(f"ColumbaRNodeInterface: optional callback registration failed (non-fatal): {e}", RNS.LOG_DEBUG)
 
+        # Stop any stale read thread before starting a new one.
+        # _on_connection_state_changed(False) does NOT clear _running, so an
+        # existing thread from the previous connection is still looping. Without
+        # this guard, both the old and the new thread poll the same
+        # KotlinRNodeBridge.readBuffer concurrently, stealing bytes from each
+        # other and corrupting every KISS frame. _start_usb() already applies
+        # this pattern (lines ~594-600) — mirror it here.
+        if self._read_thread is not None and self._read_thread.is_alive():
+            RNS.log(
+                f"ColumbaRNodeInterface[{self.name}]: stopping stale BLE/Classic "
+                "read thread before reconnect start",
+                RNS.LOG_INFO,
+            )
+            self._running.clear()
+            self._read_thread.join(timeout=2.0)
+            if self._read_thread.is_alive():
+                RNS.log(
+                    f"ColumbaRNodeInterface[{self.name}]: stale read thread did not stop "
+                    "within timeout — aborting start to prevent race",
+                    RNS.LOG_ERROR,
+                )
+                return False
+
         # Start read thread
         self._running.set()
         self._read_thread = threading.Thread(target=self._read_loop, daemon=True)

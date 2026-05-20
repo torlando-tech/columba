@@ -51,7 +51,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         BlockedPeerEntity::class,
         InterfaceFirstSeenEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -118,6 +118,193 @@ abstract class ColumbaDatabase : RoomDatabase() {
          * importing pre-v2 backup bundles whose messages still carry
          * the legacy overload.
          */
+        /**
+         * v2 → v3: normalize `destinationHash` to lowercase across the
+         * contacts table (and the join tables that key off it) so that
+         * case-variant rows for the same logical peer cannot coexist.
+         *
+         * Background: the `contacts` PK is the composite
+         * (destinationHash, identityHash), stored under SQLite's default
+         * BINARY collation. Older releases (≤0.8.15) and any code path
+         * that didn't normalize before insert could persist a row with a
+         * mixed-case hash. A later lowercase insert of the same logical
+         * peer then created a *second* row, and
+         * `ContactDao.getEnrichedContacts` returned both — surfacing as
+         * an IllegalArgumentException in LazyColumn at /contacts when
+         * the keys `${prefix}_${destinationHash.lowercase()}` collided
+         * (COLUMBA-3F).
+         *
+         * Strategy: for each (identityHash, lower(destinationHash))
+         * group, pick a "survivor" row (highest lastInteractionTimestamp,
+         * tiebreak on isPinned, then ACTIVE status, then non-null
+         * publicKey), repoint all FK-ish references in the dependent
+         * tables to the lowercase canonical hash, delete the losing
+         * rows, then rewrite the survivor's destinationHash to its
+         * lowercase form. Finally, lowercase destinationHash in the
+         * sibling tables that participate in the enriched join so the
+         * case-sensitive ON conditions continue to match.
+         *
+         * Wrapped in a single transaction so a partial migration cannot
+         * leave dangling references.
+         */
+        val MIGRATION_2_3: Migration =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.beginTransaction()
+                    try {
+                        // 1) Find all (identityHash, lower(destinationHash)) groups with
+                        //    more than one row in the contacts table — these are the
+                        //    case-variant duplicates we need to collapse.
+                        val dupGroups = mutableListOf<Pair<String, String>>() // (identityHash, lowerHash)
+                        db.query(
+                            """
+                            SELECT identityHash, lower(destinationHash) AS lh, COUNT(*) AS c
+                            FROM contacts
+                            GROUP BY identityHash, lower(destinationHash)
+                            HAVING c > 1
+                            """.trimIndent(),
+                        ).use { cursor ->
+                            val idCol = cursor.getColumnIndexOrThrow("identityHash")
+                            val lhCol = cursor.getColumnIndexOrThrow("lh")
+                            while (cursor.moveToNext()) {
+                                dupGroups.add(cursor.getString(idCol) to cursor.getString(lhCol))
+                            }
+                        }
+
+                        for ((identityHash, lowerHash) in dupGroups) {
+                            // 2) Pick the survivor: latest interaction wins; tiebreak on
+                            //    isPinned DESC, status='ACTIVE' first, non-null publicKey.
+                            var survivorHash: String? = null
+                            db.query(
+                                """
+                                SELECT destinationHash
+                                FROM contacts
+                                WHERE identityHash = ?
+                                  AND lower(destinationHash) = ?
+                                ORDER BY lastInteractionTimestamp DESC,
+                                         isPinned DESC,
+                                         CASE WHEN status = 'ACTIVE' THEN 0 ELSE 1 END,
+                                         CASE WHEN publicKey IS NOT NULL THEN 0 ELSE 1 END,
+                                         addedTimestamp DESC
+                                LIMIT 1
+                                """.trimIndent(),
+                                arrayOf<Any?>(identityHash, lowerHash),
+                            ).use { c ->
+                                if (c.moveToFirst()) survivorHash = c.getString(0)
+                            }
+                            val keep = survivorHash ?: continue
+
+                            // 3) Delete the loser rows (everything for this group except the survivor).
+                            db.execSQL(
+                                """
+                                DELETE FROM contacts
+                                WHERE identityHash = ?
+                                  AND lower(destinationHash) = ?
+                                  AND destinationHash <> ?
+                                """.trimIndent(),
+                                arrayOf<Any?>(identityHash, lowerHash, keep),
+                            )
+
+                            // 4) Rewrite the survivor's destinationHash to its lowercase form
+                            //    (only if it isn't already lowercase).
+                            if (keep != lowerHash) {
+                                db.execSQL(
+                                    """
+                                    UPDATE contacts
+                                    SET destinationHash = ?
+                                    WHERE identityHash = ? AND destinationHash = ?
+                                    """.trimIndent(),
+                                    arrayOf<Any?>(lowerHash, identityHash, keep),
+                                )
+                            }
+                        }
+
+                        // 5) Lowercase any remaining mixed-case rows in contacts that
+                        //    weren't part of a duplicate group (safe: no PK collision
+                        //    because we already collapsed those).
+                        db.execSQL(
+                            """
+                            UPDATE contacts
+                            SET destinationHash = lower(destinationHash)
+                            WHERE destinationHash <> lower(destinationHash)
+                            """.trimIndent(),
+                        )
+
+                        // 6) Normalize join-side tables so the case-sensitive ON
+                        //    conditions in ContactDao.getEnrichedContacts continue
+                        //    to match. These tables key on destinationHash / peerHash /
+                        //    senderHash; we lowercase in-place. For tables with a
+                        //    composite PK (conversations) duplicates are theoretically
+                        //    possible — guard with INSERT OR IGNORE-style merge by
+                        //    deleting losers first when collisions exist.
+                        normalizeSimpleHashColumn(db, table = "announces", column = "destinationHash")
+                        normalizeSimpleHashColumn(db, table = "peer_icons", column = "destinationHash")
+                        normalizeSimpleHashColumn(db, table = "received_locations", column = "senderHash")
+                        normalizeCompositeHashColumn(
+                            db,
+                            table = "conversations",
+                            hashColumn = "peerHash",
+                            otherKeyColumn = "identityHash",
+                        )
+                        normalizeCompositeHashColumn(
+                            db,
+                            table = "blocked_peers",
+                            hashColumn = "peerHash",
+                            otherKeyColumn = "identityHash",
+                        )
+
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
+                    }
+                }
+            }
+
+        /**
+         * Lowercase [column] in [table] in-place. Assumes [column] is the
+         * sole identity for the row (or part of a unique constraint that
+         * tolerates lower(x) without collisions). Mixed-case-only rows
+         * are rewritten; rows already lowercase are left alone.
+         */
+        private fun normalizeSimpleHashColumn(
+            db: SupportSQLiteDatabase,
+            table: String,
+            column: String,
+        ) {
+            db.execSQL(
+                "UPDATE $table SET $column = lower($column) WHERE $column <> lower($column)",
+            )
+        }
+
+        /**
+         * Lowercase [hashColumn] in a table whose uniqueness depends on
+         * (hashColumn, otherKeyColumn). Before rewriting, drop any row
+         * whose lowercase form would collide with an already-lowercase
+         * row for the same [otherKeyColumn] (best-effort: prefer the
+         * lowercase row, which is the one the rest of the app writes).
+         */
+        private fun normalizeCompositeHashColumn(
+            db: SupportSQLiteDatabase,
+            table: String,
+            hashColumn: String,
+            otherKeyColumn: String,
+        ) {
+            db.execSQL(
+                """
+                DELETE FROM $table
+                WHERE $hashColumn <> lower($hashColumn)
+                  AND EXISTS (
+                    SELECT 1 FROM $table t2
+                    WHERE t2.$otherKeyColumn = $table.$otherKeyColumn
+                      AND t2.$hashColumn = lower($table.$hashColumn)
+                  )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "UPDATE $table SET $hashColumn = lower($hashColumn) WHERE $hashColumn <> lower($hashColumn)",
+            )
+        }
+
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =
             try {

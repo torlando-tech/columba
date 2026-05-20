@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.ble.bridge
 
+import androidx.annotation.Keep
 import com.chaquo.python.PyObject
 import network.columba.app.rns.api.util.toHex
 import android.annotation.SuppressLint
@@ -60,6 +61,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @SuppressLint("MissingPermission")
 @Suppress("InjectDispatcher") // Bridge class doesn't use DI - dispatchers are used for BLE operations
+@Keep // Python (BLE driver / event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinBLEBridge(
     private val context: Context,
     private val bluetoothManager: BluetoothManager,

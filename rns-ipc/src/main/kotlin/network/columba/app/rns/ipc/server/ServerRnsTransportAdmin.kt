@@ -66,6 +66,10 @@ internal class ServerRnsTransportAdmin(
         impl.isSharedInstanceAvailable()
     }
 
+    override fun isHostingSharedInstance(cb: IRnsBoolCallback) = dispatchBool(cb, scope) {
+        impl.isHostingSharedInstance()
+    }
+
     override fun getDebugInfo(cb: IRnsResultCallback) = dispatch(cb, scope) {
         impl.getDebugInfo().toBundle()
     }

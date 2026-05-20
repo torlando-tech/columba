@@ -203,6 +203,19 @@ class PythonRnsTransportAdmin(
             connected || isShared
         }
 
+    override suspend fun isHostingSharedInstance(): Boolean =
+        pyCall {
+            // Distinct from isSharedInstanceAvailable: only true when WE
+            // own TCP 37428, not when we're a client of someone else who
+            // does. Upstream Reticulum tracks this in `is_shared_instance`
+            // (set true in `__create_default_config` when share_instance=yes
+            // and the bind succeeds; left false when first-to-bind was
+            // already taken and we fell back to RPC client mode).
+            val instance = runtime.reticulumInstance ?: return@pyCall false
+            instance["is_shared_instance"]
+                ?.toJava(Boolean::class.javaObjectType) ?: false
+        }
+
     // ==================== Diagnostics ====================
 
     override suspend fun getDebugInfo(): Map<String, Any> =

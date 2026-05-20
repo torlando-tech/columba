@@ -91,11 +91,20 @@ data class BackendCapabilities(
      * the kotlin backend has the hooks. `sharedInstanceAvailabilityChecks`
      * lets the UI detect when a co-located rnsd shared instance is
      * present; only python upstream RNS exposes the necessary check.
+     *
+     * `shareInstanceHosting` reports whether this backend can publish
+     * itself as an RNS shared instance (TCP 37428 master) so other RNS
+     * apps on the device (Sideband, rnsd, ...) can RPC through it.
+     * Upstream Python RNS implements the RPC server; reticulum-kt has no
+     * equivalent. UI hides the "Share Instance" toggle in Advanced
+     * settings on backends that report `false` so the option doesn't
+     * appear where it has no effect.
      */
     @Parcelize
     data class PerformanceCaps(
         val batteryProfileTuning: Support,
         val sharedInstanceAvailabilityChecks: Boolean,
+        val shareInstanceHosting: Boolean = false,
     ) : Parcelable
 
     /**
@@ -151,6 +160,7 @@ data class BackendCapabilities(
             performance = PerformanceCaps(
                 batteryProfileTuning = Support.UNSUPPORTED,
                 sharedInstanceAvailabilityChecks = false,
+                shareInstanceHosting = false,
             ),
         )
     }

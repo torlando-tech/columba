@@ -335,10 +335,12 @@ class InterfaceConfigManager
                     // Coerce -1 (never configured sentinel) to 0
                     val autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
                     val autoconnectIfacOnly = settingsRepository.getAutoconnectIfacOnly()
+                    val shareInstanceHosting = settingsRepository.getShareInstanceHostingEnabled()
                     Log.d(
                         TAG,
                         "Discovery settings: discover=$discoverInterfaces, autoconnect=$autoconnectDiscoveredCount " +
-                            "(saved=$savedAutoconnect), ifacOnly=$autoconnectIfacOnly",
+                            "(saved=$savedAutoconnect), ifacOnly=$autoconnectIfacOnly, " +
+                            "shareInstanceHosting=$shareInstanceHosting",
                     )
 
                     val config =
@@ -353,6 +355,7 @@ class InterfaceConfigManager
                             preferOwnInstance = preferOwnInstance,
                             rpcKey = rpcKey,
                             enableTransport = transportNodeEnabled,
+                            shareInstanceHosting = shareInstanceHosting,
                             discoverInterfaces = discoverInterfaces,
                             autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                             autoconnectIfacOnly = autoconnectIfacOnly,

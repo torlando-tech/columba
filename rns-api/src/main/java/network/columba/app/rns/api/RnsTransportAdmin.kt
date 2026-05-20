@@ -88,6 +88,20 @@ interface RnsTransportAdmin {
      */
     suspend fun isSharedInstanceAvailable(): Boolean
 
+    /**
+     * Returns true if this Reticulum instance is itself acting as the shared
+     * instance master (other apps on the device can RPC into it via TCP
+     * 37428). Distinct from [isSharedInstanceAvailable], which is true for
+     * EITHER "we are the master" or "we are connected to one." The UI uses
+     * this to distinguish the "Hosting Shared Instance" banner state from
+     * the "Connected to Shared Instance" client state.
+     *
+     * Capability-gated by
+     * [BackendCapabilities.PerformanceCaps.shareInstanceHosting] — backends
+     * that report `false` always return `false` here.
+     */
+    suspend fun isHostingSharedInstance(): Boolean
+
     // ==================== Diagnostics ====================
 
     /** Free-form key/value debug snapshot. Surfaced on the developer screen. */

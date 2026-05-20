@@ -42,5 +42,9 @@ val NATIVE_CAPABILITIES: BackendCapabilities = BackendCapabilities(
     performance = PerformanceCaps(
         batteryProfileTuning = Support.FULL,
         sharedInstanceAvailabilityChecks = false,
+        // RNS shared-instance hosting needs upstream Python RNS's
+        // SharedInstanceServer (RPC over TCP 37428). reticulum-kt has no
+        // equivalent server; UI hides the toggle on this backend.
+        shareInstanceHosting = false,
     ),
 )

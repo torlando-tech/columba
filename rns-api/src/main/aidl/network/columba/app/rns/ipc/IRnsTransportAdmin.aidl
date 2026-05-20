@@ -43,6 +43,7 @@ oneway interface IRnsTransportAdmin {
     // ==================== Shared instance ====================
 
     void isSharedInstanceAvailable(in IRnsBoolCallback cb);
+    void isHostingSharedInstance(in IRnsBoolCallback cb);
 
     // ==================== Diagnostics ====================
 

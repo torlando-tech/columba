@@ -123,6 +123,21 @@ data class SettingsState(
     // Transport node + battery profile state
     val transportNodeEnabled: Boolean = true,
     val batteryProfile: BatteryProfile = BatteryProfile.BALANCED,
+    // RNS shared-instance HOSTING (python backend only; capability-gated in UI).
+    //
+    // - `shareInstanceHostingEnabled` mirrors the persisted preference — what
+    //   the toggle reflects.
+    // - `appliedShareInstanceHosting` is the value that's in the live RNS
+    //   config; differs from the persisted preference when there's a pending
+    //   change awaiting Apply & Restart.
+    // - `isHostingSharedInstance` is the runtime fact polled from the
+    //   daemon's `is_shared_instance` Python attribute (we ARE the master).
+    // - `isHostingShareInstanceConflict` is derived: user enabled hosting,
+    //   but another app already holds TCP 37428 (we became client instead).
+    val shareInstanceHostingEnabled: Boolean = false,
+    val appliedShareInstanceHosting: Boolean = false,
+    val isHostingSharedInstance: Boolean = false,
+    val isHostingShareInstanceConflict: Boolean = false,
     // Location sharing state
     val locationSharingEnabled: Boolean = true,
     val activeSharingSessions: List<network.columba.app.service.SharingSession> = emptyList(),
@@ -262,13 +277,28 @@ class SettingsViewModel
             startSyncStateMonitor()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
-                // supportsSharedInstanceAvailabilityChecks was a kotlin-backend-always-false
-                // capability flag on the legacy ReticulumProtocol. Phase D's BackendCapabilities
-                // gating replaces this; until then hard-code to false to preserve current
-                // behavior on the kotlin backend (the only impl today).
-                @Suppress("ConstantConditionIf")
-                if (false) {
+                // Phase D wiring: gate the availability monitor on the
+                // backend capability rather than the legacy hard-false. The
+                // monitor also drives the hosting/conflict flags for the
+                // Share-Instance toggle, so on the python backend we want
+                // it running; on kotlin it's a no-op (always returns false
+                // for both probes), so we still gate to skip the poll
+                // overhead.
+                if (capabilities.value.performance.sharedInstanceAvailabilityChecks ||
+                    capabilities.value.performance.shareInstanceHosting
+                ) {
                     startSharedInstanceAvailabilityMonitor()
+                }
+                // Seed appliedShareInstanceHosting from the persisted
+                // preference at startup — the daemon was constructed with
+                // this value so applied == persisted at this moment. From
+                // here on, only restartService()'s onServiceReady advances
+                // the applied mirror.
+                viewModelScope.launch {
+                    val initialApplied = settingsRepository.getShareInstanceHostingEnabled()
+                    _state.value = _state.value.copy(
+                        appliedShareInstanceHosting = initialApplied,
+                    )
                 }
                 startRelayMonitor()
                 startLocationSharingMonitor()
@@ -336,6 +366,7 @@ class SettingsViewModel
                         propagationNodeManager.lastSyncTimestamp,
                         settingsRepository.autoRetrieveEnabledFlow,
                         settingsRepository.retrievalIntervalSecondsFlow,
+                        settingsRepository.shareInstanceHostingEnabledFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as network.columba.app.data.db.entity.LocalIdentityEntity?
@@ -387,6 +418,9 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val retrievalIntervalSeconds = flows[15] as Int
 
+                        @Suppress("UNCHECKED_CAST")
+                        val shareInstanceHostingEnabled = flows[16] as Boolean
+
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
                         val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
@@ -433,6 +467,13 @@ class SettingsViewModel
                             // Transport node + battery profile state
                             transportNodeEnabled = transportNodeEnabled,
                             batteryProfile = batteryProfile,
+                            // Share-instance hosting: persisted preference reflected
+                            // immediately; applied/runtime/conflict come from
+                            // loadShareInstanceHostingState() + periodic polling.
+                            shareInstanceHostingEnabled = shareInstanceHostingEnabled,
+                            appliedShareInstanceHosting = _state.value.appliedShareInstanceHosting,
+                            isHostingSharedInstance = _state.value.isHostingSharedInstance,
+                            isHostingShareInstanceConflict = _state.value.isHostingShareInstanceConflict,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
                             tryPropagationOnFail = _state.value.tryPropagationOnFail,
@@ -964,7 +1005,20 @@ class SettingsViewModel
                     // 3. Re-initialize with config from database
                     interfaceConfigManager
                         .applyInterfaceChanges(
-                            onServiceReady = { _state.value = _state.value.copy(isRestarting = false) },
+                            onServiceReady = {
+                                // Restart completed: the daemon now reflects the
+                                // persisted shareInstanceHosting preference, so
+                                // sync the "applied" mirror used by the pending-
+                                // changes affordance. Reading via viewModelScope
+                                // because onServiceReady runs on the IPC thread.
+                                viewModelScope.launch {
+                                    val applied = settingsRepository.getShareInstanceHostingEnabled()
+                                    _state.value = _state.value.copy(
+                                        isRestarting = false,
+                                        appliedShareInstanceHosting = applied,
+                                    )
+                                }
+                            },
                         ).onSuccess {
                             Log.i(TAG, "Service restart completed successfully")
                         }.onFailure { error ->
@@ -1201,6 +1255,26 @@ class SettingsViewModel
                         if (!currentState.isRestarting && networkReady) {
                             // Query service for shared instance availability
                             val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
+                            // Also poll whether we are the hosting master vs a
+                            // client. Cheap (single Python attr read) and runs
+                            // on the same cadence as isOnline so the UI can't
+                            // see a torn state between the two flags.
+                            val isHosting = rnsTransportAdmin.isHostingSharedInstance()
+                            // Conflict: user wants to host but a master other
+                            // than us holds TCP 37428 (we became RPC client).
+                            // `isOnline && !isHosting` means "a shared instance
+                            // exists on this device and it is not us."
+                            val isConflict =
+                                currentState.shareInstanceHostingEnabled && isOnline && !isHosting
+                            if (
+                                isHosting != currentState.isHostingSharedInstance ||
+                                isConflict != currentState.isHostingShareInstanceConflict
+                            ) {
+                                _state.value = _state.value.copy(
+                                    isHostingSharedInstance = isHosting,
+                                    isHostingShareInstanceConflict = isConflict,
+                                )
+                            }
 
                             // Update sharedInstanceOnline if changed
                             if (isOnline != currentState.sharedInstanceOnline) {
@@ -1602,6 +1676,23 @@ class SettingsViewModel
                 if (!_state.value.isRestarting) {
                     restartService()
                 }
+            }
+        }
+
+        /**
+         * Save the RNS shared-instance hosting preference.
+         *
+         * Deliberately does NOT trigger an immediate service restart: hosting
+         * a shared instance flips RNS into master mode and other apps on the
+         * device may already be RPCing — a silent restart could drop their
+         * sessions mid-call. The UI shows an "Apply & Restart" affordance
+         * when `shareInstanceHostingEnabled != appliedShareInstanceHosting`
+         * so the user explicitly approves the outage window.
+         */
+        fun setShareInstanceHostingEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveShareInstanceHostingEnabled(enabled)
+                Log.d(TAG, "Share-instance hosting preference set to $enabled (pending restart to apply)")
             }
         }
 

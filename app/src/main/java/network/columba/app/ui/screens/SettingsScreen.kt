@@ -252,6 +252,8 @@ fun SettingsScreen(
                         sharedInstanceOnline = state.sharedInstanceOnline,
                         wasUsingSharedInstance = state.wasUsingSharedInstance,
                         isRestarting = state.isRestarting,
+                        isHostingSharedInstance = state.isHostingSharedInstance,
+                        isHostingShareInstanceConflict = state.isHostingShareInstanceConflict,
                     )
                 if (showSharedInstanceBanner) {
                     SharedInstanceBannerCard(
@@ -260,6 +262,8 @@ fun SettingsScreen(
                         rpcKey = state.rpcKey,
                         wasUsingSharedInstance = state.wasUsingSharedInstance,
                         sharedInstanceOnline = state.sharedInstanceOnline,
+                        isHostingSharedInstance = state.isHostingSharedInstance,
+                        isHostingShareInstanceConflict = state.isHostingShareInstanceConflict,
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                         onRpcKeyChange = { viewModel.saveRpcKey(it) },
@@ -523,6 +527,10 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.ADVANCED, it) },
                     transportNodeEnabled = state.transportNodeEnabled,
                     onTransportNodeToggle = { viewModel.setTransportNodeEnabled(it) },
+                    shareInstanceHostingEnabled = state.shareInstanceHostingEnabled,
+                    onShareInstanceHostingToggle = { viewModel.setShareInstanceHostingEnabled(it) },
+                    shareInstanceHostingPending =
+                        state.shareInstanceHostingEnabled != state.appliedShareInstanceHosting,
                 )
 
                 // About section

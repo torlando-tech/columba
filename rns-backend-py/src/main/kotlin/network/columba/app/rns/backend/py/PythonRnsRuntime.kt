@@ -203,11 +203,23 @@ class PythonRnsRuntime(
         //    shared instance (another Columba running standalone).
         //    Can't join, can't bind — render AutoInterface as disabled
         //    so RNS doesn't crash trying to compete for the port.
+        //
+        // Resolve "join" before "host": the user's Advanced-settings
+        // toggle (`config.shareInstanceHosting`) expresses intent to
+        // publish ourselves on TCP 37428, but the kernel allows only
+        // one binder. When the probe finds another master, we defer to
+        // it at the wire layer and surface a "hosting conflict" mode to
+        // the UI so the user can see why their toggle didn't take
+        // effect.
         val probe = network.columba.app.rns.api.util.SharedInstanceProbe
-        val shareInstance = probe.shouldShareInstance(config)
-        val skipAutoInterface = !shareInstance && !probe.isAutoInterfaceUsable()
+        val joinShareInstance = probe.shouldShareInstance(config)
+        val hostShareInstance = config.shareInstanceHosting && !joinShareInstance
+        val skipAutoInterface = !joinShareInstance && !probe.isAutoInterfaceUsable()
         val mode = when {
-            shareInstance -> "shared-client"
+            joinShareInstance && config.shareInstanceHosting ->
+                "shared-client (HOSTING CONFLICT — another master holds TCP 37428)"
+            joinShareInstance -> "shared-client"
+            hostShareInstance -> "shared-host"
             skipAutoInterface -> "own-instance (AutoInterface disabled — port held by another app)"
             else -> "own-instance"
         }
@@ -215,7 +227,12 @@ class PythonRnsRuntime(
 
         val configDir = File(config.storagePath, "reticulum").apply { mkdirs() }
         File(configDir, "config").writeText(
-            RnsConfigFile.build(config, shareInstance, skipAutoInterface),
+            RnsConfigFile.build(
+                config = config,
+                joinShareInstance = joinShareInstance,
+                hostShareInstance = hostShareInstance,
+                skipAutoInterface = skipAutoInterface,
+            ),
         )
         storagePath = configDir.absolutePath
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")

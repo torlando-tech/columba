@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,14 +44,23 @@ import androidx.compose.ui.unit.dp
  * - A shared instance is currently available (can switch to it)
  * - Was using shared instance but it went offline (informational state)
  * - Service is restarting
+ * - This instance is itself hosting a shared instance (python backend)
+ * - The user enabled hosting but a co-located master is in the way (conflict)
  */
 internal fun shouldShowSharedInstanceBanner(
     isSharedInstance: Boolean,
     sharedInstanceOnline: Boolean,
     wasUsingSharedInstance: Boolean,
     isRestarting: Boolean,
+    isHostingSharedInstance: Boolean = false,
+    isHostingShareInstanceConflict: Boolean = false,
 ): Boolean {
-    return isSharedInstance || sharedInstanceOnline || wasUsingSharedInstance || isRestarting
+    return isSharedInstance ||
+        sharedInstanceOnline ||
+        wasUsingSharedInstance ||
+        isRestarting ||
+        isHostingSharedInstance ||
+        isHostingShareInstanceConflict
 }
 
 /**
@@ -92,6 +103,19 @@ fun SharedInstanceBannerCard(
     wasUsingSharedInstance: Boolean = false,
     /** Current availability from service query */
     sharedInstanceOnline: Boolean = false,
+    /**
+     * True when this Columba instance is itself acting as the shared
+     * instance master (python backend only). Drives the new "Hosting
+     * Shared Instance" header state.
+     */
+    isHostingSharedInstance: Boolean = false,
+    /**
+     * True when the user enabled Share Instance hosting in Advanced
+     * settings but a co-located master holds TCP 37428 — we became a
+     * client instead. Drives the "Sharing Conflict" header state so the
+     * user can see why their toggle didn't take effect.
+     */
+    isHostingShareInstanceConflict: Boolean = false,
     onExpandToggle: (Boolean) -> Unit,
     onTogglePreferOwnInstance: (Boolean) -> Unit,
     onRpcKeyChange: (String?) -> Unit,
@@ -103,18 +127,24 @@ fun SharedInstanceBannerCard(
     // so we just need to check that flag and that shared is still offline
     val isInformationalState = wasUsingSharedInstance && !sharedInstanceOnline
 
-    // Use subtle color for informational state (not error), primary otherwise
+    // Header color selection. Precedence (most-specific first):
+    //   conflict → error    (something needs the user's attention)
+    //   hosting  → tertiary (we own the transport; distinct from client primary)
+    //   info     → surfaceVariant (subtle "FYI, used to be using shared")
+    //   default  → primaryContainer (the existing client / own modes)
     val containerColor =
-        if (isInformationalState) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            MaterialTheme.colorScheme.primaryContainer
+        when {
+            isHostingShareInstanceConflict -> MaterialTheme.colorScheme.errorContainer
+            isHostingSharedInstance -> MaterialTheme.colorScheme.tertiaryContainer
+            isInformationalState -> MaterialTheme.colorScheme.surfaceVariant
+            else -> MaterialTheme.colorScheme.primaryContainer
         }
     val contentColor =
-        if (isInformationalState) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.onPrimaryContainer
+        when {
+            isHostingShareInstanceConflict -> MaterialTheme.colorScheme.onErrorContainer
+            isHostingSharedInstance -> MaterialTheme.colorScheme.onTertiaryContainer
+            isInformationalState -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.onPrimaryContainer
         }
 
     Card(
@@ -148,10 +178,11 @@ fun SharedInstanceBannerCard(
                 ) {
                     Icon(
                         imageVector =
-                            if (isInformationalState) {
-                                Icons.Default.LinkOff
-                            } else {
-                                Icons.Default.Link
+                            when {
+                                isHostingShareInstanceConflict -> Icons.Default.Warning
+                                isHostingSharedInstance -> Icons.Default.Cast
+                                isInformationalState -> Icons.Default.LinkOff
+                                else -> Icons.Default.Link
                             },
                         contentDescription = "Instance Mode",
                         tint = contentColor,
@@ -159,6 +190,8 @@ fun SharedInstanceBannerCard(
                     Text(
                         text =
                             when {
+                                isHostingShareInstanceConflict -> "Sharing Conflict — Another App is Hosting"
+                                isHostingSharedInstance -> "Hosting Shared Instance"
                                 isInformationalState -> "Shared Instance No Longer Available"
                                 isUsingSharedInstance -> "Connected to Shared Instance"
                                 else -> "Using Columba's Own Instance"
@@ -189,8 +222,32 @@ fun SharedInstanceBannerCard(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    // Show different content based on state
-                    if (isInformationalState) {
+                    // Show different content based on state.
+                    // Precedence matches the header (most-specific first); the
+                    // hosting/conflict branches own their own body so the
+                    // existing informational/client/own UI is untouched.
+                    if (isHostingShareInstanceConflict) {
+                        Text(
+                            text =
+                                "You enabled Share Instance in Advanced settings, but another " +
+                                    "app on this device (e.g., Sideband) is already hosting " +
+                                    "a shared Reticulum instance on TCP 37428. Columba has " +
+                                    "joined it as a client. To host from Columba instead, " +
+                                    "disable sharing in the other app and restart Columba.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                        )
+                    } else if (isHostingSharedInstance) {
+                        Text(
+                            text =
+                                "Other RNS apps on this device can connect to Columba's " +
+                                    "transport via the shared instance on TCP 37428. " +
+                                    "Disable Share Instance in Advanced settings and restart " +
+                                    "Reticulum to stop hosting.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor,
+                        )
+                    } else if (isInformationalState) {
                         // Informational state - shared instance went offline, Columba restarted
                         Text(
                             text =

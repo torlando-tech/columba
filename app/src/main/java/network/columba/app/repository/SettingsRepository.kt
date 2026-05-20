@@ -109,6 +109,13 @@ class SettingsRepository
             val TRANSPORT_NODE_ENABLED = booleanPreferencesKey("transport_node_enabled")
             val BATTERY_PROFILE = stringPreferencesKey("battery_profile")
 
+            // RNS shared-instance HOSTING (Python backend only — kotlin backend
+            // has no SharedInstanceServer). When enabled, the rendered RNS
+            // config gets `share_instance = yes` + `shared_instance_type = tcp`
+            // and the daemon publishes itself on TCP 37428 so other RNS apps
+            // on the device can join it.
+            val SHARE_INSTANCE_HOSTING_ENABLED = booleanPreferencesKey("share_instance_hosting_enabled")
+
             // RNS 1.1.x Interface Discovery preferences
             val DISCOVER_INTERFACES_ENABLED = booleanPreferencesKey("discover_interfaces_enabled")
             val AUTOCONNECT_DISCOVERED_COUNT = intPreferencesKey("autoconnect_discovered_count")
@@ -1062,6 +1069,36 @@ class SettingsRepository
         suspend fun saveTransportNodeEnabled(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.TRANSPORT_NODE_ENABLED] = enabled
+            }
+        }
+
+        /**
+         * Flow of the RNS shared-instance hosting toggle.
+         *
+         * When `true`, the Python-backend's config writer emits
+         * `share_instance = yes` and `shared_instance_type = tcp` so other
+         * RNS apps on the device can RPC through this Reticulum instance.
+         * Hidden from the UI on backends where
+         * `BackendCapabilities.PerformanceCaps.shareInstanceHosting = false`.
+         * Defaults to `false`.
+         */
+        val shareInstanceHostingEnabledFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SHARE_INSTANCE_HOSTING_ENABLED] ?: false
+                }.distinctUntilChanged()
+
+        /** Non-flow read of [shareInstanceHostingEnabledFlow]. */
+        suspend fun getShareInstanceHostingEnabled(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.SHARE_INSTANCE_HOSTING_ENABLED] ?: false
+                }.first()
+
+        /** Save the RNS shared-instance hosting toggle. */
+        suspend fun saveShareInstanceHostingEnabled(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SHARE_INSTANCE_HOSTING_ENABLED] = enabled
             }
         }
 

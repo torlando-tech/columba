@@ -464,12 +464,15 @@ jobs:
               --stacktrace
 
       - name: Upload R8 mapping file
-        if: always()
+        # Only on failure — the mapping (~130 MB for the python flavor) is only
+        # useful for debugging a gate failure, and uploading it every run would
+        # dominate the Actions storage quota.
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: r8-mapping-pythonBackend
           path: app/build/outputs/mapping/noSentryPythonBackendReleaseMinified/mapping.txt
-          retention-days: 30
+          retention-days: 14
 
       - name: Upload test reports
         if: failure()

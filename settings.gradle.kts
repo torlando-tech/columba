@@ -6,6 +6,14 @@ pluginManagement {
     }
 }
 
+plugins {
+    // Auto-provisions the JDK toolchain pinned in build.gradle.kts (JDK 21) so the
+    // pythonBackend flavor builds regardless of the developer's default JDK — its
+    // Hilt-generated Java makes javac read LXST-kt's Java 21 bytecode, which a
+    // JDK <21 javac can't load. CI uses JDK 25; 21 is the local floor.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {

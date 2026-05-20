@@ -379,6 +379,9 @@ class PythonRnsTransportAdmin(
         fun putLong(jsonKey: String, dictKey: String = jsonKey) {
             info.dictLong(dictKey)?.let { obj.put(jsonKey, it) }
         }
+        fun putDouble(jsonKey: String, dictKey: String = jsonKey) {
+            info.dictDouble(dictKey)?.let { obj.put(jsonKey, it) }
+        }
         putStr("name")
         putStr("type")
         putStr("transport_id")
@@ -398,6 +401,14 @@ class PythonRnsTransportAdmin(
         putInt("coding_rate")
         putStr("modulation")
         putInt("channel")
+        // Discovery location: upstream RNS stores `latitude` / `longitude` /
+        // `height` as floats (or None) in the announce dict. Without these,
+        // `DiscoveredInterface.hasLocation` is false and the Map screen's
+        // marker layer + the layers-sheet "Show on map" chip row stay empty
+        // for every Python-flavor interface.
+        putDouble("latitude")
+        putDouble("longitude")
+        putDouble("height")
         putStr("ifac_netname")
         putStr("ifac_netkey")
         info.dictGet("transport")?.let { obj.put("transport", it.toJava(Boolean::class.javaObjectType)) }

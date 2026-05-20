@@ -67,42 +67,48 @@ class ContactRepository
          */
         suspend fun getContact(destinationHash: String): ContactEntity? {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return null
-            return contactDao.getContact(destinationHash, activeIdentity.identityHash)
+            // Normalize: contacts are stored with lowercase destinationHash (COLUMBA-3F).
+            return contactDao.getContact(destinationHash.lowercase(), activeIdentity.identityHash)
         }
 
         /**
          * Get a specific contact as Flow (for observing changes) for the active identity.
          * Automatically switches when identity changes.
          */
-        fun getContactFlow(destinationHash: String): Flow<ContactEntity?> =
-            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun getContactFlow(destinationHash: String): Flow<ContactEntity?> {
+            // Normalize: contacts are stored with lowercase destinationHash (COLUMBA-3F).
+            val normalizedHash = destinationHash.lowercase()
+            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(null)
                 } else {
-                    contactDao.getContactFlow(destinationHash, identity.identityHash)
+                    contactDao.getContactFlow(normalizedHash, identity.identityHash)
                 }
             }
+        }
 
         /**
          * Check if a contact exists for the active identity (for star button state in announce stream)
          */
         suspend fun hasContact(destinationHash: String): Boolean {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
-            return contactDao.contactExists(destinationHash, activeIdentity.identityHash)
+            return contactDao.contactExists(destinationHash.lowercase(), activeIdentity.identityHash)
         }
 
         /**
          * Check if a contact exists as Flow (for observing star button state) for the active identity.
          * Automatically switches when identity changes.
          */
-        fun hasContactFlow(destinationHash: String): Flow<Boolean> =
-            localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
+        fun hasContactFlow(destinationHash: String): Flow<Boolean> {
+            val normalizedHash = destinationHash.lowercase()
+            return localIdentityDao.getActiveIdentity().flatMapLatest { identity ->
                 if (identity == null) {
                     flowOf(false)
                 } else {
-                    contactDao.contactExistsFlow(destinationHash, identity.identityHash)
+                    contactDao.contactExistsFlow(normalizedHash, identity.identityHash)
                 }
             }
+        }
 
         /**
          * Add a contact from an announce (when user stars an announce).
@@ -263,7 +269,7 @@ class ContactRepository
          */
         suspend fun deleteContact(destinationHash: String) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            contactDao.deleteContact(destinationHash, activeIdentity.identityHash)
+            contactDao.deleteContact(destinationHash.lowercase(), activeIdentity.identityHash)
         }
 
         /**
@@ -274,7 +280,7 @@ class ContactRepository
             nickname: String?,
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            contactDao.updateNickname(destinationHash, activeIdentity.identityHash, nickname)
+            contactDao.updateNickname(destinationHash.lowercase(), activeIdentity.identityHash, nickname)
         }
 
         /**
@@ -285,7 +291,7 @@ class ContactRepository
             notes: String?,
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            contactDao.updateNotes(destinationHash, activeIdentity.identityHash, notes)
+            contactDao.updateNotes(destinationHash.lowercase(), activeIdentity.identityHash, notes)
         }
 
         /**
@@ -296,7 +302,7 @@ class ContactRepository
             tags: String?,
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            contactDao.updateTags(destinationHash, activeIdentity.identityHash, tags)
+            contactDao.updateTags(destinationHash.lowercase(), activeIdentity.identityHash, tags)
         }
 
         /**
@@ -304,8 +310,9 @@ class ContactRepository
          */
         suspend fun togglePin(destinationHash: String) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            val current = contactDao.getContact(destinationHash, activeIdentity.identityHash)?.isPinned ?: false
-            contactDao.updatePinned(destinationHash, activeIdentity.identityHash, !current)
+            val normalizedHash = destinationHash.lowercase()
+            val current = contactDao.getContact(normalizedHash, activeIdentity.identityHash)?.isPinned ?: false
+            contactDao.updatePinned(normalizedHash, activeIdentity.identityHash, !current)
         }
 
         /**
@@ -316,7 +323,7 @@ class ContactRepository
             timestamp: Long,
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
-            contactDao.updateLastInteraction(destinationHash, activeIdentity.identityHash, timestamp)
+            contactDao.updateLastInteraction(destinationHash.lowercase(), activeIdentity.identityHash, timestamp)
         }
 
         /**

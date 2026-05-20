@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -524,10 +525,10 @@ fun ContactsScreen(
                                         modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
                                     )
                                 }
-                                items(
+                                itemsIndexed(
                                     contactsState.groupedContacts.pinned,
-                                    key = { contact -> "pinned_${contact.destinationHash.lowercase()}" },
-                                ) { contact ->
+                                    key = { index, contact -> "pinned_${contact.destinationHash.lowercase()}_$index" },
+                                ) { _, contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
                                         onClick = {
@@ -576,10 +577,10 @@ fun ContactsScreen(
                                         )
                                     }
                                 }
-                                items(
+                                itemsIndexed(
                                     contactsState.groupedContacts.all,
-                                    key = { contact -> "all_${contact.destinationHash.lowercase()}" },
-                                ) { contact ->
+                                    key = { index, contact -> "all_${contact.destinationHash.lowercase()}_$index" },
+                                ) { _, contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
                                         onClick = {

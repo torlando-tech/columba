@@ -362,6 +362,132 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+  proguard-verification:
+    name: Verify Python-Kotlin Bridge (R8)
+    # Builds a MINIFIED pythonBackend APK and instrument-tests that the @Keep'd
+    # Python<->Kotlin bridge classes/methods survive R8 (Chaquopy calls them by
+    # name; obfuscation would break the python flavor silently at runtime).
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Clean AIDL generated code
+        run: |
+          rm -rf app/build/generated/aidl_source_output_dir
+          rm -rf */build/generated/aidl_source_output_dir
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Pre-build minified APK + test APK
+        # testBuildType=releaseMinified so the androidTest variant targets the
+        # minified app. No SENTRY_AUTH_TOKEN -> no mapping upload; noSentry flavor
+        # keeps the Sentry plugin out of the way entirely.
+        timeout-minutes: 40
+        run: |
+          ./gradlew \
+            :app:assembleNoSentryPythonBackendReleaseMinified \
+            :app:assembleNoSentryPythonBackendReleaseMinifiedAndroidTest \
+            -PtestBuildType=releaseMinified --stacktrace --max-workers=2
+
+      - name: AVD cache
+        uses: actions/cache@v5
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-34-x86_64-v6
+
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2.37.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            adb wait-for-device
+            adb shell getprop sys.boot_completed | grep -q 1 || sleep 10
+            echo "Emulator ready, snapshot cached."
+
+      - name: Verify bridge survives R8 (minified, on device)
+        uses: reactivecircus/android-emulator-runner@v2.37.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            ./gradlew :app:connectedNoSentryPythonBackendReleaseMinifiedAndroidTest \
+              -PtestBuildType=releaseMinified \
+              -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.proguard.PythonKotlinBridgeR8Test \
+              --stacktrace
+
+      - name: Upload R8 mapping file
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: r8-mapping-pythonBackend
+          path: app/build/outputs/mapping/noSentryPythonBackendReleaseMinified/mapping.txt
+          retention-days: 30
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: proguard-verification-reports
+          path: |
+            **/build/reports/androidTests/
+            **/build/outputs/androidTest-results/**/*.xml
+          retention-days: 7
+
+      - name: Cleanup emulator
+        if: always()
+        run: |
+          adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+          pkill -9 qemu-system || true
+          adb kill-server || true
+
   instrumented-tests:
     name: Instrumented Tests
     # Run in parallel with other jobs

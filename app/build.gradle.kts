@@ -259,7 +259,33 @@ android {
             enableUnitTestCoverage = true
             enableAndroidTestCoverage = true
         }
+        // Minified-but-debuggable build type used ONLY to instrument-test R8
+        // output — it verifies the @Keep'd Python<->Kotlin bridge classes/methods
+        // survive obfuscation (Chaquopy resolves them by name; obfuscation = silent
+        // runtime break). Not shipped. Select it for tests with
+        // `-PtestBuildType=releaseMinified`.
+        create("releaseMinified") {
+            initWith(getByName("release"))
+            isMinifyEnabled = true // inherited from release; explicit for clarity
+            // MUST stay non-debuggable: AGP disables all R8 obfuscation/optimization
+            // for debuggable builds, which would make the bridge R8 test a false pass.
+            // Instrumentation does not require a debuggable target — only that the
+            // APK is installable, which the debug signing below provides.
+            isDebuggable = false
+            applicationIdSuffix = ".minified"
+            // Library modules only declare debug/release — match their release.
+            matchingFallbacks += "release"
+            // Debug-sign so CI can install it on the emulator without the release keystore.
+            signingConfig = signingConfigs.getByName("debug")
+            // Keep the *test* APK intact when it gets R8'd alongside this minified
+            // target; the target app APK is still fully obfuscated (the thing under test).
+            testProguardFiles("test-proguard-rules.pro")
+        }
     }
+
+    // Instrumented tests run against `debug` by default (existing CI smoke jobs).
+    // The R8 bridge-verification CI job overrides this to `releaseMinified`.
+    testBuildType = (project.findProperty("testBuildType") as String?) ?: "debug"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -123,6 +123,21 @@ data class SettingsState(
     // Transport node + battery profile state
     val transportNodeEnabled: Boolean = true,
     val batteryProfile: BatteryProfile = BatteryProfile.BALANCED,
+    // RNS shared-instance HOSTING (python backend only; capability-gated in UI).
+    //
+    // - `shareInstanceHostingEnabled` mirrors the persisted preference — what
+    //   the toggle reflects.
+    // - `appliedShareInstanceHosting` is the value that's in the live RNS
+    //   config; differs from the persisted preference when there's a pending
+    //   change awaiting Apply & Restart.
+    // - `isHostingSharedInstance` is the runtime fact polled from the
+    //   daemon's `is_shared_instance` Python attribute (we ARE the master).
+    // - `isHostingShareInstanceConflict` is derived: user enabled hosting,
+    //   but another app already holds TCP 37428 (we became client instead).
+    val shareInstanceHostingEnabled: Boolean = false,
+    val appliedShareInstanceHosting: Boolean = false,
+    val isHostingSharedInstance: Boolean = false,
+    val isHostingShareInstanceConflict: Boolean = false,
     // Location sharing state
     val locationSharingEnabled: Boolean = true,
     val activeSharingSessions: List<network.columba.app.service.SharingSession> = emptyList(),
@@ -262,13 +277,24 @@ class SettingsViewModel
             startSyncStateMonitor()
             if (enableMonitors) {
                 startSharedInstanceMonitor()
-                // supportsSharedInstanceAvailabilityChecks was a kotlin-backend-always-false
-                // capability flag on the legacy ReticulumProtocol. Phase D's BackendCapabilities
-                // gating replaces this; until then hard-code to false to preserve current
-                // behavior on the kotlin backend (the only impl today).
-                @Suppress("ConstantConditionIf")
-                if (false) {
-                    startSharedInstanceAvailabilityMonitor()
+                // Phase D wiring: gate the availability monitor on the
+                // backend capability rather than the legacy hard-false.
+                // capabilities is a StateFlow seeded with UNKNOWN before
+                // the backend service binds, so we COLLECT instead of
+                // reading .value once — the guard is permanently false at
+                // init-time but becomes true the moment the real per-
+                // flavor snapshot arrives. The monitor drives the
+                // hosting/conflict flags for the Share-Instance toggle on
+                // python; on kotlin both flags stay false (capability
+                // gate skips the poll), so the collector is cheap there.
+                viewModelScope.launch {
+                    capabilities.collect { caps ->
+                        val wants = caps.performance.sharedInstanceAvailabilityChecks ||
+                            caps.performance.shareInstanceHosting
+                        if (wants && sharedInstanceAvailabilityJob?.isActive != true) {
+                            startSharedInstanceAvailabilityMonitor()
+                        }
+                    }
                 }
                 startRelayMonitor()
                 startLocationSharingMonitor()
@@ -336,6 +362,7 @@ class SettingsViewModel
                         propagationNodeManager.lastSyncTimestamp,
                         settingsRepository.autoRetrieveEnabledFlow,
                         settingsRepository.retrievalIntervalSecondsFlow,
+                        settingsRepository.shareInstanceHostingEnabledFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as network.columba.app.data.db.entity.LocalIdentityEntity?
@@ -387,6 +414,9 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val retrievalIntervalSeconds = flows[15] as Int
 
+                        @Suppress("UNCHECKED_CAST")
+                        val shareInstanceHostingEnabled = flows[16] as Boolean
+
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
                         val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
@@ -433,6 +463,24 @@ class SettingsViewModel
                             // Transport node + battery profile state
                             transportNodeEnabled = transportNodeEnabled,
                             batteryProfile = batteryProfile,
+                            // Share-instance hosting: persisted preference reflected
+                            // immediately. `applied` anchors to the persisted value
+                            // on the first emission (isLoading flips false in the
+                            // same applySettingsUpdate that processes this state) —
+                            // at VM-creation time the daemon is running with whatever
+                            // is in DataStore now, so applied == persisted at t=0.
+                            // Subsequent emissions preserve _state.value.applied so
+                            // toggles produce the divergence that drives the "Change
+                            // pending" hint until restartService completes.
+                            shareInstanceHostingEnabled = shareInstanceHostingEnabled,
+                            appliedShareInstanceHosting =
+                                if (_state.value.isLoading) {
+                                    shareInstanceHostingEnabled
+                                } else {
+                                    _state.value.appliedShareInstanceHosting
+                                },
+                            isHostingSharedInstance = _state.value.isHostingSharedInstance,
+                            isHostingShareInstanceConflict = _state.value.isHostingShareInstanceConflict,
                             // Message delivery state
                             defaultDeliveryMethod = defaultDeliveryMethod,
                             tryPropagationOnFail = _state.value.tryPropagationOnFail,
@@ -964,7 +1012,20 @@ class SettingsViewModel
                     // 3. Re-initialize with config from database
                     interfaceConfigManager
                         .applyInterfaceChanges(
-                            onServiceReady = { _state.value = _state.value.copy(isRestarting = false) },
+                            onServiceReady = {
+                                // Restart completed: the daemon now reflects the
+                                // persisted shareInstanceHosting preference, so
+                                // sync the "applied" mirror used by the pending-
+                                // changes affordance. Reading via viewModelScope
+                                // because onServiceReady runs on the IPC thread.
+                                viewModelScope.launch {
+                                    val applied = settingsRepository.getShareInstanceHostingEnabled()
+                                    _state.value = _state.value.copy(
+                                        isRestarting = false,
+                                        appliedShareInstanceHosting = applied,
+                                    )
+                                }
+                            },
                         ).onSuccess {
                             Log.i(TAG, "Service restart completed successfully")
                         }.onFailure { error ->
@@ -1179,6 +1240,38 @@ class SettingsViewModel
         }
 
         /**
+         * Poll the daemon for "are we the master?" and compute the
+         * hosting-conflict flag, then write both to `_state` only when
+         * something changed. Lives next to [startSharedInstanceAvailabilityMonitor]
+         * but is `suspend` because the IPC call is suspend; pulled out so
+         * the monitor body stays inside detekt's cyclomatic-complexity
+         * threshold (the monitor already has 5 nested if-branches for the
+         * existing client/auto-restart logic).
+         *
+         * Conflict semantics: `isOnline && !isHosting` means "a shared
+         * instance exists on this device and it is not us." When the user
+         * also has hosting enabled, that's a conflict — Sideband (or
+         * similar) is the master and we yielded.
+         */
+        private suspend fun updateHostingShareInstanceState(
+            isOnline: Boolean,
+            currentState: SettingsState,
+        ) {
+            val isHosting = rnsTransportAdmin.isHostingSharedInstance()
+            val isConflict =
+                currentState.shareInstanceHostingEnabled && isOnline && !isHosting
+            val changed =
+                isHosting != currentState.isHostingSharedInstance ||
+                    isConflict != currentState.isHostingShareInstanceConflict
+            if (changed) {
+                _state.value = _state.value.copy(
+                    isHostingSharedInstance = isHosting,
+                    isHostingShareInstanceConflict = isConflict,
+                )
+            }
+        }
+
+        /**
          * Start monitoring for shared instance availability.
          * This periodically queries the service to check if a shared instance is reachable.
          * Updates sharedInstanceOnline for toggle enable logic and sharedInstanceAvailable
@@ -1201,6 +1294,11 @@ class SettingsViewModel
                         if (!currentState.isRestarting && networkReady) {
                             // Query service for shared instance availability
                             val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
+                            // Hosting/conflict polling runs on the same cadence
+                            // so the UI can't see a torn state between the two
+                            // flags. Extracted out to keep this monitor's
+                            // cyclomatic complexity under the detekt threshold.
+                            updateHostingShareInstanceState(isOnline, currentState)
 
                             // Update sharedInstanceOnline if changed
                             if (isOnline != currentState.sharedInstanceOnline) {
@@ -1215,8 +1313,15 @@ class SettingsViewModel
                                         "Shared instance went offline while we were using it - " +
                                             "restarting with Columba's own instance",
                                     )
+                                    // Copy from _state.value, NOT currentState: the
+                                    // updateHostingShareInstanceState() call earlier
+                                    // in this iteration may have already written
+                                    // fresh isHostingSharedInstance / Conflict values
+                                    // that the stale currentState snapshot would
+                                    // silently revert. Same reasoning at the else
+                                    // branch below.
                                     _state.value =
-                                        currentState.copy(
+                                        _state.value.copy(
                                             sharedInstanceOnline = isOnline,
                                             wasUsingSharedInstance = true,
                                             isRestarting = true,
@@ -1225,7 +1330,7 @@ class SettingsViewModel
                                     // and initialize with Columba's own interfaces
                                     restartServiceAfterSharedInstanceLost()
                                 } else {
-                                    _state.value = currentState.copy(sharedInstanceOnline = isOnline)
+                                    _state.value = _state.value.copy(sharedInstanceOnline = isOnline)
                                 }
                             }
 
@@ -1602,6 +1707,23 @@ class SettingsViewModel
                 if (!_state.value.isRestarting) {
                     restartService()
                 }
+            }
+        }
+
+        /**
+         * Save the RNS shared-instance hosting preference.
+         *
+         * Deliberately does NOT trigger an immediate service restart: hosting
+         * a shared instance flips RNS into master mode and other apps on the
+         * device may already be RPCing — a silent restart could drop their
+         * sessions mid-call. The UI shows an "Apply & Restart" affordance
+         * when `shareInstanceHostingEnabled != appliedShareInstanceHosting`
+         * so the user explicitly approves the outage window.
+         */
+        fun setShareInstanceHostingEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.saveShareInstanceHostingEnabled(enabled)
+                Log.d(TAG, "Share-instance hosting preference set to $enabled (pending restart to apply)")
             }
         }
 

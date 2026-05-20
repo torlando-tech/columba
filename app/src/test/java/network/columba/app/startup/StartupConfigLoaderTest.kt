@@ -78,6 +78,7 @@ class StartupConfigLoaderTest {
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
         coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+        coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
 
         loader =
             StartupConfigLoader(
@@ -267,6 +268,7 @@ class StartupConfigLoaderTest {
                 discoverInterfaces = false,
                 autoconnectDiscoveredCount = 0,
                 autoconnectIfacOnly = false,
+                shareInstanceHosting = false,
             )
         val config2 =
             StartupConfigLoader.StartupConfig(
@@ -279,6 +281,7 @@ class StartupConfigLoaderTest {
                 discoverInterfaces = false,
                 autoconnectDiscoveredCount = 0,
                 autoconnectIfacOnly = false,
+                shareInstanceHosting = false,
             )
         val config3 =
             StartupConfigLoader.StartupConfig(
@@ -291,6 +294,7 @@ class StartupConfigLoaderTest {
                 discoverInterfaces = true,
                 autoconnectDiscoveredCount = 5,
                 autoconnectIfacOnly = true,
+                shareInstanceHosting = true,
             )
 
         assertEquals(config1, config2)

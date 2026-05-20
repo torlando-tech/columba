@@ -83,6 +83,7 @@ class SettingsViewModelTest {
     // Mutable flows for controlling test scenarios
     private val preferOwnInstanceFlow = MutableStateFlow(false)
     private val isSharedInstanceFlow = MutableStateFlow(false)
+    private val shareInstanceHostingEnabledFlow = MutableStateFlow(false)
     private val rpcKeyFlow = MutableStateFlow<String?>(null)
     private val autoAnnounceEnabledFlow = MutableStateFlow(true)
     private val autoAnnounceIntervalHoursFlow = MutableStateFlow(3)
@@ -161,6 +162,9 @@ class SettingsViewModelTest {
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
+        every { settingsRepository.shareInstanceHostingEnabledFlow } returns shareInstanceHostingEnabledFlow
+        coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
+        coEvery { settingsRepository.saveShareInstanceHostingEnabled(any()) } returns Unit
         every { settingsRepository.rpcKeyFlow } returns rpcKeyFlow
         every { settingsRepository.autoAnnounceEnabledFlow } returns autoAnnounceEnabledFlow
         every { settingsRepository.autoAnnounceIntervalHoursFlow } returns autoAnnounceIntervalHoursFlow
@@ -254,6 +258,7 @@ class SettingsViewModelTest {
         every { rnsBackend.capabilities } returns MutableStateFlow(BackendCapabilities.UNKNOWN)
         coEvery { rnsCore.shutdown() } returns Result.success(Unit)
         coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+        coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
 
         // Mock MapTileSourceManager flows
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)

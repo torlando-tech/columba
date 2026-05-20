@@ -503,6 +503,7 @@ private class FakeRnsTransportAdmin : RnsTransportAdmin {
     override suspend fun isDiscoveryEnabled(): Boolean = false
     override suspend fun getAutoconnectedEndpoints(): Set<String> = emptySet()
     override suspend fun isSharedInstanceAvailable(): Boolean = false
+    override suspend fun isHostingSharedInstance(): Boolean = false
     override suspend fun getDebugInfo(): Map<String, Any> = emptyMap()
     override suspend fun getFailedInterfaces(): List<FailedInterface> = emptyList()
     override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? = null

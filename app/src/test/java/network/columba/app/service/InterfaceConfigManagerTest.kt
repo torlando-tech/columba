@@ -124,6 +124,7 @@ class InterfaceConfigManagerTest {
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
         coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+        coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Setup identity repository mock

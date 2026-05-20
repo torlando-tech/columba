@@ -36,7 +36,11 @@ import network.columba.app.rns.api.model.ReticulumConfig
 object ReticulumConfigSnapshot {
     private const val TAG = "ReticulumConfigSnapshot"
     private const val FILE_NAME = "rns_config_snapshot.bin"
-    private const val VERSION = 1
+    // Bumped to 2 when ReticulumConfig.shareInstanceHosting was added. Old
+    // V1 snapshots don't include the new boolean and would unmarshal with
+    // a torn parcel layout from this version onward, so we explicitly
+    // discard them; the UI re-initialises on next launch and writes V2.
+    private const val VERSION = 2
 
     /**
      * The deserialized snapshot: a config without an identity key plus the

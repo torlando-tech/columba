@@ -48,6 +48,24 @@ data class ReticulumConfig(
      * When false, only handles its own traffic without relaying for other peers.
      */
     val enableTransport: Boolean = true,
+    /**
+     * When true, publish this RNS instance as a shared instance on TCP 37428
+     * (`share_instance = yes`, `shared_instance_type = tcp` in the rendered
+     * config). Other RNS apps on the device — stock Sideband, `rnscp` shells,
+     * other Columba installs — can then RPC through this instance instead of
+     * spinning up their own transport.
+     *
+     * Distinct from [preferOwnInstance], which controls whether *we* join an
+     * existing shared instance hosted by another app. The runtime path
+     * yields cooperatively when both are true and another app already holds
+     * TCP 37428 (upstream RNS's first-to-bind-wins policy); see
+     * `PythonRnsRuntime.start()`.
+     *
+     * Python-backend only. UI hides the source toggle on backends that
+     * report `BackendCapabilities.PerformanceCaps.shareInstanceHosting =
+     * false`, so this stays at its default there.
+     */
+    val shareInstanceHosting: Boolean = false,
     // ==================== RNS 1.1.x Interface Discovery ====================
     /**
      * Enable automatic interface discovery (RNS 1.1.0+).
@@ -100,6 +118,7 @@ data class ReticulumConfig(
             preferOwnInstance == other.preferOwnInstance &&
             rpcKey == other.rpcKey &&
             enableTransport == other.enableTransport &&
+            shareInstanceHosting == other.shareInstanceHosting &&
             discoverInterfaces == other.discoverInterfaces &&
             autoconnectDiscoveredInterfaces == other.autoconnectDiscoveredInterfaces &&
             autoconnectIfacOnly == other.autoconnectIfacOnly &&
@@ -119,6 +138,7 @@ data class ReticulumConfig(
         result = 31 * result + preferOwnInstance.hashCode()
         result = 31 * result + (rpcKey?.hashCode() ?: 0)
         result = 31 * result + enableTransport.hashCode()
+        result = 31 * result + shareInstanceHosting.hashCode()
         result = 31 * result + discoverInterfaces.hashCode()
         result = 31 * result + autoconnectDiscoveredInterfaces
         result = 31 * result + autoconnectIfacOnly.hashCode()
@@ -150,6 +170,7 @@ data class ReticulumConfig(
             "preferOwnInstance=$preferOwnInstance, " +
             "rpcKey=$rpcKey, " +
             "enableTransport=$enableTransport, " +
+            "shareInstanceHosting=$shareInstanceHosting, " +
             "discoverInterfaces=$discoverInterfaces, " +
             "autoconnectDiscoveredInterfaces=$autoconnectDiscoveredInterfaces, " +
             "autoconnectIfacOnly=$autoconnectIfacOnly, " +

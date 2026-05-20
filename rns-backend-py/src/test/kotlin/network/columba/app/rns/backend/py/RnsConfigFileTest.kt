@@ -28,7 +28,7 @@ class RnsConfigFileTest {
 
     @Test
     fun `shared-client render sets share_instance yes and omits interfaces`() {
-        val out = RnsConfigFile.build(cfg(), shareInstance = true)
+        val out = RnsConfigFile.build(cfg(), joinShareInstance = true)
         assertTrue(out.contains("share_instance = Yes"))
         assertTrue(out.contains("shared_instance_type = tcp"))
         assertFalse(out.contains("[interfaces]"))
@@ -40,14 +40,14 @@ class RnsConfigFileTest {
     fun `shared-client render emits rpc_key when supplied`() {
         val out = RnsConfigFile.build(
             cfg().copy(rpcKey = "deadbeefdeadbeef"),
-            shareInstance = true,
+            joinShareInstance = true,
         )
         assertTrue(out.contains("rpc_key = deadbeefdeadbeef"))
     }
 
     @Test
     fun `shared-client render omits rpc_key when null`() {
-        val out = RnsConfigFile.build(cfg(), shareInstance = true)
+        val out = RnsConfigFile.build(cfg(), joinShareInstance = true)
         assertFalse(out.contains("rpc_key"))
     }
 
@@ -60,7 +60,7 @@ class RnsConfigFileTest {
 
     @Test
     fun `skipAutoInterface disables AutoInterface but keeps other interfaces`() {
-        val out = RnsConfigFile.build(cfg(), shareInstance = false, skipAutoInterface = true)
+        val out = RnsConfigFile.build(cfg(), joinShareInstance = false, skipAutoInterface = true)
         assertTrue(out.contains("[interfaces]"))
         assertTrue(out.contains("type = AutoInterface"))
         assertTrue(out.contains("enabled = no"))
@@ -142,10 +142,70 @@ class RnsConfigFileTest {
         )
         val out = RnsConfigFile.build(
             cfg(interfaces = listOf(customAuto)),
-            shareInstance = false,
+            joinShareInstance = false,
             skipAutoInterface = true,
         )
         assertFalse(out.contains("data_port = 29999"))
         assertFalse(out.contains("group_id = test-group"))
+    }
+
+    // ---- host-mode (we ARE the shared instance) -----------------------------
+
+    @Test
+    fun `host mode emits share_instance yes and shared_instance_type tcp`() {
+        // User toggled "Share Instance" on; no co-located master detected.
+        // Daemon publishes itself on TCP 37428 so other RNS apps on the
+        // device can RPC through us.
+        val out = RnsConfigFile.build(cfg(), hostShareInstance = true)
+        assertTrue(out.contains("share_instance = Yes"))
+        assertTrue(out.contains("shared_instance_type = tcp"))
+    }
+
+    @Test
+    fun `host mode keeps interfaces block because we own the transport`() {
+        // Distinguishes host (master) from join (client): the master needs
+        // its own interface set to drive traffic; the client routes through
+        // someone else's interfaces.
+        val out = RnsConfigFile.build(cfg(), hostShareInstance = true)
+        assertTrue(out.contains("[interfaces]"))
+        assertTrue(out.contains("type = AutoInterface"))
+        assertTrue(out.contains("type = TCPClientInterface"))
+    }
+
+    @Test
+    fun `host mode does NOT emit rpc_key`() {
+        // The host is the authority — upstream RNS generates its own RPC
+        // key for incoming clients at runtime. A persisted rpc_key only
+        // matters for joining a foreign master (Sideband).
+        val out = RnsConfigFile.build(
+            cfg().copy(rpcKey = "deadbeefdeadbeef"),
+            hostShareInstance = true,
+        )
+        assertFalse(out.contains("rpc_key"))
+    }
+
+    @Test
+    fun `host and join together — join wins, interfaces skipped, rpc_key kept`() {
+        // PythonRnsRuntime resolves the conflict by demoting host→false
+        // before reaching here, but defend against accidental misuse: if
+        // both arrive true, the JOIN branch must take precedence (kernel
+        // can't double-bind 37428 anyway).
+        val out = RnsConfigFile.build(
+            cfg().copy(rpcKey = "deadbeefdeadbeef"),
+            joinShareInstance = true,
+            hostShareInstance = true,
+        )
+        assertTrue(out.contains("share_instance = Yes"))
+        assertTrue(out.contains("shared_instance_type = tcp"))
+        assertFalse(out.contains("[interfaces]"))
+        assertTrue(out.contains("rpc_key = deadbeefdeadbeef"))
+    }
+
+    @Test
+    fun `neither host nor join — own-instance, no share_instance keys`() {
+        val out = RnsConfigFile.build(cfg())
+        assertTrue(out.contains("share_instance = No"))
+        assertFalse(out.contains("shared_instance_type"))
+        assertFalse(out.contains("rpc_key"))
     }
 }

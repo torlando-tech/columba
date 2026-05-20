@@ -30,6 +30,12 @@ import network.columba.app.rns.api.BackendCapabilities.Versions
  *   [Support.EXPERIMENTAL] pending the A.11 parity test — not this one.)
  * - **`sharedInstanceAvailabilityChecks = true`** — upstream RNS can probe
  *   for a co-located shared `rnsd` instance.
+ * - **`shareInstanceHosting = true`** — upstream Python RNS implements the
+ *   `SharedInstanceServer` (RPC over TCP 37428) that lets other apps on the
+ *   device route through this Reticulum instance. Toggling `share_instance =
+ *   yes` in the rendered config promotes the daemon to master (or quietly
+ *   yields to a co-located master per upstream's first-to-bind policy). UI
+ *   exposes the toggle in Settings → Advanced on this backend only.
  * - **`autoconnectIfacOnlyFilter = false`** — upstream Python RNS has no
  *   knob that filters auto-connect by IFAC presence; reticulum-kt does. UI
  *   hides the IFAC-only Switch on this backend so the toggle doesn't
@@ -66,5 +72,6 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
     performance = PerformanceCaps(
         batteryProfileTuning = Support.UNSUPPORTED,
         sharedInstanceAvailabilityChecks = true,
+        shareInstanceHosting = true,
     ),
 )

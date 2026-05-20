@@ -2299,4 +2299,11 @@ class NativeRnsBackendImpl(
      * the native Kotlin backend — only upstream Python RNS exposes the check.
      */
     override suspend fun isSharedInstanceAvailable(): Boolean = false
+
+    /**
+     * Whether this instance is itself hosting a shared instance. Always false
+     * on the native Kotlin backend — reticulum-kt has no SharedInstanceServer
+     * counterpart, gated by `BackendCapabilities.PerformanceCaps.shareInstanceHosting`.
+     */
+    override suspend fun isHostingSharedInstance(): Boolean = false
 }

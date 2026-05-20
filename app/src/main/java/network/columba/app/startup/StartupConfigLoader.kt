@@ -40,6 +40,7 @@ class StartupConfigLoader
             val discoverInterfaces: Boolean,
             val autoconnectDiscoveredCount: Int,
             val autoconnectIfacOnly: Boolean,
+            val shareInstanceHosting: Boolean,
         )
 
         /**
@@ -59,6 +60,8 @@ class StartupConfigLoader
                 val discoverInterfacesDeferred = async { settingsRepository.getDiscoverInterfacesEnabled() }
                 val autoconnectCountDeferred = async { settingsRepository.getAutoconnectDiscoveredCount() }
                 val autoconnectIfacOnlyDeferred = async { settingsRepository.getAutoconnectIfacOnly() }
+                val shareInstanceHostingDeferred =
+                    async { settingsRepository.getShareInstanceHostingEnabled() }
 
                 val savedAutoconnect = autoconnectCountDeferred.await()
                 // Filter the enabled set against the device's current transport so the
@@ -78,6 +81,7 @@ class StartupConfigLoader
                     // Coerce -1 (never configured sentinel) to 0 for the native stack
                     autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0,
                     autoconnectIfacOnly = autoconnectIfacOnlyDeferred.await(),
+                    shareInstanceHosting = shareInstanceHostingDeferred.await(),
                 )
             }
     }

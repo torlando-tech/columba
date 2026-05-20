@@ -20,6 +20,7 @@ class BackendCapabilitiesTest {
         assertEquals(Support.FULL, caps.performance.batteryProfileTuning)
         assertEquals(Support.FULL, caps.telemetry.collectorHostMode)
         assert(!caps.performance.sharedInstanceAvailabilityChecks)
+        assert(!caps.performance.shareInstanceHosting)
     }
 
     @Test
@@ -31,6 +32,14 @@ class BackendCapabilitiesTest {
         // Telemetry collector host mode is the well-tested reference path on python.
         assertEquals(Support.FULL, caps.telemetry.collectorHostMode)
         assert(caps.performance.sharedInstanceAvailabilityChecks)
+        assert(caps.performance.shareInstanceHosting)
+    }
+
+    @Test
+    fun `unknown snapshot defaults shareInstanceHosting to false`() {
+        // The UI gates the Share Instance toggle on this flag; the sentinel
+        // value must hide the toggle until a real backend snapshot lands.
+        assert(!BackendCapabilities.UNKNOWN.performance.shareInstanceHosting)
     }
 
     @Test
@@ -81,6 +90,7 @@ class BackendCapabilitiesTest {
                 PerformanceCaps(
                     batteryProfileTuning = Support.FULL,
                     sharedInstanceAvailabilityChecks = false,
+                    shareInstanceHosting = false,
                 ),
         )
 
@@ -99,6 +109,7 @@ class BackendCapabilitiesTest {
                 PerformanceCaps(
                     batteryProfileTuning = Support.UNSUPPORTED,
                     sharedInstanceAvailabilityChecks = true,
+                    shareInstanceHosting = true,
                 ),
         )
 }

@@ -67,6 +67,9 @@ internal class BoundRnsTransportAdmin(
     override suspend fun isSharedInstanceAvailable(): Boolean =
         awaitBound().transportAdmin.isSharedInstanceAvailable()
 
+    override suspend fun isHostingSharedInstance(): Boolean =
+        awaitBound().transportAdmin.isHostingSharedInstance()
+
     override suspend fun getDebugInfo(): Map<String, Any> =
         awaitBound().transportAdmin.getDebugInfo()
 

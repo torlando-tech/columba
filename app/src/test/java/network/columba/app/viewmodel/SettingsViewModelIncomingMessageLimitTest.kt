@@ -155,6 +155,14 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.incomingMessageSizeLimitKbFlow } returns incomingMessageSizeLimitKbFlow
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
+        every { settingsRepository.shareInstanceHostingEnabledFlow } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+        io.mockk.coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
+        io.mockk.coEvery {
+            settingsRepository.saveShareInstanceHostingEnabled(true)
+        } returns Unit
+        io.mockk.coEvery {
+            settingsRepository.saveShareInstanceHostingEnabled(false)
+        } returns Unit
         every { settingsRepository.rpcKeyFlow } returns rpcKeyFlow
         every { settingsRepository.autoAnnounceEnabledFlow } returns autoAnnounceEnabledFlow
         every { settingsRepository.autoAnnounceIntervalHoursFlow } returns autoAnnounceIntervalHoursFlow

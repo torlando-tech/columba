@@ -793,6 +793,7 @@ class ColumbaApplication : Application() {
                     preferOwnInstance = preferOwnInstance,
                     rpcKey = rpcKey,
                     enableTransport = transportNodeEnabled,
+                    shareInstanceHosting = startupConfig.shareInstanceHosting,
                     discoverInterfaces = discoverInterfaces,
                     autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                     autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,

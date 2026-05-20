@@ -215,15 +215,15 @@ class PythonRnsRuntime(
         val joinShareInstance = probe.shouldShareInstance(config)
         val hostShareInstance = config.shareInstanceHosting && !joinShareInstance
         val skipAutoInterface = !joinShareInstance && !probe.isAutoInterfaceUsable()
-        val mode = when {
-            joinShareInstance && config.shareInstanceHosting ->
-                "shared-client (HOSTING CONFLICT — another master holds TCP 37428)"
-            joinShareInstance -> "shared-client"
-            hostShareInstance -> "shared-host"
-            skipAutoInterface -> "own-instance (AutoInterface disabled — port held by another app)"
-            else -> "own-instance"
-        }
-        Log.i(TAG, "RNS instance mode: $mode")
+        Log.i(
+            TAG,
+            "RNS instance mode: ${describeRnsMode(
+                joinShareInstance = joinShareInstance,
+                hostShareInstance = hostShareInstance,
+                userWantsHost = config.shareInstanceHosting,
+                skipAutoInterface = skipAutoInterface,
+            )}",
+        )
 
         val configDir = File(config.storagePath, "reticulum").apply { mkdirs() }
         File(configDir, "config").writeText(
@@ -426,6 +426,27 @@ class PythonRnsRuntime(
             )
         }
     }
+
+    /**
+     * Human-readable mode string for the boot-time log line. Pulled out
+     * of [start] so the latter stays under detekt's cyclomatic complexity
+     * threshold (the four-way mode `when` plus the existing setup adds
+     * over the limit on its own).
+     */
+    private fun describeRnsMode(
+        joinShareInstance: Boolean,
+        hostShareInstance: Boolean,
+        userWantsHost: Boolean,
+        skipAutoInterface: Boolean,
+    ): String =
+        when {
+            joinShareInstance && userWantsHost ->
+                "shared-client (HOSTING CONFLICT — another master holds TCP 37428)"
+            joinShareInstance -> "shared-client"
+            hostShareInstance -> "shared-host"
+            skipAutoInterface -> "own-instance (AutoInterface disabled — port held by another app)"
+            else -> "own-instance"
+        }
 }
 
 /**

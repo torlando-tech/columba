@@ -278,27 +278,23 @@ class SettingsViewModel
             if (enableMonitors) {
                 startSharedInstanceMonitor()
                 // Phase D wiring: gate the availability monitor on the
-                // backend capability rather than the legacy hard-false. The
-                // monitor also drives the hosting/conflict flags for the
-                // Share-Instance toggle, so on the python backend we want
-                // it running; on kotlin it's a no-op (always returns false
-                // for both probes), so we still gate to skip the poll
-                // overhead.
-                if (capabilities.value.performance.sharedInstanceAvailabilityChecks ||
-                    capabilities.value.performance.shareInstanceHosting
-                ) {
-                    startSharedInstanceAvailabilityMonitor()
-                }
-                // Seed appliedShareInstanceHosting from the persisted
-                // preference at startup — the daemon was constructed with
-                // this value so applied == persisted at this moment. From
-                // here on, only restartService()'s onServiceReady advances
-                // the applied mirror.
+                // backend capability rather than the legacy hard-false.
+                // capabilities is a StateFlow seeded with UNKNOWN before
+                // the backend service binds, so we COLLECT instead of
+                // reading .value once — the guard is permanently false at
+                // init-time but becomes true the moment the real per-
+                // flavor snapshot arrives. The monitor drives the
+                // hosting/conflict flags for the Share-Instance toggle on
+                // python; on kotlin both flags stay false (capability
+                // gate skips the poll), so the collector is cheap there.
                 viewModelScope.launch {
-                    val initialApplied = settingsRepository.getShareInstanceHostingEnabled()
-                    _state.value = _state.value.copy(
-                        appliedShareInstanceHosting = initialApplied,
-                    )
+                    capabilities.collect { caps ->
+                        val wants = caps.performance.sharedInstanceAvailabilityChecks ||
+                            caps.performance.shareInstanceHosting
+                        if (wants && sharedInstanceAvailabilityJob?.isActive != true) {
+                            startSharedInstanceAvailabilityMonitor()
+                        }
+                    }
                 }
                 startRelayMonitor()
                 startLocationSharingMonitor()
@@ -468,10 +464,21 @@ class SettingsViewModel
                             transportNodeEnabled = transportNodeEnabled,
                             batteryProfile = batteryProfile,
                             // Share-instance hosting: persisted preference reflected
-                            // immediately; applied/runtime/conflict come from
-                            // loadShareInstanceHostingState() + periodic polling.
+                            // immediately. `applied` anchors to the persisted value
+                            // on the first emission (isLoading flips false in the
+                            // same applySettingsUpdate that processes this state) —
+                            // at VM-creation time the daemon is running with whatever
+                            // is in DataStore now, so applied == persisted at t=0.
+                            // Subsequent emissions preserve _state.value.applied so
+                            // toggles produce the divergence that drives the "Change
+                            // pending" hint until restartService completes.
                             shareInstanceHostingEnabled = shareInstanceHostingEnabled,
-                            appliedShareInstanceHosting = _state.value.appliedShareInstanceHosting,
+                            appliedShareInstanceHosting =
+                                if (_state.value.isLoading) {
+                                    shareInstanceHostingEnabled
+                                } else {
+                                    _state.value.appliedShareInstanceHosting
+                                },
                             isHostingSharedInstance = _state.value.isHostingSharedInstance,
                             isHostingShareInstanceConflict = _state.value.isHostingShareInstanceConflict,
                             // Message delivery state
@@ -1233,6 +1240,38 @@ class SettingsViewModel
         }
 
         /**
+         * Poll the daemon for "are we the master?" and compute the
+         * hosting-conflict flag, then write both to `_state` only when
+         * something changed. Lives next to [startSharedInstanceAvailabilityMonitor]
+         * but is `suspend` because the IPC call is suspend; pulled out so
+         * the monitor body stays inside detekt's cyclomatic-complexity
+         * threshold (the monitor already has 5 nested if-branches for the
+         * existing client/auto-restart logic).
+         *
+         * Conflict semantics: `isOnline && !isHosting` means "a shared
+         * instance exists on this device and it is not us." When the user
+         * also has hosting enabled, that's a conflict — Sideband (or
+         * similar) is the master and we yielded.
+         */
+        private suspend fun updateHostingShareInstanceState(
+            isOnline: Boolean,
+            currentState: SettingsState,
+        ) {
+            val isHosting = rnsTransportAdmin.isHostingSharedInstance()
+            val isConflict =
+                currentState.shareInstanceHostingEnabled && isOnline && !isHosting
+            val changed =
+                isHosting != currentState.isHostingSharedInstance ||
+                    isConflict != currentState.isHostingShareInstanceConflict
+            if (changed) {
+                _state.value = _state.value.copy(
+                    isHostingSharedInstance = isHosting,
+                    isHostingShareInstanceConflict = isConflict,
+                )
+            }
+        }
+
+        /**
          * Start monitoring for shared instance availability.
          * This periodically queries the service to check if a shared instance is reachable.
          * Updates sharedInstanceOnline for toggle enable logic and sharedInstanceAvailable
@@ -1255,26 +1294,11 @@ class SettingsViewModel
                         if (!currentState.isRestarting && networkReady) {
                             // Query service for shared instance availability
                             val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
-                            // Also poll whether we are the hosting master vs a
-                            // client. Cheap (single Python attr read) and runs
-                            // on the same cadence as isOnline so the UI can't
-                            // see a torn state between the two flags.
-                            val isHosting = rnsTransportAdmin.isHostingSharedInstance()
-                            // Conflict: user wants to host but a master other
-                            // than us holds TCP 37428 (we became RPC client).
-                            // `isOnline && !isHosting` means "a shared instance
-                            // exists on this device and it is not us."
-                            val isConflict =
-                                currentState.shareInstanceHostingEnabled && isOnline && !isHosting
-                            if (
-                                isHosting != currentState.isHostingSharedInstance ||
-                                isConflict != currentState.isHostingShareInstanceConflict
-                            ) {
-                                _state.value = _state.value.copy(
-                                    isHostingSharedInstance = isHosting,
-                                    isHostingShareInstanceConflict = isConflict,
-                                )
-                            }
+                            // Hosting/conflict polling runs on the same cadence
+                            // so the UI can't see a torn state between the two
+                            // flags. Extracted out to keep this monitor's
+                            // cyclomatic complexity under the detekt threshold.
+                            updateHostingShareInstanceState(isOnline, currentState)
 
                             // Update sharedInstanceOnline if changed
                             if (isOnline != currentState.sharedInstanceOnline) {

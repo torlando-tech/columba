@@ -94,10 +94,20 @@ class ContactsViewModel
         // Current relay info (includes isAutoSelected for showing "(auto)" badge)
         val currentRelayInfo: StateFlow<RelayInfo?> = propagationNodeManager.currentRelay
 
-        // All enriched contacts (includes network status and conversation data)
+        // All enriched contacts (includes network status and conversation data).
+        //
+        // We deduplicate by lowercase destinationHash *here* (at the source), not just
+        // downstream in `contactsState`, because legacy databases may contain two
+        // ContactEntity rows for the same logical peer whose `destinationHash` differs
+        // only in case (the composite PK (destinationHash, identityHash) is stored under
+        // SQLite's case-sensitive BINARY collation). If the dedup lives only in
+        // `contactsState.map`, any other consumer of this flow — and in particular any
+        // intermediate Compose snapshot of `groupedContacts.all` / `groupedContacts.pinned`
+        // — can still see the duplicates and crash LazyColumn's unique-key invariant.
         val contacts: StateFlow<List<EnrichedContact>> =
             contactRepository
                 .getEnrichedContacts()
+                .map { list -> list.distinctBy { it.destinationHash.lowercase() } }
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(5000L),

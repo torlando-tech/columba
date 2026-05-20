@@ -1313,8 +1313,15 @@ class SettingsViewModel
                                         "Shared instance went offline while we were using it - " +
                                             "restarting with Columba's own instance",
                                     )
+                                    // Copy from _state.value, NOT currentState: the
+                                    // updateHostingShareInstanceState() call earlier
+                                    // in this iteration may have already written
+                                    // fresh isHostingSharedInstance / Conflict values
+                                    // that the stale currentState snapshot would
+                                    // silently revert. Same reasoning at the else
+                                    // branch below.
                                     _state.value =
-                                        currentState.copy(
+                                        _state.value.copy(
                                             sharedInstanceOnline = isOnline,
                                             wasUsingSharedInstance = true,
                                             isRestarting = true,
@@ -1323,7 +1330,7 @@ class SettingsViewModel
                                     // and initialize with Columba's own interfaces
                                     restartServiceAfterSharedInstanceLost()
                                 } else {
-                                    _state.value = currentState.copy(sharedInstanceOnline = isOnline)
+                                    _state.value = _state.value.copy(sharedInstanceOnline = isOnline)
                                 }
                             }
 

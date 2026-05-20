@@ -121,7 +121,10 @@ object ReticulumServiceConnection {
                 try {
                     context.unbindService(this)
                 } catch (e: IllegalArgumentException) {
-                    // Already unbound — proceed with rebind.
+                    // Already unbound — proceed with rebind. Log at DEBUG so
+                    // the swallowed exception isn't truly invisible if it
+                    // surfaces during diagnosis.
+                    Log.d(TAG, "unbindService: already unbound, proceeding with rebind: ${e.message}")
                 }
                 try {
                     context.bindService(intentFor(context), this, Context.BIND_AUTO_CREATE)

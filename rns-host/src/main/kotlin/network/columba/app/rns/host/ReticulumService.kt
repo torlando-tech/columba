@@ -222,9 +222,12 @@ class ReticulumService : Service() {
                     }
                 }
 
-                override fun onUsbPermissionGranted(deviceId: Int) {}
+                // Permission grants and denials are surfaced by KotlinUSBBridge
+                // for the USB-driver layer but the service has no notification
+                // surface tied to them — RNode detach is the load-bearing event.
+                override fun onUsbPermissionGranted(deviceId: Int) = Unit
 
-                override fun onUsbPermissionDenied(deviceId: Int) {}
+                override fun onUsbPermissionDenied(deviceId: Int) = Unit
             },
         )
 
@@ -304,14 +307,15 @@ class ReticulumService : Service() {
         val notInitialized = !::managers.isInitialized || !::binder.isInitialized
 
         if (isUserShutdownRestart || notInitialized) {
-            if (isUserShutdownRestart) {
+            return if (isUserShutdownRestart) {
                 Log.i(TAG, "User shutdown flag set - stopping service instead of restarting")
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
-                return START_NOT_STICKY
+                START_NOT_STICKY
+            } else {
+                Log.w(TAG, "onStartCommand called before onCreate completed - will retry after init")
+                START_STICKY
             }
-            Log.w(TAG, "onStartCommand called before onCreate completed - will retry after init")
-            return START_STICKY
         }
 
         when (intent?.action) {

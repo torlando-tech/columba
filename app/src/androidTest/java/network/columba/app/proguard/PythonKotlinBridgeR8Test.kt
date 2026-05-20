@@ -54,9 +54,12 @@ class PythonKotlinBridgeR8Test {
      * the union of all classes' methods would let a name stripped from one bridge
      * pass as long as another bridge still has it — masking a real per-class break.
      *
-     * PythonEventBridge maps to an empty set: Python invokes it indirectly through
-     * `PyEventCallback` objects passed to `register_callbacks` (see PythonRnsRuntime),
-     * not by its own `handle*` method names, so only its class survival is asserted.
+     * The event path is reflected differently: Python (`event_bridge.py`) calls
+     * `callback.onEvent(payload)` on the five `PyEventCallback` SAMs passed to
+     * `register_callbacks`, so `PyEventCallback.onEvent` is the name that must
+     * survive. `PythonEventBridge` itself is constructed Kotlin-side and its
+     * `handle*` methods are called internally (by the SAMs), not by Python — so it
+     * maps to an empty set (class survival only).
      */
     private val bridgeMethods: Map<String, Set<String>> = mapOf(
         "network.columba.app.rns.host.rnode.KotlinRNodeBridge" to setOf(
@@ -76,6 +79,8 @@ class PythonKotlinBridgeR8Test {
             "connect", "disconnect", "findDeviceByVidPid", "isConnected", "notifyBluetoothPin", "read",
         ),
         "network.columba.app.rns.backend.py.PythonEventBridge" to emptySet(),
+        // The SAM Python invokes for every announce/packet/link/LXMF event.
+        "network.columba.app.rns.backend.py.PyEventCallback" to setOf("onEvent"),
     )
 
     @Test

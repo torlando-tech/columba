@@ -100,6 +100,28 @@ def apply_android_env_patches():
     signal.signal = _safe_signal
     signal._columba_android_patched = True
 
+    # Bump TCPConnection.CONNECT_TIMEOUT for the Android RNodeInterface.
+    # Upstream hardcodes both to 5.0s as a class constant
+    # (RNS/Interfaces/Android/RNodeInterface.py:1871-1872). T-Beam-class
+    # RNodes (e.g. T-Beam Supreme on firmware 1.85) running their own
+    # WiFi-hosted TCP listener can take 6-10s to SYN+ACK on first
+    # connect — slower than upstream's desktop-tuned default, fast
+    # enough that 15s is plenty. Without this bump the phone gives up
+    # before the T-Beam responds and the interface logs
+    # "TCP connection ... could not be established: timed out" on a
+    # reachable + listening RNode. Idempotent: re-imports of the
+    # interface module reuse the patched class.
+    try:
+        import RNS.Interfaces.Android.RNodeInterface as _android_rnode_iface
+        _android_rnode_iface.TCPConnection.CONNECT_TIMEOUT = 15.0
+        _android_rnode_iface.TCPConnection.INITIAL_CONNECT_TIMEOUT = 15.0
+    except Exception as e:  # noqa: BLE001
+        RNS.log(
+            f"event_bridge: failed to bump Android RNodeInterface TCP "
+            f"connect timeout (non-fatal): {e}",
+            RNS.LOG_WARNING,
+        )
+
 
 # Slot for the KotlinBLEBridge instance. Populated by Kotlin via
 # `set_ble_bridge(...)` after the bridge is constructed; consulted by
@@ -122,6 +144,33 @@ def set_ble_bridge(bridge):
 
 def get_ble_bridge():
     return _ble_bridge
+
+
+# Slot for the KotlinRNodeBridge instance (Classic SPP / BLE GATT to RNode
+# hardware). Populated by Kotlin via `set_rnode_bridge(...)` at runtime
+# start, consulted by `columba_rnode_interface.ColumbaRNodeInterface.
+# _get_kotlin_bridge()` when the interface's connection initialiser runs.
+# Replaces the legacy v0.10.x `reticulum_wrapper.kotlin_rnode_bridge`
+# accessor — the dual-build's slim-Python rule has no reticulum_wrapper to
+# hold instance state.
+#
+# USB-serial RNode connections use a separate slot in `usb_bridge.py`
+# (set_usb_bridge / get_usb_bridge) — the two bridge surfaces have different
+# constructor / method shapes so they're kept separate rather than wrapped.
+_rnode_bridge = None
+
+
+def set_rnode_bridge(bridge):
+    """Hand a `KotlinRNodeBridge` (or compatible duck-typed bridge exposing
+    `connect(deviceName, mode)` / `disconnect()` / `writeSync(bytes)` /
+    `read(): ByteArray` / `getRssi()` / `isConnected()`) to the Python-side
+    RNode interface."""
+    global _rnode_bridge
+    _rnode_bridge = bridge
+
+
+def get_rnode_bridge():
+    return _rnode_bridge
 
 
 def deploy_bundled_interfaces(storage_path):
@@ -168,6 +217,10 @@ def deploy_bundled_interfaces(storage_path):
         ("ble_reticulum", "BLEInterface.py", interfaces_dir, "BLEInterface.py"),
         ("ble_modules", "android_ble_interface.py", interfaces_dir, "AndroidBLE.py"),
         ("ble_modules", "android_ble_driver.py", drivers_dir, "android_ble_driver.py"),
+        # ColumbaRNodeInterface deployment is handled separately below the
+        # loop — it lives at the top level of the slim Python tree (not
+        # inside a package) so `pkgutil.get_data` can't reach it. We read
+        # the module's __file__ post-import instead.
     ]
 
     # Drivers package marker — AndroidBLE.py imports from drivers.android_ble_driver.
@@ -193,6 +246,58 @@ def deploy_bundled_interfaces(storage_path):
                 f"event_bridge: failed to deploy {package}/{resource} → {dest}: {e}",
                 RNS.LOG_ERROR,
             )
+
+    # ColumbaRNodeInterface — Columba-authored RNS.Interface subclass that
+    # speaks KISS to RNode LoRa hardware over Bluetooth Classic/BLE/USB.
+    # The interface module sits at the top level of the slim Python tree
+    # rather than inside a package because it doesn't depend on a sibling
+    # package (unlike ble_modules.android_ble_driver), so `pkgutil.get_data`
+    # (which needs a package as its first arg) can't reach it.
+    #
+    # Use `inspect.getsource()` which delegates to the module's loader's
+    # `get_source()` (PEP 302) — works for both filesystem-imported modules
+    # and Chaquopy's in-zip AssetFinder loader (whose __file__ points into
+    # the app.imy archive and is not open()-able with the regular file API).
+    # An earlier attempt to use open(__file__) silently failed because the
+    # zip path is a synthetic location; the .pyc gets cached on disk but the
+    # source never does. Stick with the loader API.
+    #
+    # The destination is renamed snake_case → PascalCase
+    # (columba_rnode_interface.py → ColumbaRNodeInterface.py) so it matches
+    # the `type = ColumbaRNodeInterface` directive emitted by RnsConfigFile.
+    # Failure is logged but non-fatal: BLE/USB RNode support is degraded,
+    # the rest of the stack still comes up. Bumped to LOG_NOTICE +
+    # unconditional print so the success/failure is visible in `python.
+    # stdout` even before RNS's logfile machinery is up (deploy runs before
+    # Reticulum()).
+    import inspect
+    import traceback
+    try:
+        import columba_rnode_interface as _crni_mod
+        src = inspect.getsource(_crni_mod)
+        dest = os.path.join(interfaces_dir, "ColumbaRNodeInterface.py")
+        with open(dest, "w") as f:
+            f.write(src)
+        RNS.log(
+            f"event_bridge: deployed ColumbaRNodeInterface.py "
+            f"({len(src)} bytes) to {dest}",
+            RNS.LOG_NOTICE,
+        )
+        print(
+            f"event_bridge: deployed ColumbaRNodeInterface.py "
+            f"({len(src)} bytes)",
+            flush=True,
+        )
+    except Exception as e:  # noqa: BLE001
+        RNS.log(
+            f"event_bridge: failed to deploy ColumbaRNodeInterface.py: {e}",
+            RNS.LOG_ERROR,
+        )
+        print(
+            f"event_bridge: FAILED to deploy ColumbaRNodeInterface.py: {e}",
+            flush=True,
+        )
+        traceback.print_exc()
 
 
 def reset_reticulum_for_restart():
@@ -1290,7 +1395,21 @@ def make_nomadnet_response_capture():
     cap = SimpleNamespace(
         done=False,
         response_bytes=None,
-        metadata_bytes=None,
+        # True iff the upstream `RequestReceipt.metadata` was non-None — the
+        # "/file/ response" signal. NomadNet sets metadata on file responses
+        # only (NomadNet node.py `Request.file_handler`); `/page/` responses
+        # leave it None. The Kotlin consumer keys "render as file" on this
+        # flag, independent of whether a `"name"` key was present.
+        has_metadata=False,
+        # Server-advertised file name bytes from the metadata dict's `"name"`
+        # key (utf-8). Empty bytes when the metadata dict has no `"name"` key,
+        # or when `has_metadata` is False. Replaces the previous
+        # `metadata_bytes` (a msgpack-roundtripped blob) — upstream
+        # `RequestReceipt.metadata` is already a Python dict at the property
+        # accessor, so packing it just to make Kotlin unpack it on-device was
+        # unnecessary work. The Kotlin consumer
+        # (`PythonRnsNomadnet.buildPageResult`) only ever needed the name.
+        metadata_name_bytes=b"",
         error=None,
     )
 
@@ -1303,12 +1422,24 @@ def make_nomadnet_response_capture():
                 cap.response_bytes = bytes(r)
             else:
                 cap.response_bytes = b"" if r is None else bytes(str(r), "utf-8")
+            # Extract just the server-advertised file name from the metadata
+            # dict. Upstream RNS exposes `receipt.metadata` as the unpacked
+            # dict (msgpack happens lazily inside the property accessor), so
+            # we read `m["name"]` directly. v0.10.x reference behavior:
+            # python/rns_api.py:_save_file_response — name defaults to
+            # b"download" when the key is absent; bytes are decoded
+            # utf-8/errors="replace" on the Kotlin side.
             m = getattr(receipt, "metadata", None)
-            if isinstance(m, (bytes, bytearray)):
-                cap.metadata_bytes = bytes(m)
-            elif m is not None:
-                import umsgpack
-                cap.metadata_bytes = umsgpack.packb(m)
+            if m is not None:
+                cap.has_metadata = True
+            if isinstance(m, dict):
+                name_raw = m.get("name", b"")
+                if isinstance(name_raw, bytes):
+                    cap.metadata_name_bytes = bytes(name_raw)
+                elif isinstance(name_raw, str):
+                    cap.metadata_name_bytes = name_raw.encode("utf-8")
+                else:
+                    cap.metadata_name_bytes = str(name_raw).encode("utf-8")
         except Exception as e:  # noqa: BLE001
             cap.error = str(e)
         finally:

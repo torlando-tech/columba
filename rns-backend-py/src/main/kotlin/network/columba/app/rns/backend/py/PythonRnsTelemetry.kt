@@ -27,18 +27,19 @@ import java.util.concurrent.ConcurrentHashMap
  * Follows the [PythonRnsCore] pattern: every `suspend` method routes through
  * [pyResult] / [pyCall]; live upstream objects are resolved out of
  * [PythonRnsRuntime]'s registries; the observable flow is sourced from
- * [PythonEventBridge]; on-device-iteration-shaped gaps are honest minimal
- * impls with `TODO(on-device)` markers — never silent fakes.
+ * [PythonEventBridge].
  *
  * Telemetry split (mirrors `NativeRnsBackendImpl`):
  *  - **send paths** ([sendLocationTelemetry] / [sendTelemetryRequest]) build an
  *    `LXMF.LXMessage` carrying the relevant field and route it through
- *    `LXMRouter.handle_outbound` — a real best-effort PyObject impl;
+ *    `LXMRouter.handle_outbound`;
  *  - **collector-host-mode state** ([setTelemetryCollectorMode] /
  *    [storeOwnTelemetry] / [setTelemetryAllowedRequesters]) is held backend-side
- *    so a restart re-applies it. Full upstream LXMF `FIELD_TELEMETRY_STREAM`
- *    responder wiring genuinely needs device iteration to verify — the state is
- *    tracked honestly, not faked, and the responder hookup is `TODO(on-device)`.
+ *    so a restart re-applies it, and pushed into `event_bridge.py` where the
+ *    upstream LXMF `FIELD_COMMANDS` responder + `FIELD_TELEMETRY_STREAM` reply
+ *    path lives (Python-side because the response touches `RNS.Identity.recall`
+ *    / `RNS.Destination` / `router.handle_outbound`). Verified E2E against a
+ *    Fold 7 host ↔ S21 member pair in commit `61598cf1`.
  */
 @Suppress("TooManyFunctions") // Mirrors the RnsTelemetry contract surface 1:1.
 class PythonRnsTelemetry(
@@ -56,9 +57,10 @@ class PythonRnsTelemetry(
     }
 
     // ==================== Collector-host-mode state ====================
-    // Held backend-side so an "Apply & Restart" re-applies it. The upstream
-    // LXMF FIELD_TELEMETRY_STREAM responder that consumes this state is
-    // on-device follow-up — see the TODO(on-device) notes on the setters.
+    // Held backend-side so an "Apply & Restart" re-applies it. The setters
+    // also push this state into `event_bridge.py` where the upstream LXMF
+    // FIELD_COMMANDS responder + FIELD_TELEMETRY_STREAM reply path lives
+    // (wired and verified live in commit `61598cf1`).
 
     @Volatile
     private var collectorHostModeEnabled: Boolean = false
@@ -112,11 +114,10 @@ class PythonRnsTelemetry(
             runtime.requireRunning()
             // A telemetry request is an LXMF FIELD_COMMANDS frame. Upstream
             // Sideband encodes this as a list of command dicts; the collector
-            // replies with FIELD_TELEMETRY_STREAM since `timebase`.
-            // TODO(on-device): the exact FIELD_COMMANDS command-dict shape
-            // (Sideband uses {0x01: timebase} for "telemetry request") needs
-            // verification against a live collector — the structural cut sends
-            // a single timebase-keyed command entry.
+            // replies with FIELD_TELEMETRY_STREAM since `timebase`. The
+            // command-dict shape `{0x01: timebase}` (Sideband's
+            // `_COMMAND_TELEMETRY_REQUEST`) was verified live against a
+            // Fold 7 host ↔ S21 member pair in commit `61598cf1`.
             val commandList = listOf(
                 mapOf(0x01 to (timebase ?: 0L)).toPyDict(),
             ).toPyList()

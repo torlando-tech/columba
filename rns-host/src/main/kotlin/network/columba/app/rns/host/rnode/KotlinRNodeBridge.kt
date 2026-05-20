@@ -18,6 +18,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
+import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -217,6 +218,17 @@ class KotlinRNodeBridge(
     // Kotlin online status listeners (for UI notification)
     private val onlineStatusListeners = mutableListOf<RNodeOnlineStatusListener>()
 
+    // Python-side connection-state callback. Single slot (not a list) because
+    // the consumer is ColumbaRNodeInterface._on_connection_state_changed —
+    // there's one Python interface per bridge instance at a time. PyObject
+    // (Chaquopy) instead of a Kotlin SAM because Chaquopy doesn't auto-
+    // adapt a Python bound method to a Kotlin functional interface
+    // ("Cannot convert method object to ..." at runtime). PyObject +
+    // callAttr("__call__", ...) is the working pattern used throughout
+    // KotlinBLEBridge for the same situation.
+    @Volatile
+    private var connectionStateListener: PyObject? = null
+
     /**
      * Register a Kotlin listener for RNode error events.
      * Listeners will be called on a background thread when errors occur.
@@ -289,6 +301,23 @@ class KotlinRNodeBridge(
         synchronized(onlineStatusListeners) {
             onlineStatusListeners.remove(listener)
         }
+    }
+
+    /**
+     * Register the python callback invoked on BLE/Classic
+     * connect / disconnect transitions.
+     *
+     * Python registers this via `ColumbaRNodeInterface.start()` after the
+     * initial `connect()` succeeds; the bridge then invokes it from
+     * [handleDisconnect] (BLE GATT drop, Classic stream EOF) and from the
+     * connect-success path. Without this wiring the python interface keeps
+     * believing it's online after the radio is yanked.
+     *
+     * Callback signature on the python side:
+     *   `def _on_connection_state_changed(self, connected: bool, device_name: str | None)`
+     */
+    fun setOnConnectionStateChanged(callback: PyObject) {
+        connectionStateListener = callback
     }
 
     /**
@@ -381,11 +410,31 @@ class KotlinRNodeBridge(
             }
 
         if (isConnected.get()) {
-            Log.w(TAG, "Already connected to $connectedDeviceName")
             if (connectedDeviceName == deviceName && connectionMode == requestedMode) {
-                return true // Already connected to this device with same mode
+                Log.d(TAG, "Already connected to $deviceName ($mode) - idempotent connect()")
+                return true
             }
-            disconnect() // Disconnect from current device first
+            // Different device or different mode requested. Refusing rather
+            // than disconnecting+reconnecting protects against two
+            // ColumbaRNodeInterface.start() threads racing — the previously-
+            // observed pattern was both python interfaces' start() firing in
+            // the same millisecond, both racing through connect(), the
+            // second one's disconnect() killing the first's working GATT,
+            // and both python interfaces then reading from the same broken
+            // shared buffer (both reporting offline within seconds). User-
+            // visible result: neither RNode works after Apply & Restart.
+            //
+            // Returning false here lets the second python interface bail
+            // out cleanly; it logs an instructive error ("only one BLE/
+            // Classic RNode at a time") and stays offline. The first
+            // interface keeps its GATT and works normally.
+            Log.w(
+                TAG,
+                "Refusing connect to '$deviceName' ($mode) — bridge already serving " +
+                    "'$connectedDeviceName' ($connectionMode). Only one BLE/Classic RNode " +
+                    "at a time.",
+            )
+            return false
         }
 
         val adapter =
@@ -451,6 +500,12 @@ class KotlinRNodeBridge(
             isConnected.set(true)
 
             Log.i(TAG, "Connected to $deviceName via Bluetooth Classic")
+
+            try {
+                connectionStateListener?.callAttr("__call__", true, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener (classic connect)", e)
+            }
 
             // Start read thread
             startClassicReadThread()
@@ -561,6 +616,12 @@ class KotlinRNodeBridge(
             isConnected.set(true)
 
             Log.d(TAG, "████ RNODE BLE SUCCESS ████ deviceName=$deviceName MTU=$bleMtu")
+
+            try {
+                connectionStateListener?.callAttr("__call__", true, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener (BLE connect)", e)
+            }
 
             true
         } catch (e: Exception) {
@@ -1243,6 +1304,15 @@ class KotlinRNodeBridge(
             connectionMode = null
             connectedDeviceName = null
             readBuffer.clear()
+
+            // Notify python interface so it can flip self.online = False,
+            // notify the kotlin notification listener (ServiceNotificationManager
+            // posts the heads-up alert), and kick off the reconnection loop.
+            try {
+                connectionStateListener?.callAttr("__call__", false, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener (disconnect)", e)
+            }
         }
     }
 

@@ -52,10 +52,19 @@ data class BackendCapabilities(
      * because every realistic implementation either applies live or
      * requires a restart — there is no "unsupported" state where interface
      * changes have no path to take effect at all.
+     *
+     * `autoconnectIfacOnlyFilter` reports whether the backend enforces the
+     * "skip auto-connect for interfaces that didn't advertise an IFAC
+     * netname" filter. Reticulum-kt enforces it in its auto-connect
+     * factory; upstream Python RNS has no equivalent knob and silently
+     * ignores any `autoconnect_ifac_only` config option. UI hides the
+     * IFAC-only Switch on backends that report `false` so the toggle
+     * doesn't silently lie about its effect.
      */
     @Parcelize
     data class InterfaceCaps(
         val hotReloadInterfaces: Boolean,
+        val autoconnectIfacOnlyFilter: Boolean = false,
         val degradationHint: String? = null,
     ) : Parcelable
 
@@ -130,7 +139,10 @@ data class BackendCapabilities(
         val UNKNOWN: BackendCapabilities = BackendCapabilities(
             backendId = BackendId.KOTLIN_NATIVE,
             versions = Versions(null, null, null, null),
-            interfaces = InterfaceCaps(hotReloadInterfaces = false),
+            interfaces = InterfaceCaps(
+                hotReloadInterfaces = false,
+                autoconnectIfacOnlyFilter = false,
+            ),
             telemetry = TelemetryCaps(
                 collectorHostMode = Support.UNSUPPORTED,
                 storeOwnTelemetry = Support.UNSUPPORTED,

@@ -1,0 +1,273 @@
+# Punch-list item 10: "Failed to initialize Reticulum: Backend not ready"
+# after adding an RNode-over-TCP interface and tapping Apply & Restart.
+#
+# Repro (per pre-python-dual-backend-release.md, Open bugs, item 10):
+#   1. Add a new RNode interface in TCP/WiFi connection mode.
+#   2. Save it.
+#   3. Tap "Apply & Restart" (label used on backends that can't hot-reload,
+#      i.e. the Python backend — see InterfaceManagementScreen.kt:192).
+#   4. Confirm in the "Apply & Restart" AlertDialog (line ~516, confirm
+#      button label "Apply & Restart" at line 531).
+#   5. Error surfaces as the ApplyErrorDialog (title "Failed to Apply
+#      Changes", lines 1001-1039) with body text containing the
+#      "Failed to initialize Reticulum: Backend not ready" message thrown
+#      from InterfaceConfigManager.kt:347.
+#
+# Hypothesis (per the issue notes): race between
+# BackendInitializer.initializeFromSnapshot running on ReticulumService
+# onCreate (after the force-stop that an Apply & Restart triggers) and
+# InterfaceConfigManager calling rnsCore.initialize(config) explicitly.
+# One sees running.get() == true from the other and short-circuits with a
+# stale config / "Backend not ready". Logcat from both pids
+# (network.columba.app.debug and network.columba.app.debug:reticulum) is
+# captured by the harness across the Apply & Restart window.
+#
+# Preconditions:
+#   - App network.columba.app.debug installed on emulator-5554 (python build).
+#   - Onboarding already completed (launchApp lands on the Chats tab,
+#     not the Welcome wizard).
+#
+# Selectors used (no testTags on the relevant composables; falling back
+# to visible text and contentDescription):
+#   - "Settings"            -> bottom navigation tab (MainActivity.kt:566,
+#                              Screen.Settings.title).
+#   - "Network"             -> CollapsibleSettingsCard title for the
+#                              NetworkCard (NetworkCard.kt:48); tap to
+#                              expand if collapsed.
+#   - "Manage Interfaces"   -> OutlinedButton inside NetworkCard
+#                              (NetworkCard.kt:108).
+#   - "Network Interfaces"  -> InterfaceManagementScreen TopAppBar title
+#                              (InterfaceManagementScreen.kt:156). Confirms
+#                              we landed on the right screen.
+#   - "Add Interface"       -> FloatingActionButton contentDescription
+#                              (InterfaceManagementScreen.kt:208) — opens
+#                              the InterfaceTypeSelector dialog.
+#   - "Select Interface Type" -> AlertDialog title for InterfaceTypeSelector
+#                                (InterfaceManagementScreen.kt:1191).
+#   - "RNode LoRa"          -> InterfaceTypeOption title for the RNode entry
+#                              (InterfaceManagementScreen.kt:1212). Tapping
+#                              this routes to RNodeWizardScreen via
+#                              onTypeSelected("RNode") -> onNavigateToRNodeWizard(null).
+#   - "Select RNode Device" -> RNodeWizardScreen TopAppBar title for the
+#                              DEVICE_DISCOVERY step in add mode
+#                              (RNodeWizardScreen.kt:129).
+#   - "WiFi / TCP"          -> FilterChip label for RNodeConnectionType.TCP_WIFI
+#                              (DeviceDiscoveryStep.kt:156).
+#   - "IP Address or Hostname" -> OutlinedTextField label for tcpHost
+#                                 (DeviceDiscoveryStep.kt:220). Tap to focus
+#                                 so the following inputText hits it.
+#   - "Next"                -> WizardBottomBar button text for non-Review
+#                              steps (RNodeWizardScreen.kt:168).
+#   - "Custom Settings"     -> CustomSettingsCard title on RegionSelectionStep
+#                              (RegionSelectionStep.kt:101). Picking this
+#                              flips isCustomMode=true so the wizard skips
+#                              Modem + Slot and jumps straight to Review
+#                              (RNodeWizardViewModel.kt:582-586).
+#   - "Review Settings"     -> RNodeWizardScreen TopAppBar title at the
+#                              REVIEW_CONFIGURE step (RNodeWizardScreen.kt:134).
+#   - "Save"                -> WizardBottomBar button text on REVIEW_CONFIGURE
+#                              in add mode (RNodeWizardScreen.kt:166). Calls
+#                              viewModel.saveConfiguration(); on success
+#                              navigates back to InterfaceManagementScreen.
+#   - "Apply & Restart"     -> Action Button in the InterfaceManagementScreen
+#                              TopAppBar when state.hasPendingChanges is true
+#                              (InterfaceManagementScreen.kt:192). Triggers
+#                              the showApplyRestartConfirm AlertDialog.
+#   - "Apply & Restart" (in dialog) -> TextButton inside the confirm dialog
+#                                      (InterfaceManagementScreen.kt:531).
+#                                      Calls viewModel.applyChanges().
+#   - "Failed to Apply Changes" -> ApplyErrorDialog title
+#                                  (InterfaceManagementScreen.kt:1015) —
+#                                  the visible signal that the bug fired.
+#
+# Notes on choices:
+#   - TCP host hardcoded to 192.0.2.1 (TEST-NET-1, RFC 5737). Per the issue
+#     report the bug fires regardless of whether the target is reachable,
+#     so we want an obviously-bogus address that won't accidentally hit
+#     anything real on the LAN during a CI run.
+#   - Interface name is left at the auto-assigned "RNode TCP" default
+#     (RNodeWizardViewModel.kt:1545). No need to type it; saving as-is
+#     keeps the flow short and avoids keyboard-dismiss flakes.
+#   - The flow doesn't explicitly assert the "Backend not ready" string,
+#     only the surrounding "Failed to Apply Changes" dialog. The dialog
+#     body text is inside the dialog and the exact phrasing of the
+#     wrapped exception is what we want to capture — but if the bug ever
+#     stops reproducing, the dialog won't appear at all, so the
+#     extendedWaitUntil on "Failed to Apply Changes" is the right gate.
+#     The screenshot at step 10-apply-restart-result captures whichever
+#     state is on-screen (success OR the dialog), so even if the
+#     race outcome changes we still get useful evidence.
+
+appId: network.columba.app.debug
+name: 10-tcp-rnode-apply-restart
+tags:
+  - py-backend
+  - punch-list-10
+---
+# Reset the activity stack so we always start from Screen.Chats regardless of
+# where a previous flow left the app (e.g. deep in Settings > Network >
+# Discovered Interfaces). Without stopApp:true, a previous flow's deep-nav
+# state persists and "tapOn: Settings" no-ops on an already-selected tab,
+# leaving us on the wrong screen. clearState would wipe onboarding and
+# break the precondition, so use stopApp only.
+- launchApp:
+    appId: network.columba.app.debug
+    clearKeychain: false
+    stopApp: true
+    clearState: false
+
+# Settle on the Chats tab. If onboarding hasn't been completed, the bottom
+# nav tabs won't appear and the flow will fail here with a clear message
+# telling the test runner the environment isn't set up.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+
+# Bottom-nav: jump to Settings tab (MainActivity.kt:566). On the Chats screen
+# "Settings" is unambiguous (only the bottom-nav label uses it).
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Network"
+    timeout: 10000
+
+# The NetworkCard is a CollapsibleSettingsCard; "Manage Interfaces" is only
+# tappable when expanded. Tap the "Network" title row to expand. If it was
+# already expanded this is a no-op tap on the header (acceptable).
+- tapOn: "Network"
+- scrollUntilVisible:
+    element:
+      text: "Manage Interfaces"
+    direction: DOWN
+    timeout: 5000
+
+- tapOn: "Manage Interfaces"
+
+# InterfaceManagementScreen TopAppBar title ("Network Interfaces") confirms
+# we landed on the right screen.
+- extendedWaitUntil:
+    visible: "Network Interfaces"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+
+- takeScreenshot: 10-interface-mgmt-initial
+
+# Open the InterfaceTypeSelector via the FAB. Its only stable selector is
+# the Icon's contentDescription "Add Interface" (InterfaceManagementScreen.kt:208).
+# Maestro matches on contentDescription via the tapOn text form.
+- tapOn: "Add Interface"
+
+- extendedWaitUntil:
+    visible: "Select Interface Type"
+    timeout: 5000
+
+# Pick the RNode entry. The selector dialog only shows the label "RNode LoRa"
+# (InterfaceManagementScreen.kt:1212); tapping it routes to RNodeWizardScreen.
+- tapOn: "RNode LoRa"
+
+# Wizard top bar reads "Select RNode Device" in add mode (DEVICE_DISCOVERY step).
+- extendedWaitUntil:
+    visible: "Select RNode Device"
+    timeout: 10000
+
+# Switch the connection method to WiFi / TCP (DeviceDiscoveryStep.kt:156).
+- tapOn: "WiFi / TCP"
+- extendedWaitUntil:
+    visible: "IP Address or Hostname"
+    timeout: 5000
+
+# Focus the host field and type a bogus TEST-NET-1 address. We don't tap
+# "Test Connection" — canProceed() only checks tcpHost.isNotBlank()
+# (RNodeWizardViewModel.kt:653), so we can advance straight to the next
+# step. (Tapping "Test" would block on a network timeout and isn't
+# required to reproduce the bug.)
+- tapOn: "IP Address or Hostname"
+- inputText: "192.0.2.1"
+
+# Hide the keyboard so the "Next" button in the bottom bar is hittable.
+- hideKeyboard
+
+# Advance: DEVICE_DISCOVERY -> REGION_SELECTION.
+- tapOn: "Next"
+- extendedWaitUntil:
+    visible: "Choose Region"
+    timeout: 5000
+
+# Pick "Custom Settings" to skip the Modem and Frequency Slot steps and go
+# straight to Review (viewmodel goToNextStep on REGION_SELECTION:582-586).
+# "Custom Settings" lives inside the LazyColumn after all frequency regions
+# (RegionSelectionStep.kt:99-106). The list is long (10+ regions) so we set
+# a generous scroll budget and disable centerElement to take a partial match.
+- scrollUntilVisible:
+    element:
+      text: "Custom Settings"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 30
+    centerElement: false
+- tapOn: "Custom Settings"
+
+# Advance: REGION_SELECTION (custom mode) -> REVIEW_CONFIGURE.
+- tapOn: "Next"
+- extendedWaitUntil:
+    visible: "Review Settings"
+    timeout: 10000
+
+# The interface name auto-defaults to "RNode TCP" when TCP_WIFI is selected
+# (RNodeWizardViewModel.kt:1545) so we don't need to type a name. Save.
+- tapOn: "Save"
+
+# After save success, the wizard navigates back to InterfaceManagementScreen
+# via onComplete (RNodeWizardScreen.kt:114). The pending-changes Apply
+# button surfaces in the top bar.
+- extendedWaitUntil:
+    visible: "Network Interfaces"
+    timeout: 15000
+
+- takeScreenshot: 10-after-add-interface
+
+# Apply button. On Python (no hot-reload) the label is "Apply & Restart"
+# (InterfaceManagementScreen.kt:192).
+- extendedWaitUntil:
+    visible: "Apply & Restart"
+    timeout: 10000
+
+- tapOn: "Apply & Restart"
+
+# Confirm dialog appears. The trigger button, the dialog title, and the
+# dialog's confirm button all read "Apply & Restart" (lines 192, 516, 531).
+# Gate on the dialog's unique body text instead so we know the dialog is
+# fully drawn before we try to tap into it. Maestro's text matcher requires
+# a full-text regex match, so wrap the substring in .* to match the long
+# body text.
+- extendedWaitUntil:
+    visible: ".*Applying interface changes restarts Reticulum.*"
+    timeout: 5000
+
+# Tap the confirm button. Two "Apply & Restart" matches are on-screen now
+# (dialog title + confirm button); index: 1 picks the second one, which is
+# the TextButton inside confirmButton (InterfaceManagementScreen.kt:524-532).
+# This runs viewModel.applyChanges() and either succeeds or surfaces
+# ApplyErrorDialog with title "Failed to Apply Changes".
+- tapOn:
+    text: "Apply & Restart"
+    index: 1
+
+# Wait up to 30 seconds for one of:
+#   - Success: the ApplyChangesDialog ("Applying Changes" / "Restarting
+#     Reticulum network...") dismisses and the Apply button disappears
+#     because hasPendingChanges flips false.
+#   - Failure (the bug): ApplyErrorDialog with title "Failed to Apply
+#     Changes" appears with body "Failed to initialize Reticulum:
+#     Backend not ready" (InterfaceConfigManager.kt:347).
+#
+# We gate on the failure title, then fall through to the screenshot. If
+# the bug doesn't reproduce on this run the wait will time out — that's
+# fine; the screenshot still captures the success state, which is itself
+# valuable evidence that the race resolved the other way.
+- extendedWaitUntil:
+    visible: "Failed to Apply Changes"
+    timeout: 30000
+    optional: true
+
+- takeScreenshot: 10-apply-restart-result

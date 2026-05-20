@@ -79,8 +79,29 @@ class InterfaceConfigManager
          * @return Result indicating success or failure with error details
          */
         @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
-        suspend fun applyInterfaceChanges(onServiceReady: (() -> Unit)? = null): Result<Unit> =
-            runCatching {
+        suspend fun applyInterfaceChanges(onServiceReady: (() -> Unit)? = null): Result<Unit> {
+            // Apply flag lifecycle: set in Step 3, cleared HERE in finally. Keeping
+            // the flag set across the whole apply (not just until initialize returns)
+            // matters for two cross-process races:
+            //  • ColumbaApplication.onCreate in the UI process — sees a stale flag
+            //    on the next cold start and clears it via isStaleFlag(); a clean
+            //    apply just lets this finally cover the exit.
+            //  • ReticulumService.onStartCommand in :reticulum — when an Android
+            //    auto-restart redelivers an in-flight ACTION_STOP onto the
+            //    freshly-spawned process, the gate added in punch-list item 10
+            //    consults this same flag to decide whether to ignore the stale
+            //    STOP (yes, mid-apply) or honour it (no, real user shutdown).
+            //    Clearing the flag in initialize.onFailure used to drop this gate
+            //    just in time for the redelivered STOP to kill every restart in
+            //    the cascade.
+            val clearApplyFlag: () -> Unit = {
+                context
+                    .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("is_applying_config", false)
+                    .commit()
+            }
+            return runCatching {
                 withTimeout(APPLY_CHANGES_TIMEOUT_MS) {
                     Log.i(TAG, "==== Applying Interface Configuration Changes (Service Restart) ====")
 
@@ -142,7 +163,7 @@ class InterfaceConfigManager
                     // to run — preventing SIGSEGV in PyGILState_Ensure.
                     var reticulumProcessFound = false
                     try {
-                        val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                         val runningProcesses = activityManager.runningAppProcesses.orEmpty()
                         val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
 
@@ -169,7 +190,7 @@ class InterfaceConfigManager
                         var processDied = false
                         for (attempt in 1..maxVerifyAttempts) {
                             delay(250)
-                            val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                             val stillRunning =
                                 activityManager.runningAppProcesses
                                     .orEmpty()
@@ -183,7 +204,7 @@ class InterfaceConfigManager
                         if (!processDied) {
                             Log.w(TAG, "Service process didn't exit gracefully after ${maxVerifyAttempts * 250}ms, sending SIGKILL...")
                             try {
-                                val am = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                                 val proc = am.runningAppProcesses.orEmpty().find { it.processName == reticulumProcessName }
                                 if (proc != null) {
                                     Process.killProcess(proc.pid)
@@ -215,10 +236,35 @@ class InterfaceConfigManager
                     ContextCompat.startForegroundService(context, startIntent)
                     Log.d(TAG, "✓ Service start initiated")
 
-                    // Step 8: Bind to the new service
-                    Log.d(TAG, "Step 8: Binding to new service instance...")
-                    // bindService() was a legacy no-op on the kotlin backend
-                    Log.d(TAG, "✓ Bound to new service")
+                    // Step 8: Wait for the new :reticulum process to be live.
+                    // The Hilt-bound BoundRnsBackend always wraps its connection in a
+                    // StateFlow<RnsBackend?> that emits null on onServiceDisconnected
+                    // (post-punch-list-10 fix), so the next initialize() call on the
+                    // wrapped RnsCore would suspend until rebind anyway — BUT, between
+                    // Step 4's ACTION_STOP and Android's auto-restart from the crash,
+                    // the previous binder reference can linger as the StateFlow's most
+                    // recent value for up to a few tens of milliseconds. Poll for the
+                    // fresh pid before invoking initialize() so the AIDL call lands on
+                    // the new process's stub instead of the dead one.
+                    Log.d(TAG, "Step 8: Waiting for new :reticulum process to spawn...")
+                    val maxBindAttempts = 24 // ~6s at 250ms intervals — covers Android's 1s + 4s service-restart backoff
+                    var newProcessUp = false
+                    for (attempt in 1..maxBindAttempts) {
+                        delay(250)
+                        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                        val freshProcess =
+                            activityManager.runningAppProcesses
+                                .orEmpty()
+                                .find { it.processName == reticulumProcessName }
+                        if (freshProcess != null) {
+                            Log.d(TAG, "✓ New :reticulum process spawned with PID ${freshProcess.pid} after ${attempt * 250}ms")
+                            newProcessUp = true
+                            break
+                        }
+                    }
+                    if (!newProcessUp) {
+                        Log.w(TAG, "Timed out waiting for new :reticulum process to spawn — proceeding with initialize() anyway")
+                    }
 
                     // Step 9: Initialize Reticulum with new config
                     Log.d(TAG, "Step 9: Initializing Reticulum with new configuration...")
@@ -229,18 +275,9 @@ class InterfaceConfigManager
                     // file on every interface toggle, defeating the on-disk scrub.
                     //
                     // The is_applying_config flag was set synchronously in Step 3 to keep
-                    // ColumbaApplication.onCreate from racing us to reinitialize. Bailing
-                    // here without clearing it would leave the flag set for the rest of
-                    // this process — stale-flag detection on the next cold start would
-                    // eventually catch it, but a second apply attempt in the same session
-                    // would see the flag and short-circuit instead of actually running.
-                    val clearApplyFlag: () -> Unit = {
-                        context
-                            .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                            .edit()
-                            .putBoolean("is_applying_config", false)
-                            .commit()
-                    }
+                    // ColumbaApplication.onCreate from racing us to reinitialize. The
+                    // outer try/finally clears it on every exit path (success, throw,
+                    // timeout), so individual early-return branches just throw.
                     val activeIdentity = identityRepository.getActiveIdentitySync()
                     if (activeIdentity != null &&
                         runCatching {
@@ -252,7 +289,6 @@ class InterfaceConfigManager
                             "Active identity ${activeIdentity.identityHash.take(8)}... is password-protected " +
                                 "(or password status unreadable) - skipping apply until unlock",
                         )
-                        clearApplyFlag()
                         error("Active identity requires unlock before interface config can apply")
                     }
                     val deliveryKey =
@@ -270,7 +306,6 @@ class InterfaceConfigManager
                             "Active identity ${activeIdentity.identityHash.take(8)}... present but key decryption " +
                                 "returned null - refusing to restart with an ephemeral identity",
                         )
-                        clearApplyFlag()
                         error("Active identity key unavailable; aborting apply")
                     }
                     val displayName = activeIdentity?.displayName
@@ -327,62 +362,72 @@ class InterfaceConfigManager
                         .initialize(config)
                         .onSuccess {
                             Log.d(TAG, "✓ Reticulum initialized successfully")
-
-                            // Clear the flag now that initialization is complete
-                            context
-                                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                                .edit()
-                                .putBoolean("is_applying_config", false)
-                                .commit() // Synchronous to ensure flag is cleared for next restart
-                            Log.d(TAG, "✓ Config apply flag cleared")
                         }.onFailure { error ->
-                            // Clear flag even on failure
-                            context
-                                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                                .edit()
-                                .putBoolean("is_applying_config", false)
-                                .commit() // Synchronous to ensure flag is cleared
-
+                            // The outer finally clears is_applying_config — keep the flag set
+                            // here so any stale ACTION_STOP redelivery during the in-flight
+                            // service restart (Step 4 → Step 7 window) is still recognised
+                            // as an apply-time redelivery and ignored in
+                            // ReticulumService.onStartCommand.
                             Log.e(TAG, "Failed to initialize Reticulum", error)
                             throw Exception("Failed to initialize Reticulum: ${error.message}", error)
                         }
 
                     // Signal caller that service is usable (before post-init bookkeeping)
                     onServiceReady?.invoke()
+                    Unit // Hint inference: function return is Result<Unit>.
+                } // withTimeout — wraps ONLY the critical-path RNS restart (Steps 1-9).
+                // Post-init bookkeeping (Steps 10-12) runs outside the timeout: by
+                // this point RNS is up and the user-facing apply has succeeded.
+                // Identity restoration on devices with thousands of stored peers
+                // can take 45-60s on its own, which used to trip the apply-wide
+                // 60s timeout and incorrectly mark the apply as failed even though
+                // RNS was healthy. The is_applying_config flag (cleared in the
+                // outer .also) stays set across these steps too, so the stale-
+                // STOP gate in ReticulumService keeps fielding any redelivered
+                // STOP cascades from the Step-4 shutdown.
 
-                    // Step 10: Restore peer identities (uses batched loading to prevent OOM)
-                    Log.d(TAG, "Step 10: Batch restoring peer identities...")
-                    try {
-                        restorePeerIdentitiesInBatches()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error batch restoring peer identities", e)
-                        // Not fatal - continue
-                    }
+                // Step 10: Restore peer identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10: Batch restoring peer identities...")
+                try {
+                    restorePeerIdentitiesInBatches()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error batch restoring peer identities", e)
+                    // Not fatal - continue
+                }
 
-                    // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
-                    Log.d(TAG, "Step 10b: Batch restoring announce identities...")
-                    try {
-                        restoreAnnounceIdentitiesInBatches()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error batch restoring announce identities", e)
-                        // Not fatal - continue
-                    }
+                // Step 10b: Restore announce identities (uses batched loading to prevent OOM)
+                Log.d(TAG, "Step 10b: Batch restoring announce identities...")
+                try {
+                    restoreAnnounceIdentitiesInBatches()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error batch restoring announce identities", e)
+                    // Not fatal - continue
+                }
 
-                    // Step 11: Restart message collector
-                    Log.d(TAG, "Step 11: Starting message collector...")
-                    messageCollector.startCollecting()
-                    Log.d(TAG, "✓ Message collector started")
+                // Step 11: Restart message collector
+                Log.d(TAG, "Step 11: Starting message collector...")
+                messageCollector.startCollecting()
+                Log.d(TAG, "✓ Message collector started")
 
-                    // Step 12: Restart managers (same as ColumbaApplication.onCreate)
-                    Log.d(TAG, "Step 12: Restarting managers...")
-                    autoAnnounceManager.start()
-                    identityResolutionManager.start(applicationScope)
-                    propagationNodeManager.start()
-                    Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
+                // Step 12: Restart managers (same as ColumbaApplication.onCreate)
+                Log.d(TAG, "Step 12: Restarting managers...")
+                autoAnnounceManager.start()
+                identityResolutionManager.start(applicationScope)
+                propagationNodeManager.start()
+                Log.d(TAG, "✓ AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager started")
 
-                    Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
-                } // withTimeout
+                Log.i(TAG, "==== Configuration Changes Applied Successfully ====")
+                Unit // Hint inference: function return is Result<Unit>, not Result<Int> from Log.i.
+            }.also {
+                // Always clear the apply flag — even when initialize() failed or the
+                // withTimeout fired. Keeping it set across the whole apply (Step 3 → here)
+                // means ReticulumService.onStartCommand's stale-STOP gate stays live
+                // until the apply has actually finished one way or the other, preventing
+                // the redelivered ACTION_STOP cascade that turned into "Backend not ready".
+                Log.d(TAG, "Clearing is_applying_config flag (apply complete: success=${it.isSuccess})")
+                clearApplyFlag()
             }
+        }
 
         /**
          * Check if Reticulum is currently running and ready.

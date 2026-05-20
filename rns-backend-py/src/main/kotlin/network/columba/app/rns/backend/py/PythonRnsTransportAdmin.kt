@@ -146,10 +146,27 @@ class PythonRnsTransportAdmin(
         pyCall {
             // RNS.Reticulum.should_autoconnect_discovered_interfaces() is the
             // static that reflects the live `autoconnect_discovered_interfaces`
-            // config value (> 0).
-            runtime.rnsModule["Reticulum"]
+            // config value (> 0). Also peek at the name-mangled class attr
+            // directly so we can disambiguate "class attribute is False"
+            // from "method returned False through some other path" while
+            // debugging the post-restart subtitle bug.
+            val reticulumClass = runtime.rnsModule["Reticulum"]
+            val result = reticulumClass
                 ?.callAttr("should_autoconnect_discovered_interfaces")
                 ?.toJava(Boolean::class.javaObjectType) ?: false
+            val rawAttr = runCatching {
+                reticulumClass?.get("_Reticulum__autoconnect_discovered_interfaces")?.toString()
+            }.getOrNull()
+            val discoverAttr = runCatching {
+                reticulumClass?.get("_Reticulum__discover_interfaces")?.toString()
+            }.getOrNull()
+            Log.i(
+                TAG,
+                "isDiscoveryEnabled() → $result " +
+                    "(_Reticulum__autoconnect_discovered_interfaces=$rawAttr, " +
+                    "_Reticulum__discover_interfaces=$discoverAttr)",
+            )
+            result
         }
 
     override suspend fun getAutoconnectedEndpoints(): Set<String> =

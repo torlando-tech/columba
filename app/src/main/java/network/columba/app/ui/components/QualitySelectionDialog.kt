@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +79,10 @@ data class QualityOption<T>(
  * @param initialSelection The initially selected option value
  * @param recommendedOption The recommended option value (shows "Recommended" badge)
  * @param linkState Current link state for displaying path info (null to hide)
+ * @param isProbing True while a link probe is in flight; renders a spinner +
+ *   "Probing link..." in the PathInfoSection even when linkState is null,
+ *   so the user gets immediate feedback when the dialog opens before the
+ *   probe has populated linkState.
  * @param transferTimeEstimates Optional map of option value to transfer time string
  * @param confirmButtonText Text for the confirm button (default: "Confirm")
  * @param onConfirm Called with selected value when user confirms
@@ -90,6 +96,7 @@ fun <T> QualitySelectionDialog(
     initialSelection: T,
     recommendedOption: T,
     linkState: ConversationLinkManager.LinkState? = null,
+    isProbing: Boolean = false,
     transferTimeEstimates: Map<T, String?>? = null,
     confirmButtonText: String = "Confirm",
     onConfirm: (T) -> Unit,
@@ -119,10 +126,11 @@ fun <T> QualitySelectionDialog(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                // Path info section (shows link state)
-                PathInfoSection(linkState)
+                // Path info section (shows link state, or a spinner while
+                // the link probe is in flight).
+                PathInfoSection(linkState, isProbing = isProbing)
 
-                if (linkState != null) {
+                if (linkState != null || isProbing) {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
@@ -173,15 +181,24 @@ fun <T> QualitySelectionDialog(
  * Displays link path information (hops, bitrate, MTU).
  *
  * Shows different states:
+ * - Probing link... (when [isProbing] is true) — small spinner + label,
+ *   visible even when [linkState] is still null (dialog opens before
+ *   the probe populates link state).
  * - Connecting... (when establishing)
  * - Path metrics (when active)
  * - Connection failed (on error)
  * - No active link (when inactive)
  */
 @Composable
-fun PathInfoSection(linkState: ConversationLinkManager.LinkState?) {
+fun PathInfoSection(
+    linkState: ConversationLinkManager.LinkState?,
+    isProbing: Boolean = false,
+) {
     val pathInfo =
         when {
+            // isProbing takes precedence over linkState being null so the
+            // dialog can render the probing card immediately on open.
+            isProbing -> "Probing link..."
             linkState == null -> null
             linkState.isEstablishing -> "Connecting..."
             linkState.isActive -> {
@@ -209,12 +226,23 @@ fun PathInfoSection(linkState: ConversationLinkManager.LinkState?) {
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.small,
         ) {
-            Text(
-                text = pathInfo,
+            Row(
                 modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (isProbing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = pathInfo,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

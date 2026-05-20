@@ -279,8 +279,24 @@ class PythonRnsNomadnet(
                     ?: throw RnsException(
                         RnsError.Generic("NomadNet response READY but body was null", null),
                     )
-                val metadata = capture["metadata_bytes"]?.toJava(ByteArray::class.java)
-                return buildPageResult(response, metadata, safePath)
+                // Two values surfaced by the Python-side capture
+                // (`event_bridge.make_nomadnet_response_capture`) instead of
+                // the prior msgpack-roundtripped metadata blob:
+                //   - hasMetadata: did upstream `RequestReceipt.metadata`
+                //     come back non-None? This is the "/file/ response"
+                //     discriminator — NomadNet only sets metadata on file
+                //     responses, never on `/page/` micron responses.
+                //   - metadataNameBytes: bytes for the metadata dict's
+                //     `"name"` key (utf-8). Empty when the key is absent or
+                //     this is a `/page/` response.
+                // Upstream RNS lazy-unpacks `RequestReceipt.metadata` at the
+                // property accessor, so the prior repack-then-decode loop
+                // was pure overhead with no payoff.
+                val hasMetadata = capture["has_metadata"]
+                    ?.toJava(Boolean::class.javaObjectType) == true
+                val metadataNameBytes = capture["metadata_name_bytes"]
+                    ?.toJava(ByteArray::class.java)
+                return buildPageResult(response, hasMetadata, metadataNameBytes, safePath)
             }
 
             // Defensive fallback: surface upstream-reported FAILED even if
@@ -299,25 +315,37 @@ class PythonRnsNomadnet(
     }
 
     /**
-     * A `/file/` response carries msgpacked metadata (`{name, ...}`) and the
-     * body is written to a download file; a `/page/` response is raw micron
-     * text. Metadata parsing reuses the upstream-shaped contract — full
-     * msgpack decode of the metadata blob is on-device follow-up, so for now
-     * a non-null metadata blob is treated as "file" with a path-safe name
-     * derived from the request path.
+     * A `/file/` response carries metadata (a dict with `{name, ...}`
+     * unpacked Python-side by `event_bridge.make_nomadnet_response_capture`,
+     * which forwards the [hasMetadata] discriminator and just the `"name"`
+     * bytes via [metadataNameBytes]); the body is written to a download file.
+     * A `/page/` response has no metadata ([hasMetadata] == false) and the
+     * body is raw micron text.
+     *
+     * v0.10.x reference: `python/rns_api.py:_save_file_response` — name
+     * defaults to `b"download"` when `"name"` is absent / empty / decodes
+     * to blank; bytes decoded utf-8/errors="replace"; `os.path.basename` to
+     * sanitize.
      */
     private fun buildPageResult(
         data: ByteArray,
-        metadata: ByteArray?,
+        hasMetadata: Boolean,
+        metadataNameBytes: ByteArray?,
         safePath: String,
     ): NomadnetPageResult {
-        if (metadata != null && metadata.isNotEmpty()) {
-            // TODO(on-device): decode the msgpacked metadata map to recover the
-            // server-advertised file name (NativeNomadNetHandler unpacks it via
-            // org.msgpack). Until that decode path is verified on-device, fall
-            // back to the request-path basename — still path-traversal-safe.
-            val rawName = safePath.substringAfterLast('/').ifBlank { "download" }
-            val fileName = File(rawName).name.ifBlank { "download" }
+        if (hasMetadata) {
+            // `String(_, Charsets.UTF_8)` silently substitutes the Unicode
+            // replacement char for malformed sequences — matches v0.10.x's
+            // `errors="replace"` contract (python/rns_api.py:425).
+            val advertised = if (metadataNameBytes != null && metadataNameBytes.isNotEmpty()) {
+                String(metadataNameBytes, Charsets.UTF_8)
+            } else {
+                ""
+            }
+            // Strip any directory components from the server-advertised name
+            // (path-traversal sanitize, Kotlin equivalent of
+            // `os.path.basename`). Fall through to "download" when blank.
+            val fileName = File(advertised).name.ifBlank { "download" }
             val downloadDir = File(
                 System.getProperty("java.io.tmpdir") ?: "/tmp",
                 "nomadnet_downloads",
@@ -325,7 +353,7 @@ class PythonRnsNomadnet(
             val outFile = File(downloadDir, fileName)
             check(
                 outFile.canonicalPath.startsWith(downloadDir.canonicalPath + File.separator),
-            ) { "Rejected path traversal in NomadNet download: $rawName" }
+            ) { "Rejected path traversal in NomadNet download: $advertised" }
             outFile.writeBytes(data)
             Log.i(TAG, "NomadNet: file response $fileName (${data.size} bytes)")
             return NomadnetPageResult(

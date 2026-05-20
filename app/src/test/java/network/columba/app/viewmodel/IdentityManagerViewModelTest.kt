@@ -65,8 +65,12 @@ class IdentityManagerViewModelTest {
         every { mockRepository.allIdentities } returns MutableStateFlow(emptyList())
         every { mockRepository.activeIdentity } returns MutableStateFlow(null)
 
-        // Default stub for InterfaceConfigManager
-        coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+        // Default stub for InterfaceConfigManager. The new signature takes an
+        // `onServiceReady` callback the VM relies on to transition to Success.
+        coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } answers {
+            firstArg<() -> Unit>().invoke()
+            Result.success(Unit)
+        }
 
         // Default stub: any identity's Keystore-wrapped key decrypts cleanly.
         coEvery { mockKeyProvider.getDecryptedKeyData(any(), any()) } returns
@@ -307,7 +311,10 @@ class IdentityManagerViewModelTest {
             // Given
             coEvery { mockRepository.getIdentity("id2") } returns null
             coEvery { mockRepository.switchActiveIdentity("id2") } returns Result.success(Unit)
-            coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } answers {
+                firstArg<() -> Unit>().invoke()
+                Result.success(Unit)
+            }
 
             viewModel.uiState.test {
                 assertTrue(awaitItem() is IdentityManagerUiState.Idle)

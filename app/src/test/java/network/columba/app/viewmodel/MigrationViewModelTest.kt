@@ -102,8 +102,12 @@ class MigrationViewModelTest {
         // Stub cleanupExportFiles - called during cleanup operations
         every { migrationExporter.cleanupExportFiles() } just Runs
 
-        // Mock service restart to succeed
-        coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+        // Mock service restart to succeed. The new signature takes an
+        // `onServiceReady` callback that flips RestartingService -> ImportComplete.
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } answers {
+            firstArg<() -> Unit>().invoke()
+            Result.success(Unit)
+        }
 
         viewModel = MigrationViewModel(migrationExporter, migrationImporter, interfaceConfigManager)
     }
@@ -276,7 +280,7 @@ class MigrationViewModelTest {
             advanceUntilIdle()
 
             // Verify service restart was called
-            coVerify { interfaceConfigManager.applyInterfaceChanges() }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
 
             // Final state should be ImportComplete (after restart)
             viewModel.uiState.test {

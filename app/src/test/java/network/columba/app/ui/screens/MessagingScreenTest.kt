@@ -338,8 +338,12 @@ class MessagingScreenTest {
     // ========== Online Status Tests ==========
 
     @Test
-    fun onlineStatus_displaysOnline_whenRecentlySeen() {
-        // Given - announce with recent lastSeenTimestamp (< 5 minutes ago)
+    fun onlineStatus_displaysLastSeen_whenRecentlySeen() {
+        // Given - announce with recent lastSeenTimestamp (< 5 minutes ago).
+        // "Online" is now reserved for an active link only; announce-only
+        // presence renders as "Last seen X ago" so the user judges from
+        // the relative time, not a misleading "Online" label produced by
+        // RNS announce_table cache replays.
         every { mockViewModel.announceInfo } returns
             MutableStateFlow(
                 MessagingTestFixtures.createOnlineAnnounce(),
@@ -356,7 +360,8 @@ class MessagingScreenTest {
         }
 
         // Then
-        composeTestRule.onNodeWithText("Online").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Last seen", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Online").assertDoesNotExist()
     }
 
     @Test

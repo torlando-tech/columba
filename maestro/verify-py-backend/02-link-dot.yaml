@@ -1,0 +1,94 @@
+# Reproduces punch-list item 2: PythonRnsCore.establishConversationLink stub.
+#
+# The Python build's PythonRnsCore.establishConversationLink
+# (rns-backend-py/src/main/kotlin/network/columba/app/rns/backend/py/PythonRnsCore.kt:431-451)
+# always returns ConversationLinkResult(isActive=false, ...) — it never
+# constructs an RNS.Link, so the conversation TopAppBar's online dot never goes
+# solid green. ConversationLinkManager.openConversationLink() is invoked
+# automatically on chat open with a LINK_ESTABLISHMENT_TIMEOUT_SECONDS = 5.0f
+# timeout, so we just need to enter a conversation and wait for the establishing
+# state to resolve, then screenshot the dot.
+#
+# Reference (working v0.10.x): `git show origin/release/v0.10.x:python/reticulum_wrapper.py`
+# lines 6447-6727 — establish_link() actually creates the link, identifies on
+# it, and returns link_active=true once ACTIVE.
+#
+# Preconditions:
+#   - App is already onboarded (start destination resolves to Screen.Chats).
+#   - At least one conversation exists in the chat list (the flow fails fast
+#     via assertNotVisible on "No conversations yet" if not).
+#   - Python build of network.columba.app.debug is installed on emulator-5554.
+#
+# Evidence: takeScreenshot artifacts (Maestro cannot read pixel colors). On the
+# broken Python build the dot stays grey/absent and the status text remains
+# "Connecting..." or disappears entirely; on a working build it transitions to
+# solid green with "Online" by the 6s mark.
+
+appId: network.columba.app.debug
+---
+- launchApp:
+    appId: network.columba.app.debug
+    clearState: false
+
+# Wait for the Chats screen to render. The TopAppBar title is "Chats" (from
+# ChatsScreen.kt:178, via Screen.Chats.title). 30s budget covers cold-start
+# Reticulum init.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+
+# Fail fast with a clear assertion message if the chat list is empty — this
+# flow requires an existing conversation to drive the openConversationLink path.
+- assertNotVisible: "No conversations yet"
+
+# Also fail fast if we're still on the loading spinner after the 30s wait above.
+- assertNotVisible: "Loading conversations..."
+
+# Tap into the first conversation. ConversationCard (ChatsScreen.kt:438) has no
+# testTag, so we tap by screen position — the first card sits just below the
+# TopAppBar at ~22% of the screen height. ConversationLinkManager.openConversationLink()
+# fires automatically from MessagingScreen on entry via LaunchedEffect.
+- tapOn:
+    point: "50%,22%"
+
+# Confirm we made it into the conversation: MessagingScreen TopAppBar
+# (MessagingScreen.kt:820) shows a Back arrow as navigationIcon. We can't
+# use `id: Back` — Compose doesn't expose contentDescription as a Maestro
+# accessibility id. Instead, gate on a UI element that uniquely identifies
+# the MessagingScreen: the message input placeholder "Type a message..."
+# (MessagingScreen.kt:2433). Use a long timeout because the conversation
+# view re-hydrates messages on entry.
+- extendedWaitUntil:
+    visible: "Type a message..."
+    timeout: 10000
+
+# Sleep ~6 seconds total without tapping anything — the dot's state machine
+# runs autonomously: ConversationLinkManager marks the link as establishing
+# (pulsing dot, "Connecting..." text), then either flips to active (solid
+# green dot, "Online" text) or times out at LINK_ESTABLISHMENT_TIMEOUT_SECONDS
+# = 5.0f (service/ConversationLinkManager.kt:37). Maestro has no `sleep`, so
+# we use three waitForAnimationToEnd blocks as a deterministic ceiling — the
+# infinite pulse animation on the establishing dot guarantees we hit the full
+# timeout each time.
+- waitForAnimationToEnd:
+    timeout: 2000
+- waitForAnimationToEnd:
+    timeout: 2000
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Screenshot #1: captures the TopAppBar at the 6s mark. On the broken Python
+# build the dot is grey/offline (or absent if no announce activity preceded
+# entry); on a working build it is solid green with "Online".
+- takeScreenshot: 02-link-dot-after-6s
+
+# Sleep ~4 more seconds to confirm the broken state is persistent rather than
+# just slow link establishment.
+- waitForAnimationToEnd:
+    timeout: 2000
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Screenshot #2: same TopAppBar at the 10s mark. Two screenshots establish
+# that the state is stable, not transient.
+- takeScreenshot: 02-link-dot-after-10s

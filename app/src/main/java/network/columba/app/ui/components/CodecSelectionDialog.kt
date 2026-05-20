@@ -14,6 +14,9 @@ import network.columba.app.ui.model.CodecProfile
  *
  * @param recommendedProfile The recommended profile based on link speed (default: QUALITY_MEDIUM)
  * @param linkState Current link state for displaying path info (null to hide)
+ * @param isProbing True while a link probe is in flight; the dialog renders
+ *   immediately on open with a spinner inside the PathInfoSection, then the
+ *   spinner is replaced with the probe result when the suspend completes.
  * @param onDismiss Called when the dialog is dismissed without selection
  * @param onProfileSelected Called with the selected profile when user confirms
  */
@@ -21,6 +24,7 @@ import network.columba.app.ui.model.CodecProfile
 fun CodecSelectionDialog(
     recommendedProfile: CodecProfile = CodecProfile.DEFAULT,
     linkState: ConversationLinkManager.LinkState? = null,
+    isProbing: Boolean = false,
     onDismiss: () -> Unit,
     onProfileSelected: (CodecProfile) -> Unit,
 ) {
@@ -41,6 +45,7 @@ fun CodecSelectionDialog(
         initialSelection = recommendedProfile,
         recommendedOption = recommendedProfile,
         linkState = linkState,
+        isProbing = isProbing,
         confirmButtonText = "Call",
         onConfirm = onProfileSelected,
         onDismiss = onDismiss,

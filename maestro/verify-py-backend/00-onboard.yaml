@@ -1,0 +1,178 @@
+# 00-onboard: Reusable setup flow that walks a fresh-install Columba debug
+# build (python flavor) from the Welcome page of the onboarding pager all
+# the way to the Chats landing screen. Subsequent flows in this directory
+# (01-probe-codec, 02-link-dot, 03-04-05-discovery-toggles, etc.) assume
+# the app has already been onboarded; this flow establishes that state.
+#
+# Identity choices documented (per task spec):
+#   - Display Name: "Maestro Test Emulator" (clearly synthetic; helps
+#     distinguish this peer in announce dumps / sideband chats during
+#     debugging).
+#   - Password / PIN: NONE. Onboarding for fresh installs does NOT
+#     prompt for a password or PIN (verified against IdentityPage.kt,
+#     which only collects a display name). Identity protection is a
+#     separate Settings-only feature that gates IdentityUnlockScreen,
+#     and the onboarding -> Chats route never traverses it.
+#   - Connectivity interfaces: leave default. OnboardingState.kt seeds
+#     `selectedInterfaces` with `OnboardingInterfaceType.AUTO` ("Local
+#     WiFi") only. We do NOT enable BLE (triggers runtime permission
+#     dialog + would short-circuit into pairing), TCP (would need server
+#     config later), or LoRa Radio / RNODE (would redirect onStartMessaging
+#     into the RNode wizard via `hasLoRaSelected` branch in
+#     OnboardingPagerScreen.kt:272-274, NOT to Chats).
+#   - Permissions: notifications + battery-optimization exemption are
+#     OPTIONAL on the Permissions page. Tapping "Continue" with both
+#     ungranted is allowed (no required-permission gate on the button).
+#     The `launchApp.permissions.all: "allow"` directive below grants
+#     POST_NOTIFICATIONS up-front so the page reflects the granted state,
+#     but the in-app "Enable" buttons are deliberately not tapped — the
+#     battery-optimization one launches a system Settings activity that
+#     Maestro can't reliably navigate, and we want the simplest happy path.
+#
+# Pages traversed (HorizontalPager indices 0..4 in OnboardingPagerScreen.kt):
+#   0. WelcomePage          -> tap "Get Started"
+#   1. IdentityPage         -> type display name, tap "Continue"
+#   2. ConnectivityPage     -> tap "Continue" (Local WiFi already selected)
+#   3. PermissionsPage      -> tap "Continue" (skip optional perms)
+#   4. CompletePage         -> tap "Start Messaging" (triggers
+#                              completeOnboarding -> onOnboardingComplete(false)
+#                              -> navController.navigate(Screen.Chats.route))
+#
+# After "Start Messaging", the ViewModel's completeOnboarding{} saves
+# settings, sets hasCompletedOnboarding=true, and the :reticulum foreground
+# service spins up. The transition from CompletePage to ChatsScreen can
+# take several seconds while the Python wrapper initializes; we use
+# extendedWaitUntil with a 20s timeout to absorb that.
+
+appId: network.columba.app.debug
+name: 00-onboard
+tags:
+  - py-backend
+  - setup
+---
+- launchApp:
+    appId: network.columba.app.debug
+    clearState: true
+    clearKeychain: true
+    stopApp: true
+    permissions:
+      all: "allow"
+
+# --- Page 0: WelcomePage ---
+# Selector: literal Button text "Get Started" (WelcomePage.kt:134).
+# Wait generously: cold-start of the Python interpreter + Hilt graph
+# can take 5-10s on the emulator before the Compose tree is laid out.
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 20000
+
+# Sanity: confirm we're on the pager Welcome (NOT the legacy
+# WelcomeScreen.kt, which has "Continue" instead of "Get Started" and
+# routes through a different ViewModel path).
+- assertVisible: "Welcome to Columba"
+
+- tapOn: "Get Started"
+
+# --- Page 1: IdentityPage ---
+# Selector: literal label text "Display Name" (IdentityPage.kt:93).
+# Maestro will focus the OutlinedTextField whose Label child renders
+# this text. There's no testTag set.
+- extendedWaitUntil:
+    visible: "Your Identity"
+    timeout: 10000
+
+- tapOn:
+    text: "Display Name"
+- inputText: "Maestro Test Emulator"
+
+# Dismiss the soft keyboard so the "Continue" button isn't covered.
+- hideKeyboard
+
+# Tap the Continue button (IdentityPage.kt:150). Note: "Back" is also
+# present on this page — match the Continue label explicitly.
+- tapOn:
+    text: "Continue"
+
+# --- Page 2: ConnectivityPage ---
+# Selector: page title "How will you connect?" (ConnectivityPage.kt:75).
+# Local WiFi (AUTO) is preselected via OnboardingState.kt:12; do NOT
+# toggle any other cards (BLE triggers runtime perms; RNODE redirects
+# to the LoRa wizard at completion).
+# Continue button sits below the connection-type cards — scroll until
+# it's visible (at 1080x1920 it's below the fold; at larger viewports
+# it may already be visible).
+- extendedWaitUntil:
+    visible: "How will you connect?"
+    timeout: 10000
+
+- scrollUntilVisible:
+    element:
+      text: "Continue"
+    direction: DOWN
+    timeout: 5000
+
+- tapOn:
+    text: "Continue"
+
+# --- Page 3: PermissionsPage ---
+# Selector: page title "Stay Connected" (PermissionsPage.kt:72).
+# Both permission cards ("Notifications", "Unrestricted Battery") have
+# in-card "Enable" buttons. We deliberately skip them — the page has
+# no required-permission gate on the bottom "Continue" button
+# (PermissionsPage.kt:142-152, onClick = onContinue unconditional).
+- extendedWaitUntil:
+    visible: "Stay Connected"
+    timeout: 10000
+
+- scrollUntilVisible:
+    element:
+      text: "Continue"
+    direction: DOWN
+    timeout: 5000
+
+- tapOn:
+    text: "Continue"
+
+# --- Page 4: CompletePage ---
+# Selector: page title "You're all set!" (CompletePage.kt:87).
+# The CTA text is "Start Messaging" because we did NOT select LoRa
+# Radio (CompletePage.kt:200; the alternate text "Configure LoRa
+# Radio" appears only when RNODE is in selectedInterfaces).
+- extendedWaitUntil:
+    visible: "You're all set!"
+    timeout: 10000
+
+# Belt-and-suspenders: confirm we're getting the messaging CTA, not
+# the LoRa wizard CTA — failing here would mean the connectivity page
+# misregistered our selection.
+- scrollUntilVisible:
+    element:
+      text: "Start Messaging"
+    direction: DOWN
+    timeout: 5000
+
+- assertVisible: "Start Messaging"
+- assertNotVisible: "Configure LoRa Radio"
+
+- tapOn:
+    text: "Start Messaging"
+
+# --- Transition to Chats ---
+# completeOnboarding{} in OnboardingViewModel does:
+#   1. Persists displayName + selectedInterfaces.
+#   2. Marks hasCompletedOnboarding = true.
+#   3. Starts the :reticulum foreground service (Python interpreter
+#      + Reticulum core boot — several seconds on first run).
+#   4. Invokes onOnboardingComplete(false) -> MainActivity navigates
+#      Screen.Welcome -> Screen.Chats.
+# Use a generous timeout for the title to appear; the foreground
+# service spin-up is the slowest step here.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+
+# Final assertion: the Chats SearchableTopAppBar renders title "Chats"
+# (ChatsScreen.kt:178). If we're here, the app is at the main landing
+# screen and ready for subsequent flows to launchApp + land directly
+# in the chat list.
+- assertVisible: "Chats"

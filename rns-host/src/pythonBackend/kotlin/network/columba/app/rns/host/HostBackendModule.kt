@@ -12,6 +12,8 @@ import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
 import network.columba.app.rns.host.di.LocalBackend
 import network.columba.app.rns.host.persistence.CallsFromContactsGate
 import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
+import network.columba.app.rns.host.rnode.KotlinRNodeBridge
+import network.columba.app.rns.host.usb.KotlinUSBBridge
 import tech.torlando.lxst.core.CallCoordinator
 import javax.inject.Singleton
 
@@ -65,6 +67,20 @@ object HostBackendModule {
             // process-singleton and idempotent — same instance the rest of
             // the host uses (BleCoordinator, BleStatusRepository).
             it.runtime.bleBridge = KotlinBLEBridge.getInstance(context)
+
+            // Round 2 RNode: ColumbaRNodeInterface bridges to two singletons.
+            //   • KotlinRNodeBridge — Bluetooth Classic (SPP) + BLE GATT
+            //     paths, both implemented on top of Android Bluetooth APIs.
+            //   • KotlinUSBBridge   — USB-serial path (mik3y usb-serial-for-
+            //     android) used when an RNode is plugged in over USB.
+            // Both are process-singletons that other host components (BLE
+            // coordinator, USB flasher, etc.) already consume, so we hand
+            // those same instances to Python rather than constructing
+            // duplicates. PythonRnsRuntime.start forwards them via
+            // event_bridge.set_rnode_bridge + usb_bridge.set_usb_bridge
+            // before Reticulum() constructs the bundled interface.
+            it.runtime.rnodeHostBridge = KotlinRNodeBridge.getInstance(context)
+            it.runtime.usbBridge = KotlinUSBBridge.getInstance(context)
         }
 
     @Provides

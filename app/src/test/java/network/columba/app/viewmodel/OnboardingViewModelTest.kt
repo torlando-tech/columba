@@ -73,8 +73,13 @@ class OnboardingViewModelTest {
         coEvery { mockInterfaceRepository.toggleInterfaceEnabled(any(), any()) } just Runs
         coEvery { mockInterfaceRepository.insertInterface(any()) } returns 1L
 
-        // Default stubs for InterfaceConfigManager
-        coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+        // Default stubs for InterfaceConfigManager. The new signature takes
+        // an `onServiceReady` callback the VM relies on to set
+        // hasCompletedOnboarding/dismiss the spinner — invoke it from the stub.
+        coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } answers {
+            firstArg<() -> Unit>().invoke()
+            Result.success(Unit)
+        }
     }
 
     @After
@@ -493,7 +498,7 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             assertTrue("Callback should be called on completion", callbackCalled)
-            coVerify { mockInterfaceConfigManager.applyInterfaceChanges() }
+            coVerify { mockInterfaceConfigManager.applyInterfaceChanges(any()) }
         }
 
     @Test

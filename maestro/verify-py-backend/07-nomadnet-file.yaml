@@ -1,0 +1,176 @@
+# Punch-list item 7: PythonRnsNomadnet file-metadata fallback
+#
+# Reproduces the broken state of PythonRnsNomadnet.buildPageResult
+# (rns-backend-py/src/main/kotlin/network/columba/app/rns/backend/py/PythonRnsNomadnet.kt:309-345)
+# by driving a real NomadNet /file/<name> download through the UI. On the
+# broken build the downloaded filename comes from the request-path basename
+# (URL component) rather than the msgpack-decoded "name" field from the
+# server's metadata blob handed over by event_bridge.py. The screenshot at
+# the end captures the filename text rendered in NomadNetDownloadDialog
+# (NomadNetBrowserScreen.kt:601 / :620) — the test runner compares that
+# image against a fixed-build baseline AND greps logcat for the
+# `PythonRnsNomadnet`: "NomadNet: file response <name>" log line.
+#
+# v0.10.x reference behavior (python/rns_api.py _save_file_response,
+# lines 421-461 of origin/release/v0.10.x): RequestReceipt.metadata is
+# already a Python dict at the property accessor (upstream RNS unpacks
+# msgpack lazily there), and the name comes from
+# metadata.get("name", b"download") as bytes, decoded utf-8 with
+# errors="replace". The fixed Kotlin path should match that contract.
+#
+# REQUIRED ENV VARS (set by the test runner before invoking maestro):
+#   NOMADNET_TEST_NODE_HASH — 32-char hex destination hash of a reachable
+#                             NomadNet test node that serves a file whose
+#                             server-advertised name (msgpack "name" field)
+#                             differs from its URL basename. Without this
+#                             the bug isn't observable: the broken path
+#                             basename and the metadata name would coincide.
+#                             Example: "a1b2c3d4e5f6...".
+#   NOMADNET_TEST_FILE_PATH — request path starting with "/file/", e.g.
+#                             "/file/url-basename.bin" where the server
+#                             advertises name="server-advertised.bin" in
+#                             metadata. Used verbatim in the URL bar.
+#
+# The flow falls back to placeholder defaults if these are unset so a
+# dry-run still exercises the navigation path; the download will fail
+# (no path / timeout) but the URL-bar interaction and screen transitions
+# are verified. The 60-second extendedWaitUntil tolerates RNS path
+# discovery; lower it if the runner wants a faster-fail dry run.
+#
+# Preconditions (must be true before running this flow):
+#   - App network.columba.app.debug installed on emulator-5554 (python build).
+#   - Onboarding already completed (launchApp lands on the Chats screen).
+#   - RNS transport up and at least one path known to NOMADNET_TEST_NODE_HASH
+#     OR a willingness to wait for path discovery within the 60 s window.
+#     If the node is unreachable the "Open" button never appears and the
+#     flow fails at the extendedWaitUntil; that's still a useful negative
+#     signal but won't reproduce the filename-fallback bug.
+#
+# Navigation strategy:
+#   The app registers a `nomadnetwork://` deeplink (AndroidManifest.xml:150)
+#   routed by MainActivityIntentHandler.handleActionView -> PendingNavigation
+#   .NomadNetBrowser. Using `openLink:` is the most reliable way to land
+#   on the browser screen with a known node + path without depending on a
+#   pre-existing announce being visible in the announce list (the
+#   AnnounceDetail "Browse Site" button path requires that announce to
+#   have already been received and cached, which is fragile in CI).
+#
+# Selectors used (no testTags on the relevant composables; falling back
+# to visible text / contentDescription):
+#   - "Chats"           -> SearchableTopAppBar title after launch settles.
+#   - "Downloading..." -> NomadNetDownloadDialog title while in-flight
+#                          (NomadNetBrowserScreen.kt:590).
+#   - "Open"            -> NomadNetDownloadDialog confirmButton text once
+#                          filePath != null (NomadNetBrowserScreen.kt:634).
+#                          This is the load-bearing signal that the
+#                          download finished and the dialog is showing
+#                          the final filename from the broken fallback.
+
+appId: network.columba.app.debug
+name: 07-nomadnet-file
+env:
+  # Local NomadNet test node hash (Columba Test Node, ~/.nomadnetwork/).
+  # NOTE: hardcoded for local-only verification. For non-local runs, override
+  # via maestro -e flags; Maestro 1.39 has an env-precedence quirk so YAML
+  # defaults win — edit these lines directly if needed.
+  NOMADNET_TEST_NODE_HASH: "0d1ddfcc8a820d2fe2fe1d4c895e18fc"
+  NOMADNET_TEST_FILE_PATH: "/file/nomadnet_test.txt"
+tags:
+  - py-backend
+  - punch-list-7
+---
+- launchApp:
+    appId: network.columba.app.debug
+    clearKeychain: false
+    stopApp: false
+
+# Settle on the Chats screen so we know onboarding/identity-unlock isn't
+# blocking the deeplink intent. If onboarding hasn't been completed the
+# flow fails here with a clear message.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
+
+# Give the Python backend a moment to finish initialization. The Chats
+# screen renders before BackendInitializer.initializeFromSnapshot
+# completes, and the NomadNetBrowserViewModel.loadPage call short-circuits
+# with "Backend not ready" if it fires too early (especially right after
+# an Apply & Restart). Use an extendedWaitUntil on a sentinel that never
+# matches to consume real wall-clock time (Maestro has no sleep step).
+- extendedWaitUntil:
+    visible: "__never_match_backend_warmup__"
+    timeout: 12000
+    optional: true
+
+# Drive ACTION_VIEW with a nomadnetwork:// URI. MainActivityIntentHandler
+# parses this and sets PendingNavigation.NomadNetBrowser(nodeHash, path),
+# which MainActivity then routes to "nomadnet_browser/<hash>?path=<path>".
+# NomadNetBrowserViewModel.loadPage() sees path starts with "/file/" and
+# requests a file response; the response data + metadata flow back into
+# PythonRnsNomadnet.buildPageResult — the function under test.
+#
+# NOTE: Maestro 1.39 `openLink` does NOT perform ${VAR} interpolation
+# on its argument (unlike tapOn / inputText). YAML `env:` defaults and
+# `-e` runner flags both go literal here. Hardcoded for local-only verify;
+# regenerate this line when targeting a different test node.
+- openLink: "nomadnetwork://0d1ddfcc8a820d2fe2fe1d4c895e18fc:/file/nomadnet_test.txt"
+
+# The browser screen renders. While the request is in flight the
+# NomadNetDownloadDialog shows "Downloading..." (broken or fixed, both
+# builds show this). We don't strictly need this assertion — the
+# "Open" wait below is the real gate — but it makes mid-flow failures
+# easier to diagnose (e.g. deeplink didn't fire, screen didn't mount).
+- extendedWaitUntil:
+    visible: "Downloading..."
+    timeout: 15000
+    optional: true
+
+# If the deeplink fired before BackendInitializer.initializeFromSnapshot
+# completed (race window right after Apply & Restart), the page errors
+# with "Backend not ready" and a Retry button. Tap Retry, then wait a
+# bit, then tap again as needed. Each is optional so a clean run skips
+# them entirely.
+- runFlow:
+    when:
+      visible: "Backend not ready"
+    commands:
+      - tapOn: "Retry"
+      - extendedWaitUntil:
+          visible: "__never_match_post_retry_warmup__"
+          timeout: 5000
+          optional: true
+- runFlow:
+    when:
+      visible: "Backend not ready"
+    commands:
+      - tapOn: "Retry"
+
+# Wait up to 60 s for the request to complete and the dialog to flip to
+# the "Download Complete" state. The "Open" button only appears when
+# downloadState.filePath != null (NomadNetBrowserScreen.kt:633-635),
+# which is exactly when buildPageResult has returned a NomadnetPageResult
+# of type="file" with the (broken or fixed) fileName written to disk.
+- extendedWaitUntil:
+    visible: "Open"
+    timeout: 60000
+
+# Let the dialog finish its enter/transition animation so the filename
+# Text composable has its final rendered size before the screenshot.
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Capture the filename. NomadNetDownloadDialog renders downloadState.fileName
+# at NomadNetBrowserScreen.kt:620 in the completed state. On the broken
+# build the text is the basename of NOMADNET_TEST_FILE_PATH (e.g.
+# "sample.bin"). On a fixed build it'll be the server-advertised name
+# from the msgpack metadata "name" field (something different by design
+# of the test node setup).
+- takeScreenshot: 07-nomadnet-download-filename
+
+# Close the dialog cleanly so the next flow can start from a known state.
+# The "Close" / "OK" button is the dismissButton when filePath is null
+# (error), or we can tap outside; the simplest is to tap Open's sibling
+# "Share" which dismisses via onShare's clearDownload() — but that fires
+# an Intent.ACTION_SEND chooser. Safer: press back to dismiss.
+- back
+- assertNotVisible: "Download Complete"

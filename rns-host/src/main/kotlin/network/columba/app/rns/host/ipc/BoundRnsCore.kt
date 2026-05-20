@@ -5,12 +5,15 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.Destination
@@ -43,8 +46,41 @@ internal class BoundRnsCore(
 ) : RnsCore {
     private suspend fun awaitBound(): RnsBackend = backendFlow.filterNotNull().first()
 
-    override suspend fun initialize(config: ReticulumConfig): Result<Unit> =
-        awaitBound().core.initialize(config)
+    /**
+     * Wait for the NEXT non-null binding emission, skipping the current value
+     * if any. Used by [initialize] to recover when the cached binding turned
+     * out to be a dead binder — we need to wait for a fresh
+     * `onServiceConnected`, not re-take the same stale reference.
+     */
+    private suspend fun awaitNextFreshBound(): RnsBackend =
+        backendFlow.drop(1).filterNotNull().first()
+
+    /**
+     * Resilient initialize that survives an `onServiceDisconnected` race during
+     * Apply & Restart. If the cached binding is dead at call time, the AIDL
+     * layer surfaces it as [RnsError.BackendNotReady] (see
+     * `ClientAidlBridge.remoteToRnsException`); rather than propagate that
+     * spurious failure to the UI, we drop the dead reference and wait for the
+     * next fresh binding before retrying. Bounded to one retry so a genuinely
+     * misconfigured backend still fails fast.
+     *
+     * Punch-list item 10: InterfaceConfigManager Step 9 used to fail here
+     * within milliseconds because the `:reticulum` we just sent ACTION_STOP
+     * to had System.exit'd but its binder reference was still sitting in
+     * [backendFlow] (onServiceDisconnected hadn't propagated yet, or had
+     * propagated but with no null sentinel so the StateFlow still held the
+     * dead client). The retry-on-dead-binder gives Android time to deliver
+     * `onServiceConnected` for the fresh `:reticulum` process the apply
+     * sequence's Step 7 `startForegroundService(ACTION_START)` triggered.
+     */
+    override suspend fun initialize(config: ReticulumConfig): Result<Unit> {
+        val first = awaitBound().core.initialize(config)
+        val firstError = first.exceptionOrNull()
+        if (firstError is RnsException && firstError.error is RnsError.BackendNotReady) {
+            return awaitNextFreshBound().core.initialize(config)
+        }
+        return first
+    }
 
     override suspend fun shutdown(): Result<Unit> = awaitBound().core.shutdown()
 

@@ -88,6 +88,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import network.columba.app.R
 import network.columba.app.rns.api.model.DiscoveredInterface
+import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.ServiceRestartBanner
 import network.columba.app.ui.components.SortModeSelector
 import network.columba.app.ui.theme.MaterialDesignIcons
@@ -530,8 +531,18 @@ internal fun DiscoverySettingsCard(
                         enabled = !isRestarting,
                     )
 
-                    // IFAC-only sub-toggle. Only relevant when auto-connect is on.
-                    if (autoconnectCount > 0) {
+                    // IFAC-only sub-toggle. Visible only when (a) auto-connect
+                    // is on AND (b) the backend actually enforces the IFAC
+                    // filter — reticulum-kt does (NativeRnsBackendImpl
+                    // .createAutoconnectInterface skips when ifac netname is
+                    // blank), upstream Python RNS does not. Hiding the toggle
+                    // on the Python flavor avoids a UI lie. Mirrors the
+                    // "hide entirely" capability-gate pattern from
+                    // BatteryOptimizationCard. The DataStore value still
+                    // persists across backend swaps; only the UI control is
+                    // gated.
+                    val ifacFilterSupported = LocalCapabilities.current.interfaces.autoconnectIfacOnlyFilter
+                    if (autoconnectCount > 0 && ifacFilterSupported) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),

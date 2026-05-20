@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.usb
 
+import androidx.annotation.Keep
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -75,6 +76,7 @@ interface UsbConnectionListener {
  * @property context Application context for USB access
  */
 @Suppress("TooManyFunctions", "LargeClass")
+@Keep // Python (rnode_interface.py / usb_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinUSBBridge(
     private val context: Context,
 ) : SerialInputOutputManager.Listener {

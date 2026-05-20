@@ -362,6 +362,75 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+  proguard-verification:
+    name: Verify Python-Kotlin Bridge (R8)
+    # Builds the minified pythonBackend RELEASE APK and asserts, against R8's own
+    # mapping.txt, that the @Keep'd Python<->Kotlin bridge classes/methods survive
+    # un-renamed. Chaquopy resolves them by name, so obfuscation would silently
+    # break the python flavor at runtime. No emulator needed — checking the rename
+    # table is the canonical, deterministic way to verify keep rules.
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build dependencies
+        run: pip install build
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build minified pythonBackend release (generates R8 mapping)
+        # noSentry + no SENTRY_AUTH_TOKEN keeps the Sentry mapping-upload path out;
+        # unsigned is fine — minification (and mapping.txt) happens regardless.
+        timeout-minutes: 40
+        run: ./gradlew :app:assembleNoSentryPythonBackendRelease --stacktrace --max-workers=2
+
+      - name: Assert bridge classes/methods survived R8
+        run: |
+          python scripts/assert_bridges_kept.py \
+            app/build/outputs/mapping/noSentryPythonBackendRelease/mapping.txt
+
+      - name: Upload R8 mapping file
+        # Only on failure — the mapping (~130 MB for the python flavor) is only
+        # useful for debugging a gate failure, and uploading it every run would
+        # dominate the Actions storage quota.
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: r8-mapping-pythonBackend
+          path: app/build/outputs/mapping/noSentryPythonBackendRelease/mapping.txt
+          retention-days: 14
+
+      - name: Cleanup emulator
+        if: always()
+        run: |
+          adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+          pkill -9 qemu-system || true
+          adb kill-server || true
+
   instrumented-tests:
     name: Instrumented Tests
     # Run in parallel with other jobs

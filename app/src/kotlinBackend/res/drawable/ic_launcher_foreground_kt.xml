@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  kotlinBackend adaptive-icon foreground: the shared mesh foreground from
+  src/main with the WIP wrench badge composited on top. Both layers are
+  108dp / 512-viewport vectors, so they align without scaling.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_foreground" />
+    <item android:drawable="@drawable/ic_launcher_kt_badge" />
+</layer-list>

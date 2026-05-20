@@ -47,7 +47,14 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         run: |
-          ./gradlew :app:assembleSentryKotlinBackendRelease :app:assembleNoSentryKotlinBackendRelease --no-daemon --stacktrace
+          # Python backend first, then Kotlin backend; each in sentry / noSentry
+          # telemetry variants. Four flavor combos × ABI splits + universal.
+          ./gradlew \
+            :app:assembleSentryPythonBackendRelease \
+            :app:assembleNoSentryPythonBackendRelease \
+            :app:assembleSentryKotlinBackendRelease \
+            :app:assembleNoSentryKotlinBackendRelease \
+            --no-daemon --stacktrace
           echo "✓ Release APKs built successfully"
 
       - name: Extract signing certificate fingerprints
@@ -72,29 +79,40 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # ABI split APKs: app-{abi}-{flavor}-release.apk
-          # Universal APKs: app-universal-{flavor}-release.apk
+          # Two flavor dimensions (telemetry × rnsImpl) mean Gradle writes to
+          # app/build/outputs/apk/<telemetry><Backend>/release/, e.g.
+          # sentryPythonBackend/release/. Output filenames:
+          #   columba-{version}-{backend}-{abi}[-no-sentry].apk
+          # Backend is python first, then kotlin.
           APK_DIR="app/build/outputs/apk"
-          
-          for flavor in sentry noSentry; do
-            suffix=""
-            [ "$flavor" = "noSentry" ] && suffix="-no-sentry"
-            
-            for apk in "$APK_DIR/$flavor/release/"*.apk; do
-              filename=$(basename "$apk")
-              
-              if echo "$filename" | grep -q "armeabi-v7a"; then
-                cp "$apk" "columba-${VERSION}-armeabi-v7a${suffix}.apk"
-              elif echo "$filename" | grep -q "arm64-v8a"; then
-                cp "$apk" "columba-${VERSION}-arm64-v8a${suffix}.apk"
-              elif echo "$filename" | grep -q "x86_64"; then
-                cp "$apk" "columba-${VERSION}-x86_64${suffix}.apk"
-              elif echo "$filename" | grep -q "universal"; then
-                cp "$apk" "columba-${VERSION}-universal${suffix}.apk"
-              fi
+
+          # "<dir-infix>:<filename-token>"
+          for backend in "Python:official-rns-py" "Kotlin:EXPERIMENTAL-reticulum-kt"; do
+            dir_backend="${backend%%:*}"
+            name_backend="${backend##*:}"
+
+            for telemetry in sentry noSentry; do
+              sentry_suffix=""
+              [ "$telemetry" = "noSentry" ] && sentry_suffix="-no-sentry"
+              variant_dir="${telemetry}${dir_backend}Backend"
+
+              for apk in "$APK_DIR/$variant_dir/release/"*.apk; do
+                [ -e "$apk" ] || continue
+                filename=$(basename "$apk")
+
+                if echo "$filename" | grep -q "armeabi-v7a"; then
+                  cp "$apk" "columba-${VERSION}-${name_backend}-armeabi-v7a${sentry_suffix}.apk"
+                elif echo "$filename" | grep -q "arm64-v8a"; then
+                  cp "$apk" "columba-${VERSION}-${name_backend}-arm64-v8a${sentry_suffix}.apk"
+                elif echo "$filename" | grep -q "x86_64"; then
+                  cp "$apk" "columba-${VERSION}-${name_backend}-x86_64${sentry_suffix}.apk"
+                elif echo "$filename" | grep -q "universal"; then
+                  cp "$apk" "columba-${VERSION}-${name_backend}-universal${sentry_suffix}.apk"
+                fi
+              done
             done
           done
-          
+
           ls -la columba-*.apk
           echo "✓ Renamed APKs"
 
@@ -260,18 +278,33 @@ jobs:
             ## Columba ${{ steps.version.outputs.version }}
 
             ### Installation
-            Download the APK matching your device's CPU architecture.
+            Pick a **backend**, then download the APK matching your device's CPU architecture.
 
-            **Architecture-specific APKs (recommended — smaller download):**
+            - **Python backend, RECOMMENDED** — ships Mark Qvist's official python reference implementations of Reticulum and LXMF via Chaquopy.
+            - **Kotlin backend** — ships Torlando's EXPERIMENTAL, AI-GENERATED native reticulum-kt / lxmf-kt / lxst-kt stack.
+
+            The python version is highly recommended. The kotlin version is a work in progress, and is not yet verified to be completely safe.
+            The kotlin version may yield better battery life depending on your device, and comes in a smaller apk due to not requiring a python runtime.
+
+            #### Python backend (`official-rns-py`)
             | APK | Architecture | Devices |
             |-----|-------------|---------|
-            | `columba-${{ steps.version.outputs.version }}-armeabi-v7a.apk` | armeabi-v7a | Older 32-bit ARM phones & tablets |
-            | `columba-${{ steps.version.outputs.version }}-arm64-v8a.apk` | arm64-v8a | Most modern Android phones & tablets |
-            | `columba-${{ steps.version.outputs.version }}-x86_64.apk` | x86_64 | Chromebooks, emulators, some tablets |
-            | `columba-${{ steps.version.outputs.version }}-universal.apk` | All | Universal fallback (larger download) |
+            | `columba-${{ steps.version.outputs.version }}-official-rns-py-armeabi-v7a.apk` | armeabi-v7a | Older 32-bit ARM phones & tablets |
+            | `columba-${{ steps.version.outputs.version }}-official-rns-py-arm64-v8a.apk` | arm64-v8a | Most modern Android phones & tablets |
+            | `columba-${{ steps.version.outputs.version }}-official-rns-py-x86_64.apk` | x86_64 | Chromebooks, emulators, some tablets |
+            | `columba-${{ steps.version.outputs.version }}-official-rns-py-universal.apk` | All | Universal fallback (larger download) |
+
+            #### Kotlin backend (`EXPERIMENTAL-reticulum-kt`)
+            | APK | Architecture | Devices |
+            |-----|-------------|---------|
+            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-armeabi-v7a.apk` | armeabi-v7a | Older 32-bit ARM phones & tablets |
+            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-arm64-v8a.apk` | arm64-v8a | Most modern Android phones & tablets |
+            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-x86_64.apk` | x86_64 | Chromebooks, emulators, some tablets |
+            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-universal.apk` | All | Universal fallback (larger download) |
 
             **Telemetry variants:**
-            Each architecture also has a `-no-sentry` variant without crash reporting for maximum privacy.
+            Each APK above also has a `-no-sentry` variant without crash reporting for maximum privacy. Sentry collects stack traces when Columba encounters errors
+            and provides helpful information to the developer to improve Columba, but is hosted at sentry.io, and is thus not the maximum privacy option.
 
             > **Not sure which to pick?** Most Android phones use **arm64-v8a**. If unsure, use the **universal** APK.
 
@@ -297,4 +330,7 @@ jobs:
         with:
           name: columba-${{ steps.version.outputs.version }}-apks
           path: columba-*.apk
-          retention-days: 30
+          # Short retention: these duplicate the Release assets (which don't count
+          # toward Actions storage). 1 day keeps them handy for a quick download
+          # (e.g. sideloading to a phone) without piling up against the quota.
+          retention-days: 1

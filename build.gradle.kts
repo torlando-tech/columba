@@ -68,6 +68,26 @@ subprojects {
     dependencies {
         "detektPlugins"(project(":detekt-rules"))
     }
+
+    // Pin the javac runner to JDK 21 for every module. The pythonBackend flavor's
+    // Hilt-generated *Java* (e.g. HostBackendModule_ProvidePythonCallManagerFactory)
+    // makes javac read LXST-kt's Java 21 bytecode; a JDK <21 javac can't load it
+    // ("bad class file"). Only the compiler JDK is pinned — source/target
+    // compatibility (17) and the Kotlin toolchain are left untouched, so output
+    // bytecode is unchanged. Foojay (settings.gradle.kts) downloads JDK 21 if it
+    // isn't installed. CI uses JDK 25, which also satisfies this.
+    // Look up the toolchain service lazily inside configureEach: a JavaCompile
+    // task only exists once a java/android plugin is applied, which also registers
+    // JavaToolchainService — fetching it eagerly here (before the module's plugins
+    // apply) would fail configuration.
+    tasks.withType(org.gradle.api.tasks.compile.JavaCompile::class.java).configureEach {
+        javaCompiler.set(
+            project.extensions.getByType(org.gradle.jvm.toolchain.JavaToolchainService::class.java)
+                .compilerFor {
+                    languageVersion.set(org.gradle.jvm.toolchain.JavaLanguageVersion.of(21))
+                },
+        )
+    }
 }
 
 // CPD (Copy-Paste Detector) for duplicate code detection

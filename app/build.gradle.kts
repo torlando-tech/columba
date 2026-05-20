@@ -153,10 +153,21 @@ android {
         create("kotlinBackend") {
             dimension = "rnsImpl"
             isDefault = true
+            // Distinct package + label so the EXPERIMENTAL Kotlin backend can be
+            // installed side-by-side with the recommended Python backend (which
+            // keeps the base `network.columba.app`). The launcher icon is also
+            // badged — see src/kotlinBackend/res/.
+            applicationIdSuffix = ".kt"
+            versionNameSuffix = "-kt"
+            // app_name lives on the flavor (not the release buildType) so each
+            // backend gets its own label. The debug buildType still overrides
+            // this with "columbatest" for instrumentation.
+            resValue("string", "app_name", "Columba (Kotlin)")
             buildConfigField("String", "RNS_IMPL", "\"kotlin\"")
         }
         create("pythonBackend") {
             dimension = "rnsImpl"
+            resValue("string", "app_name", "Columba")
             buildConfigField("String", "RNS_IMPL", "\"python\"")
         }
     }
@@ -222,7 +233,9 @@ android {
 
     buildTypes {
         release {
-            resValue("string", "app_name", "Columba")
+            // app_name is set per rnsImpl flavor (pythonBackend -> "Columba",
+            // kotlinBackend -> "Columba (Kotlin)") rather than here, so the two
+            // backends get distinct launcher labels in release builds.
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

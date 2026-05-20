@@ -7,9 +7,6 @@
 -keep class javax.inject.** { *; }
 -keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
 
-# Keep Reticulum model classes
--keep class network.columba.app.reticulum.model.** { *; }
-
 # Keep Room entities
 -keep class network.columba.app.data.local.entities.** { *; }
 
@@ -49,9 +46,14 @@
     volatile <fields>;
 }
 
-# ===== Reticulum Protocol Bridge Classes =====
-# These classes bridge between Kotlin and Python
--keep class network.columba.app.reticulum.protocol.** { *; }
+# ===== Python <-> Kotlin bridge classes =====
+# The Chaquopy-called bridges (KotlinRNodeBridge, KotlinBLEBridge,
+# KotlinUSBBridge in :rns-host, PythonEventBridge in :rns-backend-py) are now
+# kept via @Keep (androidx.annotation.Keep) on the classes themselves — see
+# PythonKotlinBridgeR8Test for the CI gate. The old
+# `-keep class network.columba.app.reticulum.protocol.** { *; }` rule was
+# removed: that package no longer holds any shipped bridge (only test classes),
+# so the glob protected nothing.
 
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations

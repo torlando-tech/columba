@@ -330,4 +330,7 @@ jobs:
         with:
           name: columba-${{ steps.version.outputs.version }}-apks
           path: columba-*.apk
-          retention-days: 30
+          # Short retention: these duplicate the Release assets (which don't count
+          # toward Actions storage). 1 day keeps them handy for a quick download
+          # (e.g. sideloading to a phone) without piling up against the quota.
+          retention-days: 1

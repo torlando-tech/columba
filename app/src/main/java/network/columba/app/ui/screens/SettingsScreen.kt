@@ -531,6 +531,8 @@ fun SettingsScreen(
                     onShareInstanceHostingToggle = { viewModel.setShareInstanceHostingEnabled(it) },
                     shareInstanceHostingPending =
                         state.shareInstanceHostingEnabled != state.appliedShareInstanceHosting,
+                    onRestartReticulum = { viewModel.restartService() },
+                    isRestarting = state.isRestarting,
                 )
 
                 // About section

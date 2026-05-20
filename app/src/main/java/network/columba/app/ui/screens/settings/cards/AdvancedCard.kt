@@ -5,10 +5,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -38,7 +43,11 @@ import network.columba.app.ui.components.LocalCapabilities
  *   explicitly Apply & Restart from elsewhere to avoid surprise outages.
  * @param shareInstanceHostingPending True when the persisted preference differs from
  *   the value the running daemon was constructed with. Drives the "(pending restart)"
- *   hint under the toggle.
+ *   hint and inline Restart button under the toggle.
+ * @param onRestartReticulum Invoked when the user taps the inline Restart button next
+ *   to the pending-changes hint. Plumbs through to `SettingsViewModel.restartService()`.
+ * @param isRestarting True while a service restart is in flight; disables the
+ *   inline Restart button and shows a small progress spinner instead of the icon.
  */
 @Composable
 fun AdvancedCard(
@@ -49,6 +58,8 @@ fun AdvancedCard(
     shareInstanceHostingEnabled: Boolean = false,
     onShareInstanceHostingToggle: (Boolean) -> Unit = {},
     shareInstanceHostingPending: Boolean = false,
+    onRestartReticulum: () -> Unit = {},
+    isRestarting: Boolean = false,
 ) {
     val canHostShareInstance = LocalCapabilities.current.performance.shareInstanceHosting
     CollapsibleSettingsCard(
@@ -135,12 +146,46 @@ fun AdvancedCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (shareInstanceHostingPending) {
-                Text(
-                    text = "Change pending — restart Reticulum to apply.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    fontWeight = FontWeight.Medium,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Change pending — restart Reticulum to apply.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilledTonalButton(
+                        onClick = onRestartReticulum,
+                        enabled = !isRestarting,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                        contentPadding = ButtonDefaults.ContentPadding,
+                    ) {
+                        if (isRestarting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text("Restarting…")
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.RestartAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text("Restart")
+                        }
+                    }
+                }
             }
         }
     }

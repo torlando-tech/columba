@@ -163,7 +163,7 @@ class InterfaceConfigManager
                     // to run — preventing SIGSEGV in PyGILState_Ensure.
                     var reticulumProcessFound = false
                     try {
-                        val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                         val runningProcesses = activityManager.runningAppProcesses.orEmpty()
                         val reticulumProcess = runningProcesses.find { it.processName == reticulumProcessName }
 
@@ -190,7 +190,7 @@ class InterfaceConfigManager
                         var processDied = false
                         for (attempt in 1..maxVerifyAttempts) {
                             delay(250)
-                            val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                             val stillRunning =
                                 activityManager.runningAppProcesses
                                     .orEmpty()
@@ -204,7 +204,7 @@ class InterfaceConfigManager
                         if (!processDied) {
                             Log.w(TAG, "Service process didn't exit gracefully after ${maxVerifyAttempts * 250}ms, sending SIGKILL...")
                             try {
-                                val am = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                                 val proc = am.runningAppProcesses.orEmpty().find { it.processName == reticulumProcessName }
                                 if (proc != null) {
                                     Process.killProcess(proc.pid)
@@ -251,7 +251,7 @@ class InterfaceConfigManager
                     var newProcessUp = false
                     for (attempt in 1..maxBindAttempts) {
                         delay(250)
-                        val activityManager = context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as ActivityManager
+                        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                         val freshProcess =
                             activityManager.runningAppProcesses
                                 .orEmpty()

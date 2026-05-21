@@ -27,6 +27,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Keep desugaring in sync with the rest of the rns-* modules.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -43,6 +45,9 @@ android {
 }
 
 dependencies {
+    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // Backend-seam contract. api() so RnsBackend / sub-interfaces / value types
     // and the AIDL-generated Stub/Proxy classes are visible to :app and :rns-host
     // without an explicit :rns-api dependency in either.

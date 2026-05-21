@@ -127,7 +127,8 @@ class SettingsViewModelTest {
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
         updateChecker = mockk()
-        crashReportManager = mockk(relaxed = true)
+        crashReportManager = mockk()
+        every { crashReportManager.setCrashReportingConsentMirror(any()) } returns Unit
         context =
             mockk {
                 val mockEditor =

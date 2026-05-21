@@ -174,7 +174,16 @@ class RnsException(val error: RnsError) : RuntimeException(describe(error)) {
     private companion object {
         fun describe(error: RnsError): String =
             when (error) {
-                is RnsError.Generic -> error.message
+                is RnsError.Generic ->
+                    // Generic is the "unexpected failure" bucket — append the backend
+                    // stack text (preserved across the AIDL boundary because the live
+                    // Throwable can't cross) so it lands in logs/Sentry. For the python
+                    // backend this carries Chaquopy's python traceback frames.
+                    if (error.stackTraceText.isNullOrBlank()) {
+                        error.message
+                    } else {
+                        "${error.message}\n${error.stackTraceText}"
+                    }
                 is RnsError.BackendNotReady -> "Backend not ready"
                 is RnsError.IdentityNotFound -> "Identity not found: ${error.hashHex}"
                 is RnsError.TimeoutExceeded -> "Timeout (${error.timeoutMs}ms) on ${error.operation}"

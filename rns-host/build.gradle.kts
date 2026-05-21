@@ -53,6 +53,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required for java.time.* used by reticulum-kt on minSdk 24.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -74,6 +76,9 @@ android {
 }
 
 dependencies {
+    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // AIDL adapters (transitively brings in :rns-api contract types).
     api(project(":rns-ipc"))
 

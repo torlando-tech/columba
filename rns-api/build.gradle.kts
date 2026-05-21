@@ -31,6 +31,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Keep desugaring in sync with downstream modules so any future
+        // java.time usage compiles + runs on minSdk 24.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -51,6 +54,9 @@ android {
 }
 
 dependencies {
+    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // Flow / StateFlow / suspend types appear in the seam contract.
     implementation(libs.coroutines.core)
 

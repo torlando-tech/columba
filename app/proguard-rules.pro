@@ -64,7 +64,6 @@
 # bridging needs generic-signature and inner-class metadata that R8 strips by
 # default, and that no -keep class rule restores.
 -keep class com.chaquo.python.** { *; }
--keepclassmembers class com.chaquo.python.** { *; }
 -dontwarn com.chaquo.python.**
 -keepattributes Signature
 -keepattributes Exceptions

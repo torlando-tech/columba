@@ -47,6 +47,7 @@ class OnboardingViewModelTest {
     private lateinit var mockIdentityRepository: IdentityRepository
     private lateinit var mockInterfaceRepository: InterfaceRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
+    private lateinit var mockCrashReportManager: network.columba.app.util.CrashReportManager
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -57,11 +58,15 @@ class OnboardingViewModelTest {
         mockIdentityRepository = mockk()
         mockInterfaceRepository = mockk()
         mockInterfaceConfigManager = mockk()
+        mockCrashReportManager = mockk()
+        every { mockCrashReportManager.setCrashReportingConsentMirror(any()) } returns Unit
 
         // Default stubs for SettingsRepository
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.markOnboardingCompleted() } just Runs
+        coEvery { mockSettingsRepository.setCrashReportingConsent(any()) } just Runs
+        coEvery { mockSettingsRepository.markCrashReportingPromptSeen() } just Runs
 
         // Default stubs for IdentityRepository
         coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
@@ -94,6 +99,7 @@ class OnboardingViewModelTest {
             mockIdentityRepository,
             mockInterfaceRepository,
             mockInterfaceConfigManager,
+            mockCrashReportManager,
         )
 
     private fun createTestIdentity(

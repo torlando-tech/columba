@@ -91,6 +91,7 @@ fun SettingsScreen(
     crashReportManager: CrashReportManager,
     debugViewModel: DebugViewModel = hiltViewModel(),
     onNavigateToInterfaces: () -> Unit = {},
+    onNavigateToBleConnections: () -> Unit = {},
     onNavigateToIdentity: () -> Unit = {},
     onNavigateToNetworkStatus: () -> Unit = {},
     onNavigateToIdentityManager: () -> Unit = {},
@@ -279,6 +280,7 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.NETWORK, it) },
                     onViewStatus = onNavigateToNetworkStatus,
                     onManageInterfaces = onNavigateToInterfaces,
+                    onBleConnections = onNavigateToBleConnections,
                     isSharedInstance = state.isSharedInstance,
                     sharedInstanceOnline = state.sharedInstanceOnline,
                 )

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
@@ -26,6 +27,7 @@ import network.columba.app.ui.components.CollapsibleSettingsCard
  * @param onExpandedChange Callback when expansion state changes
  * @param onViewStatus Callback when "View Network Status" is clicked
  * @param onManageInterfaces Callback when "Manage Interfaces" is clicked
+ * @param onBleConnections Callback when "BLE Connections" is clicked
  * @param isSharedInstance When true, interface management is disabled because
  *                         Columba is connected to a shared RNS instance
  * @param sharedInstanceOnline Whether the shared instance is currently reachable.
@@ -38,6 +40,7 @@ fun NetworkCard(
     onExpandedChange: (Boolean) -> Unit,
     onViewStatus: () -> Unit,
     onManageInterfaces: () -> Unit,
+    onBleConnections: () -> Unit = {},
     isSharedInstance: Boolean = false,
     sharedInstanceOnline: Boolean = true,
 ) {
@@ -106,6 +109,20 @@ fun NetworkCard(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text("Manage Interfaces")
+        }
+
+        // Secondary action - BLE Connections (status view; always enabled)
+        OutlinedButton(
+            onClick = onBleConnections,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Bluetooth,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("BLE Connections")
         }
     }
 }

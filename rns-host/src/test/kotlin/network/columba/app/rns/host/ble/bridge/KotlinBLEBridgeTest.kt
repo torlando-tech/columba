@@ -898,20 +898,20 @@ class KotlinBLEBridgeTest {
             // Given
             val bridge = createBridgeWithMockScanner()
             val listener =
-                object : KotlinBLEBridge.ConnectionChangeListener {
-                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                object : network.columba.app.rns.api.BleConnectionsListener {
+                    override fun onBleConnectionsChanged(connectionDetailsJson: String) {
                         // No-op for this test
                     }
                 }
 
             // When
-            bridge.addConnectionChangeListener(listener)
+            bridge.addBleConnectionsListener(listener)
 
             // Then - verify via reflection that listener was added
             val listenersField = KotlinBLEBridge::class.java.getDeclaredField("connectionChangeListeners")
             listenersField.isAccessible = true
             @Suppress("UNCHECKED_CAST")
-            val listeners = listenersField.get(bridge) as MutableList<KotlinBLEBridge.ConnectionChangeListener>
+            val listeners = listenersField.get(bridge) as MutableList<network.columba.app.rns.api.BleConnectionsListener>
             assertEquals(1, listeners.size)
         }
 
@@ -921,21 +921,21 @@ class KotlinBLEBridgeTest {
             // Given
             val bridge = createBridgeWithMockScanner()
             val listener =
-                object : KotlinBLEBridge.ConnectionChangeListener {
-                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                object : network.columba.app.rns.api.BleConnectionsListener {
+                    override fun onBleConnectionsChanged(connectionDetailsJson: String) {
                         // No-op
                     }
                 }
 
             // When
-            bridge.addConnectionChangeListener(listener)
-            bridge.removeConnectionChangeListener(listener)
+            bridge.addBleConnectionsListener(listener)
+            bridge.removeBleConnectionsListener(listener)
 
             // Then - verify listener was removed
             val listenersField = KotlinBLEBridge::class.java.getDeclaredField("connectionChangeListeners")
             listenersField.isAccessible = true
             @Suppress("UNCHECKED_CAST")
-            val listeners = listenersField.get(bridge) as MutableList<KotlinBLEBridge.ConnectionChangeListener>
+            val listeners = listenersField.get(bridge) as MutableList<network.columba.app.rns.api.BleConnectionsListener>
             assertEquals(0, listeners.size)
         }
 
@@ -947,20 +947,20 @@ class KotlinBLEBridgeTest {
             val receivedJson = mutableListOf<String>()
 
             val listener1 =
-                object : KotlinBLEBridge.ConnectionChangeListener {
-                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                object : network.columba.app.rns.api.BleConnectionsListener {
+                    override fun onBleConnectionsChanged(connectionDetailsJson: String) {
                         receivedJson.add("L1:$connectionDetailsJson")
                     }
                 }
             val listener2 =
-                object : KotlinBLEBridge.ConnectionChangeListener {
-                    override fun onConnectionsChanged(connectionDetailsJson: String) {
+                object : network.columba.app.rns.api.BleConnectionsListener {
+                    override fun onBleConnectionsChanged(connectionDetailsJson: String) {
                         receivedJson.add("L2:$connectionDetailsJson")
                     }
                 }
 
-            bridge.addConnectionChangeListener(listener1)
-            bridge.addConnectionChangeListener(listener2)
+            bridge.addBleConnectionsListener(listener1)
+            bridge.addBleConnectionsListener(listener2)
 
             // When - trigger notifyConnectionChange via reflection
             val method = KotlinBLEBridge::class.java.getDeclaredMethod("notifyConnectionChange")

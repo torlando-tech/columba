@@ -80,6 +80,10 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    // org.json is compileOnly above (Android provides it at runtime), so the
+    // real impl must be on the JVM unit-test classpath — otherwise toJsonString()
+    // hits the android.jar "Stub!" org.json. Matches the other modules' test deps.
+    testImplementation("org.json:json:20240303")
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)
 }

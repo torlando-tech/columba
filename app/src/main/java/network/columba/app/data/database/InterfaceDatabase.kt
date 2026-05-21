@@ -10,7 +10,6 @@ import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.toJsonString
-import network.columba.app.rns.api.model.typeName
 import java.io.File
 import javax.inject.Provider
 

@@ -108,23 +108,3 @@ private fun JSONObject.putRestrictionUnlessDefault(
 ) {
     if (value != default) put("network_restriction", value.value)
 }
-
-/**
- * Get the type name string for this InterfaceConfig.
- * Used for database storage.
- *
- * These are explicit, stable string literals — NOT derived from `::class.simpleName`.
- * Under R8/minification in release builds, `simpleName` returns the obfuscated class
- * name (e.g. "wy2"), which then fails to round-trip through `entityToConfig`'s
- * `when (entity.type)` and surfaces as "Unknown interface type: wy2". The literals
- * here must stay in sync with the branches in that deserializer.
- */
-val InterfaceConfig.typeName: String
-    get() = when (this) {
-        is InterfaceConfig.AutoInterface -> "AutoInterface"
-        is InterfaceConfig.TCPClient -> "TCPClient"
-        is InterfaceConfig.RNode -> "RNode"
-        is InterfaceConfig.UDP -> "UDP"
-        is InterfaceConfig.AndroidBLE -> "AndroidBLE"
-        is InterfaceConfig.TCPServer -> "TCPServer"
-    }

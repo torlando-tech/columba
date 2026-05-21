@@ -16,7 +16,6 @@ import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.toJsonString
-import network.columba.app.rns.api.model.typeName
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -1122,23 +1121,24 @@ class InterfaceRepositoryTest {
      * `this::class.simpleName`. In the minified release build that returned the
      * obfuscated class name (e.g. "wy2"), which was persisted to the `type`
      * column and then failed `entityToConfig`'s `when (entity.type)` with
-     * "Unknown interface type: wy2".
+     * "Unknown interface type: wy2". `typeName` is now an abstract member each
+     * subclass overrides with an explicit literal, so the class identity can't be
+     * obfuscated and the compiler forces every subclass to declare one.
      *
      * This test exercises the REAL save path — `typeName` + `toJsonString`, the
      * exact pair `InterfaceRepository.configToEntity` uses — and feeds it back
      * through `entityToConfig`. It cannot reproduce R8 obfuscation (unit tests
      * run unobfuscated), but it does fail if:
-     *   - a `typeName` literal is typo'd so it no longer matches a deserializer
-     *     branch (falls through to the "Unknown" else), or
-     *   - a new InterfaceConfig subclass gets a `typeName` literal but a
-     *     forgotten `entityToConfig` branch — the deserializer's `else` is NOT
-     *     compile-checked, unlike the now-exhaustive `typeName` `when`.
+     *   - a subclass's `typeName` literal is typo'd so it no longer matches a
+     *     deserializer branch (falls through to the "Unknown" else), or
+     *   - a new InterfaceConfig subclass declares a `typeName` but its
+     *     `entityToConfig` branch is forgotten — the deserializer's `else` is NOT
+     *     compile-checked, unlike the abstract `typeName` member.
      *
      * Forcing function for new types: `expectedTypeName` below is an exhaustive
      * `when` with no `else`, so adding a 7th InterfaceConfig subclass fails to
-     * compile here until it is handled — the same compile-time guard the
-     * production `typeName` `when` now has, extended to the deserializer side
-     * (whose `else` branch is otherwise the silent failure point).
+     * compile here until it is handled and given a sample above — pinning the
+     * expected wire value and exercising the deserializer's `else`-prone path.
      */
     @Test
     fun `every InterfaceConfig type round-trips through typeName and entityToConfig`() =
@@ -1165,11 +1165,10 @@ class InterfaceRepositoryTest {
                         is InterfaceConfig.AndroidBLE -> "AndroidBLE"
                         is InterfaceConfig.RNode -> "RNode"
                     }
-                // Catches the R8-style regression directly: if typeName ever goes
-                // back to ::class.simpleName, an obfuscated build yields "wy2" here.
-                // (Unit tests run unobfuscated, so this specifically guards a typo'd
-                // or drifted literal; the obfuscation case is covered in CI — see
-                // scripts/assert_bridges_kept.py philosophy.)
+                // Guards against a subclass's typeName override drifting from the
+                // persisted discriminator. (Unit tests run unobfuscated, so the R8
+                // rename itself isn't reproducible here; the obfuscation-survival
+                // class of bug is gated in CI — see scripts/assert_bridges_kept.py.)
                 assertEquals(
                     "typeName drifted from the persisted discriminator for ${source::class.simpleName}",
                     expectedTypeName,

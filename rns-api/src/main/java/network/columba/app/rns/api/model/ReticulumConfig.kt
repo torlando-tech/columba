@@ -208,6 +208,17 @@ sealed class InterfaceConfig : Parcelable {
     abstract val networkRestriction: NetworkRestriction
 
     /**
+     * Stable type discriminator persisted to the `interfaces.type` DB column and matched
+     * in `InterfaceRepository.entityToConfig`. Declared per-subclass as an explicit literal,
+     * deliberately NOT `this::class.simpleName`: R8 obfuscates the class name to e.g. "wy2"
+     * in release builds, which then fails to round-trip and surfaces as "Unknown interface
+     * type: wy2". Lives alongside each subclass's Parcel `TAG_*` for the same reason — it's
+     * that subclass's identity — and decouples the wire/DB format from the Kotlin class name
+     * so the type can be renamed without a DB migration.
+     */
+    abstract val typeName: String
+
+    /**
      * AutoInterface - Automatically discovers peers on the local network.
      * Uses UDP multicast for peer discovery and establishes direct connections.
      *
@@ -229,6 +240,8 @@ sealed class InterfaceConfig : Parcelable {
         val mode: String = "full",
         override val networkRestriction: NetworkRestriction = NetworkRestriction.WIFI_ONLY,
     ) : InterfaceConfig() {
+        override val typeName: String get() = "AutoInterface"
+
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(TAG_AUTO_INTERFACE)
             parcel.writeString(name)
@@ -278,6 +291,8 @@ sealed class InterfaceConfig : Parcelable {
         val socksProxyPort: Int = 9050,
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig() {
+        override val typeName: String get() = "TCPClient"
+
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(TAG_TCP_CLIENT)
             parcel.writeString(name)
@@ -343,6 +358,8 @@ sealed class InterfaceConfig : Parcelable {
         val enableFramebuffer: Boolean = true, // Display logo on RNode screen
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig() {
+        override val typeName: String get() = "RNode"
+
         @Suppress("LongMethod") // Mechanical field serialization; one parcel.write per field.
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(TAG_RNODE)
@@ -392,6 +409,8 @@ sealed class InterfaceConfig : Parcelable {
         val mode: String = "full",
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig() {
+        override val typeName: String get() = "UDP"
+
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(TAG_UDP)
             parcel.writeString(name)
@@ -429,6 +448,8 @@ sealed class InterfaceConfig : Parcelable {
         val bleAdvertisingRefreshIntervalMs: Long = 60_000L,
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig() {
+        override val typeName: String get() = "AndroidBLE"
+
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(TAG_ANDROID_BLE)
             parcel.writeString(name)
@@ -467,6 +488,8 @@ sealed class InterfaceConfig : Parcelable {
         val passphrase: String? = null,
         override val networkRestriction: NetworkRestriction = NetworkRestriction.ANY,
     ) : InterfaceConfig() {
+        override val typeName: String get() = "TCPServer"
+
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(TAG_TCP_SERVER)
             parcel.writeString(name)

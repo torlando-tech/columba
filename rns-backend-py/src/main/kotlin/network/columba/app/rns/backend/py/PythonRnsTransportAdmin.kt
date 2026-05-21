@@ -82,7 +82,12 @@ class PythonRnsTransportAdmin(
     /**
      * Attach the host-side BLE bridge as the live connection source. Idempotent:
      * re-attaching swaps the source and re-seeds the flow with current peers.
+     *
+     * `@Synchronized` so the remove-old/swap/add-new sequence is atomic — a
+     * concurrent or re-entrant call must not leave [bleListener] registered on
+     * two sources (which would double-emit on [_bleConnectionsFlow]).
      */
+    @Synchronized
     fun attachBleSource(source: network.columba.app.rns.api.BleConnectionSource) {
         bleSource?.removeBleConnectionsListener(bleListener)
         bleSource = source

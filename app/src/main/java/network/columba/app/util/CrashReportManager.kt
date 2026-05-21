@@ -122,7 +122,12 @@ class CrashReportManager
          * the value is available for the next cold start.
          */
         fun setCrashReportingConsentMirror(granted: Boolean) {
-            prefs.edit().putBoolean(KEY_CRASH_CONSENT, granted).apply()
+            // commit() (synchronous) rather than apply(): the mirror gates Sentry init at
+            // the next cold start, so a crash between the DataStore write and an async SP
+            // flush must not leave a stale `true` that re-enables reporting after the user
+            // revoked consent. Callers run on a coroutine thread, so the blocking write is
+            // negligible for a single boolean.
+            prefs.edit().putBoolean(KEY_CRASH_CONSENT, granted).commit()
         }
 
         /**

@@ -16,6 +16,7 @@ import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.toJsonString
+import network.columba.app.rns.api.model.typeName
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -1110,6 +1111,100 @@ class InterfaceRepositoryTest {
                         "round-trip lost CELLULAR_ONLY for $type",
                         NetworkRestriction.CELLULAR_ONLY,
                         parsed.networkRestriction,
+                    )
+                    cancelAndIgnoreRemainingEvents()
+                }
+            }
+        }
+
+    /**
+     * Regression guard for the R8 bug where `typeName` was derived from
+     * `this::class.simpleName`. In the minified release build that returned the
+     * obfuscated class name (e.g. "wy2"), which was persisted to the `type`
+     * column and then failed `entityToConfig`'s `when (entity.type)` with
+     * "Unknown interface type: wy2".
+     *
+     * This test exercises the REAL save path — `typeName` + `toJsonString`, the
+     * exact pair `InterfaceRepository.configToEntity` uses — and feeds it back
+     * through `entityToConfig`. It cannot reproduce R8 obfuscation (unit tests
+     * run unobfuscated), but it does fail if:
+     *   - a `typeName` literal is typo'd so it no longer matches a deserializer
+     *     branch (falls through to the "Unknown" else), or
+     *   - a new InterfaceConfig subclass gets a `typeName` literal but a
+     *     forgotten `entityToConfig` branch — the deserializer's `else` is NOT
+     *     compile-checked, unlike the now-exhaustive `typeName` `when`.
+     *
+     * Forcing function for new types: `expectedTypeName` below is an exhaustive
+     * `when` with no `else`, so adding a 7th InterfaceConfig subclass fails to
+     * compile here until it is handled — the same compile-time guard the
+     * production `typeName` `when` now has, extended to the deserializer side
+     * (whose `else` branch is otherwise the silent failure point).
+     */
+    @Test
+    fun `every InterfaceConfig type round-trips through typeName and entityToConfig`() =
+        runTest {
+            val samples: List<InterfaceConfig> =
+                listOf(
+                    InterfaceConfig.AutoInterface(name = "auto"),
+                    InterfaceConfig.TCPClient(name = "tcp", targetHost = "10.0.0.1", targetPort = 4242),
+                    InterfaceConfig.TCPServer(name = "tcps"),
+                    InterfaceConfig.UDP(name = "udp"),
+                    InterfaceConfig.AndroidBLE(name = "ble"),
+                    InterfaceConfig.RNode(name = "rnode", targetDeviceName = "RNode 1234", connectionMode = "classic"),
+                )
+
+            samples.forEachIndexed { idx, source ->
+                // Exhaustive (no `else`) — a new InterfaceConfig subclass breaks
+                // compilation here. The literals must match entityToConfig's branches.
+                val expectedTypeName =
+                    when (source) {
+                        is InterfaceConfig.AutoInterface -> "AutoInterface"
+                        is InterfaceConfig.TCPClient -> "TCPClient"
+                        is InterfaceConfig.TCPServer -> "TCPServer"
+                        is InterfaceConfig.UDP -> "UDP"
+                        is InterfaceConfig.AndroidBLE -> "AndroidBLE"
+                        is InterfaceConfig.RNode -> "RNode"
+                    }
+                // Catches the R8-style regression directly: if typeName ever goes
+                // back to ::class.simpleName, an obfuscated build yields "wy2" here.
+                // (Unit tests run unobfuscated, so this specifically guards a typo'd
+                // or drifted literal; the obfuscation case is covered in CI — see
+                // scripts/assert_bridges_kept.py philosophy.)
+                assertEquals(
+                    "typeName drifted from the persisted discriminator for ${source::class.simpleName}",
+                    expectedTypeName,
+                    source.typeName,
+                )
+
+                // Build the entity exactly as InterfaceRepository.configToEntity does:
+                // the discriminator comes from typeName (the field that broke under R8).
+                val entity =
+                    InterfaceEntity(
+                        id = idx + 1L,
+                        name = source.name,
+                        type = source.typeName,
+                        enabled = source.enabled,
+                        configJson = source.toJsonString(),
+                        displayOrder = idx,
+                    )
+                every { mockDao.getAllInterfaces() } returns flowOf(emptyList())
+                every { mockDao.getEnabledInterfaces() } returns flowOf(listOf(entity))
+                val repository = InterfaceRepository(mockDao)
+
+                repository.enabledInterfaces.test {
+                    val parsed = awaitItem()
+                    // A round-trip failure (typeName not matching a deserializer
+                    // branch) surfaces as the interface being dropped from the list.
+                    assertEquals(
+                        "type '${source.typeName}' (${source::class.simpleName}) did not round-trip " +
+                            "through entityToConfig — likely a typeName/deserializer mismatch",
+                        1,
+                        parsed.size,
+                    )
+                    assertEquals(
+                        "round-trip changed the interface subtype for '${source.typeName}'",
+                        source::class,
+                        parsed.single()::class,
                     )
                     cancelAndIgnoreRemainingEvents()
                 }

@@ -60,7 +60,10 @@ import java.util.concurrent.ConcurrentHashMap
  * @property bluetoothManager Android Bluetooth manager
  */
 @SuppressLint("MissingPermission")
-@Suppress("InjectDispatcher") // Bridge class doesn't use DI - dispatchers are used for BLE operations
+// TooManyFunctions: large Android BLE bridge, already over the threshold and
+// baselined; adding the BleConnectionSource supertype changed detekt's class
+// signature so the baseline ID stopped matching — suppress inline instead.
+@Suppress("InjectDispatcher", "TooManyFunctions") // DI-free bridge; dispatchers used for BLE ops
 @Keep // Python (BLE driver / event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinBLEBridge(
     private val context: Context,

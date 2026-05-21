@@ -39,6 +39,12 @@ class OnboardingPagerScreenTest {
 
     val composeTestRule get() = composeRule
 
+    // Index of the CompletePage for the current build flavor. The crash-reporting opt-in
+    // page is inserted before CompletePage in the sentry flavor, so this is not a constant.
+    private val completePageIndex =
+        onboardingPages(network.columba.app.BuildConfig.CRASH_REPORTING_AVAILABLE)
+            .indexOf(OnboardingPage.COMPLETE)
+
     // ========== Test 1: Initial render shows welcome page (page 0) ==========
 
     @Test
@@ -308,7 +314,7 @@ class OnboardingPagerScreenTest {
     fun pagerContainsAllPages_page4_completePage() {
         // Given
         var refreshIdentityDataCalled = false
-        val mockViewModel = createMockOnboardingViewModel(currentPage = 4)
+        val mockViewModel = createMockOnboardingViewModel(currentPage = completePageIndex)
         val mockDebugViewModel = createMockDebugViewModel()
         every { mockDebugViewModel.refreshIdentityData() } answers {
             refreshIdentityDataCalled = true
@@ -448,7 +454,7 @@ class OnboardingPagerScreenTest {
         var refreshIdentityDataCalled = false
         val mockViewModel =
             createMockOnboardingViewModel(
-                currentPage = 4,
+                currentPage = completePageIndex,
                 selectedInterfaces = setOf(OnboardingInterfaceType.AUTO),
             )
         val mockDebugViewModel = createMockDebugViewModel()
@@ -492,7 +498,7 @@ class OnboardingPagerScreenTest {
         var refreshIdentityDataCalled = false
         val mockViewModel =
             createMockOnboardingViewModel(
-                currentPage = 4,
+                currentPage = completePageIndex,
                 selectedInterfaces = setOf(OnboardingInterfaceType.AUTO, OnboardingInterfaceType.RNODE),
             )
         val mockDebugViewModel = createMockDebugViewModel()
@@ -553,7 +559,7 @@ class OnboardingPagerScreenTest {
     @Test
     fun skipButton_hiddenOnLastPage() {
         // Given - On the complete page (page 4 = ONBOARDING_PAGE_COUNT - 1)
-        val mockViewModel = createMockOnboardingViewModel(currentPage = 4)
+        val mockViewModel = createMockOnboardingViewModel(currentPage = completePageIndex)
         val mockDebugViewModel = createMockDebugViewModel()
 
         // When
@@ -600,7 +606,7 @@ class OnboardingPagerScreenTest {
     fun completePage_triggersRefreshIdentityData() {
         // Given
         var refreshIdentityDataCalled = false
-        val mockViewModel = createMockOnboardingViewModel(currentPage = 4)
+        val mockViewModel = createMockOnboardingViewModel(currentPage = completePageIndex)
         val mockDebugViewModel = createMockDebugViewModel()
         every { mockDebugViewModel.refreshIdentityData() } answers {
             refreshIdentityDataCalled = true

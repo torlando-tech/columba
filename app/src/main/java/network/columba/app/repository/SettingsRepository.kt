@@ -166,6 +166,13 @@ class SettingsRepository
 
             // Message sort order: false = received time (default), true = sent time
             val SORT_MESSAGES_BY_SENT_TIME = booleanPreferencesKey("sort_messages_by_sent_time")
+
+            // Anonymous crash reporting (sentry flavor only). Opt-in: defaults to false.
+            val CRASH_REPORTING_CONSENT = booleanPreferencesKey("crash_reporting_consent")
+
+            // Whether the one-time crash-reporting opt-in prompt has been shown to an
+            // existing user (who completed onboarding before the feature existed).
+            val HAS_SEEN_CRASH_REPORTING_PROMPT = booleanPreferencesKey("has_seen_crash_reporting_prompt")
         }
 
         // Cross-process SharedPreferences for service communication
@@ -447,6 +454,48 @@ class SettingsRepository
         suspend fun markOnboardingCompleted() {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] = true
+            }
+        }
+
+        // Crash reporting (sentry flavor only)
+
+        /**
+         * Flow of the anonymous crash reporting consent. Opt-in: defaults to false.
+         * This is the source of truth; [CrashReportManager.setCrashReportingConsentMirror]
+         * mirrors it into SharedPreferences for synchronous reads at app startup.
+         */
+        val crashReportingConsentFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.CRASH_REPORTING_CONSENT] ?: false
+                }.distinctUntilChanged()
+
+        /**
+         * Persist the anonymous crash reporting consent. Callers should also update the
+         * synchronous mirror via CrashReportManager and call CrashReporter.setEnabled().
+         */
+        suspend fun setCrashReportingConsent(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.CRASH_REPORTING_CONSENT] = enabled
+            }
+        }
+
+        /**
+         * Flow tracking whether the one-time crash-reporting opt-in prompt has been shown.
+         * Defaults to false.
+         */
+        val hasSeenCrashReportingPromptFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.HAS_SEEN_CRASH_REPORTING_PROMPT] ?: false
+                }.distinctUntilChanged()
+
+        /**
+         * Mark the one-time crash-reporting opt-in prompt as seen so it never reappears.
+         */
+        suspend fun markCrashReportingPromptSeen() {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.HAS_SEEN_CRASH_REPORTING_PROMPT] = true
             }
         }
 

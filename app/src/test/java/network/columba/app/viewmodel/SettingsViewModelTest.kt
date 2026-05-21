@@ -77,6 +77,7 @@ class SettingsViewModelTest {
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: ContactRepository
     private lateinit var updateChecker: network.columba.app.service.UpdateChecker
+    private lateinit var crashReportManager: network.columba.app.util.CrashReportManager
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -126,6 +127,8 @@ class SettingsViewModelTest {
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
         updateChecker = mockk()
+        crashReportManager = mockk()
+        every { crashReportManager.setCrashReportingConsentMirror(any()) } returns Unit
         context =
             mockk {
                 val mockEditor =
@@ -175,6 +178,9 @@ class SettingsViewModelTest {
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
+        every { settingsRepository.crashReportingConsentFlow } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+        every { settingsRepository.hasCompletedOnboardingFlow } returns kotlinx.coroutines.flow.MutableStateFlow(true)
+        every { settingsRepository.hasSeenCrashReportingPromptFlow } returns kotlinx.coroutines.flow.MutableStateFlow(true)
         every { settingsRepository.batteryProfileFlow } returns batteryProfileFlow
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { settingsRepository.imageCompressionPresetFlow } returns imageCompressionPresetFlow
@@ -293,6 +299,7 @@ class SettingsViewModelTest {
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
             updateChecker = updateChecker,
+            crashReportManager = crashReportManager,
         )
 
     // region parseRpcKey Tests
@@ -1622,6 +1629,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    crashReportManager = crashReportManager,
                 )
 
             viewModel.state.test {
@@ -1674,6 +1682,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    crashReportManager = crashReportManager,
                 )
 
             viewModel.state.test {
@@ -2304,6 +2313,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    crashReportManager = crashReportManager,
                 )
 
             // Wait for any potential async operations to settle
@@ -2353,6 +2363,7 @@ class SettingsViewModelTest {
                     telemetryCollectorManager = telemetryCollectorManager,
                     contactRepository = contactRepository,
                     updateChecker = updateChecker,
+                    crashReportManager = crashReportManager,
                 )
 
             // The ViewModel should be created successfully with NativeReticulumProtocol

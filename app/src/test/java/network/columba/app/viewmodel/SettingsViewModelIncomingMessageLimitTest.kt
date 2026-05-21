@@ -74,6 +74,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private lateinit var telemetryCollectorManager: TelemetryCollectorManager
     private lateinit var contactRepository: network.columba.app.data.repository.ContactRepository
     private lateinit var updateChecker: network.columba.app.service.UpdateChecker
+    private lateinit var crashReportManager: network.columba.app.util.CrashReportManager
     private lateinit var context: android.content.Context
     private lateinit var viewModel: SettingsViewModel
 
@@ -120,6 +121,8 @@ class SettingsViewModelIncomingMessageLimitTest {
         telemetryCollectorManager = mockk()
         contactRepository = mockk()
         updateChecker = mockk()
+        crashReportManager = mockk()
+        every { crashReportManager.setCrashReportingConsentMirror(any()) } returns Unit
         context =
             mockk {
                 val mockEditor =
@@ -173,6 +176,9 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
         every { settingsRepository.transportNodeEnabledFlow } returns transportNodeEnabledFlow
+        every { settingsRepository.crashReportingConsentFlow } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+        every { settingsRepository.hasCompletedOnboardingFlow } returns kotlinx.coroutines.flow.MutableStateFlow(true)
+        every { settingsRepository.hasSeenCrashReportingPromptFlow } returns kotlinx.coroutines.flow.MutableStateFlow(true)
         every { settingsRepository.defaultDeliveryMethodFlow } returns defaultDeliveryMethodFlow
         every { settingsRepository.locationSharingEnabledFlow } returns MutableStateFlow(false)
         every { settingsRepository.defaultSharingDurationFlow } returns MutableStateFlow("ONE_HOUR")
@@ -260,6 +266,7 @@ class SettingsViewModelIncomingMessageLimitTest {
             telemetryCollectorManager = telemetryCollectorManager,
             contactRepository = contactRepository,
             updateChecker = updateChecker,
+            crashReportManager = crashReportManager,
         )
 
     // ========== Initial State Tests ==========

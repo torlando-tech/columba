@@ -26,6 +26,8 @@ import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.startup.ConfigApplyFlagManager
 import network.columba.app.startup.ServiceIdentityVerifier
 import network.columba.app.startup.StartupConfigLoader
+import network.columba.app.telemetry.CrashReporter
+import network.columba.app.telemetry.CrashReporterProvider
 import network.columba.app.util.CrashReportManager
 import network.columba.app.util.HexUtils.hexStringToByteArray
 import javax.inject.Inject
@@ -112,15 +114,27 @@ class ColumbaApplication : Application() {
     // SupervisorJob ensures failures don't crash the entire app
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // Build-time-swappable crash reporter. The `sentry` flavor binds a Sentry-backed
+    // implementation; `noSentry` binds a no-op (the SDK is stripped from that APK).
+    // Constructed via a plain factory rather than Hilt because it is used at the very top
+    // of onCreate(), before the DI graph is guaranteed ready.
+    private val crashReporter: CrashReporter = CrashReporterProvider.create()
+
     override fun onCreate() {
         super.onCreate()
 
         // Install crash handler FIRST (before anything else that might crash)
         // This ensures we capture crashes from any subsequent initialization
         crashReportManager.installCrashHandler()
-        // Initialize Sentry for crash reporting and performance monitoring
-        // Phase 1 Plan 01-03: Sentry Performance Monitoring
-        initializeSentry()
+        // Initialize crash reporting (Sentry flavor only). Consent is read synchronously
+        // from the SharedPreferences mirror so we never block the main thread on DataStore.
+        // When consent is not granted, the reporter does not initialize or upload anything.
+        crashReporter.initialize(
+            context = this,
+            environment = if (BuildConfig.DEBUG) "debug" else "production",
+            isDebug = BuildConfig.DEBUG,
+            consentGranted = crashReportManager.isCrashReportingConsentGranted(),
+        )
 
         // Phase 4 Task 4.1: StrictMode for debug builds
         // Detect threading violations during development
@@ -1006,68 +1020,4 @@ class ColumbaApplication : Application() {
         android.util.Log.d("ColumbaApplication", "✓ Batch restore complete: $totalRestored peer identities restored")
     }
 
-    /**
-     * Initialize Sentry SDK for crash reporting and performance monitoring.
-     * Phase 1 Plan 01-03: Production observability for performance issues.
-     */
-    private fun initializeSentry() {
-        try {
-            io.sentry.android.core.SentryAndroid.init(this) { options ->
-                // DSN from BuildConfig - set via SENTRY_DSN environment variable at build time
-                // Empty DSN = Sentry disabled (used by noSentry build variant in Phase 2)
-                options.dsn = BuildConfig.SENTRY_DSN
-
-                // Sentry is enabled when DSN is provided (not empty).
-                // Both debug and release builds report, distinguished by environment.
-                options.isEnabled = BuildConfig.SENTRY_DSN.isNotEmpty()
-
-                // Tag the environment so events are filterable in the Sentry dashboard.
-                // "debug" for local/dev builds, "production" for release builds.
-                options.environment = if (BuildConfig.DEBUG) "debug" else "production"
-
-                // Performance Monitoring - Tracing
-                // Debug builds use lower sampling to reduce noise during development.
-                if (BuildConfig.DEBUG) {
-                    options.tracesSampleRate = 0.1 // 10% sampling for debug
-                    options.profilesSampleRate = 0.0 // No profiling in debug
-                } else {
-                    options.tracesSampleRate = 0.5 // 50% sampling appropriate for <500 users
-                    options.profilesSampleRate = 0.1 // Profile 10% of sampled transactions
-                }
-
-                // Activity & Fragment tracing (enabled by default)
-                options.isEnableActivityLifecycleTracingAutoFinish = true
-
-                // User Interaction tracing (clicks, scrolls, swipes)
-                options.isEnableUserInteractionTracing = true
-                options.isEnableUserInteractionBreadcrumbs = true
-
-                // App Start performance tracking (cold/warm starts)
-                options.isEnableAppStartProfiling = !BuildConfig.DEBUG
-
-                // ANR Detection (Application Not Responding)
-                options.isAnrEnabled = true
-                options.anrTimeoutIntervalMillis = 5000 // 5 second ANR threshold
-                options.isAttachAnrThreadDump = true
-
-                // Frame Tracking (slow/frozen frames)
-                options.isEnableFramesTracking = true
-
-                // Breadcrumbs for debugging
-                options.isEnableActivityLifecycleBreadcrumbs = true
-                options.isEnableAppComponentBreadcrumbs = true
-                options.isEnableSystemEventBreadcrumbs = true
-
-                android.util.Log.d(
-                    "ColumbaApplication",
-                    "Sentry initialized: enabled=${options.isEnabled}, " +
-                        "environment=${options.environment}, " +
-                        "tracing=${options.tracesSampleRate}, " +
-                        "hasDsn=${BuildConfig.SENTRY_DSN.isNotEmpty()}",
-                )
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("ColumbaApplication", "Failed to initialize Sentry", e)
-        }
-    }
 }

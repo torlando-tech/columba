@@ -60,6 +60,7 @@ class OnboardingViewModelPermissionsTest {
     private lateinit var mockIdentityRepository: IdentityRepository
     private lateinit var mockInterfaceRepository: InterfaceRepository
     private lateinit var mockInterfaceConfigManager: InterfaceConfigManager
+    private lateinit var mockCrashReportManager: network.columba.app.util.CrashReportManager
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var context: Context
 
@@ -72,6 +73,8 @@ class OnboardingViewModelPermissionsTest {
         mockIdentityRepository = mockk()
         mockInterfaceRepository = mockk()
         mockInterfaceConfigManager = mockk()
+        mockCrashReportManager = mockk()
+        every { mockCrashReportManager.setCrashReportingConsentMirror(any()) } returns Unit
 
         coEvery { mockSettingsRepository.hasCompletedOnboardingFlow } returns MutableStateFlow(false)
         coEvery { mockSettingsRepository.needsIdentityUnlockFlow } returns MutableStateFlow(false)
@@ -98,6 +101,7 @@ class OnboardingViewModelPermissionsTest {
             mockIdentityRepository,
             mockInterfaceRepository,
             mockInterfaceConfigManager,
+            mockCrashReportManager,
         )
 
     private fun stubBlePermissionsAllGranted() {

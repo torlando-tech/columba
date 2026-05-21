@@ -31,6 +31,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +42,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import network.columba.app.BuildConfig
 import network.columba.app.ui.screens.onboarding.pages.CompletePage
 import network.columba.app.ui.screens.onboarding.pages.ConnectivityPage
+import network.columba.app.ui.screens.onboarding.pages.CrashReportingPage
 import network.columba.app.ui.screens.onboarding.pages.IdentityPage
 import network.columba.app.ui.screens.onboarding.pages.PermissionsPage
 import network.columba.app.ui.screens.onboarding.pages.WelcomePage
@@ -70,7 +73,12 @@ fun OnboardingPagerScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(pageCount = { ONBOARDING_PAGE_COUNT })
+
+    // Ordered pages for this flavor. The crash-reporting opt-in page is only present when
+    // crash reporting is available (sentry flavor). Navigation below is relative
+    // (page + 1 / page - 1) so a missing page never breaks indices.
+    val pages = remember { onboardingPages(BuildConfig.CRASH_REPORTING_AVAILABLE) }
+    val pagerState = rememberPagerState(pageCount = { pages.size })
 
     // Identity data for QR code dialog
     val identityHash by debugViewModel.identityHash.collectAsState()
@@ -132,8 +140,8 @@ fun OnboardingPagerScreen(
     // Update viewmodel when user swipes
     LaunchedEffect(pagerState.currentPage) {
         viewModel.setCurrentPage(pagerState.currentPage)
-        // Refresh identity data when entering the CompletePage (page 4)
-        if (pagerState.currentPage == 4) {
+        // Refresh identity data when entering the CompletePage
+        if (pages.getOrNull(pagerState.currentPage) == OnboardingPage.COMPLETE) {
             debugViewModel.refreshIdentityData()
         }
     }
@@ -159,6 +167,7 @@ fun OnboardingPagerScreen(
                 // Top bar with Skip button
                 TopBar(
                     currentPage = pagerState.currentPage,
+                    pageCount = pages.size,
                     onSkip = {
                         viewModel.skipOnboarding { onOnboardingComplete(false) }
                     },
@@ -175,32 +184,24 @@ fun OnboardingPagerScreen(
                             .weight(1f),
                     userScrollEnabled = false,
                 ) { page ->
-                    when (page) {
-                        0 ->
+                    // Relative navigation: pages are in fixed order, so the next/previous
+                    // page is always page +/- 1 regardless of which pages this flavor includes.
+                    val goNext = { scope.launch { pagerState.animateScrollToPage(page + 1) } }
+                    val goBack = { scope.launch { pagerState.animateScrollToPage(page - 1) } }
+                    when (pages[page]) {
+                        OnboardingPage.WELCOME ->
                             WelcomePage(
-                                onGetStarted = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(1)
-                                    }
-                                },
+                                onGetStarted = { goNext() },
                                 onRestoreFromBackup = onImportData,
                             )
-                        1 ->
+                        OnboardingPage.IDENTITY ->
                             IdentityPage(
                                 displayName = state.displayName,
                                 onDisplayNameChange = viewModel::updateDisplayName,
-                                onBack = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(0)
-                                    }
-                                },
-                                onContinue = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(2)
-                                    }
-                                },
+                                onBack = { goBack() },
+                                onContinue = { goNext() },
                             )
-                        2 ->
+                        OnboardingPage.CONNECTIVITY ->
                             ConnectivityPage(
                                 selectedInterfaces = state.selectedInterfaces,
                                 onInterfaceToggle = { interfaceType ->
@@ -217,18 +218,10 @@ fun OnboardingPagerScreen(
                                 },
                                 blePermissionsGranted = state.blePermissionsGranted,
                                 blePermissionsDenied = state.blePermissionsDenied,
-                                onBack = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(1)
-                                    }
-                                },
-                                onContinue = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(3)
-                                    }
-                                },
+                                onBack = { goBack() },
+                                onContinue = { goNext() },
                             )
-                        3 ->
+                        OnboardingPage.PERMISSIONS ->
                             PermissionsPage(
                                 notificationsGranted = state.notificationsGranted,
                                 batteryOptimizationExempt = state.batteryOptimizationExempt,
@@ -250,18 +243,17 @@ fun OnboardingPagerScreen(
                                         BatteryOptimizationManager.requestBatteryOptimizationExemption(context)
                                     }
                                 },
-                                onBack = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(2)
-                                    }
-                                },
-                                onContinue = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(4)
-                                    }
-                                },
+                                onBack = { goBack() },
+                                onContinue = { goNext() },
                             )
-                        4 ->
+                        OnboardingPage.CRASH_REPORTING ->
+                            CrashReportingPage(
+                                crashReportingEnabled = state.crashReportingEnabled,
+                                onCrashReportingToggle = viewModel::setCrashReportingEnabled,
+                                onBack = { goBack() },
+                                onContinue = { goNext() },
+                            )
+                        OnboardingPage.COMPLETE ->
                             CompletePage(
                                 displayName = state.displayName,
                                 selectedInterfaces = state.selectedInterfaces,
@@ -283,7 +275,7 @@ fun OnboardingPagerScreen(
 
                 // Page indicators
                 PageIndicator(
-                    pageCount = ONBOARDING_PAGE_COUNT,
+                    pageCount = pages.size,
                     currentPage = pagerState.currentPage,
                     modifier =
                         Modifier
@@ -299,6 +291,7 @@ fun OnboardingPagerScreen(
 @Composable
 private fun TopBar(
     currentPage: Int,
+    pageCount: Int,
     onSkip: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
@@ -310,7 +303,7 @@ private fun TopBar(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
         // Skip button (not shown on last page)
-        if (currentPage < ONBOARDING_PAGE_COUNT - 1) {
+        if (currentPage < pageCount - 1) {
             TextButton(
                 onClick = onSkip,
                 enabled = enabled,

@@ -93,9 +93,6 @@ dependencies {
     // Room runtime (native process access to Reticulum stores).
     implementation(libs.room)
 
-    // Crash Reporting - Sentry (for instrumented metrics).
-    implementation("io.sentry:sentry-android:8.31.0")
-
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)

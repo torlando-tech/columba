@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.RestartAlt
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.BuildConfig
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.components.LocalCapabilities
 
@@ -60,6 +62,8 @@ fun AdvancedCard(
     shareInstanceHostingPending: Boolean = false,
     onRestartReticulum: () -> Unit = {},
     isRestarting: Boolean = false,
+    crashReportingEnabled: Boolean = false,
+    onCrashReportingToggle: (Boolean) -> Unit = {},
 ) {
     val canHostShareInstance = LocalCapabilities.current.performance.shareInstanceHosting
     CollapsibleSettingsCard(
@@ -187,6 +191,45 @@ fun AdvancedCard(
                     }
                 }
             }
+        }
+
+        // Anonymous crash reporting toggle (sentry flavor only — the SDK is stripped from
+        // the noSentry flavor, so the toggle would do nothing there).
+        if (BuildConfig.CRASH_REPORTING_AVAILABLE) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BugReport,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "Anonymous Crash Reports",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Switch(
+                    checked = crashReportingEnabled,
+                    onCheckedChange = onCrashReportingToggle,
+                )
+            }
+            Text(
+                text =
+                    "Send anonymous crash and error reports to help the developer fix bugs. " +
+                        "No message content, contacts, or identity information is ever included. " +
+                        "Off by default; you can change this at any time.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -1407,6 +1407,9 @@ fun ColumbaNavigation(
                                     onNavigateToInterfaces = {
                                         navController.navigate("interface_management")
                                     },
+                                    onNavigateToBleConnections = {
+                                        navController.navigate("ble_connection_status")
+                                    },
                                     onNavigateToIdentity = {
                                         navController.navigate("my_identity")
                                     },

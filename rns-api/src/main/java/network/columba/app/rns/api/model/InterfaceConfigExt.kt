@@ -108,10 +108,3 @@ private fun JSONObject.putRestrictionUnlessDefault(
 ) {
     if (value != default) put("network_restriction", value.value)
 }
-
-/**
- * Get the type name string for this InterfaceConfig.
- * Used for database storage.
- */
-val InterfaceConfig.typeName: String
-    get() = this::class.simpleName ?: "Unknown"

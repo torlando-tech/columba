@@ -328,14 +328,22 @@ class MainActivity : ComponentActivity() {
         // Reinforce foreground notification: on Android 13+ users can swipe it away,
         // and only Service.startForeground() can restore it. Sending ACTION_START
         // triggers onStartCommand which calls startForeground(this).
+        //
+        // COLUMBA-4B: catch Throwable, not just Exception. The pre-#563 bug invoked
+        // Activity.startForegroundService() directly, which the ART verifier on
+        // API 24/25 cannot resolve — that surfaces as NoSuchMethodError (a
+        // java.lang.Error, not Exception) and crashed onResume. ContextCompat
+        // wraps the version check now, but a Throwable catch keeps the
+        // notification-refresh path non-fatal against any future LinkageError /
+        // NoClassDefFoundError on legacy devices.
         try {
             val serviceIntent =
                 Intent(this, ReticulumService::class.java).apply {
                     action = ReticulumService.ACTION_START
                 }
             ContextCompat.startForegroundService(this, serviceIntent)
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not reinforce foreground notification", e)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Could not reinforce foreground notification", t)
         }
     }
 

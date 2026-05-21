@@ -266,6 +266,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // COLUMBA-4B: enforce minSdk=24 API compatibility at build time.
+    // Pre-#563 MainActivity.onResume called Activity.startForegroundService()
+    // unconditionally; the ART verifier on API 24/25 devices threw
+    // NoSuchMethodError and crashed the app. Promote NewApi to an error so any
+    // future unguarded API > minSdk call (without SDK_INT check, RequiresApi,
+    // or a *Compat wrapper) fails CI instead of shipping.
+    lint {
+        error += listOf("NewApi", "InlinedApi")
+        abortOnError = true
+        checkReleaseBuilds = true
+    }
+
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)

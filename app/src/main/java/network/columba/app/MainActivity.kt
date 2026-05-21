@@ -156,23 +156,35 @@ class MainActivity : ComponentActivity() {
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
+    // Build-time-swappable crash reporter (no-op in the noSentry flavor). Breadcrumbs are
+    // recorded against the global reporting hub initialized by ColumbaApplication.
+    private val crashReporter: network.columba.app.telemetry.CrashReporter =
+        network.columba.app.telemetry.CrashReporterProvider.create()
+
     // JankStats for performance monitoring (Phase 1 Plan 01-03)
     private lateinit var jankStats: androidx.metrics.performance.JankStats
 
     private val jankFrameListener =
         androidx.metrics.performance.JankStats.OnFrameListener { frameData ->
-            // Report janky frames to Sentry as breadcrumbs
+            // Report janky frames as breadcrumbs (flavor-gated via crashReporter)
             if (frameData.isJank) {
                 val durationMs = frameData.frameDurationUiNanos / 1_000_000
-                io.sentry.Sentry.addBreadcrumb(
-                    io.sentry.Breadcrumb().apply {
-                        category = "performance"
-                        message = "Janky frame: ${durationMs}ms"
-                        level = if (durationMs > 100) io.sentry.SentryLevel.WARNING else io.sentry.SentryLevel.INFO
-                        setData("frame_duration_ms", durationMs)
-                        val stateString = frameData.states.joinToString { "${it.key}=${it.value}" }
-                        setData("states", stateString)
-                    },
+                crashReporter.addBreadcrumb(
+                    network.columba.app.telemetry.CrashBreadcrumb(
+                        category = "performance",
+                        message = "Janky frame: ${durationMs}ms",
+                        level =
+                            if (durationMs > 100) {
+                                network.columba.app.telemetry.CrashReportLevel.WARNING
+                            } else {
+                                network.columba.app.telemetry.CrashReportLevel.INFO
+                            },
+                        data =
+                            mapOf(
+                                "frame_duration_ms" to durationMs,
+                                "states" to frameData.states.joinToString { "${it.key}=${it.value}" },
+                            ),
+                    ),
                 )
 
                 // Log for local debugging
@@ -614,6 +626,9 @@ fun ColumbaNavigation(
 
     // Collect settings state (includes theme preference)
     val settingsState by settingsViewModel.state.collectAsState()
+
+    // One-time anonymous crash-reporting opt-in prompt for existing users (sentry flavor).
+    val showCrashReportingOptIn by settingsViewModel.shouldShowCrashReportingPrompt.collectAsState()
 
     // Access MapViewModel at navigation level so "Locate on Map" can set pending focus
     val mapViewModel: MapViewModel = hiltViewModel()
@@ -2226,6 +2241,16 @@ fun ColumbaNavigation(
                         },
                         sheetState = sheetState,
                         primaryActionLabel = if (useAppSettings) "Open Settings" else "Grant Permissions",
+                    )
+                }
+
+                // One-time anonymous crash-reporting opt-in for existing users. The
+                // ViewModel gates visibility (sentry flavor, onboarding complete, prompt
+                // not yet seen, not already opted in) and marks it seen on either choice.
+                if (showCrashReportingOptIn) {
+                    network.columba.app.ui.screens.settings.dialogs.CrashReportingOptInDialog(
+                        onEnable = { settingsViewModel.enableCrashReportingFromPrompt() },
+                        onDismiss = { settingsViewModel.dismissCrashReportingPrompt() },
                     )
                 }
             }

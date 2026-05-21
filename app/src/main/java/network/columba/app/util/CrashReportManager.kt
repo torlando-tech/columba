@@ -55,6 +55,11 @@ class CrashReportManager
             private const val KEY_STACK_TRACE = "stack_trace"
             private const val KEY_LOGS = "logs"
 
+            // Synchronous mirror of the crash-reporting consent preference (the DataStore
+            // value in SettingsRepository is the source of truth). Mirrored here so it can
+            // be read without coroutines at the top of Application.onCreate().
+            private const val KEY_CRASH_CONSENT = "crash_reporting_consent"
+
             // Privacy filter patterns
             private val HASH_PATTERN = Regex("([a-fA-F0-9]{16,})")
             private val IP_PATTERN = Regex("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b")
@@ -101,6 +106,23 @@ class CrashReportManager
          */
         fun hasPendingCrashReport(): Boolean {
             return prefs.getBoolean(KEY_HAS_CRASH, false)
+        }
+
+        /**
+         * Synchronously read whether the user has opted in to anonymous crash reporting.
+         * Defaults to false (opt-in). Safe to call from Application.onCreate().
+         */
+        fun isCrashReportingConsentGranted(): Boolean {
+            return prefs.getBoolean(KEY_CRASH_CONSENT, false)
+        }
+
+        /**
+         * Update the synchronous consent mirror. Call this alongside
+         * SettingsRepository.setCrashReportingConsent() (the DataStore source of truth) so
+         * the value is available for the next cold start.
+         */
+        fun setCrashReportingConsentMirror(granted: Boolean) {
+            prefs.edit().putBoolean(KEY_CRASH_CONSENT, granted).apply()
         }
 
         /**

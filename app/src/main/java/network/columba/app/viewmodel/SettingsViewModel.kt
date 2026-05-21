@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,8 +21,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import network.columba.app.BuildConfig
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ContactRepository
@@ -123,6 +126,8 @@ data class SettingsState(
     // Transport node + battery profile state
     val transportNodeEnabled: Boolean = true,
     val batteryProfile: BatteryProfile = BatteryProfile.BALANCED,
+    // Anonymous crash reporting opt-in (sentry flavor only). Defaults to off.
+    val crashReportingEnabled: Boolean = false,
     // RNS shared-instance HOSTING (python backend only; capability-gated in UI).
     //
     // - `shareInstanceHostingEnabled` mirrors the persisted preference — what
@@ -215,6 +220,7 @@ class SettingsViewModel
         private val telemetryCollectorManager: TelemetryCollectorManager,
         private val contactRepository: ContactRepository,
         private val updateChecker: network.columba.app.service.UpdateChecker,
+        private val crashReportManager: network.columba.app.util.CrashReportManager,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -363,6 +369,7 @@ class SettingsViewModel
                         settingsRepository.autoRetrieveEnabledFlow,
                         settingsRepository.retrievalIntervalSecondsFlow,
                         settingsRepository.shareInstanceHostingEnabledFlow,
+                        settingsRepository.crashReportingConsentFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as network.columba.app.data.db.entity.LocalIdentityEntity?
@@ -417,6 +424,9 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val shareInstanceHostingEnabled = flows[16] as Boolean
 
+                        @Suppress("UNCHECKED_CAST")
+                        val crashReportingEnabled = flows[17] as Boolean
+
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
                         val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
@@ -463,6 +473,7 @@ class SettingsViewModel
                             // Transport node + battery profile state
                             transportNodeEnabled = transportNodeEnabled,
                             batteryProfile = batteryProfile,
+                            crashReportingEnabled = crashReportingEnabled,
                             // Share-instance hosting: persisted preference reflected
                             // immediately. `applied` anchors to the persisted value
                             // on the first emission (isLoading flips false in the
@@ -1707,6 +1718,57 @@ class SettingsViewModel
                 if (!_state.value.isRestarting) {
                     restartService()
                 }
+            }
+        }
+
+        /**
+         * Set the anonymous crash reporting opt-in (sentry flavor only).
+         * Persists the DataStore source of truth + the synchronous startup mirror, and
+         * activates/deactivates reporting immediately (no restart required).
+         */
+        fun setCrashReportingEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.setCrashReportingConsent(enabled)
+                crashReportManager.setCrashReportingConsentMirror(enabled)
+                network.columba.app.telemetry.CrashReporterProvider
+                    .create()
+                    .setEnabled(enabled)
+                Log.d(TAG, "Crash reporting ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Whether to show the one-time crash-reporting opt-in dialog. True only for an
+         * existing user (onboarding complete) on the sentry flavor who has neither seen the
+         * prompt nor already opted in. New users make this choice during onboarding.
+         */
+        val shouldShowCrashReportingPrompt: StateFlow<Boolean> =
+            combine(
+                settingsRepository.hasCompletedOnboardingFlow,
+                settingsRepository.hasSeenCrashReportingPromptFlow,
+                settingsRepository.crashReportingConsentFlow,
+            ) { completed, seen, consent ->
+                BuildConfig.CRASH_REPORTING_AVAILABLE && completed && !seen && !consent
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000L),
+                initialValue = false,
+            )
+
+        /** Opt in from the one-time prompt and mark it seen so it never reappears. */
+        fun enableCrashReportingFromPrompt() {
+            setCrashReportingEnabled(true)
+            markCrashReportingPromptSeen()
+        }
+
+        /** Decline the one-time prompt; mark it seen so it never reappears. */
+        fun dismissCrashReportingPrompt() {
+            markCrashReportingPromptSeen()
+        }
+
+        private fun markCrashReportingPromptSeen() {
+            viewModelScope.launch {
+                settingsRepository.markCrashReportingPromptSeen()
             }
         }
 

@@ -142,9 +142,6 @@ dependencies {
     // directly from the :reticulum process.
     implementation(project(":data"))
 
-    // Crash reporting — KotlinBLEBridge metrics already wire through Sentry.
-    implementation("io.sentry:sentry-android:8.31.0")
-
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)

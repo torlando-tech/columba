@@ -535,6 +535,8 @@ fun SettingsScreen(
                         state.shareInstanceHostingEnabled != state.appliedShareInstanceHosting,
                     onRestartReticulum = { viewModel.restartService() },
                     isRestarting = state.isRestarting,
+                    crashReportingEnabled = state.crashReportingEnabled,
+                    onCrashReportingToggle = { viewModel.setCrashReportingEnabled(it) },
                 )
 
                 // About section

@@ -13,6 +13,7 @@ data class OnboardingState(
     val notificationsEnabled: Boolean = false,
     val notificationsGranted: Boolean = false,
     val batteryOptimizationExempt: Boolean = false,
+    val crashReportingEnabled: Boolean = false,
     val isSaving: Boolean = false,
     val isLoading: Boolean = true,
     val hasCompletedOnboarding: Boolean = false,
@@ -53,6 +54,23 @@ enum class OnboardingInterfaceType(
 }
 
 /**
- * Total number of onboarding pages.
+ * Ordered onboarding pages. [CRASH_REPORTING] is only present in the `sentry` flavor
+ * (gated by BuildConfig.CRASH_REPORTING_AVAILABLE when the page list is built).
  */
-const val ONBOARDING_PAGE_COUNT = 5
+enum class OnboardingPage {
+    WELCOME,
+    IDENTITY,
+    CONNECTIVITY,
+    PERMISSIONS,
+    CRASH_REPORTING,
+    COMPLETE,
+}
+
+/**
+ * Build the ordered list of onboarding pages for the current build flavor. The crash
+ * reporting opt-in page is omitted entirely when crash reporting is not available.
+ */
+fun onboardingPages(crashReportingAvailable: Boolean): List<OnboardingPage> =
+    OnboardingPage.entries.filter {
+        it != OnboardingPage.CRASH_REPORTING || crashReportingAvailable
+    }

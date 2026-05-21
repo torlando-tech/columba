@@ -139,11 +139,17 @@ android {
             isDefault = true
             // SENTRY_DSN from environment - Sentry enabled in release builds
             buildConfigField("String", "SENTRY_DSN", "\"${System.getenv("SENTRY_DSN") ?: ""}\"")
+            // Crash reporting UI (onboarding page, settings toggle, update prompt) is
+            // only present in this flavor; consent gates whether anything is uploaded.
+            buildConfigField("boolean", "CRASH_REPORTING_AVAILABLE", "true")
         }
         create("noSentry") {
             dimension = "telemetry"
             // Empty DSN - Sentry fully disabled (no init, no network calls)
             buildConfigField("String", "SENTRY_DSN", "\"\"")
+            // Sentry SDK is stripped from this flavor entirely (see sentryImplementation
+            // + autoInstallation/ignoredFlavors below); hide all crash-reporting UI.
+            buildConfigField("boolean", "CRASH_REPORTING_AVAILABLE", "false")
         }
 
         // RNS backend selection. `kotlinBackend` ships reticulum-kt / lxmf-kt /
@@ -384,6 +390,29 @@ sentry {
     autoUploadSourceContext.set(hasAuth)
     autoUploadNativeSymbols.set(false) // No native code
 
+    // CRITICAL: the io.sentry:sentry-android dependency is declared manually and scoped to
+    // the `sentry` flavor only (see `sentryImplementation` in dependencies). With
+    // autoInstallation enabled the plugin would re-add the SDK to the noSentry flavor
+    // (which has no direct Sentry dependency), defeating the build-time removal.
+    autoInstallation {
+        enabled.set(false)
+    }
+
+    // Exclude all noSentry* variants from bytecode instrumentation, logcat breadcrumbs,
+    // and mapping upload — the Sentry SDK is not present there, so any injected reference
+    // (e.g. SentryLogcatAdapter) would NoClassDefFoundError at runtime. ignoredFlavors
+    // alone did not gate the logcat instrumentation in this plugin version, so the full
+    // noSentry variant names are listed explicitly via ignoredVariants as well.
+    ignoredFlavors.set(setOf("noSentry"))
+    ignoredVariants.set(
+        setOf(
+            "noSentryKotlinBackendDebug",
+            "noSentryKotlinBackendRelease",
+            "noSentryPythonBackendDebug",
+            "noSentryPythonBackendRelease",
+        ),
+    )
+
     // Logcat integration - captures android.util.Log calls as breadcrumbs
     tracingInstrumentation {
         enabled.set(true)
@@ -455,7 +484,10 @@ dependencies {
 
     // Crash Reporting - GlitchTip (Sentry-compatible)
     // Phase 4 Task 4.2: Production Observability
-    implementation("io.sentry:sentry-android:8.31.0")
+    // Scoped to the `sentry` flavor ONLY so the SDK is entirely absent from the noSentry
+    // APK. The noSentry flavor uses src/noSentry/.../NoOpCrashReporter instead. Requires
+    // autoInstallation.enabled = false in the sentry { } block above.
+    "sentryImplementation"("io.sentry:sentry-android:8.31.0")
 
     // Performance Monitoring - JankStats for frame monitoring
     // Phase 1 Plan 01-03: Frame tracking integration with Sentry

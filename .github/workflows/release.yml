@@ -37,7 +37,10 @@ jobs:
           echo "Building version: $VERSION from tag: $TAG_NAME"
 
       - name: Build Release APK
-        timeout-minutes: 20
+        # 40m to match build-prerelease-apk.yml: assembleRelease builds the two
+        # pythonBackend flavors, which bundle a Python runtime per ABI via
+        # Chaquopy and overrun the old 20m budget.
+        timeout-minutes: 40
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

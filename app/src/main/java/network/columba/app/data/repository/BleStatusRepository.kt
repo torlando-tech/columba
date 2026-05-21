@@ -47,7 +47,10 @@ class BleStatusRepository
             val connectionEventsFlow =
                 transportAdmin
                     .bleConnectionsFlow
-                    .onStart { emit("[]") } // Initial empty state
+                    // Seed with the current peers (live pull) rather than empty, so
+                    // opening Network Status after a peer connected shows it without
+                    // waiting for the next connect/disconnect push event.
+                    .onStart { emit(transportAdmin.getBleConnectionDetails()) }
                     .map { json -> parseConnectionsJson(json) }
 
             return combine(

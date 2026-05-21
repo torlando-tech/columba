@@ -60,12 +60,15 @@ import java.util.concurrent.ConcurrentHashMap
  * @property bluetoothManager Android Bluetooth manager
  */
 @SuppressLint("MissingPermission")
-@Suppress("InjectDispatcher") // Bridge class doesn't use DI - dispatchers are used for BLE operations
+// TooManyFunctions: large Android BLE bridge, already over the threshold and
+// baselined; adding the BleConnectionSource supertype changed detekt's class
+// signature so the baseline ID stopped matching — suppress inline instead.
+@Suppress("InjectDispatcher", "TooManyFunctions") // DI-free bridge; dispatchers used for BLE ops
 @Keep // Python (BLE driver / event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinBLEBridge(
     private val context: Context,
     private val bluetoothManager: BluetoothManager,
-) {
+) : network.columba.app.rns.api.BleConnectionSource {
     companion object {
         private const val TAG = "Columba:BLE:K:Bridge"
         private const val MAX_BLE_PACKET_SIZE = 512 // Maximum BLE packet size in bytes for validation
@@ -224,36 +227,35 @@ class KotlinBLEBridge(
     private var dualConnectionRaceCount: Long = 0
 
     // Native connection change listeners (for IPC callbacks)
-    private val connectionChangeListeners = mutableListOf<ConnectionChangeListener>()
+    private val connectionChangeListeners = mutableListOf<network.columba.app.rns.api.BleConnectionsListener>()
     private val listenerLock = Any()
 
-    /**
-     * Listener interface for BLE connection state changes.
-     * Used by BleCoordinator to broadcast events via AIDL.
-     */
-    interface ConnectionChangeListener {
-        fun onConnectionsChanged(connectionDetailsJson: String)
-    }
+    // ===== BleConnectionSource (rns-api seam) =====
+    // Lets the active backend's RnsTransportAdmin observe (push) and query
+    // (pull) live peer connection details and republish them over the AIDL
+    // bleConnectionsFlow / getBleConnectionDetails() seam — without
+    // :rns-backend-* taking a reverse dependency on this :rns-host class.
+
+    /** Current connected-peer details as the connection-details JSON array. */
+    override fun currentBleConnectionsJson(): String = buildConnectionDetailsJson()
 
     /**
-     * Register a listener for connection state changes.
-     * Thread-safe: synchronized on listenerLock.
+     * Register a connections listener. Thread-safe: synchronized on listenerLock.
      */
-    fun addConnectionChangeListener(listener: ConnectionChangeListener) {
+    override fun addBleConnectionsListener(listener: network.columba.app.rns.api.BleConnectionsListener) {
         synchronized(listenerLock) {
             connectionChangeListeners.add(listener)
-            Log.d(TAG, "Connection change listener added (total: ${connectionChangeListeners.size})")
+            Log.d(TAG, "BLE connections listener added (total: ${connectionChangeListeners.size})")
         }
     }
 
     /**
-     * Unregister a connection state listener.
-     * Thread-safe: synchronized on listenerLock.
+     * Unregister a connections listener. Thread-safe: synchronized on listenerLock.
      */
-    fun removeConnectionChangeListener(listener: ConnectionChangeListener) {
+    override fun removeBleConnectionsListener(listener: network.columba.app.rns.api.BleConnectionsListener) {
         synchronized(listenerLock) {
             connectionChangeListeners.remove(listener)
-            Log.d(TAG, "Connection change listener removed (total: ${connectionChangeListeners.size})")
+            Log.d(TAG, "BLE connections listener removed (total: ${connectionChangeListeners.size})")
         }
     }
 
@@ -266,7 +268,7 @@ class KotlinBLEBridge(
         synchronized(listenerLock) {
             connectionChangeListeners.forEach { listener ->
                 try {
-                    listener.onConnectionsChanged(json)
+                    listener.onBleConnectionsChanged(json)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error notifying connection change listener", e)
                 }

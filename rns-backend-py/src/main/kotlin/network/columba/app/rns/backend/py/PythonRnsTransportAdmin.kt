@@ -59,7 +59,7 @@ class PythonRnsTransportAdmin(
     // polled). They are owned here so consumers can subscribe unconditionally;
     // wiring them to real upstream events is on-device follow-up.
     private val _interfaceStatusChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
-    private val _bleConnectionsFlow = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val _bleConnectionsFlow = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 16)
     private val _debugInfoFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _interfaceStatusFlow = MutableSharedFlow<String>(extraBufferCapacity = 16)
 
@@ -67,6 +67,35 @@ class PythonRnsTransportAdmin(
     override val bleConnectionsFlow: SharedFlow<String> = _bleConnectionsFlow.asSharedFlow()
     override val debugInfoFlow: SharedFlow<String> = _debugInfoFlow.asSharedFlow()
     override val interfaceStatusFlow: SharedFlow<String> = _interfaceStatusFlow.asSharedFlow()
+
+    // ===== BLE peer connection details (Network Status "BLE Connections" card) =====
+    // The host wires the live KotlinBLEBridge in via attachBleSource() right after
+    // creating it (HostBackendModule), as the rns-api BleConnectionSource seam — this
+    // module can't reference KotlinBLEBridge directly (reverse dep). We observe it
+    // (push -> _bleConnectionsFlow) and query it (pull -> getBleConnectionDetails).
+    // replay=1 means a UI subscriber that opens Network Status *after* a peer
+    // connected still sees the current peers.
+    @Volatile private var bleSource: network.columba.app.rns.api.BleConnectionSource? = null
+    private val bleListener =
+        network.columba.app.rns.api.BleConnectionsListener { json -> _bleConnectionsFlow.tryEmit(json) }
+
+    /**
+     * Attach the host-side BLE bridge as the live connection source. Idempotent:
+     * re-attaching swaps the source and re-seeds the flow with current peers.
+     *
+     * `@Synchronized` so the remove-old/swap/add-new sequence is atomic — a
+     * concurrent or re-entrant call must not leave [bleListener] registered on
+     * two sources (which would double-emit on [_bleConnectionsFlow]).
+     */
+    @Synchronized
+    fun attachBleSource(source: network.columba.app.rns.api.BleConnectionSource) {
+        bleSource?.removeBleConnectionsListener(bleListener)
+        bleSource = source
+        source.addBleConnectionsListener(bleListener)
+        // Seed current peers so the replay-1 flow + first pull reflect connections
+        // established before this wiring (or before the UI subscribed).
+        _bleConnectionsFlow.tryEmit(source.currentBleConnectionsJson())
+    }
 
     /** Reaction frames are sourced from the shared event bridge (LXMF Field 16). */
     override val reactionReceivedFlow: SharedFlow<String> = events.reactionReceived
@@ -303,11 +332,10 @@ class PythonRnsTransportAdmin(
 
     // ==================== BLE ====================
 
-    override fun getBleConnectionDetails(): String {
-        // No python-side BLE peer tracking in this cut — return the contract's
-        // documented empty-array value.
-        return EMPTY_JSON_ARRAY
-    }
+    override fun getBleConnectionDetails(): String =
+        // Pull live details from the host-side bridge (wired via attachBleSource).
+        // Falls back to the contract's empty-array value before wiring / on no peers.
+        bleSource?.currentBleConnectionsJson() ?: EMPTY_JSON_ARRAY
 
     // ==================== Internal helpers ====================
 

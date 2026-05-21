@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.backend.py.ChaquopyRnsBackend
+import network.columba.app.rns.backend.py.PythonRnsTransportAdmin
 import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
 import network.columba.app.rns.host.di.LocalBackend
 import network.columba.app.rns.host.persistence.CallsFromContactsGate
@@ -66,7 +67,15 @@ object HostBackendModule {
             // Reticulum() is constructed. KotlinBLEBridge.getInstance is
             // process-singleton and idempotent — same instance the rest of
             // the host uses (BleCoordinator, BleStatusRepository).
-            it.runtime.bleBridge = KotlinBLEBridge.getInstance(context)
+            val bleBridge = KotlinBLEBridge.getInstance(context)
+            it.runtime.bleBridge = bleBridge
+
+            // Surface live BLE peer connections to the Network Status "BLE
+            // Connections" card. KotlinBLEBridge implements the rns-api
+            // BleConnectionSource seam; the python transport-admin observes +
+            // pulls it and republishes over the AIDL bleConnectionsFlow /
+            // getBleConnectionDetails() surface the UI repository consumes.
+            (it.transportAdmin as? PythonRnsTransportAdmin)?.attachBleSource(bleBridge)
 
             // Round 2 RNode: ColumbaRNodeInterface bridges to two singletons.
             //   • KotlinRNodeBridge — Bluetooth Classic (SPP) + BLE GATT

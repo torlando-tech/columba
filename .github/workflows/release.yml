@@ -34,6 +34,12 @@ jobs:
           VERSION=${TAG_NAME#v}
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Base URL for release asset downloads. GitHub serves every asset at a
+          # predictable path, so we can link directly to APKs from the body
+          # instead of making people expand the Assets accordion. Note: these
+          # URLs 404 while the release is a draft (the tag isn't public yet) and
+          # start resolving the moment it's published.
+          echo "dl=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION from tag: $TAG_NAME"
 
       - name: Build Release APK
@@ -292,21 +298,21 @@ jobs:
             #### Python backend (`official-rns-py`)
             | APK | Architecture | Devices |
             |-----|-------------|---------|
-            | `columba-${{ steps.version.outputs.version }}-official-rns-py-armeabi-v7a.apk` | armeabi-v7a | Older 32-bit ARM phones & tablets |
-            | `columba-${{ steps.version.outputs.version }}-official-rns-py-arm64-v8a.apk` | arm64-v8a | Most modern Android phones & tablets |
-            | `columba-${{ steps.version.outputs.version }}-official-rns-py-x86_64.apk` | x86_64 | Chromebooks, emulators, some tablets |
-            | `columba-${{ steps.version.outputs.version }}-official-rns-py-universal.apk` | All | Universal fallback (larger download) |
+            | [`columba-${{ steps.version.outputs.version }}-official-rns-py-armeabi-v7a.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-official-rns-py-armeabi-v7a.apk) | armeabi-v7a | Older 32-bit ARM phones & tablets |
+            | [`columba-${{ steps.version.outputs.version }}-official-rns-py-arm64-v8a.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-official-rns-py-arm64-v8a.apk) | arm64-v8a | Most modern Android phones & tablets |
+            | [`columba-${{ steps.version.outputs.version }}-official-rns-py-x86_64.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-official-rns-py-x86_64.apk) | x86_64 | Chromebooks, emulators, some tablets |
+            | [`columba-${{ steps.version.outputs.version }}-official-rns-py-universal.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-official-rns-py-universal.apk) | All | Universal fallback (larger download) |
 
             #### Kotlin backend (`EXPERIMENTAL-reticulum-kt`)
             | APK | Architecture | Devices |
             |-----|-------------|---------|
-            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-armeabi-v7a.apk` | armeabi-v7a | Older 32-bit ARM phones & tablets |
-            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-arm64-v8a.apk` | arm64-v8a | Most modern Android phones & tablets |
-            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-x86_64.apk` | x86_64 | Chromebooks, emulators, some tablets |
-            | `columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-universal.apk` | All | Universal fallback (larger download) |
+            | [`columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-armeabi-v7a.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-armeabi-v7a.apk) | armeabi-v7a | Older 32-bit ARM phones & tablets |
+            | [`columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-arm64-v8a.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-arm64-v8a.apk) | arm64-v8a | Most modern Android phones & tablets |
+            | [`columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-x86_64.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-x86_64.apk) | x86_64 | Chromebooks, emulators, some tablets |
+            | [`columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-universal.apk`](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-universal.apk) | All | Universal fallback (larger download) |
 
             **Telemetry variants:**
-            Each APK above also has a `-no-sentry` variant without crash reporting for maximum privacy. Sentry collects stack traces when Columba encounters errors
+            Each APK above also has a `-no-sentry` variant without crash reporting for maximum privacy — append `-no-sentry` to any download link above (e.g. the most common builds: [Python arm64-v8a no-sentry](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-official-rns-py-arm64-v8a-no-sentry.apk) · [Kotlin arm64-v8a no-sentry](${{ steps.version.outputs.dl }}/columba-${{ steps.version.outputs.version }}-EXPERIMENTAL-reticulum-kt-arm64-v8a-no-sentry.apk)). Sentry collects stack traces when Columba encounters errors
             and provides helpful information to the developer to improve Columba, but is hosted at sentry.io, and is thus not the maximum privacy option.
 
             > **Not sure which to pick?** Most Android phones use **arm64-v8a**. If unsure, use the **universal** APK.

@@ -55,6 +55,25 @@
 # removed: that package no longer holds any shipped bridge (only test classes),
 # so the glob protected nothing.
 
+# ===== Chaquopy (Python runtime) =====
+# Restored from release/v0.10.x: the com.lxmf.messenger -> network.columba.app
+# rename dropped these rules, which regressed minified release builds — the
+# Python backend fails at interpreter startup with an asset AssertionError
+# (dumping assets/chaquopy/build.json). The -keepattributes below are the
+# critical part: Chaquopy's reflection / PyObject.toJava() Java<->Python type
+# bridging needs generic-signature and inner-class metadata that R8 strips by
+# default, and that no -keep class rule restores.
+-keep class com.chaquo.python.** { *; }
+-dontwarn com.chaquo.python.**
+-keepattributes Signature
+-keepattributes Exceptions
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
+# Keep classes used with PyObject.toJava()
+-keepclassmembers class * {
+    *** toJava(...);
+}
+
 # ===== MessagePack Serialization =====
 # MessagePack uses reflection to load buffer implementations
 # Without these rules, LXMF message deserialization crashes

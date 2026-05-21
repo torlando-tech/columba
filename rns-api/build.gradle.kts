@@ -58,7 +58,17 @@ dependencies {
     // serialization concern lives with the type rather than with the storage
     // layer (:data) so consumers don't need a separate dep just to round-trip
     // an interface config.
-    implementation("org.json:json:20240303")
+    //
+    // compileOnly, NOT implementation: org.json ships in the Android framework
+    // (bootclasspath), so it's present at runtime for free. Bundling the
+    // reference `org.json:json` artifact into the APK creates a DUPLICATE
+    // org.json on the classpath whose method signatures differ from the
+    // framework's. R8 (optimize/obfuscate) then binds call sites against the
+    // bundled copy, but the framework copy wins at runtime — producing
+    // NoSuchMethodError (e.g. JSONObject.optInt) and breaking Chaquopy's
+    // build.json walk (isinstance mismatch), which crashed the minified
+    // pythonBackend release. Keep it off the runtime classpath.
+    compileOnly("org.json:json:20240303")
 
     // msgpack-core powers `util.AppDataParser` — the announce app_data
     // parser is consumed by every backend (kotlin native + python flavor)
@@ -70,6 +80,10 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    // org.json is compileOnly above (Android provides it at runtime), so the
+    // real impl must be on the JVM unit-test classpath — otherwise toJsonString()
+    // hits the android.jar "Stub!" org.json. Matches the other modules' test deps.
+    testImplementation("org.json:json:20240303")
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)
 }

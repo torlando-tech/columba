@@ -46,14 +46,19 @@
     volatile <fields>;
 }
 
-# ===== Python <-> Kotlin bridge classes =====
-# The Chaquopy-called bridges (KotlinRNodeBridge, KotlinBLEBridge,
-# KotlinUSBBridge in :rns-host, PythonEventBridge in :rns-backend-py) are now
-# kept via @Keep (androidx.annotation.Keep) on the classes themselves — see
-# PythonKotlinBridgeR8Test for the CI gate. The old
-# `-keep class network.columba.app.reticulum.protocol.** { *; }` rule was
-# removed: that package no longer holds any shipped bridge (only test classes),
-# so the glob protected nothing.
+# ===== Reflectively-invoked bridge classes (Chaquopy / JNI-by-name) =====
+# Classes invoked by name across a boundary R8 can't see (Python via Chaquopy,
+# JNI) carry @network.columba.app.rns.api.annotation.ReflectivelyKept. Keeping
+# them at class level preserves all current AND future members, so adding a
+# method to a bridge needs no rule change. The ReflectivelyKeptRequired detekt
+# rule enforces the annotation on Chaquopy bridge shapes (fun interfaces in
+# :rns-backend-py + Kotlin*Bridge classes) so a new bridge can't merge
+# unprotected.
+#
+# (Replaces the previous per-class androidx.annotation.Keep convention; the old
+# `-keep class network.columba.app.reticulum.protocol.** { *; }` glob was
+# already removed — it protected only test classes after a package rename.)
+-keep @network.columba.app.rns.api.annotation.ReflectivelyKept class * { *; }
 
 # ===== Chaquopy (Python runtime) =====
 # Restored from release/v0.10.x: the com.lxmf.messenger -> network.columba.app

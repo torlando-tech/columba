@@ -1,7 +1,7 @@
 package network.columba.app.rns.host.ble.bridge
 
-import androidx.annotation.Keep
 import com.chaquo.python.PyObject
+import network.columba.app.rns.api.annotation.ReflectivelyKept
 import network.columba.app.rns.api.util.toHex
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -64,7 +64,7 @@ import java.util.concurrent.ConcurrentHashMap
 // baselined; adding the BleConnectionSource supertype changed detekt's class
 // signature so the baseline ID stopped matching — suppress inline instead.
 @Suppress("InjectDispatcher", "TooManyFunctions") // DI-free bridge; dispatchers used for BLE ops
-@Keep // Python (BLE driver / event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
+@ReflectivelyKept // Python (BLE driver / event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinBLEBridge(
     private val context: Context,
     private val bluetoothManager: BluetoothManager,

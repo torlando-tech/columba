@@ -2,6 +2,7 @@ package network.columba.app.rns.backend.py
 
 import android.content.Context
 import android.util.Log
+import network.columba.app.rns.api.annotation.ReflectivelyKept
 import network.columba.app.rns.api.util.StampGenerator
 import network.columba.app.rns.api.util.toHex
 import com.chaquo.python.PyObject
@@ -134,6 +135,22 @@ class PythonRnsRuntime(
      */
     @Volatile
     var usbBridge: Any? = null
+
+    /**
+     * Optional hook fired right after the LXMF delivery destination is
+     * (re-)announced via [PythonRnsCore.triggerAutoAnnounce].
+     *
+     * Set by `:rns-host`'s `PythonCallManager` so the `lxst.telephony`
+     * destination is re-announced on the same cadence as `lxmf.delivery`
+     * (periodic auto-announce + network-change announce). Without this the
+     * telephony destination is only announced once at backend READY, so its
+     * path goes stale and inbound callers can't reach it. Typed as a plain
+     * lambda + held here (a shared object both `PythonRnsCore` and
+     * `PythonCallManager` already reference) to avoid a Hilt construction
+     * cycle between `ChaquopyRnsBackend` → `PythonRnsCore` → `PythonCallManager`.
+     */
+    @Volatile
+    var onLxmfReannounce: (() -> Unit)? = null
 
     private val running = AtomicBoolean(false)
 
@@ -472,6 +489,7 @@ class PythonRnsRuntime(
  * builtin so they expose the buffer protocol that LXStamper then
  * concatenates with the workblock.
  */
+@ReflectivelyKept // event_bridge.py calls generate(workblock, cost) by name via Chaquopy — R8 must not rename/strip it
 internal class StampGeneratorCallback(
     private val generator: StampGenerator,
 ) {

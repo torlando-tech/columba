@@ -150,6 +150,14 @@ class PythonCallManager(
         registerTelephonyDestination(localIdentity)
         announce()
 
+        // Re-announce lxst.telephony whenever lxmf.delivery is (re-)announced
+        // (periodic auto-announce + network-change announce, both routed
+        // through PythonRnsCore.triggerAutoAnnounce). A one-time setup()
+        // announce alone lets the telephony path go stale, so inbound callers
+        // silently fail to reach us. announce() no-ops when the destination is
+        // deregistered (incoming disabled), so the hook is safe to leave set.
+        runtime.onLxmfReannounce = { announce() }
+
         // Cold-start application of the persisted master toggle. If the
         // user turned voice calls OFF before the last :reticulum tear-down
         // (or before this fresh-start), apply that now — we register +
@@ -205,7 +213,15 @@ class PythonCallManager(
     /** Public so callers can couple lxst.telephony announces to LXMF reannounces. */
     fun announce(appData: ByteArray? = null) {
         val dest = telephonyDestination ?: run {
-            Log.w(TAG, "Cannot announce lxst.telephony: destination not registered")
+            // No destination is the expected, intended state when incoming
+            // calls are disabled (the master toggle deregistered it) — stay
+            // silent so the periodic LXMF-coupled re-announce doesn't spam a
+            // warning each interval. Warn only if it's missing unexpectedly.
+            if (incomingDisabled) {
+                Log.d(TAG, "Skipping lxst.telephony announce: incoming calls disabled")
+            } else {
+                Log.w(TAG, "Cannot announce lxst.telephony: destination not registered")
+            }
             return
         }
         try {
@@ -411,6 +427,7 @@ class PythonCallManager(
     /** Tear down the telephony stack. Mirrors `NativeCallManager.shutdown()`. */
     fun shutdown() {
         Log.i(TAG, "Shutting down PythonCallManager")
+        runtime.onLxmfReannounce = null
         if (::telephone.isInitialized && telephone.isCallActive()) {
             runCatching { telephone.hangup() }
                 .onFailure { Log.w(TAG, "Ignored error hanging up on shutdown", it) }

@@ -1,11 +1,11 @@
 package network.columba.app.rns.backend.py
 
-import androidx.annotation.Keep
 import android.util.Log
 import com.chaquo.python.PyObject
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import network.columba.app.rns.api.annotation.ReflectivelyKept
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.IconAppearance
@@ -43,7 +43,7 @@ import org.json.JSONObject
  * threads and must return fast. The buffer capacities mirror
  * `NativeRnsBackendImpl`.
  */
-@Keep // Python (event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
+@ReflectivelyKept // Python (event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class PythonEventBridge {
     private companion object {
         const val TAG = "PythonEventBridge"

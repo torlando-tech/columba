@@ -274,6 +274,10 @@ class PythonRnsCore(
             val router = runtime.lxmRouter
                 ?: throw RnsException(RnsError.BackendNotReady)
             router.callAttr("announce", runtime.localDestination?.get("hash"))
+            // Keep lxst.telephony announced on the same cadence as
+            // lxmf.delivery so inbound callers can resolve a fresh path
+            // (PythonCallManager installs this hook in setup()).
+            runtime.onLxmfReannounce?.invoke()
             Unit
         }
 

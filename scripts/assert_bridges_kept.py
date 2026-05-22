@@ -5,9 +5,10 @@ Chaquopy resolves the bridge classes/methods by name from Python, so R8
 obfuscation silently breaks the pythonBackend release at runtime. This reads
 R8's own mapping.txt (the authoritative rename table) and fails the build if any
 bridge class was renamed/stripped, any host-bridge method Python calls was
-renamed, or the PyEventCallback SAM (`onEvent`) was renamed.
+renamed, or a callback SAM (`onEvent`) was renamed.
 
-The defense is `@Keep` on each class; this is the regression gate that proves it.
+The defense is `@ReflectivelyKept` on each class (kept via a single proguard
+rule); this is the regression gate that proves R8 honored it.
 
 Usage: assert_bridges_kept.py <path-to-mapping.txt>
 Exit: 0 = all kept, 1 = something obfuscated, 2 = usage/IO error.
@@ -16,13 +17,15 @@ import re
 import sys
 from pathlib import Path
 
-# Every bridge class Chaquopy touches must keep its name (proves @Keep fired).
+# Every bridge class Chaquopy touches must keep its name (proves @ReflectivelyKept fired).
 BRIDGE_CLASSES = [
     "network.columba.app.rns.host.rnode.KotlinRNodeBridge",
     "network.columba.app.rns.host.ble.bridge.KotlinBLEBridge",
     "network.columba.app.rns.host.usb.KotlinUSBBridge",
     "network.columba.app.rns.backend.py.PythonEventBridge",
     "network.columba.app.rns.backend.py.PyEventCallback",
+    "network.columba.app.rns.backend.py.PyTwoArgCallback",
+    "network.columba.app.rns.backend.py.StampGeneratorCallback",
 ]
 
 # Method names Python calls on each host bridge (from the call sites in
@@ -45,11 +48,25 @@ BRIDGE_METHODS = {
     "network.columba.app.rns.host.usb.KotlinUSBBridge": {
         "connect", "disconnect", "findDeviceByVidPid", "isConnected", "notifyBluetoothPin", "read",
     },
+    "network.columba.app.rns.backend.py.StampGeneratorCallback": {
+        # event_bridge.install_external_stamp_generator calls generate(workblock, cost) by name.
+        "generate",
+    },
 }
 
-# PythonEventBridge's handle* methods are called Kotlin-side (by the SAMs), not by
-# Python — Python calls `callback.onEvent(payload)`. So the SAM is what must survive.
-SAM_RE = re.compile(r"onEvent\(com\.chaquo\.python\.PyObject\).* -> onEvent$")
+# Chaquopy callback SAMs Python invokes by name:
+#   PyEventCallback.onEvent(PyObject)             — 1 arg (register_callbacks sinks)
+#   PyTwoArgCallback.onEvent(PyObject, PyObject)  — 2 args (set_remote_identified_callback)
+# Abstract interface methods get no mapping line, so we match a surviving
+# *implementation* mapped to `onEvent` that carries that many PyObject params.
+# Supplementary to the class-level checks above (which, with the
+# `-keep @ReflectivelyKept class * { *; }` rule, already keep these members).
+SAM_PATTERNS = {
+    "PyEventCallback.onEvent(PyObject)":
+        re.compile(r"com\.chaquo\.python\.PyObject\).* -> onEvent$"),
+    "PyTwoArgCallback.onEvent(PyObject, PyObject)":
+        re.compile(r"com\.chaquo\.python\.PyObject,com\.chaquo\.python\.PyObject\).* -> onEvent$"),
+}
 
 
 def parse_blocks(lines):
@@ -97,7 +114,7 @@ def main():
         if b is None:
             failures.append(f"class stripped entirely (not in mapping): {cls}")
         elif b["mapped"] != cls:
-            failures.append(f"class RENAMED by R8: {cls} -> {b['mapped']}  (add @Keep)")
+            failures.append(f"class RENAMED by R8: {cls} -> {b['mapped']}  (add @ReflectivelyKept)")
 
     for cls, expected in BRIDGE_METHODS.items():
         b = blocks.get(cls)
@@ -105,13 +122,14 @@ def main():
             continue  # already reported as stripped
         missing = expected - kept_method_names(b["members"])
         if missing:
-            failures.append(f"methods renamed/stripped on {cls}: {sorted(missing)}  (ensure @Keep)")
+            failures.append(f"methods renamed/stripped on {cls}: {sorted(missing)}  (ensure @ReflectivelyKept)")
 
-    if not any(SAM_RE.search(ln) for ln in lines):
-        failures.append(
-            "PyEventCallback SAM onEvent(PyObject) was renamed/stripped  "
-            "(add @Keep to PyEventCallback — event_bridge.py calls it by name)",
-        )
+    for label, sam_re in SAM_PATTERNS.items():
+        if not any(sam_re.search(ln) for ln in lines):
+            failures.append(
+                f"{label} SAM was renamed/stripped  "
+                "(ensure @ReflectivelyKept on the SAM — Python calls it by name)",
+            )
 
     if failures:
         print("✗ R8 bridge keep-check FAILED:")

@@ -2,7 +2,7 @@ package network.columba.app.rns.backend.py
 
 import android.content.Context
 import android.util.Log
-import androidx.annotation.Keep
+import network.columba.app.rns.api.annotation.ReflectivelyKept
 import network.columba.app.rns.api.util.StampGenerator
 import network.columba.app.rns.api.util.toHex
 import com.chaquo.python.PyObject
@@ -489,7 +489,7 @@ class PythonRnsRuntime(
  * builtin so they expose the buffer protocol that LXStamper then
  * concatenates with the workblock.
  */
-@Keep // event_bridge.py calls `callback.generate(workblock, cost)` by name via Chaquopy — R8 must not rename/strip it
+@ReflectivelyKept // event_bridge.py calls generate(workblock, cost) by name via Chaquopy — R8 must not rename/strip it
 internal class StampGeneratorCallback(
     private val generator: StampGenerator,
 ) {

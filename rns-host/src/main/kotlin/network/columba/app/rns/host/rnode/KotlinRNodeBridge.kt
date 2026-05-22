@@ -1,7 +1,7 @@
 package network.columba.app.rns.host.rnode
 
-import androidx.annotation.Keep
 import android.annotation.SuppressLint
+import network.columba.app.rns.api.annotation.ReflectivelyKept
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -101,7 +101,7 @@ interface RNodeOnlineStatusListener {
  */
 @SuppressLint("MissingPermission")
 @Suppress("LargeClass", "InjectDispatcher") // Bridge class doesn't use DI - dispatcher used for BLE/serial I/O
-@Keep // Python (rnode_interface.py) calls this via Chaquopy reflection — R8 must not strip/rename it
+@ReflectivelyKept // Python (rnode_interface.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class KotlinRNodeBridge(
     private val context: Context,
 ) {

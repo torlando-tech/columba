@@ -18,6 +18,7 @@ class ColumbaRuleSetProvider : RuleSetProvider {
                 DiscardedConcurrencyReturnRule(config),
                 NoCallCoordinatorGetInstanceOutsideHostRule(config),
                 NoRnsFacadeInPythonBackend(config),
+                ReflectivelyKeptRequiredRule(config),
                 NoRelaxedMocksRule(config),
                 NoVerifyOnlyTestsRule(config),
                 StateFlowPollingLoopRule(config),

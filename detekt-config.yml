@@ -132,6 +132,8 @@ columba:
     active: true
   NoVerifyOnlyTests:
     active: true
+  ReflectivelyKeptRequired:
+    active: true
   StateFlowPollingLoop:
     active: true
 

@@ -1,7 +1,7 @@
 package network.columba.app.rns.backend.py
 
-import androidx.annotation.Keep
 import com.chaquo.python.PyObject
+import network.columba.app.rns.api.annotation.ReflectivelyKept
 
 /**
  * Single-method event sink that `event_bridge.py` invokes for each flattened
@@ -16,7 +16,7 @@ import com.chaquo.python.PyObject
  * into the `:rns-api` model types and publishes onto the same
  * `MutableSharedFlow`s the kotlin backend exposes.
  */
-@Keep // event_bridge.py calls `callback.onEvent(payload)` by name via Chaquopy — R8 must not rename the SAM
+@ReflectivelyKept // event_bridge.py calls onEvent(payload) by name via Chaquopy
 fun interface PyEventCallback {
     /**
      * @param payload a Python `dict` (str -> primitive) built by

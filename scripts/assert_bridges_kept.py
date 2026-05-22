@@ -63,7 +63,10 @@ BRIDGE_METHODS = {
 # `-keep @ReflectivelyKept class * { *; }` rule, already keep these members).
 SAM_PATTERNS = {
     "PyEventCallback.onEvent(PyObject)":
-        re.compile(r"com\.chaquo\.python\.PyObject\).* -> onEvent$"),
+        # Anchor the open paren so a single-PyObject signature can't be matched by
+        # a two-PyObject line (which also ends `…PyObject) -> onEvent`) — otherwise
+        # a stripped PyEventCallback could pass on a surviving PyTwoArgCallback line.
+        re.compile(r"\(com\.chaquo\.python\.PyObject\).* -> onEvent$"),
     "PyTwoArgCallback.onEvent(PyObject, PyObject)":
         re.compile(r"com\.chaquo\.python\.PyObject,com\.chaquo\.python\.PyObject\).* -> onEvent$"),
 }

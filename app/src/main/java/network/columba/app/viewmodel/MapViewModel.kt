@@ -778,12 +778,19 @@ class MapViewModel
                         val withId =
                             withLocation.map { iface ->
                                 val id = "${iface.name}\u0000${iface.type}\u0000${iface.reachableOn ?: ""}"
-                                interfaceFirstSeenDao.insertIfNotExists(
-                                    network.columba.app.data.db.entity
-                                        .InterfaceFirstSeenEntity(id, now),
-                                )
                                 id to iface
                             }
+
+                        // Batch-insert first-seen rows in a single Room transaction
+                        // to avoid N+1 INSERT OR IGNORE statements per interface.
+                        if (withId.isNotEmpty()) {
+                            interfaceFirstSeenDao.insertAllIfNotExists(
+                                withId.map { (id, _) ->
+                                    network.columba.app.data.db.entity
+                                        .InterfaceFirstSeenEntity(id, now)
+                                },
+                            )
+                        }
 
                         // Batch-fetch first-seen timestamps
                         val ids = withId.map { it.first }

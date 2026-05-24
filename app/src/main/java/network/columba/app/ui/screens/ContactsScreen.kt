@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -484,7 +485,7 @@ fun ContactsScreen(
                                         }
                                     }
                                 }
-                                item(key = "relay_${relay.destinationHash}") {
+                                item(key = "relay_${relay.destinationHash.lowercase()}") {
                                     ContactListItemWithMenu(
                                         contact = relay,
                                         onClick = {
@@ -523,10 +524,10 @@ fun ContactsScreen(
                                         color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
                                     )
-                                }
+                                itemsIndexed(
                                 items(
-                                    contactsState.groupedContacts.pinned,
-                                    key = { contact -> "pinned_${contact.destinationHash.lowercase()}" },
+                                    key = { index, contact -> "pinned_${index}_${contact.destinationHash.lowercase()}" },
+                                ) { _, contact ->
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
@@ -575,10 +576,10 @@ fun ContactsScreen(
                                             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
                                         )
                                     }
-                                }
+                                itemsIndexed(
                                 items(
-                                    contactsState.groupedContacts.all,
-                                    key = { contact -> "all_${contact.destinationHash.lowercase()}" },
+                                    key = { index, contact -> "all_${index}_${contact.destinationHash.lowercase()}" },
+                                ) { _, contact ->
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,

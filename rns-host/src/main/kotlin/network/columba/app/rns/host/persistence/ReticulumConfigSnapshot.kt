@@ -127,13 +127,18 @@ object ReticulumConfigSnapshot {
                 return null
             }
             val identityHashHex = parcel.readString().orEmpty().takeIf { it.isNotEmpty() }
-            parcel.readParcelable(ReticulumConfig::class.java.classLoader, ReticulumConfig::class.java)
-                ?.let { config ->
-                    Snapshot(
-                        configWithoutKey = config,
-                        identityHashHex = identityHashHex,
-                    )
-                }
+            // readParcelable(ClassLoader) works across the whole minSdk-24 fleet. The typed
+            // (ClassLoader, Class) overload is API 33+ and throws NoSuchMethodError below it —
+            // and that's an Error, NOT an Exception, so the catch below would NOT save us; it
+            // crashes :reticulum on FGS start. (Mirrors ReticulumConfig.kt / LinkEvent.kt.)
+            @Suppress("DEPRECATION")
+            val config = parcel.readParcelable<ReticulumConfig>(ReticulumConfig::class.java.classLoader)
+            config?.let {
+                Snapshot(
+                    configWithoutKey = it,
+                    identityHashHex = identityHashHex,
+                )
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to unmarshal snapshot: ${e.message}", e)
             null
@@ -147,9 +152,3 @@ object ReticulumConfigSnapshot {
         snapshotFile(context).delete()
     }
 }
-
-@Suppress("DEPRECATION") // readParcelable typed-classloader variant; non-deprecated form added in API 33
-private fun <T : android.os.Parcelable> Parcel.readParcelable(
-    classLoader: ClassLoader?,
-    @Suppress("UNUSED_PARAMETER") clazz: Class<T>,
-): T? = readParcelable(classLoader)

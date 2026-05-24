@@ -27,9 +27,9 @@ jobs:
         uses: gradle/actions/wrapper-validation@v6
 
   lint:
-    name: Code Quality (ktlint + detekt + CPD)
+    name: Code Quality (ktlint + detekt + CPD + Android Lint)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -46,8 +46,16 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run all lint checks
-        run: ./gradlew ktlintCheck detekt cpdCheck --continue
+      - name: Run all lint checks (ktlint, detekt, CPD, Android Lint)
+        # Android `lint` enforces only the checks in `checkOnly` (round 1: NewApi);
+        # see the Android Lint block in the root build.gradle.kts. No baseline.
+        # `lint` covers each module's DEFAULT variant; the two extra variant tasks
+        # cover the flavor source the default misses (app/src/noSentry,
+        # rns-host/src/pythonBackend) so NewApi is enforced across all variants.
+        run: >-
+          ./gradlew ktlintCheck detekt cpdCheck
+          lint :app:lintNoSentryKotlinBackendDebug :rns-host:lintPythonBackendDebug
+          --continue
 
       - name: Check for forbidden test suppressions
         run: |
@@ -99,6 +107,7 @@ jobs:
           path: |
             **/build/reports/ktlint/
             **/build/reports/detekt/
+            **/build/reports/lint-results-*.*
             build/reports/cpd/
           retention-days: 7
 

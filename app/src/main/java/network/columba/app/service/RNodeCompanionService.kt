@@ -44,6 +44,9 @@ class RNodeCompanionService : CompanionDeviceService() {
      * Android 13+ (API 33) — called when an associated RNode device appears (connects
      * or comes into BLE range).
      */
+    // onDeviceAppeared(AssociationInfo) is the API 33 callback; the system uses the
+    // deprecated onDeviceAppeared(String) on 31-32, so this only runs on 33+.
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @SuppressLint("MissingPermission")
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
         val deviceName = associationInfo.displayName ?: "Unknown"

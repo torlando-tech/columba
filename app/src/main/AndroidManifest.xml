@@ -169,7 +169,8 @@
             android:name=".service.RNodeCompanionService"
             android:enabled="@bool/enable_companion_service"
             android:exported="true"
-            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE"
+            tools:targetApi="31">
             <intent-filter>
                 <action android:name="android.companion.CompanionDeviceService" />
             </intent-filter>

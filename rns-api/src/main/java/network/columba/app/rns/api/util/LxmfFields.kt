@@ -49,18 +49,42 @@ object LxmfFields {
     const val FIELD_COMMANDS = 0x09
 
     /**
-     * Tap-back reaction field — `fields[0x10] = {reaction_to, emoji, sender}`
-     * per-event wire shape, shared with MeshChatX
-     * (`src/backend/lxmf_utils.py:11 LXMF_APP_EXTENSIONS_FIELD = 16`).
-     * `reaction_to` and `sender` are hex strings (no canonical case);
-     * `emoji` is Unicode. One reaction per LXMessage on the wire;
-     * receiver aggregates per-target-message locally for UI rendering.
+     * Canonical tap-back reaction field — `fields[0x40] = {0x00: bytes, 0x01: bytes}`
+     * per-event wire shape, standardised upstream in LXMF.py (commit
+     * `764758d`, "to be finalized in 1.0.0"):
+     *   - [REACTION_TO] (`0x00`) = raw bytes of the target `LXMessage.hash`.
+     *   - [REACTION_CONTENT] (`0x01`) = UTF-8 bytes of the reaction content
+     *     (the emoji). The sender is NOT carried on the wire — it is derived
+     *     from the inbound LXMF message's source hash on receive.
      *
-     * Upstream LXMF doesn't allocate this byte yet; both Columba and
-     * MeshChatX work in the unallocated range. Spec discussion:
-     * https://github.com/thatSFguy/reticulum-specifications/issues/8
+     * One reaction per LXMessage on the wire; the receiver aggregates
+     * per-target-message locally (the flat `reactionsJson` column) for UI
+     * rendering. Outbound writes this shape only; inbound parsing falls back
+     * to the legacy [FIELD_REACTION_LEGACY] for un-upgraded Columba peers —
+     * see `ReactionWireCodec`.
      */
-    const val FIELD_REACTION = 0x10
+    const val FIELD_REACTION = 0x40
+
+    /** [FIELD_REACTION] dict key — raw bytes of the target `LXMessage.hash`. */
+    const val REACTION_TO = 0x00
+
+    /** [FIELD_REACTION] dict key — UTF-8 bytes of the reaction content (emoji). */
+    const val REACTION_CONTENT = 0x01
+
+    /**
+     * Legacy tap-back reaction field — `fields[0x10] = {reaction_to, emoji, sender}`
+     * string-keyed dict (hex-string target + sender, Unicode emoji), shared
+     * historically with MeshChatX
+     * (`src/backend/lxmf_utils.py:11 LXMF_APP_EXTENSIONS_FIELD = 16`).
+     *
+     * **Parse-only fallback.** Outbound no longer writes this — it was
+     * superseded by the canonical [FIELD_REACTION] (`0x40`) once upstream
+     * LXMF standardised the field. `0x10` also now sits inside upstream's
+     * reserved `0x00`–`0x80` range, so squatting it risks a future
+     * collision. Kept on the inbound path so reactions from un-upgraded
+     * Columba peers still resolve — see `ReactionWireCodec`.
+     */
+    const val FIELD_REACTION_LEGACY = 0x10
 
     /**
      * Reply-target message hash — `fields[0x30] = ByteArray(32)` raw

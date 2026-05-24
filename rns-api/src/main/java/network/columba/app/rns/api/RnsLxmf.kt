@@ -13,8 +13,8 @@ import network.columba.app.rns.api.model.ReceivedMessage
 
 /**
  * LXMF messaging surface: send/receive messages, observe delivery state,
- * propagation node sync, reactions (LXMF Field 16), and message size
- * limits.
+ * propagation node sync, reactions (LXMF `FIELD_REACTION` 0x40), and
+ * message size limits.
  *
  * The LXMF identity/destination accessors live here (rather than in
  * [RnsCore]) because the binding LXMF identity is owned by the LXMF
@@ -66,14 +66,19 @@ interface RnsLxmf {
     ): Result<MessageReceipt>
 
     /**
-     * Send an emoji reaction to a message via LXMF Field 16.
+     * Send an emoji reaction to a message via the canonical LXMF
+     * `FIELD_REACTION` (0x40).
      *
-     * The reaction is sent as a lightweight LXMF message with Field 16 containing
-     * the reaction data: {"reaction_to": "...", "emoji": "...", "sender": "..."}.
+     * The reaction is sent as a lightweight, otherwise-empty LXMF message
+     * carrying `fields[0x40] = {0x00: <target hash bytes>, 0x01: <emoji UTF-8
+     * bytes>}` (upstream `LXMF.py` standard). The reacting user is derived
+     * from the message source on the receiving end, so it is not on the wire.
+     * Inbound parsing falls back to the legacy `0x10` dict for un-upgraded
+     * peers — see `ReactionWireCodec`.
      *
      * @param destinationHash Destination hash bytes (16 bytes) - the recipient
      * @param targetMessageId The message hash/ID being reacted to
-     * @param emoji The emoji reaction (e.g., "thumbs-up", "heart", etc.)
+     * @param emoji The reaction content (typically one Unicode emoji)
      * @param sourceIdentity Identity of the sender
      * @return Result containing MessageReceipt or failure
      */

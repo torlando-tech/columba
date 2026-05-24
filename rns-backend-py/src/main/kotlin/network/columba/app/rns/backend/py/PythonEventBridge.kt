@@ -18,8 +18,10 @@ import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.util.AppDataParser
 import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.TelemeterCodec
 import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -86,7 +88,6 @@ class PythonEventBridge {
         val FIELD_TELEMETRY_STREAM_KEY = LxmfFields.FIELD_TELEMETRY_STREAM.toString()
         val FIELD_ICON_APPEARANCE_KEY = LxmfFields.FIELD_ICON_APPEARANCE.toString()
         val FIELD_CUSTOM_META_KEY = LxmfFields.FIELD_CUSTOM_META.toString()
-        val FIELD_REACTION_KEY = LxmfFields.FIELD_REACTION.toString()
     }
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
@@ -244,7 +245,7 @@ class PythonEventBridge {
             // store and location map update.
             if (fieldsJson != null) {
                 assembleLocationTelemetry(fieldsJson, sourceHash, message.iconAppearance)
-                routeReactionSideChannel(fieldsJson)
+                routeReactionSideChannel(fieldsJson, sourceHash, message.timestamp)
             }
 
             // Chat emit is gated by the shared predicate
@@ -395,16 +396,19 @@ class PythonEventBridge {
         }
 
     /**
-     * Reaction-channel routing — `FIELD_REACTION` (0x10) is a
-     * Columba-specific field that doesn't go through Telemeter, so
-     * it stays a JSON-string side-channel as before.
+     * Reaction-channel routing — decodes the canonical `fields[0x40]` (or the
+     * legacy `fields[0x10]` fallback) into the normalized reaction JSON via the
+     * shared `ReactionWireCodec`, then emits it on `_reactionReceived`.
+     *
+     * The reactor (`sender`) is derived from the inbound message's
+     * [sourceHash] on the canonical path — the standard does not carry it on
+     * the wire. Using the shared codec keeps this byte-for-byte identical to
+     * the kotlin-native backend's `routeReactionSideChannel`.
      */
-    private fun routeReactionSideChannel(fieldsJson: String) {
+    private fun routeReactionSideChannel(fieldsJson: String, sourceHash: ByteArray, timestamp: Long) {
         runCatching {
-            val fields = JSONObject(fieldsJson)
-            if (fields.has(FIELD_REACTION_KEY)) {
-                _reactionReceived.tryEmit(fields.get(FIELD_REACTION_KEY).toString())
-            }
+            ReactionWireCodec.parseInboundReaction(fieldsJson, sourceHash.toHex(), timestamp)
+                ?.let { _reactionReceived.tryEmit(it) }
         }.onFailure { Log.w(TAG, "reaction side-channel routing failed", it) }
     }
 

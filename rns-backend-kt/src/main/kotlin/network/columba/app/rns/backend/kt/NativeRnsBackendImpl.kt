@@ -15,6 +15,7 @@ import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.api.util.AppDataParser
 import network.columba.app.rns.api.util.Aspects
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.toHex
@@ -915,7 +916,7 @@ class NativeRnsBackendImpl(
             // appearance each have their own flow. We fire those routes
             // unconditionally — the chat-bubble emit below is gated
             // separately by `isUserVisibleChatMessage()`.
-            routeReactionSideChannel(fields, fieldsJson, sourceHash, message, timestamp)
+            routeReactionSideChannel(fieldsJson, sourceHash, message, timestamp)
             telemetryHandler.handleIncomingTelemetry(message = message, timestamp = timestamp)
             val iconAppearance = telemetryHandler.extractIconAppearance(fields)
             telemetryHandler.handleTelemetryCommands(message)
@@ -951,58 +952,29 @@ class NativeRnsBackendImpl(
     }
 
     /**
-     * Fire `_reactionReceivedFlow` if the inbound message carries a
-     * `fields[0x10] = {reaction_to, emoji, sender}` per-event reaction.
+     * Fire `_reactionReceivedFlow` if the inbound message carries a reaction —
+     * the canonical `fields[0x40] = {0x00: hashBytes, 0x01: contentBytes}` or
+     * the legacy `fields[0x10] = {reaction_to, emoji, sender}` fallback.
      * No-op for non-reaction messages.
      *
-     * Routing is separate from the chat-emit gate: a reaction-only
-     * message still flows through this routine, then naturally fails
-     * `isUserVisibleChatMessage` (no text, no attachments) and skips
-     * the chat bubble.
+     * Parses purely from the serialized `fieldsJson` (byte values already
+     * hex-encoded) via the shared `ReactionWireCodec`, so the kotlin-native
+     * and python-flavor backends decode reactions identically.
+     *
+     * Routing is separate from the chat-emit gate: a reaction-only message
+     * still flows through this routine, then naturally fails
+     * `isUserVisibleChatMessage` (no text, no attachments) and skips the
+     * chat bubble.
      */
     private fun routeReactionSideChannel(
-        fields: Map<Int, Any?>,
         fieldsJson: String?,
         sourceHash: ByteArray,
         message: LXMessage,
         timestamp: Long,
     ) {
-        val directReactionField = fields[16] as? Map<*, *>
-        val jsonReactionField =
-            fieldsJson
-                ?.let { runCatching { org.json.JSONObject(it).optJSONObject("16") }.getOrNull() }
-
-        if (fields.containsKey(16)) {
-            Log.d(
-                TAG,
-                "Incoming field16 type=${fields[16]?.javaClass?.name}, " +
-                    "directKeys=${directReactionField?.keys}, jsonField16=$jsonReactionField",
-            )
-        }
-
-        val reactionTo =
-            (directReactionField?.get("reaction_to") as? String)
-                ?: jsonReactionField?.optString("reaction_to")?.takeIf { it.isNotBlank() }
-                ?: return
-
-        val emoji =
-            (directReactionField?.get("emoji") as? String)
-                ?: jsonReactionField?.optString("emoji")
-                ?: ""
-        val sender =
-            (directReactionField?.get("sender") as? String)
-                ?: jsonReactionField?.optString("sender")
-                ?: ""
-
         val reactionJson =
-            org.json
-                .JSONObject()
-                .put("reaction_to", reactionTo)
-                .put("emoji", emoji)
-                .put("sender", sender)
-                .put("source_hash", sourceHash.toHex())
-                .put("timestamp", timestamp)
-                .toString()
+            ReactionWireCodec.parseInboundReaction(fieldsJson, sourceHash.toHex(), timestamp)
+                ?: return
 
         Log.d(
             TAG,
@@ -1398,22 +1370,24 @@ class NativeRnsBackendImpl(
         emoji: String,
         sourceIdentity: ColumbaIdentity,
     ): Result<MessageReceipt> {
-        val senderHash = sourceIdentity.hash.toHex()
+        // Canonical LXMF `fields[0x40] = {0x00: hashBytes, 0x01: emojiBytes}`
+        // (the reactor is derived from the message source on receive — no
+        // `sender` on the wire). Clean cutover: we no longer write the legacy
+        // `0x10` dict. See `ReactionWireCodec`.
+        val reactionFields =
+            ReactionWireCodec.encodeReactionFields(targetMessageId, emoji)
+                ?: return Result.failure(
+                    IllegalArgumentException(
+                        "Invalid reaction target hash: ${targetMessageId.take(16)}",
+                    ),
+                )
 
         return sendLxmfMessageWithMethod(
             destinationHash = destinationHash,
             content = "",
             sourceIdentity = sourceIdentity,
             deliveryMethod = DeliveryMethod.OPPORTUNISTIC,
-            extraFields =
-                mapOf(
-                    16 to
-                        mapOf(
-                            "reaction_to" to targetMessageId,
-                            "emoji" to emoji,
-                            "sender" to senderHash,
-                        ),
-                ),
+            extraFields = reactionFields,
         )
     }
 

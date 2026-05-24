@@ -191,6 +191,7 @@
         <provider
             android:name="io.sentry.android.core.SentryInitProvider"
             android:authorities="${applicationId}.SentryInitProvider"
+            tools:ignore="MissingClass"
             tools:node="remove" />
 
         <!-- Disable Sentry auto-initialization (we initialize manually in Application) -->

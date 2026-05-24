@@ -129,7 +129,16 @@ tasks.named<de.aaschmid.gradle.plugins.cpd.Cpd>("cpdCheck") {
 subprojects {
     if (name == "detekt-rules") return@subprojects
     val lintConfig: com.android.build.api.dsl.Lint.() -> Unit = {
+        // Enforced checks, widened one round at a time (each round's findings fixed
+        // inline first — never a baseline).
+        //   Round 1: NewApi
+        //   Round 2: InlinedApi, MissingClass, LocalContextGetResourceValueCall, HardwareIds, ExportedReceiver
         checkOnly += "NewApi"
+        checkOnly += "InlinedApi"
+        checkOnly += "MissingClass"
+        checkOnly += "LocalContextGetResourceValueCall"
+        checkOnly += "HardwareIds"
+        checkOnly += "ExportedReceiver"
         abortOnError = true
         warningsAsErrors = false
         checkReleaseBuilds = false // enforced via the dedicated `lint` task in CI, not release assembly

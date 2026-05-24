@@ -1,5 +1,6 @@
 package network.columba.app.ui.screens
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.SystemClock
@@ -1383,12 +1384,13 @@ fun MessagingScreen(
                                     filePickerLauncher.launch(arrayOf("*/*"))
                                 } catch (e: android.content.ActivityNotFoundException) {
                                     Log.w("MessagingScreen", "No file manager found", e)
+                                    // In a click handler (not composition) — stringResource() isn't
+                                    // applicable and recomposition doesn't apply to this one-shot read.
+                                    @SuppressLint("LocalContextGetResourceValueCall")
+                                    val noFileManager = context.getString(R.string.error_no_file_manager)
                                     Toast
-                                        .makeText(
-                                            context,
-                                            context.getString(R.string.error_no_file_manager),
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
+                                        .makeText(context, noFileManager, Toast.LENGTH_SHORT)
+                                        .show()
                                 }
                                 inputPanelMode = InputPanelMode.NONE
                             },

@@ -396,6 +396,9 @@ class BleGattClient(
      */
     fun shouldConnect(peerAddress: String): Boolean {
         try {
+            // Local adapter address, for connect-direction tie-break only. Neutered to a
+            // constant on Android 6+, so it's not a real device identifier.
+            @SuppressLint("HardwareIds")
             val localAddress = bluetoothAdapter.address ?: return true // Fallback: always connect if we can't get local MAC
 
             // Convert MAC addresses to integers for comparison

@@ -1050,7 +1050,9 @@ class KotlinBLEBridge(
      */
     fun shouldConnect(peerAddress: String): Boolean {
         try {
-            // Get local MAC address
+            // Local adapter address, for connect-direction tie-break only. Neutered to a
+            // constant (02:00:00:00:00:00) on Android 6+, so it's not a real device identifier.
+            @SuppressLint("HardwareIds")
             val localAddress = bluetoothAdapter?.address
             if (localAddress == null) {
                 Log.w(TAG, "Local MAC address unavailable (no Bluetooth?), falling back to always connect")

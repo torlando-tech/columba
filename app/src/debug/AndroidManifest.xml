@@ -14,6 +14,7 @@
         <activity
             android:name="leakcanary.internal.activity.LeakLauncherActivity"
             android:enabled="false"
+            tools:ignore="MissingClass"
             tools:replace="android:enabled" />
 
         <!-- Debug-only: exposes a BroadcastReceiver that the columba phone
@@ -21,7 +22,8 @@
              for the full action contract. Compiled out of release builds. -->
         <receiver
             android:name="network.columba.app.test.TestReceiver"
-            android:exported="true">
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="network.columba.test.GET_DEST" />
                 <action android:name="network.columba.test.HAS_PATH" />

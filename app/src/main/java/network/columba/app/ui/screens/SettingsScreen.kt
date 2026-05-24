@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -690,7 +691,11 @@ fun SettingsScreen(
                 },
                 onRequestPermission = {
                     showBackgroundLocationSheet = false
-                    telemetryBackgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    // ACCESS_BACKGROUND_LOCATION is API 29; the permission string is valid on all
+                    // levels (location is implicitly background-capable pre-29).
+                    @SuppressLint("InlinedApi")
+                    val backgroundLocation = Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                    telemetryBackgroundPermissionLauncher.launch(backgroundLocation)
                 },
                 sheetState = backgroundLocationSheetState,
             )

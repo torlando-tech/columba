@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -304,7 +305,11 @@ fun MigrationScreen(
         NotificationPermissionDialog(
             onConfirm = {
                 showNotificationPermissionDialog = false
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                // POST_NOTIFICATIONS is API 33; the permission string is valid on all levels and
+                // this dialog is only shown on Android 13+.
+                @SuppressLint("InlinedApi")
+                val postNotifications = Manifest.permission.POST_NOTIFICATIONS
+                notificationPermissionLauncher.launch(postNotifications)
             },
             onDismiss = {
                 // User declined, proceed without notifications

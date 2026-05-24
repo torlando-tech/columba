@@ -1365,7 +1365,7 @@ class RNodeWizardViewModel
 
                         // onAssociationCreated(AssociationInfo) is the API 33 callback; the
                         // pre-33 path is onDeviceFound(IntentSender) above.
-                        @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
                         override fun onAssociationCreated(associationInfo: AssociationInfo) {
                             Log.d(TAG, "Association created: ${associationInfo.id}")
 

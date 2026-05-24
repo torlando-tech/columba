@@ -118,6 +118,30 @@ tasks.named<de.aaschmid.gradle.plugins.cpd.Cpd>("cpdCheck") {
     }
 }
 
+// Android Lint — progressive enforcement, NO baseline by design.
+//
+// Round 1 enforces ONLY `NewApi` — the check that catches API-level/minSdk
+// mismatches like the readParcelable(ClassLoader, Class) crash (API 33 method on
+// minSdk 24). Each subsequent round widens `checkOnly` by one or a few checks,
+// fixing that set inline BEFORE enforcing it. Because un-enforced checks aren't
+// run, the backlog is faced check-by-check and there is never anything to baseline
+// (a baseline would just permanently hide the very issues we're trying to surface).
+subprojects {
+    if (name == "detekt-rules") return@subprojects
+    val lintConfig: com.android.build.api.dsl.Lint.() -> Unit = {
+        checkOnly += "NewApi"
+        abortOnError = true
+        warningsAsErrors = false
+        checkReleaseBuilds = false // enforced via the dedicated `lint` task in CI, not release assembly
+    }
+    plugins.withType<com.android.build.gradle.AppPlugin> {
+        extensions.configure<com.android.build.api.dsl.ApplicationExtension> { lint(lintConfig) }
+    }
+    plugins.withType<com.android.build.gradle.LibraryPlugin> {
+        extensions.configure<com.android.build.api.dsl.LibraryExtension> { lint(lintConfig) }
+    }
+}
+
 tasks.register("clean", Delete::class) {
     delete(layout.buildDirectory)
 }

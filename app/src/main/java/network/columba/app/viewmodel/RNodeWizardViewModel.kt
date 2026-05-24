@@ -21,6 +21,7 @@ import android.content.IntentSender
 import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.data.model.BluetoothType
@@ -1362,6 +1363,9 @@ class RNodeWizardViewModel
                             }
                         }
 
+                        // onAssociationCreated(AssociationInfo) is the API 33 callback; the
+                        // pre-33 path is onDeviceFound(IntentSender) above.
+                        @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
                         override fun onAssociationCreated(associationInfo: AssociationInfo) {
                             Log.d(TAG, "Association created: ${associationInfo.id}")
 

@@ -133,7 +133,12 @@ class LocalHotspotManager(private val context: Context) {
      */
     fun stop() {
         try {
-            reservation?.close()
+            // A reservation only ever exists on API 26+ (start() guards on isSupported()),
+            // so this is null on older devices — the SDK_INT check makes that floor explicit
+            // for lint (LocalOnlyHotspotReservation#close is API 26+).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reservation?.close()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error closing hotspot reservation", e)
         }
@@ -158,12 +163,17 @@ class LocalHotspotManager(private val context: Context) {
             val ssid = config.ssid?.removeSurrounding("\"") ?: ""
             val password = config.passphrase ?: ""
             HotspotInfo(ssid, password)
-        } else {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // API 26-29: Use deprecated WifiConfiguration
             val config = reservation.wifiConfiguration
             val ssid = config?.SSID?.removeSurrounding("\"") ?: ""
             val password = config?.preSharedKey?.removeSurrounding("\"") ?: ""
             HotspotInfo(ssid, password)
+        } else {
+            // Unreachable: a reservation only exists on API 26+ (start() guards on
+            // isSupported()). Kept so lint sees an explicit SDK_INT floor for the
+            // deprecated WifiConfiguration access above.
+            HotspotInfo("", "")
         }
     }
 

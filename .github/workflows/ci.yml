@@ -43,6 +43,14 @@ jobs:
         with:
           cache-read-only: false
 
+      - name: Set up Python 3.11
+        # Android `lint` covers :rns-backend-py + the pythonBackend variants, which
+        # trigger Chaquopy's installPythonRequirements — and Chaquopy 17 only accepts
+        # buildPython 3.11 (same reason the kotlin-tests + release jobs set this up).
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 

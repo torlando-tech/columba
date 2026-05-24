@@ -102,9 +102,10 @@ object ReactionWireCodec {
     /** Canonical `fields[0x40] = {0x00: bytes, 0x01: bytes}` (bytes arrive hex). */
     private fun parseCanonical(fields: JSONObject, sourceHashHex: String, timestamp: Long): String? {
         val dict = fields.optJSONObject(FIELD_REACTION_KEY) ?: return null
-        val reactionTo = dict.optString(REACTION_TO_KEY).takeIf { it.isNotBlank() } ?: return null
-        val contentHex = dict.optString(REACTION_CONTENT_KEY).takeIf { it.isNotBlank() } ?: return null
-        val emoji = decodeUtf8Hex(contentHex) ?: return null
+        val reactionTo = dict.optString(REACTION_TO_KEY).takeIf { it.isNotBlank() }
+        val emoji =
+            dict.optString(REACTION_CONTENT_KEY).takeIf { it.isNotBlank() }?.let { decodeUtf8Hex(it) }
+        if (reactionTo == null || emoji == null) return null
         // Standard: the reactor is the message source, not a wire field.
         return normalized(
             reactionTo = reactionTo.lowercase(),

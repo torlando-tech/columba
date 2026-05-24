@@ -10,6 +10,7 @@ import network.columba.app.data.util.HashUtils.computeIdentityHash
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,6 +47,14 @@ class ContactRepository
                 } else {
                     val onlineThreshold = System.currentTimeMillis() - (5 * 60 * 1000) // 5 minutes
                     contactDao.getEnrichedContacts(identity.identityHash, onlineThreshold)
+                        // Defense in depth: collapse any rows that still differ only by
+                        // hex case (or that the LEFT JOINs on announces / peer_icons /
+                        // received_locations fan-out into multiple rows for the same
+                        // destination). Every downstream consumer relies on the contract
+                        // that destinationHash is unique within this list — duplicates
+                        // here crash LazyColumn with a duplicate-key IllegalArgumentException
+                        // (see COLUMBA-4Z).
+                        .map { contacts -> contacts.distinctBy { it.destinationHash.lowercase() } }
                 }
             }
 

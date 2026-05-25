@@ -47,7 +47,7 @@ jobs:
         # Android `lint` covers :rns-backend-py + the pythonBackend variants, which
         # trigger Chaquopy's installPythonRequirements — and Chaquopy 17 only accepts
         # buildPython 3.11 (same reason the kotlin-tests + release jobs set this up).
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -312,7 +312,7 @@ jobs:
       - name: Set up Python 3.11
         # Required by Chaquopy's `installDebugPythonRequirements` task on
         # :rns-backend-py — Chaquopy 17 only accepts buildPython 3.11.
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 

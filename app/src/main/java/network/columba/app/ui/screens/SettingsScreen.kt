@@ -54,6 +54,8 @@ import network.columba.app.ui.components.BackgroundLocationPermissionBottomSheet
 import network.columba.app.ui.components.LocationPermissionBottomSheet
 import network.columba.app.ui.components.ServiceRestartBanner
 import network.columba.app.ui.screens.settings.cards.AboutCard
+import network.columba.app.util.GITHUB_NEW_ISSUE_URL
+import network.columba.app.util.safeOpenUrl
 import network.columba.app.ui.screens.settings.cards.AdvancedCard
 import network.columba.app.ui.screens.settings.cards.AutoAnnounceCard
 import network.columba.app.ui.screens.settings.cards.BatteryOptimizationCard
@@ -586,16 +588,15 @@ fun SettingsScreen(
                             val clip = ClipData.newPlainText("Bug Report", report)
                             clipboard.setPrimaryClip(clip)
 
-                            // Open GitHub Issues in browser
-                            val intent =
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("https://github.com/torlando-tech/columba/issues/new"),
-                                )
-                            context.startActivity(intent)
+                            // Open GitHub Issues in browser (safe: device may have no web handler)
+                            val opened = safeOpenUrl(context, GITHUB_NEW_ISSUE_URL)
 
                             snackbarHostState.showSnackbar(
-                                message = "Bug report copied to clipboard",
+                                message = if (opened) {
+                                    "Bug report copied to clipboard"
+                                } else {
+                                    "No browser found — bug report and link copied to clipboard"
+                                },
                                 duration = SnackbarDuration.Short,
                             )
                         }
@@ -660,20 +661,19 @@ fun SettingsScreen(
                         val clip = ClipData.newPlainText("Bug Report", report)
                         clipboard.setPrimaryClip(clip)
 
-                        // Open GitHub Issues in browser
-                        val intent =
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://github.com/torlando-tech/columba/issues/new"),
-                            )
-                        context.startActivity(intent)
+                        // Open GitHub Issues in browser (safe: device may have no web handler)
+                        val opened = safeOpenUrl(context, GITHUB_NEW_ISSUE_URL)
 
                         crashReportManager.clearPendingCrashReport()
                         showCrashDialog = false
                         pendingCrashReport = null
 
                         snackbarHostState.showSnackbar(
-                            message = "Bug report copied to clipboard",
+                            message = if (opened) {
+                                "Bug report copied to clipboard"
+                            } else {
+                                "No browser found — bug report and link copied to clipboard"
+                            },
                             duration = SnackbarDuration.Short,
                         )
                     }

@@ -170,14 +170,14 @@ private fun parseReplyToFromField16(fieldsJson: String?): String? =
  *
  * Reaction layering — two distinct shapes exist:
  *
- *   1. **Wire format (per-event, interop-shared with MeshChatX):**
+ *   1. **Wire format (per-event):** canonical upstream-LXMF
+ *      `fields[0x40] = {0x00: <target hash bytes>, 0x01: <emoji UTF-8 bytes>}`
+ *      (`LXMF.py` commit 764758d), with a parse-only fallback to the legacy
  *      `fields[0x10] = {"reaction_to": <hex>, "emoji": "👍", "sender": <hex>}`
- *      One LXMF message per reaction event. Both Columba and
- *      MeshChatX put this shape on the wire — see GitHub issue #926
- *      and MeshChatX #14 (Ivan's confirmation). The backend reaction
- *      routers filter these events out before message persistence
- *      and dispatch them via `_reactionReceivedFlow` →
- *      `handleIncomingReaction`.
+ *      for un-upgraded Columba peers. One LXMF message per reaction event.
+ *      Both backends decode it via the shared `ReactionWireCodec` and the
+ *      reaction routers dispatch the normalized event via
+ *      `_reactionReceivedFlow` → `handleIncomingReaction`.
  *
  *   2. **DB-aggregated form (local-only, what this function reads):**
  *      Flat `{"👍": [sender1, sender2], "❤️": [sender3]}` stored in

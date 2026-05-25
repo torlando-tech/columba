@@ -28,6 +28,7 @@ import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
 
@@ -169,18 +170,21 @@ class PythonRnsLxmf(
     ): Result<MessageReceipt> =
         pyResult {
             runtime.requireRunning()
-            // Columba reaction payload: LXMF Field 16 carries the small dict
-            // {"reaction_to", "emoji", "sender"} on an otherwise-empty message.
-            val reaction = mapOf(
-                "reaction_to" to targetMessageId,
-                "emoji" to emoji,
-                "sender" to sourceIdentity.hash.toHex(),
-            )
-            val fields = pyDict(mapOf(LxmfFields.FIELD_REACTION to reaction))
+            // Canonical LXMF `fields[0x40] = {0x00: hashBytes, 0x01: emojiBytes}`
+            // on an otherwise-empty message — the reactor is derived from the
+            // message source on receive, so no `sender` is carried. Clean
+            // cutover: we no longer write the legacy `0x10` dict. The shared
+            // `ReactionWireCodec` produces the field map (ByteArray values);
+            // `pyDict` converts it to a Python dict of `bytes`.
+            val reactionFields =
+                ReactionWireCodec.encodeReactionFields(targetMessageId, emoji)
+                    ?: throw IllegalArgumentException(
+                        "Invalid reaction target hash: ${targetMessageId.take(16)}",
+                    )
             dispatchLxmessage(
                 destinationHash = destinationHash,
                 content = "",
-                fields = fields,
+                fields = pyDict(reactionFields),
                 desiredMethod = LXMF_METHOD_OPPORTUNISTIC,
             )
         }

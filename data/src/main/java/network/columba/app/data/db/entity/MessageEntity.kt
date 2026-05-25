@@ -45,8 +45,9 @@ data class MessageEntity(
     val fieldsJson: String? = null,
     // Per-target-message reactions aggregation (DB-local, never on the wire).
     // Shape: {"👍": ["sender_hex_1", "sender_hex_2"], "❤️": ["sender_hex_3"]}
-    // The wire format is fields[0x10] = {reaction_to, emoji, sender} per-event;
-    // the receiver routes those events into this column on the *target* message.
+    // The canonical wire format is fields[0x40] = {0x00: hashBytes, 0x01:
+    // contentBytes} per-event (legacy fields[0x10] still parsed inbound); the
+    // receiver routes those events into this column on the *target* message.
     // Migrated v1→v2 from the prior fields[16].reactions overload — see
     // MIGRATION_1_2 in ColumbaDatabase.
     val reactionsJson: String? = null,

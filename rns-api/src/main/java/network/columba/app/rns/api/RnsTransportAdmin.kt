@@ -169,7 +169,8 @@ interface RnsTransportAdmin {
     val interfaceStatusFlow: SharedFlow<String>
 
     /**
-     * Stream of inbound LXMF reaction frames (Field 16). Surfaced as a
+     * Stream of inbound LXMF reaction frames (`FIELD_REACTION` 0x40, with a
+     * legacy 0x10 parse fallback). Surfaced as a
      * low-level diagnostic channel here rather than in [RnsLxmf] because
      * the transport reads them off the same packet pipeline as the BLE/
      * interface diagnostic events; the message-list ViewModel parses the

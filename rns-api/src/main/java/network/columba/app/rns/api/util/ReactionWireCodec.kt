@@ -119,8 +119,11 @@ object ReactionWireCodec {
     /** Legacy `fields[0x10] = {reaction_to, emoji, sender}` (string-keyed). */
     private fun parseLegacy(fields: JSONObject, sourceHashHex: String, timestamp: Long): String? {
         val dict = fields.optJSONObject(FIELD_REACTION_LEGACY_KEY) ?: return null
-        val reactionTo = dict.optString("reaction_to").takeIf { it.isNotBlank() } ?: return null
-        val emoji = dict.optString("emoji")
+        val reactionTo = dict.optString("reaction_to").takeIf { it.isNotBlank() }
+        // Guard a blank/absent emoji (optString returns "" for a missing or null key),
+        // matching parseCanonical — otherwise an empty "" reaction reaches the UI map.
+        val emoji = dict.optString("emoji").takeIf { it.isNotBlank() }
+        if (reactionTo == null || emoji == null) return null
         // Legacy carried the reactor explicitly; fall back to the source hash
         // if an old peer ever omitted it.
         val sender = dict.optString("sender").takeIf { it.isNotBlank() } ?: sourceHashHex

@@ -115,6 +115,22 @@ class ReactionWireCodecTest {
     }
 
     @Test
+    fun `legacy 0x10 with blank or absent emoji is rejected`() {
+        // optString returns "" for a missing or null key; a blank emoji must not
+        // become an invisible "" reaction (parity with the canonical path).
+        assertNull(
+            ReactionWireCodec.parseInboundReaction(
+                """{"16":{"reaction_to":"$targetHash","sender":"deadbeef"}}""", sourceHash, 1L,
+            ),
+        )
+        assertNull(
+            ReactionWireCodec.parseInboundReaction(
+                """{"16":{"reaction_to":"$targetHash","emoji":"","sender":"deadbeef"}}""", sourceHash, 1L,
+            ),
+        )
+    }
+
+    @Test
     fun `canonical 0x40 takes precedence over legacy 0x10 when both present`() {
         // Carrier with BOTH a canonical and a (different) legacy reaction.
         val canonical = ReactionWireCodec.encodeReactionFields(targetHash, "🔥")!!

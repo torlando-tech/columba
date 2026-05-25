@@ -36,6 +36,7 @@ import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.AvailableRelaysState
@@ -1283,6 +1284,75 @@ class SettingsViewModel
         }
 
         /**
+         * React to a shared-instance availability poll result: update
+         * `sharedInstanceOnline`, auto-restart onto Columba's own instance if a
+         * shared instance we were using went offline, clear the informational
+         * "was using shared" flag when it returns, and toggle the "newly
+         * available" banner. Extracted from [startSharedInstanceAvailabilityMonitor]
+         * to keep that loop under detekt's cyclomatic-complexity threshold (the
+         * monitor already carries the network/restart guard + the BackendNotReady
+         * skip).
+         */
+        private suspend fun applySharedInstanceOnlineState(
+            isOnline: Boolean,
+            currentState: SettingsState,
+        ) {
+            // Update sharedInstanceOnline if changed
+            if (isOnline != currentState.sharedInstanceOnline) {
+                Log.d(TAG, "Shared instance online status changed: $isOnline")
+
+                // Detect shared instance going offline while we were using it
+                val wasUsingShared = currentState.sharedInstanceOnline && currentState.isSharedInstance
+                val shouldAutoRestart = !isOnline && wasUsingShared && !currentState.preferOwnInstance
+                if (shouldAutoRestart) {
+                    Log.i(
+                        TAG,
+                        "Shared instance went offline while we were using it - " +
+                            "restarting with Columba's own instance",
+                    )
+                    // Copy from _state.value, NOT currentState: the
+                    // updateHostingShareInstanceState() call earlier
+                    // in this iteration may have already written
+                    // fresh isHostingSharedInstance / Conflict values
+                    // that the stale currentState snapshot would
+                    // silently revert. Same reasoning at the else
+                    // branch below.
+                    _state.value =
+                        _state.value.copy(
+                            sharedInstanceOnline = isOnline,
+                            wasUsingSharedInstance = true,
+                            isRestarting = true,
+                        )
+                    // Restart service - Python will detect no shared instance
+                    // and initialize with Columba's own interfaces
+                    restartServiceAfterSharedInstanceLost()
+                } else {
+                    _state.value = _state.value.copy(sharedInstanceOnline = isOnline)
+                }
+            }
+
+            // Clear wasUsingSharedInstance when shared instance comes back online
+            if (isOnline && currentState.wasUsingSharedInstance) {
+                Log.i(TAG, "Shared instance is back online - clearing informational state")
+                _state.value = _state.value.copy(wasUsingSharedInstance = false)
+            }
+
+            // Trigger "newly available" notification if applicable
+            // (only when not currently using shared and notification not already shown)
+            if (isOnline &&
+                !currentState.isSharedInstance &&
+                !currentState.sharedInstanceAvailable
+            ) {
+                Log.i(TAG, "Shared instance became available on port $SHARED_INSTANCE_PORT")
+                _state.value = _state.value.copy(sharedInstanceAvailable = true)
+            } else if (!isOnline && currentState.sharedInstanceAvailable) {
+                // Shared instance went away, clear notification
+                Log.d(TAG, "Shared instance no longer available")
+                _state.value = _state.value.copy(sharedInstanceAvailable = false)
+            }
+        }
+
+        /**
          * Start monitoring for shared instance availability.
          * This periodically queries the service to check if a shared instance is reachable.
          * Updates sharedInstanceOnline for toggle enable logic and sharedInstanceAvailable
@@ -1303,67 +1373,27 @@ class SettingsViewModel
                         // Only monitor when not restarting and network is ready
                         val networkReady = rnsCore.networkStatus.value is NetworkStatus.READY
                         if (!currentState.isRestarting && networkReady) {
-                            // Query service for shared instance availability
-                            val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
+                            // Query service for shared instance availability.
+                            // The bound RNS service binder can be dead while the
+                            // app is backgrounded — the AIDL bridge surfaces that
+                            // as RnsException(BackendNotReady). A best-effort poll
+                            // must not crash the app (COLUMBA-AX), so skip this
+                            // tick and retry on the next interval rather than
+                            // letting the exception escape viewModelScope.
+                            val isOnline =
+                                try {
+                                    rnsTransportAdmin.isSharedInstanceAvailable()
+                                } catch (e: RnsException) {
+                                    Log.d(TAG, "Shared-instance poll skipped; backend not ready: ${e.message}")
+                                    delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
+                                    continue
+                                }
                             // Hosting/conflict polling runs on the same cadence
                             // so the UI can't see a torn state between the two
                             // flags. Extracted out to keep this monitor's
                             // cyclomatic complexity under the detekt threshold.
                             updateHostingShareInstanceState(isOnline, currentState)
-
-                            // Update sharedInstanceOnline if changed
-                            if (isOnline != currentState.sharedInstanceOnline) {
-                                Log.d(TAG, "Shared instance online status changed: $isOnline")
-
-                                // Detect shared instance going offline while we were using it
-                                val wasUsingShared = currentState.sharedInstanceOnline && currentState.isSharedInstance
-                                val shouldAutoRestart = !isOnline && wasUsingShared && !currentState.preferOwnInstance
-                                if (shouldAutoRestart) {
-                                    Log.i(
-                                        TAG,
-                                        "Shared instance went offline while we were using it - " +
-                                            "restarting with Columba's own instance",
-                                    )
-                                    // Copy from _state.value, NOT currentState: the
-                                    // updateHostingShareInstanceState() call earlier
-                                    // in this iteration may have already written
-                                    // fresh isHostingSharedInstance / Conflict values
-                                    // that the stale currentState snapshot would
-                                    // silently revert. Same reasoning at the else
-                                    // branch below.
-                                    _state.value =
-                                        _state.value.copy(
-                                            sharedInstanceOnline = isOnline,
-                                            wasUsingSharedInstance = true,
-                                            isRestarting = true,
-                                        )
-                                    // Restart service - Python will detect no shared instance
-                                    // and initialize with Columba's own interfaces
-                                    restartServiceAfterSharedInstanceLost()
-                                } else {
-                                    _state.value = _state.value.copy(sharedInstanceOnline = isOnline)
-                                }
-                            }
-
-                            // Clear wasUsingSharedInstance when shared instance comes back online
-                            if (isOnline && currentState.wasUsingSharedInstance) {
-                                Log.i(TAG, "Shared instance is back online - clearing informational state")
-                                _state.value = _state.value.copy(wasUsingSharedInstance = false)
-                            }
-
-                            // Trigger "newly available" notification if applicable
-                            // (only when not currently using shared and notification not already shown)
-                            if (isOnline &&
-                                !currentState.isSharedInstance &&
-                                !currentState.sharedInstanceAvailable
-                            ) {
-                                Log.i(TAG, "Shared instance became available on port $SHARED_INSTANCE_PORT")
-                                _state.value = _state.value.copy(sharedInstanceAvailable = true)
-                            } else if (!isOnline && currentState.sharedInstanceAvailable) {
-                                // Shared instance went away, clear notification
-                                Log.d(TAG, "Shared instance no longer available")
-                                _state.value = _state.value.copy(sharedInstanceAvailable = false)
-                            }
+                            applySharedInstanceOnlineState(isOnline, currentState)
                         }
 
                         // Wait before next poll

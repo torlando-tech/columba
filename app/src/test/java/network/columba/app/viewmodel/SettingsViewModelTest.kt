@@ -13,6 +13,8 @@ import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.AvailableRelaysState
@@ -30,6 +32,7 @@ import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -2329,6 +2332,76 @@ class SettingsViewModelTest {
                 "Monitor should not run when enableMonitors is false",
                 0,
                 monitorCallCount,
+            )
+        }
+
+    /**
+     * Reproduces COLUMBA-AX: `RnsException: Backend not ready` crashing the app
+     * from the shared-instance availability monitor.
+     *
+     * While the app is backgrounded the bound RNS service binder can be dead,
+     * so the AIDL bridge maps the `DeadObjectException` to
+     * `RnsException(BackendNotReady)`. The monitor's `while(true)` loop calls
+     * `isSharedInstanceAvailable()` unguarded, so that exception escapes
+     * `viewModelScope` → uncaught → fatal crash (Sentry: fatal,
+     * mechanism=UncaughtExceptionHandler, in_foreground=false).
+     *
+     * Expected behaviour after the fix: a transient `BackendNotReady` poll is
+     * skipped and the monitor recovers on the next tick. We model that by
+     * throwing once, then returning `true`, and asserting the monitor recovered
+     * (`sharedInstanceOnline == true`).
+     *
+     * Pre-fix this is RED: the first throw kills the loop, so `sharedInstanceOnline`
+     * never flips and the uncaught `RnsException` surfaces.
+     *
+     * Only the availability monitor is started (via reflection, with
+     * `enableMonitors = false`) so the test drives a single, cancellable loop
+     * rather than every monitor's `while(true)`.
+     */
+    @Test
+    fun `availability monitor survives a transient BackendNotReady and recovers - COLUMBA-AX`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            var calls = 0
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } coAnswers {
+                calls++
+                // First poll hits a dead binder → BackendNotReady; then recovers.
+                if (calls == 1) throw RnsException(RnsError.BackendNotReady)
+                true
+            }
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            // Start ONLY the availability monitor. The production init path reaches
+            // it through the capabilities collector; invoking it directly isolates
+            // this one loop (executes the real production method).
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            // init delay (INIT_DELAY_MS*4 = 2s) + two 5s poll intervals.
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            // Stop the loop (post-fix it polls forever) so runTest can settle.
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            assertTrue(
+                "Monitor must skip a transient BackendNotReady poll and recover; instead the " +
+                    "loop died on the first throw and never reported the shared instance online",
+                viewModel.state.value.sharedInstanceOnline,
+            )
+            assertTrue(
+                "Monitor should have polled again after the transient failure (throw, then success)",
+                calls >= 2,
             )
         }
 

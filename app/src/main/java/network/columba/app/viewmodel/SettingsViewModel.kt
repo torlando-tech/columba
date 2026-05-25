@@ -1373,27 +1373,24 @@ class SettingsViewModel
                         // Only monitor when not restarting and network is ready
                         val networkReady = rnsCore.networkStatus.value is NetworkStatus.READY
                         if (!currentState.isRestarting && networkReady) {
-                            // Query service for shared instance availability.
-                            // The bound RNS service binder can be dead while the
-                            // app is backgrounded — the AIDL bridge surfaces that
-                            // as RnsException(BackendNotReady). A best-effort poll
-                            // must not crash the app (COLUMBA-AX), so skip this
-                            // tick and retry on the next interval rather than
-                            // letting the exception escape viewModelScope.
-                            val isOnline =
-                                try {
-                                    rnsTransportAdmin.isSharedInstanceAvailable()
-                                } catch (e: RnsException) {
-                                    Log.d(TAG, "Shared-instance poll skipped; backend not ready: ${e.message}")
-                                    delay(SHARED_INSTANCE_MONITOR_INTERVAL_MS)
-                                    continue
-                                }
-                            // Hosting/conflict polling runs on the same cadence
-                            // so the UI can't see a torn state between the two
-                            // flags. Extracted out to keep this monitor's
-                            // cyclomatic complexity under the detekt threshold.
-                            updateHostingShareInstanceState(isOnline, currentState)
-                            applySharedInstanceOnlineState(isOnline, currentState)
+                            // Every call in this block reaches the RNS service over
+                            // AIDL (isSharedInstanceAvailable + isHostingSharedInstance
+                            // inside updateHostingShareInstanceState, plus the restart
+                            // path). The bound service binder can be dead while the
+                            // app is backgrounded, so any of them may throw
+                            // RnsException(BackendNotReady) (COLUMBA-AX). A best-effort
+                            // poll must not crash the app: skip the whole tick on any
+                            // RnsException and retry next interval, rather than letting
+                            // it escape viewModelScope.
+                            try {
+                                val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
+                                // Hosting/conflict polling runs on the same cadence so
+                                // the UI can't see a torn state between the two flags.
+                                updateHostingShareInstanceState(isOnline, currentState)
+                                applySharedInstanceOnlineState(isOnline, currentState)
+                            } catch (e: RnsException) {
+                                Log.d(TAG, "Shared-instance poll skipped (${e.error::class.simpleName}): ${e.message}")
+                            }
                         }
 
                         // Wait before next poll

@@ -2405,6 +2405,55 @@ class SettingsViewModelTest {
             )
         }
 
+    /**
+     * COLUMBA-AX hardening: the monitor makes a SECOND AIDL call per tick
+     * (`isHostingSharedInstance()` inside `updateHostingShareInstanceState`),
+     * which can hit the same dead binder and throw `RnsException(BackendNotReady)`
+     * one call after the availability poll succeeds. The per-tick guard must
+     * cover that call too — not just `isSharedInstanceAvailable()`.
+     *
+     * Models it: the availability poll always succeeds, but the hosting poll
+     * throws on the first tick then recovers. The monitor must skip and recover
+     * (`sharedInstanceOnline == true`) rather than crash.
+     */
+    @Test
+    fun `availability monitor survives BackendNotReady from the hosting poll - COLUMBA-AX`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns true
+            var hostingCalls = 0
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } coAnswers {
+                hostingCalls++
+                if (hostingCalls == 1) throw RnsException(RnsError.BackendNotReady)
+                false
+            }
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            assertTrue(
+                "A BackendNotReady from the hosting poll must skip the tick and let the monitor " +
+                    "recover, not crash the loop",
+                viewModel.state.value.sharedInstanceOnline,
+            )
+            assertTrue("hosting poll should have been retried after the transient failure", hostingCalls >= 2)
+        }
+
     @Test
     fun `viewmodel passes NativeReticulumProtocol check for monitoring`() =
         runTest {

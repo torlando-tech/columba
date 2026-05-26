@@ -38,6 +38,18 @@
     native <methods>;
 }
 
+# LXST Codec2/Opus JNI bridges register their natives from JNI_OnLoad via
+# FindClass + RegisterNatives against a fixed method table. The rule above keeps
+# the NAMES of surviving natives but ALLOWS SHRINKING, and R8 can't trace the
+# capture path (Oboe native callbacks / Chaquopy), so it removed the `encode`
+# native method as unused — RegisterNatives then fails and JNI_OnLoad returns
+# JNI_ERR, crashing outbound calls (Sentry COLUMBA-B1 / COLUMBA-B2). Pin both
+# classes fully so every method in the native table is present. (Also lives in
+# LXST-kt consumer-rules.pro, but columba consumes LXST-kt from JitPack, so the
+# load-bearing copy must be here until that ships.)
+-keep class tech.torlando.lxst.codec.NativeCodec2 { *; }
+-keep class tech.torlando.lxst.codec.NativeOpus { *; }
+
 # ===== Kotlin Coroutines =====
 # Used extensively in service for async operations
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}

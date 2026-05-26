@@ -141,7 +141,10 @@ object ReticulumServiceConnection {
                 // stale live reference after the null sentinel.
                 val job = scope.launch {
                     try {
-                        val client = RnsBackendClient(scope)
+                        // cacheDir is shared per-process by the same app/UID; the
+                        // client only needs a writable dir to stage attachment
+                        // PFDs (the server reads the dup'd fd, not the path).
+                        val client = RnsBackendClient(scope, context.cacheDir)
                         client.connect(remote)
                         trySend(client)
                     } catch (e: CancellationException) {

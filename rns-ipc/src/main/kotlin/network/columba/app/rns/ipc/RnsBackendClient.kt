@@ -28,6 +28,7 @@ import network.columba.app.rns.ipc.client.ClientRnsNomadnet
 import network.columba.app.rns.ipc.client.ClientRnsTelemetry
 import network.columba.app.rns.ipc.client.ClientRnsTelephony
 import network.columba.app.rns.ipc.client.ClientRnsTransportAdmin
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
@@ -52,6 +53,13 @@ import kotlin.coroutines.resume
  */
 class RnsBackendClient(
     private val scope: CoroutineScope,
+    /**
+     * App cache dir used by [ClientRnsLxmf] to stage attachment payloads as
+     * temp files before handing the `:reticulum` server a [android.os.ParcelFileDescriptor].
+     * Any writable dir owned by this process works — the server reads the dup'd
+     * fd, never the path.
+     */
+    private val attachmentCacheDir: File,
 ) : RnsBackend {
     private val capabilitiesState = MutableStateFlow(BackendCapabilities.UNKNOWN)
 
@@ -72,7 +80,7 @@ class RnsBackendClient(
      */
     suspend fun connect(remote: IRnsBackend) {
         coreClient = ClientRnsCore(fetchCore(remote), scope)
-        lxmfClient = ClientRnsLxmf(fetchLxmf(remote), scope)
+        lxmfClient = ClientRnsLxmf(fetchLxmf(remote), scope, attachmentCacheDir)
         telephonyClient = ClientRnsTelephony(fetchTelephony(remote), scope)
         telemetryClient = ClientRnsTelemetry(fetchTelemetry(remote), scope)
         nomadnetClient = ClientRnsNomadnet(fetchNomadnet(remote), scope)

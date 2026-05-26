@@ -44,9 +44,12 @@
 # capture path (Oboe native callbacks / Chaquopy), so it removed the `encode`
 # native method as unused — RegisterNatives then fails and JNI_OnLoad returns
 # JNI_ERR, crashing outbound calls (Sentry COLUMBA-B1 / COLUMBA-B2). Pin both
-# classes fully so every method in the native table is present. (Also lives in
-# LXST-kt consumer-rules.pro, but columba consumes LXST-kt from JitPack, so the
-# load-bearing copy must be here until that ships.)
+# classes fully so every method in the native table is present.
+#
+# Do NOT remove these: columba consumes LXST-kt from JitPack, so the app's own
+# R8 config is the authoritative copy. An equivalent keep belongs in LXST-kt's
+# consumer-rules.pro for other consumers, but that is a separate, not-yet-shipped
+# follow-up — these lines must stay regardless of any LXST-kt-side change.
 -keep class tech.torlando.lxst.codec.NativeCodec2 { *; }
 -keep class tech.torlando.lxst.codec.NativeOpus { *; }
 

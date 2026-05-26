@@ -51,9 +51,13 @@ class ReticulumServiceConnectionDeathTest {
             val connection = shadowOf(app).boundServiceConnections.firstOrNull()
             assertNotNull("bind() should register a ServiceConnection via bindService", connection)
 
-            val backend = mockk<IRnsBackend>(relaxed = true)
-            val binder = mockk<IBinder>(relaxed = true)
-            // asInterface() returns this local interface directly.
+            // Explicit stubs (no relaxed mock) for exactly the calls the connect
+            // path makes: asInterface() resolves the backend; RnsBackendClient.connect
+            // fetches the core sub-interface (left unresolved — we only exercise the
+            // death wiring, not a full connect); the binder is linked/unlinked.
+            val backend = mockk<IRnsBackend>()
+            every { backend.getCore(any()) } just Runs
+            val binder = mockk<IBinder>()
             every { binder.queryLocalInterface(any()) } returns backend
             val recipientSlot = slot<IBinder.DeathRecipient>()
             every { binder.linkToDeath(capture(recipientSlot), 0) } just Runs

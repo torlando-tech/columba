@@ -1,7 +1,9 @@
 package network.columba.app.rns.ipc.client
 
 import android.os.DeadObjectException
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -50,9 +52,14 @@ class ClientRnsCoreNetworkObserverTest {
         // coroutine; Unconfined so init's launches run eagerly/inline.
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined + handler)
 
-        val remote = mockk<IRnsCore>(relaxed = true)
+        // Explicit stubs (no relaxed mock) for exactly the calls ClientRnsCore.init
+        // makes: the observer registration throws (the crash trigger); the snapshot
+        // read and unregister are no-ops.
+        val remote = mockk<IRnsCore>()
         every { remote.registerNetworkStatusObserver(any()) } throws
             DeadObjectException("Transaction failed on small parcel; remote process probably died")
+        every { remote.unregisterNetworkStatusObserver(any()) } just Runs
+        every { remote.getCurrentNetworkStatus(any()) } just Runs
 
         // Construct the real production object — its init block performs the registration.
         val core = ClientRnsCore(remote, scope)

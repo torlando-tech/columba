@@ -94,7 +94,7 @@ internal class ClientRnsTelemetry(
                     if (payload != null) trySend(payload)
                 }
             }
-            remote.registerTelemetryObserver(cb)
+            if (!registerObserverOrClose { remote.registerTelemetryObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterTelemetryObserver(cb) } }
         }.onEach { locationTelemetryShared.emit(it) }.launchIn(scope)
     }

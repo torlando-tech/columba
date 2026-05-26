@@ -113,7 +113,7 @@ internal class ClientRnsTransportAdmin(
     init {
         callbackFlow<Unit> {
             val cb = object : IRnsUnitEventCallback.Stub() { override fun onEvent() { trySend(Unit) } }
-            remote.registerInterfaceStatusChangedObserver(cb)
+            if (!registerObserverOrClose { remote.registerInterfaceStatusChangedObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterInterfaceStatusChangedObserver(cb) } }
         }.onEach { interfaceStatusChangedShared.emit(it) }.launchIn(scope)
 
@@ -153,7 +153,7 @@ internal class ClientRnsTransportAdmin(
         val cb = object : IRnsStringEventCallback.Stub() {
             override fun onString(value: String?) { if (value != null) trySend(value) }
         }
-        register(cb)
+        if (!registerObserverOrClose { register(cb) }) return@callbackFlow
         awaitClose { runCatching { unregister(cb) } }
     }
 

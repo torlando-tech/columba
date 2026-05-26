@@ -113,7 +113,7 @@ internal class ClientRnsLxmf(
         val cb = object : IRnsMessageCallback.Stub() {
             override fun onMessage(message: ReceivedMessage?) { if (message != null) trySend(message) }
         }
-        remote.registerMessageObserver(cb)
+        if (!registerObserverOrClose { remote.registerMessageObserver(cb) }) return@callbackFlow
         awaitClose { runCatching { remote.unregisterMessageObserver(cb) } }
     }
 
@@ -121,7 +121,7 @@ internal class ClientRnsLxmf(
         val cb = object : IRnsDeliveryStatusCallback.Stub() {
             override fun onDeliveryStatus(update: DeliveryStatusUpdate?) { if (update != null) trySend(update) }
         }
-        remote.registerDeliveryStatusObserver(cb)
+        if (!registerObserverOrClose { remote.registerDeliveryStatusObserver(cb) }) return@callbackFlow
         awaitClose { runCatching { remote.unregisterDeliveryStatusObserver(cb) } }
     }
 
@@ -185,7 +185,7 @@ internal class ClientRnsLxmf(
                     if (state != null) trySend(state)
                 }
             }
-            remote.registerPropagationStateObserver(cb)
+            if (!registerObserverOrClose { remote.registerPropagationStateObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterPropagationStateObserver(cb) } }
         }.onEach { propagationShared.emit(it) }.launchIn(scope)
     }

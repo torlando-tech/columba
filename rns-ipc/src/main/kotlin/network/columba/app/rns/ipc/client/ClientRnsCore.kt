@@ -1,5 +1,6 @@
 package network.columba.app.rns.ipc.client
 
+import android.os.RemoteException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -60,7 +61,23 @@ internal class ClientRnsCore(
             val cb = object : IRnsNetworkStatusCallback.Stub() {
                 override fun onStatus(status: NetworkStatus?) { if (status != null) trySend(status) }
             }
-            remote.registerNetworkStatusObserver(cb)
+            try {
+                remote.registerNetworkStatusObserver(cb)
+            } catch (e: RemoteException) {
+                // The :reticulum backend process can die in the window between
+                // onServiceConnected handing back this proxy and this coroutine
+                // running (OOM/restart), so the observer registration is the one
+                // remote call that races process death. An unguarded throw here
+                // escapes the callbackFlow into the collecting coroutine and crashes
+                // the UI (Sentry COLUMBA-AZ: DeadObjectException, a RemoteException).
+                // Surface the unavailability and close the flow gracefully; the
+                // bound-service layer recreates this ClientRnsCore (fresh observer)
+                // on rebind. Mirrors the snapshot path, which already catches here.
+                // The cause is carried into the ERROR so it isn't swallowed.
+                trySend(NetworkStatus.ERROR("RNS backend process unavailable: ${e.message}"))
+                close()
+                return@callbackFlow
+            }
             awaitClose { runCatching { remote.unregisterNetworkStatusObserver(cb) } }
         }.onEach { networkStatusState.value = it }.launchIn(scope)
 

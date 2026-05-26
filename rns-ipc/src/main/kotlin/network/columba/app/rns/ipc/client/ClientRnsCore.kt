@@ -73,7 +73,8 @@ internal class ClientRnsCore(
                 // Surface the unavailability and close the flow gracefully; the
                 // bound-service layer recreates this ClientRnsCore (fresh observer)
                 // on rebind. Mirrors the snapshot path, which already catches here.
-                trySend(NetworkStatus.ERROR("RNS backend process unavailable"))
+                // The cause is carried into the ERROR so it isn't swallowed.
+                trySend(NetworkStatus.ERROR("RNS backend process unavailable: ${e.message}"))
                 close()
                 return@callbackFlow
             }

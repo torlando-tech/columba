@@ -64,7 +64,7 @@ internal class ClientRnsNomadnet(
             val cb = object : IRnsStringEventCallback.Stub() {
                 override fun onString(value: String?) { if (value != null) trySend(value) }
             }
-            remote.registerRequestStatusObserver(cb)
+            if (!registerObserverOrClose { remote.registerRequestStatusObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterRequestStatusObserver(cb) } }
         }.onEach { statusState.value = it }.launchIn(scope)
 
@@ -72,7 +72,7 @@ internal class ClientRnsNomadnet(
             val cb = object : IRnsFloatEventCallback.Stub() {
                 override fun onFloat(value: Float) { trySend(value) }
             }
-            remote.registerDownloadProgressObserver(cb)
+            if (!registerObserverOrClose { remote.registerDownloadProgressObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterDownloadProgressObserver(cb) } }
         }.onEach { progressState.value = it }.launchIn(scope)
 

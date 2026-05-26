@@ -3,6 +3,8 @@ package network.columba.app.rns.ipc.client
 import android.os.Bundle
 import android.os.DeadObjectException
 import android.os.RemoteException
+import android.util.Log
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
@@ -224,6 +226,34 @@ internal suspend inline fun awaitNullableByteArray(
 internal inline fun <T> Bundle.unwrap(extract: Bundle.() -> T): Result<T> =
     runCatching { extract() }.recoverCatching {
         throw RnsException(RnsError.Generic("Failed to extract result payload: ${it.message}", it.stackTraceToString()))
+    }
+
+private const val OBSERVER_TAG = "ClientRnsObserver"
+
+/**
+ * Register an AIDL observer from inside a [kotlinx.coroutines.flow.callbackFlow]
+ * producer, guarding the cross-process call against a dead `:reticulum` backend.
+ *
+ * If the backend process is dead at registration time the call throws
+ * [RemoteException] (DeadObjectException). Unguarded, that escapes the producer
+ * and crashes the collecting coroutine — Sentry COLUMBA-AZ (networkStatus),
+ * COLUMBA-B0 (telemetry), and every other observer-backed flow share the
+ * hazard. On failure the producer is closed gracefully (no exception
+ * propagated), so the bound-service layer's `flatMapLatest` re-subscribes once
+ * the backend rebinds.
+ *
+ * @return true if registration succeeded; false if the backend was dead — in
+ *   which case the flow is already closed and the caller should
+ *   `return@callbackFlow` to skip the awaitClose unregister.
+ */
+internal inline fun ProducerScope<*>.registerObserverOrClose(register: () -> Unit): Boolean =
+    try {
+        register()
+        true
+    } catch (e: RemoteException) {
+        Log.w(OBSERVER_TAG, "observer registration failed; :reticulum backend dead", e)
+        close()
+        false
     }
 
 internal fun remoteToRnsException(e: RemoteException): RnsException =

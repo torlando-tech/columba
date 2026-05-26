@@ -54,7 +54,7 @@ internal class ClientRnsTelephony(
             val cb = object : IRnsCallStateCallback.Stub() {
                 override fun onState(state: CallState?) { if (state != null) trySend(state) }
             }
-            remote.registerCallStateObserver(cb)
+            if (!registerObserverOrClose { remote.registerCallStateObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterCallStateObserver(cb) } }
         }.onEach { callStateState.value = it }.launchIn(scope)
 
@@ -69,7 +69,7 @@ internal class ClientRnsTelephony(
             val cb = object : IRnsNullableStringEventCallback.Stub() {
                 override fun onString(value: String?) { trySend(value) }
             }
-            remote.registerRemoteIdentityObserver(cb)
+            if (!registerObserverOrClose { remote.registerRemoteIdentityObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterRemoteIdentityObserver(cb) } }
         }.onEach { remoteIdentityState.value = it }.launchIn(scope)
 
@@ -108,7 +108,7 @@ internal class ClientRnsTelephony(
             val cb = object : IRnsBoolEventCallback.Stub() {
                 override fun onBool(value: Boolean) { trySend(value) }
             }
-            register(cb)
+            if (!registerObserverOrClose { register(cb) }) return@callbackFlow
             awaitClose { runCatching { unregister(cb) } }
         }.onEach { state.value = it }.launchIn(scope)
     }

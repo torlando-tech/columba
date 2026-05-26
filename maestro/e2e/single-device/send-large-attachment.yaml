@@ -1,0 +1,94 @@
+# single-device/send-large-attachment.yaml
+#
+# Regression guard for the LXMF attachment TransactionTooLargeException.
+#
+# Attachment bytes used to ride INLINE through the oneway AIDL/Binder
+# transaction from the UI process to :reticulum. Binder's ~1 MB shared
+# per-process transaction buffer overflowed on a multi-MB file ->
+# android.os.TransactionTooLargeException, surfaced as a failed send. They now
+# cross out-of-band via a ParcelFileDescriptor (AttachmentBlob), so a multi-MB
+# attachment must send without the overflow surfacing. See PR #967.
+#
+# What it does: open a chat with PEER_HASH/PEER_NAME (the runner points this at
+# the device's OWN LXMF dest, so the send resolves locally and reaches
+# handleSendSuccess -> the file card renders -> a positive assertion is
+# possible on a single device), attach a large file staged in Downloads,
+# send, and assert the file card renders while the Binder-overflow failure text
+# never appears.
+#
+# PREREQUISITES (run-large-attachment.sh does all of this):
+#   - A DEBUG build is installed (release has no TestReceiver, and the runner
+#     uses it only to fetch the self dest; the fix under test is identical).
+#   - A large file (ideally ~5 MB) is already in Downloads as FILE_NAME.
+#   - PEER_HASH is the device's own LXMF destination hash.
+#
+# Params: APP_ID, PEER_HASH, PEER_NAME, FILE_NAME, MSG_TOKEN.
+#
+# NOTE: the SAF document picker (GetContent "*/*") is an EXTERNAL system UI that
+# varies by Android image / OEM. The picker-navigation taps below are marked
+# `optional: true` so the flow tolerates layout differences and falls through to
+# selecting FILE_NAME directly; tune them for your target emulator image if the
+# file isn't found.
+appId: ${APP_ID}
+name: send-large-attachment
+---
+# Open a conversation with the target (self) — leaves us on the MessagingScreen.
+- runFlow:
+    file: ../lib/add-contact-by-hash.yaml
+    env:
+      APP_ID: ${APP_ID}
+      PEER_HASH: ${PEER_HASH}
+      PEER_NAME: ${PEER_NAME}
+
+# Open the attachment panel and choose File (-> SAF GetContent "*/*").
+- tapOn:
+    text: "Attach"            # AttachmentInput button contentDescription
+- extendedWaitUntil:
+    visible: "File"           # AttachmentPanel's File button (text + a11y "File")
+    timeout: 8000
+- tapOn: "File"
+
+# ---- External SAF document picker (system UI; selectors are best-effort) ----
+# Open the roots drawer and the Downloads root if the file isn't already shown,
+# then select it by name. All navigation taps are optional so the flow adapts
+# to whichever document-picker layout the image presents.
+- tapOn:
+    text: "Show roots"
+    optional: true
+- tapOn:
+    text: "Downloads"
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: ${FILE_NAME}
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: ${FILE_NAME}
+
+# Back in the chat: the attachment preview chip shows the picked file.
+- extendedWaitUntil:
+    visible: ${FILE_NAME}
+    timeout: 15000
+
+# Add a tokened body so the sent bubble is unambiguous, then send.
+- tapOn:
+    text: "Type a message..."
+- inputText: ${MSG_TOKEN}
+- hideKeyboard
+- tapOn: "Send message"
+
+# ---- Regression assertions ----
+# Tripwire: if attachment bytes ever ride inline through Binder again, the send
+# fails and the friendly guard (or the raw exception) surfaces this text. It
+# must NOT appear.
+- assertNotVisible:
+    text: ".*[Tt]oo large to send.*"
+- assertNotVisible:
+    text: ".*TransactionTooLarge.*"
+# Positive signal: a successful (past-IPC) send saves the message with its file
+# field, so the file card renders in the conversation.
+- extendedWaitUntil:
+    visible: ${FILE_NAME}
+    timeout: 30000
+- takeScreenshot: large-attachment-sent

@@ -134,18 +134,11 @@ object ReticulumServiceConnection {
                 // dropped — defeating the fast path for the very COLUMBA-AZ race.
                 linkedBinder.set(service)
                 deathRecipient.set(recipient)
-                try {
-                    service.linkToDeath(recipient, 0)
-                } catch (e: RemoteException) {
-                    // Binder already dead at link time — the exact race COLUMBA-AZ
-                    // hit. Roll back the refs we just published and treat as
-                    // disconnected; the rebind path recovers.
-                    linkedBinder.set(null)
-                    deathRecipient.set(null)
-                    Log.w(TAG, "linkToDeath failed; binder already dead", e)
-                    trySend(null)
-                    return
-                }
+                // Store the connect job BEFORE linkToDeath, too: otherwise a
+                // binderDied() firing in the window after registration but before
+                // the job is stored finds no job to cancel, and a connect() that
+                // completed before the death notification would trySend(client) a
+                // stale live reference after the null sentinel.
                 val job = scope.launch {
                     try {
                         val client = RnsBackendClient(scope)
@@ -158,6 +151,19 @@ object ReticulumServiceConnection {
                     }
                 }
                 connectJob.getAndSet(job)?.cancel()
+                try {
+                    service.linkToDeath(recipient, 0)
+                } catch (e: RemoteException) {
+                    // Binder already dead at link time — the exact race COLUMBA-AZ
+                    // hit. Roll back: cancel the job we just stored, clear the
+                    // refs, and treat as disconnected; the rebind path recovers.
+                    connectJob.getAndSet(null)?.cancel()
+                    linkedBinder.set(null)
+                    deathRecipient.set(null)
+                    Log.w(TAG, "linkToDeath failed; binder already dead", e)
+                    trySend(null)
+                    return
+                }
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {

@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.os.RemoteException
 import android.util.Log
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -77,17 +79,67 @@ object ReticulumServiceConnection {
      *   `ApplicationScope`).
      */
     fun bind(context: Context, scope: CoroutineScope): Flow<RnsBackend?> = callbackFlow {
-        var connectJob: Job? = null
+        // connectJob is mutated from the main-thread connection callbacks AND
+        // the binder-thread death recipient, so it needs the same atomic
+        // happens-before treatment as the link refs below (getAndSet swaps the
+        // job and cancels the previous one in one step).
+        val connectJob = AtomicReference<Job?>(null)
+        // The binder we currently hold a death link on, plus its recipient, so
+        // the link can be dropped on reconnect/teardown (avoids leaking
+        // recipients across rebinds). AtomicReference, not plain var: written on
+        // the main-thread connection callbacks but read from the binder-thread
+        // death recipient's identity guard, so it needs a happens-before edge.
+        val linkedBinder = AtomicReference<IBinder?>(null)
+        val deathRecipient = AtomicReference<IBinder.DeathRecipient?>(null)
+
+        fun unlinkDeath() {
+            val binder = linkedBinder.getAndSet(null)
+            val recipient = deathRecipient.getAndSet(null)
+            if (binder != null && recipient != null) {
+                runCatching { binder.unlinkToDeath(recipient, 0) }
+            }
+        }
 
         val connection = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-                val remote = service?.let { IRnsBackend.Stub.asInterface(it) }
+                if (service == null) {
+                    Log.w(TAG, "onServiceConnected delivered a null binder")
+                    return
+                }
+                val remote = IRnsBackend.Stub.asInterface(service)
                 if (remote == null) {
                     Log.w(TAG, "onServiceConnected delivered a binder that is not IRnsBackend")
                     return
                 }
-                connectJob?.cancel()
-                connectJob = scope.launch {
+                // Link a death recipient to the new binder. binderDied() fires
+                // promptly off a binder thread — often before the main-thread
+                // onServiceDisconnected lands, which lags on low-end devices (the
+                // Sentry COLUMBA-AZ repro device: 2 cores, low memory). It only
+                // emits null so awaitBound() callers suspend through the gap and
+                // stop invoking the dead binder; the rebind itself stays owned by
+                // onServiceDisconnected/onBindingDied to avoid a double-rebind.
+                unlinkDeath()
+                val recipient = IBinder.DeathRecipient {
+                    // Identity guard: ignore a stale fire for a binder we've
+                    // already replaced on a newer onServiceConnected.
+                    if (linkedBinder.get() === service) {
+                        Log.w(TAG, "binderDied — :reticulum process died; emitting null")
+                        connectJob.getAndSet(null)?.cancel()
+                        trySend(null)
+                    }
+                }
+                // Publish the refs BEFORE linkToDeath: if the binder dies in the
+                // window around registration, the recipient's identity guard must
+                // already see this binder, or the null emission is silently
+                // dropped — defeating the fast path for the very COLUMBA-AZ race.
+                linkedBinder.set(service)
+                deathRecipient.set(recipient)
+                // Store the connect job BEFORE linkToDeath, too: otherwise a
+                // binderDied() firing in the window after registration but before
+                // the job is stored finds no job to cancel, and a connect() that
+                // completed before the death notification would trySend(client) a
+                // stale live reference after the null sentinel.
+                val job = scope.launch {
                     try {
                         val client = RnsBackendClient(scope)
                         client.connect(remote)
@@ -98,12 +150,26 @@ object ReticulumServiceConnection {
                         Log.e(TAG, "Failed to connect RnsBackendClient", e)
                     }
                 }
+                connectJob.getAndSet(job)?.cancel()
+                try {
+                    service.linkToDeath(recipient, 0)
+                } catch (e: RemoteException) {
+                    // Binder already dead at link time — the exact race COLUMBA-AZ
+                    // hit. Roll back: cancel the job we just stored, clear the
+                    // refs, and treat as disconnected; the rebind path recovers.
+                    connectJob.getAndSet(null)?.cancel()
+                    linkedBinder.set(null)
+                    deathRecipient.set(null)
+                    Log.w(TAG, "linkToDeath failed; binder already dead", e)
+                    trySend(null)
+                    return
+                }
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
                 Log.w(TAG, "Service disconnected; awaiting reconnect (emitting null)")
-                connectJob?.cancel()
-                connectJob = null
+                unlinkDeath()
+                connectJob.getAndSet(null)?.cancel()
                 // Punch-list item 10: emit null so downstream awaitBound() suspends
                 // until a fresh onServiceConnected lands, instead of resolving
                 // immediately against the dead binder still cached in the StateFlow.
@@ -112,8 +178,8 @@ object ReticulumServiceConnection {
 
             override fun onBindingDied(name: ComponentName?) {
                 Log.w(TAG, "onBindingDied from $name — binding will need rebind")
-                connectJob?.cancel()
-                connectJob = null
+                unlinkDeath()
+                connectJob.getAndSet(null)?.cancel()
                 trySend(null)
                 // Re-bind so Android delivers a fresh onServiceConnected once the
                 // next :reticulum process is up. Without this, onBindingDied is
@@ -151,7 +217,8 @@ object ReticulumServiceConnection {
         }
 
         awaitClose {
-            connectJob?.cancel()
+            connectJob.getAndSet(null)?.cancel()
+            unlinkDeath()
             try {
                 context.unbindService(connection)
             } catch (e: IllegalArgumentException) {

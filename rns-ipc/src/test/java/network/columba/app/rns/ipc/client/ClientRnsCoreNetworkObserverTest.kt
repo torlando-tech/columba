@@ -57,13 +57,10 @@ class ClientRnsCoreNetworkObserverTest {
         // Construct the real production object — its init block performs the registration.
         val core = ClientRnsCore(remote, scope)
 
-        // Give any (unexpected) escape a moment to surface on the handler.
+        // Block the full window for any (unexpected) escape to surface on the
+        // handler. This also lets the Unconfined callbackFlow settle to its
+        // terminal ERROR emission, so the value read below is deterministic.
         val escaped = latch.await(500, TimeUnit.MILLISECONDS)
-        // Let the StateFlow settle to its terminal ERROR emission.
-        val deadline = System.currentTimeMillis() + 2000
-        while (core.networkStatus.value !is NetworkStatus.ERROR && System.currentTimeMillis() < deadline) {
-            Thread.sleep(20)
-        }
         scope.cancel()
 
         assertFalse(

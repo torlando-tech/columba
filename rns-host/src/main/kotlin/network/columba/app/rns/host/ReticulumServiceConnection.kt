@@ -7,6 +7,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.RemoteException
 import android.util.Log
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -81,19 +82,18 @@ object ReticulumServiceConnection {
         var connectJob: Job? = null
         // The binder we currently hold a death link on, plus its recipient, so
         // the link can be dropped on reconnect/teardown (avoids leaking
-        // recipients across rebinds). Mutated from the main-thread connection
-        // callbacks; read from the binder-thread recipient via an identity guard.
-        var linkedBinder: IBinder? = null
-        var deathRecipient: IBinder.DeathRecipient? = null
+        // recipients across rebinds). AtomicReference, not plain var: written on
+        // the main-thread connection callbacks but read from the binder-thread
+        // death recipient's identity guard, so it needs a happens-before edge.
+        val linkedBinder = AtomicReference<IBinder?>(null)
+        val deathRecipient = AtomicReference<IBinder.DeathRecipient?>(null)
 
         fun unlinkDeath() {
-            val binder = linkedBinder
-            val recipient = deathRecipient
+            val binder = linkedBinder.getAndSet(null)
+            val recipient = deathRecipient.getAndSet(null)
             if (binder != null && recipient != null) {
                 runCatching { binder.unlinkToDeath(recipient, 0) }
             }
-            linkedBinder = null
-            deathRecipient = null
         }
 
         val connection = object : ServiceConnection {
@@ -118,20 +118,27 @@ object ReticulumServiceConnection {
                 val recipient = IBinder.DeathRecipient {
                     // Identity guard: ignore a stale fire for a binder we've
                     // already replaced on a newer onServiceConnected.
-                    if (linkedBinder === service) {
+                    if (linkedBinder.get() === service) {
                         Log.w(TAG, "binderDied — :reticulum process died; emitting null")
                         connectJob?.cancel()
                         connectJob = null
                         trySend(null)
                     }
                 }
+                // Publish the refs BEFORE linkToDeath: if the binder dies in the
+                // window around registration, the recipient's identity guard must
+                // already see this binder, or the null emission is silently
+                // dropped — defeating the fast path for the very COLUMBA-AZ race.
+                linkedBinder.set(service)
+                deathRecipient.set(recipient)
                 try {
                     service.linkToDeath(recipient, 0)
-                    linkedBinder = service
-                    deathRecipient = recipient
                 } catch (e: RemoteException) {
                     // Binder already dead at link time — the exact race COLUMBA-AZ
-                    // hit. Treat as disconnected and let the rebind path recover.
+                    // hit. Roll back the refs we just published and treat as
+                    // disconnected; the rebind path recovers.
+                    linkedBinder.set(null)
+                    deathRecipient.set(null)
                     Log.w(TAG, "linkToDeath failed; binder already dead", e)
                     trySend(null)
                     return

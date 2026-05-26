@@ -41,6 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.viewmodel.OnboardingViewModel
+import androidx.compose.ui.res.stringResource
+import network.columba.app.R
 
 /**
  * Welcome screen shown on first launch for fresh installs.
@@ -208,7 +210,7 @@ fun WelcomeScreen(
                     enabled = !state.isSaving,
                 ) {
                     Text(
-                        text = "Skip",
+                        text = stringResource(R.string.skip),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

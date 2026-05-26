@@ -184,7 +184,7 @@ internal class ClientRnsCore(
         val cb = object : IRnsPacketCallback.Stub() {
             override fun onPacket(packet: ReceivedPacket?) { if (packet != null) trySend(packet) }
         }
-        remote.registerPacketObserver(cb)
+        if (!registerObserverOrClose { remote.registerPacketObserver(cb) }) return@callbackFlow
         awaitClose { runCatching { remote.unregisterPacketObserver(cb) } }
     }
 
@@ -210,7 +210,7 @@ internal class ClientRnsCore(
         val cb = object : IRnsLinkEventCallback.Stub() {
             override fun onLinkEvent(event: LinkEvent?) { if (event != null) trySend(event) }
         }
-        remote.registerLinkObserver(cb)
+        if (!registerObserverOrClose { remote.registerLinkObserver(cb) }) return@callbackFlow
         awaitClose { runCatching { remote.unregisterLinkObserver(cb) } }
     }
 
@@ -279,7 +279,7 @@ internal class ClientRnsCore(
         val cb = object : IRnsAnnounceCallback.Stub() {
             override fun onAnnounce(event: AnnounceEvent?) { if (event != null) trySend(event) }
         }
-        remote.registerAnnounceObserver(cb)
+        if (!registerObserverOrClose { remote.registerAnnounceObserver(cb) }) return@callbackFlow
         awaitClose { runCatching { remote.unregisterAnnounceObserver(cb) } }
     }
 

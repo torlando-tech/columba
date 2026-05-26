@@ -242,6 +242,13 @@ private const val OBSERVER_TAG = "ClientRnsObserver"
  * propagated), so the bound-service layer's `flatMapLatest` re-subscribes once
  * the backend rebinds.
  *
+ * Closing **without** the cause is deliberate — do NOT change this to
+ * `close(e)`. Most of these observers are collected via `.launchIn(scope)`
+ * with no `.catch`, so `close(e)` would re-throw the [RemoteException] into
+ * that collector and reintroduce the exact uncaught-coroutine crash this
+ * guards against. The dead-backend signal is intentionally dropped here; the
+ * rebind path is what restores the stream.
+ *
  * @return true if registration succeeded; false if the backend was dead — in
  *   which case the flow is already closed and the caller should
  *   `return@callbackFlow` to skip the awaitClose unregister.

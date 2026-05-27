@@ -277,4 +277,12 @@ class MessagingScreenLinkUtilsTest {
         val result = toBrowsableUrl("9ce92808be498e9e05590ff27cbfdfe:/page/index.mu")
         assertEquals("https://9ce92808be498e9e05590ff27cbfdfe:/page/index.mu", result)
     }
+
+    @Test
+    fun `NomadNet address with an interior space is not scheme-normalized`() {
+        // BARE_NOMADNET_ADDRESS shares NOMADNET_ADDRESS's path char class, so a raw address
+        // containing a space (excluded from a real path) is not accepted as a NomadNet link.
+        val result = toBrowsableUrl("9ce92808be498e9e05590ff27cbfdfe4:/page/foo bar")
+        assertEquals("https://9ce92808be498e9e05590ff27cbfdfe4:/page/foo bar", result)
+    }
 }

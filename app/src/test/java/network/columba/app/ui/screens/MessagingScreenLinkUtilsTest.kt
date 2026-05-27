@@ -231,4 +231,58 @@ class MessagingScreenLinkUtilsTest {
         val result = toBrowsableUrl("https://user:pass@example.com")
         assertEquals("https://user:pass@example.com", result)
     }
+
+    // ==========================================
+    // NomadNet Address Tests (#921)
+    // ==========================================
+
+    @Test
+    fun `bare NomadNet page address gets nomadnetwork scheme`() {
+        val result = toBrowsableUrl("9ce92808be498e9e05590ff27cbfdfe4:/page/forum/register.mu")
+        assertEquals(
+            "nomadnetwork://9ce92808be498e9e05590ff27cbfdfe4:/page/forum/register.mu",
+            result,
+        )
+    }
+
+    @Test
+    fun `bare NomadNet file address gets nomadnetwork scheme`() {
+        val result = toBrowsableUrl("9ce92808be498e9e05590ff27cbfdfe4:/file/photo.jpg")
+        assertEquals("nomadnetwork://9ce92808be498e9e05590ff27cbfdfe4:/file/photo.jpg", result)
+    }
+
+    @Test
+    fun `uppercase hex NomadNet address gets nomadnetwork scheme`() {
+        val result = toBrowsableUrl("9CE92808BE498E9E05590FF27CBFDFE4:/page/index.mu")
+        assertEquals("nomadnetwork://9CE92808BE498E9E05590FF27CBFDFE4:/page/index.mu", result)
+    }
+
+    @Test
+    fun `already-schemed nomadnetwork address is preserved`() {
+        val result = toBrowsableUrl("nomadnetwork://9ce92808be498e9e05590ff27cbfdfe4:/page/index.mu")
+        assertEquals("nomadnetwork://9ce92808be498e9e05590ff27cbfdfe4:/page/index.mu", result)
+    }
+
+    @Test
+    fun `bare 32-hex hash without path is not treated as NomadNet address`() {
+        // A bare hash (no ":/path") is commonly a pasted identity/destination hash, not a
+        // navigable page link, so it falls through to the default https handling (#921).
+        val result = toBrowsableUrl("9ce92808be498e9e05590ff27cbfdfe4")
+        assertEquals("https://9ce92808be498e9e05590ff27cbfdfe4", result)
+    }
+
+    @Test
+    fun `31-char hex prefix is not treated as NomadNet address`() {
+        // One hex short of a destination hash must not match.
+        val result = toBrowsableUrl("9ce92808be498e9e05590ff27cbfdfe:/page/index.mu")
+        assertEquals("https://9ce92808be498e9e05590ff27cbfdfe:/page/index.mu", result)
+    }
+
+    @Test
+    fun `NomadNet address with an interior space is not scheme-normalized`() {
+        // BARE_NOMADNET_ADDRESS shares NOMADNET_ADDRESS's path char class, so a raw address
+        // containing a space (excluded from a real path) is not accepted as a NomadNet link.
+        val result = toBrowsableUrl("9ce92808be498e9e05590ff27cbfdfe4:/page/foo bar")
+        assertEquals("https://9ce92808be498e9e05590ff27cbfdfe4:/page/foo bar", result)
+    }
 }

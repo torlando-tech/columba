@@ -118,8 +118,13 @@ class PythonRnsTelemetry(
             // command-dict shape `{0x01: timebase}` (Sideband's
             // `_COMMAND_TELEMETRY_REQUEST`) was verified live against a
             // Fold 7 host ↔ S21 member pair in commit `61598cf1`.
+            // Timebase rides the wire in epoch SECONDS (Sideband-interop) but
+            // arrives here in millis; the shared converter also maps the
+            // first-request null to 0. See
+            // [TelemeterCodec.telemetryRequestTimebaseSeconds]. (#927)
+            val timebaseSeconds = TelemeterCodec.telemetryRequestTimebaseSeconds(timebase)
             val commandList = listOf(
-                mapOf(0x01 to (timebase ?: 0L)).toPyDict(),
+                mapOf(0x01 to timebaseSeconds).toPyDict(),
             ).toPyList()
             val fields = buildFieldsDict {
                 putRaw(LxmfFields.FIELD_COMMANDS, commandList)

@@ -11,6 +11,9 @@ interface InterfaceFirstSeenDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIfNotExists(entity: InterfaceFirstSeenEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllIfNotExists(entities: List<InterfaceFirstSeenEntity>)
+
     @Query("SELECT * FROM interface_first_seen WHERE interfaceId IN (:ids)")
     suspend fun getFirstSeenBatch(ids: List<String>): List<InterfaceFirstSeenEntity>
 }

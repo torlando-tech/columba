@@ -4,7 +4,6 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.SystemClock
 import android.util.Log
-import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -201,13 +200,6 @@ import java.util.Locale
 
 private const val URL_ANNOTATION_TAG = "url"
 
-/** Matches nomadnetwork:// and lxma:// URIs (not caught by Patterns.WEB_URL). */
-private val CUSTOM_SCHEME_URL =
-    java.util.regex.Pattern.compile(
-        """(?:nomadnetwork|lxma)://[^\s,;!?)\]]+(?<![.,;])""",
-        java.util.regex.Pattern.CASE_INSENSITIVE,
-    )
-
 @Composable
 private fun LinkifiedMessageText(
     text: String,
@@ -233,26 +225,8 @@ private fun LinkifiedMessageText(
     LaunchedEffect(text, linkColor) {
         val result =
             withContext(Dispatchers.Default) {
-                // Collect all URL ranges: standard web URLs + custom schemes
-                val ranges = mutableListOf<Pair<Int, Int>>()
-
-                val webMatcher = Patterns.WEB_URL.matcher(text)
-                while (webMatcher.find()) {
-                    ranges.add(webMatcher.start() to webMatcher.end())
-                }
-
-                val customSchemeMatcher =
-                    CUSTOM_SCHEME_URL.matcher(text)
-                while (customSchemeMatcher.find()) {
-                    val start = customSchemeMatcher.start()
-                    val end = customSchemeMatcher.end()
-                    // Only add if not already covered by a WEB_URL match
-                    if (ranges.none { it.first <= start && it.second >= end }) {
-                        ranges.add(start to end)
-                    }
-                }
-
-                ranges.sortBy { it.first }
+                // NomadNet addresses, custom-scheme URIs, and web URLs — sorted, de-overlapped.
+                val ranges = detectLinkRanges(text)
 
                 buildAnnotatedString {
                     var currentIndex = 0

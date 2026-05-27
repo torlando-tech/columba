@@ -17,6 +17,7 @@ ktlint = "12.1.1"
 detekt = "1.23.7"
 serialization = "1.10.0"
 coil = "2.7.0"
+desugarJdkLibs = "2.1.5"
 
 # JitPack-published libraries (formerly git submodules)
 reticulumKt = "v0.0.20"
@@ -66,6 +67,12 @@ lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.r
 
 # Core
 core-ktx = { module = "androidx.core:core-ktx", version = "1.15.0" }
+
+# Android Java 8+ API desugaring — required so java.time.* (LocalTime,
+# LocalDateTime, …) used transitively by reticulum-kt's AutoInterface
+# resolves on minSdk 24 devices. Without this the kotlinBackend flavor
+# throws NoClassDefFoundError: java.time.LocalTime at startInterface().
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 
 # DataStore
 datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "dataStore" }

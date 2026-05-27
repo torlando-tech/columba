@@ -270,6 +270,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Backport java.time.* (and other Java 8+ APIs) to minSdk 24 devices.
+        // reticulum-kt's AutoInterface logger touches LocalTime/LocalDateTime —
+        // without desugaring this crashes with NoClassDefFoundError on Android 7.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -428,6 +432,9 @@ sentry {
 }
 
 dependencies {
+    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     implementation(project(":domain"))
     implementation(project(":data"))
     implementation(libs.lxst.kt)

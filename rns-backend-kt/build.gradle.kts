@@ -42,6 +42,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // reticulum-kt's AutoInterface uses java.time.LocalTime (API 26+).
+        // Enable desugaring so NativeInterfaceFactory.startInterface works on minSdk 24.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -63,6 +66,9 @@ android {
 }
 
 dependencies {
+    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // Backend-seam contract (value types, capabilities, interfaces). Implementation
     // scope only — consumers reach value types through `:rns-api` directly via
     // `:reticulum`'s `api()` edge today, and through the `:rns-ipc` adapter

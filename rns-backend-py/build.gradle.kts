@@ -65,6 +65,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Keep desugaring in sync with the rest of the rns-* modules.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlin {
@@ -134,6 +136,9 @@ chaquopy {
 }
 
 dependencies {
+    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // Backend-seam contract (value types, capabilities, sub-interfaces).
     implementation(project(":rns-api"))
 

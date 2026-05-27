@@ -783,17 +783,17 @@ class MapViewModel
 
                         // Batch-insert first-seen rows in a single Room transaction
                         // to avoid N+1 INSERT OR IGNORE statements per interface.
-                        if (withId.isNotEmpty()) {
-                            interfaceFirstSeenDao.insertAllIfNotExists(
-                                withId.map { (id, _) ->
-                                    network.columba.app.data.db.entity
-                                        .InterfaceFirstSeenEntity(id, now)
-                                },
-                            )
+                        val entities =
+                            withId.map { (id, _) ->
+                                network.columba.app.data.db.entity
+                                    .InterfaceFirstSeenEntity(id, now)
+                            }
+                        if (entities.isNotEmpty()) {
+                            interfaceFirstSeenDao.insertAllIfNotExists(entities)
                         }
 
                         // Batch-fetch first-seen timestamps
-                        val ids = withId.map { it.first }
+                        val ids = entities.map { it.interfaceId }
                         val firstSeenMap =
                             if (ids.isNotEmpty()) {
                                 interfaceFirstSeenDao

@@ -1,15 +1,18 @@
 package network.columba.app.rns.ipc.server
 
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.model.DeliveryMethod
-import network.columba.app.rns.api.model.FileAttachment
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.ipc.AttachmentBlob
 import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.IRnsLxmf
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback
@@ -17,7 +20,6 @@ import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
 import network.columba.app.rns.ipc.callback.IRnsResultCallback
 import network.columba.app.rns.ipc.callback.IRnsStringCallback
-import network.columba.app.rns.ipc.toAttachmentPairs
 
 internal class ServerRnsLxmf(
     private val impl: RnsLxmf,
@@ -46,18 +48,20 @@ internal class ServerRnsLxmf(
         destinationHash: ByteArray,
         content: String,
         sourceIdentity: Identity,
-        imageData: ByteArray?,
-        imageFormat: String?,
-        fileAttachments: MutableList<FileAttachment>,
+        attachmentsBlob: ParcelFileDescriptor?,
         cb: IRnsResultCallback,
     ) = dispatch(cb, scope) {
+        // Read the out-of-band attachment payload back into memory (fast local
+        // temp-file read just staged by the client; see AttachmentBlob). Runs on
+        // the dispatch coroutine, so it never blocks a Binder thread.
+        val payload = withContext(Dispatchers.IO) { AttachmentBlob.readFromPfd(attachmentsBlob) }
         val receipt = impl.sendLxmfMessage(
             destinationHash,
             content,
             sourceIdentity,
-            imageData,
-            imageFormat,
-            fileAttachments.toAttachmentPairs().takeIf { it.isNotEmpty() },
+            payload.imageData,
+            payload.imageFormat,
+            payload.fileAttachments.takeIf { it.isNotEmpty() },
         ).getOrThrow()
         Bundle().apply { putParcelable(BundleKeys.RECEIPT, receipt) }
     }
@@ -68,24 +72,26 @@ internal class ServerRnsLxmf(
         sourceIdentity: Identity,
         deliveryMethod: DeliveryMethod,
         tryPropagationOnFail: Boolean,
-        imageData: ByteArray?,
-        imageFormat: String?,
-        fileAttachments: MutableList<FileAttachment>,
+        attachmentsBlob: ParcelFileDescriptor?,
         replyToMessageId: String?,
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Bundle?,
         cb: IRnsResultCallback,
     ) = dispatch(cb, scope) {
+        // Read the out-of-band attachment payload back into memory (fast local
+        // temp-file read just staged by the client; see AttachmentBlob). Runs on
+        // the dispatch coroutine, so it never blocks a Binder thread.
+        val payload = withContext(Dispatchers.IO) { AttachmentBlob.readFromPfd(attachmentsBlob) }
         val receipt = impl.sendLxmfMessageWithMethod(
             destinationHash,
             content,
             sourceIdentity,
             deliveryMethod,
             tryPropagationOnFail,
-            imageData,
-            imageFormat,
-            fileAttachments.toAttachmentPairs().takeIf { it.isNotEmpty() },
+            payload.imageData,
+            payload.imageFormat,
+            payload.fileAttachments.takeIf { it.isNotEmpty() },
             replyToMessageId,
             replyQuotedContent,
             iconAppearance,

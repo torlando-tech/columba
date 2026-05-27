@@ -134,9 +134,13 @@ internal class NativeMessageSender(
         }
 
         if (!options.fileAttachments.isNullOrEmpty()) {
+            // [[name_str, data_bytes], ...] — filename is a `str` to match upstream
+            // Sideband's `[basename, bytes]` shape (receivers render it via
+            // `str(name)`, so a `bytes` name shows up as its `b'...'` repr). Kept in
+            // lockstep with PythonRnsLxmf.
             fields[LxmfFields.FIELD_FILE_ATTACHMENTS] =
                 options.fileAttachments.map { (name, data) ->
-                    listOf(name.toByteArray(), data)
+                    listOf(name, data)
                 }
         }
 

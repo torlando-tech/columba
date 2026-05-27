@@ -51,6 +51,8 @@ import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.model.ReticulumConfig
 import network.columba.app.rns.api.model.VoiceCallState
 import kotlinx.coroutines.flow.Flow
+import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -76,9 +78,18 @@ import org.robolectric.RobolectricTestRunner
 class RnsBackendIpcRoundTripTest {
     private lateinit var fake: FakeRnsBackend
 
+    // Scratch dir for ClientRnsLxmf's out-of-band attachment PFD staging.
+    private lateinit var attachmentCacheDir: java.io.File
+
     @Before
     fun setUp() {
         fake = FakeRnsBackend()
+        attachmentCacheDir = java.nio.file.Files.createTempDirectory("rns-ipc-attach-test").toFile()
+    }
+
+    @After
+    fun tearDown() {
+        attachmentCacheDir.deleteRecursively()
     }
 
     @Test
@@ -230,6 +241,74 @@ class RnsBackendIpcRoundTripTest {
         assertEquals(flipped, client.capabilities.value)
     }
 
+    @Test
+    fun `large file attachment and image survive the send round trip via out-of-band PFD`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        // 3 MB — well past Binder's ~1 MB transaction cap, the size that threw
+        // TransactionTooLargeException when attachment bytes rode inline. The
+        // non-trivial byte patterns let assertArrayEquals catch any truncation
+        // or framing slip in AttachmentBlob.
+        val bigFile = ByteArray(3 * 1024 * 1024) { (it % 251).toByte() }
+        val image = ByteArray(700 * 1024) { (it % 97).toByte() }
+        val identity = Identity(hash = ByteArray(16), publicKey = ByteArray(32), privateKey = null)
+
+        val result = client.lxmf.sendLxmfMessageWithMethod(
+            destinationHash = ByteArray(16) { 0x11 },
+            content = "here is a file",
+            sourceIdentity = identity,
+            deliveryMethod = DeliveryMethod.DIRECT,
+            tryPropagationOnFail = false,
+            imageData = image,
+            imageFormat = "jpg",
+            fileAttachments = listOf("report.pdf" to bigFile),
+            replyToMessageId = null,
+            replyQuotedContent = null,
+            iconAppearance = null,
+            extraFields = null,
+        )
+        advanceUntilIdle()
+
+        assertTrue("send should succeed", result.isSuccess)
+        assertEquals("here is a file", fake.lxmf.lastContent)
+        assertEquals("jpg", fake.lxmf.lastImageFormat)
+        assertArrayEquals("image bytes must survive the PFD round trip", image, fake.lxmf.lastImageData)
+        val files = fake.lxmf.lastFileAttachments
+        assertEquals(1, files?.size)
+        assertEquals("report.pdf", files?.first()?.first)
+        assertArrayEquals("3 MB file must survive the PFD round trip", bigFile, files?.first()?.second)
+    }
+
+    @Test
+    fun `text-only send sends a null attachment blob`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        val identity = Identity(hash = ByteArray(16), publicKey = ByteArray(32), privateKey = null)
+        val result = client.lxmf.sendLxmfMessageWithMethod(
+            destinationHash = ByteArray(16) { 0x22 },
+            content = "no attachments here",
+            sourceIdentity = identity,
+            deliveryMethod = DeliveryMethod.DIRECT,
+            tryPropagationOnFail = false,
+            imageData = null,
+            imageFormat = null,
+            fileAttachments = null,
+            replyToMessageId = null,
+            replyQuotedContent = null,
+            iconAppearance = null,
+            extraFields = null,
+        )
+        advanceUntilIdle()
+
+        assertTrue("send should succeed", result.isSuccess)
+        assertEquals("no attachments here", fake.lxmf.lastContent)
+        assertEquals(null, fake.lxmf.lastImageData)
+        // Server maps an empty payload back to null file attachments.
+        assertEquals(null, fake.lxmf.lastFileAttachments)
+    }
+
     private suspend fun TestScope.buildClientAndServer(): Pair<RnsBackend, RnsBackendServer> {
         // Single shared scheduler so advanceUntilIdle() drains both halves of
         // the round trip. Separate jobs so we can cancel scopes independently
@@ -239,7 +318,7 @@ class RnsBackendIpcRoundTripTest {
         val serverScope = CoroutineScope(dispatcher + SupervisorJob())
         val clientScope = CoroutineScope(dispatcher + SupervisorJob())
         val server = RnsBackendServer(fake, serverScope)
-        val client = RnsBackendClient(clientScope)
+        val client = RnsBackendClient(clientScope, attachmentCacheDir)
         client.connect(server)
         return client to server
     }
@@ -337,6 +416,30 @@ private class FakeRnsLxmf : RnsLxmf {
     private val deliveryStatus: MutableSharedFlow<DeliveryStatusUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
     private val propagation: MutableSharedFlow<PropagationState> = MutableSharedFlow(extraBufferCapacity = 8)
 
+    // Last-send capture so tests can assert exactly what reached the backend
+    // after crossing the AIDL seam (the attachment payload travels out-of-band
+    // through a PFD, so byte-for-byte fidelity is what we're verifying).
+    @Volatile var lastContent: String? = null
+    @Volatile var lastImageData: ByteArray? = null
+    @Volatile var lastImageFormat: String? = null
+    @Volatile var lastFileAttachments: List<Pair<String, ByteArray>>? = null
+
+    private fun recordAndAck(
+        content: String,
+        imageData: ByteArray?,
+        imageFormat: String?,
+        fileAttachments: List<Pair<String, ByteArray>>?,
+        destinationHash: ByteArray,
+    ): Result<MessageReceipt> {
+        lastContent = content
+        lastImageData = imageData
+        lastImageFormat = imageFormat
+        lastFileAttachments = fileAttachments
+        return Result.success(
+            MessageReceipt(messageHash = ByteArray(0), timestamp = 0L, destinationHash = destinationHash),
+        )
+    }
+
     override suspend fun sendLxmfMessage(
         destinationHash: ByteArray,
         content: String,
@@ -344,7 +447,8 @@ private class FakeRnsLxmf : RnsLxmf {
         imageData: ByteArray?,
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
-    ): Result<MessageReceipt> = Result.failure(NotImplementedError())
+    ): Result<MessageReceipt> =
+        recordAndAck(content, imageData, imageFormat, fileAttachments, destinationHash)
 
     override suspend fun sendLxmfMessageWithMethod(
         destinationHash: ByteArray,
@@ -359,7 +463,8 @@ private class FakeRnsLxmf : RnsLxmf {
         replyQuotedContent: String?,
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
-    ): Result<MessageReceipt> = Result.failure(NotImplementedError())
+    ): Result<MessageReceipt> =
+        recordAndAck(content, imageData, imageFormat, fileAttachments, destinationHash)
 
     override suspend fun sendReaction(
         destinationHash: ByteArray,

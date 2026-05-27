@@ -36,7 +36,7 @@ def test_file_columba_to_sideband(interop, attach_bytes):
     attachments = file_attachments(msg.fields)
     assert len(attachments) == 1
     name, data = attachments[0]
-    assert name == b"attach.txt"
+    assert name == "attach.txt"
     assert data == attach_bytes
 
 

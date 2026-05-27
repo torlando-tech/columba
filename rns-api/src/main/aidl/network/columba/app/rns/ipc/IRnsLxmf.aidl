@@ -8,16 +8,19 @@
 //   - getOutboundPropagationNode (Result<String?>) — uses IRnsStringCallback, not Bundle.
 //   - Result<Unit>        → Bundle.EMPTY
 //
-// File attachments cross AIDL as `List<FileAttachment>` Parcelable wrappers
-// (AIDL has neither Pair nor List<byte[]>). :rns-ipc converts to/from the
-// Kotlin `List<Pair<String, ByteArray>>` shape at the seam. extraFields is a
-// generic Bundle whose keys are stringified LXMF field numbers ("4", "5",
-// "16", …); values are whatever the field accepts (typically byte[] or
-// String). See the per-call documentation for which fields each method writes.
+// Binary attachment payloads (image bytes + file attachments) do NOT ride
+// inline: a Binder transaction caps at ~1 MB shared per process, so a multi-MB
+// file threw TransactionTooLargeException. They cross as a single read-only
+// `ParcelFileDescriptor attachmentsBlob` (a dup'd fd, not the bytes) that
+// :rns-ipc's AttachmentBlob serializes on the client and reads on the server;
+// null means "no binary payload". extraFields is a generic Bundle whose keys
+// are stringified LXMF field numbers ("4", "5", "16", …); values are whatever
+// the field accepts (typically byte[] or String) and are expected to stay small
+// — large binary fields must go through attachmentsBlob, not here. See the
+// per-call documentation for which fields each method writes.
 package network.columba.app.rns.ipc;
 
 import network.columba.app.rns.api.model.DeliveryMethod;
-import network.columba.app.rns.api.model.FileAttachment;
 import network.columba.app.rns.api.model.IconAppearance;
 import network.columba.app.rns.api.model.Identity;
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback;
@@ -33,9 +36,7 @@ oneway interface IRnsLxmf {
         in byte[] destinationHash,
         String content,
         in Identity sourceIdentity,
-        in @nullable byte[] imageData,
-        in @nullable String imageFormat,
-        in List<FileAttachment> fileAttachments,
+        in @nullable ParcelFileDescriptor attachmentsBlob,
         in IRnsResultCallback cb);
 
     void sendLxmfMessageWithMethod(
@@ -44,9 +45,7 @@ oneway interface IRnsLxmf {
         in Identity sourceIdentity,
         in DeliveryMethod deliveryMethod,
         boolean tryPropagationOnFail,
-        in @nullable byte[] imageData,
-        in @nullable String imageFormat,
-        in List<FileAttachment> fileAttachments,
+        in @nullable ParcelFileDescriptor attachmentsBlob,
         in @nullable String replyToMessageId,
         in @nullable String replyQuotedContent,
         in @nullable IconAppearance iconAppearance,

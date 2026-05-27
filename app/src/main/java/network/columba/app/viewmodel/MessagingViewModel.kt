@@ -1186,6 +1186,28 @@ class MessagingViewModel
                     val imageFormat = _selectedImageFormat.value
                     val fileAttachments = _selectedFileAttachments.value
 
+                    // Reject pathologically large attachments before sending.
+                    // Attachment bytes now cross to :reticulum out-of-band (a
+                    // ParcelFileDescriptor, so no Binder ~1 MB limit), but they
+                    // still live fully in memory in both processes plus
+                    // Reticulum's Resource buffers — an unbounded file OOMs
+                    // instead of sending. Surface a friendly message rather than
+                    // a buried failure.
+                    val totalAttachmentBytes =
+                        (imageData?.size?.toLong() ?: 0L) + fileAttachments.sumOf { it.sizeBytes.toLong() }
+                    if (totalAttachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
+                        Log.w(
+                            TAG,
+                            "Attachment payload too large to send: $totalAttachmentBytes bytes " +
+                                "(max $MAX_ATTACHMENT_TOTAL_BYTES)",
+                        )
+                        _fileAttachmentError.emit(
+                            "Attachment too large to send (${formatBytesHelper(totalAttachmentBytes)}). " +
+                                "Maximum is ${formatBytesHelper(MAX_ATTACHMENT_TOTAL_BYTES)}.",
+                        )
+                        return@launch
+                    }
+
                     val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
                     val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
@@ -1375,7 +1397,7 @@ class MessagingViewModel
                     isFromMe = true,
                     status = "failed",
                     deliveryMethod = deliveryMethodString,
-                    errorMessage = error.message,
+                    errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
                 )
             saveMessageToDatabase(destinationHash, currentPeerName, message)
@@ -2489,6 +2511,40 @@ private fun DeliveryMethod.toStorageString(): String =
 private const val OPPORTUNISTIC_MAX_BYTES_HELPER = 295
 private const val OUTGOING_HEX_DIR = "outgoing_hex"
 private const val STREAM_HEX_THRESHOLD = 512 * 1024 // Stream to disk above 512KB to avoid OOM
+
+/**
+ * Defense-in-depth ceiling on the total outbound attachment payload (image +
+ * files). Attachment bytes cross to the `:reticulum` process out-of-band via a
+ * ParcelFileDescriptor, so the Binder ~1 MB transaction limit no longer applies
+ * — but the bytes are still held fully in memory in both processes plus
+ * Reticulum's Resource buffers, so an unbounded file would OOM rather than
+ * send. 32 MB is generous for the mesh use case (large files are slow but
+ * allowed) while staying clear of that cliff. Tune here if needed.
+ */
+internal const val MAX_ATTACHMENT_TOTAL_BYTES = 32L * 1024 * 1024
+
+/** Human-readable byte size for user-facing attachment messages (MB / KB / B). */
+private fun formatBytesHelper(bytes: Long): String =
+    when {
+        bytes >= 1024L * 1024L -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+        bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
+        else -> "$bytes B"
+    }
+
+/**
+ * Map a raw send-failure message to something a user can act on. The Binder
+ * over-size failure mode (`TransactionTooLargeException`) should no longer
+ * reach here now that attachments transfer out-of-band, but if any residual
+ * inline payload ever overflows the transaction we show "attachment too large"
+ * instead of leaking the raw exception text into the conversation.
+ */
+private fun friendlyOutboundError(raw: String?): String? =
+    when {
+        raw == null -> null
+        raw.contains("TransactionTooLarge", ignoreCase = true) ->
+            "Attachment too large to send. Try a smaller file."
+        else -> raw
+    }
 
 private fun determineDeliveryMethod(
     sanitized: String,

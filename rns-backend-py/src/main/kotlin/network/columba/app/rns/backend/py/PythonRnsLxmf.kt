@@ -329,15 +329,14 @@ class PythonRnsLxmf(
         }
 
         if (!fileAttachments.isNullOrEmpty()) {
-            // FIELD_FILE_ATTACHMENTS: [[name_bytes, data_bytes], ...] — byte-identical
-            // to NativeMessageSender (`listOf(name.toByteArray(), data)`), so
-            // cross-backend Columba attachment interop is guaranteed by construction.
-            // Note: upstream Sideband uses a `str` filename (`[basename, bytes]`);
-            // Columba (both backends) uses `bytes`. Columba<->Sideband attachment-
-            // filename interop is a Phase B on-device verification item — not a
-            // wire-shape bug on this backend.
+            // FIELD_FILE_ATTACHMENTS: [[name_str, data_bytes], ...]. The filename is a
+            // `str`, matching upstream Sideband's `[basename, bytes]` shape (and the
+            // sibling FIELD_IMAGE above, which sends its format as a str). Sideband and
+            // older Columba render the name via `str(name)`, so a `bytes` filename
+            // surfaces as its `b'...'` repr on the receiver — sending a `str` is the
+            // interop-correct encoding. Kept in lockstep with NativeMessageSender.
             val attachments = fileAttachments.map { (name, data) ->
-                listOf(name.toByteArray(), data).toPyList()
+                listOf(name, data).toPyList()
             }
             fields[LxmfFields.FIELD_FILE_ATTACHMENTS] = attachments.toPyList()
         }

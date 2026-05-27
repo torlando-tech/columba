@@ -49,16 +49,18 @@ def image_format(fields: dict) -> str:
     return fmt.decode("utf-8") if isinstance(fmt, (bytes, bytearray)) else fmt
 
 
-def file_attachments(fields: dict) -> list[tuple[bytes, bytes]]:
-    """`FIELD_FILE_ATTACHMENTS` is `[[name_bytes, data_bytes], …]`. Coerce
-    both elements to `bytes` so test asserts don't have to care about
-    Chaquopy jarray vs python bytes."""
+def file_attachments(fields: dict) -> list[tuple[str, bytes]]:
+    """`FIELD_FILE_ATTACHMENTS` is `[[name_str, data_bytes], …]` — the filename
+    is a `str`, matching Sideband's `[basename, bytes]` shape. Coerce the name to
+    `str` (decoding defensively if a peer still sends bytes) and the data to
+    `bytes`, so asserts don't have to care about Chaquopy jarray vs python bytes."""
     raw = fields[FIELD_FILE_ATTACHMENTS]
     out = []
     for entry in raw:
         if isinstance(entry, (list, tuple)) and len(entry) >= 2:
             n, d = entry[0], entry[1]
-            out.append((bytes(n), bytes(d)))
+            name = n.decode("utf-8", "replace") if isinstance(n, (bytes, bytearray)) else str(n)
+            out.append((name, bytes(d)))
     return out
 
 

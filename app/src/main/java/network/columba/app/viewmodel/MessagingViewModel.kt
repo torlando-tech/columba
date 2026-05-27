@@ -2523,12 +2523,12 @@ private const val STREAM_HEX_THRESHOLD = 512 * 1024 // Stream to disk above 512K
  */
 internal const val MAX_ATTACHMENT_TOTAL_BYTES = 32L * 1024 * 1024
 
-/** Human-readable byte size for user-facing attachment messages (MB, or KB when small). */
+/** Human-readable byte size for user-facing attachment messages (MB / KB / B). */
 private fun formatBytesHelper(bytes: Long): String =
-    if (bytes >= 1024L * 1024L) {
-        "%.1f MB".format(bytes / (1024.0 * 1024.0))
-    } else {
-        "%.0f KB".format(bytes / 1024.0)
+    when {
+        bytes >= 1024L * 1024L -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+        bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
+        else -> "$bytes B"
     }
 
 /**

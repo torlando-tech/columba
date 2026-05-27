@@ -114,24 +114,32 @@ internal object AttachmentBlob {
             val version = inp.readInt()
             if (version != VERSION) throw IOException("Unsupported attachment blob version: $version")
 
+            // Lengths come straight off the stream; a corrupt/truncated blob could
+            // carry a negative count. Reject it as a clean IOException rather than
+            // letting ByteArray(-n) / ArrayList(-n) throw NegativeArraySizeException.
             val imageLen = inp.readInt()
             var imageData: ByteArray? = null
             var imageFormat: String? = null
             if (imageLen != NO_IMAGE) {
-                imageData = ByteArray(imageLen).also { inp.readFully(it) }
+                imageData = ByteArray(checkLen(imageLen, "imageLen")).also { inp.readFully(it) }
                 if (inp.readBoolean()) imageFormat = inp.readUTF()
             }
 
-            val fileCount = inp.readInt()
+            val fileCount = checkLen(inp.readInt(), "fileCount")
             val files = ArrayList<Pair<String, ByteArray>>(fileCount)
             repeat(fileCount) {
                 val name = inp.readUTF()
-                val dataLen = inp.readInt()
+                val dataLen = checkLen(inp.readInt(), "dataLen")
                 val data = ByteArray(dataLen).also { inp.readFully(it) }
                 files.add(name to data)
             }
             return Payload(imageData, imageFormat, files)
         }
+    }
+
+    private fun checkLen(value: Int, field: String): Int {
+        if (value < 0) throw IOException("Bad attachment blob: negative $field ($value)")
+        return value
     }
 
     /**

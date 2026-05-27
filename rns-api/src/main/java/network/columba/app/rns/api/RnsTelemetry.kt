@@ -49,7 +49,10 @@ interface RnsTelemetry {
      *
      * @param destinationHash Destination hash bytes (16 bytes identity hash) of the collector
      * @param sourceIdentity Identity of the sender
-     * @param timebase Optional Unix timestamp (milliseconds) to request telemetry since
+     * @param timebase Optional last-request time in epoch **milliseconds** to request
+     *   telemetry since. The backend converts this to epoch **seconds** before it goes
+     *   on the wire — Sideband's FIELD_COMMANDS telemetry-request timebase is seconds
+     *   (#927). Null (no prior request) means "all available history".
      * @param isCollectorRequest True if requesting from a collector (default)
      * @return Result containing MessageReceipt or failure
      */

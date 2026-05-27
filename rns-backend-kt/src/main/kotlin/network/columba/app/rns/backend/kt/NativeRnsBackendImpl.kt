@@ -1427,10 +1427,16 @@ class NativeRnsBackendImpl(
         timebase: Long?,
         isCollectorRequest: Boolean,
     ): Result<MessageReceipt> {
+        // Timebase rides the wire in epoch SECONDS (Sideband-interop) but
+        // arrives here in millis; the shared converter also maps the
+        // first-request null to 0 so we never ship int(None) into the list.
+        // See TelemeterCodec.telemetryRequestTimebaseSeconds. (#927)
+        val timebaseSeconds =
+            network.columba.app.rns.api.util.TelemeterCodec.telemetryRequestTimebaseSeconds(timebase)
         val commands =
             listOf(
                 mapOf(
-                    0x01 to listOf(timebase, isCollectorRequest),
+                    0x01 to listOf(timebaseSeconds, isCollectorRequest),
                 ),
             )
         return sendLxmfMessageWithMethod(

@@ -10,10 +10,11 @@ import kotlin.math.round
 /**
  * Single source of truth for the Sideband-compatible Telemeter wire
  * format (LXMF `FIELD_TELEMETRY` payload) + Columba's `FIELD_CUSTOM_META`
- * extras. Both backends — Kotlin-native (`rns-backend-kt`) and Python-
- * Chaquopy (`rns-backend-py`) — route through this codec so there's
- * exactly one implementation of the bit-format both apps interoperate
- * over.
+ * extras, plus the `FIELD_COMMANDS` telemetry-request timebase units
+ * ([telemetryRequestTimebaseSeconds]). Both backends — Kotlin-native
+ * (`rns-backend-kt`) and Python-Chaquopy (`rns-backend-py`) — route
+ * through this codec so there's exactly one implementation of the
+ * bit-format both apps interoperate over.
  *
  * Wire-format reference: `Sideband/sbapp/sideband/sense.py`'s
  * `Telemeter.packed()` / `Telemeter.from_packed()`:
@@ -191,6 +192,28 @@ object TelemeterCodec {
         } catch (_: Exception) {
             null
         }
+
+    /**
+     * Convert a last-request time in epoch **milliseconds** (Columba tracks
+     * telemetry request times with `System.currentTimeMillis()`) to the epoch
+     * **seconds** timebase that rides in an LXMF `FIELD_COMMANDS` telemetry
+     * request — `{0x01: [timebase, isCollectorRequest]}`. Both backends route
+     * through here so the request units can't drift from the data units packed
+     * by [packLocationTelemetry] (likewise seconds).
+     *
+     * Sideband reads this field as seconds: `timebase = int(command_timebase)`
+     * then `list_telemetry(after=timebase)` against second-resolution
+     * `{"utc": int(time.time())}` telemetry stamps (Sideband `core.py:5259`,
+     * `sense.py:328`). A milliseconds value read as seconds points the request
+     * ~58000 AD, so collectors return no telemetry and RCH additionally crashes
+     * in `datetime.fromtimestamp` ("year 58337 is out of range").
+     *
+     * Null (the first request, no stored time) maps to 0 — epoch, i.e. "all
+     * available history". 0 is a valid wire value; a literal null would crash
+     * collectors via `int(None)`. (#927)
+     */
+    fun telemetryRequestTimebaseSeconds(lastRequestMillis: Long?): Long =
+        (lastRequestMillis ?: 0L) / 1000L
 
     // ---- msgpack value helpers ---------------------------------------
     // Type-routing packer/unpacker for the polymorphic SID_LOCATION list

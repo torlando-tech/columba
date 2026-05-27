@@ -1,8 +1,6 @@
 package network.columba.app.util
 
 import android.content.ActivityNotFoundException
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
@@ -16,19 +14,16 @@ const val GITHUB_NEW_ISSUE_URL: String = "https://github.com/torlando-tech/colum
  * Attempts to open the given [url] in an external handler (browser, etc.).
  *
  * Many Android devices ship without a default browser or web-capable activity
- * (e.g. heavily customised AOSP / regional Xiaomi builds). Calling
- * [Context.startActivity] with [Intent.ACTION_VIEW] on those devices throws
- * [ActivityNotFoundException] and crashes the app.
+ * (e.g. heavily customised AOSP / regional Xiaomi / Huawei builds). On those,
+ * [Context.startActivity] with [Intent.ACTION_VIEW] throws
+ * [ActivityNotFoundException] — and on some MIUI/EMUI variants [SecurityException]
+ * — for the same "no handler" scenario, crashing the app. This helper swallows
+ * both so the caller can degrade gracefully.
  *
- * This helper:
- *  - sets [Intent.FLAG_ACTIVITY_NEW_TASK] so it can be safely launched from
- *    non-Activity contexts,
- *  - swallows [ActivityNotFoundException],
- *  - copies the URL to the clipboard as a fallback so the user can still reach
- *    the destination manually.
+ * The clipboard is intentionally left untouched: callers may have already placed
+ * their own payload there (e.g. a bug report) that must not be clobbered.
  *
- * @return `true` if an external handler was launched, `false` if the URL was
- *         copied to the clipboard instead.
+ * @return `true` if an external handler was launched, `false` if none could be.
  */
 fun safeOpenUrl(context: Context, url: String): Boolean {
     val intent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {
@@ -38,12 +33,8 @@ fun safeOpenUrl(context: Context, url: String): Boolean {
         context.startActivity(intent)
         true
     } catch (_: ActivityNotFoundException) {
-        copyToClipboard(context, label = "URL", text = url)
+        false
+    } catch (_: SecurityException) {
         false
     }
-}
-
-private fun copyToClipboard(context: Context, label: String, text: String) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    clipboard?.setPrimaryClip(ClipData.newPlainText(label, text))
 }

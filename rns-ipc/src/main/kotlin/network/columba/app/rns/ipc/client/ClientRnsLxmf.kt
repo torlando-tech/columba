@@ -2,6 +2,7 @@ package network.columba.app.rns.ipc.client
 
 import android.os.Bundle
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
@@ -21,16 +23,19 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.ipc.AttachmentBlob
 import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.IRnsLxmf
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback
 import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
-import network.columba.app.rns.ipc.toFileAttachments
+import java.io.File
 
 internal class ClientRnsLxmf(
     private val remote: IRnsLxmf,
     private val scope: CoroutineScope,
+    /** App cache dir used to stage attachment blobs before handing the server a PFD. */
+    private val attachmentCacheDir: File,
 ) : RnsLxmf {
     override suspend fun sendLxmfMessage(
         destinationHash: ByteArray,
@@ -40,21 +45,29 @@ internal class ClientRnsLxmf(
         imageFormat: String?,
         fileAttachments: List<Pair<String, ByteArray>>?,
     ): Result<MessageReceipt> = runCatching {
-        val bundle = awaitResult { cb ->
-            remote.sendLxmfMessage(
-                destinationHash,
-                content,
-                sourceIdentity,
-                imageData,
-                imageFormat,
-                fileAttachments.toFileAttachments(),
-                cb,
-            )
+        // Attachment bytes ride out-of-band via a PFD, never inline in the
+        // Binder transaction (see AttachmentBlob). The PFD is ours to close once
+        // the call settles; the server has read its own dup by then.
+        val blob = withContext(Dispatchers.IO) {
+            AttachmentBlob.writeToPfd(attachmentCacheDir, imageData, imageFormat, fileAttachments)
         }
-        bundle.classLoader = MessageReceipt::class.java.classLoader
-        @Suppress("DEPRECATION")
-        bundle.getParcelable<MessageReceipt>(BundleKeys.RECEIPT)
-            ?: throw RnsException(RnsError.Generic("sendLxmfMessage payload missing 'receipt'", null))
+        try {
+            val bundle = awaitResult { cb ->
+                remote.sendLxmfMessage(
+                    destinationHash,
+                    content,
+                    sourceIdentity,
+                    blob,
+                    cb,
+                )
+            }
+            bundle.classLoader = MessageReceipt::class.java.classLoader
+            @Suppress("DEPRECATION")
+            bundle.getParcelable<MessageReceipt>(BundleKeys.RECEIPT)
+                ?: throw RnsException(RnsError.Generic("sendLxmfMessage payload missing 'receipt'", null))
+        } finally {
+            runCatching { blob?.close() }
+        }
     }
 
     override suspend fun sendLxmfMessageWithMethod(
@@ -71,27 +84,35 @@ internal class ClientRnsLxmf(
         iconAppearance: IconAppearance?,
         extraFields: Map<Int, Any>?,
     ): Result<MessageReceipt> = runCatching {
-        val bundle = awaitResult { cb ->
-            remote.sendLxmfMessageWithMethod(
-                destinationHash,
-                content,
-                sourceIdentity,
-                deliveryMethod,
-                tryPropagationOnFail,
-                imageData,
-                imageFormat,
-                fileAttachments.toFileAttachments(),
-                replyToMessageId,
-                replyQuotedContent,
-                iconAppearance,
-                extraFields?.toExtraFieldsBundle(),
-                cb,
-            )
+        // Attachment bytes ride out-of-band via a PFD, never inline in the
+        // Binder transaction (see AttachmentBlob). The PFD is ours to close once
+        // the call settles; the server has read its own dup by then.
+        val blob = withContext(Dispatchers.IO) {
+            AttachmentBlob.writeToPfd(attachmentCacheDir, imageData, imageFormat, fileAttachments)
         }
-        bundle.classLoader = MessageReceipt::class.java.classLoader
-        @Suppress("DEPRECATION")
-        bundle.getParcelable<MessageReceipt>(BundleKeys.RECEIPT)
-            ?: throw RnsException(RnsError.Generic("sendLxmfMessageWithMethod payload missing 'receipt'", null))
+        try {
+            val bundle = awaitResult { cb ->
+                remote.sendLxmfMessageWithMethod(
+                    destinationHash,
+                    content,
+                    sourceIdentity,
+                    deliveryMethod,
+                    tryPropagationOnFail,
+                    blob,
+                    replyToMessageId,
+                    replyQuotedContent,
+                    iconAppearance,
+                    extraFields?.toExtraFieldsBundle(),
+                    cb,
+                )
+            }
+            bundle.classLoader = MessageReceipt::class.java.classLoader
+            @Suppress("DEPRECATION")
+            bundle.getParcelable<MessageReceipt>(BundleKeys.RECEIPT)
+                ?: throw RnsException(RnsError.Generic("sendLxmfMessageWithMethod payload missing 'receipt'", null))
+        } finally {
+            runCatching { blob?.close() }
+        }
     }
 
     override suspend fun sendReaction(

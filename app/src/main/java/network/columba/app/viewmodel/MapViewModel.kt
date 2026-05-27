@@ -781,23 +781,20 @@ class MapViewModel
                                 id to iface
                             }
 
-                        // Batch-insert first-seen rows in a single Room transaction
-                        // to avoid N+1 INSERT OR IGNORE statements per interface.
+                        // Batch-insert first-seen rows and read them back in a single
+                        // Room @Transaction (see InterfaceFirstSeenDao.upsertAndFetch).
+                        // This surfaces as one span instead of N INSERT OR IGNORE
+                        // spans per interface, which previously tripped Sentry's
+                        // N+1 detector (issue COLUMBA-8W).
                         val entities =
                             withId.map { (id, _) ->
                                 network.columba.app.data.db.entity
                                     .InterfaceFirstSeenEntity(id, now)
                             }
-                        if (entities.isNotEmpty()) {
-                            interfaceFirstSeenDao.insertAllIfNotExists(entities)
-                        }
-
-                        // Batch-fetch first-seen timestamps
-                        val ids = entities.map { it.interfaceId }
                         val firstSeenMap =
-                            if (ids.isNotEmpty()) {
+                            if (entities.isNotEmpty()) {
                                 interfaceFirstSeenDao
-                                    .getFirstSeenBatch(ids)
+                                    .upsertAndFetch(entities)
                                     .associate { it.interfaceId to it.firstSeenTimestamp }
                             } else {
                                 emptyMap()

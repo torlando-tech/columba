@@ -396,13 +396,13 @@ sentry {
             enabled.set(true)
             minLevel.set(io.sentry.android.gradle.instrumentation.logcat.LogcatLevel.WARNING)
         }
-    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
-
     }
 }
 
 dependencies {
+    // Java 8+ core library desugaring runtime (java.time backport for API < 26).
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     implementation(project(":domain"))
     implementation(project(":data"))
     implementation(libs.lxst.kt)

@@ -593,9 +593,9 @@ fun SettingsScreen(
 
                             snackbarHostState.showSnackbar(
                                 message = if (opened) {
-                                    "Bug report copied to clipboard"
+                                    "Bug report copied to clipboard — browser opened"
                                 } else {
-                                    "No browser found — bug report and link copied to clipboard"
+                                    "No browser found — bug report copied to clipboard"
                                 },
                                 duration = SnackbarDuration.Short,
                             )
@@ -670,9 +670,9 @@ fun SettingsScreen(
 
                         snackbarHostState.showSnackbar(
                             message = if (opened) {
-                                "Bug report copied to clipboard"
+                                "Bug report copied to clipboard — browser opened"
                             } else {
-                                "No browser found — bug report and link copied to clipboard"
+                                "No browser found — bug report copied to clipboard"
                             },
                             duration = SnackbarDuration.Short,
                         )

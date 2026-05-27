@@ -112,15 +112,28 @@ class PythonRnsTelemetry(
     ): Result<MessageReceipt> =
         pyResult {
             runtime.requireRunning()
-            // A telemetry request is an LXMF FIELD_COMMANDS frame. Upstream
-            // Sideband encodes this as a list of command dicts; the collector
-            // replies with FIELD_TELEMETRY_STREAM since `timebase`. The
-            // command-dict shape `{0x01: timebase}` (Sideband's
-            // `_COMMAND_TELEMETRY_REQUEST`) was verified live against a
-            // Fold 7 host ↔ S21 member pair in commit `61598cf1`.
-            val commandList = listOf(
-                mapOf(0x01 to (timebase ?: 0L)).toPyDict(),
-            ).toPyList()
+            // LXMF FIELD_COMMANDS telemetry request. Match Sideband's
+            // canonical shape `{0x01: [timebase, is_collector_request]}`
+            // (core.py:1358) — identical to the native backend. Sideband also
+            // accepts the legacy scalar `{0x01: timebase}`, but its old-format
+            // fallback hardcodes is_collector_request=True (core.py:5254-5256),
+            // so the scalar silently drops `isCollectorRequest`; the list form
+            // honors it (e.g. a non-collector "just send your own telemetry"
+            // request). Shape live-verified Fold 7 ↔ S21 in commit `61598cf1`.
+            //
+            // Timebase rides the wire in epoch SECONDS (Sideband-interop) but
+            // arrives here in millis; the shared converter also maps the
+            // first-request null to 0. See
+            // [TelemeterCodec.telemetryRequestTimebaseSeconds]. (#927)
+            val timebaseSeconds = TelemeterCodec.telemetryRequestTimebaseSeconds(timebase)
+            // Build the inner [timebase, isCollectorRequest] as a real Python
+            // list before nesting: a raw Kotlin List value would reach umsgpack
+            // as a non-iterable Java proxy (see PythonExt.toPyList). toPyDict
+            // passes the already-built PyObject value through unchanged.
+            val command = mapOf(
+                0x01 to listOf<Any>(timebaseSeconds, isCollectorRequest).toPyList(),
+            ).toPyDict()
+            val commandList = listOf(command).toPyList()
             val fields = buildFieldsDict {
                 putRaw(LxmfFields.FIELD_COMMANDS, commandList)
             }

@@ -26,7 +26,7 @@ internal val NOMADNET_ADDRESS: Pattern =
     )
 
 /** Start-anchored form of [NOMADNET_ADDRESS], used to scheme-normalize a single token. */
-private val BARE_NOMADNET_ADDRESS = Regex("""^[0-9a-fA-F]{32}:/.+""")
+private val BARE_NOMADNET_ADDRESS = Regex("""^[0-9a-fA-F]{32}:/[^\s,;!?)\]]+$""")
 
 private fun cleanUrlForOpening(raw: String): String {
     val trimmed = raw.trim()

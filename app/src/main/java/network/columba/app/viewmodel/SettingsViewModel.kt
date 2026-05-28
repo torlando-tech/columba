@@ -307,11 +307,25 @@ class SettingsViewModel
                             // would otherwise wait ~12s (INIT_DELAY_MS * 4)
                             // for its first poll, leaving the user staring
                             // at a toggle that looks honoured but isn't.
-                            runCatching {
-                                updateHostingShareInstanceState(
-                                    isOnline = rnsTransportAdmin.isSharedInstanceAvailable(),
-                                    currentState = _state.value,
-                                )
+                            //
+                            // Wait for loadSettings() to populate DataStore-
+                            // backed state before priming. applySettingsUpdate's
+                            // init anchor (~line 502) sets `applied = persisted`
+                            // on every combine emission while isLoading=true, so
+                            // a prime that fires earlier is silently overwritten
+                            // — and reading isHostingShareInstanceConflict before
+                            // shareInstanceHostingEnabled has loaded also forces
+                            // conflict=false, hiding genuine conflicts.
+                            viewModelScope.launch {
+                                _state.first { !it.isLoading }
+                                runCatching {
+                                    updateHostingShareInstanceState(
+                                        isOnline = rnsTransportAdmin.isSharedInstanceAvailable(),
+                                        currentState = _state.value,
+                                    )
+                                }.onFailure { e ->
+                                    Log.d(TAG, "One-shot prime skipped (${e::class.simpleName}): ${e.message}")
+                                }
                             }
                             startSharedInstanceAvailabilityMonitor()
                         }

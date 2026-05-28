@@ -953,7 +953,10 @@ private fun RelaySelectionDialog(
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(availableRelays, key = { it.destinationHash }) { relay ->
+                    // Deduplicate by destinationHash to prevent LazyColumn duplicate-key
+                    // crash (COLUMBA-99) — multiple announce rows can share a destinationHash.
+                    val uniqueRelays = availableRelays.distinctBy { it.destinationHash }
+                    items(uniqueRelays, key = { it.destinationHash }) { relay ->
                         RelayListItem(
                             relay = relay,
                             isSelected = relay.destinationHash == currentRelayHash,

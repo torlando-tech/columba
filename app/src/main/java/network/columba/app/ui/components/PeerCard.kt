@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
@@ -290,6 +291,12 @@ fun interfaceTypeIconData(type: InterfaceType): InterfaceTypeIconData? =
                 ImageVector.vectorResource(com.composables.icons.lucide.R.drawable.lucide_ic_antenna),
                 "LoRa/RNode",
             )
+        // Hub: same icon used for Transport Node, intentional — the
+        // shared-instance interface IS the loopback hub between apps on
+        // this device. Material's `Hub` reads "central distribution
+        // point" which matches the role.
+        InterfaceType.SHARED_INSTANCE ->
+            InterfaceTypeIconData(Icons.Default.Hub, "Shared Instance")
         InterfaceType.UNKNOWN -> null
     }
 

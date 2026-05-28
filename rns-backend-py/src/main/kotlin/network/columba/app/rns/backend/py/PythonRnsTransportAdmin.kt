@@ -372,15 +372,30 @@ class PythonRnsTransportAdmin(
                     // as `iface.name`. `str(interface)` is the verbose
                     // "TCPInterface[name/host:port]" form — keying on that left the
                     // toggle rows all showing offline because the lookup missed.
-                    val name = iface["name"]?.toString() ?: iface.toString()
+                    val rawName = iface["name"]?.toString() ?: iface.toString()
+                    val pyClassName = runCatching {
+                        runtime.python.builtins.callAttr("type", iface)["__name__"]?.toString()
+                    }.getOrNull().orEmpty()
+                    // Two upstream RNS classes need explicit relabelling for
+                    // the runtime UI: when `share_instance = yes` is in the
+                    // config, RNS spawns a `LocalServerInterface` whose
+                    // `name = "Reticulum"` and one `LocalClientInterface` per
+                    // connected app whose `name = <ephemeral_port>` (line
+                    // 374-375 of upstream LocalInterface.py renders both as
+                    // `LocalInterface[<port>]`). Both fields end up identical
+                    // in the row — "Reticulum / Reticulum" or "44910 / 44910"
+                    // — because `substringBefore("[")` doesn't touch the bare
+                    // names. Map them to human-meaningful labels here so the
+                    // UI doesn't need its own special-case branch.
+                    val (uiName, uiType) = labelLocalInterface(iface, pyClassName, rawName)
                     val parentName = runCatching {
                         iface["parent_interface"]
                             ?.takeIf { it.toString() != "None" }
                             ?.get("name")?.toString()
                     }.getOrNull()
                     linkedMapOf<String, Any>(
-                        "name" to name,
-                        "type" to name.substringBefore("[").trim(),
+                        "name" to uiName,
+                        "type" to uiType,
                         "online" to (iface["online"]?.toJava(Boolean::class.javaObjectType) ?: false),
                         "parent_name" to (parentName ?: ""),
                         "can_send" to (iface["OUT"]?.toJava(Boolean::class.javaObjectType) ?: false),
@@ -402,6 +417,39 @@ class PythonRnsTransportAdmin(
             Log.w(TAG, "getDebugInfo: interface enumeration failed", it)
             emptyList()
         }
+
+    /**
+     * Produce a `(name, type)` pair for the runtime interface list shown on
+     * the Network Status screen. Default path (`else` branch) preserves
+     * the long-standing
+     * `name = interface.name`, `type = name.substringBefore("[")` derivation
+     * — which works for everything other than RNS's
+     * [`LocalServerInterface`](https://github.com/markqvist/Reticulum/blob/master/RNS/Interfaces/LocalInterface.py#L378)
+     * and [`LocalClientInterface`](https://github.com/markqvist/Reticulum/blob/master/RNS/Interfaces/LocalInterface.py#L62),
+     * whose `name` attributes collide with their type strings ("Reticulum"
+     * and an ephemeral client port respectively), leaving the UI row with
+     * two identical text lines.
+     *
+     * For those two classes we surface upstream's underlying socket
+     * coordinates instead — the server's bind port, the client's
+     * `target_ip:target_port` (AF_INET) or socket path (AF_UNIX). The type
+     * line becomes "Shared Instance (host)" / "Shared Instance (client)"
+     * so the row is self-explanatory without cross-referencing the
+     * Advanced settings toggle.
+     */
+    private fun labelLocalInterface(
+        iface: PyObject,
+        pyClassName: String,
+        rawName: String,
+    ): Pair<String, String> =
+        formatLocalInterfaceLabel(
+            pyClassName = pyClassName,
+            bindPort = runCatching { iface["bind_port"]?.toString() }.getOrNull(),
+            socketPath = runCatching { iface["socket_path"]?.toString() }.getOrNull(),
+            targetIp = runCatching { iface["target_ip"]?.toString() }.getOrNull(),
+            targetPort = runCatching { iface["target_port"]?.toString() }.getOrNull(),
+            rawName = rawName,
+        )
 
     /**
      * Map one `RNS.Discovery` `info` dict to the JSON object shape that
@@ -459,3 +507,48 @@ class PythonRnsTransportAdmin(
         return obj
     }
 }
+
+/**
+ * Pure label-formatting half of [PythonRnsTransportAdmin]'s `labelLocalInterface`,
+ * split out from the `PyObject` attribute reads so it can be unit-tested without a
+ * live Python runtime.
+ *
+ * Mirrors RNS's own display handling: AF_UNIX socket paths are stored as
+ * `"\u0000rns/<name>"` (abstract-socket leading null), and the null is stripped for
+ * display exactly as `LocalInterface.__str__` does upstream (LocalInterface.py L497).
+ */
+internal fun formatLocalInterfaceLabel(
+    pyClassName: String,
+    bindPort: String?,
+    socketPath: String?,
+    targetIp: String?,
+    targetPort: String?,
+    rawName: String,
+): Pair<String, String> =
+    when (pyClassName) {
+        "LocalServerInterface" -> {
+            val cleanedSocketPath =
+                socketPath
+                    ?.replace("\u0000", "")
+                    ?.takeUnless { it.isBlank() || it == "None" }
+            val endpoint =
+                when {
+                    !cleanedSocketPath.isNullOrBlank() -> "unix:$cleanedSocketPath"
+                    !bindPort.isNullOrBlank() && bindPort != "None" -> "TCP $bindPort"
+                    else -> "TCP 37428" // shared_instance_port default
+                }
+            "Shared Instance @ $endpoint" to "Shared Instance (host)"
+        }
+        "LocalClientInterface" -> {
+            val ip = targetIp?.takeUnless { it.isBlank() || it == "None" }
+            val port = targetPort?.takeUnless { it.isBlank() || it == "None" }
+            val endpoint =
+                when {
+                    ip != null && port != null -> "$ip:$port"
+                    port != null -> "port $port"
+                    else -> rawName
+                }
+            "Client @ $endpoint" to "Shared Instance (client)"
+        }
+        else -> rawName to rawName.substringBefore("[").trim()
+    }

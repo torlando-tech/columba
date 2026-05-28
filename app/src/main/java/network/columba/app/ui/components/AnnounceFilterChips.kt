@@ -25,8 +25,6 @@ private enum class AspectChip(
     AUDIO("Audio"),
 }
 
-private val ALL_ASPECTS = setOf(AspectChip.PEER, AspectChip.NODE, AspectChip.RELAY, AspectChip.AUDIO)
-
 private val INTERFACE_OPTIONS: List<Pair<InterfaceType, String>> =
     listOf(
         InterfaceType.AUTO to "Local",
@@ -49,10 +47,12 @@ private val INTERFACE_OPTIONS: List<Pair<InterfaceType, String>> =
  * use different underlying semantics (aspect = positive include, interface =
  * restrict to set), but both surface a single-active-chip UX.
  *
- * The aspect row hides the per-aspect "selected" highlight while All is
- * active — otherwise all four chips would also light up (since the underlying
- * state is the full set), which reads as multi-select and contradicts the
- * exclusive contract.
+ * The aspect row only lights up an individual chip when exactly one aspect
+ * is active; every other shape (empty, full set, or a partial "messy" state
+ * carried over from a pre-PR persisted ViewModel) falls back to the All chip
+ * — otherwise multiple chips would light up alongside All and contradict the
+ * exclusive contract. The user's next tap normalises state via the exclusive
+ * select path.
  */
 @Composable
 fun AnnounceFilterChips(
@@ -118,7 +118,14 @@ private fun AspectChipRow(
     onAspectSelect: (AspectChip) -> Unit,
     onAllClick: () -> Unit,
 ) {
-    val isAllActive = activeAspects == ALL_ASPECTS
+    // Under the exclusive contract, the per-aspect chips light up only when
+    // exactly one aspect is active. Any other shape — empty, the full set, or
+    // a "messy" multi-not-full state inherited from a pre-PR persisted
+    // ViewModel — falls back to "All highlighted". This keeps the row visually
+    // consistent with the contract even for input states the chip handlers
+    // themselves can't produce, and the user's first tap then normalises the
+    // underlying state via the exclusive select path.
+    val isAllActive = activeAspects.size != 1
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -134,8 +141,6 @@ private fun AspectChipRow(
         }
         items(AspectChip.entries.toList(), key = { "aspect-${it.name}" }) { aspect ->
             FilterChip(
-                // Hide per-aspect highlights while All is active so the row reads
-                // as a single-active-chip control instead of a multi-select stack.
                 selected = !isAllActive && activeAspects.contains(aspect),
                 onClick = { onAspectSelect(aspect) },
                 label = { Text(aspect.label) },

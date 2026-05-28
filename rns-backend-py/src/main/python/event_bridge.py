@@ -598,14 +598,23 @@ class _AnnounceHandler:
             if path_entry is not None and len(path_entry) > 5:
                 iface = path_entry[5]
                 if iface is not None:
-                    # `.name` is set on most Interface subclasses but blank
-                    # on AutoInterfacePeer (its `__init__` only writes
-                    # `ifname` + `addr`). Fall back to `__str__()` for those.
-                    recv_iface_name = (
-                        getattr(iface, "name", None)
-                        or str(iface)
-                        or type(iface).__name__
-                    )
+                    # Always emit `"ClassName[friendly_name]"` so the kotlin
+                    # `InterfaceType.fromName` classifier has the transport
+                    # class to pattern-match — not just the unconstrained
+                    # user-given `iface.name` like "homelab" or "Local
+                    # shared instance" which the classifier cannot reliably
+                    # recognise. RNS's `Interface.__str__` already returns
+                    # this shape for AutoInterfacePeer and a few others,
+                    # but most subclasses (TCPClientInterface,
+                    # LocalServerInterface, …) override `__str__` to drop
+                    # the class prefix — which is what left 99% of
+                    # `announces` rows storing as `UNKNOWN`. Keeping the
+                    # class prefix is what AnnounceDetailScreen's
+                    # `getInterfaceInfo()` already expects too (it
+                    # extracts the friendly name out of the brackets).
+                    cls_name = type(iface).__name__
+                    friendly_name = getattr(iface, "name", None) or ""
+                    recv_iface_name = f"{cls_name}[{friendly_name}]"
         except Exception as e:  # noqa: BLE001 — annotation is best-effort, never fatal
             RNS.log(
                 f"event_bridge: receiving_interface lookup failed: {e}",
@@ -1054,12 +1063,16 @@ def _lxmf_delivery_callback(message):
                     RNS.LOG_DEBUG,
                 )
 
-        # Resolve the interface object to its configured short name for
-        # parity with `PythonRnsTransportAdmin` (which keys by `iface["name"]`)
-        # and with the kotlin backend's `Transport.getInterfaces()...name`.
+        # Resolve the interface object to a `"ClassName[friendly_name]"`
+        # string — same format the announce-receive path emits, so the
+        # kotlin classifier's pattern match is deterministic regardless
+        # of what user-given `.name` an interface carries. See the rationale
+        # in `_AnnounceHandler.received_announce`.
         recv_iface_name = None
         if recv_iface is not None:
-            recv_iface_name = getattr(recv_iface, "name", None) or str(recv_iface)
+            cls_name = type(recv_iface).__name__
+            friendly_name = getattr(recv_iface, "name", None) or ""
+            recv_iface_name = f"{cls_name}[{friendly_name}]"
 
         rssi, snr = _signal_metrics(recv_iface)
 

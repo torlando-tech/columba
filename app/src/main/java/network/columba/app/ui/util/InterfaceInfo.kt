@@ -109,6 +109,14 @@ internal fun categorizeInterface(
         -> if (isYggdrasilHost(host)) InterfaceCategory.YGGDRASIL else InterfaceCategory.TCP
         InterfaceType.BLE -> InterfaceCategory.BLUETOOTH
         InterfaceType.RNODE -> InterfaceCategory.LORA
+        // Shared-instance loopback (LocalServer/Client) is host-local TCP
+        // by construction — same kernel path as a 127.0.0.1 TCP socket.
+        // Map-pin categorisation has no useful coordinates for it, but
+        // grouping with TCP keeps the announce-detail UI honest about
+        // what's underneath. The list-row icon comes from the dedicated
+        // SHARED_INSTANCE branch in `interfaceTypeIconData`, not this
+        // category mapping.
+        InterfaceType.SHARED_INSTANCE -> InterfaceCategory.TCP
         InterfaceType.UNKNOWN -> InterfaceCategory.UNKNOWN
     }
 }

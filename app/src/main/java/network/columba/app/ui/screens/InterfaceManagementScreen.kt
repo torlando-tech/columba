@@ -360,6 +360,34 @@ fun InterfaceManagementScreen(
                                     }
                                 }
                             }
+
+                            // Shared-instance runtime interfaces (host + connected app
+                            // clients) are spawned by RNS when hosting is enabled; they
+                            // are not DB-configured, so they never match an InterfaceCard
+                            // row. Surface the host and its clients as their own group.
+                            val sharedInstanceHost =
+                                state.transportInterfaces.firstOrNull {
+                                    InterfaceType.fromName(it.type) == InterfaceType.SHARED_INSTANCE &&
+                                        it.parentName.isNullOrBlank()
+                                }
+                            if (sharedInstanceHost != null) {
+                                val sharedInstanceClients =
+                                    state.transportInterfaces.filter {
+                                        InterfaceType.fromName(it.type) == InterfaceType.SHARED_INSTANCE &&
+                                            !it.parentName.isNullOrBlank()
+                                    }
+                                item(key = "shared_instance_host") {
+                                    SharedInstanceHostCard(
+                                        host = sharedInstanceHost,
+                                        clientCount = sharedInstanceClients.size,
+                                    )
+                                }
+                                sharedInstanceClients.forEachIndexed { index, client ->
+                                    item(key = "shared_instance_client_$index") {
+                                        SpawnedPeerCard(info = client)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -714,8 +742,9 @@ fun SpawnedPeerCard(info: network.columba.app.viewmodel.TransportInterfaceInfo) 
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val iconData = interfaceTypeIconData(InterfaceType.fromName(info.type))
             Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = iconData?.imageVector ?: Icons.Default.CheckCircle,
                 contentDescription = null,
                 tint = statusColor,
                 modifier = Modifier.size(20.dp),
@@ -732,6 +761,57 @@ fun SpawnedPeerCard(info: network.columba.app.viewmodel.TransportInterfaceInfo) 
 
             Text(
                 text = if (info.isOnline) "Online" else "Offline",
+                style = MaterialTheme.typography.labelSmall,
+                color = statusColor,
+            )
+        }
+    }
+}
+
+/**
+ * Top-level card for the RNS shared-instance host (`LocalServerInterface`), spawned at
+ * runtime when hosting is enabled. It has no DB-configured [InterfaceEntity] row of its
+ * own, so it is rendered here rather than via [InterfaceCard]. [clientCount] is the
+ * number of apps currently connected to our instance (the spawned `LocalClientInterface`s).
+ */
+@Composable
+fun SharedInstanceHostCard(
+    host: network.columba.app.viewmodel.TransportInterfaceInfo,
+    clientCount: Int,
+) {
+    val statusColor =
+        if (host.isOnline) {
+            Color(0xFF4CAF50)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        }
+    val iconData = interfaceTypeIconData(InterfaceType.fromName(host.type))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = iconData?.imageVector ?: Icons.Default.SettingsInputAntenna,
+                contentDescription = "Shared Instance host",
+                tint = statusColor,
+                modifier = Modifier.size(32.dp),
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = host.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (clientCount == 1) "1 app connected" else "$clientCount apps connected",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = if (host.isOnline) "Online" else "Offline",
                 style = MaterialTheme.typography.labelSmall,
                 color = statusColor,
             )

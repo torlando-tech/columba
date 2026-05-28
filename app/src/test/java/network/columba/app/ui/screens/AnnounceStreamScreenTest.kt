@@ -227,10 +227,9 @@ class AnnounceStreamScreenTest {
     }
 
     @Test
-    fun filterChips_tappingAspect_replacesActiveSelection() {
-        // Default active = {PEER, AUDIO}. Exclusive: tap "Sites" should
-        // replace the whole set with just NODE and deselect audio — not
-        // add NODE alongside the existing chips.
+    fun filterChips_tappingAspect_fromAllNarrowsToSingle() {
+        // Default = canonical All state ({PEER, NODE, PROPAGATION_NODE} + audio).
+        // Exclusive: tap "Sites" should narrow to just NODE and drop audio.
         val mockViewModel = createMockAnnounceStreamViewModel()
         var capturedTypes: Set<NodeType>? = null
         var capturedShowAudio: Boolean? = null
@@ -244,7 +243,7 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithText("Sites").performClick()
 
         assertEquals(
-            "Exclusive: tapping Sites should narrow to NODE only, not append",
+            "Exclusive: tapping Sites from All should narrow to NODE only, not append",
             setOf(NodeType.NODE),
             capturedTypes,
         )
@@ -256,12 +255,71 @@ class AnnounceStreamScreenTest {
     }
 
     @Test
-    fun filterChips_tappingAspect_fromAllNarrowsToSingle() {
-        // Start with every aspect active (the "All" state).
+    fun filterChips_tappingAudioAspect_dropsNodeTypes() {
+        // Default = canonical All. Audio is exclusive too: tapping it should
+        // drop every node type so only PHONE/audio announces remain visible.
+        val mockViewModel = createMockAnnounceStreamViewModel()
+        var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Audio").performClick()
+
+        assertEquals(emptySet<NodeType>(), capturedTypes)
+        assertEquals(true, capturedShowAudio)
+    }
+
+    @Test
+    fun filterChips_tappingAll_restoresFullSetFromSingle() {
+        // Start with a single aspect (Peers); tapping the All chip directly
+        // must restore all 3 node types + re-enable audio. Greptile flagged
+        // that the All-click path had no direct coverage.
         val mockViewModel =
             createMockAnnounceStreamViewModel(
-                selectedNodeTypes = setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
-                showAudioAnnounces = true,
+                selectedNodeTypes = setOf(NodeType.PEER),
+                showAudioAnnounces = false,
+            )
+        var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        // Aspect row's "All" is the first node; interface row has its own "All".
+        // Match the aspect-row All by its position (first occurrence at row 0).
+        composeTestRule.onAllNodes(hasText("All"))[0].performClick()
+
+        assertEquals(
+            "Tapping All should restore the full node-type set",
+            setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
+            capturedTypes,
+        )
+        assertEquals(
+            "Tapping All should re-enable audio",
+            true,
+            capturedShowAudio,
+        )
+    }
+
+    @Test
+    fun filterChips_tappingAspect_normalisesMessyMultiState() {
+        // Pre-PR persisted state could carry over a partial set like
+        // {PEER, NODE} with audio=false — neither the canonical All nor a
+        // single-chip state. Tapping any chip from that state should still
+        // narrow cleanly via the exclusive replace path (proving the
+        // handler isn't sensitive to the input shape).
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedNodeTypes = setOf(NodeType.PEER, NodeType.NODE),
+                showAudioAnnounces = false,
             )
         var capturedTypes: Set<NodeType>? = null
         var capturedShowAudio: Boolean? = null
@@ -276,30 +334,6 @@ class AnnounceStreamScreenTest {
 
         assertEquals(setOf(NodeType.PROPAGATION_NODE), capturedTypes)
         assertEquals(false, capturedShowAudio)
-    }
-
-    @Test
-    fun filterChips_tappingAudioAspect_dropsNodeTypes() {
-        // Audio is exclusive too: tapping it should drop every node type
-        // (so only PHONE/audio announces remain visible).
-        val mockViewModel =
-            createMockAnnounceStreamViewModel(
-                selectedNodeTypes = setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
-                showAudioAnnounces = true,
-            )
-        var capturedTypes: Set<NodeType>? = null
-        var capturedShowAudio: Boolean? = null
-        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
-        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
-
-        composeTestRule.setContent {
-            AnnounceStreamScreen(viewModel = mockViewModel)
-        }
-
-        composeTestRule.onNodeWithText("Audio").performClick()
-
-        assertEquals(emptySet<NodeType>(), capturedTypes)
-        assertEquals(true, capturedShowAudio)
     }
 
     @Test
@@ -407,12 +441,21 @@ class AnnounceStreamScreenTest {
 
     // ========== Test Helpers ==========
 
+    // This is a mock builder that mirrors the StateFlow surface of
+    // AnnounceStreamViewModel — every parameter maps 1:1 to a public StateFlow
+    // on the real ViewModel. Grouping these into a config object would obscure
+    // that mirror; @Suppress is the right call per the no-baseline-bumps rule.
+    @Suppress("detekt:LongParameterList")
     private fun createMockAnnounceStreamViewModel(
         reachableCount: Int = 0,
         isAnnouncing: Boolean = false,
         announceSuccess: Boolean = false,
         announceError: String? = null,
-        selectedNodeTypes: Set<NodeType> = setOf(NodeType.PEER),
+        // Default = canonical All state under the new exclusive contract:
+        // all 3 node types + audio active. Tests that need a single-chip or
+        // partial state override these explicitly.
+        selectedNodeTypes: Set<NodeType> =
+            setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
         showAudioAnnounces: Boolean = true,
         selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
         searchQuery: String = "",

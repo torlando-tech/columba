@@ -2,7 +2,7 @@ package network.columba.app.ui.components
 
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 
@@ -21,13 +21,18 @@ import androidx.compose.ui.unit.dp
  * filters) so missing the provider degrades to the smallest layout rather
  * than over-promising tablet space.
  *
- * `staticCompositionLocalOf` (not `compositionLocalOf`): size-class changes
- * happen on rotation / fold / resize — events that already force a broad
- * recomposition. Skipping read-tracking saves overhead in the steady-state
- * recomposition cycles where the value never moves.
+ * `compositionLocalOf` (not `staticCompositionLocalOf`): `setContent` and the
+ * `CompositionLocalProvider` re-run whenever any sibling state changes
+ * (e.g. capabilities, settingsState), and `calculateWindowSizeClass(this)`
+ * returns a fresh object on each recomposition. `staticCompositionLocalOf`
+ * does reference equality and would invalidate every consumer's subtree on
+ * each sibling-state change, even when the underlying size class is
+ * identical. `compositionLocalOf` uses structural equality on the
+ * [WindowSizeClass] data class so consumers only recompose when the actual
+ * width/height bucket changes (i.e. rotation / fold / resize).
  */
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 val LocalWindowSize =
-    staticCompositionLocalOf {
+    compositionLocalOf {
         WindowSizeClass.calculateFromSize(DpSize(360.dp, 800.dp))
     }

@@ -83,6 +83,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -109,7 +110,6 @@ import kotlinx.coroutines.launch
 import network.columba.app.R
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.model.EnrichedContact
-import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import network.columba.app.ui.components.AddContactConfirmationDialog
 import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.ProfileIcon

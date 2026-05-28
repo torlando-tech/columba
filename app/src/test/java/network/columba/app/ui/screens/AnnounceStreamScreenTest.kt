@@ -415,6 +415,34 @@ class AnnounceStreamScreenTest {
     }
 
     @Test
+    fun filterChips_tappingInterface_normalisesMessyMultiState() {
+        // Pre-PR persisted state could carry over a multi-type set like
+        // {TCP_CLIENT, RNODE}. Tapping any chip from that state should
+        // still narrow cleanly via the exclusive replace path — proving
+        // the interface row applies the same robustness as the aspect row.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedInterfaceTypes = setOf(InterfaceType.TCP_CLIENT, InterfaceType.RNODE),
+            )
+        var capturedInterfaces: Set<InterfaceType>? = null
+        every {
+            mockViewModel.updateSelectedInterfaceTypes(any())
+        } answers { capturedInterfaces = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Bluetooth").performClick()
+
+        assertEquals(
+            "Exclusive: tapping Bluetooth from a messy multi-type state should narrow to BLE only",
+            setOf(InterfaceType.BLE),
+            capturedInterfaces,
+        )
+    }
+
+    @Test
     fun filterChips_tappingActiveInterface_snapsBackToAll() {
         // Only TCP active; tapping TCP again should clear the restriction.
         val mockViewModel =

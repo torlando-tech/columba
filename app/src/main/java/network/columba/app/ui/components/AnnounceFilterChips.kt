@@ -155,6 +155,12 @@ private fun InterfaceChipRow(
     onSelect: (InterfaceType) -> Unit,
     onAllClick: () -> Unit,
 ) {
+    // Mirror the aspect row's robustness: only highlight an individual chip
+    // when exactly one type is restricted. Empty (no restriction) and any
+    // multi-type partial state from a pre-PR persisted ViewModel fall back
+    // to "All highlighted" so the row stays visually consistent with the
+    // exclusive contract.
+    val isAllActive = selected.size != 1
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -162,14 +168,14 @@ private fun InterfaceChipRow(
     ) {
         item(key = "iface-all") {
             FilterChip(
-                selected = selected.isEmpty(),
+                selected = isAllActive,
                 onClick = onAllClick,
                 label = { Text("All") },
             )
         }
         items(INTERFACE_OPTIONS, key = { "iface-${it.first.name}" }) { (type, label) ->
             FilterChip(
-                selected = selected.contains(type),
+                selected = !isAllActive && selected.contains(type),
                 onClick = { onSelect(type) },
                 label = { Text(label) },
             )

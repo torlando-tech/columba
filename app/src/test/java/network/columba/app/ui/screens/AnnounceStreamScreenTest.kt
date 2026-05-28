@@ -227,10 +227,14 @@ class AnnounceStreamScreenTest {
     }
 
     @Test
-    fun filterChips_tappingAspect_callsViewModel() {
+    fun filterChips_tappingAspect_fromAllNarrowsToSingle() {
+        // Default = canonical All state ({PEER, NODE, PROPAGATION_NODE} + audio).
+        // Exclusive: tap "Sites" should narrow to just NODE and drop audio.
         val mockViewModel = createMockAnnounceStreamViewModel()
         var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
         every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
 
         composeTestRule.setContent {
             AnnounceStreamScreen(viewModel = mockViewModel)
@@ -238,16 +242,43 @@ class AnnounceStreamScreenTest {
 
         composeTestRule.onNodeWithText("Sites").performClick()
 
-        verify { mockViewModel.updateSelectedNodeTypes(match { it.contains(NodeType.NODE) }) }
-        assertTrue(
-            "updateSelectedNodeTypes should have been called with a set containing NODE",
-            capturedTypes?.contains(NodeType.NODE) == true,
+        assertEquals(
+            "Exclusive: tapping Sites from All should narrow to NODE only, not append",
+            setOf(NodeType.NODE),
+            capturedTypes,
+        )
+        assertEquals(
+            "Exclusive: selecting a non-audio aspect should deselect audio",
+            false,
+            capturedShowAudio,
         )
     }
 
     @Test
-    fun filterChips_deselectingLastAspect_snapsBackToAll() {
-        // Single aspect selected: PEER only, audio off → activeAspects = {PEER}.
+    fun filterChips_tappingAudioAspect_dropsNodeTypes() {
+        // Default = canonical All. Audio is exclusive too: tapping it should
+        // drop every node type so only PHONE/audio announces remain visible.
+        val mockViewModel = createMockAnnounceStreamViewModel()
+        var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Audio").performClick()
+
+        assertEquals(emptySet<NodeType>(), capturedTypes)
+        assertEquals(true, capturedShowAudio)
+    }
+
+    @Test
+    fun filterChips_tappingAll_restoresFullSetFromSingle() {
+        // Start with a single aspect (Peers); tapping the All chip directly
+        // must restore all 3 node types + re-enable audio. Greptile flagged
+        // that the All-click path had no direct coverage.
         val mockViewModel =
             createMockAnnounceStreamViewModel(
                 selectedNodeTypes = setOf(NodeType.PEER),
@@ -262,12 +293,72 @@ class AnnounceStreamScreenTest {
             AnnounceStreamScreen(viewModel = mockViewModel)
         }
 
-        // Tapping the only active chip would leave no aspect selected;
-        // the component should snap to ALL (node types + audio) instead of producing an empty filter.
+        // Aspect row's "All" is the first node; interface row has its own "All".
+        // Match the aspect-row All by its position (first occurrence at row 0).
+        composeTestRule.onAllNodes(hasText("All"))[0].performClick()
+
+        assertEquals(
+            "Tapping All should restore the full node-type set",
+            setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
+            capturedTypes,
+        )
+        assertEquals(
+            "Tapping All should re-enable audio",
+            true,
+            capturedShowAudio,
+        )
+    }
+
+    @Test
+    fun filterChips_tappingAspect_normalisesMessyMultiState() {
+        // Pre-PR persisted state could carry over a partial set like
+        // {PEER, NODE} with audio=false — neither the canonical All nor a
+        // single-chip state. Tapping any chip from that state should still
+        // narrow cleanly via the exclusive replace path (proving the
+        // handler isn't sensitive to the input shape).
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedNodeTypes = setOf(NodeType.PEER, NodeType.NODE),
+                showAudioAnnounces = false,
+            )
+        var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Relays").performClick()
+
+        assertEquals(setOf(NodeType.PROPAGATION_NODE), capturedTypes)
+        assertEquals(false, capturedShowAudio)
+    }
+
+    @Test
+    fun filterChips_tappingActiveAspect_snapsBackToAll() {
+        // Single aspect selected: PEER only, audio off → activeAspects = {PEER}.
+        // Tapping the only-active chip should snap to All instead of leaving
+        // an empty filter (which would render a blank list).
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedNodeTypes = setOf(NodeType.PEER),
+                showAudioAnnounces = false,
+            )
+        var capturedTypes: Set<NodeType>? = null
+        var capturedShowAudio: Boolean? = null
+        every { mockViewModel.updateSelectedNodeTypes(any()) } answers { capturedTypes = firstArg() }
+        every { mockViewModel.updateShowAudioAnnounces(any()) } answers { capturedShowAudio = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
         composeTestRule.onNodeWithText("Peers").performClick()
 
         assertEquals(
-            "Deselecting the last active aspect should snap to all node types, not empty",
+            "Re-tapping the only active aspect should snap to all node types",
             setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
             capturedTypes,
         )
@@ -279,7 +370,8 @@ class AnnounceStreamScreenTest {
     }
 
     @Test
-    fun filterChips_tappingInterface_callsViewModel() {
+    fun filterChips_tappingInterface_selectsExclusively() {
+        // No interface restriction initially. Tapping TCP picks just TCP.
         val mockViewModel = createMockAnnounceStreamViewModel()
         var capturedInterfaces: Set<InterfaceType>? = null
         every {
@@ -293,21 +385,107 @@ class AnnounceStreamScreenTest {
         composeTestRule.onNodeWithText("TCP").performClick()
 
         verify { mockViewModel.updateSelectedInterfaceTypes(setOf(InterfaceType.TCP_CLIENT)) }
-        assertTrue(
-            "updateSelectedInterfaceTypes should have been called with TCP_CLIENT",
-            capturedInterfaces == setOf(InterfaceType.TCP_CLIENT),
+        assertEquals(setOf(InterfaceType.TCP_CLIENT), capturedInterfaces)
+    }
+
+    @Test
+    fun filterChips_tappingInterface_replacesPriorSelection() {
+        // Start with RNode active. Exclusive: tapping TCP must REPLACE,
+        // not add — capturing the same regression issue #862 calls out.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedInterfaceTypes = setOf(InterfaceType.RNODE),
+            )
+        var capturedInterfaces: Set<InterfaceType>? = null
+        every {
+            mockViewModel.updateSelectedInterfaceTypes(any())
+        } answers { capturedInterfaces = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("TCP").performClick()
+
+        assertEquals(
+            "Exclusive: tapping TCP while RNode was active should replace, not combine",
+            setOf(InterfaceType.TCP_CLIENT),
+            capturedInterfaces,
+        )
+    }
+
+    @Test
+    fun filterChips_tappingInterface_normalisesMessyMultiState() {
+        // Pre-PR persisted state could carry over a multi-type set like
+        // {TCP_CLIENT, RNODE}. Tapping any chip from that state should
+        // still narrow cleanly via the exclusive replace path — proving
+        // the interface row applies the same robustness as the aspect row.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedInterfaceTypes = setOf(InterfaceType.TCP_CLIENT, InterfaceType.RNODE),
+            )
+        var capturedInterfaces: Set<InterfaceType>? = null
+        every {
+            mockViewModel.updateSelectedInterfaceTypes(any())
+        } answers { capturedInterfaces = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Bluetooth").performClick()
+
+        assertEquals(
+            "Exclusive: tapping Bluetooth from a messy multi-type state should narrow to BLE only",
+            setOf(InterfaceType.BLE),
+            capturedInterfaces,
+        )
+    }
+
+    @Test
+    fun filterChips_tappingActiveInterface_snapsBackToAll() {
+        // Only TCP active; tapping TCP again should clear the restriction.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedInterfaceTypes = setOf(InterfaceType.TCP_CLIENT),
+            )
+        var capturedInterfaces: Set<InterfaceType>? = null
+        every {
+            mockViewModel.updateSelectedInterfaceTypes(any())
+        } answers { capturedInterfaces = firstArg() }
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("TCP").performClick()
+
+        assertEquals(
+            "Tapping the only-active interface chip should snap back to All (empty)",
+            emptySet<InterfaceType>(),
+            capturedInterfaces,
         )
     }
 
     // ========== Test Helpers ==========
 
+    // This is a mock builder that mirrors the StateFlow surface of
+    // AnnounceStreamViewModel — every parameter maps 1:1 to a public StateFlow
+    // on the real ViewModel. Grouping these into a config object would obscure
+    // that mirror; @Suppress is the right call per the no-baseline-bumps rule.
+    @Suppress("detekt:LongParameterList")
     private fun createMockAnnounceStreamViewModel(
         reachableCount: Int = 0,
         isAnnouncing: Boolean = false,
         announceSuccess: Boolean = false,
         announceError: String? = null,
-        selectedNodeTypes: Set<NodeType> = setOf(NodeType.PEER),
+        // Default = canonical All state under the new exclusive contract:
+        // all 3 node types + audio active. Tests that need a single-chip or
+        // partial state override these explicitly.
+        selectedNodeTypes: Set<NodeType> =
+            setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
         showAudioAnnounces: Boolean = true,
+        selectedInterfaceTypes: Set<InterfaceType> = emptySet(),
         searchQuery: String = "",
     ): AnnounceStreamViewModel {
         val mockViewModel = mockk<AnnounceStreamViewModel>()
@@ -318,7 +496,7 @@ class AnnounceStreamScreenTest {
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
         every { mockViewModel.selectedNodeTypes } returns MutableStateFlow(selectedNodeTypes)
         every { mockViewModel.showAudioAnnounces } returns MutableStateFlow(showAudioAnnounces)
-        every { mockViewModel.selectedInterfaceTypes } returns MutableStateFlow(emptySet<InterfaceType>())
+        every { mockViewModel.selectedInterfaceTypes } returns MutableStateFlow(selectedInterfaceTypes)
         every { mockViewModel.isAnnouncing } returns MutableStateFlow(isAnnouncing)
         every { mockViewModel.announceSuccess } returns MutableStateFlow(announceSuccess)
         every { mockViewModel.announceError } returns MutableStateFlow(announceError)

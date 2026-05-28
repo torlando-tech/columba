@@ -38,6 +38,7 @@ lxst-kt = { module = "com.github.torlando-tech:LXST-kt", version.ref = "lxstKt" 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-material3-windowsizeclass = { module = "androidx.compose.material3:material3-window-size-class" }
 compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-activity = { module = "androidx.activity:activity-compose", version = "1.9.3" }

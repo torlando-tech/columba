@@ -1,17 +1,29 @@
 package network.columba.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.api.model.NodeType
@@ -36,7 +48,7 @@ private val INTERFACE_OPTIONS: List<Pair<InterfaceType, String>> =
     )
 
 /**
- * Two always-visible rows of filter chips for the announce stream:
+ * Two collapsible rows of filter chips for the announce stream:
  *   1. Aspect: All / Peers / Sites / Relays / Audio
  *   2. Interface: All / Local / TCP / TCP Server / Bluetooth / RNode / Other
  *
@@ -53,6 +65,14 @@ private val INTERFACE_OPTIONS: List<Pair<InterfaceType, String>> =
  * — otherwise multiple chips would light up alongside All and contradict the
  * exclusive contract. The user's next tap normalises state via the exclusive
  * select path.
+ *
+ * **Collapsed mode** (`expanded = false`, used on compact-height windows per
+ * GH issue #922): the chip rows are hidden and a slim "active filter" pill
+ * row replaces them — but only when at least one filter is restricting the
+ * view. When both rows are All (unfiltered), collapsed mode renders nothing,
+ * giving the announce list maximum vertical real estate in landscape. Tapping
+ * the pill row fires [onExpandRequest] so the host screen can flip its own
+ * `expanded` state (typically driven by a Filter icon in the top bar).
  */
 @Composable
 fun AnnounceFilterChips(
@@ -62,6 +82,8 @@ fun AnnounceFilterChips(
     onNodeTypesChange: (Set<NodeType>) -> Unit,
     onShowAudioChange: (Boolean) -> Unit,
     onInterfaceTypesChange: (Set<InterfaceType>) -> Unit,
+    expanded: Boolean = true,
+    onExpandRequest: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val activeAspects: Set<AspectChip> =
@@ -72,43 +94,113 @@ fun AnnounceFilterChips(
             if (showAudio) add(AspectChip.AUDIO)
         }
 
+    // Resolve the active labels using the same single-active rule the chip
+    // rows themselves use — anything that isn't "exactly one chip" reads as
+    // "All" (no pill) so the collapsed state matches the expanded highlights.
+    val activeAspectLabel = activeAspects.singleOrNull()?.label
+    val activeInterfaceLabel =
+        selectedInterfaceTypes.singleOrNull()?.let { type ->
+            INTERFACE_OPTIONS.firstOrNull { it.first == type }?.second
+        }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 1.dp,
     ) {
-        androidx.compose.foundation.layout.Column {
-            AspectChipRow(
-                activeAspects = activeAspects,
-                onAspectSelect = { aspect ->
-                    selectAspectExclusive(
-                        aspect = aspect,
-                        active = activeAspects,
-                        onNodeTypesChange = onNodeTypesChange,
-                        onShowAudioChange = onShowAudioChange,
+        Column {
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    AspectChipRow(
+                        activeAspects = activeAspects,
+                        onAspectSelect = { aspect ->
+                            selectAspectExclusive(
+                                aspect = aspect,
+                                active = activeAspects,
+                                onNodeTypesChange = onNodeTypesChange,
+                                onShowAudioChange = onShowAudioChange,
+                            )
+                        },
+                        onAllClick = {
+                            onNodeTypesChange(
+                                setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
+                            )
+                            onShowAudioChange(true)
+                        },
                     )
-                },
-                onAllClick = {
-                    onNodeTypesChange(setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE))
-                    onShowAudioChange(true)
-                },
-            )
-            InterfaceChipRow(
-                selected = selectedInterfaceTypes,
-                onSelect = { type ->
-                    // Exclusive: tapping the only-active chip snaps back to All (empty);
-                    // tapping any other chip replaces the selection with just this one.
-                    val next =
-                        if (selectedInterfaceTypes == setOf(type)) {
-                            emptySet()
-                        } else {
-                            setOf(type)
-                        }
-                    onInterfaceTypesChange(next)
-                },
-                onAllClick = { onInterfaceTypesChange(emptySet()) },
-            )
+                    InterfaceChipRow(
+                        selected = selectedInterfaceTypes,
+                        onSelect = { type ->
+                            // Exclusive: tapping the only-active chip snaps back to All
+                            // (empty); tapping any other chip replaces the selection
+                            // with just this one.
+                            val next =
+                                if (selectedInterfaceTypes == setOf(type)) {
+                                    emptySet()
+                                } else {
+                                    setOf(type)
+                                }
+                            onInterfaceTypesChange(next)
+                        },
+                        onAllClick = { onInterfaceTypesChange(emptySet()) },
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = !expanded && (activeAspectLabel != null || activeInterfaceLabel != null),
+            ) {
+                ActiveFilterPillRow(
+                    aspectLabel = activeAspectLabel,
+                    interfaceLabel = activeInterfaceLabel,
+                    onClick = onExpandRequest,
+                )
+            }
         }
+    }
+}
+
+/**
+ * Slim "active filter" summary shown when [AnnounceFilterChips] is collapsed.
+ * Tapping anywhere on the row asks the host to expand the chip rows; the
+ * whole strip is one touch target on purpose — per-pill remove buttons would
+ * fight the chip rows' exclusive contract.
+ */
+@Composable
+private fun ActiveFilterPillRow(
+    aspectLabel: String?,
+    interfaceLabel: String?,
+    onClick: () -> Unit,
+) {
+    val labels = listOfNotNull(aspectLabel, interfaceLabel)
+    val joined = labels.joinToString(" • ")
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .semantics {
+                    contentDescription = "Active filters: $joined. Tap to edit."
+                },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Filtering: ",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = joined,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

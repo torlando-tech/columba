@@ -38,6 +38,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.FilterAltOff
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
@@ -107,7 +109,9 @@ import kotlinx.coroutines.launch
 import network.columba.app.R
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.model.EnrichedContact
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import network.columba.app.ui.components.AddContactConfirmationDialog
+import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.ProfileIcon
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.theme.MeshConnected
@@ -164,6 +168,17 @@ fun ContactsScreen(
     val announceError by announceViewModel.announceError.collectAsState()
     var showNetworkOverflowMenu by remember { mutableStateOf(false) }
     var showClearAllAnnouncesDialog by remember { mutableStateOf(false) }
+
+    // Network tab filter-chip expand state — driven from the Filter icon in
+    // the top bar. Default: expanded except on compact-height windows
+    // (landscape phones), where two chip rows + the segmented tab + bottom
+    // nav eat the whole screen (GH issue #922). Keyed on heightSizeClass so
+    // rotation snaps back to the per-class default; the user's explicit
+    // toggle persists within a single orientation session.
+    val heightSizeClass = LocalWindowSize.current.heightSizeClass
+    var filtersExpanded by remember(heightSizeClass) {
+        mutableStateOf(heightSizeClass != WindowHeightSizeClass.Compact)
+    }
 
     // Show toast for announce success/error
     LaunchedEffect(announceSuccess) {
@@ -264,6 +279,21 @@ fun ContactsScreen(
                         }
                         // Network tab actions
                         if (selectedTab == ContactsTab.NETWORK) {
+                            // Filter chips toggle — collapses the chip rows so
+                            // landscape / compact-height windows can see more
+                            // of the announce list (GH issue #922).
+                            IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
+                                Icon(
+                                    imageVector =
+                                        if (filtersExpanded) {
+                                            Icons.Default.FilterAltOff
+                                        } else {
+                                            Icons.Default.FilterAlt
+                                        },
+                                    contentDescription =
+                                        if (filtersExpanded) "Hide filters" else "Show filters",
+                                )
+                            }
                             // Announce button
                             IconButton(
                                 onClick = { announceViewModel.triggerAnnounce() },
@@ -623,6 +653,8 @@ fun ContactsScreen(
             ContactsTab.NETWORK -> {
                 // Network tab - show announces/discovered nodes
                 AnnounceStreamContent(
+                    filtersExpanded = filtersExpanded,
+                    onExpandFiltersRequest = { filtersExpanded = true },
                     onPeerClick = { destinationHash, _ -> onViewPeerDetails(destinationHash) },
                     onStartChat = { destinationHash, displayName ->
                         if (!effectivePendingSharedText.isNullOrBlank()) {

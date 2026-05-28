@@ -125,6 +125,68 @@ class AnnounceStreamScreenTest {
         assertTrue("triggerAnnounce() should be called when button is clicked", triggerAnnounceCalled)
     }
 
+    // ========== Filter Toggle Button Tests (GH issue #922) ==========
+
+    @Test
+    fun filterToggle_defaultExpanded_showsHideFiltersIcon() {
+        // Default LocalWindowSize is phone-portrait (Medium height) so the
+        // standalone screen starts with filters expanded; the icon should
+        // therefore be the "hide" (FilterAltOff) variant.
+        val mockViewModel = createMockAnnounceStreamViewModel()
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithContentDescription("Hide filters").assertIsDisplayed()
+    }
+
+    @Test
+    fun filterToggle_tapping_collapsesChipRows() {
+        // Start expanded (the default). Tap the Filter icon: the aspect
+        // chip labels disappear because the row is now collapsed. With no
+        // filter restricting the view, the pill row also stays hidden, so
+        // collapsing yields maximum list real estate.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedNodeTypes = setOf(NodeType.PEER, NodeType.NODE, NodeType.PROPAGATION_NODE),
+                showAudioAnnounces = true,
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Peers").assertIsDisplayed()
+
+        composeTestRule.onNodeWithContentDescription("Hide filters").performClick()
+
+        composeTestRule.onNodeWithText("Peers").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Show filters").assertIsDisplayed()
+    }
+
+    @Test
+    fun filterToggle_whenCollapsedWithFilterActive_pillRowSurfacesIt() {
+        // Single aspect active → pill row shows that aspect label when collapsed.
+        val mockViewModel =
+            createMockAnnounceStreamViewModel(
+                selectedNodeTypes = setOf(NodeType.NODE),
+                showAudioAnnounces = false,
+            )
+
+        composeTestRule.setContent {
+            AnnounceStreamScreen(viewModel = mockViewModel)
+        }
+
+        // Initial state: expanded — chips visible, no pill row.
+        composeTestRule.onNodeWithContentDescription("Hide filters").performClick()
+
+        // After collapse the pill row should describe the active filter.
+        composeTestRule
+            .onNodeWithContentDescription("Active filters: Sites. Tap to edit.")
+            .assertIsDisplayed()
+    }
+
     // ========== Search Tests ==========
 
     @Test

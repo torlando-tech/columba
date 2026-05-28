@@ -64,7 +64,11 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.launch
 import network.columba.app.data.repository.Announce
 import network.columba.app.rns.api.model.NodeType
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.FilterAltOff
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import network.columba.app.ui.components.AnnounceFilterChips
+import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.NodeTypeBadge
 import network.columba.app.ui.components.OtherBadge
 import network.columba.app.ui.components.PeerCard
@@ -118,6 +122,14 @@ fun AnnounceStreamScreen(
     // Overflow menu state
     var showOverflowMenu by remember { mutableStateOf(false) }
 
+    // Filter-chip expand state — see ContactsScreen for the rationale (GH
+    // issue #922). Keyed on heightSizeClass so rotation snaps to the default;
+    // explicit toggle persists within a single orientation session.
+    val heightSizeClass = LocalWindowSize.current.heightSizeClass
+    var filtersExpanded by remember(heightSizeClass) {
+        mutableStateOf(heightSizeClass != WindowHeightSizeClass.Compact)
+    }
+
     // Scroll state and coroutine scope
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -162,6 +174,20 @@ fun AnnounceStreamScreen(
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder = "Search by name or hash...",
                 additionalActions = {
+                    // Filter chips toggle (matches ContactsScreen Network tab)
+                    IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
+                        Icon(
+                            imageVector =
+                                if (filtersExpanded) {
+                                    Icons.Default.FilterAltOff
+                                } else {
+                                    Icons.Default.FilterAlt
+                                },
+                            contentDescription =
+                                if (filtersExpanded) "Hide filters" else "Show filters",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                     // Announce button
                     IconButton(
                         onClick = { viewModel.triggerAnnounce() },
@@ -233,6 +259,8 @@ fun AnnounceStreamScreen(
                 onNodeTypesChange = viewModel::updateSelectedNodeTypes,
                 onShowAudioChange = viewModel::updateShowAudioAnnounces,
                 onInterfaceTypesChange = viewModel::updateSelectedInterfaceTypes,
+                expanded = filtersExpanded,
+                onExpandRequest = { filtersExpanded = true },
             )
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -498,10 +526,17 @@ fun PeerContextMenu(
 /**
  * Reusable announce stream content without the scaffold/app bar.
  * Can be embedded in other screens like ContactsScreen Network tab.
+ *
+ * [filtersExpanded] / [onExpandFiltersRequest] are hoisted up to the host
+ * screen so the same state can drive a Filter icon in the host's top bar
+ * (typical pattern: Filter icon toggles, the collapsed pill row also requests
+ * expansion). See [AnnounceFilterChips] for the collapsed-state contract.
  */
 @Composable
 fun AnnounceStreamContent(
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
+    filtersExpanded: Boolean = true,
+    onExpandFiltersRequest: () -> Unit = {},
     onPeerClick: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
     onStartChat: (destinationHash: String, peerName: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
@@ -573,6 +608,8 @@ fun AnnounceStreamContent(
             onNodeTypesChange = viewModel::updateSelectedNodeTypes,
             onShowAudioChange = viewModel::updateShowAudioAnnounces,
             onInterfaceTypesChange = viewModel::updateSelectedInterfaceTypes,
+            expanded = filtersExpanded,
+            onExpandRequest = onExpandFiltersRequest,
         )
         when {
             isLoading && pagingItems.itemCount == 0 -> {

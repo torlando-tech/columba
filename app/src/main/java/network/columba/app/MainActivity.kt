@@ -80,6 +80,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.ReticulumService
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.LocalCapabilities
+import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.OfflineModeBanner
 import network.columba.app.ui.screens.AnnounceDetailScreen
 import network.columba.app.ui.screens.AnnounceStreamScreen
@@ -312,7 +313,18 @@ class MainActivity : ComponentActivity() {
             // prop-drilling (Phase D). settingsViewModel is the Activity-scoped
             // instance, so this is the same StateFlow the gated screens read.
             val capabilities by settingsViewModel.capabilities.collectAsState()
-            CompositionLocalProvider(LocalCapabilities provides capabilities) {
+            // WindowSizeClass exposes width/height buckets (Compact/Medium/Expanded)
+            // so screens can collapse chrome on landscape phones (compact-height)
+            // and eventually adopt list-detail layouts on tablets/foldables
+            // (expanded-width). Computed once at the activity root; consumers read
+            // via LocalWindowSize.
+            @OptIn(androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi::class)
+            val windowSizeClass =
+                androidx.compose.material3.windowsizeclass.calculateWindowSizeClass(this)
+            CompositionLocalProvider(
+                LocalCapabilities provides capabilities,
+                LocalWindowSize provides windowSizeClass,
+            ) {
                 ColumbaNavigation(
                     pendingNavigation = pendingNavigation,
                     interfaceRepository = interfaceRepository,

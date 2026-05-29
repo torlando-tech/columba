@@ -477,22 +477,34 @@ fun NomadNetBrowserScreen(
                         ) {
                             // Subtract horizontal padding (8.dp * 2) so lines fill viewport
                             val viewportLineWidth = maxWidth - 16.dp
+                            // Viewport size in px, captured here before verticalScroll /
+                            // horizontalScroll unbound the constraints to Infinity.
+                            val viewportWidthPx = constraints.maxWidth
+                            val viewportHeightPx = constraints.maxHeight
                             Column(
                                 modifier =
                                     Modifier
-                                        // fillMaxSize forces minHeight/minWidth = viewport into
-                                        // the scroll node's child constraints, so the scrollable
-                                        // (gesture-catching) area always fills the viewport even
-                                        // when the page is shorter than the screen. Without it the
-                                        // scroll node wraps the content and drags in the blank area
-                                        // below short pages are ignored (issue #681).
-                                        .fillMaxSize()
                                         .verticalScroll(rememberScrollState())
                                         .horizontalScroll(rememberScrollState())
                                         .layout { measurable, constraints ->
                                             val placeable = measurable.measure(constraints)
-                                            val scaledWidth = (placeable.width * zoomScale).roundToInt()
-                                            val scaledHeight = (placeable.height * zoomScale).roundToInt()
+                                            // Report a scrollable area no smaller than the
+                                            // viewport so the whole screen catches pan gestures
+                                            // even when the page is shorter than the screen
+                                            // (issue #681). Clamping the reported size — rather
+                                            // than forcing the content to fill via fillMaxSize —
+                                            // keeps the scroll extent tied to the real (scaled)
+                                            // content height, so a short page is neither
+                                            // scrollable into blank space when zoomed in nor
+                                            // dead-zoned when zoomed out.
+                                            val scaledWidth =
+                                                (placeable.width * zoomScale)
+                                                    .roundToInt()
+                                                    .coerceAtLeast(viewportWidthPx)
+                                            val scaledHeight =
+                                                (placeable.height * zoomScale)
+                                                    .roundToInt()
+                                                    .coerceAtLeast(viewportHeightPx)
                                             layout(scaledWidth, scaledHeight) {
                                                 placeable.placeRelativeWithLayer(0, 0) {
                                                     scaleX = zoomScale

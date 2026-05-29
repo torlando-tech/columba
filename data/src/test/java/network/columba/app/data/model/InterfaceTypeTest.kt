@@ -162,7 +162,7 @@ class InterfaceTypeTest {
 
     @Test
     fun `enum values are correct`() {
-        assertEquals(6, InterfaceType.entries.size)
+        assertEquals(7, InterfaceType.entries.size)
         assertEquals(
             setOf(
                 InterfaceType.AUTO,
@@ -170,10 +170,23 @@ class InterfaceTypeTest {
                 InterfaceType.TCP_SERVER,
                 InterfaceType.BLE,
                 InterfaceType.RNODE,
+                InterfaceType.SHARED_INSTANCE,
                 InterfaceType.UNKNOWN,
             ),
             InterfaceType.entries.toSet(),
         )
+    }
+
+    @Test
+    fun `shared instance classifier matches the labelLocalInterface output`() {
+        // PythonRnsTransportAdmin.labelLocalInterface() emits these exact
+        // type strings for `LocalServerInterface` / `LocalClientInterface`.
+        // Keep this in lockstep with that helper or the InterfaceTypeIcon
+        // / map-pin categorisation downstream silently falls to UNKNOWN.
+        assertEquals(InterfaceType.SHARED_INSTANCE, InterfaceType.fromName("Shared Instance (host)"))
+        assertEquals(InterfaceType.SHARED_INSTANCE, InterfaceType.fromName("Shared Instance (client)"))
+        // Storage-name round-trip.
+        assertEquals(InterfaceType.SHARED_INSTANCE, InterfaceType.fromName("SHARED_INSTANCE"))
     }
 
     @Test

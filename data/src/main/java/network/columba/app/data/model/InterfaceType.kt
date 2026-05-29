@@ -39,6 +39,14 @@ enum class InterfaceType(
     TCP_SERVER("TCP Server", "TCP_SERVER"),
     BLE("BLE", "BLE"),
     RNODE("RNode", "RNODE"),
+    // RNS shared-instance loopback. Spawned when `share_instance = yes`:
+    // the host bind side is `LocalServerInterface` (`name = "Reticulum"`),
+    // each connected app gets a `LocalClientInterface` whose `name` is the
+    // ephemeral TCP port. `PythonRnsTransportAdmin.labelLocalInterface()`
+    // rewrites both to the user-facing "Shared Instance (host|client)"
+    // strings — keep the keyword stable here so classification stays one
+    // grep away from any future renaming.
+    SHARED_INSTANCE("Shared Instance", "SHARED_INSTANCE"),
     UNKNOWN("Unknown", "UNKNOWN"),
     ;
 
@@ -79,6 +87,7 @@ enum class InterfaceType(
                 "ANDROID_BLE" to BLE,
                 "BLE" to BLE,
                 "RNODE" to RNODE,
+                "SHARED_INSTANCE" to SHARED_INSTANCE,
                 "UNKNOWN" to UNKNOWN,
             )
 
@@ -104,6 +113,11 @@ enum class InterfaceType(
                 name.contains("androidble") ||
                     name.contains("ble") ||
                     name.contains("bluetooth") -> BLE
+                // Matches `PythonRnsTransportAdmin.labelLocalInterface()`'s
+                // "Shared Instance (host|client)" type strings. Must be
+                // checked AFTER the specific transport prefixes because the
+                // substring "instance" is unlikely to collide upstream.
+                name.contains("shared instance") -> SHARED_INSTANCE
                 else -> UNKNOWN
             }
 

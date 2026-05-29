@@ -173,6 +173,7 @@ import network.columba.app.ui.components.ReactionDisplayRow
 import network.columba.app.ui.components.ReactionModeOverlay
 import network.columba.app.ui.components.ReplyInputBar
 import network.columba.app.ui.components.ReplyPreviewBubble
+import network.columba.app.ui.components.SelectableTextDialog
 import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SwipeableMessageBubble
 import network.columba.app.ui.components.SyncStatusBottomSheet
@@ -612,6 +613,10 @@ fun MessagingScreen(
     // State for image options bottom sheet
     var showImageOptionsSheet by remember { mutableStateOf(false) }
     var selectedImageMessageId by remember { mutableStateOf<String?>(null) }
+
+    // Text shown in the "Select text" dialog (issue #920). Lives at screen scope so it
+    // survives the reaction-mode overlay being dismissed before the dialog opens.
+    var selectableText by remember { mutableStateOf<String?>(null) }
     var selectedImageForOptionsIsAnimated by remember { mutableStateOf(false) }
 
     // State for saving images
@@ -1463,6 +1468,12 @@ fun MessagingScreen(
                             )
                         }
                     },
+                    onSelectText =
+                        pagingItems.itemSnapshotList
+                            .find { it?.id == state.messageId }
+                            ?.content
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { content -> { selectableText = content } },
                     onViewDetails = { onViewMessageDetails(state.messageId) },
                     onRetry =
                         if (state.isFailed) {
@@ -1484,6 +1495,15 @@ fun MessagingScreen(
                 )
             }
         }
+    }
+
+    // Select-text dialog (issue #920): lets the user highlight and copy substrings of a
+    // message, which the chat bubble can't offer because long-press is reserved for reactions.
+    selectableText?.let { text ->
+        SelectableTextDialog(
+            text = text,
+            onDismiss = { selectableText = null },
+        )
     }
 
     // File attachment options bottom sheet

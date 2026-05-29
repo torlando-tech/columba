@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,7 +28,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Add
@@ -35,11 +39,14 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -788,6 +795,7 @@ private fun ReactionChip(
  * @param onShowFullPicker Callback to show the full emoji picker
  * @param onReply Callback for the reply action
  * @param onCopy Callback for the copy action
+ * @param onSelectText Optional callback to open a selectable-text view (text messages only)
  * @param onViewDetails Optional callback for viewing message details (all messages)
  * @param onRetry Optional callback for retrying failed messages
  * @param onDismiss Callback when the overlay is dismissed
@@ -808,6 +816,7 @@ fun ReactionModeOverlay(
     onShowFullPicker: () -> Unit,
     onReply: () -> Unit,
     onCopy: () -> Unit,
+    onSelectText: (() -> Unit)? = null,
     onViewDetails: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
@@ -913,6 +922,16 @@ fun ReactionModeOverlay(
         onCopy()
         handleDismiss()
     }
+
+    val wrappedOnSelectText: (() -> Unit)? =
+        onSelectText?.let {
+            {
+                // Exit reaction mode immediately before showing the selection dialog so the
+                // dialog isn't layered behind the overlay scrim.
+                onDismiss()
+                it()
+            }
+        }
 
     val wrappedOnViewDetails: (() -> Unit)? =
         onViewDetails?.let {
@@ -1052,6 +1071,7 @@ fun ReactionModeOverlay(
                     MessageActionButtons(
                         onReply = wrappedOnReply,
                         onCopy = wrappedOnCopy,
+                        onSelectText = wrappedOnSelectText,
                         onViewDetails = wrappedOnViewDetails,
                         onRetry = wrappedOnRetry,
                         onDelete = wrappedOnDelete,
@@ -1067,11 +1087,71 @@ fun ReactionModeOverlay(
 }
 
 /**
+ * Selectable copy of a message body.
+ *
+ * Wraps the text in a [SelectionContainer] so the user can highlight and copy arbitrary
+ * substrings via the platform text-selection toolbar — which the chat bubble itself cannot
+ * offer because its long-press gesture is reserved for reaction mode (issue #920).
+ *
+ * @param text The message body to display selectably
+ * @param modifier Optional modifier for the text
+ */
+@Composable
+fun SelectableMessageText(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    SelectionContainer(modifier = modifier) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/**
+ * Dialog that presents a message body as selectable text.
+ *
+ * Lets the user highlight and copy substrings of a message (issue #920). The chat bubble
+ * reserves long-press for reaction mode, so substring selection is surfaced here instead.
+ *
+ * @param text The message body to display
+ * @param onDismiss Callback when the dialog is dismissed
+ */
+@Composable
+fun SelectableTextDialog(
+    text: String,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select text") },
+        text = {
+            SelectableMessageText(
+                text = text,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
+            }
+        },
+    )
+}
+
+/**
  * Action buttons for reaction mode overlay.
  * Displays a horizontal row of action buttons (Retry, Reply, Copy, View Details).
  *
  * @param onReply Callback for reply action
  * @param onCopy Callback for copy action
+ * @param onSelectText Optional callback for the select-text action (shown only when non-null)
  * @param onViewDetails Optional callback for view details (shown for sent messages)
  * @param onRetry Optional callback for retry (shown for failed messages)
  * @param onDelete Optional callback for delete action
@@ -1081,6 +1161,7 @@ fun ReactionModeOverlay(
 private fun MessageActionButtons(
     onReply: () -> Unit,
     onCopy: () -> Unit,
+    onSelectText: (() -> Unit)? = null,
     onViewDetails: (() -> Unit)?,
     onRetry: (() -> Unit)?,
     onDelete: (() -> Unit)? = null,
@@ -1120,6 +1201,15 @@ private fun MessageActionButtons(
                 label = "Copy",
                 onClick = onCopy,
             )
+
+            // Select text button (only for messages with selectable text content)
+            if (onSelectText != null) {
+                ReactionModeActionButton(
+                    icon = Icons.Default.SelectAll,
+                    label = "Select text",
+                    onClick = onSelectText,
+                )
+            }
 
             // View Details button (shown for all messages)
             if (onViewDetails != null) {

@@ -137,6 +137,7 @@ class SettingsRepository
             val MAP_SOURCE_RMSP_ENABLED = booleanPreferencesKey("map_source_rmsp_enabled")
             val MAP_MARKER_DECLUTTER_ENABLED = booleanPreferencesKey("map_marker_declutter_enabled")
             val MAP_STYLE_PREFERENCE = stringPreferencesKey("map_style_preference")
+            val NOMADNET_RENDERING_MODE = stringPreferencesKey("nomadnet_rendering_mode")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
             // Privacy preferences
@@ -1399,6 +1400,27 @@ class SettingsRepository
         suspend fun saveMapStylePreference(preference: MapStylePreference) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.MAP_STYLE_PREFERENCE] = preference.name
+            }
+        }
+
+        /**
+         * Flow of the persisted NomadNet page rendering mode, stored as the enum
+         * name (e.g. "PROPORTIONAL_WRAP"). Emits null when the user has never made
+         * a selection; the consumer maps the name to its RenderingMode enum and
+         * applies its own default. Kept as a raw String here so the repository layer
+         * does not depend on the viewmodel layer where RenderingMode is defined.
+         */
+        val nomadNetRenderingModeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences -> preferences[PreferencesKeys.NOMADNET_RENDERING_MODE] }
+                .distinctUntilChanged()
+
+        /**
+         * Save the NomadNet page rendering mode selection (enum name).
+         */
+        suspend fun saveNomadNetRenderingMode(modeName: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOMADNET_RENDERING_MODE] = modeName
             }
         }
 

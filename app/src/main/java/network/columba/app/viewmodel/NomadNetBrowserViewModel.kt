@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronDocument
@@ -19,6 +20,7 @@ import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
+import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsNomadnet
 import org.json.JSONObject
 import javax.inject.Inject
@@ -30,6 +32,7 @@ class NomadNetBrowserViewModel
     constructor(
         private val nomadnet: RnsNomadnet,
         private val pageCache: NomadNetPageCache,
+        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "NomadNetBrowserVM"
@@ -66,6 +69,12 @@ class NomadNetBrowserViewModel
             MONOSPACE_SCROLL,
             MONOSPACE_ZOOM,
             PROPORTIONAL_WRAP,
+            ;
+
+            companion object {
+                /** Maps a persisted enum name back to a RenderingMode, defaulting when absent/unknown. */
+                fun fromName(name: String?): RenderingMode = entries.firstOrNull { it.name == name } ?: MONOSPACE_SCROLL
+            }
         }
 
         private data class HistoryEntry(
@@ -83,6 +92,21 @@ class NomadNetBrowserViewModel
 
         private val _renderingMode = MutableStateFlow(RenderingMode.MONOSPACE_SCROLL)
         val renderingMode: StateFlow<RenderingMode> = _renderingMode.asStateFlow()
+
+        // Guards the async startup restore from clobbering a selection the user
+        // makes before the persisted value has been read back.
+        @Volatile
+        private var renderingModeUserSelected = false
+
+        init {
+            // Restore the user's last-selected rendering mode so it persists across sessions.
+            viewModelScope.launch {
+                val restored = RenderingMode.fromName(settingsRepository.nomadNetRenderingModeFlow.first())
+                if (!renderingModeUserSelected) {
+                    _renderingMode.value = restored
+                }
+            }
+        }
 
         private val _isIdentified = MutableStateFlow(false)
         val isIdentified: StateFlow<Boolean> = _isIdentified.asStateFlow()
@@ -495,7 +519,10 @@ class NomadNetBrowserViewModel
         }
 
         fun setRenderingMode(mode: RenderingMode) {
+            renderingModeUserSelected = true
             _renderingMode.value = mode
+            // Persist so the choice is remembered for future sessions and other sites.
+            viewModelScope.launch { settingsRepository.saveNomadNetRenderingMode(mode.name) }
         }
 
         fun identifyToNode() {

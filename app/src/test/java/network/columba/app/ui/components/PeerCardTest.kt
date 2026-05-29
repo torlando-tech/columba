@@ -223,16 +223,21 @@ class PeerCardTest {
     }
 
     // ========== Interface Type Icon Tests ==========
+    //
+    // The icon is classified from the RAW `receivingInterface` field at
+    // render time (not the cached `receivingInterfaceType` column) — see
+    // the comment on the `InterfaceTypeIcon` call site in `PeerCard.kt`.
+    // The cached column can be stale ("UNKNOWN" from a buggy classifier
+    // run at save time), so tests use class-prefixed strings matching the
+    // canonical `event_bridge.py` emit format: `"ClassName[friendly_name]"`.
 
     @Test
     fun peerCard_displaysWiFiIcon_forAutoInterface() {
-        // Given
         val announce =
             TestFactories.createAnnounce(
-                receivingInterfaceType = "AUTO_INTERFACE",
+                receivingInterface = "AutoInterface[Local]",
             )
 
-        // When
         composeTestRule.setContent {
             PeerCard(
                 announce = announce,
@@ -241,19 +246,37 @@ class PeerCardTest {
             )
         }
 
-        // Then
+        composeTestRule.onNodeWithContentDescription("WiFi").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_displaysWiFiIcon_forAutoInterfacePeer() {
+        // AutoInterfacePeer is what `RNS.Transport.path_table[...][5]` returns
+        // for LAN-multicast-discovered peers; its `__str__` returns the
+        // `AutoInterfacePeer[ifname/addr]` shape that the classifier expects.
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterface = "AutoInterfacePeer[wlan0/fe80::10af:905f:7605:214e]",
+            )
+
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
         composeTestRule.onNodeWithContentDescription("WiFi").assertIsDisplayed()
     }
 
     @Test
     fun peerCard_displaysGlobeIcon_forTcpClient() {
-        // Given
         val announce =
             TestFactories.createAnnounce(
-                receivingInterfaceType = "TCP_CLIENT",
+                receivingInterface = "TCPClientInterface[homelab]",
             )
 
-        // When
         composeTestRule.setContent {
             PeerCard(
                 announce = announce,
@@ -262,19 +285,16 @@ class PeerCardTest {
             )
         }
 
-        // Then
         composeTestRule.onNodeWithContentDescription("Internet").assertIsDisplayed()
     }
 
     @Test
     fun peerCard_displaysBluetoothIcon_forAndroidBle() {
-        // Given
         val announce =
             TestFactories.createAnnounce(
-                receivingInterfaceType = "ANDROID_BLE",
+                receivingInterface = "AndroidBLE[Pixel 7 / 0A:1B:2C:3D:4E:5F]",
             )
 
-        // When
         composeTestRule.setContent {
             PeerCard(
                 announce = announce,
@@ -283,19 +303,16 @@ class PeerCardTest {
             )
         }
 
-        // Then
         composeTestRule.onNodeWithContentDescription("Bluetooth").assertIsDisplayed()
     }
 
     @Test
     fun peerCard_displaysAntennaIcon_forRnode() {
-        // Given
         val announce =
             TestFactories.createAnnounce(
-                receivingInterfaceType = "RNODE",
+                receivingInterface = "RNodeInterface[My Radio]",
             )
 
-        // When
         composeTestRule.setContent {
             PeerCard(
                 announce = announce,
@@ -304,19 +321,19 @@ class PeerCardTest {
             )
         }
 
-        // Then
         composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertIsDisplayed()
     }
 
     @Test
-    fun peerCard_doesNotDisplayInterfaceIcon_forUnknown() {
-        // Given
+    fun peerCard_displaysAntennaIcon_forColumbaRNodeBle() {
+        // BLE-attached RNode: classifier must prefer "rnode" over "ble"
+        // because the transport really IS RNode even though the wire
+        // adapter is BLE. Regression-pin from the original cascade fix.
         val announce =
             TestFactories.createAnnounce(
-                receivingInterfaceType = "UNKNOWN",
+                receivingInterface = "ColumbaRNodeInterface[Heltec V3]",
             )
 
-        // When
         composeTestRule.setContent {
             PeerCard(
                 announce = announce,
@@ -325,7 +342,51 @@ class PeerCardTest {
             )
         }
 
-        // Then - no interface icon should be displayed for unknown type
+        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_displaysIcon_evenWhenCachedTypeIsStaleUnknown() {
+        // Regression-pin for the brittleness Tyler called out: a row whose
+        // cached `receivingInterfaceType` was set to "UNKNOWN" by an old
+        // (buggy) classifier run must still render the icon if the raw
+        // `receivingInterface` can be classified now. PeerCard reads the raw
+        // field — `receivingInterfaceType` is irrelevant for icons.
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterface = "TCPClientInterface[homelab]",
+                receivingInterfaceType = "UNKNOWN",
+            )
+
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Internet").assertIsDisplayed()
+    }
+
+    @Test
+    fun peerCard_doesNotDisplayInterfaceIcon_forUnknownRawName() {
+        // A truly unrecognisable raw name (no class prefix, no pattern match)
+        // still produces UNKNOWN — the resilience improvement helps with
+        // classifier-cache drift, not with genuinely unknowable strings.
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterface = "homelab",
+            )
+
+        composeTestRule.setContent {
+            PeerCard(
+                announce = announce,
+                onClick = {},
+                onFavoriteClick = {},
+            )
+        }
+
         composeTestRule.onNodeWithContentDescription("WiFi").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Internet").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Bluetooth").assertDoesNotExist()
@@ -333,14 +394,12 @@ class PeerCardTest {
     }
 
     @Test
-    fun peerCard_doesNotDisplayInterfaceIcon_forNull() {
-        // Given
+    fun peerCard_doesNotDisplayInterfaceIcon_forNullRawName() {
         val announce =
             TestFactories.createAnnounce(
-                receivingInterfaceType = null,
+                receivingInterface = null,
             )
 
-        // When
         composeTestRule.setContent {
             PeerCard(
                 announce = announce,
@@ -349,7 +408,6 @@ class PeerCardTest {
             )
         }
 
-        // Then - no interface icon should be displayed for null type
         composeTestRule.onNodeWithContentDescription("WiFi").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Internet").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Bluetooth").assertDoesNotExist()

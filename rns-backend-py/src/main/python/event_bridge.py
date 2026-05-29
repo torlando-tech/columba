@@ -403,6 +403,28 @@ def reset_reticulum_for_restart():
                         RNS.LOG_DEBUG,
                     )
 
+    # Shared-instance TCP listener (port 37428). When share_instance=yes,
+    # upstream's LocalServerInterface binds via BackboneInterface.add_listener,
+    # which stashes the listening socket in the *global*
+    # BackboneInterface.listener_filenos dict — NOT in an interface's .socket /
+    # .server attribute, so the per-interface close loop above never sees it.
+    # That socket is normally closed by exit_handler() ->
+    # Transport.detach_interfaces() -> BackboneInterface.deregister_listeners();
+    # but PythonRnsRuntime.stop() swallows exit_handler() failures, and if it
+    # threw before detach the 37428 listener leaks. A leaked listener makes the
+    # NEXT in-process start()'s SharedInstanceProbe connect to our OWN socket
+    # and silently demote us from host to client (self-detection). Close it here
+    # unconditionally — reset_reticulum_for_restart() runs in stop()'s own
+    # runCatching, independent of exit_handler(). Idempotent: deregister_listeners()
+    # no-ops once listener_filenos is already cleared (the normal exit_handler()
+    # path), so this only has an effect when exit_handler() failed to run it.
+    try:
+        import RNS.Interfaces.BackboneInterface as _backbone
+        _backbone.BackboneInterface.deregister_listeners()
+        print("event_bridge.reset: deregistered BackboneInterface listeners (shared-instance 37428)", flush=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"event_bridge.reset: BackboneInterface.deregister_listeners FAILED: {type(e).__name__}: {e}", flush=True)
+
     # Reticulum singleton + one-shot exit guards. Without the __instance reset
     # the next Reticulum() raises OSError; without the *_ran resets a second
     # exit_handler() would no-op and skip interface detach + persist.

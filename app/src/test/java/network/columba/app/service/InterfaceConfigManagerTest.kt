@@ -12,6 +12,8 @@ import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +34,7 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -69,7 +72,9 @@ class InterfaceConfigManagerTest {
     private lateinit var sharedPrefs: SharedPreferences
     private lateinit var sharedPrefsEditor: SharedPreferences.Editor
 
-    @Suppress("NoRelaxedMocks") // Android Context and SharedPreferences require relaxed mocks
+    // NoRelaxedMocks: Android Context and SharedPreferences require relaxed mocks.
+    // LongMethod: setup configures mock stubs for InterfaceConfigManager's 15+ dependencies.
+    @Suppress("NoRelaxedMocks", "LongMethod")
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -142,6 +147,16 @@ class InterfaceConfigManagerTest {
         coEvery { rnsCore.shutdown() } returns Result.success(Unit)
         coEvery { rnsCore.initialize(any()) } returns Result.success(Unit)
 
+        // applyInterfaceChanges() refreshes the persisted snapshot on the
+        // initialize() success path. ReticulumConfigSnapshot.write() does real
+        // Android Parcel + file I/O, which isn't on the JVM unit-test classpath
+        // (Parcel.obtain() throws "not mocked"), so stub the object to a no-op —
+        // same boundary-mocking the rest of this test already does for Context.
+        // The snapshot's own serialization is covered elsewhere; here we only
+        // care about the manager's orchestration.
+        mockkObject(ReticulumConfigSnapshot)
+        every { ReticulumConfigSnapshot.write(any(), any(), any()) } just Runs
+
         // Setup manager mocks (start/stop methods)
         every { messageCollector.stopCollecting() } just Runs
         every { messageCollector.startCollecting() } just Runs
@@ -175,6 +190,7 @@ class InterfaceConfigManagerTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkObject(ReticulumConfigSnapshot)
         clearAllMocks()
     }
 
@@ -263,6 +279,39 @@ class InterfaceConfigManagerTest {
             verify { autoAnnounceManager.start() }
             verify { identityResolutionManager.start(any()) }
             verify { propagationNodeManager.start() }
+        }
+
+    @Test
+    fun `applyInterfaceChanges - refreshes config snapshot on successful initialization`() =
+        runTest {
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: Should succeed
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+
+            // And: the persisted snapshot is refreshed so a later OS-driven
+            // :reticulum restart self-inits from the just-applied config rather
+            // than a stale one. This is the core behavioral fix — assert it
+            // explicitly so the call can't be silently dropped.
+            verify { ReticulumConfigSnapshot.write(any(), any(), any()) }
+        }
+
+    @Test
+    fun `applyInterfaceChanges - does not write snapshot when initialization fails`() =
+        runTest {
+            // Given: initialize() fails
+            coEvery { rnsCore.initialize(any()) } returns
+                Result.failure(RuntimeException("init failed"))
+
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: apply fails and the snapshot is NOT refreshed — a stale-but-
+            // valid snapshot is preferable to one reflecting a config that never
+            // came up. Guards that the write stays gated on the onSuccess path.
+            assertTrue("applyInterfaceChanges should fail", result.isFailure)
+            verify(exactly = 0) { ReticulumConfigSnapshot.write(any(), any(), any()) }
         }
 
     @Test

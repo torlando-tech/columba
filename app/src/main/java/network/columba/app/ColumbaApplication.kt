@@ -494,6 +494,7 @@ class ColumbaApplication : Application() {
                         preferOwnInstance = preferOwnInstance,
                         rpcKey = rpcKey,
                         enableTransport = transportNodeEnabled,
+                        shareInstanceHosting = startupConfig.shareInstanceHosting,
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
@@ -734,110 +735,6 @@ class ColumbaApplication : Application() {
             }
         } catch (e: Exception) {
             android.util.Log.w("ColumbaApplication", "Failed to register companion devices: ${e.message}")
-        }
-    }
-
-    /**
-     * Initialize the Reticulum service with configuration from the database.
-     * This is called both during normal app startup and when the service needs
-     * reinitialization after being killed by Android and successfully rebound.
-     *
-     * @param rnsCore The RnsCore instance to initialize
-     */
-    private suspend fun initializeReticulumService(rnsCore: RnsCore) {
-        try {
-            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Loading configuration from database...")
-
-            // Load all configuration from database in parallel for faster startup
-            val startupConfig = startupConfigLoader.loadConfig()
-            val enabledInterfaces = startupConfig.interfaces
-            val activeIdentity = startupConfig.identity
-
-            if (activeIdentity != null &&
-                runCatching {
-                    identityRepository.requiresPassword(activeIdentity.identityHash)
-                }.getOrDefault(true)
-            ) {
-                android.util.Log.w(
-                    "ColumbaApplication",
-                    "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
-                        "is password-protected (or password status unreadable) - skipping init until unlock",
-                )
-                return
-            }
-
-            val preferOwnInstance = startupConfig.preferOwn
-            val rpcKey = startupConfig.rpcKey
-            val transportNodeEnabled = startupConfig.transport
-            val discoverInterfaces = startupConfig.discoverInterfaces
-            val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
-            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Loaded ${enabledInterfaces.size} enabled interface(s)")
-            android.util.Log.d(
-                "ColumbaApplication",
-                "initializeReticulumService: Discover interfaces: $discoverInterfaces, autoconnect: $autoconnectDiscoveredCount",
-            )
-
-            val displayName = activeIdentity?.displayName
-            val deliveryKey = decryptDeliveryKey(activeIdentity)
-
-            // Same guard as the cold-start path: don't init with a null key when an
-            // active identity exists, or the native stack silently substitutes a fresh
-            // ephemeral identity.
-            if (activeIdentity != null && deliveryKey == null) {
-                android.util.Log.e(
-                    "ColumbaApplication",
-                    "initializeReticulumService: Active identity ${activeIdentity.identityHash.take(8)}... " +
-                        "present but key decryption returned null - skipping init",
-                )
-                settingsRepository.setNeedsIdentityUnlock(true)
-                return
-            }
-            settingsRepository.setNeedsIdentityUnlock(false)
-
-            // Initialize Reticulum with config from database
-            android.util.Log.d("ColumbaApplication", "initializeReticulumService: Initializing Reticulum...")
-            val config =
-                ReticulumConfig(
-                    storagePath = filesDir.absolutePath + "/reticulum",
-                    enabledInterfaces = enabledInterfaces,
-                    deliveryIdentityKey = deliveryKey,
-                    displayName = displayName,
-                    logLevel = LogLevel.DEBUG,
-                    allowAnonymous = false,
-                    preferOwnInstance = preferOwnInstance,
-                    rpcKey = rpcKey,
-                    enableTransport = transportNodeEnabled,
-                    shareInstanceHosting = startupConfig.shareInstanceHosting,
-                    discoverInterfaces = discoverInterfaces,
-                    autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
-                    autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
-                )
-
-            rnsCore
-                .initialize(config)
-                .onSuccess {
-                    android.util.Log.i("ColumbaApplication", "initializeReticulumService: Reticulum initialized successfully")
-
-                    // networkStatus.collect (set up in onCreate) handles the READY
-                    // notification push.
-
-                    restorePeerIdentities(rnsCore)
-
-                    // Start the message collector and other services after Reticulum is ready
-                    messageCollector.startCollecting()
-                    autoAnnounceManager.start()
-                    identityResolutionManager.start(applicationScope)
-                    propagationNodeManager.start()
-                    telemetryCollectorManager.start()
-                    android.util.Log.d(
-                        "ColumbaApplication",
-                        "initializeReticulumService: MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
-                    )
-                }.onFailure { error ->
-                    android.util.Log.e("ColumbaApplication", "initializeReticulumService: Failed to initialize Reticulum: ${error.message}", error)
-                }
-        } catch (e: Exception) {
-            android.util.Log.e("ColumbaApplication", "initializeReticulumService: Error during initialization", e)
         }
     }
 

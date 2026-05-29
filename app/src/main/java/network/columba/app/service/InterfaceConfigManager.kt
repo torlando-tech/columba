@@ -365,6 +365,18 @@ class InterfaceConfigManager
                         .initialize(config)
                         .onSuccess {
                             Log.d(TAG, "✓ Reticulum initialized successfully")
+
+                            // Refresh the persisted snapshot with the config we just
+                            // applied. Without this, the snapshot only ever reflects
+                            // ColumbaApplication.onCreate's cold-start config — so any
+                            // field changed via Apply & Restart (e.g. shareInstanceHosting)
+                            // silently reverts the next time the OS reaps and START_STICKY-
+                            // restarts the :reticulum process from the stale snapshot.
+                            network.columba.app.rns.host.persistence.ReticulumConfigSnapshot.write(
+                                context = context,
+                                config = config,
+                                identityHashHex = activeIdentity?.identityHash,
+                            )
                         }.onFailure { error ->
                             // The outer finally clears is_applying_config — keep the flag set
                             // here so any stale ACTION_STOP redelivery during the in-flight

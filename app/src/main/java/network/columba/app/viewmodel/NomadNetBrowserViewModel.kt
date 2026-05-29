@@ -104,6 +104,9 @@ class NomadNetBrowserViewModel
                 val restored =
                     try {
                         RenderingMode.fromName(settingsRepository.nomadNetRenderingModeFlow.first())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        // Normal ViewModel teardown cancels the read; preserve the cancellation contract.
+                        throw e
                     } catch (e: Exception) {
                         // DataStore I/O failure or corruption: fall back to the default rather than crash.
                         Log.w(TAG, "Failed to read persisted rendering mode; using default", e)

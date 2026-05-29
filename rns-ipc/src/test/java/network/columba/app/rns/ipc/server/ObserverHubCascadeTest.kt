@@ -1,9 +1,9 @@
 package network.columba.app.rns.ipc.server
 
+import android.os.Binder
 import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.TransactionTooLargeException
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -42,7 +42,7 @@ class ObserverHubCascadeTest {
         val hubScope = CoroutineScope(StandardTestDispatcher(testScheduler))
         val upstream = MutableSharedFlow<String>(extraBufferCapacity = 16)
         val delivered = mutableListOf<String>()
-        val cb = FakeCallback(mockk<IBinder>(relaxed = true))
+        val cb = FakeCallback(Binder())
 
         val hub = ObserverHub<String, FakeCallback>(
             scope = hubScope,
@@ -76,7 +76,7 @@ class ObserverHubCascadeTest {
         val hubScope = CoroutineScope(StandardTestDispatcher(testScheduler))
         val upstream = MutableSharedFlow<String>(extraBufferCapacity = 16)
         val delivered = mutableListOf<String>()
-        val cb = FakeCallback(mockk<IBinder>(relaxed = true))
+        val cb = FakeCallback(Binder())
 
         val hub = ObserverHub<String, FakeCallback>(
             scope = hubScope,

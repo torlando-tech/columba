@@ -64,6 +64,7 @@ internal class ObserverHub<T, C : Any>(
                                 // The client process is genuinely gone. Clean up
                                 // now in case the linkToDeath recipient hasn't
                                 // fired yet.
+                                Log.d(TAG, "Observer client is dead; detaching", e)
                                 detach(binder)
                             } catch (e: TransactionTooLargeException) {
                                 // This ONE payload overflowed the Binder buffer;

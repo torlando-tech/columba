@@ -81,12 +81,19 @@ internal object FieldsBlob {
     fun readFromPfd(pfd: ParcelFileDescriptor): String {
         DataInputStream(BufferedInputStream(ParcelFileDescriptor.AutoCloseInputStream(pfd))).use { inp ->
             val magic = inp.readInt()
-            if (magic != MAGIC) throw IOException("Bad fields blob magic: 0x${Integer.toHexString(magic)}")
             val version = inp.readInt()
-            if (version != VERSION) throw IOException("Unsupported fields blob version: $version")
+            if (magic != MAGIC || version != VERSION) {
+                throw IOException(
+                    "Bad fields blob header: magic=0x${Integer.toHexString(magic)} version=$version",
+                )
+            }
+            // Reject a negative or implausibly large length (a corrupt/garbage blob
+            // could carry up to Int.MAX) before allocating, so we fail fast instead
+            // of churning GC/LMK on a doomed multi-GB ByteArray.
             val len = inp.readInt()
-            if (len < 0) throw IOException("Bad fields blob: negative length ($len)")
-            if (len > MAX_FIELDS_BYTES) throw IOException("Bad fields blob: implausible length ($len)")
+            if (len < 0 || len > MAX_FIELDS_BYTES) {
+                throw IOException("Bad fields blob: implausible length ($len)")
+            }
             val bytes = ByteArray(len).also { inp.readFully(it) }
             return String(bytes, Charsets.UTF_8)
         }

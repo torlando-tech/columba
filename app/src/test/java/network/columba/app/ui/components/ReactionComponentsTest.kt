@@ -562,6 +562,45 @@ class ReactionComponentsTest {
         assertEquals(expectedEmojis, REACTION_EMOJIS)
     }
 
+    // ========== SelectableMessageText TESTS (issue #920) ==========
+
+    @Test
+    fun `SelectableMessageText displays the provided text`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SelectableMessageText(text = "The quick brown fox")
+            }
+        }
+
+        composeTestRule.onNodeWithText("The quick brown fox").assertIsDisplayed()
+    }
+
+    @Test
+    fun `SelectableMessageText displays multiline text`() {
+        val multiline = "first line\nsecond line"
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                SelectableMessageText(text = multiline)
+            }
+        }
+
+        composeTestRule.onNodeWithText(multiline).assertIsDisplayed()
+    }
+
+    @Test
+    fun `SelectableMessageText renders empty string without crashing`() {
+        // Guards the call-site gate in MessagingScreen that only opens the dialog for
+        // non-blank content; if that gate regresses, the composable must still be robust.
+        composeTestRule.setContent {
+            MaterialTheme {
+                SelectableMessageText(text = "")
+            }
+        }
+
+        composeTestRule.onNodeWithText("non-existent").assertDoesNotExist()
+    }
+
     // ========== calculateMessageScaleForOverlay TESTS ==========
 
     // Common UI dimensions for tests (in pixels, simulating a typical phone at 3x density)

@@ -531,6 +531,36 @@ def _resolve_aspect(destination_hash, identity):
     return None
 
 
+def _format_iface_for_emit(iface):
+    """Resolve an RNS Interface object to a structured display string.
+
+    Goal: every emitted `receiving_interface` carries a class signal the
+    kotlin `InterfaceType.fromName` classifier can pattern-match (otherwise
+    rows store as `UNKNOWN` and the announce-card icon disappears — the
+    recurring regression this helper exists to prevent).
+
+    Strategy:
+      1. If `__str__` already returns a structured `"AnyClass[content]"`
+         shape — true for AutoInterface, AutoInterfacePeer, TCPInterface,
+         BackboneInterface, LocalServerInterface, RNodeInterface and most
+         other upstream subclasses — use it verbatim. This preserves
+         per-peer detail like `AutoInterfacePeer[wlan0/fe80::…]` (the
+         `ifname/addr` joined form, NOT just `.name` which is unset on
+         that subclass) so the kotlin `extractFriendlyName` parser still
+         derives the right display label.
+      2. Otherwise, `__str__` returned a bare name (a subclass that
+         doesn't override, or one that returns just `.name`). Wrap it
+         with the actual `type(iface).__name__` so the classifier still
+         has a class token to match — e.g. `"homelab"` becomes
+         `"TCPClientInterface[homelab]"`.
+    """
+    raw_str = str(iface) if iface is not None else ""
+    if "[" in raw_str and raw_str.endswith("]"):
+        return raw_str
+    cls_name = type(iface).__name__ if iface is not None else ""
+    return f"{cls_name}[{raw_str}]"
+
+
 def _announce_enrichment(destination_hash, identity, app_data):
     """Python-only enrichment for an announce: matched aspect + current hops.
 
@@ -598,14 +628,7 @@ class _AnnounceHandler:
             if path_entry is not None and len(path_entry) > 5:
                 iface = path_entry[5]
                 if iface is not None:
-                    # `.name` is set on most Interface subclasses but blank
-                    # on AutoInterfacePeer (its `__init__` only writes
-                    # `ifname` + `addr`). Fall back to `__str__()` for those.
-                    recv_iface_name = (
-                        getattr(iface, "name", None)
-                        or str(iface)
-                        or type(iface).__name__
-                    )
+                    recv_iface_name = _format_iface_for_emit(iface)
         except Exception as e:  # noqa: BLE001 — annotation is best-effort, never fatal
             RNS.log(
                 f"event_bridge: receiving_interface lookup failed: {e}",
@@ -1054,12 +1077,14 @@ def _lxmf_delivery_callback(message):
                     RNS.LOG_DEBUG,
                 )
 
-        # Resolve the interface object to its configured short name for
-        # parity with `PythonRnsTransportAdmin` (which keys by `iface["name"]`)
-        # and with the kotlin backend's `Transport.getInterfaces()...name`.
+        # Resolve the interface object to a structured
+        # `"ClassName[content]"` string — same format the announce-receive
+        # path emits, so the kotlin classifier's pattern match is
+        # deterministic regardless of what user-given `.name` an interface
+        # carries. See `_format_iface_for_emit` for the rationale.
         recv_iface_name = None
         if recv_iface is not None:
-            recv_iface_name = getattr(recv_iface, "name", None) or str(recv_iface)
+            recv_iface_name = _format_iface_for_emit(recv_iface)
 
         rssi, snr = _signal_metrics(recv_iface)
 

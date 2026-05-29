@@ -207,7 +207,14 @@ fun PeerCard(
                         isStarred = announce.isFavorite || !showFavoriteToggle,
                         onClick = onFavoriteClick,
                     )
-                    InterfaceTypeIcon(interfaceType = announce.receivingInterfaceType)
+                    // Read the RAW `receivingInterface` here (not the cached
+                    // `receivingInterfaceType` column) so any classifier
+                    // improvement applies retroactively to existing rows
+                    // — the cache is set ONCE at announce-save time, so a
+                    // bug fix to `InterfaceType.fromName` would otherwise
+                    // only land for new announces. The icon has been the
+                    // recurring casualty of classifier-cache drift.
+                    InterfaceTypeIcon(interfaceType = announce.receivingInterface)
                 }
             }
         }

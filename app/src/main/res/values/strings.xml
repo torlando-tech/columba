@@ -30,4 +30,8 @@
     <string name="view_interface_details">View interface details</string>
     <string name="interface_actions">Interface actions</string>
     <string name="edit_interface">Edit interface</string>
+
+    <!-- Precise location permission prompt (issue #855) -->
+    <string name="enable_precise_location">Enable Precise Location</string>
+    <string name="precise_location_settings_hint">Open Permissions → Location and turn on \"Use precise location\".</string>
 </resources>

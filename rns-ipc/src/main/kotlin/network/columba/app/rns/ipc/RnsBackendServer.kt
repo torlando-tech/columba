@@ -36,6 +36,9 @@ import network.columba.app.rns.ipc.server.ServerRnsTransportAdmin
 class RnsBackendServer(
     private val impl: RnsBackend,
     private val scope: CoroutineScope,
+    // App cache dir used to stage out-of-band inbound `fieldsJson` blobs
+    // (received images/files) for delivery to the UI process; see [FieldsBlob].
+    private val cacheDir: java.io.File,
 ) : IRnsBackend.Stub() {
     // Lazy server-adapter construction. `synchronized` guards the double-check
     // pattern so two concurrent UI processes (binder dispatch is multi-thread)
@@ -64,7 +67,7 @@ class RnsBackendServer(
 
     override fun getLxmf(cb: IRnsLxmfCallback) {
         val server = lxmfServer ?: synchronized(constructLock) {
-            lxmfServer ?: ServerRnsLxmf(impl.lxmf, scope).also { lxmfServer = it }
+            lxmfServer ?: ServerRnsLxmf(impl.lxmf, scope, cacheDir).also { lxmfServer = it }
         }
         try { cb.onLxmf(server) } catch (_: RemoteException) { /* client dead */ }
     }

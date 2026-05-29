@@ -1,6 +1,7 @@
 package network.columba.app.rns.ipc.client
 
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -25,6 +26,7 @@ import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.ipc.AttachmentBlob
 import network.columba.app.rns.ipc.BundleKeys
+import network.columba.app.rns.ipc.FieldsBlob
 import network.columba.app.rns.ipc.IRnsLxmf
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback
 import network.columba.app.rns.ipc.callback.IRnsMessageCallback
@@ -132,7 +134,26 @@ internal class ClientRnsLxmf(
 
     override fun observeMessages(): Flow<ReceivedMessage> = callbackFlow {
         val cb = object : IRnsMessageCallback.Stub() {
-            override fun onMessage(message: ReceivedMessage?) { if (message != null) trySend(message) }
+            override fun onMessage(message: ReceivedMessage?, fieldsBlob: ParcelFileDescriptor?) {
+                if (message == null) {
+                    runCatching { fieldsBlob?.close() }
+                    return
+                }
+                // Large messages (received image/file) arrive with fieldsJson
+                // stripped and carried out-of-band; reconstitute it. FieldsBlob
+                // closes the fd on success. On a read failure fall back to the
+                // (fieldsJson-less) message rather than dropping it, and never
+                // leak the fd.
+                val full = if (fieldsBlob != null) {
+                    val fields = runCatching { FieldsBlob.readFromPfd(fieldsBlob) }
+                        .onFailure { runCatching { fieldsBlob.close() } }
+                        .getOrNull()
+                    if (fields != null) message.copy(fieldsJson = fields) else message
+                } else {
+                    message
+                }
+                trySend(full)
+            }
         }
         if (!registerObserverOrClose { remote.registerMessageObserver(cb) }) return@callbackFlow
         awaitClose { runCatching { remote.unregisterMessageObserver(cb) } }

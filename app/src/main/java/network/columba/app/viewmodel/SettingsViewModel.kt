@@ -299,6 +299,34 @@ class SettingsViewModel
                         val wants = caps.performance.sharedInstanceAvailabilityChecks ||
                             caps.performance.shareInstanceHosting
                         if (wants && sharedInstanceAvailabilityJob?.isActive != true) {
+                            // One-shot prime so the "Change pending" hint
+                            // appears immediately when the daemon's running
+                            // config disagrees with the persisted toggle
+                            // (e.g., snapshot-driven FGS self-init came up
+                            // with stale config). The periodic monitor below
+                            // would otherwise wait ~12s (INIT_DELAY_MS * 4)
+                            // for its first poll, leaving the user staring
+                            // at a toggle that looks honoured but isn't.
+                            //
+                            // Wait for loadSettings() to populate DataStore-
+                            // backed state before priming. applySettingsUpdate's
+                            // init anchor (~line 502) sets `applied = persisted`
+                            // on every combine emission while isLoading=true, so
+                            // a prime that fires earlier is silently overwritten
+                            // — and reading isHostingShareInstanceConflict before
+                            // shareInstanceHostingEnabled has loaded also forces
+                            // conflict=false, hiding genuine conflicts.
+                            viewModelScope.launch {
+                                _state.first { !it.isLoading }
+                                runCatching {
+                                    updateHostingShareInstanceState(
+                                        isOnline = rnsTransportAdmin.isSharedInstanceAvailable(),
+                                        currentState = _state.value,
+                                    )
+                                }.onFailure { e ->
+                                    Log.d(TAG, "One-shot prime skipped (${e::class.simpleName}): ${e.message}")
+                                }
+                            }
                             startSharedInstanceAvailabilityMonitor()
                         }
                     }
@@ -1272,13 +1300,31 @@ class SettingsViewModel
             val isHosting = rnsTransportAdmin.isHostingSharedInstance()
             val isConflict =
                 currentState.shareInstanceHostingEnabled && isOnline && !isHosting
+            // `appliedShareInstanceHosting` reflects what the running daemon
+            // is doing, not what's in DataStore. The previous init-time
+            // anchor assumed daemon == persisted at startup, which doesn't
+            // hold when the FGS self-init path (BackendInitializer +
+            // ReticulumConfigSnapshot) brings the daemon up with stale
+            // config before UI's `rnsCore.initialize(newConfig)` runs —
+            // and that call no-ops because `PythonRnsRuntime.start()`
+            // early-returns when `running.get()` is true. Without this
+            // sync, the user can see persisted=ON but daemon=OFF with no
+            // "Change pending" hint, exactly the reported symptom.
+            //
+            // `isHosting || isConflict` because a hosting conflict (user
+            // wants host but Sideband already holds 37428) still means the
+            // daemon honoured the toggle in the only way it could —
+            // tapping Restart wouldn't help there.
+            val newApplied = isHosting || isConflict
             val changed =
                 isHosting != currentState.isHostingSharedInstance ||
-                    isConflict != currentState.isHostingShareInstanceConflict
+                    isConflict != currentState.isHostingShareInstanceConflict ||
+                    newApplied != currentState.appliedShareInstanceHosting
             if (changed) {
                 _state.value = _state.value.copy(
                     isHostingSharedInstance = isHosting,
                     isHostingShareInstanceConflict = isConflict,
+                    appliedShareInstanceHosting = newApplied,
                 )
             }
         }

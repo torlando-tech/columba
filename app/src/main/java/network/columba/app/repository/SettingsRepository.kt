@@ -125,6 +125,7 @@ class SettingsRepository
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
             val DEFAULT_SHARING_DURATION = stringPreferencesKey("default_sharing_duration")
             val LOCATION_PRECISION_RADIUS = intPreferencesKey("location_precision_radius")
+            val PRECISE_LOCATION_PROMPT_DISMISSED = booleanPreferencesKey("precise_location_prompt_dismissed")
 
             // Incoming message size limit
             val INCOMING_MESSAGE_SIZE_LIMIT_KB = intPreferencesKey("incoming_message_size_limit_kb")
@@ -1335,6 +1336,31 @@ class SettingsRepository
         suspend fun saveLocationPrecisionRadius(radiusMeters: Int) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] = radiusMeters
+                // Re-arm the precise-location prompt whenever the user (re)selects
+                // Precise (0): a fresh "I want precise" intent should re-prompt even
+                // after a prior "Not Now" dismissal (issue #855).
+                if (radiusMeters == 0) {
+                    preferences[PreferencesKeys.PRECISE_LOCATION_PROMPT_DISMISSED] = false
+                }
+            }
+        }
+
+        /**
+         * Whether the user dismissed the precise-location prompt ("Not Now").
+         * Persisted so the prompt doesn't reappear on every cold start; re-armed
+         * when Precise is (re)selected (see [saveLocationPrecisionRadius]).
+         * Defaults to false (not dismissed).
+         */
+        val preciseLocationPromptDismissedFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PRECISE_LOCATION_PROMPT_DISMISSED] ?: false
+                }.distinctUntilChanged()
+
+        /** Persist that the user dismissed the precise-location prompt. */
+        suspend fun savePreciseLocationPromptDismissed(dismissed: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PRECISE_LOCATION_PROMPT_DISMISSED] = dismissed
             }
         }
 

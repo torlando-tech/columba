@@ -183,6 +183,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.locationSharingEnabledFlow } returns MutableStateFlow(false)
         every { settingsRepository.defaultSharingDurationFlow } returns MutableStateFlow("ONE_HOUR")
         every { settingsRepository.locationPrecisionRadiusFlow } returns MutableStateFlow(0)
+        every { settingsRepository.preciseLocationPromptDismissedFlow } returns MutableStateFlow(false)
         every { settingsRepository.imageCompressionPresetFlow } returns MutableStateFlow(network.columba.app.data.model.ImageCompressionPreset.AUTO)
         every { settingsRepository.telemetryCollectorEnabledFlow } returns MutableStateFlow(false)
         every { settingsRepository.telemetryCollectorAddressFlow } returns MutableStateFlow<String?>(null)

@@ -1069,6 +1069,8 @@ fun ColumbaNavigation(
         network.columba.app.ui.components.PreciseLocationPermissionPrompt(
             locationPrecisionRadius = settingsState.locationPrecisionRadius,
             enabled = !settingsState.isLoading && onboardingState.hasCompletedOnboarding,
+            dismissed = settingsState.preciseLocationPromptDismissed,
+            onDismiss = { settingsViewModel.dismissPreciseLocationPrompt() },
         )
         Surface(
             modifier = Modifier.fillMaxSize(),

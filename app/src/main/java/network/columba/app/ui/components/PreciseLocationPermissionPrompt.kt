@@ -41,17 +41,21 @@ import network.columba.app.util.LocationPermissionManager
  * `ON_RESUME` so granting/revoking precise from system settings while the app
  * is backgrounded is reflected when the user returns.
  *
- * Dismissals persist: tapping "Not Now" calls [onDismiss] to set [dismissed],
- * so the prompt does not reappear on every cold start. It re-arms when the user
- * next (re)selects Precise — `SettingsRepository.saveLocationPrecisionRadius`
+ * Dismissals persist: tapping "Not Now", swiping the sheet away, or finishing the
+ * precise-permission request without granting `FINE` calls [onDismiss] to set
+ * [dismissed], so the prompt does not reappear on every cold start. It re-arms when
+ * the user next (re)selects Precise — `SettingsRepository.saveLocationPrecisionRadius`
  * clears the persisted flag on a transition into radius 0.
  *
- * Tapping "Enable Precise Location" re-requests `FINE`+`COARSE`. If the request
- * returns without `FINE` and Android will no longer show the in-app dialog
- * ([ActivityCompat.shouldShowRequestPermissionRationale] is false — already
- * settled on Approximate, or permanently denied), it falls back to the app's
- * settings page. If the rationale is still true (a plain decline that can be
- * re-prompted next time), it just closes.
+ * Tapping "Enable Precise Location" re-requests `FINE`+`COARSE`. Any outcome that
+ * doesn't grant `FINE` (plain decline, Approximate-only, or permanent denial)
+ * settles the interaction by persisting a dismissal, so the sheet re-arms only when
+ * the user next selects Precise. This also stops the `ON_RESUME` that the closing
+ * system chooser delivers from immediately re-showing the sheet (issue #855). When
+ * Android will additionally no longer show the in-app dialog
+ * ([ActivityCompat.shouldShowRequestPermissionRationale] is false — settled on
+ * Approximate, or permanently denied), it also routes to the app's settings page as
+ * the only remaining way to enable precise access.
  *
  * @param locationPrecisionRadius persisted precision radius (0 = precise)
  * @param enabled gate so the prompt only fires once the main UI is up
@@ -87,6 +91,15 @@ fun PreciseLocationPermissionPrompt(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Local guard bridging the window between the permission-launcher callback
+    // deciding to dismiss and the persisted [dismissed] flag propagating back.
+    // On Android 12+ the precise-location chooser closing delivers an ON_RESUME
+    // (which bumps resumeKey) in the same frame the callback runs; without this
+    // guard the resume-driven LaunchedEffect re-evaluates needsPreciseLocationUpgrade
+    // (still true) and re-shows the sheet before onDismiss() takes effect, trapping
+    // the user in a loop (issue #855).
+    var pendingDismiss by remember { mutableStateOf(false) }
+
     val permissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -95,25 +108,41 @@ fun PreciseLocationPermissionPrompt(
             val fineGranted =
                 grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                     LocationPermissionManager.hasFineLocationPermission(context)
-            // Only route to app settings when Android will NOT show the in-app
-            // dialog again: shouldShowRequestPermissionRationale == false with FINE
-            // still missing means the dialog is suppressed (settled on Approximate,
-            // or permanently denied), so settings is the only recourse. A plain
-            // decline (rationale true) can be re-prompted — just close (issue #855).
-            if (!fineGranted &&
-                !ActivityCompat.shouldShowRequestPermissionRationale(
-                    context.findActivity(),
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                )
-            ) {
-                context.openPreciseLocationSettings()
+            if (!fineGranted) {
+                // The Enable flow finished without precise access (plain decline,
+                // Approximate-only, or permanent denial). Settle the interaction:
+                // persist a dismissal so the prompt re-arms only when the user next
+                // selects Precise, and set pendingDismiss so the ON_RESUME the closing
+                // system chooser delivers can't re-show the sheet before that flag
+                // propagates back (issue #855).
+                pendingDismiss = true
+                onDismiss()
+                // Additionally route to app settings only when Android will NOT show
+                // the in-app dialog again: shouldShowRequestPermissionRationale ==
+                // false with FINE still missing means the dialog is suppressed
+                // (settled on Approximate, or permanently denied), so settings is the
+                // only remaining recourse. A plain decline (rationale true) can be
+                // re-prompted next time the user re-selects Precise.
+                if (!ActivityCompat.shouldShowRequestPermissionRationale(
+                        context.findActivity(),
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                    )
+                ) {
+                    context.openPreciseLocationSettings()
+                }
             }
         }
 
-    LaunchedEffect(locationPrecisionRadius, enabled, dismissed, resumeKey) {
+    // Clear the local guard once the persisted dismissal state settles — true after
+    // a non-grant (suppression handed back to [dismissed]), or false again when the
+    // user re-selects Precise and re-arms the prompt (issue #855).
+    LaunchedEffect(dismissed) { pendingDismiss = false }
+
+    LaunchedEffect(locationPrecisionRadius, enabled, dismissed, pendingDismiss, resumeKey) {
         showSheet =
             enabled &&
             !dismissed &&
+            !pendingDismiss &&
             LocationPermissionManager.needsPreciseLocationUpgrade(
                 precisionRadiusMeters = locationPrecisionRadius,
                 hasFineLocation = LocationPermissionManager.hasFineLocationPermission(context),

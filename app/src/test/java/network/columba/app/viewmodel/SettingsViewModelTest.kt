@@ -190,6 +190,7 @@ class SettingsViewModelTest {
         every { settingsRepository.locationSharingEnabledFlow } returns flowOf(false)
         every { settingsRepository.defaultSharingDurationFlow } returns flowOf("ONE_HOUR")
         every { settingsRepository.locationPrecisionRadiusFlow } returns flowOf(0)
+        every { settingsRepository.preciseLocationPromptDismissedFlow } returns flowOf(false)
         every { settingsRepository.tryPropagationOnFailFlow } returns flowOf(false)
         every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(false)
         every { settingsRepository.mapSourceHttpEnabledFlow } returns flowOf(true)

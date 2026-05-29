@@ -17,11 +17,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.ActivityCompat
 import network.columba.app.util.LocationPermissionManager
 
 /**
  * Prompts the user to grant *precise* (fine) location when they've chosen
- * precise location sharing but the OS has only granted approximate access.
+ * precise location sharing but the OS has only granted approximate access (or
+ * none at all).
  *
  * The trigger is [locationPrecisionRadius] being "Precise"
  * ([LocationPermissionManager.PRECISE_PRECISION_RADIUS]) while fine location is
@@ -30,22 +32,33 @@ import network.columba.app.util.LocationPermissionManager
  * precision picker, observing it here covers all three cases (issue #855)
  * without a persistent map banner.
  *
- * Tapping "Enable Precise Location" re-requests `FINE`+`COARSE`. On a fresh
- * grant that surfaces the system dialog; but once the user has already settled
- * on **Approximate**, Android no longer shows the in-app precise-upgrade dialog
- * and the request returns denied with no UI. In that case we fall back to the
- * app's settings page, where "Use precise location" can be turned on manually —
- * otherwise the prompt would re-appear forever with no way to act on it.
+ * Dismissals persist: tapping "Not Now" calls [onDismiss] to set [dismissed],
+ * so the prompt does not reappear on every cold start. It re-arms when the user
+ * next (re)selects Precise — `SettingsRepository.saveLocationPrecisionRadius`
+ * clears the persisted flag for radius 0.
+ *
+ * Tapping "Enable Precise Location" re-requests `FINE`+`COARSE`. If the request
+ * returns without `FINE` and Android will no longer show the in-app dialog
+ * ([ActivityCompat.shouldShowRequestPermissionRationale] is false — the user
+ * already settled on Approximate, or permanently denied), it falls back to the
+ * app's settings page. If the rationale is still true (a plain decline that can
+ * be re-prompted next time), it just closes.
  *
  * @param locationPrecisionRadius persisted precision radius (0 = precise)
  * @param enabled gate so the prompt only fires once the main UI is up
  *   (onboarding complete, settings loaded) — never during splash/onboarding
+ * @param dismissed persisted "Not Now" state; suppresses the prompt until the
+ *   user next selects Precise
+ * @param onDismiss persist a dismissal (called when the user taps "Not Now" or
+ *   swipes the sheet away)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PreciseLocationPermissionPrompt(
     locationPrecisionRadius: Int,
     enabled: Boolean,
+    dismissed: Boolean,
+    onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     var showSheet by remember { mutableStateOf(false) }
@@ -59,18 +72,26 @@ fun PreciseLocationPermissionPrompt(
             val fineGranted =
                 grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                     LocationPermissionManager.hasFineLocationPermission(context)
-            if (!fineGranted) {
-                // Android won't surface the in-app precise-upgrade dialog once
-                // the user has settled on Approximate — the request returns
-                // without UI. Guide them to the app's settings page to turn on
-                // "Use precise location" manually (issue #855).
+            // Only route to app settings when Android will NOT show the in-app
+            // dialog again: shouldShowRequestPermissionRationale == false with FINE
+            // still missing means the dialog is suppressed (user settled on
+            // Approximate, or permanently denied), so settings is the only
+            // recourse. When it's true, this was a plain decline that can be
+            // re-prompted next time — just close the sheet (issue #855).
+            if (!fineGranted &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(
+                    context.findActivity(),
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                )
+            ) {
                 context.openPreciseLocationSettings()
             }
         }
 
-    LaunchedEffect(locationPrecisionRadius, enabled) {
+    LaunchedEffect(locationPrecisionRadius, enabled, dismissed) {
         showSheet =
             enabled &&
+            !dismissed &&
             LocationPermissionManager.needsPreciseLocationUpgrade(
                 precisionRadiusMeters = locationPrecisionRadius,
                 hasFineLocation = LocationPermissionManager.hasFineLocationPermission(context),
@@ -79,7 +100,12 @@ fun PreciseLocationPermissionPrompt(
 
     if (showSheet) {
         LocationPermissionBottomSheet(
-            onDismiss = { showSheet = false },
+            onDismiss = {
+                showSheet = false
+                // Persist so the prompt doesn't reappear on every cold start;
+                // it re-arms when the user next selects Precise (issue #855).
+                onDismiss()
+            },
             onRequestPermissions = {
                 showSheet = false
                 permissionLauncher.launch(

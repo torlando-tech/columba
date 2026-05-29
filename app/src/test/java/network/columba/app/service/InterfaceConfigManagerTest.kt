@@ -12,6 +12,8 @@ import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +34,7 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -142,6 +145,16 @@ class InterfaceConfigManagerTest {
         coEvery { rnsCore.shutdown() } returns Result.success(Unit)
         coEvery { rnsCore.initialize(any()) } returns Result.success(Unit)
 
+        // applyInterfaceChanges() refreshes the persisted snapshot on the
+        // initialize() success path. ReticulumConfigSnapshot.write() does real
+        // Android Parcel + file I/O, which isn't on the JVM unit-test classpath
+        // (Parcel.obtain() throws "not mocked"), so stub the object to a no-op —
+        // same boundary-mocking the rest of this test already does for Context.
+        // The snapshot's own serialization is covered elsewhere; here we only
+        // care about the manager's orchestration.
+        mockkObject(ReticulumConfigSnapshot)
+        every { ReticulumConfigSnapshot.write(any(), any(), any()) } just Runs
+
         // Setup manager mocks (start/stop methods)
         every { messageCollector.stopCollecting() } just Runs
         every { messageCollector.startCollecting() } just Runs
@@ -175,6 +188,7 @@ class InterfaceConfigManagerTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkObject(ReticulumConfigSnapshot)
         clearAllMocks()
     }
 

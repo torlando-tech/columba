@@ -1628,4 +1628,32 @@ class SettingsRepositoryTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    @Test
+    fun saveLocationPrecisionRadius_transitionIntoPrecise_reArmsDismissedPrompt() =
+        runTest {
+            // Approximate radius with the precise-prompt dismissed.
+            repository.saveLocationPrecisionRadius(1000)
+            repository.savePreciseLocationPromptDismissed(true)
+            assertTrue(repository.preciseLocationPromptDismissedFlow.first())
+
+            // A real transition INTO Precise (0) re-arms the prompt (issue #855).
+            repository.saveLocationPrecisionRadius(0)
+
+            assertFalse(repository.preciseLocationPromptDismissedFlow.first())
+        }
+
+    @Test
+    fun saveLocationPrecisionRadius_reSavingPrecise_keepsDismissal() =
+        runTest {
+            // Already Precise and dismissed (e.g. a settings import preserving 0).
+            repository.saveLocationPrecisionRadius(0)
+            repository.savePreciseLocationPromptDismissed(true)
+            assertTrue(repository.preciseLocationPromptDismissedFlow.first())
+
+            // An idempotent re-save of Precise must NOT clear the dismissal (issue #855).
+            repository.saveLocationPrecisionRadius(0)
+
+            assertTrue(repository.preciseLocationPromptDismissedFlow.first())
+        }
 }

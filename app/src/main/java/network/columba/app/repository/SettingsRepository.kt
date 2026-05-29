@@ -1335,11 +1335,14 @@ class SettingsRepository
          */
         suspend fun saveLocationPrecisionRadius(radiusMeters: Int) {
             context.dataStore.edit { preferences ->
+                val previousRadius = preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] ?: 0
                 preferences[PreferencesKeys.LOCATION_PRECISION_RADIUS] = radiusMeters
-                // Re-arm the precise-location prompt whenever the user (re)selects
-                // Precise (0): a fresh "I want precise" intent should re-prompt even
-                // after a prior "Not Now" dismissal (issue #855).
-                if (radiusMeters == 0) {
+                // Re-arm the precise-location prompt only on a real transition INTO
+                // Precise (0) — a fresh "I want precise" intent should re-prompt even
+                // after a prior "Not Now". Idempotent re-saves of an already-Precise
+                // value (e.g. a settings import/restore that preserves radius 0) must
+                // NOT silently undo a prior dismissal (issue #855).
+                if (radiusMeters == 0 && previousRadius != 0) {
                     preferences[PreferencesKeys.PRECISE_LOCATION_PROMPT_DISMISSED] = false
                 }
             }

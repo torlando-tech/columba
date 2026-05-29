@@ -11,13 +11,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import network.columba.app.R
 import network.columba.app.util.LocationPermissionManager
 
 /**
@@ -30,19 +37,21 @@ import network.columba.app.util.LocationPermissionManager
  * missing. Because the persisted precision setting is the single value that
  * changes on app start, on settings import, and when the user edits the
  * precision picker, observing it here covers all three cases (issue #855)
- * without a persistent map banner.
+ * without a persistent map banner. The state is also re-evaluated on every
+ * `ON_RESUME` so granting/revoking precise from system settings while the app
+ * is backgrounded is reflected when the user returns.
  *
  * Dismissals persist: tapping "Not Now" calls [onDismiss] to set [dismissed],
  * so the prompt does not reappear on every cold start. It re-arms when the user
  * next (re)selects Precise — `SettingsRepository.saveLocationPrecisionRadius`
- * clears the persisted flag for radius 0.
+ * clears the persisted flag on a transition into radius 0.
  *
  * Tapping "Enable Precise Location" re-requests `FINE`+`COARSE`. If the request
  * returns without `FINE` and Android will no longer show the in-app dialog
- * ([ActivityCompat.shouldShowRequestPermissionRationale] is false — the user
- * already settled on Approximate, or permanently denied), it falls back to the
- * app's settings page. If the rationale is still true (a plain decline that can
- * be re-prompted next time), it just closes.
+ * ([ActivityCompat.shouldShowRequestPermissionRationale] is false — already
+ * settled on Approximate, or permanently denied), it falls back to the app's
+ * settings page. If the rationale is still true (a plain decline that can be
+ * re-prompted next time), it just closes.
  *
  * @param locationPrecisionRadius persisted precision radius (0 = precise)
  * @param enabled gate so the prompt only fires once the main UI is up
@@ -61,8 +70,22 @@ fun PreciseLocationPermissionPrompt(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+
+    // Bump on every foreground transition so the sheet state is refreshed when
+    // the user returns after granting/revoking fine location in system settings
+    // (none of the other keys would change to reflect that) — issue #855.
+    var resumeKey by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) resumeKey++
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val permissionLauncher =
         rememberLauncherForActivityResult(
@@ -74,10 +97,9 @@ fun PreciseLocationPermissionPrompt(
                     LocationPermissionManager.hasFineLocationPermission(context)
             // Only route to app settings when Android will NOT show the in-app
             // dialog again: shouldShowRequestPermissionRationale == false with FINE
-            // still missing means the dialog is suppressed (user settled on
-            // Approximate, or permanently denied), so settings is the only
-            // recourse. When it's true, this was a plain decline that can be
-            // re-prompted next time — just close the sheet (issue #855).
+            // still missing means the dialog is suppressed (settled on Approximate,
+            // or permanently denied), so settings is the only recourse. A plain
+            // decline (rationale true) can be re-prompted — just close (issue #855).
             if (!fineGranted &&
                 !ActivityCompat.shouldShowRequestPermissionRationale(
                     context.findActivity(),
@@ -88,7 +110,7 @@ fun PreciseLocationPermissionPrompt(
             }
         }
 
-    LaunchedEffect(locationPrecisionRadius, enabled, dismissed) {
+    LaunchedEffect(locationPrecisionRadius, enabled, dismissed, resumeKey) {
         showSheet =
             enabled &&
             !dismissed &&
@@ -114,7 +136,7 @@ fun PreciseLocationPermissionPrompt(
             },
             sheetState = sheetState,
             rationale = LocationPermissionManager.getPreciseLocationRationale(),
-            primaryActionLabel = "Enable Precise Location",
+            primaryActionLabel = stringResource(R.string.enable_precise_location),
         )
     }
 }
@@ -138,7 +160,7 @@ private fun Context.openPreciseLocationSettings() {
         Toast
             .makeText(
                 this,
-                "Open Permissions → Location and turn on \"Use precise location\".",
+                getString(R.string.precise_location_settings_hint),
                 Toast.LENGTH_LONG,
             ).show()
     }

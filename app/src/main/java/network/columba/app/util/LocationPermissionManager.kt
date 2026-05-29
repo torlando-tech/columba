@@ -18,6 +18,15 @@ import androidx.core.content.ContextCompat
  */
 object LocationPermissionManager {
     /**
+     * The location-precision radius (metres) that means "Precise" — exact GPS,
+     * no coarsening. Mirrors the `PRECISE` preset in the Location Sharing
+     * settings card. When the user has chosen this, the app needs
+     * [Manifest.permission.ACCESS_FINE_LOCATION]; only-approximate access
+     * yields positions kilometres off (issue #855).
+     */
+    const val PRECISE_PRECISION_RADIUS = 0
+
+    /**
      * Result of permission check.
      */
     sealed class PermissionStatus {
@@ -81,6 +90,25 @@ object LocationPermissionManager {
             Manifest.permission.ACCESS_FINE_LOCATION,
         ) == PackageManager.PERMISSION_GRANTED
     }
+
+    /**
+     * Whether to prompt the user to upgrade to precise (fine) location.
+     *
+     * True when the Location Sharing precision is set to "Precise"
+     * ([PRECISE_PRECISION_RADIUS]) but only approximate location is currently
+     * granted — the state behind issue #855, where shared/telemetry positions
+     * land kilometres away because the OS is withholding GPS. When the user has
+     * deliberately chosen an approximate radius (>0) no upgrade is needed.
+     *
+     * @param precisionRadiusMeters persisted location-precision radius
+     *   (0 = precise; >0 = coarsen to that radius)
+     * @param hasFineLocation whether [Manifest.permission.ACCESS_FINE_LOCATION]
+     *   is currently granted (see [hasFineLocationPermission])
+     */
+    fun needsPreciseLocationUpgrade(
+        precisionRadiusMeters: Int,
+        hasFineLocation: Boolean,
+    ): Boolean = precisionRadiusMeters == PRECISE_PRECISION_RADIUS && !hasFineLocation
 
     /**
      * Whether this Android version requires explicit background location permission.
@@ -157,6 +185,26 @@ object LocationPermissionManager {
             appendLine(
                 "Columba will not and can not share your location with anyone until you actively " +
                     "send it to someone. Your location is always encrypted safely over Reticulum.",
+            )
+        }
+    }
+
+    /**
+     * Rationale shown when prompting a user who has selected precise location
+     * sharing but doesn't hold precise (fine) access — whether that's
+     * approximate-only or no location permission at all (issue #855).
+     */
+    fun getPreciseLocationRationale(): String {
+        return buildString {
+            appendLine(
+                "Location sharing is set to Precise, but Columba doesn't have precise " +
+                    "location access.",
+            )
+            appendLine()
+            appendLine(
+                "Without it, a shared position is unavailable or only approximate — off by a " +
+                    "kilometre or more. Enable precise location for accurate sharing, or set a " +
+                    "coarser precision in Location Sharing settings if that's intended.",
             )
         }
     }

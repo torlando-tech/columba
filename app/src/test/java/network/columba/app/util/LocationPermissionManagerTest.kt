@@ -177,6 +177,47 @@ class LocationPermissionManagerTest {
         assertTrue(rationale.contains("peer-to-peer"))
     }
 
+    // ========== needsPreciseLocationUpgrade Tests (issue #855) ==========
+
+    @Test
+    fun `needsPreciseLocationUpgrade true when precise selected but fine not granted`() {
+        assertTrue(
+            LocationPermissionManager.needsPreciseLocationUpgrade(
+                precisionRadiusMeters = LocationPermissionManager.PRECISE_PRECISION_RADIUS,
+                hasFineLocation = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `needsPreciseLocationUpgrade false when precise selected and fine granted`() {
+        assertFalse(
+            LocationPermissionManager.needsPreciseLocationUpgrade(
+                precisionRadiusMeters = LocationPermissionManager.PRECISE_PRECISION_RADIUS,
+                hasFineLocation = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `needsPreciseLocationUpgrade false when approximate radius chosen even without fine`() {
+        // User deliberately picked a coarse radius — no precise upgrade needed.
+        assertFalse(LocationPermissionManager.needsPreciseLocationUpgrade(100, hasFineLocation = false))
+        assertFalse(LocationPermissionManager.needsPreciseLocationUpgrade(1000, hasFineLocation = false))
+        assertFalse(LocationPermissionManager.needsPreciseLocationUpgrade(10000, hasFineLocation = true))
+    }
+
+    // ========== getPreciseLocationRationale Tests ==========
+
+    @Test
+    fun `getPreciseLocationRationale mentions precise and approximate`() {
+        val rationale = LocationPermissionManager.getPreciseLocationRationale()
+
+        assertTrue(rationale.isNotEmpty())
+        assertTrue(rationale.contains("Precise"))
+        assertTrue(rationale.contains("approximate"))
+    }
+
     // ========== isLocationSupported Tests ==========
 
     @Test

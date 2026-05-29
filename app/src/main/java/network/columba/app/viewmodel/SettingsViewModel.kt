@@ -149,6 +149,7 @@ data class SettingsState(
     val activeSharingSessions: List<network.columba.app.service.SharingSession> = emptyList(),
     val defaultSharingDuration: String = "ONE_HOUR",
     val locationPrecisionRadius: Int = 0,
+    val preciseLocationPromptDismissed: Boolean = false,
     // Notifications state
     val notificationsEnabled: Boolean = true,
     // Privacy state
@@ -1913,6 +1914,11 @@ class SettingsViewModel
                 }
             }
             viewModelScope.launch {
+                settingsRepository.preciseLocationPromptDismissedFlow.collect { dismissed ->
+                    _state.update { it.copy(preciseLocationPromptDismissed = dismissed) }
+                }
+            }
+            viewModelScope.launch {
                 settingsRepository.incomingMessageSizeLimitKbFlow.collect { limitKb ->
                     _state.update { it.copy(incomingMessageSizeLimitKb = limitKb) }
                 }
@@ -2003,6 +2009,13 @@ class SettingsViewModel
                 Log.d(TAG, "Location precision radius set to: ${radiusMeters}m")
                 // Send immediate update to all active sharing recipients with new precision
                 locationSharingManager.sendImmediateUpdate()
+            }
+        }
+
+        /** Persist that the user dismissed the precise-location prompt ("Not Now"). */
+        fun dismissPreciseLocationPrompt() {
+            viewModelScope.launch {
+                settingsRepository.savePreciseLocationPromptDismissed(true)
             }
         }
 

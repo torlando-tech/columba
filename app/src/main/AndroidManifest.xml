@@ -39,7 +39,17 @@
     <!-- Location permissions for BLE scanning (Android 6-11) and Map feature (all versions) -->
     <!-- Android 12+ requires both FINE and COARSE if requesting FINE -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!--
+        reticulum-kt's rns-android manifest declares ACCESS_FINE_LOCATION with
+        android:maxSdkVersion="32" (for legacy pre-Android-12 BLE-scan location).
+        Manifest-merged into the app, that cap strips fine location on API 33+,
+        so on modern devices there is no "Use precise location" toggle and every
+        position is coarse — kilometres off (issue #855). tools:remove drops the
+        merged cap so precise location works on all API levels.
+    -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        tools:remove="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Declare BLE hardware feature (optional but recommended) -->

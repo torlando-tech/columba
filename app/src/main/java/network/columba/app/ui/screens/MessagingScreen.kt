@@ -1441,6 +1441,17 @@ fun MessagingScreen(
                     )
                 }
 
+                // Capture the selected message's text once when the overlay opens. Keyed on
+                // messageId so a later paging refresh that momentarily drops the row from the
+                // snapshot window can't make the "Select text" button vanish mid-overlay.
+                val selectableMessageContent =
+                    remember(state.messageId) {
+                        pagingItems.itemSnapshotList
+                            .find { it?.id == state.messageId }
+                            ?.content
+                            ?.takeIf { it.isNotBlank() }
+                    }
+
                 ReactionModeOverlay(
                     messageId = state.messageId,
                     isFromMe = state.isFromMe,
@@ -1469,11 +1480,7 @@ fun MessagingScreen(
                         }
                     },
                     onSelectText =
-                        pagingItems.itemSnapshotList
-                            .find { it?.id == state.messageId }
-                            ?.content
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let { content -> { selectableText = content } },
+                        selectableMessageContent?.let { content -> { selectableText = content } },
                     onViewDetails = { onViewMessageDetails(state.messageId) },
                     onRetry =
                         if (state.isFailed) {

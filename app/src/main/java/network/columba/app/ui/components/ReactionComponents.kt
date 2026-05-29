@@ -1101,11 +1101,15 @@ fun SelectableMessageText(
     text: String,
     modifier: Modifier = Modifier,
 ) {
+    // The SelectionContainer must claim the drag gesture uncontested, so the scroll lives
+    // *inside* it on the Text rather than on the container — otherwise on long (>400dp)
+    // messages the scroll handler steals drags meant to extend a selection.
     SelectionContainer(modifier = modifier) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.verticalScroll(rememberScrollState()),
         )
     }
 }
@@ -1133,8 +1137,7 @@ fun SelectableTextDialog(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState()),
+                        .heightIn(max = 400.dp),
             )
         },
         confirmButton = {

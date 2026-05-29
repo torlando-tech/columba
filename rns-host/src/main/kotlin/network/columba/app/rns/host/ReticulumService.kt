@@ -429,7 +429,13 @@ class ReticulumService : Service() {
         // onCreate) because in-process service managers (NetworkChangeManager,
         // BleCoordinator) call its `restartAutoInterface` / `announceLxmfDestination`
         // helpers via direct Java calls — A.10 rewires those to use `rnsBackend`.
-        return aidlServer ?: RnsBackendServer(impl = rnsBackend, scope = serviceScope).also {
+        return aidlServer ?: RnsBackendServer(
+            impl = rnsBackend,
+            scope = serviceScope,
+            // Shared app cache (same UID as the UI process) for staging
+            // out-of-band inbound fields blobs; see FieldsBlob / IRnsMessageCallback.
+            cacheDir = cacheDir,
+        ).also {
             aidlServer = it
         }
     }

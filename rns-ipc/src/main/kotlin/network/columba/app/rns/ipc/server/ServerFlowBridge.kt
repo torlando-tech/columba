@@ -1,7 +1,10 @@
 package network.columba.app.rns.ipc.server
 
+import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.RemoteException
+import android.os.TransactionTooLargeException
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +44,10 @@ internal class ObserverHub<T, C : Any>(
     private var collectorJob: Job? = null
     private val stateLock = Any()
 
+    private companion object {
+        const val TAG = "ObserverHub"
+    }
+
     fun registerObserver(cb: C) {
         val binder = callbackBinder(cb)
         observers[binder] = cb
@@ -53,9 +60,38 @@ internal class ObserverHub<T, C : Any>(
                         for ((binder, observer) in observers.entries.toList()) {
                             try {
                                 emit(observer, value)
-                            } catch (e: RemoteException) {
-                                // Client died between unhook and unregister — clean up now.
+                            } catch (e: DeadObjectException) {
+                                // The client process is genuinely gone. Clean up
+                                // now in case the linkToDeath recipient hasn't
+                                // fired yet.
+                                Log.d(TAG, "Observer client is dead; detaching", e)
                                 detach(binder)
+                            } catch (e: TransactionTooLargeException) {
+                                // This ONE payload overflowed the Binder buffer;
+                                // the client is alive and still subscribed.
+                                // Detaching here would silently kill ALL future
+                                // delivery for the session — the client never
+                                // learns it was dropped and never re-registers
+                                // (it subscribes once via a callbackFlow whose
+                                // awaitClose only fires on cancel). That is how a
+                                // single oversized inbound message used to take
+                                // out every subsequent message, including small
+                                // text. Skip this payload and keep the observer;
+                                // large payloads must cross out-of-band (see
+                                // AttachmentBlob), not inline.
+                                Log.e(
+                                    TAG,
+                                    "Observer payload exceeded the Binder transaction " +
+                                        "limit; dropping this message but keeping the " +
+                                        "observer subscribed",
+                                    e,
+                                )
+                            } catch (e: RemoteException) {
+                                // Other transient remote failures: keep the
+                                // observer (genuine death is handled by the
+                                // linkToDeath recipient) so one bad emission can't
+                                // silently end the stream.
+                                Log.w(TAG, "Observer emit failed transiently; keeping observer", e)
                             }
                         }
                     }

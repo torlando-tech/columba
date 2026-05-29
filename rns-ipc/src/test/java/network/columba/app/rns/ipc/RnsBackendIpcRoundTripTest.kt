@@ -317,7 +317,7 @@ class RnsBackendIpcRoundTripTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val serverScope = CoroutineScope(dispatcher + SupervisorJob())
         val clientScope = CoroutineScope(dispatcher + SupervisorJob())
-        val server = RnsBackendServer(fake, serverScope)
+        val server = RnsBackendServer(fake, serverScope, attachmentCacheDir)
         val client = RnsBackendClient(clientScope, attachmentCacheDir)
         client.connect(server)
         return client to server

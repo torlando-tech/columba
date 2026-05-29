@@ -2,6 +2,7 @@ package network.columba.app.rns.ipc.server
 
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,23 +15,60 @@ import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.ipc.AttachmentBlob
 import network.columba.app.rns.ipc.BundleKeys
+import network.columba.app.rns.ipc.FieldsBlob
 import network.columba.app.rns.ipc.IRnsLxmf
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback
 import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
 import network.columba.app.rns.ipc.callback.IRnsResultCallback
 import network.columba.app.rns.ipc.callback.IRnsStringCallback
+import java.io.File
+import java.io.IOException
 
 internal class ServerRnsLxmf(
     private val impl: RnsLxmf,
     private val scope: CoroutineScope,
+    private val cacheDir: File,
 ) : IRnsLxmf.Stub() {
     private val messageHub = ObserverHub<ReceivedMessage, IRnsMessageCallback>(
         scope = scope,
         upstream = { impl.observeMessages() },
         callbackBinder = { it.asBinder() },
-        emit = { cb, value -> cb.onMessage(value) },
+        emit = { cb, value -> emitMessage(cb, value) },
     )
+
+    /**
+     * Deliver one inbound message to a UI-process observer. A received image/file
+     * is hex-encoded inside [ReceivedMessage.fieldsJson]; when that is large, ship
+     * it out-of-band as a [ParcelFileDescriptor] rather than inline, because an
+     * inline multi-hundred-KB parcel overflows the Binder buffer and throws
+     * `TransactionTooLargeException` (which [ObserverHub] now survives, but the
+     * message would still be lost). Small messages — plain text has null/tiny
+     * `fieldsJson` — stay inline (null blob) at zero overhead.
+     */
+    private fun emitMessage(cb: IRnsMessageCallback, message: ReceivedMessage) {
+        val fields = message.fieldsJson
+        if (fields != null && fields.length > INLINE_FIELDS_LIMIT) {
+            val pfd = try {
+                FieldsBlob.writeToPfd(cacheDir, fields)
+            } catch (e: IOException) {
+                // Staging failed (e.g. disk full). Drop just this message rather
+                // than throwing out of the collector (which would cancel it and
+                // stop all delivery). Keep the observer; the next message is fine.
+                Log.e(TAG, "Failed to stage inbound fields blob; dropping this message", e)
+                return
+            }
+            // onMessage may still throw (RemoteException/TransactionTooLargeException);
+            // let it propagate to ObserverHub, which keeps the observer subscribed.
+            try {
+                cb.onMessage(message.copy(fieldsJson = null), pfd)
+            } finally {
+                pfd.close()
+            }
+        } else {
+            cb.onMessage(message, null)
+        }
+    }
     private val deliveryHub = ObserverHub<DeliveryStatusUpdate, IRnsDeliveryStatusCallback>(
         scope = scope,
         upstream = { impl.observeDeliveryStatus() },
@@ -162,6 +200,20 @@ internal class ServerRnsLxmf(
 
     override fun setIncomingMessageSizeLimit(limitKb: Int) {
         runCatching { impl.setIncomingMessageSizeLimit(limitKb) }
+    }
+
+    private companion object {
+        const val TAG = "ServerRnsLxmf"
+
+        // `fieldsJson` longer than this crosses out-of-band via FieldsBlob.
+        // Comfortably under the ~1 MB Binder async-transaction buffer (so even a
+        // few small inline messages queued together stay safe) yet large enough
+        // that plain-text messages (null/tiny fieldsJson) always ride inline.
+        // NOTE: measured in chars (String.length), not UTF-8 bytes. fieldsJson is
+        // hex-encoded binary + ASCII JSON, so chars == bytes here; a hypothetical
+        // multi-byte fieldsJson could be up to 4x larger on the wire but still
+        // far under the ~1 MB buffer at this 64 KB threshold.
+        const val INLINE_FIELDS_LIMIT = 64 * 1024
     }
 }
 

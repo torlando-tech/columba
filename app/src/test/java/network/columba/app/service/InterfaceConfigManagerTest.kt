@@ -72,7 +72,9 @@ class InterfaceConfigManagerTest {
     private lateinit var sharedPrefs: SharedPreferences
     private lateinit var sharedPrefsEditor: SharedPreferences.Editor
 
-    @Suppress("NoRelaxedMocks") // Android Context and SharedPreferences require relaxed mocks
+    // NoRelaxedMocks: Android Context and SharedPreferences require relaxed mocks.
+    // LongMethod: setup configures mock stubs for InterfaceConfigManager's 15+ dependencies.
+    @Suppress("NoRelaxedMocks", "LongMethod")
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)

@@ -209,6 +209,10 @@ internal class ServerRnsLxmf(
         // Comfortably under the ~1 MB Binder async-transaction buffer (so even a
         // few small inline messages queued together stay safe) yet large enough
         // that plain-text messages (null/tiny fieldsJson) always ride inline.
+        // NOTE: measured in chars (String.length), not UTF-8 bytes. fieldsJson is
+        // hex-encoded binary + ASCII JSON, so chars == bytes here; a hypothetical
+        // multi-byte fieldsJson could be up to 4x larger on the wire but still
+        // far under the ~1 MB buffer at this 64 KB threshold.
         const val INLINE_FIELDS_LIMIT = 64 * 1024
     }
 }

@@ -42,6 +42,14 @@ internal object FieldsBlob {
     private const val VERSION = 1
     private const val TEMP_SUBDIR = "rns-ipc-rx"
 
+    // Sanity ceiling on the declared payload length. A corrupt/garbage blob that
+    // still passes the magic+version check could otherwise carry a length up to
+    // Int.MAX (~2 GB) and trigger a huge ByteArray allocation + GC/LMK churn
+    // before the caller's runCatching fallback. 128 MB is far above any
+    // legitimate hex-encoded fieldsJson — even a maxed ~32 MB attachment doubles
+    // to ~64 MB of hex — yet well under Int.MAX.
+    private const val MAX_FIELDS_BYTES = 128 * 1024 * 1024
+
     /**
      * Serialize [fieldsJson] to a delete-on-close temp file under [cacheDir] and
      * return a read-only [ParcelFileDescriptor] over it. The returned PFD is
@@ -78,6 +86,7 @@ internal object FieldsBlob {
             if (version != VERSION) throw IOException("Unsupported fields blob version: $version")
             val len = inp.readInt()
             if (len < 0) throw IOException("Bad fields blob: negative length ($len)")
+            if (len > MAX_FIELDS_BYTES) throw IOException("Bad fields blob: implausible length ($len)")
             val bytes = ByteArray(len).also { inp.readFully(it) }
             return String(bytes, Charsets.UTF_8)
         }

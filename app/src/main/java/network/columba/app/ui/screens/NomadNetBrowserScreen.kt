@@ -480,6 +480,13 @@ fun NomadNetBrowserScreen(
                             Column(
                                 modifier =
                                     Modifier
+                                        // fillMaxSize forces minHeight/minWidth = viewport into
+                                        // the scroll node's child constraints, so the scrollable
+                                        // (gesture-catching) area always fills the viewport even
+                                        // when the page is shorter than the screen. Without it the
+                                        // scroll node wraps the content and drags in the blank area
+                                        // below short pages are ignored (issue #681).
+                                        .fillMaxSize()
                                         .verticalScroll(rememberScrollState())
                                         .horizontalScroll(rememberScrollState())
                                         .layout { measurable, constraints ->

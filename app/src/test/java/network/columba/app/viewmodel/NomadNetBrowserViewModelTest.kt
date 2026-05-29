@@ -17,12 +17,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.nomadnet.NomadNetPageCache
+import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsNomadnet
 import network.columba.app.rns.api.model.NomadnetPageResult
 import org.junit.After
@@ -46,6 +48,7 @@ class NomadNetBrowserViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var protocol: RnsNomadnet
     private lateinit var pageCache: NomadNetPageCache
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: NomadNetBrowserViewModel
 
     private val nodeHash = "abcdef01234567890abcdef012345678"
@@ -56,10 +59,14 @@ class NomadNetBrowserViewModelTest {
         Dispatchers.setMain(testDispatcher)
         protocol = mockk()
         pageCache = mockk()
+        settingsRepository = mockk()
         every { pageCache.put(any(), any(), any(), any()) } just Runs
         coEvery { protocol.cancelNomadnetPageRequest() } just Runs
         coEvery { protocol.getNomadnetRequestStatus() } returns ""
-        viewModel = NomadNetBrowserViewModel(protocol, pageCache)
+        // No persisted rendering mode by default; individual tests can override.
+        every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
+        coEvery { settingsRepository.saveNomadNetRenderingMode(any()) } just Runs
+        viewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
     }
 
     @Suppress("SleepInsteadOfDelay")
@@ -483,6 +490,41 @@ class NomadNetBrowserViewModelTest {
 
         assertEquals(NomadNetBrowserViewModel.RenderingMode.PROPORTIONAL_WRAP, viewModel.renderingMode.value)
     }
+
+    @Test
+    fun `setRenderingMode persists the selection`() =
+        runTest(testDispatcher) {
+            viewModel.setRenderingMode(NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM)
+            advanceUntilIdle()
+
+            coVerify { settingsRepository.saveNomadNetRenderingMode("MONOSPACE_ZOOM") }
+        }
+
+    @Test
+    fun `init restores the persisted rendering mode`() =
+        runTest(testDispatcher) {
+            every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf("PROPORTIONAL_WRAP")
+
+            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+            advanceUntilIdle()
+
+            assertEquals(
+                NomadNetBrowserViewModel.RenderingMode.PROPORTIONAL_WRAP,
+                restoredViewModel.renderingMode.value,
+            )
+        }
+
+    @Test
+    fun `init falls back to default when no rendering mode persisted`() =
+        runTest(testDispatcher) {
+            // setUp already stubs nomadNetRenderingModeFlow to flowOf(null)
+            advanceUntilIdle()
+
+            assertEquals(
+                NomadNetBrowserViewModel.RenderingMode.MONOSPACE_SCROLL,
+                viewModel.renderingMode.value,
+            )
+        }
 
     // ── identifyToNode ──
 

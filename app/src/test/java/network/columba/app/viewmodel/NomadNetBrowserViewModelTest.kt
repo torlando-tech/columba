@@ -16,6 +16,7 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -523,6 +524,30 @@ class NomadNetBrowserViewModelTest {
             assertEquals(
                 NomadNetBrowserViewModel.RenderingMode.MONOSPACE_SCROLL,
                 viewModel.renderingMode.value,
+            )
+        }
+
+    @Test
+    fun `init restore does not clobber a selection made before the read completes`() =
+        runTest(testDispatcher) {
+            // A flow whose emission we control, so the init read stays suspended until we choose.
+            val controllableFlow = MutableSharedFlow<String?>()
+            every { settingsRepository.nomadNetRenderingModeFlow } returns controllableFlow
+
+            // init launches and suspends on first() because nothing has been emitted yet.
+            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+
+            // User picks a mode before the persisted value has been read back.
+            racingViewModel.setRenderingMode(NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM)
+
+            // The persisted value finally arrives, resuming the init coroutine.
+            controllableFlow.emit("PROPORTIONAL_WRAP")
+            advanceUntilIdle()
+
+            // The guard must keep the user's selection, not the late-arriving persisted value.
+            assertEquals(
+                NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM,
+                racingViewModel.renderingMode.value,
             )
         }
 

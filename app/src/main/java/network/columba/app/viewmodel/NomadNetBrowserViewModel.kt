@@ -101,7 +101,14 @@ class NomadNetBrowserViewModel
         init {
             // Restore the user's last-selected rendering mode so it persists across sessions.
             viewModelScope.launch {
-                val restored = RenderingMode.fromName(settingsRepository.nomadNetRenderingModeFlow.first())
+                val restored =
+                    try {
+                        RenderingMode.fromName(settingsRepository.nomadNetRenderingModeFlow.first())
+                    } catch (e: Exception) {
+                        // DataStore I/O failure or corruption: fall back to the default rather than crash.
+                        Log.w(TAG, "Failed to read persisted rendering mode; using default", e)
+                        RenderingMode.MONOSPACE_SCROLL
+                    }
                 if (!renderingModeUserSelected) {
                     _renderingMode.value = restored
                 }

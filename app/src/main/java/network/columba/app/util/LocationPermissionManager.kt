@@ -191,19 +191,20 @@ object LocationPermissionManager {
 
     /**
      * Rationale shown when prompting a user who has selected precise location
-     * sharing but only granted approximate access (issue #855).
+     * sharing but doesn't hold precise (fine) access — whether that's
+     * approximate-only or no location permission at all (issue #855).
      */
     fun getPreciseLocationRationale(): String {
         return buildString {
             appendLine(
-                "Location sharing is set to Precise, but Columba currently only has approximate " +
+                "Location sharing is set to Precise, but Columba doesn't have precise " +
                     "location access.",
             )
             appendLine()
             appendLine(
-                "Approximate location is rounded to an area a kilometre or more across, so the position " +
-                    "you share will be off by that much. Enable precise location for accurate sharing, or " +
-                    "set a coarser precision in Location Sharing settings if that's intended.",
+                "Without it, a shared position is unavailable or only approximate — off by a " +
+                    "kilometre or more. Enable precise location for accurate sharing, or set a " +
+                    "coarser precision in Location Sharing settings if that's intended.",
             )
         }
     }

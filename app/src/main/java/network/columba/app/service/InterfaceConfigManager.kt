@@ -26,6 +26,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.ReticulumService
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.rns.host.manager.filterByTransport
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -372,7 +373,7 @@ class InterfaceConfigManager
                             // field changed via Apply & Restart (e.g. shareInstanceHosting)
                             // silently reverts the next time the OS reaps and START_STICKY-
                             // restarts the :reticulum process from the stale snapshot.
-                            network.columba.app.rns.host.persistence.ReticulumConfigSnapshot.write(
+                            ReticulumConfigSnapshot.write(
                                 context = context,
                                 config = config,
                                 identityHashHex = activeIdentity?.identityHash,

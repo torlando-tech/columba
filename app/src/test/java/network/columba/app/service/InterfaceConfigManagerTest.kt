@@ -282,6 +282,39 @@ class InterfaceConfigManagerTest {
         }
 
     @Test
+    fun `applyInterfaceChanges - refreshes config snapshot on successful initialization`() =
+        runTest {
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: Should succeed
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+
+            // And: the persisted snapshot is refreshed so a later OS-driven
+            // :reticulum restart self-inits from the just-applied config rather
+            // than a stale one. This is the core behavioral fix — assert it
+            // explicitly so the call can't be silently dropped.
+            verify { ReticulumConfigSnapshot.write(any(), any(), any()) }
+        }
+
+    @Test
+    fun `applyInterfaceChanges - does not write snapshot when initialization fails`() =
+        runTest {
+            // Given: initialize() fails
+            coEvery { rnsCore.initialize(any()) } returns
+                Result.failure(RuntimeException("init failed"))
+
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: apply fails and the snapshot is NOT refreshed — a stale-but-
+            // valid snapshot is preferable to one reflecting a config that never
+            // came up. Guards that the write stays gated on the onSuccess path.
+            assertTrue("applyInterfaceChanges should fail", result.isFailure)
+            verify(exactly = 0) { ReticulumConfigSnapshot.write(any(), any(), any()) }
+        }
+
+    @Test
     fun `applyInterfaceChanges - managers stopped before collectors and started after`() =
         runTest {
             // When

@@ -495,10 +495,14 @@ class NomadNetBrowserViewModelTest {
     @Test
     fun `setRenderingMode persists the selection`() =
         runTest(testDispatcher) {
+            val savedMode = slot<String>()
+            coEvery { settingsRepository.saveNomadNetRenderingMode(capture(savedMode)) } just Runs
+
             viewModel.setRenderingMode(NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM)
             advanceUntilIdle()
 
-            coVerify { settingsRepository.saveNomadNetRenderingMode("MONOSPACE_ZOOM") }
+            // Asserts the production enum→name conversion that gets persisted, not just the call.
+            assertEquals("MONOSPACE_ZOOM", savedMode.captured)
         }
 
     @Test

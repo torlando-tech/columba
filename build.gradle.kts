@@ -42,7 +42,11 @@ subprojects {
     }
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
-        version.set("1.0.1")
+        // 1.5.x relaxes `discouraged-comment-location` so end-of-line trailing comments
+        // on value arguments no longer trip the rule (see issue #923). 1.0.1 flagged ~550
+        // such lines; they were only ever hidden by android.set(true) below, so external
+        // linters (Codacy) still surfaced them. Bumping the engine fixes both.
+        version.set("1.5.0")
         android.set(true)
         outputColorName.set("RED")
         // Currently advisory - there are pre-existing style violations (primarily Compose

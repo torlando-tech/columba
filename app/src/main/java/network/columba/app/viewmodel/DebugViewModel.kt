@@ -363,12 +363,17 @@ class DebugViewModel
 
                     Log.d(TAG, "Using display name for announce")
 
-                    // Announce it with configured display name
+                    // Announce the local LXMF delivery destination the proper LXMF
+                    // way, via the router's self-announce (LXMRouter.announce ->
+                    // get_announce_app_data builds the msgpack [display_name,
+                    // stamp_cost] payload). The generic rnsCore.announceDestination()
+                    // would instead push raw display-name bytes as app data — the
+                    // deprecated pre-0.5.0 announce format — and on the Python backend
+                    // failed outright with "Identity not found" because the delivery
+                    // destination isn't in the generic destination cache (#988).
                     rnsCore
-                        .announceDestination(
-                            destination = destination,
-                            appData = displayName.toByteArray(),
-                        ).getOrThrow()
+                        .triggerAutoAnnounce(displayName)
+                        .getOrThrow()
 
                     Log.d(TAG, "Test announce sent successfully")
                     _testAnnounceResult.value =

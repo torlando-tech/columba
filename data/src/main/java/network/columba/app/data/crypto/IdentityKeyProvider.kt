@@ -427,32 +427,49 @@ class IdentityKeyProvider
          */
         @Suppress("DEPRECATION", "ThrowsCount") // Different encryption versions require different handling
         private fun decryptIdentityKey(identity: LocalIdentityEntity, password: CharArray?): ByteArray? {
-            return when (identity.keyEncryptionVersion) {
-                0 -> {
-                    // Unencrypted (legacy/not yet migrated)
-                    identity.keyData ?: readKeyFromFile(identity)
-                }
-                IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt() -> {
-                    // Device-only encryption
-                    val encryptedData =
-                        identity.encryptedKeyData
-                            ?: throw CorruptedKeyException("No encrypted key data for device-encrypted identity")
-                    encryptor.decryptWithDeviceKey(encryptedData)
-                }
-                IdentityKeyEncryptor.VERSION_DEVICE_AND_PASSWORD.toInt() -> {
-                    // Device + password encryption
-                    if (password == null) {
-                        throw WrongPasswordException("Password required for this identity")
+            val keyData =
+                when (identity.keyEncryptionVersion) {
+                    0 -> {
+                        // Unencrypted (legacy/not yet migrated)
+                        identity.keyData ?: readKeyFromFile(identity)
                     }
-                    val encryptedData =
-                        identity.encryptedKeyData
-                            ?: throw CorruptedKeyException("No encrypted key data for password-protected identity")
-                    encryptor.decryptWithPassword(encryptedData, password)
+                    IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt() -> {
+                        // Device-only encryption
+                        val encryptedData =
+                            identity.encryptedKeyData
+                                ?: throw CorruptedKeyException("No encrypted key data for device-encrypted identity")
+                        encryptor.decryptWithDeviceKey(encryptedData)
+                    }
+                    IdentityKeyEncryptor.VERSION_DEVICE_AND_PASSWORD.toInt() -> {
+                        // Device + password encryption
+                        if (password == null) {
+                            throw WrongPasswordException("Password required for this identity")
+                        }
+                        val encryptedData =
+                            identity.encryptedKeyData
+                                ?: throw CorruptedKeyException("No encrypted key data for password-protected identity")
+                        encryptor.decryptWithPassword(encryptedData, password)
+                    }
+                    else -> {
+                        throw CorruptedKeyException("Unknown encryption version: ${identity.keyEncryptionVersion}")
+                    }
                 }
-                else -> {
-                    throw CorruptedKeyException("Unknown encryption version: ${identity.keyEncryptionVersion}")
-                }
+
+            // Enforce the canonical 64-byte keypair (X25519_prv || Ed25519_prv) before
+            // the key can be used to reconstruct an RNS identity. A wrong-length blob —
+            // a legacy raw `keyData` half-key, a truncated import, or a corrupted Keystore
+            // unwrap — would otherwise reach RNS.Identity.from_bytes() in the :reticulum
+            // backend, whose load_private_key() splits at byte 32 and feeds the malformed
+            // remainder to Ed25519PrivateKey.from_private_bytes(), raising an uncaught
+            // "An Ed25519 private key is 32 bytes long" that crash-loops startup
+            // (Sentry COLUMBA-B8). Reject it here so callers route to the recovery/unlock
+            // path. Symmetric with IdentityKeyEncryptor.encrypt*'s require(size == 64).
+            if (keyData != null && keyData.size != IdentityKeyEncryptor.IDENTITY_KEY_SIZE) {
+                throw CorruptedKeyException(
+                    "Identity key is ${keyData.size} bytes, expected ${IdentityKeyEncryptor.IDENTITY_KEY_SIZE}",
+                )
             }
+            return keyData
         }
 
         /**

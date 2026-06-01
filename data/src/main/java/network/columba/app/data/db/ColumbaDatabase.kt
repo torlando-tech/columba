@@ -51,7 +51,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         BlockedPeerEntity::class,
         InterfaceFirstSeenEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -105,6 +105,23 @@ abstract class ColumbaDatabase : RoomDatabase() {
                             )
                         }
                     }
+                }
+            }
+
+        /**
+         * v2 → v3: add nullable `messages.signatureVerified INTEGER` column.
+         *
+         * Surfaces LXMF signature-verification state per received message so
+         * the UI can warn on unverified senders. Pure additive `ALTER` — no
+         * data transform. Existing rows backfill to
+         * NULL, which the UI treats as "no warning": showing every legacy
+         * message as unverified would be inaccurate (most are from peers we
+         * already had on file) and alarming.
+         */
+        val MIGRATION_2_3: Migration =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE messages ADD COLUMN signatureVerified INTEGER")
                 }
             }
 

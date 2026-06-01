@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -193,6 +195,34 @@ fun MessageDetailScreen(
                     }
                 } else {
                     // Received message info: delivery method, hop count, receiving interface.
+
+                    // Signature verification card. Only emitted for received
+                    // messages where the flag is non-null. Null (sent messages,
+                    // legacy rows) renders no card — we don't claim a
+                    // verification state either way for those, matching the
+                    // bubble behavior in MessagingScreen.
+                    msg.signatureVerified?.let { verified ->
+                        if (verified) {
+                            MessageInfoCard(
+                                icon = Icons.Default.VerifiedUser,
+                                title = "Signature",
+                                content = "Verified",
+                                subtitle = "The sender's identity was confirmed against their announce.",
+                            )
+                        } else {
+                            MessageInfoCard(
+                                icon = Icons.Default.Warning,
+                                iconTint = MaterialTheme.colorScheme.error,
+                                title = "Signature",
+                                content = "Unverified",
+                                subtitle = "The sender's identity was unknown to your node when this " +
+                                    "message arrived. It could be legitimate (their announce hasn't " +
+                                    "reached you yet) or a forgery from anyone who knows your address. " +
+                                    "Treat with caution.",
+                                contentColor = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
 
                     // Delivery method card. Especially important for propagation-fetched
                     // messages — hop count / interface / signal metrics are all null for

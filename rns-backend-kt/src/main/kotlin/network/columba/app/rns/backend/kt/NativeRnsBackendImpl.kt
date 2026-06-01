@@ -423,7 +423,23 @@ class NativeRnsBackendImpl(
                 displayName = config.displayName,
             )
 
+        // Surface the LXMF signature-verification state to the UI. LXMF-kt's
+        // router has already dropped SIGNATURE_INVALID deliveries (tampered
+        // payloads claiming a known sender) before this callback fires, so an
+        // unverified message here is the SOURCE_UNKNOWN case: we don't yet
+        // hold the sender's identity, so the signature can't be checked — it
+        // could be a legitimate first-contact OR a forgery. We ingest it
+        // anyway (Sideband-style warn-and-ingest, so genuine first-contact
+        // isn't lost). `buildReceivedMessage` reads `message.signatureValidated`
+        // onto the ReceivedMessage so the UI can warn.
         router!!.registerDeliveryCallback { message ->
+            if (!message.signatureValidated) {
+                Log.w(
+                    TAG,
+                    "Unverified inbound message from ${message.sourceHash.toHex()} " +
+                        "(${message.unverifiedReason}) — ingesting with warning per Sideband-style policy",
+                )
+            }
             handleIncomingMessage(message)
         }
 
@@ -1014,6 +1030,10 @@ class NativeRnsBackendImpl(
             receivedRssi = message.receivedRssi,
             receivedSnr = message.receivedSnr,
             deliveryMethod = nativeDeliveryMethodName(message.method),
+            // Read directly off the message — LXMF-kt sets `signatureValidated`
+            // false only for SOURCE_UNKNOWN here (SIGNATURE_INVALID is dropped
+            // at the router). Surfaced so the UI can warn on unverified senders.
+            signatureVerified = message.signatureValidated,
         )
     }
 

@@ -8,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
@@ -203,11 +204,14 @@ class IdentityKeyProviderTest {
                 )
 
             coEvery { identityDao.getIdentity(TEST_IDENTITY_HASH) } returns identity
+            every { encryptor.secureWipe(halfKey) } returns Unit
 
             val result = keyProvider.getDecryptedKeyData(TEST_IDENTITY_HASH)
 
             assertTrue(result.isFailure)
             assertTrue(result.exceptionOrNull() is CorruptedKeyException)
+            // The rejected key-derived bytes must be wiped, not left in the heap.
+            verify { encryptor.secureWipe(halfKey) }
         }
 
     @Test
@@ -235,11 +239,13 @@ class IdentityKeyProviderTest {
 
             coEvery { identityDao.getIdentity(TEST_IDENTITY_HASH) } returns identity
             every { encryptor.decryptWithDeviceKey(ENCRYPTED_KEY_DATA) } returns shortKey
+            every { encryptor.secureWipe(shortKey) } returns Unit
 
             val result = keyProvider.getDecryptedKeyData(TEST_IDENTITY_HASH)
 
             assertTrue(result.isFailure)
             assertTrue(result.exceptionOrNull() is CorruptedKeyException)
+            verify { encryptor.secureWipe(shortKey) }
         }
 
     // ==================== Requires Password Tests ====================

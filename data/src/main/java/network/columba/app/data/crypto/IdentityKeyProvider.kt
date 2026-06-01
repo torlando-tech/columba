@@ -465,8 +465,16 @@ class IdentityKeyProvider
             // (Sentry COLUMBA-B8). Reject it here so callers route to the recovery/unlock
             // path. Symmetric with IdentityKeyEncryptor.encrypt*'s require(size == 64).
             if (keyData != null && keyData.size != IdentityKeyEncryptor.IDENTITY_KEY_SIZE) {
+                // Best-effort wipe of the rejected key-derived bytes before discarding,
+                // matching the codebase's secureWipe hygiene (clearCachedKey /
+                // wipeCacheUnsafe). Reachable in practice only on the v0 legacy path,
+                // where keyData is a raw DB blob — GCM auth makes a wrong-length decrypt
+                // near-impossible on the encrypted paths. Capture the size first since
+                // the array contents are zeroed by the wipe.
+                val actualSize = keyData.size
+                encryptor.secureWipe(keyData)
                 throw CorruptedKeyException(
-                    "Identity key is ${keyData.size} bytes, expected ${IdentityKeyEncryptor.IDENTITY_KEY_SIZE}",
+                    "Identity key is $actualSize bytes, expected ${IdentityKeyEncryptor.IDENTITY_KEY_SIZE}",
                 )
             }
             return keyData

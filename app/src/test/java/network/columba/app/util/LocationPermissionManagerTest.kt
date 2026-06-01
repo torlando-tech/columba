@@ -177,12 +177,13 @@ class LocationPermissionManagerTest {
         assertTrue(rationale.contains("peer-to-peer"))
     }
 
-    // ========== needsPreciseLocationUpgrade Tests (issue #855) ==========
+    // ========== needsPreciseLocationUpgrade Tests (issues #855, #991) ==========
 
     @Test
-    fun `needsPreciseLocationUpgrade true when precise selected but fine not granted`() {
+    fun `needsPreciseLocationUpgrade true when sharing on, precise selected, fine not granted`() {
         assertTrue(
             LocationPermissionManager.needsPreciseLocationUpgrade(
+                locationSharingEnabled = true,
                 precisionRadiusMeters = LocationPermissionManager.PRECISE_PRECISION_RADIUS,
                 hasFineLocation = false,
             ),
@@ -193,6 +194,7 @@ class LocationPermissionManagerTest {
     fun `needsPreciseLocationUpgrade false when precise selected and fine granted`() {
         assertFalse(
             LocationPermissionManager.needsPreciseLocationUpgrade(
+                locationSharingEnabled = true,
                 precisionRadiusMeters = LocationPermissionManager.PRECISE_PRECISION_RADIUS,
                 hasFineLocation = true,
             ),
@@ -202,9 +204,42 @@ class LocationPermissionManagerTest {
     @Test
     fun `needsPreciseLocationUpgrade false when approximate radius chosen even without fine`() {
         // User deliberately picked a coarse radius — no precise upgrade needed.
-        assertFalse(LocationPermissionManager.needsPreciseLocationUpgrade(100, hasFineLocation = false))
-        assertFalse(LocationPermissionManager.needsPreciseLocationUpgrade(1000, hasFineLocation = false))
-        assertFalse(LocationPermissionManager.needsPreciseLocationUpgrade(10000, hasFineLocation = true))
+        assertFalse(
+            LocationPermissionManager.needsPreciseLocationUpgrade(
+                locationSharingEnabled = true,
+                precisionRadiusMeters = 100,
+                hasFineLocation = false,
+            ),
+        )
+        assertFalse(
+            LocationPermissionManager.needsPreciseLocationUpgrade(
+                locationSharingEnabled = true,
+                precisionRadiusMeters = 1000,
+                hasFineLocation = false,
+            ),
+        )
+        assertFalse(
+            LocationPermissionManager.needsPreciseLocationUpgrade(
+                locationSharingEnabled = true,
+                precisionRadiusMeters = 10000,
+                hasFineLocation = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `needsPreciseLocationUpgrade false when sharing disabled despite precise and no fine`() {
+        // Issue #991: precision defaults to Precise (0) and most users lack fine
+        // location, but sharing defaults to OFF — the prompt must stay silent for
+        // anyone who never opted into Location Sharing. This is the exact #855
+        // trigger state (precise + no fine) with sharing off, so it pins the gate.
+        assertFalse(
+            LocationPermissionManager.needsPreciseLocationUpgrade(
+                locationSharingEnabled = false,
+                precisionRadiusMeters = LocationPermissionManager.PRECISE_PRECISION_RADIUS,
+                hasFineLocation = false,
+            ),
+        )
     }
 
     // ========== getPreciseLocationRationale Tests ==========

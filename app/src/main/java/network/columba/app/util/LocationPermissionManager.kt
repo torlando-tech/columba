@@ -94,21 +94,34 @@ object LocationPermissionManager {
     /**
      * Whether to prompt the user to upgrade to precise (fine) location.
      *
-     * True when the Location Sharing precision is set to "Precise"
-     * ([PRECISE_PRECISION_RADIUS]) but only approximate location is currently
-     * granted — the state behind issue #855, where shared/telemetry positions
-     * land kilometres away because the OS is withholding GPS. When the user has
-     * deliberately chosen an approximate radius (>0) no upgrade is needed.
+     * True only when location sharing is *enabled* AND its precision is set to
+     * "Precise" ([PRECISE_PRECISION_RADIUS]) AND only approximate location is
+     * currently granted — the state behind issue #855, where shared/telemetry
+     * positions land kilometres away because the OS is withholding GPS.
      *
+     * The [locationSharingEnabled] precondition fixes issue #991: precision
+     * defaults to Precise (radius 0) for users who have never opened Location
+     * Sharing settings, while sharing itself defaults to *off*. Without this
+     * gate the prompt fired on the default state and re-armed every resume,
+     * nagging users who never opted into sharing at all. When the user has
+     * deliberately chosen an approximate radius (>0), or hasn't enabled sharing,
+     * no upgrade is needed.
+     *
+     * @param locationSharingEnabled whether the user has turned on Location
+     *   Sharing — precise access is pointless to request while it's off (#991)
      * @param precisionRadiusMeters persisted location-precision radius
      *   (0 = precise; >0 = coarsen to that radius)
      * @param hasFineLocation whether [Manifest.permission.ACCESS_FINE_LOCATION]
      *   is currently granted (see [hasFineLocationPermission])
      */
     fun needsPreciseLocationUpgrade(
+        locationSharingEnabled: Boolean,
         precisionRadiusMeters: Int,
         hasFineLocation: Boolean,
-    ): Boolean = precisionRadiusMeters == PRECISE_PRECISION_RADIUS && !hasFineLocation
+    ): Boolean =
+        locationSharingEnabled &&
+            precisionRadiusMeters == PRECISE_PRECISION_RADIUS &&
+            !hasFineLocation
 
     /**
      * Whether this Android version requires explicit background location permission.

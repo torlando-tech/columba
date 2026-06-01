@@ -1061,12 +1061,15 @@ fun ColumbaNavigation(
     }
 
     ColumbaTheme(selectedTheme = settingsState.selectedTheme) {
-        // Prompt for precise location when the user has chosen precise sharing
-        // but only approximate access is granted. Fires on app start, after a
-        // settings import, and when precision is changed to Precise — all
-        // surface as the precision setting (issue #855). Hosted inside
-        // ColumbaTheme so the sheet matches the app's light/dark theme.
+        // Prompt for precise location when the user has enabled location sharing
+        // and chosen precise precision but only approximate access is granted.
+        // Fires on app start, after a settings import, and when sharing/precision
+        // changes — all surface as the persisted settings (issues #855, #991).
+        // Gated on locationSharingEnabled so users who never opted into sharing
+        // aren't nagged (issue #991). Hosted inside ColumbaTheme so the sheet
+        // matches the app's light/dark theme.
         network.columba.app.ui.components.PreciseLocationPermissionPrompt(
+            locationSharingEnabled = settingsState.locationSharingEnabled,
             locationPrecisionRadius = settingsState.locationPrecisionRadius,
             enabled = !settingsState.isLoading && onboardingState.hasCompletedOnboarding,
             dismissed = settingsState.preciseLocationPromptDismissed,

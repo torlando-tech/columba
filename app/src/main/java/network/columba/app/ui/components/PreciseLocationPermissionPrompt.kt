@@ -32,14 +32,17 @@ import network.columba.app.util.LocationPermissionManager
  * precise location sharing but the OS has only granted approximate access (or
  * none at all).
  *
- * The trigger is [locationPrecisionRadius] being "Precise"
- * ([LocationPermissionManager.PRECISE_PRECISION_RADIUS]) while fine location is
- * missing. Because the persisted precision setting is the single value that
- * changes on app start, on settings import, and when the user edits the
- * precision picker, observing it here covers all three cases (issue #855)
- * without a persistent map banner. The state is also re-evaluated on every
- * `ON_RESUME` so granting/revoking precise from system settings while the app
- * is backgrounded is reflected when the user returns.
+ * The trigger is [locationSharingEnabled] being on while [locationPrecisionRadius]
+ * is "Precise" ([LocationPermissionManager.PRECISE_PRECISION_RADIUS]) and fine
+ * location is missing. Gating on [locationSharingEnabled] fixes issue #991:
+ * precision defaults to Precise for users who never opened Location Sharing
+ * settings while sharing itself defaults to off, so without the gate the prompt
+ * nagged users who hadn't opted into sharing at all. Because these persisted
+ * settings are the values that change on app start, on settings import, and when
+ * the user edits the toggle/precision picker, observing them here covers all
+ * those cases (issues #855, #991) without a persistent map banner. The state is
+ * also re-evaluated on every `ON_RESUME` so granting/revoking precise from system
+ * settings while the app is backgrounded is reflected when the user returns.
  *
  * Dismissals persist: tapping "Not Now", swiping the sheet away, or finishing the
  * precise-permission request without granting `FINE` calls [onDismiss] to set
@@ -57,6 +60,8 @@ import network.columba.app.util.LocationPermissionManager
  * Approximate, or permanently denied), it also routes to the app's settings page as
  * the only remaining way to enable precise access.
  *
+ * @param locationSharingEnabled whether the user has turned on Location Sharing;
+ *   the prompt never fires while sharing is off (issue #991)
  * @param locationPrecisionRadius persisted precision radius (0 = precise)
  * @param enabled gate so the prompt only fires once the main UI is up
  *   (onboarding complete, settings loaded) — never during splash/onboarding
@@ -68,6 +73,7 @@ import network.columba.app.util.LocationPermissionManager
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PreciseLocationPermissionPrompt(
+    locationSharingEnabled: Boolean,
     locationPrecisionRadius: Int,
     enabled: Boolean,
     dismissed: Boolean,
@@ -138,12 +144,20 @@ fun PreciseLocationPermissionPrompt(
     // user re-selects Precise and re-arms the prompt (issue #855).
     LaunchedEffect(dismissed) { pendingDismiss = false }
 
-    LaunchedEffect(locationPrecisionRadius, enabled, dismissed, pendingDismiss, resumeKey) {
+    LaunchedEffect(
+        locationSharingEnabled,
+        locationPrecisionRadius,
+        enabled,
+        dismissed,
+        pendingDismiss,
+        resumeKey,
+    ) {
         showSheet =
             enabled &&
             !dismissed &&
             !pendingDismiss &&
             LocationPermissionManager.needsPreciseLocationUpgrade(
+                locationSharingEnabled = locationSharingEnabled,
                 precisionRadiusMeters = locationPrecisionRadius,
                 hasFineLocation = LocationPermissionManager.hasFineLocationPermission(context),
             )

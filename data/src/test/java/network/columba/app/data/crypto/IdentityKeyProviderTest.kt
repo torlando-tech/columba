@@ -174,6 +174,74 @@ class IdentityKeyProviderTest {
             assertArrayEquals(TEST_KEY_DATA, result.getOrThrow())
         }
 
+    @Test
+    fun `getDecryptedKeyData rejects legacy unencrypted key that is not 64 bytes`() =
+        runTest {
+            // Regression for COLUMBA-B8. A stored 32-byte "half key" (only the
+            // signing or encryption half) sails through the legacy version-0 path
+            // unchecked, then reaches RNS.Identity.from_bytes() in the :reticulum
+            // backend. load_private_key() splits the blob at byte 32 and feeds the
+            // empty remainder to Ed25519PrivateKey.from_private_bytes(), raising
+            // "ValueError: An Ed25519 private key is 32 bytes long" — an uncaught
+            // crash that loops on every launch. The provider must reject it here so
+            // callers fall back to the recovery path instead of bricking startup.
+            val halfKey = ByteArray(32) { it.toByte() }
+
+            @Suppress("DEPRECATION")
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = TEST_IDENTITY_HASH,
+                    displayName = "Test Identity",
+                    destinationHash = "dest123",
+                    filePath = "/fake/path",
+                    keyData = halfKey,
+                    encryptedKeyData = null,
+                    keyEncryptionVersion = 0, // Unencrypted (legacy/not yet migrated)
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            coEvery { identityDao.getIdentity(TEST_IDENTITY_HASH) } returns identity
+
+            val result = keyProvider.getDecryptedKeyData(TEST_IDENTITY_HASH)
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is CorruptedKeyException)
+        }
+
+    @Test
+    fun `getDecryptedKeyData rejects device-encrypted key that decrypts to wrong length`() =
+        runTest {
+            // Defense-in-depth for the same COLUMBA-B8 invariant on the encrypted
+            // path: even if a malformed blob ever decrypts to a non-64-byte value,
+            // it must never be handed back as a usable identity key.
+            val shortKey = ByteArray(63) { it.toByte() }
+
+            @Suppress("DEPRECATION")
+            val identity =
+                LocalIdentityEntity(
+                    identityHash = TEST_IDENTITY_HASH,
+                    displayName = "Test Identity",
+                    destinationHash = "dest123",
+                    filePath = "/fake/path",
+                    keyData = null,
+                    encryptedKeyData = ENCRYPTED_KEY_DATA,
+                    keyEncryptionVersion = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
+                    createdTimestamp = System.currentTimeMillis(),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    isActive = true,
+                )
+
+            coEvery { identityDao.getIdentity(TEST_IDENTITY_HASH) } returns identity
+            every { encryptor.decryptWithDeviceKey(ENCRYPTED_KEY_DATA) } returns shortKey
+
+            val result = keyProvider.getDecryptedKeyData(TEST_IDENTITY_HASH)
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is CorruptedKeyException)
+        }
+
     // ==================== Requires Password Tests ====================
 
     @Test

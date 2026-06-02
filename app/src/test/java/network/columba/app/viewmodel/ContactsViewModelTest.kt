@@ -493,6 +493,70 @@ class ContactsViewModelTest {
             }
         }
 
+    /**
+     * Regression test for COLUMBA-99: `IllegalArgumentException: Key "<hash>" was already
+     * used. If you are using LazyColumn/Row please make sure you provide a unique key`,
+     * crashing the `/contacts` screen during a scroll.
+     *
+     * Root cause: the same destinationHash could reach the contact LazyColumn more than
+     * once — the ContactEntity composite PK [destinationHash, identityHash] permits two
+     * rows that share a destinationHash across local identities, the enriched-contacts
+     * JOIN can emit duplicate rows, and case-variant hashes ("ABC" vs "abc") slip past a
+     * naive equality dedup. ContactsScreen derives each LazyColumn `key` from the section
+     * plus the contact's destinationHash, so two such rows collapse to the same key and
+     * Compose throws.
+     *
+     * This test feeds the worst-case adversarial input straight through the real
+     * ContactsViewModel grouping pipeline, then reconstructs the EXACT Compose keys
+     * ContactsScreen renders (`relay_…`, `pinned_…`, `all_…`) and asserts they are
+     * globally unique — the invariant whose violation produced the crash. It fails if the
+     * upstream `distinctBy { destinationHash.lowercase() }` guard is removed.
+     */
+    @Test
+    fun `groupedContacts - COLUMBA-99 grouped contacts yield globally unique LazyColumn keys`() =
+        runTest {
+            // Adversarial duplicates: exact dup, case-variant dup, a hash that appears both
+            // pinned and unpinned, and a relay whose hash also appears as a plain contact.
+            val testContactsFlow =
+                MutableStateFlow(
+                    listOf(
+                        TestFactories.createEnrichedContact(destinationHash = "AABBCCDD", displayName = "Pinned A", isPinned = true),
+                        TestFactories.createEnrichedContact(destinationHash = "aabbccdd", displayName = "Pinned A case-variant", isPinned = true),
+                        TestFactories.createEnrichedContact(destinationHash = "AABBCCDD", displayName = "Same hash, unpinned", isPinned = false),
+                        TestFactories.createEnrichedContact(destinationHash = "EE11FF22", displayName = "Relay", isMyRelay = true),
+                        TestFactories.createEnrichedContact(destinationHash = "ee11ff22", displayName = "Relay hash as contact", isPinned = false),
+                        TestFactories.createEnrichedContact(destinationHash = "99887766", displayName = "Unique", isPinned = false),
+                    ),
+                )
+            every { contactRepository.getEnrichedContacts() } returns testContactsFlow
+            val newViewModel = ContactsViewModel(contactRepository, propagationNodeManager, receivedLocationRepository, identityResolutionManager)
+
+            newViewModel.contactsState.test {
+                var groups = awaitItem().groupedContacts
+                while (groups.relay == null && groups.pinned.isEmpty() && groups.all.isEmpty()) {
+                    advanceUntilIdle()
+                    groups = awaitItem().groupedContacts
+                }
+
+                // Reconstruct the keys ContactsScreen.kt assigns to each LazyColumn item.
+                val keys = buildList {
+                    groups.relay?.let { add("relay_${it.destinationHash}") }
+                    groups.pinned.forEach { add("pinned_${it.destinationHash.lowercase()}") }
+                    groups.all.forEach { add("all_${it.destinationHash.lowercase()}") }
+                }
+
+                // The crash is exactly a duplicate key, so distinct == total proves it is gone.
+                assertEquals(
+                    "Duplicate LazyColumn key would crash ContactsScreen (COLUMBA-99). Keys: $keys",
+                    keys.size,
+                    keys.toSet().size,
+                )
+                // Sanity: the three distinct hashes survived dedup, one row each.
+                assertEquals(3, keys.size)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     // ========== Contact Operations Tests ==========
 
     @Test

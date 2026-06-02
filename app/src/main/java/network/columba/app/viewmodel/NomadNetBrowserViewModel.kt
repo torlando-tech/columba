@@ -20,9 +20,10 @@ import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
+import network.columba.app.nomadnet.buildNomadNetRequestData
+import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsNomadnet
-import org.json.JSONObject
 import javax.inject.Inject
 
 @Suppress("TooManyFunctions") // ViewModel has 15 UI-interaction methods at the threshold
@@ -239,18 +240,34 @@ class NomadNetBrowserViewModel
             currentNodeHash = destinationHash
             _formFields.value = emptyMap()
 
+            // A path reaching here (from a nomadnetwork:// deep link or the URL
+            // bar) may carry a trailing link-field block after a backtick, e.g.
+            // "/page/forum/thread.mu`cat=help|thread=how-to-rngit". Those are
+            // request variables to submit as data so the node's dynamic page
+            // sees them — split them off rather than letting them corrupt the
+            // requested path, and route them through the same submission path
+            // an in-page link tap uses.
+            val (parsedPath, fieldNames) = splitNomadNetPathFields(path)
+            val requestPath = parsedPath.ifEmpty { DEFAULT_PATH }
+            val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
+            if (formDataJson != null) {
+                // Variable submissions always fetch fresh (response depends on data).
+                submitFormAndNavigate(destinationHash, requestPath, formDataJson)
+                return
+            }
+
             // Check cache before showing loading spinner
-            val cached = pageCache.get(destinationHash, path)
+            val cached = pageCache.get(destinationHash, requestPath)
             if (cached != null) {
                 fetchEpoch++ // Invalidate any in-flight request
                 stopStatusCollection()
                 stopProgressCollection()
                 val document = MicronParser.parse(cached)
-                emitPageLoaded(document, path, destinationHash)
+                emitPageLoaded(document, requestPath, destinationHash)
                 return
             }
 
-            fetchPage(destinationHash, path, cacheResponse = true)
+            fetchPage(destinationHash, requestPath, cacheResponse = true)
         }
 
         fun navigateToLink(
@@ -276,41 +293,11 @@ class NomadNetBrowserViewModel
 
             partialManager.clear()
 
-            // Collect form field values for submission.
-            // NomadNet link fields can be:
-            //   - "fieldname" → look up value from form fields
-            //   - "key=value" → inline variable (sent as "var_key")
-            //   - "*" → submit all form fields
+            // Collect form field values for submission. Shared with loadPage's
+            // deep-link / URL-bar path so both honour the same field semantics
+            // ("fieldname" → form value, "key=value" → var_key, "*" → all).
             val isFormSubmission = fieldNames.isNotEmpty()
-            val formDataJson =
-                if (isFormSubmission) {
-                    val data = JSONObject()
-                    val submitAll = "*" in fieldNames
-                    for (fieldEntry in fieldNames) {
-                        if (fieldEntry == "*") continue
-                        if ("=" in fieldEntry) {
-                            // Inline variable: "key=value" → sent as "var_key"
-                            val eqIdx = fieldEntry.indexOf('=')
-                            val key = fieldEntry.substring(0, eqIdx)
-                            val value = fieldEntry.substring(eqIdx + 1)
-                            data.put("var_$key", value)
-                        } else {
-                            // Form field reference: look up value from form state
-                            val value = _formFields.value[fieldEntry] ?: ""
-                            data.put(fieldEntry, value)
-                        }
-                    }
-                    if (submitAll) {
-                        for ((key, value) in _formFields.value) {
-                            if (!data.has(key)) {
-                                data.put(key, value)
-                            }
-                        }
-                    }
-                    data.toString()
-                } else {
-                    null
-                }
+            val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
 
             // Resolve destination URL using shared utility
             val (nodeHash, path) = PartialManager.resolveNomadNetUrl(destination, currentNodeHash)

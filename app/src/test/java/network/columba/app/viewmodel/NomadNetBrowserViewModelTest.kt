@@ -168,6 +168,34 @@ class NomadNetBrowserViewModelTest {
             assertTrue(viewModel.formFields.value.isEmpty())
         }
 
+    @Test
+    fun `loadPage strips backtick field block from path and submits it as var data`() =
+        runTest(testDispatcher) {
+            // A NomadNet deep link / URL-bar entry can carry request variables
+            // after a backtick, e.g. "…/thread.mu`cat=help|thread=how-to-rngit".
+            // Those fields must be split off the path and sent as request data
+            // (var_-prefixed), not left glued to the requested path.
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash, "/page/forum/thread.mu`cat=help|thread=how-to-rngit")
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for Dispatchers.IO coroutine
+
+            val pathSlot = slot<String>()
+            val dataSlot = slot<String>()
+            coVerify {
+                protocol.requestNomadnetPage(nodeHash, capture(pathSlot), capture(dataSlot), any())
+            }
+            // Path is the clean page path — the backtick block is gone.
+            assertEquals("/page/forum/thread.mu", pathSlot.captured)
+            // Fields are submitted as var_-prefixed request data.
+            val submitted = org.json.JSONObject(dataSlot.captured)
+            assertEquals("help", submitted.getString("var_cat"))
+            assertEquals("how-to-rngit", submitted.getString("var_thread"))
+        }
+
     // ── navigateToLink ──
 
     @Test

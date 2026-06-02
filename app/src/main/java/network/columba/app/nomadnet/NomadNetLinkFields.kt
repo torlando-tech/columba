@@ -31,8 +31,9 @@ fun splitNomadNetPathFields(rawPath: String): Pair<String, List<String>> {
 
 /**
  * Build the request `data` JSON for a set of NomadNet link [fieldNames], or null
- * when there is nothing to submit (no fields). Mirrors NomadNet's link-field
- * semantics, and is shared by both in-page link taps
+ * when there is nothing to submit — no field tokens, or only tokens that resolve
+ * to no data (e.g. a lone `*` against an empty form). Mirrors NomadNet's
+ * link-field semantics, and is shared by both in-page link taps
  * (`NomadNetBrowserViewModel.navigateToLink`) and deep-link / URL-bar page loads
  * (`NomadNetBrowserViewModel.loadPage`):
  *  - `key=value` → inline variable, sent as `var_key` (split on the first `=`);
@@ -62,5 +63,8 @@ fun buildNomadNetRequestData(
             if (!data.has(key)) data.put(key, value)
         }
     }
-    return data.toString()
+    // Tokens that resolve to nothing (e.g. a lone `*` against an empty form)
+    // mean there is genuinely nothing to submit — return null so callers treat
+    // it as a plain navigation rather than an empty `{}` form post.
+    return if (data.length() > 0) data.toString() else null
 }

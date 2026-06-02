@@ -296,7 +296,8 @@ class NomadNetBrowserViewModel
             // Collect form field values for submission. Shared with loadPage's
             // deep-link / URL-bar path so both honour the same field semantics
             // ("fieldname" → form value, "key=value" → var_key, "*" → all).
-            val isFormSubmission = fieldNames.isNotEmpty()
+            // Null means nothing to submit (no fields, or only ones resolving to
+            // no data) — treated as a plain navigation below.
             val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
 
             // Resolve destination URL using shared utility
@@ -310,8 +311,8 @@ class NomadNetBrowserViewModel
             // Form submissions always fetch fresh (response depends on submitted data)
             if (path.startsWith("/file/")) {
                 downloadFile(nodeHash, path)
-            } else if (isFormSubmission) {
-                submitFormAndNavigate(nodeHash, path, formDataJson!!)
+            } else if (formDataJson != null) {
+                submitFormAndNavigate(nodeHash, path, formDataJson)
             } else {
                 // Non-form link: check cache first
                 val cached = pageCache.get(nodeHash, path)

@@ -100,4 +100,11 @@ class NomadNetLinkFieldsTest {
         assertEquals("Bob", data.getString("var_name"))
         assertEquals("Alice", data.getString("name"))
     }
+
+    @Test
+    fun `star against an empty form resolves to nothing and returns null`() {
+        // No fields actually resolve, so there is genuinely nothing to submit —
+        // callers should treat this as a plain navigation, not an empty form post.
+        assertNull(buildNomadNetRequestData(listOf("*"), emptyMap()))
+    }
 }

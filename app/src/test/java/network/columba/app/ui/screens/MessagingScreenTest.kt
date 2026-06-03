@@ -669,6 +669,57 @@ class MessagingScreenTest {
     }
 
     @Test
+    fun inputBar_altEnter_doesNotSend() {
+        // Given
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Hello there")
+        composeTestRule.waitForIdle()
+
+        // When - Alt+Enter must be left un-consumed (covers the !isAltPressed guard)
+        field.requestFocus()
+        field.performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Enter) } }
+        composeTestRule.waitForIdle()
+
+        // Then
+        assertEquals("Alt+Enter must not send", emptyList<Pair<String, String>>(), sent)
+    }
+
+    @Test
+    fun inputBar_metaEnter_doesNotSend() {
+        // Given
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Hello there")
+        composeTestRule.waitForIdle()
+
+        // When - Meta/Command+Enter is a frequent macOS shortcut on the BT-keyboard
+        // target class; must be left un-consumed (covers the !isMetaPressed guard)
+        field.requestFocus()
+        field.performKeyInput { withKeyDown(Key.MetaLeft) { pressKey(Key.Enter) } }
+        composeTestRule.waitForIdle()
+
+        // Then
+        assertEquals("Meta+Enter must not send", emptyList<Pair<String, String>>(), sent)
+    }
+
+    @Test
     fun inputBar_bareEnter_blankText_doesNotSend() {
         // Given - empty draft
         val sent = recordSentMessages()

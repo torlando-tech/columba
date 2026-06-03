@@ -124,6 +124,15 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -2425,6 +2434,12 @@ fun MessageInputBar(
                 )
             }
 
+            // Single source of truth for "is there something to send right now",
+            // shared by the send button and the bare-Enter key handler below.
+            val canSend =
+                !isSending &&
+                    (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty())
+
             Row(
                 modifier =
                     Modifier
@@ -2488,6 +2503,30 @@ fun MessageInputBar(
                                         }
                                     }
                                     null // Content consumed
+                                }
+                                // Bare Enter sends; Shift+Enter falls through to
+                                // insert a newline. Hardware/desktop keyboards
+                                // (e.g. Waydroid, attached BT keyboards) emit a
+                                // real Enter key here; soft keyboards usually
+                                // surface a newline button instead, which still
+                                // works. Require a *bare* Enter — Ctrl/Alt/Meta+
+                                // Enter are common OS/WM shortcuts, so leave those
+                                // un-consumed rather than stealing them. Consume
+                                // only the bare-Enter KeyDown so the newline isn't
+                                // also inserted, and so the matching KeyUp doesn't
+                                // fire a second send.
+                                .onPreviewKeyEvent { event ->
+                                    val isEnter = event.key == Key.Enter || event.key == Key.NumPadEnter
+                                    val isBareEnter =
+                                        isEnter && !event.isShiftPressed &&
+                                            !event.isCtrlPressed && !event.isAltPressed &&
+                                            !event.isMetaPressed
+                                    if (isBareEnter) {
+                                        if (event.type == KeyEventType.KeyDown && canSend) onSendClick()
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 },
                         textStyle =
                             MaterialTheme.typography.bodyLarge.copy(
@@ -2531,7 +2570,7 @@ fun MessageInputBar(
 
                 FilledIconButton(
                     onClick = onSendClick,
-                    enabled = !isSending && (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()),
+                    enabled = canSend,
                     modifier = Modifier.size(48.dp),
                     shape = CircleShape,
                     colors =

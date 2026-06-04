@@ -111,10 +111,12 @@ internal fun <T> initializeCameraProvider(
         bindUseCases(future.get())
     } catch (e: InterruptedException) {
         Thread.currentThread().interrupt()
-        Log.e(TAG, "Camera initialization interrupted", e)
+        // Covers both future.get() (init) and bindUseCases (binding), so keep the label
+        // stage-neutral rather than asserting which stage failed.
+        Log.e(TAG, "Camera setup interrupted", e)
         onCameraError(CAMERA_UNAVAILABLE_MESSAGE)
     } catch (e: Exception) {
-        Log.e(TAG, "Camera initialization failed", e)
+        Log.e(TAG, "Camera setup failed", e)
         onCameraError(CAMERA_UNAVAILABLE_MESSAGE)
     }
 }
@@ -441,7 +443,7 @@ private fun CameraPreviewWithOverlay(
     cameraExecutor: ExecutorService,
     torchEnabled: Boolean,
     onQrCodeDetected: (String) -> Unit,
-    onCameraError: (String) -> Unit = {},
+    onCameraError: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current

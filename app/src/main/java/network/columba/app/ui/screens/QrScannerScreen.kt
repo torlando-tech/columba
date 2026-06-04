@@ -82,8 +82,42 @@ import network.columba.app.viewmodel.ContactsViewModel
 import kotlinx.coroutines.launch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 private const val TAG = "QrScannerScreen"
+
+/** Shown when CameraX cannot be initialized on this device (see [initializeCameraProvider]). */
+internal const val CAMERA_UNAVAILABLE_MESSAGE = "Camera unavailable on this device"
+
+/**
+ * Resolves the CameraX provider [future] and hands the result to [bindUseCases].
+ *
+ * `Future.get()` rethrows any failure from CameraX initialization wrapped in an
+ * `ExecutionException`. Some devices and emulators (e.g. BlueStacks) expose a virtual
+ * camera whose stream configuration reports a format that is not defined in `ImageFormat`
+ * or `PixelFormat`, which makes CameraX throw during camera enumeration (COLUMBA-BA).
+ * Catch it here so an unusable camera surfaces an error via [onCameraError] instead of
+ * propagating off the main-thread listener and crashing the app.
+ *
+ * Generic over the provider type purely so the failure handling can be unit-tested
+ * without constructing a real (final, privately-constructed) `ProcessCameraProvider`.
+ */
+internal fun <T> initializeCameraProvider(
+    future: Future<T>,
+    onCameraError: (String) -> Unit,
+    bindUseCases: (T) -> Unit,
+) {
+    try {
+        bindUseCases(future.get())
+    } catch (e: InterruptedException) {
+        Thread.currentThread().interrupt()
+        Log.e(TAG, "Camera initialization interrupted", e)
+        onCameraError(CAMERA_UNAVAILABLE_MESSAGE)
+    } catch (e: Exception) {
+        Log.e(TAG, "Camera initialization failed", e)
+        onCameraError(CAMERA_UNAVAILABLE_MESSAGE)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -194,6 +228,7 @@ fun QrScannerScreen(
                     CameraPreviewWithOverlay(
                         cameraExecutor = cameraExecutor,
                         torchEnabled = torchEnabled,
+                        onCameraError = { message -> errorMessage = message },
                         onQrCodeDetected = { qrData ->
                             if (!scanSuccess && !showConfirmationDialog) { // Only process if not already processing
                                 // Decode and validate the QR code
@@ -406,6 +441,7 @@ private fun CameraPreviewWithOverlay(
     cameraExecutor: ExecutorService,
     torchEnabled: Boolean,
     onQrCodeDetected: (String) -> Unit,
+    onCameraError: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -423,39 +459,36 @@ private fun CameraPreviewWithOverlay(
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
                 cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
-
-                    val preview =
-                        Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
-
-                    val imageAnalyzer =
-                        ImageAnalysis.Builder()
-                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                            .build()
-                            .also {
-                                it.setAnalyzer(
-                                    cameraExecutor,
-                                    QrCodeAnalyzer { qrCode ->
-                                        onQrCodeDetected(qrCode)
-                                    },
-                                )
+                    initializeCameraProvider(
+                        future = cameraProviderFuture,
+                        onCameraError = onCameraError,
+                    ) { cameraProvider ->
+                        val preview =
+                            Preview.Builder().build().also {
+                                it.setSurfaceProvider(previewView.surfaceProvider)
                             }
 
-                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                        val imageAnalyzer =
+                            ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+                                .also {
+                                    it.setAnalyzer(
+                                        cameraExecutor,
+                                        QrCodeAnalyzer { qrCode ->
+                                            onQrCodeDetected(qrCode)
+                                        },
+                                    )
+                                }
 
-                    try {
                         cameraProvider.unbindAll()
                         camera =
                             cameraProvider.bindToLifecycle(
                                 lifecycleOwner,
-                                cameraSelector,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
                                 preview,
                                 imageAnalyzer,
                             )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Camera binding failed", e)
                     }
                 }, ContextCompat.getMainExecutor(ctx))
 

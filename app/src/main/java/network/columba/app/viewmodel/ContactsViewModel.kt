@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.RelayInfo
@@ -74,6 +75,38 @@ data class ContactsState(
     val isLoading: Boolean = true,
 )
 
+/**
+ * Contact-type filter for the My Contacts tab (GH issue #863). Single-select:
+ * exactly one option is active at a time, [ALL] meaning "no type restriction".
+ *
+ * Mirrors the announce-stream aspect chips (Peers/Sites/Relays/Audio) so the
+ * two Contacts tabs read the same way. The mapping onto [EnrichedContact] uses
+ * the node type carried over from the contact's latest announce; [RELAYS] also
+ * matches the currently-selected relay even if it has no announce node type yet.
+ */
+enum class ContactTypeFilter(
+    val label: String,
+) {
+    ALL("All"),
+    PEERS("Peers"),
+    SITES("Sites"),
+    RELAYS("Relays"),
+    AUDIO("Audio"),
+    ;
+
+    /**
+     * Whether [contact] belongs to this filter. [ALL] matches everything.
+     */
+    fun matches(contact: EnrichedContact): Boolean =
+        when (this) {
+            ALL -> true
+            PEERS -> contact.nodeType == NodeType.PEER.name
+            SITES -> contact.nodeType == NodeType.NODE.name
+            RELAYS -> contact.isMyRelay || contact.nodeType == NodeType.PROPAGATION_NODE.name
+            AUDIO -> contact.nodeType == NodeType.PHONE.name
+        }
+}
+
 @HiltViewModel
 class ContactsViewModel
     @Inject
@@ -90,6 +123,10 @@ class ContactsViewModel
         // Search query state
         private val _searchQuery = MutableStateFlow("")
         val searchQuery: StateFlow<String> = _searchQuery
+
+        // Contact-type filter state (My Contacts tab — GH issue #863)
+        private val _selectedContactType = MutableStateFlow(ContactTypeFilter.ALL)
+        val selectedContactType: StateFlow<ContactTypeFilter> = _selectedContactType
 
         // Current relay info (includes isAutoSelected for showing "(auto)" badge)
         val currentRelayInfo: StateFlow<RelayInfo?> = propagationNodeManager.currentRelay
@@ -116,22 +153,22 @@ class ContactsViewModel
             }
         }
 
-        // Filtered contacts based on search query
+        // Filtered contacts based on contact-type filter + search query
         val filteredContacts: StateFlow<List<EnrichedContact>> =
             combine(
                 contacts,
                 searchQuery,
-            ) { contacts, query ->
-                if (query.isBlank()) {
-                    contacts
-                } else {
-                    contacts.filter { contact ->
-                        contact.displayName.contains(query, ignoreCase = true) ||
+                _selectedContactType,
+            ) { contacts, query, typeFilter ->
+                contacts
+                    .filter { typeFilter.matches(it) }
+                    .filter { contact ->
+                        query.isBlank() ||
+                            contact.displayName.contains(query, ignoreCase = true) ||
                             contact.destinationHash.contains(query, ignoreCase = true) ||
                             contact.announceName?.contains(query, ignoreCase = true) == true ||
                             contact.getTagsList().any { it.contains(query, ignoreCase = true) }
                     }
-                }
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000L),
@@ -178,6 +215,13 @@ class ContactsViewModel
          */
         fun onSearchQueryChanged(query: String) {
             _searchQuery.value = query
+        }
+
+        /**
+         * Update the contact-type filter for the My Contacts tab (GH issue #863).
+         */
+        fun onContactTypeFilterChanged(filter: ContactTypeFilter) {
+            _selectedContactType.value = filter
         }
 
         /**

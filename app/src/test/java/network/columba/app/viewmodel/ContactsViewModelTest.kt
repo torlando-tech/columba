@@ -312,6 +312,118 @@ class ContactsViewModelTest {
             }
         }
 
+    // ========== Contact-Type Filter Tests (GH issue #863) ==========
+
+    @Test
+    fun `onContactTypeFilterChanged - updates selectedContactType`() =
+        runTest {
+            // When
+            viewModel.onContactTypeFilterChanged(ContactTypeFilter.RELAYS)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(ContactTypeFilter.RELAYS, viewModel.selectedContactType.value)
+        }
+
+    @Test
+    fun `filteredContacts - PEERS filter returns only peers`() =
+        runTest {
+            // Given
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(destinationHash = "p", displayName = "Peer", nodeType = "PEER"),
+                    ),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(destinationHash = "s", displayName = "Site", nodeType = "NODE"),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            // When
+            viewModel.onContactTypeFilterChanged(ContactTypeFilter.PEERS)
+            advanceUntilIdle()
+
+            // Then
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(1, filtered.size)
+                assertEquals("Peer", filtered[0].displayName)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - RELAYS filter matches isMyRelay even without node type`() =
+        runTest {
+            // Given: a relay with no announce node type plus a plain peer
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(
+                            destinationHash = "r",
+                            displayName = "Relay",
+                            isMyRelay = true,
+                            nodeType = null,
+                        ),
+                    ),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(destinationHash = "p", displayName = "Peer", nodeType = "PEER"),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            // When
+            viewModel.onContactTypeFilterChanged(ContactTypeFilter.RELAYS)
+            advanceUntilIdle()
+
+            // Then
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(1, filtered.size)
+                assertEquals("Relay", filtered[0].displayName)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - type filter combines with search query`() =
+        runTest {
+            // Given: two peers, one site
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(destinationHash = "p1", displayName = "Alice", nodeType = "PEER"),
+                    ),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(destinationHash = "p2", displayName = "Bob", nodeType = "PEER"),
+                    ),
+                    TestFactories.createEnrichedContact(
+                        TestFactories.EnrichedContactConfig(destinationHash = "s1", displayName = "Alice Site", nodeType = "NODE"),
+                    ),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            // When: filter to peers AND search "Alice"
+            viewModel.onContactTypeFilterChanged(ContactTypeFilter.PEERS)
+            viewModel.onSearchQueryChanged("Alice")
+            advanceUntilIdle()
+
+            // Then: only the peer named Alice survives both filters
+            viewModel.filteredContacts.test {
+                skipItems(1)
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(1, filtered.size)
+                assertEquals("Alice", filtered[0].displayName)
+            }
+        }
+
     // ========== GroupedContacts Tests ==========
 
     @Test

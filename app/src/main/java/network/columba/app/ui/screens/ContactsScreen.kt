@@ -111,6 +111,7 @@ import network.columba.app.R
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.ui.components.AddContactConfirmationDialog
+import network.columba.app.ui.components.ContactTypeFilterChips
 import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.ProfileIcon
 import network.columba.app.ui.components.simpleVerticalScrollbar
@@ -152,6 +153,7 @@ fun ContactsScreen(
     val contactsState by viewModel.contactsState.collectAsState()
     val contactCount by viewModel.contactCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedContactType by viewModel.selectedContactType.collectAsState()
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
     val contactsListState = rememberLazyListState()
@@ -270,6 +272,38 @@ fun ContactsScreen(
                         }
                         // My Contacts tab actions
                         if (selectedTab == ContactsTab.MY_CONTACTS) {
+                            // Filter chips toggle — collapses the contact-type
+                            // chip row (GH issues #863 / #922).
+                            IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
+                                Icon(
+                                    imageVector =
+                                        if (filtersExpanded) {
+                                            Icons.Default.FilterAltOff
+                                        } else {
+                                            Icons.Default.FilterAlt
+                                        },
+                                    contentDescription =
+                                        if (filtersExpanded) "Hide filters" else "Show filters",
+                                )
+                            }
+                            // Announce button (announces this device to the network)
+                            IconButton(
+                                onClick = { announceViewModel.triggerAnnounce() },
+                                enabled = !isAnnouncing,
+                            ) {
+                                if (isAnnouncing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Campaign,
+                                        contentDescription = "Announce now",
+                                    )
+                                }
+                            }
+                            // Add contact
                             IconButton(onClick = { showAddContactSheet = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
@@ -431,6 +465,19 @@ fun ContactsScreen(
                             Text(label)
                         }
                     }
+                }
+
+                // Contact-type filter chips for the My Contacts tab (GH issue
+                // #863). Hidden when the user has no contacts so a fresh install
+                // isn't greeted by an orphan filter row above the empty state.
+                // The Network tab renders its own chip rows inside its content.
+                if (selectedTab == ContactsTab.MY_CONTACTS && contactCount > 0) {
+                    ContactTypeFilterChips(
+                        selected = selectedContactType,
+                        onSelectedChange = viewModel::onContactTypeFilterChanged,
+                        expanded = filtersExpanded,
+                        onExpandRequest = { filtersExpanded = true },
+                    )
                 }
             }
         },

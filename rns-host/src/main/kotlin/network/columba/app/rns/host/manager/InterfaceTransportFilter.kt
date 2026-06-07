@@ -80,8 +80,8 @@ fun currentTransportOf(connectivityManager: ConnectivityManager): CurrentTranspo
  *
  * For VPN over an underlying transport (the common case), Android typically reports both
  * `TRANSPORT_VPN` and the underlying transport on the same `NetworkCapabilities` — so the
- * underlying-transport check still wins, matching Tyler's intent in the plan's open
- * questions ("VPN behavior: underlying transport").
+ * underlying-transport check still wins, which is the intended VPN behaviour (classify by
+ * the underlying transport, not the VPN itself).
  */
 fun currentTransportOf(capabilities: NetworkCapabilities): CurrentTransport =
     when {

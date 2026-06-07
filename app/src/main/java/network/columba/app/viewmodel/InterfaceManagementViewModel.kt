@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -232,21 +231,17 @@ class InterfaceManagementViewModel
         }
 
         /**
-         * Seed `currentTransport` from the observer's snapshot, then collect future
-         * transitions. The seed covers the case where the screen opens before any
-         * capability callback has fired since `start()`, so the chip isn't stuck on
-         * `NONE` waiting for the user's first transport flip.
-         *
-         * `drop(1)` skips the StateFlow's initial replayed value: it is already covered by
-         * the synchronous snapshot seed above, and skipping it prevents a stale `NONE`
-         * (which the flow would still hold if this VM were ever built before the observer's
-         * `start()` seeded it) from clobbering the correct seed. Genuine transport
-         * transitions that occur after subscription still propagate.
+         * Seed `currentTransport` synchronously from the observer's snapshot so the chip is
+         * correct on the very first composition (no `NONE` frame), then collect the StateFlow
+         * for live transitions. The observer seeds its StateFlow from the real transport at
+         * construction, so its initial replayed value is never a stale `NONE` — collecting it
+         * directly (no `drop`) picks up every change, including any transition that races the
+         * initial seed, without a missed-update window.
          */
         private fun observeTransportChanges() {
             _state.update { it.copy(currentTransport = transportObserver.snapshotTransport()) }
             viewModelScope.launch(ioDispatcher) {
-                transportObserver.currentTransport.drop(1).collect { transport ->
+                transportObserver.currentTransport.collect { transport ->
                     _state.update { it.copy(currentTransport = transport) }
                 }
             }

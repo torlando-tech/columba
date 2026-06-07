@@ -1649,8 +1649,16 @@ private fun InterfaceRestrictionChip(view: InterfaceRestrictionView) {
             )
         }
         is InterfaceRestrictionView.NoNetwork -> {
+            // Match the icon to the configured restriction so a Cellular-only interface
+            // doesn't show a Wi-Fi-off glyph (which reads as a Wi-Fi problem rather than a
+            // missing default route). The label stays "No network · paused" either way.
+            val icon =
+                when (view.restriction) {
+                    NetworkRestriction.CELLULAR_ONLY -> Icons.Default.SignalCellularOff
+                    NetworkRestriction.WIFI_ONLY, NetworkRestriction.ANY -> Icons.Default.WifiOff
+                }
             RestrictionChip(
-                icon = Icons.Default.WifiOff,
+                icon = icon,
                 labelRes = R.string.interface_restriction_no_network,
                 container = MaterialTheme.colorScheme.surfaceVariant,
                 content = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -64,14 +64,16 @@ class InterfaceTransportObserver
         @Volatile
         private var reloadJob: Job? = null
 
-        private val _currentTransport = MutableStateFlow(CurrentTransport.NONE)
+        private val _currentTransport = MutableStateFlow(currentTransportOf(connectivityManager))
 
         /**
          * Reactive view of the device's current transport class. Emits on every transition
          * the observer treats as meaningful (i.e. once per call to `applyTransport()` that
-         * actually changed `lastTransport`). Seeded with `NONE` until the first capability
-         * callback fires after `start()` — collectors should treat that initial value as
-         * "unknown" rather than "definitely no network".
+         * actually changed `lastTransport`). Seeded at construction from the live
+         * `ConnectivityManager` state (not a placeholder `NONE`), so a collector that
+         * subscribes before `start()` still reads the real transport on its first emission —
+         * this is what lets the UI collect it directly without a separate snapshot seed or a
+         * `drop(1)` race. `NONE` here always means "no active default network", never "unknown".
          */
         val currentTransport: StateFlow<CurrentTransport> = _currentTransport.asStateFlow()
 

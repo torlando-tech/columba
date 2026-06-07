@@ -153,8 +153,13 @@ sealed interface InterfaceRestrictionView {
  * current transport. Mirrors the truth table inside `InterfaceTransportFilter` so the UI
  * never claims a state inconsistent with what the runtime filter actually does — the
  * `entityRidesOnIpCarrier_truthTable_matchesInterfaceTransportFilter` test pins drift.
+ *
+ * A disabled interface returns [InterfaceRestrictionView.NotApplicable] (no chip): the card
+ * already reads "Disabled", and a "· paused" chip would wrongly imply a transport policy
+ * dropped it when the user explicitly switched it off.
  */
 fun InterfaceEntity.restrictionView(currentTransport: CurrentTransport): InterfaceRestrictionView {
+    if (!enabled) return InterfaceRestrictionView.NotApplicable
     if (!entityRidesOnIpCarrier(this)) return InterfaceRestrictionView.NotApplicable
     val restriction = parseRestrictionForEntity(this)
     return when {

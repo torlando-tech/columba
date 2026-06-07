@@ -168,6 +168,23 @@ class InterfaceManagementUtilsTest {
         assertEquals(InterfaceRestrictionView.NotApplicable, result)
     }
 
+    @Test
+    fun restrictionView_disabledInterface_returnsNotApplicable() {
+        // A disabled AutoInterface (Wi-Fi-only) on cellular would be Blocked if enabled, but
+        // a disabled interface must show no chip — the card already reads "Disabled" and a
+        // "· paused" chip would wrongly imply a transport policy dropped it.
+        val entity =
+            InterfaceEntity(
+                id = 1L,
+                name = "auto",
+                type = "AutoInterface",
+                enabled = false,
+                configJson = """{"network_restriction":"wifi_only"}""",
+            )
+        val result = entity.restrictionView(CurrentTransport.CELLULAR)
+        assertEquals(InterfaceRestrictionView.NotApplicable, result)
+    }
+
     // region Drift-prevention pin: UI predicate vs runtime filter predicate
 
     @Test

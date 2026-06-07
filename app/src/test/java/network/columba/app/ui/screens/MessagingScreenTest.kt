@@ -1,14 +1,21 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.withKeyDown
 import androidx.paging.PagingData
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
@@ -25,6 +32,7 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -38,6 +46,7 @@ import org.robolectric.annotation.Config
  * UI tests for MessagingScreen.kt.
  * Tests the main messaging screen including message display, input, and navigation.
  */
+@OptIn(ExperimentalTestApi::class) // performKeyInput / key-injection DSL for the Enter-to-send tests
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessagingScreenTest {
@@ -559,6 +568,204 @@ class MessagingScreenTest {
         // Then
         assertTrue("Clear image button click should succeed", result.isSuccess)
         verify { mockViewModel.clearSelectedImage() }
+    }
+
+    // ========== Enter-to-Send Keyboard Tests ==========
+    // Hardware/desktop-keyboard behavior for the message composer's
+    // onPreviewKeyEvent handler: bare Enter sends; Shift+Enter and
+    // modifier+Enter (Ctrl/Alt/Meta) must NOT send so they can fall through to
+    // a newline / OS shortcut. Each test records the actual sendMessage()
+    // calls so it can assert on the exact destination + trimmed text (or assert
+    // nothing was sent), rather than only verifying a mock interaction. The text
+    // field is located via hasSetTextAction() (stable across content changes,
+    // unlike the placeholder text) and focused before injecting keys so the
+    // preview-key handler actually receives them.
+
+    /** Re-stub sendMessage() to record (destinationHash, text) pairs it is called with. */
+    private fun recordSentMessages(): List<Pair<String, String>> {
+        val sent = mutableListOf<Pair<String, String>>()
+        every { mockViewModel.sendMessage(any(), any()) } answers {
+            sent.add(firstArg<String>() to secondArg<String>())
+        }
+        return sent
+    }
+
+    @Test
+    fun inputBar_bareEnter_sendsMessage() {
+        // Given
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Hello there")
+        composeTestRule.waitForIdle()
+
+        // When - bare Enter
+        field.requestFocus()
+        field.performKeyInput { pressKey(Key.Enter) }
+        composeTestRule.waitForIdle()
+
+        // Then - sends exactly once with the trimmed draft (KeyUp must not re-send)
+        assertEquals(
+            listOf(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH to "Hello there"),
+            sent,
+        )
+    }
+
+    @Test
+    fun inputBar_shiftEnter_doesNotSend() {
+        // Given
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Line one")
+        composeTestRule.waitForIdle()
+
+        // When - Shift+Enter (intended to insert a newline, not send)
+        field.requestFocus()
+        field.performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Enter) } }
+        composeTestRule.waitForIdle()
+
+        // Then
+        assertEquals("Shift+Enter must not send", emptyList<Pair<String, String>>(), sent)
+    }
+
+    @Test
+    fun inputBar_ctrlEnter_doesNotSend() {
+        // Given
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Hello there")
+        composeTestRule.waitForIdle()
+
+        // When - Ctrl+Enter is a common OS/WM shortcut; must be left un-consumed
+        field.requestFocus()
+        field.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Enter) } }
+        composeTestRule.waitForIdle()
+
+        // Then
+        assertEquals("Ctrl+Enter must not send", emptyList<Pair<String, String>>(), sent)
+    }
+
+    @Test
+    fun inputBar_altEnter_doesNotSend() {
+        // Given
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Hello there")
+        composeTestRule.waitForIdle()
+
+        // When - Alt+Enter must be left un-consumed (covers the !isAltPressed guard)
+        field.requestFocus()
+        field.performKeyInput { withKeyDown(Key.AltLeft) { pressKey(Key.Enter) } }
+        composeTestRule.waitForIdle()
+
+        // Then
+        assertEquals("Alt+Enter must not send", emptyList<Pair<String, String>>(), sent)
+    }
+
+    @Test
+    fun inputBar_metaEnter_doesNotSend() {
+        // Given
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Hello there")
+        composeTestRule.waitForIdle()
+
+        // When - Meta/Command+Enter is a frequent macOS shortcut on the BT-keyboard
+        // target class; must be left un-consumed (covers the !isMetaPressed guard)
+        field.requestFocus()
+        field.performKeyInput { withKeyDown(Key.MetaLeft) { pressKey(Key.Enter) } }
+        composeTestRule.waitForIdle()
+
+        // Then
+        assertEquals("Meta+Enter must not send", emptyList<Pair<String, String>>(), sent)
+    }
+
+    @Test
+    fun inputBar_bareEnter_blankText_doesNotSend() {
+        // Given - empty draft
+        val sent = recordSentMessages()
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        // When - Enter with nothing to send
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.requestFocus()
+        field.performKeyInput { pressKey(Key.Enter) }
+        composeTestRule.waitForIdle()
+
+        // Then - canSend guard blocks the send
+        assertEquals("Bare Enter on a blank draft must not send", emptyList<Pair<String, String>>(), sent)
+    }
+
+    @Test
+    fun inputBar_bareEnter_whileSending_doesNotSend() {
+        // Given - a send already in flight
+        val sent = recordSentMessages()
+        every { mockViewModel.isSending } returns MutableStateFlow(true)
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val field = composeTestRule.onNode(hasSetTextAction())
+        field.performTextInput("Hello there")
+        composeTestRule.waitForIdle()
+
+        // When - bare Enter while isSending
+        field.requestFocus()
+        field.performKeyInput { pressKey(Key.Enter) }
+        composeTestRule.waitForIdle()
+
+        // Then - !isSending part of canSend blocks the duplicate send
+        assertEquals("Bare Enter while sending must not send again", emptyList<Pair<String, String>>(), sent)
     }
 
     // ========== Lifecycle Tests ==========

@@ -25,9 +25,10 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.manager.CurrentTransport
+import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.manager.InterfaceTransportObserver
-import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import org.json.JSONObject
@@ -66,6 +67,10 @@ data class InterfaceManagementState(
     val discoveredUnknownCount: Int = 0,
     val discoveredStaleCount: Int = 0,
     val isDiscoveryEnabled: Boolean = false,
+    // The device's current transport class — drives the "this interface is paused
+    // because you're on cellular" indicator on each card. `NONE` means either no
+    // active default network or that the observer hasn't seen its first callback yet.
+    val currentTransport: CurrentTransport = CurrentTransport.NONE,
 )
 
 /**
@@ -219,9 +224,27 @@ class InterfaceManagementViewModel
             Log.d(TAG, "ViewModel initialized")
             loadInterfaces()
             observeBluetoothState()
+            observeTransportChanges()
             checkExternalPendingChanges()
             observeInterfaceStatusChanges()
             loadDiscoveredInterfacesCount()
+        }
+
+        /**
+         * Seed `currentTransport` synchronously from the observer's snapshot so the chip is
+         * correct on the very first composition (no `NONE` frame), then collect the StateFlow
+         * for live transitions. The observer seeds its StateFlow from the real transport at
+         * construction, so its initial replayed value is never a stale `NONE` — collecting it
+         * directly (no `drop`) picks up every change, including any transition that races the
+         * initial seed, without a missed-update window.
+         */
+        private fun observeTransportChanges() {
+            _state.update { it.copy(currentTransport = transportObserver.snapshotTransport()) }
+            viewModelScope.launch(ioDispatcher) {
+                transportObserver.currentTransport.collect { transport ->
+                    _state.update { it.copy(currentTransport = transport) }
+                }
+            }
         }
 
         /**
@@ -1158,7 +1181,7 @@ class InterfaceManagementViewModel
                 viewModelScope.launch(ioDispatcher) {
                     try {
                         val configs = interfaceRepository.enabledInterfaces.first()
-                        val filtered = filterByTransport(configs, transportObserver.currentTransport())
+                        val filtered = filterByTransport(configs, transportObserver.snapshotTransport())
                         transportAdmin.reloadInterfaces(filtered)
                         kotlinx.coroutines.delay(1000)
                         fetchInterfaceStatus()

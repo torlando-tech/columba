@@ -317,9 +317,26 @@ android {
             isReturnDefaultValues = true
             all {
                 it.maxHeapSize = "2048m"
-                // Restart JVM periodically to prevent Robolectric/Compose resource
-                // exhaustion that causes PagingData rendering failures in large suites.
-                it.setForkEvery(10)
+                // Restart the test JVM after EVERY class. These tests render lists via Jetpack
+                // Paging (collectAsLazyPagingItems()), whose AsyncPagingDataDiffer presents items
+                // on background Dispatchers.Default coroutines. Background coroutines left running
+                // by earlier test classes accumulate within a fork and, on the few-core CI
+                // runners, starve that differ so the list never presents — deterministic
+                // "content not displayed" flakes (e.g. MessagingScreenTest) once enough classes
+                // share a fork. A fresh JVM per class removes all cross-class accumulation so each
+                // class runs effectively isolated. (Was forkEvery(10) — insufficient on a 2-core
+                // pool.) Underlying per-test coroutine-teardown leaks are tracked in issue #1005.
+                it.setForkEvery(1)
+                // Belt-and-suspenders: lift the kotlinx Default-dispatcher pool above the CI
+                // runner's core count so the Paging differ stays serviced under contention. Must
+                // go through JAVA_TOOL_OPTIONS — AGP's Robolectric fork ignores Test.systemProperty
+                // and Test.jvmArgs, but reads this env var at JVM bootstrap.
+                val coroutinePoolFloor = maxOf(16, Runtime.getRuntime().availableProcessors())
+                it.environment(
+                    "JAVA_TOOL_OPTIONS",
+                    "-Dkotlinx.coroutines.scheduler.core.pool.size=$coroutinePoolFloor " +
+                        "-Dkotlinx.coroutines.scheduler.max.pool.size=${maxOf(32, coroutinePoolFloor * 2)}",
+                )
                 // Enable JaCoCo coverage for Robolectric tests
                 it.extensions.configure<JacocoTaskExtension> {
                     isIncludeNoLocationClasses = true

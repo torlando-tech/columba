@@ -545,7 +545,13 @@ fun ContactsScreen(
                             }
 
                             // Pinned contacts section
-                            if (contactsState.groupedContacts.pinned.isNotEmpty()) {
+                            // Deduplicate by destinationHash to prevent LazyColumn duplicate-key crash
+                            // (COLUMBA-99): the contacts JOIN in getEnrichedContacts can produce
+                            // multiple rows per destinationHash, and the ContactEntity composite PK
+                            // [destinationHash, identityHash] also permits cross-identity collisions.
+                            val pinnedContacts =
+                                contactsState.groupedContacts.pinned.distinctBy { it.destinationHash.lowercase() }
+                            if (pinnedContacts.isNotEmpty()) {
                                 item {
                                     Text(
                                         text = "PINNED",
@@ -555,7 +561,7 @@ fun ContactsScreen(
                                     )
                                 }
                                 items(
-                                    contactsState.groupedContacts.pinned,
+                                    pinnedContacts,
                                     key = { contact -> "pinned_${contact.destinationHash.lowercase()}" },
                                 ) { contact ->
                                     ContactListItemWithMenu(
@@ -595,8 +601,12 @@ fun ContactsScreen(
                             }
 
                             // All contacts section
-                            if (contactsState.groupedContacts.all.isNotEmpty()) {
-                                if (contactsState.groupedContacts.relay != null || contactsState.groupedContacts.pinned.isNotEmpty()) {
+                            // Deduplicate by destinationHash to prevent LazyColumn duplicate-key crash
+                            // (COLUMBA-99). See pinnedContacts above for details.
+                            val allContacts =
+                                contactsState.groupedContacts.all.distinctBy { it.destinationHash.lowercase() }
+                            if (allContacts.isNotEmpty()) {
+                                if (contactsState.groupedContacts.relay != null || pinnedContacts.isNotEmpty()) {
                                     item {
                                         Text(
                                             text = "ALL CONTACTS",
@@ -607,7 +617,7 @@ fun ContactsScreen(
                                     }
                                 }
                                 items(
-                                    contactsState.groupedContacts.all,
+                                    allContacts,
                                     key = { contact -> "all_${contact.destinationHash.lowercase()}" },
                                 ) { contact ->
                                     ContactListItemWithMenu(

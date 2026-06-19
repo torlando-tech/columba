@@ -142,6 +142,54 @@ class ReactionWireCodecTest {
         assertEquals(sourceHash, parsed.getString("sender"))
     }
 
+    @Test
+    fun `stamp type present but data blank falls back to source hash`() {
+        val fields: Map<Int, Any> =
+            ReactionWireCodec.encodeReactionFields(targetHash, "👍")!! +
+                mapOf(LxmfFields.FIELD_CUSTOM_TYPE to "originator-identity")
+        // FIELD_CUSTOM_DATA absent entirely.
+        val parsed =
+            ReactionWireCodec.parseInboundReaction(
+                AppDataParser.serializeFieldsToJson(fields),
+                sourceHash,
+                7L,
+            )?.let { JSONObject(it) }
+        requireNotNull(parsed)
+        assertEquals(sourceHash, parsed.getString("sender"))
+    }
+
+    @Test
+    fun `malformed stamp data is rejected and falls back to source hash`() {
+        // An attacker controls the wire bytes; FIELD_CUSTOM_DATA can arrive as
+        // a str of any shape. Wrong length / non-hex must never become a
+        // reactionsJson sender key — fall back to source_hash. (A String value
+        // serializes through AppDataParser as-is, unlike a ByteArray which is
+        // always hex-encoded, so this exercises the non-hex guard too.)
+        val badValues =
+            listOf(
+                "deadbeef", // too short (8)
+                "${reactorIdentity}ff", // too long (34)
+                "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", // 32 chars, non-hex
+                "abcdef00112233445566778899aabbgg", // 32 chars, trailing non-hex
+            )
+        for (bad in badValues) {
+            val fields: Map<Int, Any> =
+                ReactionWireCodec.encodeReactionFields(targetHash, "👍")!! +
+                    mapOf(
+                        LxmfFields.FIELD_CUSTOM_TYPE to "originator-identity",
+                        LxmfFields.FIELD_CUSTOM_DATA to bad, // String → serialized verbatim
+                    )
+            val parsed =
+                ReactionWireCodec.parseInboundReaction(
+                    AppDataParser.serializeFieldsToJson(fields),
+                    sourceHash,
+                    7L,
+                )?.let { JSONObject(it) }
+            requireNotNull(parsed) { "round-trip failed for bad data $bad" }
+            assertEquals("malformed stamp '$bad' should fall back", sourceHash, parsed.getString("sender"))
+        }
+    }
+
     // ===================== legacy 0x10 fallback =====================
 
     @Test

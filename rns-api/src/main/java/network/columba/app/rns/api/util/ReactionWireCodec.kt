@@ -17,6 +17,18 @@ import org.json.JSONObject
  * the LXMF message's source hash, so [parseInboundReaction] sets `sender`
  * to the inbound source hash on the canonical path.
  *
+ * **Relay attribution override.** A re-originating group relay (e.g.
+ * reticulum-forwarding-service) re-signs each reaction as itself, so the
+ * carrying source hash is the relay, not the reactor. Such a relay stamps
+ * the reactor's source hash into top-level custom fields —
+ * `FIELD_CUSTOM_TYPE (0xFB) = "originator-identity"`,
+ * `FIELD_CUSTOM_DATA (0xFC) = <reactor source_hash>` (its destination hash,
+ * the same value a direct reaction carries and what contacts key by). When
+ * that stamp is present, the canonical path uses it as `sender` instead of
+ * the relay's source hash. Purely additive and backward compatible: direct
+ * reactions carry no stamp and fall back to source hash.
+ * (Convention: `reticulum-forwarding-service/docs/reaction-attribution.md`.)
+ *
  * **Legacy wire shape** (parse-only fallback, pre-standard Columba/MeshChatX):
  * ```
  * fields[0x10] = { "reaction_to": <hex>, "emoji": <unicode>, "sender": <hex> }
@@ -43,6 +55,15 @@ object ReactionWireCodec {
     private val REACTION_TO_KEY = LxmfFields.REACTION_TO.toString()
     private val REACTION_CONTENT_KEY = LxmfFields.REACTION_CONTENT.toString()
     private val FIELD_REACTION_LEGACY_KEY = LxmfFields.FIELD_REACTION_LEGACY.toString()
+
+    // Reactor-attribution stamp set by a re-originating group relay (see
+    // FIELD_CUSTOM_TYPE / FIELD_CUSTOM_DATA on LxmfFields). The relay
+    // re-signs each reaction as itself, so the carrying source_hash is the
+    // relay; when these top-level fields are present, the reactor identity
+    // hash in FIELD_CUSTOM_DATA is authoritative over the source hash.
+    private val FIELD_CUSTOM_TYPE_KEY = LxmfFields.FIELD_CUSTOM_TYPE.toString()
+    private val FIELD_CUSTOM_DATA_KEY = LxmfFields.FIELD_CUSTOM_DATA.toString()
+    private const val ORIGINATOR_IDENTITY_TYPE = "originator-identity"
 
     /**
      * Build the canonical `fields[0x40]` map for an outbound reaction.
@@ -106,14 +127,36 @@ object ReactionWireCodec {
         val emoji =
             dict.optString(REACTION_CONTENT_KEY).takeIf { it.isNotBlank() }?.let { decodeUtf8Hex(it) }
         if (reactionTo == null || emoji == null) return null
-        // Standard: the reactor is the message source, not a wire field.
+        // Standard: the reactor is the message source. But a re-originating
+        // group relay re-signs each reaction as itself, so source_hash would
+        // attribute every relayed reaction to the relay. When the relay
+        // stamped its reactor-attribution custom fields, the reactor
+        // source_hash in FIELD_CUSTOM_DATA is authoritative. Falls back to
+        // source_hash for direct (non-relayed) reactions, which carry no stamp.
+        val sender = originatorIdentityHex(fields) ?: sourceHashHex
         return normalized(
             reactionTo = reactionTo.lowercase(),
             emoji = emoji,
-            sender = sourceHashHex,
+            sender = sender,
             sourceHashHex = sourceHashHex,
             timestamp = timestamp,
         )
+    }
+
+    /**
+     * Read a re-originating relay's reactor-attribution stamp, returning the
+     * reactor's source-hash hex when present and well-formed, else null.
+     * Requires `FIELD_CUSTOM_TYPE == "originator-identity"` and a non-blank
+     * hex `FIELD_CUSTOM_DATA` (the serializer hex-encodes the raw 16-byte
+     * source hash). Both fields sit at the top level of the field map,
+     * alongside `fields[0x40]`.
+     */
+    private fun originatorIdentityHex(fields: JSONObject): String? {
+        if (fields.optString(FIELD_CUSTOM_TYPE_KEY) != ORIGINATOR_IDENTITY_TYPE) return null
+        return fields
+            .optString(FIELD_CUSTOM_DATA_KEY)
+            .takeIf { it.isNotBlank() }
+            ?.lowercase()
     }
 
     /** Legacy `fields[0x10] = {reaction_to, emoji, sender}` (string-keyed). */

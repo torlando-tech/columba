@@ -89,6 +89,59 @@ class ReactionWireCodecTest {
         }
     }
 
+    // ================== relay attribution stamp ==================
+
+    // The reactor's 16-byte source_hash (its lxmf.delivery destination hash)
+    // — distinct from the relay's source hash on the carrying message.
+    private val reactorIdentity = "fbaa52ed547644cfffe48ecf1ae1c355"
+
+    @Test
+    fun `relay originator-identity stamp overrides source hash as sender`() {
+        // What a re-originating relay puts on the wire: canonical 0x40 plus the
+        // top-level FIELD_CUSTOM_TYPE/DATA stamp. Serialized through the real
+        // AppDataParser so the 0xFB string + 0xFC bytes hex-encode exactly as
+        // on the JNI/UI boundary.
+        val fields: Map<Int, Any> =
+            ReactionWireCodec.encodeReactionFields(targetHash, "👍")!! +
+                mapOf(
+                    LxmfFields.FIELD_CUSTOM_TYPE to "originator-identity",
+                    LxmfFields.FIELD_CUSTOM_DATA to reactorIdentity.hexToBytes(),
+                )
+        val fieldsJson = AppDataParser.serializeFieldsToJson(fields)
+        val parsed =
+            ReactionWireCodec.parseInboundReaction(fieldsJson, sourceHash, 7L)?.let { JSONObject(it) }
+        requireNotNull(parsed)
+        assertEquals(targetHash, parsed.getString("reaction_to"))
+        assertEquals("👍", parsed.getString("emoji"))
+        // Stamp wins: attribute to the reactor identity, NOT the relay source.
+        assertEquals(reactorIdentity, parsed.getString("sender"))
+        // source_hash still records the carrying (relay) source.
+        assertEquals(sourceHash, parsed.getString("source_hash"))
+    }
+
+    @Test
+    fun `stamp with a non-matching type tag is ignored and falls back to source hash`() {
+        val fields: Map<Int, Any> =
+            ReactionWireCodec.encodeReactionFields(targetHash, "👍")!! +
+                mapOf(
+                    LxmfFields.FIELD_CUSTOM_TYPE to "something-else",
+                    LxmfFields.FIELD_CUSTOM_DATA to reactorIdentity.hexToBytes(),
+                )
+        val fieldsJson = AppDataParser.serializeFieldsToJson(fields)
+        val parsed =
+            ReactionWireCodec.parseInboundReaction(fieldsJson, sourceHash, 7L)?.let { JSONObject(it) }
+        requireNotNull(parsed)
+        assertEquals(sourceHash, parsed.getString("sender"))
+    }
+
+    @Test
+    fun `direct reaction with no stamp still derives sender from source`() {
+        // Backward compatibility: the unstamped canonical path is unchanged.
+        val parsed = roundTrip(targetHash, "👍", sourceHash, timestamp = 7L)
+        requireNotNull(parsed)
+        assertEquals(sourceHash, parsed.getString("sender"))
+    }
+
     // ===================== legacy 0x10 fallback =====================
 
     @Test

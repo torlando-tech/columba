@@ -109,6 +109,30 @@ object LxmfFields {
     const val FIELD_REPLY_QUOTE = 0x31
 
     /**
+     * Upstream LXMF `FIELD_CUSTOM_TYPE` (0xFB) — app-defined type tag that
+     * names the opaque payload in [FIELD_CUSTOM_DATA]. Read-only here:
+     * Columba uses it to recover reactor attribution for reactions relayed
+     * through a re-originating group relay (e.g. reticulum-forwarding-service).
+     * A relay re-signs each reaction as itself, so the carrying
+     * `source_hash` is the relay, not the reactor; the relay stamps
+     * `FIELD_CUSTOM_TYPE = "originator-identity"` +
+     * `FIELD_CUSTOM_DATA = <reactor source_hash>` so cooperating clients
+     * attribute the reaction to the real reactor. See `ReactionWireCodec`.
+     */
+    const val FIELD_CUSTOM_TYPE = 0xFB
+
+    /**
+     * Upstream LXMF `FIELD_CUSTOM_DATA` (0xFC) — app-defined opaque payload
+     * whose meaning is given by [FIELD_CUSTOM_TYPE]. For the
+     * `"originator-identity"` type this is the reactor's raw 16-byte
+     * `source_hash` — its `lxmf.delivery` destination hash, the same value
+     * a direct reaction carries and what contacts are keyed by (NOT the raw
+     * identity hash, which would orphan the lookup). It arrives hex-encoded
+     * in the serialized fields JSON. See `ReactionWireCodec`.
+     */
+    const val FIELD_CUSTOM_DATA = 0xFC
+
+    /**
      * Upstream LXMF `FIELD_CUSTOM_META` (0xFD) — documented extension point
      * for app-specific metadata that other LXMF clients should ignore.
      * Columba uses this to carry the `cease` / `expires` / `approxRadius`

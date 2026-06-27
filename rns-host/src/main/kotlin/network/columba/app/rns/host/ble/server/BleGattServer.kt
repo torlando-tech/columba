@@ -658,6 +658,36 @@ class BleGattServer(
         }
     }
 
+    /**
+     * Safely sends a GATT response, guarding against the Android Bluetooth stack
+     * crashing the :reticulum process when the central has already disconnected.
+     *
+     * The framework write/read callbacks are handled on a coroutine (scope.launch
+     * + Dispatchers.Main + mutexes), so by the time we respond the central may have
+     * dropped (e.g. GATT 133 / supervision timeout). Responding for a connection the
+     * system Bluetooth service no longer tracks makes it auto-unbox a null connId
+     * (Integer.intValue() NPE) and re-throw it across the binder, crashing the app.
+     * We skip stale connections and defensively swallow any residual framework error.
+     */
+    private suspend fun safeSendResponse(
+        device: BluetoothDevice,
+        requestId: Int,
+        status: Int,
+        offset: Int,
+        value: ByteArray?,
+    ) {
+        val isStillConnected = centralsMutex.withLock { connectedCentrals.containsKey(device.address) }
+        if (!isStillConnected) {
+            Log.d(TAG, "Skipping sendResponse for ${device.address}: central no longer connected")
+            return
+        }
+        try {
+            gattServer?.sendResponse(device, requestId, status, offset, value)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "sendResponse failed for ${device.address} (central likely disconnected): ${e.message}")
+        }
+    }
+
     private suspend fun handleCharacteristicReadRequest(
         device: BluetoothDevice,
         requestId: Int,
@@ -673,7 +703,7 @@ class BleGattServer(
                 BleConstants.CHARACTERISTIC_TX_UUID -> {
                     // TX characteristic read - return empty for now
                     // (notifications are the primary mechanism)
-                    gattServer?.sendResponse(
+                    safeSendResponse(
                         device,
                         requestId,
                         BluetoothGatt.GATT_SUCCESS,
@@ -686,7 +716,7 @@ class BleGattServer(
                     val identity = transportIdentityHash
                     if (identity != null) {
                         Log.d(TAG, "Serving identity to ${device.address}: ${identity.toHex()}")
-                        gattServer?.sendResponse(
+                        safeSendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
@@ -695,7 +725,7 @@ class BleGattServer(
                         )
                     } else {
                         Log.w(TAG, "Identity not available yet (Reticulum not initialized)")
-                        gattServer?.sendResponse(
+                        safeSendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_FAILURE,
@@ -706,7 +736,7 @@ class BleGattServer(
                 }
                 else -> {
                     Log.w(TAG, "Read request for unknown characteristic: ${characteristic.uuid}")
-                    gattServer?.sendResponse(
+                    safeSendResponse(
                         device,
                         requestId,
                         BluetoothGatt.GATT_FAILURE,
@@ -770,7 +800,7 @@ class BleGattServer(
 
                     // Send response if needed
                     if (responseNeeded) {
-                        gattServer?.sendResponse(
+                        safeSendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
@@ -819,7 +849,7 @@ class BleGattServer(
                 else -> {
                     Log.w(TAG, "Write request for unknown characteristic: ${characteristic.uuid}")
                     if (responseNeeded) {
-                        gattServer?.sendResponse(
+                        safeSendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_FAILURE,
@@ -849,7 +879,7 @@ class BleGattServer(
                 BleConstants.CCCD_UUID -> {
                     // CCCD read - return current value
                     val value = descriptor.value ?: BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
-                    gattServer?.sendResponse(
+                    safeSendResponse(
                         device,
                         requestId,
                         BluetoothGatt.GATT_SUCCESS,
@@ -859,7 +889,7 @@ class BleGattServer(
                 }
                 else -> {
                     Log.w(TAG, "Read request for unknown descriptor: ${descriptor.uuid}")
-                    gattServer?.sendResponse(
+                    safeSendResponse(
                         device,
                         requestId,
                         BluetoothGatt.GATT_FAILURE,
@@ -898,7 +928,7 @@ class BleGattServer(
                     descriptor.value = value
 
                     if (responseNeeded) {
-                        gattServer?.sendResponse(
+                        safeSendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_SUCCESS,
@@ -912,7 +942,7 @@ class BleGattServer(
                 else -> {
                     Log.w(TAG, "Write request for unknown descriptor: ${descriptor.uuid}")
                     if (responseNeeded) {
-                        gattServer?.sendResponse(
+                        safeSendResponse(
                             device,
                             requestId,
                             BluetoothGatt.GATT_FAILURE,

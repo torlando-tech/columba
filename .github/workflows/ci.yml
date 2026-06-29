@@ -219,7 +219,7 @@ jobs:
           rm -rf */build/reports/jacoco
 
       - name: Cache Robolectric Android SDKs
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.m2/repository/org/robolectric
           key: robolectric-4.16-${{ runner.os }}
@@ -340,7 +340,7 @@ jobs:
           rm -rf */build/reports/jacoco
 
       - name: Cache Robolectric Android SDKs
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.m2/repository/org/robolectric
           key: robolectric-4.16-${{ runner.os }}
@@ -496,7 +496,7 @@ jobs:
           echo "APKs built successfully"
 
       - name: AVD cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         id: avd-cache
         with:
           path: |

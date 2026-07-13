@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.ui.util.getInterfaceInfo
 import network.columba.app.ui.util.getRssiInfo
 import network.columba.app.ui.util.getSnrInfo
@@ -182,7 +183,7 @@ fun MessageDetailScreen(
                     }
 
                     // Error card (only if failed and has error message)
-                    if (msg.status == "failed" && !msg.errorMessage.isNullOrBlank()) {
+                    if (msg.status == DeliveryState.Failed && !msg.errorMessage.isNullOrBlank()) {
                         MessageInfoCard(
                             icon = Icons.Default.Error,
                             iconTint = MaterialTheme.colorScheme.error,
@@ -340,9 +341,9 @@ private data class StatusInfo(
 )
 
 @Composable
-private fun getStatusInfo(status: String): StatusInfo =
+private fun getStatusInfo(status: DeliveryState?): StatusInfo =
     when (status) {
-        "delivered" ->
+        DeliveryState.Delivered ->
             StatusInfo(
                 icon = Icons.Default.CheckCircle,
                 // Green
@@ -350,21 +351,24 @@ private fun getStatusInfo(status: String): StatusInfo =
                 text = "Delivered",
                 subtitle = "Message was successfully delivered to recipient",
             )
-        "failed" ->
+        DeliveryState.Failed ->
             StatusInfo(
                 icon = Icons.Default.Error,
                 color = MaterialTheme.colorScheme.error,
                 text = "Failed",
                 subtitle = "Message delivery failed",
             )
-        "pending" ->
+        DeliveryState.Pending ->
             StatusInfo(
                 icon = Icons.Default.HourglassEmpty,
                 color = MaterialTheme.colorScheme.tertiary,
                 text = "Pending",
                 subtitle = "Waiting for delivery confirmation",
             )
-        else ->
+        // Sent / Propagated / RetryingViaPropagation / unknown-legacy all
+        // rendered as the generic "Sent" card, matching the historical
+        // else-branch behavior.
+        DeliveryState.Sent, DeliveryState.Propagated, DeliveryState.RetryingViaPropagation, null ->
             StatusInfo(
                 icon = Icons.AutoMirrored.Filled.Send,
                 color = MaterialTheme.colorScheme.primary,

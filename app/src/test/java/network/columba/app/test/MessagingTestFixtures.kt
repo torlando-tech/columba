@@ -1,6 +1,7 @@
 package network.columba.app.test
 
 import network.columba.app.data.repository.Announce
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.ui.model.MessageUi
 import network.columba.app.ui.model.ReplyPreviewUi
 
@@ -31,7 +32,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = timestamp,
         isFromMe = true,
-        status = status,
+        status = DeliveryState.decode(status),
         decodedImage = null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
@@ -48,7 +49,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = timestamp,
         isFromMe = false,
-        status = "delivered",
+        status = DeliveryState.Delivered,
         decodedImage = null,
         deliveryMethod = null,
         errorMessage = null,
@@ -69,7 +70,7 @@ object MessagingTestFixtures {
     ) = createSentMessage(
         id = id,
         content = content,
-        status = "delivered",
+        status = DeliveryState.Delivered,
     )
 
     fun createFailedMessage(
@@ -166,7 +167,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = System.currentTimeMillis(),
         isFromMe = false,
-        status = "delivered",
+        status = DeliveryState.Delivered,
         decodedImage = null,
         hasImageAttachment = true,
         fieldsJson = """{"6": "ffd8ffe0"}""", // Needs async loading
@@ -188,7 +189,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = System.currentTimeMillis(),
         isFromMe = false,
-        status = "delivered",
+        status = DeliveryState.Delivered,
         decodedImage = decodedImage,
         hasImageAttachment = true,
         fieldsJson = null, // Image already cached, no need for JSON
@@ -292,7 +293,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = timestamp,
         isFromMe = isFromMe,
-        status = if (isFromMe) "sent" else "delivered",
+        status = if (isFromMe) DeliveryState.Sent else DeliveryState.Delivered,
         decodedImage = null,
         deliveryMethod = if (isFromMe) "direct" else null,
         errorMessage = null,
@@ -317,7 +318,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = timestamp,
         isFromMe = isFromMe,
-        status = if (isFromMe) "sent" else "delivered",
+        status = if (isFromMe) DeliveryState.Sent else DeliveryState.Delivered,
         decodedImage = null,
         deliveryMethod = if (isFromMe) "direct" else null,
         errorMessage = null,
@@ -368,7 +369,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = timestamp,
         isFromMe = isFromMe,
-        status = status ?: if (isFromMe) "sent" else "delivered",
+        status = status?.let { DeliveryState.decode(it) } ?: if (isFromMe) DeliveryState.Sent else DeliveryState.Delivered,
         decodedImage = null,
         hasImageAttachment = true,
         imageData = imageData,
@@ -394,7 +395,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = timestamp,
         isFromMe = isFromMe,
-        status = if (isFromMe) "sent" else "delivered",
+        status = if (isFromMe) DeliveryState.Sent else DeliveryState.Delivered,
         decodedImage = null,
         hasImageAttachment = true,
         imageData = imageData,
@@ -421,7 +422,7 @@ object MessagingTestFixtures {
         content = content,
         timestamp = timestamp,
         isFromMe = isFromMe,
-        status = if (isFromMe) "sent" else "delivered",
+        status = if (isFromMe) DeliveryState.Sent else DeliveryState.Delivered,
         decodedImage = null,
         hasImageAttachment = true,
         imageData = imageData,

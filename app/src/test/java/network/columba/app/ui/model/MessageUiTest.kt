@@ -1,5 +1,6 @@
 package network.columba.app.ui.model
 
+import network.columba.app.rns.api.model.DeliveryState
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,7 +33,7 @@ class MessageUiTest {
             content = content,
             timestamp = System.currentTimeMillis(),
             isFromMe = true,
-            status = "sent",
+            status = DeliveryState.Sent,
             isAnimatedImage = isAnimatedImage,
             imageData = imageData,
             hasFileAttachments = hasFileAttachments,
@@ -376,7 +377,7 @@ class MessageUiTest {
                 content = "Minimal message",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "pending",
+                status = DeliveryState.Pending,
             )
 
         assertFalse(message.isMediaOnlyMessage)
@@ -424,7 +425,7 @@ class MessageUiTest {
                 content = "LOL look at this!",
                 timestamp = System.currentTimeMillis(),
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = true,
                 imageData = byteArrayOf(0x47, 0x49, 0x46),
                 hasImageAttachment = true,

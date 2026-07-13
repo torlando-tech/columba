@@ -9,6 +9,7 @@ import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
@@ -296,7 +297,7 @@ class ServicePersistenceManager(
                     content = sanitizedContent,
                     timestamp = timestamp,
                     isFromMe = false,
-                    status = "delivered",
+                    status = DeliveryState.Delivered.encode(),
                     isRead = false,
                     fieldsJson = fieldsJson,
                     replyToMessageId = replyToMessageId,

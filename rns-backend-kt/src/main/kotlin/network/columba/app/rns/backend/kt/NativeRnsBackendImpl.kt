@@ -3,6 +3,7 @@ package network.columba.app.rns.backend.kt
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.model.FailedInterface
@@ -429,7 +430,7 @@ class NativeRnsBackendImpl(
 
         router!!.registerFailedDeliveryCallback { message ->
             val hash = message.hash?.toHex() ?: return@registerFailedDeliveryCallback
-            _deliveryStatus.tryEmit(DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()))
+            _deliveryStatus.tryEmit(DeliveryStatusUpdate(hash, DeliveryState.Failed, System.currentTimeMillis()))
         }
 
         return identity

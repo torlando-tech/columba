@@ -330,6 +330,10 @@ def reset_reticulum_for_restart():
     print("event_bridge.reset: ENTER", flush=True)
     sys.stdout.flush()
 
+    # Parked outbound messages reference the dying router — a resubmit after
+    # restart would re-route through dead state, so drop them.
+    _outbound_messages.clear()
+
     reticulum = RNS.Reticulum
     transport = RNS.Transport
 
@@ -1288,11 +1292,19 @@ def make_link_packet_handler(on_packet):
 
 # --- Per-LXMessage outbound delivery / failure -----------------------------
 
+# Outbound LXMessages awaiting a Kotlin retry decision, keyed by hex hash.
+# `_failed` registers the live message here before flattening the failure to
+# Kotlin; `PythonEventBridge.handleLxmfFailure` applies the shared
+# `DeliveryRetryPolicy` and calls back into `resubmit_as_propagated` (retry)
+# or `discard_outbound` (final failure), both of which pop the entry.
+# `_delivered` pops defensively in case a spurious failure registered first.
+_outbound_messages = {}
+
+
 def attach_lxmessage_callbacks(
     lxmessage,
     on_delivered,
     on_failed,
-    on_retrying_propagated=None,
     try_propagation_on_fail=False,
 ):
     """Wire per-LXMessage delivery + failure callbacks for an outbound message.
@@ -1307,28 +1319,24 @@ def attach_lxmessage_callbacks(
     message it sends — without it the Kotlin side never learns a sent message
     was delivered or failed, so the delivery-status flow stays silent (no
     delivery proofs surface in the UI). Success vs failure is implied by which
-    Kotlin `PyEventCallback` fires; the payload is a flat `{hash}` dict.
+    Kotlin `PyEventCallback` fires.
 
-    **try_propagation_on_fail (Sideband pattern)** — when set, the LXMessage
-    is tagged so the failed-callback rebuilds it as PROPAGATED and re-routes
-    it through `LXMRouter.handle_outbound` instead of reporting failure. This
-    mirrors Sideband's `core.message_notification` retry block (see
-    `Sideband/sbapp/sideband/core.py:4440`) and the `release/v0.10.x`
-    `reticulum_wrapper._on_message_failed` port. The retry fires
-    `on_retrying_propagated` (so the UI can show "retrying via propagation"
-    status); the second failure — after the propagation retry attempt — fires
-    `on_failed` for real, mirroring upstream's "give up after one retry"
-    behaviour. Requires a configured outbound propagation node; falls through
-    to plain failure when none is set.
+    **try_propagation_on_fail (Sideband pattern)** — the *decision* to retry
+    a failed DIRECT send via the propagation node lives in shared Kotlin
+    (`DeliveryRetryPolicy` in `:rns-api`, applied by
+    `PythonEventBridge.handleLxmfFailure` — the same predicate
+    `NativeMessageSender` consults on the kotlin flavor). This side only
+    flattens the failure with the state the policy needs and parks the live
+    LXMessage in `_outbound_messages` so a Kotlin retry decision can invoke
+    `resubmit_as_propagated`. The *mechanism* stays here because it
+    manipulates the live upstream LXMessage/LXMRouter.
     """
     def _delivered(msg):
         msg_hash_hex = _hex(getattr(msg, "hash", None))
+        _outbound_messages.pop(msg_hash_hex, None)
         # Carry method + desired_method through so the Kotlin side can
         # distinguish PROPAGATED (success means "stored on the relay")
         # from DIRECT/OPPORTUNISTIC (success means "ack from recipient").
-        # NativeMessageSender on the kotlin backend does the same split via
-        # NativeDeliveryMethod; the python flavor must surface enough state
-        # for PythonEventBridge.handleLxmfDelivered to make the same call.
         # Without these fields a PROPAGATED success gets stamped "delivered"
         # in the UI (✓✓) instead of "propagated" (✓).
         method = getattr(msg, "method", None)
@@ -1346,50 +1354,26 @@ def attach_lxmessage_callbacks(
         _emit(on_delivered, payload)
 
     def _failed(msg):
-        # Sideband pattern: if try_propagation_on_fail was set on the message
-        # AND we haven't already retried AND a propagation node is configured,
-        # rebuild as PROPAGATED and re-submit through the router. Otherwise
-        # report failure to Kotlin.
-        if (
-            getattr(msg, "try_propagation_on_fail", False)
-            and not getattr(msg, "_columba_propagation_retry_attempted", False)
-            and _lxmf_router is not None
-            and getattr(_lxmf_router, "outbound_propagation_node", None) is not None
-            and getattr(msg, "desired_method", None) != LXMF.LXMessage.PROPAGATED
-        ):
-            msg._columba_propagation_retry_attempted = True
-            # Clear retry flag so a second failure doesn't loop.
-            msg.try_propagation_on_fail = False
-            # Sideband resets the upstream-LXMF send-state for a fresh try as
-            # PROPAGATED. Skipping any of these wedges the send: stale packed
-            # bytes, stale propagation stamp, or a non-zero delivery_attempts
-            # count would short-circuit upstream's outbound state machine.
-            msg.delivery_attempts = 0
-            msg.packed = None
-            msg.propagation_packed = None
-            msg.propagation_stamp = None
-            msg.defer_propagation_stamp = True
-            msg.desired_method = LXMF.LXMessage.PROPAGATED
-            try:
-                _lxmf_router.handle_outbound(msg)
-                _emit(on_retrying_propagated, {"hash": _hex(getattr(msg, "hash", None))})
-                RNS.log(
-                    "event_bridge: DIRECT delivery failed, retrying via propagation node",
-                    RNS.LOG_DEBUG,
-                )
-                return
-            except Exception as e:  # noqa: BLE001
-                RNS.log(
-                    f"event_bridge: propagation retry failed: {e}",
-                    RNS.LOG_ERROR,
-                )
-                # Fall through to plain failure reporting.
+        # Flatten the failure with everything DeliveryRetryPolicy needs and
+        # park the live message for a possible resubmit. No decision here.
+        msg_hash_hex = _hex(getattr(msg, "hash", None))
+        _outbound_messages[msg_hash_hex] = msg
+        payload = {
+            "hash": msg_hash_hex,
+            "try_propagation_on_fail": bool(getattr(msg, "try_propagation_on_fail", False)),
+            "desired_method_is_propagated": (
+                getattr(msg, "desired_method", None) == LXMF.LXMessage.PROPAGATED
+            ),
+            "propagation_node_configured": (
+                _lxmf_router is not None
+                and getattr(_lxmf_router, "outbound_propagation_node", None) is not None
+            ),
+        }
+        _emit(on_failed, payload)
 
-        _emit(on_failed, {"hash": _hex(getattr(msg, "hash", None))})
-
-    # Tag the LXMessage so the failed callback can see the intent. Upstream
+    # Tag the LXMessage so the failure payload can carry the intent. Upstream
     # Sideband uses this same attribute; LXMF does not read it itself, so the
-    # tag is benign on stock upstream and only consumed by this callback.
+    # tag is benign on stock upstream.
     if try_propagation_on_fail:
         try:
             lxmessage.try_propagation_on_fail = True
@@ -1401,6 +1385,60 @@ def attach_lxmessage_callbacks(
 
     lxmessage.register_delivery_callback(_delivered)
     lxmessage.register_failed_callback(_failed)
+
+
+def resubmit_as_propagated(msg_hash_hex):
+    """Rebuild a failed outbound LXMessage as PROPAGATED and re-route it.
+
+    Mechanism half of the Sideband try-propagation-on-fail pattern — the
+    decision half is `DeliveryRetryPolicy` in `:rns-api`, applied by
+    `PythonEventBridge.handleLxmfFailure`, which calls this when it decides
+    to retry. Returns True when the message was re-submitted (the caller
+    then emits `RetryingViaPropagation`), False when it wasn't (unknown
+    hash, router gone, already retried, or `handle_outbound` raised — the
+    caller emits `Failed`).
+    """
+    msg = _outbound_messages.pop(msg_hash_hex, None)
+    if msg is None or _lxmf_router is None:
+        return False
+    if getattr(msg, "_columba_propagation_retry_attempted", False):
+        return False
+    msg._columba_propagation_retry_attempted = True
+    # Clear retry flag so a second failure doesn't loop.
+    msg.try_propagation_on_fail = False
+    # Sideband resets the upstream-LXMF send-state for a fresh try as
+    # PROPAGATED. Skipping any of these wedges the send: stale packed
+    # bytes, stale propagation stamp, or a non-zero delivery_attempts
+    # count would short-circuit upstream's outbound state machine.
+    msg.delivery_attempts = 0
+    msg.packed = None
+    msg.propagation_packed = None
+    msg.propagation_stamp = None
+    msg.defer_propagation_stamp = True
+    msg.desired_method = LXMF.LXMessage.PROPAGATED
+    try:
+        _lxmf_router.handle_outbound(msg)
+        RNS.log(
+            "event_bridge: DIRECT delivery failed, retrying via propagation node",
+            RNS.LOG_DEBUG,
+        )
+        return True
+    except Exception as e:  # noqa: BLE001
+        RNS.log(
+            f"event_bridge: propagation retry failed: {e}",
+            RNS.LOG_ERROR,
+        )
+        return False
+
+
+def discard_outbound(msg_hash_hex):
+    """Drop a parked outbound LXMessage after a final (no-retry) failure.
+
+    Called by `PythonEventBridge.handleLxmfFailure` when `DeliveryRetryPolicy`
+    decides against a propagation retry, so `_outbound_messages` doesn't leak
+    references to dead messages.
+    """
+    _outbound_messages.pop(msg_hash_hex, None)
 
 
 # --- Accessors for the per-object callbacks -------------------------------

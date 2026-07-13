@@ -70,7 +70,23 @@ class ChaquopyRnsBackend(
     val runtime: PythonRnsRuntime = PythonRnsRuntime(appContext)
 
     /** Shared upstream-callback → SharedFlow translation layer. */
-    val events: PythonEventBridge = PythonEventBridge()
+    val events: PythonEventBridge = PythonEventBridge(
+        // Flavor-local mechanism for the shared DeliveryRetryPolicy decision:
+        // both calls operate on event_bridge.py's `_outbound_messages`
+        // registry of parked LXMessages. Invoked from the failure-callback
+        // thread (already inside Python), so the reentrant callAttr is safe.
+        outboundRetry = object : PythonEventBridge.OutboundRetryMechanism {
+            override fun resubmitViaPropagation(messageHash: String): Boolean =
+                runCatching {
+                    runtime.eventBridge.callAttr("resubmit_as_propagated", messageHash)
+                        ?.toJava(Boolean::class.javaObjectType) == true
+                }.getOrDefault(false)
+
+            override fun discardOutbound(messageHash: String) {
+                runCatching { runtime.eventBridge.callAttr("discard_outbound", messageHash) }
+            }
+        },
+    )
 
     private val coreImpl = PythonRnsCore(runtime, events)
     private val lxmfImpl = PythonRnsLxmf(runtime, events)

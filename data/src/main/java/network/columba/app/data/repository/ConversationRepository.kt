@@ -683,7 +683,9 @@ class ConversationRepository
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
             val oldMessage = messageDao.getMessageById(oldMessageId, activeIdentity.identityHash) ?: return
 
-            // Create new message with updated ID
+            // Create new message with updated ID. The literal is the encoded
+            // form of DeliveryState.Pending (:rns-api) — :data sits below that
+            // module, so the string can't reference the codec here.
             val newMessage = oldMessage.copy(id = newMessageId, status = "pending")
 
             // Delete old and insert new atomically would require @Transaction,

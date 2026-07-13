@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import network.columba.app.rns.api.annotation.ReflectivelyKept
 import network.columba.app.rns.api.model.AnnounceEvent
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
@@ -140,7 +141,7 @@ class PythonEventBridge {
      * `try_propagation_on_fail` was set on the message AND a propagation node
      * is configured — the Sideband pattern that escalates the message to a
      * PROPAGATED re-`handle_outbound` instead of reporting failure. Surfaces
-     * as `status = "retrying_propagated"` on the delivery-status flow,
+     * as `DeliveryState.RetryingViaPropagation` on the delivery-status flow,
      * matching `NativeMessageSender.installDeliveryCallbacks` on the kotlin
      * backend so the UI need not branch on backend.
      */
@@ -441,7 +442,7 @@ class PythonEventBridge {
             _deliveryStatus.tryEmit(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "failed",
+                    state = DeliveryState.Failed,
                     timestamp = System.currentTimeMillis(),
                 ),
             )
@@ -459,16 +460,16 @@ class PythonEventBridge {
             // misrepresenting the actual delivery promise.
             val method = payload.dictInt("method") ?: -1
             val desired = payload.dictInt("desired_method") ?: -1
-            val status =
+            val state =
                 if (method == LXMF_METHOD_PROPAGATED || desired == LXMF_METHOD_PROPAGATED) {
-                    "propagated"
+                    DeliveryState.Propagated
                 } else {
-                    "delivered"
+                    DeliveryState.Delivered
                 }
             _deliveryStatus.tryEmit(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = status,
+                    state = state,
                     timestamp = System.currentTimeMillis(),
                 ),
             )
@@ -478,12 +479,12 @@ class PythonEventBridge {
     private fun handleLxmfRetryingPropagated(payload: PyObject) {
         runCatching {
             // Mirrors NativeMessageSender.installDeliveryCallbacks — same
-            // `retrying_propagated` status string the kotlin backend emits
-            // when a DIRECT send fails and falls back to PROPAGATED.
+            // state the kotlin backend emits when a DIRECT send fails and
+            // falls back to PROPAGATED.
             _deliveryStatus.tryEmit(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "retrying_propagated",
+                    state = DeliveryState.RetryingViaPropagation,
                     timestamp = System.currentTimeMillis(),
                 ),
             )

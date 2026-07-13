@@ -18,6 +18,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.rns.host.util.PeerNameResolver
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -213,7 +214,7 @@ class MessageCollector
                                 // Use sender's timestamp for display; receivedAt for sort ordering
                                 timestamp = receivedMessage.timestamp,
                                 isFromMe = false,
-                                status = "delivered",
+                                status = DeliveryState.Delivered.encode(),
                                 // LXMF attachments
                                 fieldsJson = receivedMessage.fieldsJson,
                                 // Routing info (hop count and receiving interface)

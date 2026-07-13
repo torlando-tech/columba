@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import network.columba.app.data.repository.Message
+import network.columba.app.rns.api.model.DeliveryState
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,7 +52,7 @@ class MessageMapperTest {
         assertEquals("test-id", result.id)
         assertEquals("Hello world", result.content)
         assertTrue(result.isFromMe)
-        assertEquals("delivered", result.status)
+        assertEquals(DeliveryState.Delivered, result.status)
     }
 
     @Test
@@ -848,7 +849,7 @@ class MessageMapperTest {
         assertEquals("Complete message content", result.content)
         assertEquals(1700000000000L, result.timestamp)
         assertTrue(result.isFromMe)
-        assertEquals("delivered", result.status)
+        assertEquals(DeliveryState.Delivered, result.status)
         assertNull(result.decodedImage)
         assertFalse(result.hasImageAttachment)
         assertNull(result.fieldsJson)
@@ -868,7 +869,7 @@ class MessageMapperTest {
 
         val result = message.toMessageUi()
 
-        assertEquals("failed", result.status)
+        assertEquals(DeliveryState.Failed, result.status)
         assertEquals("Network timeout", result.errorMessage)
     }
 
@@ -2094,7 +2095,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = true,
                 imageData = byteArrayOf(1, 2, 3),
                 hasFileAttachments = false,
@@ -2112,7 +2113,7 @@ class MessageMapperTest {
                 content = "Hello!",
                 timestamp = 0L,
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = true,
                 imageData = byteArrayOf(1, 2, 3),
             )
@@ -2129,7 +2130,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = false,
                 imageData = byteArrayOf(1, 2, 3),
             )
@@ -2146,7 +2147,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = true,
                 imageData = null,
             )
@@ -2163,7 +2164,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = true,
                 imageData = byteArrayOf(1, 2, 3),
                 hasFileAttachments = true,
@@ -2181,7 +2182,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = true,
                 imageData = byteArrayOf(1, 2, 3),
                 replyPreview =
@@ -2204,7 +2205,7 @@ class MessageMapperTest {
                 content = "   \n\t  ",
                 timestamp = 0L,
                 isFromMe = true,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 isAnimatedImage = true,
                 imageData = byteArrayOf(1, 2, 3),
             )
@@ -2223,7 +2224,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = null,
             )
 
@@ -2239,7 +2240,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"reply_to": "some_id"}}""",
             )
 
@@ -2255,7 +2256,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"pending_file_notification": {"original_message_id": "abc"}}}""",
             )
 
@@ -2273,7 +2274,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = null,
             )
 
@@ -2289,7 +2290,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"pending_file_notification": {}}}""",
             )
 
@@ -2305,7 +2306,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"superseded":true}}""",
             )
 
@@ -2321,7 +2322,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"superseded":false}}""",
             )
 
@@ -2339,7 +2340,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"reply_to": "id"}}""",
             )
 
@@ -2355,7 +2356,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = null,
             )
 
@@ -2371,7 +2372,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson =
                     """{"16": {"pending_file_notification": {"original_message_id": "abc123", """ +
                         """"filename": "report.pdf", "file_count": 3, "total_size": 1048576}}}""",
@@ -2394,7 +2395,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"pending_file_notification": {}}}""",
             )
 
@@ -2415,7 +2416,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"16": {"pending_file_notification": "invalid"}}""",
             )
 
@@ -2431,7 +2432,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = """{"6": "image_hex"}""",
             )
 
@@ -2449,7 +2450,7 @@ class MessageMapperTest {
                 content = "",
                 timestamp = 0L,
                 isFromMe = false,
-                status = "delivered",
+                status = DeliveryState.Delivered,
                 fieldsJson = "pending_file_notification not valid json {{{",
             )
 

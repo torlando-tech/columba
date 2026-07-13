@@ -166,6 +166,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.R
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.components.AttachmentPanel
@@ -1889,7 +1890,7 @@ fun MessageBubble(
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 scope.launch {
                                     val bitmap = graphicsLayer.toImageBitmap()
-                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                    onLongPress(message.id, isFromMe, message.status == DeliveryState.Failed, bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
                                 }
                             },
                             indication = null,
@@ -2001,7 +2002,7 @@ fun MessageBubble(
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     scope.launch {
                                         val bitmap = graphicsLayer.toImageBitmap()
-                                        onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                        onLongPress(message.id, isFromMe, message.status == DeliveryState.Failed, bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
                                     }
                                 },
                                 // Disable ripple - we use scale animation instead
@@ -2940,23 +2941,23 @@ private fun formatFileSize(bytes: Long): String =
     }
 
 /**
- * Get the status icon character for a message status.
+ * Get the status icon character for a message delivery state.
  *
- * @param status The message status string
- * @return Unicode character representing the status:
- *   - "○" (hollow circle) for pending - message created, waiting to send
- *   - "✓" (single check) for sent/retrying_propagated/propagated - transmitted or stored on relay
- *   - "✓✓" (double check) for delivered - delivered and acknowledged by recipient
- *   - "!" (exclamation) for failed - delivery failed
+ * @param status The delivery state (null = unrecognized legacy DB value)
+ * @return Unicode character representing the state:
+ *   - "○" (hollow circle) for Pending - message created, waiting to send
+ *   - "✓" (single check) for Sent/RetryingViaPropagation/Propagated - transmitted or stored on relay
+ *   - "✓✓" (double check) for Delivered - delivered and acknowledged by recipient
+ *   - "!" (exclamation) for Failed - delivery failed
  *   - "" (empty) for unknown status
  */
-internal fun getMessageStatusIcon(status: String): String =
+internal fun getMessageStatusIcon(status: DeliveryState?): String =
     when (status) {
-        "pending" -> "○"
-        "sent", "retrying_propagated", "propagated" -> "✓"
-        "delivered" -> "✓✓"
-        "failed" -> "!"
-        else -> ""
+        DeliveryState.Pending -> "○"
+        DeliveryState.Sent, DeliveryState.RetryingViaPropagation, DeliveryState.Propagated -> "✓"
+        DeliveryState.Delivered -> "✓✓"
+        DeliveryState.Failed -> "!"
+        null -> ""
     }
 
 @Composable

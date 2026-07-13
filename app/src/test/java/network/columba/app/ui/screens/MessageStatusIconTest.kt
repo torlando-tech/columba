@@ -1,18 +1,20 @@
 package network.columba.app.ui.screens
 
+import network.columba.app.rns.api.model.DeliveryState
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
  * Unit tests for message status icon logic in MessagingScreen.
  *
- * Tests the visual indicator for message delivery status:
- * - pending: hollow circle (○) - message created, waiting to send
- * - sent: single check (✓) - transmitted to network
- * - retrying_propagated: single check (✓) - retrying via propagation node
- * - propagated: single check (✓) - stored on propagation relay
- * - delivered: double check (✓✓) - delivered and acknowledged
- * - failed: exclamation (!) - delivery failed
+ * Tests the visual indicator for message delivery state:
+ * - Pending: hollow circle (○) - message created, waiting to send
+ * - Sent: single check (✓) - transmitted to network
+ * - RetryingViaPropagation: single check (✓) - retrying via propagation node
+ * - Propagated: single check (✓) - stored on propagation relay
+ * - Delivered: double check (✓✓) - delivered and acknowledged
+ * - Failed: exclamation (!) - delivery failed
+ * - null (unrecognized legacy DB string): empty
  */
 class MessageStatusIconTest {
     // ==========================================
@@ -21,7 +23,7 @@ class MessageStatusIconTest {
 
     @Test
     fun `pending status shows hollow circle`() {
-        assertEquals("○", getMessageStatusIcon("pending"))
+        assertEquals("○", getMessageStatusIcon(DeliveryState.Pending))
     }
 
     // ==========================================
@@ -30,7 +32,7 @@ class MessageStatusIconTest {
 
     @Test
     fun `sent status shows single checkmark`() {
-        assertEquals("✓", getMessageStatusIcon("sent"))
+        assertEquals("✓", getMessageStatusIcon(DeliveryState.Sent))
     }
 
     // ==========================================
@@ -39,19 +41,19 @@ class MessageStatusIconTest {
 
     @Test
     fun `retrying_propagated status shows single checkmark`() {
-        assertEquals("✓", getMessageStatusIcon("retrying_propagated"))
+        assertEquals("✓", getMessageStatusIcon(DeliveryState.RetryingViaPropagation))
     }
 
     @Test
     fun `propagated status shows single checkmark`() {
-        assertEquals("✓", getMessageStatusIcon("propagated"))
+        assertEquals("✓", getMessageStatusIcon(DeliveryState.Propagated))
     }
 
     @Test
     fun `sent and retrying_propagated and propagated have same icon`() {
-        val sentIcon = getMessageStatusIcon("sent")
-        assertEquals(sentIcon, getMessageStatusIcon("retrying_propagated"))
-        assertEquals(sentIcon, getMessageStatusIcon("propagated"))
+        val sentIcon = getMessageStatusIcon(DeliveryState.Sent)
+        assertEquals(sentIcon, getMessageStatusIcon(DeliveryState.RetryingViaPropagation))
+        assertEquals(sentIcon, getMessageStatusIcon(DeliveryState.Propagated))
     }
 
     // ==========================================
@@ -60,7 +62,7 @@ class MessageStatusIconTest {
 
     @Test
     fun `delivered status shows double checkmark`() {
-        assertEquals("✓✓", getMessageStatusIcon("delivered"))
+        assertEquals("✓✓", getMessageStatusIcon(DeliveryState.Delivered))
     }
 
     // ==========================================
@@ -69,7 +71,7 @@ class MessageStatusIconTest {
 
     @Test
     fun `failed status shows exclamation`() {
-        assertEquals("!", getMessageStatusIcon("failed"))
+        assertEquals("!", getMessageStatusIcon(DeliveryState.Failed))
     }
 
     // ==========================================
@@ -77,18 +79,18 @@ class MessageStatusIconTest {
     // ==========================================
 
     @Test
-    fun `unknown status shows empty string`() {
-        assertEquals("", getMessageStatusIcon("unknown"))
+    fun `unknown legacy status decodes to null and shows empty string`() {
+        assertEquals("", getMessageStatusIcon(DeliveryState.decode("unknown")))
     }
 
     @Test
-    fun `empty status shows empty string`() {
-        assertEquals("", getMessageStatusIcon(""))
+    fun `empty legacy status decodes to null and shows empty string`() {
+        assertEquals("", getMessageStatusIcon(DeliveryState.decode("")))
     }
 
     @Test
-    fun `null-like status shows empty string`() {
-        assertEquals("", getMessageStatusIcon("null"))
+    fun `null state shows empty string`() {
+        assertEquals("", getMessageStatusIcon(null))
     }
 
     // ==========================================
@@ -97,10 +99,10 @@ class MessageStatusIconTest {
 
     @Test
     fun `status icons are distinct for main states`() {
-        val pending = getMessageStatusIcon("pending")
-        val sent = getMessageStatusIcon("sent")
-        val delivered = getMessageStatusIcon("delivered")
-        val failed = getMessageStatusIcon("failed")
+        val pending = getMessageStatusIcon(DeliveryState.Pending)
+        val sent = getMessageStatusIcon(DeliveryState.Sent)
+        val delivered = getMessageStatusIcon(DeliveryState.Delivered)
+        val failed = getMessageStatusIcon(DeliveryState.Failed)
 
         // All main states should have distinct icons
         val icons = setOf(pending, sent, delivered, failed)
@@ -109,17 +111,17 @@ class MessageStatusIconTest {
 
     @Test
     fun `normal delivery flow has correct icon progression`() {
-        // Normal flow: pending -> sent -> delivered
-        assertEquals("○", getMessageStatusIcon("pending"))
-        assertEquals("✓", getMessageStatusIcon("sent"))
-        assertEquals("✓✓", getMessageStatusIcon("delivered"))
+        // Normal flow: Pending -> Sent -> Delivered
+        assertEquals("○", getMessageStatusIcon(DeliveryState.Pending))
+        assertEquals("✓", getMessageStatusIcon(DeliveryState.Sent))
+        assertEquals("✓✓", getMessageStatusIcon(DeliveryState.Delivered))
     }
 
     @Test
     fun `propagation fallback flow has correct icon progression`() {
-        // Propagation fallback: pending -> retrying_propagated -> delivered
-        assertEquals("○", getMessageStatusIcon("pending"))
-        assertEquals("✓", getMessageStatusIcon("retrying_propagated"))
-        assertEquals("✓✓", getMessageStatusIcon("delivered"))
+        // Propagation fallback: Pending -> RetryingViaPropagation -> Delivered
+        assertEquals("○", getMessageStatusIcon(DeliveryState.Pending))
+        assertEquals("✓", getMessageStatusIcon(DeliveryState.RetryingViaPropagation))
+        assertEquals("✓✓", getMessageStatusIcon(DeliveryState.Delivered))
     }
 }

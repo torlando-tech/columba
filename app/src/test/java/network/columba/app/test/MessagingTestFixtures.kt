@@ -70,7 +70,7 @@ object MessagingTestFixtures {
     ) = createSentMessage(
         id = id,
         content = content,
-        status = DeliveryState.Delivered,
+        status = "delivered",
     )
 
     fun createFailedMessage(

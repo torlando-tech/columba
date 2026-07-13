@@ -58,6 +58,17 @@ are offline, until they fetch them. The configured outbound propagation node
 is a precondition for the `RetryingViaPropagation` fallback (the Sideband
 retry pattern: try direct, on failure rebuild as PROPAGATED and re-route).
 
+### DeliveryRetryPolicy
+
+The shared *decision* half of the Sideband retry pattern
+(`network.columba.app.rns.api.util.DeliveryRetryPolicy`): retry via
+propagation iff the sender opted in, the message's desired method isn't
+already PROPAGATED (that flip is what terminates the loop after one retry),
+and a propagation node is configured. Both backend adapters consult this one
+predicate; only the *mechanism* (rebuilding the live LXMessage and
+re-submitting it) stays flavor-local, because it manipulates flavor-owned
+router/message objects.
+
 ## Backends
 
 ### RnsBackend seam

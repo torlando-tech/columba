@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import network.reticulum.common.DestinationDirection
+import network.columba.app.rns.api.util.DeliveryRetryPolicy
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
@@ -224,9 +225,14 @@ internal class NativeMessageSender(
             val hash = msg.hash?.toHex() ?: return@failedCallback
             val currentMethod = msg.desiredMethod
 
-            if (tryPropagationOnFail &&
-                currentMethod != NativeDeliveryMethod.PROPAGATED &&
-                router.getActivePropagationNode() != null
+            // Decision is the shared DeliveryRetryPolicy (same predicate the
+            // python flavor applies in PythonEventBridge.handleLxmfFailure);
+            // only the rebuild-and-resubmit mechanism below is lxmf-kt-local.
+            if (DeliveryRetryPolicy.shouldRetryViaPropagation(
+                    tryPropagationOnFail = tryPropagationOnFail,
+                    desiredMethodIsPropagated = currentMethod == NativeDeliveryMethod.PROPAGATED,
+                    propagationNodeConfigured = router.getActivePropagationNode() != null,
+                )
             ) {
                 Log.i(TAG, "${currentMethod ?: lxmfMethod} delivery failed for $hash, falling back to PROPAGATED")
                 deliveryStatusFlow.tryEmit(

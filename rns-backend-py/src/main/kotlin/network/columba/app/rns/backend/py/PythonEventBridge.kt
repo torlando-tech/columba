@@ -17,6 +17,7 @@ import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.api.util.DeliveryRetryPolicy
 import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.ReactionWireCodec
@@ -47,7 +48,29 @@ import org.json.JSONObject
  * `NativeRnsBackendImpl`.
  */
 @ReflectivelyKept // Python (event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
-class PythonEventBridge {
+class PythonEventBridge(
+    /**
+     * Mechanism half of the try-propagation-on-fail retry. The *decision*
+     * is the shared [DeliveryRetryPolicy]; when [handleLxmfFailure] decides
+     * to retry, this hook performs the flavor-local rebuild-and-resubmit
+     * (`event_bridge.resubmit_as_propagated`). Null only in tests.
+     */
+    private val outboundRetry: OutboundRetryMechanism? = null,
+) {
+    /**
+     * Flavor-local mechanism for the shared retry decision — implemented by
+     * [ChaquopyRnsBackend] over `event_bridge.py`'s `_outbound_messages`
+     * registry. Both calls pop the parked LXMessage, so exactly one of them
+     * must be invoked per failure event.
+     */
+    interface OutboundRetryMechanism {
+        /** Rebuild the parked message as PROPAGATED and re-route it. False = couldn't (caller reports failure). */
+        fun resubmitViaPropagation(messageHash: String): Boolean
+
+        /** Drop the parked message after a final, no-retry failure. */
+        fun discardOutbound(messageHash: String)
+    }
+
     private companion object {
         const val TAG = "PythonEventBridge"
 
@@ -134,18 +157,6 @@ class PythonEventBridge {
      * Attached per-LXMessage by [PythonRnsLxmf], not via `register_callbacks`.
      */
     val onLxmfDelivered = PyEventCallback { payload -> handleLxmfDelivered(payload) }
-
-    /**
-     * Outbound try-propagation-on-fail retry sink: `attach_lxmessage_callbacks`
-     * fires this when a DIRECT/OPPORTUNISTIC send fails AND
-     * `try_propagation_on_fail` was set on the message AND a propagation node
-     * is configured — the Sideband pattern that escalates the message to a
-     * PROPAGATED re-`handle_outbound` instead of reporting failure. Surfaces
-     * as `DeliveryState.RetryingViaPropagation` on the delivery-status flow,
-     * matching `NativeMessageSender.installDeliveryCallbacks` on the kotlin
-     * backend so the UI need not branch on backend.
-     */
-    val onLxmfRetryingPropagated = PyEventCallback { payload -> handleLxmfRetryingPropagated(payload) }
 
     /**
      * Packet observation is a low-traffic diagnostic surface; upstream RNS
@@ -437,12 +448,35 @@ class PythonEventBridge {
     // shared codec — no JSON intermediate, no `event_bridge.py` side
     // assembly. Reactions still go through `routeReactionSideChannel`.
 
+    /**
+     * Applies the shared [DeliveryRetryPolicy] to a flattened outbound
+     * failure (the decision `NativeMessageSender.installDeliveryCallbacks`
+     * makes inline on the kotlin flavor). On retry, the flavor-local
+     * [outboundRetry] mechanism rebuilds the parked LXMessage as PROPAGATED
+     * python-side and this emits [DeliveryState.RetryingViaPropagation];
+     * otherwise the parked message is discarded and this emits
+     * [DeliveryState.Failed].
+     */
     private fun handleLxmfFailure(payload: PyObject) {
         runCatching {
+            val hash = payload.dictStr("hash").orEmpty()
+            val shouldRetry =
+                DeliveryRetryPolicy.shouldRetryViaPropagation(
+                    tryPropagationOnFail = payload.dictBool("try_propagation_on_fail"),
+                    desiredMethodIsPropagated = payload.dictBool("desired_method_is_propagated"),
+                    propagationNodeConfigured = payload.dictBool("propagation_node_configured"),
+                )
+            val state =
+                if (shouldRetry && outboundRetry?.resubmitViaPropagation(hash) == true) {
+                    DeliveryState.RetryingViaPropagation
+                } else {
+                    outboundRetry?.discardOutbound(hash)
+                    DeliveryState.Failed
+                }
             _deliveryStatus.tryEmit(
                 DeliveryStatusUpdate(
-                    messageHash = payload.dictStr("hash").orEmpty(),
-                    state = DeliveryState.Failed,
+                    messageHash = hash,
+                    state = state,
                     timestamp = System.currentTimeMillis(),
                 ),
             )
@@ -474,21 +508,6 @@ class PythonEventBridge {
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf delivered translation failed", it) }
-    }
-
-    private fun handleLxmfRetryingPropagated(payload: PyObject) {
-        runCatching {
-            // Mirrors NativeMessageSender.installDeliveryCallbacks — same
-            // state the kotlin backend emits when a DIRECT send fails and
-            // falls back to PROPAGATED.
-            _deliveryStatus.tryEmit(
-                DeliveryStatusUpdate(
-                    messageHash = payload.dictStr("hash").orEmpty(),
-                    state = DeliveryState.RetryingViaPropagation,
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
-        }.onFailure { Log.e(TAG, "lxmf retrying-propagated translation failed", it) }
     }
 
     private fun handlePacket(payload: PyObject) {

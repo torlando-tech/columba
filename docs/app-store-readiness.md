@@ -8,9 +8,9 @@ F-Droid or Google Play, with file references and suggested fixes.
 
 | # | Item | Store | Severity |
 |---|------|-------|----------|
-| 1 | Chaquopy Python backend (prebuilt CPython + pip during build) | F-Droid | Blocker — ship `kotlinBackend` flavor instead |
+| 1 | Python flavor bundles RNS/LXMF under the non-FLOSS "Reticulum License" | F-Droid | Blocker for main repo — ship `kotlinBackend` there; serve Python flavor via self-hosted repo (§4.5) |
 | 2 | `play-services-location` GMS dependency in ALL variants | F-Droid | Blocker |
-| 3 | JitPack dependencies (reticulum-kt, LXMF-kt, LXST-kt, usb-serial-for-android) | F-Droid | Blocker |
+| 3 | JitPack dependencies (reticulum-kt, LXMF-kt, LXST-kt, usb-serial-for-android) | F-Droid | Allowed per policy (trusted repo) — source builds still preferred |
 | 4 | Release pipeline builds APKs only — Play requires AAB | Play | Blocker |
 | 5 | `READ_MEDIA_IMAGES` broad photo access (attachment grid) | Play | Blocker (Photo & Video Permissions policy) |
 | 6 | Self-update checker (`UpdateChecker.kt`) | Play (& F-Droid) | Blocker — must be gated off per store |
@@ -207,20 +207,38 @@ F-Droid's inclusion policy: everything must build from source on their
 servers; no prebuilt binaries, no proprietary dependencies, no tracking by
 default.
 
-### 3.1 Chaquopy `pythonBackend` flavor cannot be included
+### 3.1 The `pythonBackend` flavor cannot be included — because of the Reticulum License, not Chaquopy
 
-`rns-backend-py/build.gradle.kts:95-136`:
+**Primary blocker (verified 2026-07):** upstream Reticulum and LXMF are no
+longer MIT — they use the **"Reticulum License"** (MIT plus use restrictions:
+no systems that can harm humans, no AI/ML training use). Those restrictions
+violate the OSI Open Source Definition, so the code is not FLOSS by F-Droid's
+standards. The torlando-tech forks pinned in
+`rns-backend-py/build.gradle.kts:107-112` (RNS 1.1.9, LXMF 0.9.2) carry that
+upstream license. F-Droid rejected **Sideband** — markqvist's own Python
+Reticulum app — for exactly this reason ("it's not FLOSS"), see
+https://forum.f-droid.org/t/reticulum-sideband-app-developer-needs-help-adding-it-to-f-droid/33734.
+No packaging work can fix a license; only upstream relicensing (or reverting
+to ancient MIT-era RNS/LXMF versions, which is not protocol-viable) would.
 
-- Chaquopy bundles a **prebuilt CPython runtime** and prebuilt native wheels
-  (`cryptography`) from Chaquopy's Maven artifacts — prebuilt blobs F-Droid
-  won't accept (no Chaquopy app has made it into the main repo).
-- `pip { install("git+https://...") }` fetches arbitrary sources during the
-  build; `install("cryptography>=42.0.0")` is an **unpinned version range**
-  (also a reproducibility bug for your own releases — pin it regardless).
+Secondary, *solvable* issues (relevant only if the license ever changes):
 
-**Change:** submit the **`kotlinBackend` flavor** to F-Droid. It already
-exists precisely for this (`app/build.gradle.kts:159-173`). The Python flavor
-stays GitHub/Play-only.
+- Chaquopy itself is MIT since 2022 and its plugin/runtime/CPython artifacts
+  ship from **Maven Central**, which is on F-Droid's trusted-repo list —
+  prebuilt FLOSS binaries from trusted repos are permitted by current policy
+  (https://f-droid.org/en/docs/Inclusion_Policy/). No Chaquopy app is known
+  to be in the main repo yet, so reviewer discretion would still apply.
+- `pip { install("git+https://...") }` fetches could be restructured as
+  srclibs/local paths; the native `cryptography` wheel comes from Chaquopy's
+  own wheel index (not a trusted repo) and would need a from-source build.
+- `install("cryptography>=42.0.0")` is an **unpinned version range** — a
+  reproducibility bug for your own releases; pin it regardless.
+
+**Change:** submit the **`kotlinBackend` flavor** to F-Droid — reticulum-kt
+is an independent MPL-2.0 implementation of the (public-domain) protocol
+(verify LXMF-kt/LXST-kt licenses match, and be ready to demonstrate
+independence from upstream code during review). The Python flavor reaches
+F-Droid users via a self-hosted repo instead (§4.5).
 
 ### 3.2 Google Play Services location — in every variant
 
@@ -249,8 +267,13 @@ Files touching FusedLocation: `LocationCompat.kt`, `MapScreen.kt`,
 - `com.github.torlando-tech:LXMF-kt`, `com.github.torlando-tech:LXST-kt`
 - `com.github.mik3y:usb-serial-for-android:3.7.0` (`rns-host/build.gradle.kts:135`)
 
-F-Droid's scanner rejects JitPack artifacts (binaries built outside their
-infrastructure). Options, best-first:
+**Correction (verified 2026-07):** JitPack.io is on F-Droid's *trusted
+Maven repositories* list (alongside Maven Central and Google Maven), so
+JitPack artifacts are not an automatic rejection — the binaries must simply
+be FLOSS-licensed (https://f-droid.org/en/docs/Inclusion_Policy/). Reviewers
+still prefer source builds, and JitPack availability/reliability is a known
+pain point, so the options below remain worthwhile hardening but are not
+blockers:
 
 1. **srclibs / git submodules**: have the F-Droid build compile
    reticulum-kt, LXMF-kt, LXST-kt, and usb-serial-for-android from source
@@ -258,7 +281,7 @@ infrastructure). Options, best-first:
    `LOCAL_RETICULUM_KT`-style `includeBuild` seams in `settings.gradle.kts`
    already prove this works — an F-Droid build recipe can set those env vars.
 2. Publish your -kt libraries to Maven Central (helps Play reproducibility
-   too, but F-Droid may still ask for source builds).
+   too).
 
 ### 3.4 Sentry, update checker, GMS = build-variant policy for F-Droid
 
@@ -315,6 +338,25 @@ signature so users can cross-update with GitHub releases):
 - If any variant with Sentry were submitted it would be tagged `Tracking` —
   avoided by the `noSentry` gate.
 
+### 4.5 Delivering the Python flavor to F-Droid users (self-hosted repo)
+
+The `pythonBackend` flavor can't enter the main F-Droid repo (§3.1), but
+F-Droid-client users can still get it with auto-updates:
+
+1. **Self-hosted F-Droid repository (recommended).** This is exactly what
+   Sideband does (`https://reticulum.betweentheborders.com/fdroid/repo/`).
+   Run `fdroidserver` in CI to publish the existing GitHub-release APKs
+   (python + kotlin, noSentry) to a static repo on GitHub Pages; users add
+   the repo URL (or scan a QR) in the F-Droid client once and receive
+   updates like any other F-Droid app. Keeps your signing key, no policy
+   constraints, ~one CI job + a one-time repo signing key. The repo URL can
+   also be advertised in-app next to the existing Obtainium config.
+2. **IzzyOnDroid** (third-party repo pre-listed in F-Droid clients): hosts
+   developer-signed APKs from GitHub releases and lists Sideband today, but
+   enforces a **~30 MB APK size cap** — the python-flavor APKs (~60 MB)
+   exceed it, and the GMS location dependency would be flagged by their
+   library scanner. Realistic only for a slimmed kotlin flavor, if at all.
+
 ---
 
 ## 5. Recommended mechanism: a `distribution` flavor dimension
@@ -361,5 +403,6 @@ play→choice, github→both.)
 | icons-lucide-android | ISC | Maven Central |
 | Sentry SDK | MIT | stripped in noSentry |
 | usb-serial-for-android | MIT (v3.x; was LGPL pre-3.0 — verify) | JitPack source (§3.3) |
-| Reticulum / LXMF forks, reticulum-kt / LXMF-kt / LXST-kt | MIT (verify each fork carries upstream license) | — |
-| Chaquopy runtime | MIT (runtime), but ships prebuilt CPython (PSF) | F-Droid: blocked by prebuilt policy regardless of license |
+| Reticulum / LXMF forks (Python, RNS 1.1.9 / LXMF 0.9.2) | **"Reticulum License"** — MIT + use restrictions (no harm systems, no AI training) | **Not FLOSS per OSI/FSF → blocks python flavor from F-Droid main repo** (§3.1); fine for Play/GitHub distribution |
+| reticulum-kt | MPL-2.0 (independent implementation of the public-domain protocol) | F-Droid compatible; verify LXMF-kt / LXST-kt carry the same |
+| Chaquopy runtime | MIT (SDK since 2022), bundles CPython (PSF) via Maven Central | Trusted-repo prebuilt FLOSS — likely acceptable, no precedent app in main repo yet |

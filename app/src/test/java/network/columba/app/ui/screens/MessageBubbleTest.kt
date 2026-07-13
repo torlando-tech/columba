@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.model.MessageUi
@@ -173,7 +174,7 @@ class MessageBubbleTest {
         content = content,
         timestamp = System.currentTimeMillis(),
         isFromMe = isFromMe,
-        status = if (isFromMe) "delivered" else "received",
+        status = if (isFromMe) DeliveryState.Delivered else null,
         decodedImage = null, // No actual image (simulates missing attachment)
         hasImageAttachment = true, // But message originally had an image
         deliveryMethod = null,

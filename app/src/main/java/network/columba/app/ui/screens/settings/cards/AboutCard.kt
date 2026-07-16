@@ -313,7 +313,7 @@ private fun InfoRow(
 ) {
     // The label keeps its natural width; the value takes the remaining space and
     // is right-aligned. Without the weight, a long value (e.g. the Python
-    // flavor's "Reticulum 1.1.9 (torlando-tech fork)") and the label both claim
+    // flavor's "Reticulum 1.3.8 (torlando-tech fork)") and the label both claim
     // their full intrinsic width and crowd/overlap under SpaceBetween — instead
     // a long value now wraps within its column.
     Row(

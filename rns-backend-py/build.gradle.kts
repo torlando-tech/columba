@@ -57,7 +57,7 @@ android {
         // in PINNED_VERSIONS.md, not the user-facing version line). RNS and LXMF
         // ARE torlando-tech forks of markqvist's upstream; ble-reticulum is
         // torlando-tech's own project, so it carries no "fork" label.
-        buildConfigField("String", "PY_RNS_VERSION", "\"1.1.9 (torlando-tech fork)\"")
+        buildConfigField("String", "PY_RNS_VERSION", "\"1.3.8 (torlando-tech fork)\"")
         buildConfigField("String", "PY_LXMF_VERSION", "\"0.9.2 (torlando-tech fork)\"")
         buildConfigField("String", "PY_BLE_RETICULUM_VERSION", "\"0.2.2\"")
     }
@@ -100,11 +100,12 @@ chaquopy {
 
         pip {
             // Upstream RNS — torlando-tech fork pinned to commit SHA. This commit
-            // already carries the four fork patches incl. the context-manager
-            // ratchet/log file-handle fixes, so the v0.10.x `patches/RNS/` tree
-            // is intentionally NOT restored (its runtime patch-deployer lived in
+            // already carries all four effective fixes. RNS 1.3.8 includes the
+            // log file-handle fix upstream; the fork commit retains the ratchet
+            // file-handle changes, so the v0.10.x `patches/RNS/` tree is
+            // intentionally NOT restored (its runtime patch-deployer lived in
             // the deleted reticulum_wrapper.py — see PINNED_VERSIONS.md).
-            install("git+https://github.com/torlando-tech/Reticulum@99c42fce06bc8afe8cfd0107acd990d8de428013")
+            install("git+https://github.com/torlando-tech/Reticulum@817ecc31bd524c6268f816530c5115211b39cffc")
 
             // Upstream LXMF — torlando-tech fork (external stamp generator +
             // receiving-interface capture). Pinned to the commit SHA at the

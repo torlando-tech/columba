@@ -605,6 +605,7 @@ sealed class PendingNavigation {
     data class Conversation(
         val destinationHash: String,
         val peerName: String,
+        val fromNotification: Boolean = false,
     ) : PendingNavigation()
 
     data class AddContact(
@@ -843,20 +844,37 @@ fun ColumbaNavigation(
                         val backStackRoute = navController.currentBackStackEntry?.destination?.route
                         val backStackHash = navController.currentBackStackEntry?.arguments
                             ?.getString("destinationHash")
-                        if (!ConversationNavigation.shouldNavigateToConversation(
+                        val shouldNavigate = ConversationNavigation.shouldNavigateToConversation(
                                 backStackRoute,
                                 backStackHash,
                                 navigation.destinationHash,
-                            )) {
+                            )
+                        val encodedHash = Uri.encode(navigation.destinationHash)
+                        val encodedName = Uri.encode(navigation.peerName)
+                        val notifParam = if (navigation.fromNotification) "?fromNotification=true" else ""
+                        val conversationRoute = "messaging/$encodedHash/$encodedName$notifParam"
+
+                        if (!shouldNavigate && navigation.fromNotification) {
+                            // Reuse the current conversation entry so notification provenance
+                            // reaches the screen without creating a duplicate Back destination.
+                            navController.navigate(conversationRoute) {
+                                launchSingleTop = true
+                            }
+                            Log.d(
+                                "ColumbaNavigation",
+                                "Reused current conversation for notification entry: ${navigation.peerName}",
+                            )
+                        } else if (!shouldNavigate) {
                             Log.d(
                                 "ColumbaNavigation",
                                 "Already viewing conversation ${navigation.peerName} — skipping duplicate navigation",
                             )
                         } else {
-                            val encodedHash = Uri.encode(navigation.destinationHash)
-                            val encodedName = Uri.encode(navigation.peerName)
-                            navController.navigate("messaging/$encodedHash/$encodedName")
-                            Log.d("ColumbaNavigation", "Navigated to conversation: ${navigation.peerName}")
+                            navController.navigate(conversationRoute)
+                            Log.d(
+                                "ColumbaNavigation",
+                                "Navigated to conversation: ${navigation.peerName} (fromNotification=${navigation.fromNotification})",
+                            )
                         }
                     }
                     is PendingNavigation.AddContact -> {
@@ -2215,19 +2233,25 @@ fun ColumbaNavigation(
                             }
 
                             composable(
-                                route = "messaging/{destinationHash}/{peerName}",
+                                route = "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}",
                                 arguments =
                                     listOf(
                                         navArgument("destinationHash") { type = NavType.StringType },
                                         navArgument("peerName") { type = NavType.StringType },
+                                        navArgument("fromNotification") {
+                                            type = NavType.BoolType
+                                            defaultValue = false
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val destinationHash = backStackEntry.arguments?.getString("destinationHash").orEmpty()
                                 val peerName = backStackEntry.arguments?.getString("peerName").orEmpty()
+                                val fromNotification = backStackEntry.arguments?.getBoolean("fromNotification") == true
 
                                 MessagingScreen(
                                     destinationHash = destinationHash,
                                     peerName = peerName,
+                                    fromNotification = fromNotification,
                                     onBackClick = { navController.popBackStack() },
                                     onPeerClick = {
                                         val encodedHash = Uri.encode(destinationHash)

@@ -333,6 +333,7 @@ fun MessagingScreen(
     onVoiceCall: (profileCode: Int) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onUpdatePyxisPackage: (Uri) -> Unit = {},
+    fromNotification: Boolean = false,
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -746,6 +747,17 @@ fun MessagingScreen(
     LaunchedEffect(destinationHash, newestMessageId) {
         if (newestMessageId != null && !hasScrolledToBottom) {
             listState.scrollToItem(0) // Instant scroll to index 0 (newest message)
+            hasScrolledToBottom = true
+        }
+    }
+
+    // Notification-entry scroll: when the user taps a message notification, force-scroll
+    // to the newest message even if the user was previously reading history. This is a
+    // one-shot effect keyed on the destination hash so it only fires once per entry.
+    LaunchedEffect(destinationHash, fromNotification, newestMessageId) {
+        if (fromNotification && newestMessageId != null) {
+            Log.d("MessagingScreen", "Notification entry: scrolling to newest message")
+            listState.scrollToItem(0)
             hasScrolledToBottom = true
         }
     }

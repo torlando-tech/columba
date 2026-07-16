@@ -45,7 +45,7 @@ class MainActivityIntentHandler(
         val peerName = intent.getStringExtra(NotificationHelper.EXTRA_PEER_NAME)
         if (destinationHash != null && peerName != null) {
             Log.d(logTag, "Opening conversation with: $peerName ($destinationHash)")
-            pendingNavigation.value = PendingNavigation.Conversation(destinationHash, peerName)
+            pendingNavigation.value = PendingNavigation.Conversation(destinationHash, peerName, fromNotification = true)
         }
     }
 

@@ -79,6 +79,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.di.RnsTelephonyEntryPoint
+import network.columba.app.navigation.ConversationNavigation
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -835,10 +836,28 @@ fun ColumbaNavigation(
                         Log.d("ColumbaNavigation", "Navigated to announce detail: ${navigation.destinationHash}")
                     }
                     is PendingNavigation.Conversation -> {
-                        val encodedHash = Uri.encode(navigation.destinationHash)
-                        val encodedName = Uri.encode(navigation.peerName)
-                        navController.navigate("messaging/$encodedHash/$encodedName")
-                        Log.d("ColumbaNavigation", "Navigated to conversation: ${navigation.peerName}")
+                        // Idempotency: skip navigation if the user is already viewing this
+                        // conversation. Without this check, clicking a notification for the
+                        // current conversation pushes a duplicate back-stack entry, so one
+                        // Back press reveals the same conversation again (visible flash).
+                        val backStackRoute = navController.currentBackStackEntry?.destination?.route
+                        val backStackHash = navController.currentBackStackEntry?.arguments
+                            ?.getString("destinationHash")
+                        if (!ConversationNavigation.shouldNavigateToConversation(
+                                backStackRoute,
+                                backStackHash,
+                                navigation.destinationHash,
+                            )) {
+                            Log.d(
+                                "ColumbaNavigation",
+                                "Already viewing conversation ${navigation.peerName} — skipping duplicate navigation",
+                            )
+                        } else {
+                            val encodedHash = Uri.encode(navigation.destinationHash)
+                            val encodedName = Uri.encode(navigation.peerName)
+                            navController.navigate("messaging/$encodedHash/$encodedName")
+                            Log.d("ColumbaNavigation", "Navigated to conversation: ${navigation.peerName}")
+                        }
                     }
                     is PendingNavigation.AddContact -> {
                         // Navigate to contacts tab and trigger add contact dialog

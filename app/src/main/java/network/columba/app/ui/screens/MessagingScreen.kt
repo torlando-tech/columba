@@ -106,6 +106,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
@@ -164,6 +165,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.R
@@ -754,8 +756,16 @@ fun MessagingScreen(
     // Notification-entry scroll: when the user taps a message notification, force-scroll
     // to the newest message even if the user was previously reading history. This is a
     // one-shot effect keyed on the destination hash so it only fires once per entry.
-    LaunchedEffect(destinationHash, fromNotification, newestMessageId) {
-        if (fromNotification && newestMessageId != null) {
+    LaunchedEffect(destinationHash, fromNotification) {
+        if (fromNotification) {
+            // Wait for messages to load before scrolling.
+            // IMPORTANT: newestMessageId is NOT a key above — if it were, the effect would
+            // re-run on every new inbound message and yank the user from history, even when
+            // fromNotification is still true (it persists as a nav argument for the lifetime
+            // of the composable). By reading newestMessageId inside via snapshotFlow instead,
+            // we wait for the initial load and then exit; the effect does NOT re-run on
+            // subsequent messages.
+            snapshotFlow { newestMessageId }.firstOrNull { it != null }
             Log.d("MessagingScreen", "Notification entry: scrolling to newest message")
             listState.scrollToItem(0)
             hasScrolledToBottom = true

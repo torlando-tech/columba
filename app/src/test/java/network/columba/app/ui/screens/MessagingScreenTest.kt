@@ -1917,4 +1917,65 @@ class MessagingScreenTest {
         // Then - retrying_propagated shows single checkmark
         composeTestRule.onNodeWithText("✓").assertIsDisplayed()
     }
+
+    // ========== Notification Entry Tests ==========
+
+    /**
+     * Verify that MessagingScreen accepts the fromNotification parameter.
+     * This parameter is set to true by MainActivityIntentHandler when the user
+     * taps a message notification. The MessagingScreen uses it for the one-shot
+     * scroll-to-bottom effect on notification entry.
+     *
+     * The LaunchedEffect(destinationHash, fromNotification) in MessagingScreen
+     * must NOT include newestMessageId as a key — if it did, the effect would
+     * re-run on every new inbound message and yank the user from history even
+     * when fromNotification is still true (it persists as a nav argument).
+     */
+    @Test
+    fun fromNotification_true_screenComposesWithoutError() {
+        // When - composing with fromNotification = true
+        var composeError: Throwable? = null
+        runCatching {
+            composeTestRule.setContent {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    fromNotification = true,
+                    viewModel = mockViewModel,
+                )
+            }
+            composeTestRule.waitForIdle()
+        }.onFailure { composeError = it }
+
+        // Then - no composition error
+        assertTrue(
+            "Screen should compose without error when fromNotification is true",
+            composeError == null,
+        )
+    }
+
+    @Test
+    fun fromNotification_false_screenComposesWithoutError() {
+        // When - composing with fromNotification = false (default)
+        var composeError: Throwable? = null
+        runCatching {
+            composeTestRule.setContent {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    fromNotification = false,
+                    viewModel = mockViewModel,
+                )
+            }
+            composeTestRule.waitForIdle()
+        }.onFailure { composeError = it }
+
+        // Then - no composition error
+        assertTrue(
+            "Screen should compose without error when fromNotification is false",
+            composeError == null,
+        )
+    }
 }

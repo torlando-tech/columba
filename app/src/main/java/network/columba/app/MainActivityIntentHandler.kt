@@ -41,11 +41,10 @@ class MainActivityIntentHandler(
     }
 
     private fun handleOpenConversation(intent: Intent) {
-        val destinationHash = intent.getStringExtra(NotificationHelper.EXTRA_DESTINATION_HASH)
-        val peerName = intent.getStringExtra(NotificationHelper.EXTRA_PEER_NAME)
-        if (destinationHash != null && peerName != null) {
-            Log.d(logTag, "Opening conversation with: $peerName ($destinationHash)")
-            pendingNavigation.value = PendingNavigation.Conversation(destinationHash, peerName, fromNotification = true)
+        val navigation = NotificationIntentParser.parseOpenConversation(intent)
+        if (navigation != null) {
+            Log.d(logTag, "Opening conversation with: ${navigation.peerName} (${navigation.destinationHash})")
+            pendingNavigation.value = navigation
         }
     }
 

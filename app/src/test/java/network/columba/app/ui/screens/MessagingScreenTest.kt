@@ -1917,22 +1917,20 @@ class MessagingScreenTest {
         // Then - retrying_propagated shows single checkmark
         composeTestRule.onNodeWithText("✓").assertIsDisplayed()
     }
-
-    // ========== Notification Entry Tests ==========
+    // ========== Notification Entry Integration Tests ==========
 
     /**
-     * Verify that MessagingScreen accepts the fromNotification parameter.
-     * This parameter is set to true by MainActivityIntentHandler when the user
-     * taps a message notification. The MessagingScreen uses it for the one-shot
-     * scroll-to-bottom effect on notification entry.
+     * Verify that MessagingScreen composes correctly with fromNotification=true
+     * and instantiates the [NotificationScrollCoordinator] for the one-shot
+     * scroll-to-bottom effect.
      *
-     * The LaunchedEffect(destinationHash, fromNotification) in MessagingScreen
-     * must NOT include newestMessageId as a key — if it did, the effect would
-     * re-run on every new inbound message and yank the user from history even
-     * when fromNotification is still true (it persists as a nav argument).
+     * The coordinator behaviour (wait-for-readiness, one-shot only,
+     * non-notification no-scroll) is covered by [NotificationScrollCoordinatorTest].
+     * These integration tests verify the screen correctly wires the parameter
+     * through to the coordinator.
      */
     @Test
-    fun fromNotification_true_screenComposesWithoutError() {
+    fun fromNotification_true_screenComposesWithCoordinator() {
         // When - composing with fromNotification = true
         var composeError: Throwable? = null
         runCatching {
@@ -1948,15 +1946,18 @@ class MessagingScreenTest {
             composeTestRule.waitForIdle()
         }.onFailure { composeError = it }
 
-        // Then - no composition error
+        // Then - no composition error; the NotificationScrollCoordinator is
+        // created inside the composable and will drive the one-shot scroll
+        // once Paging content is ready.
         assertTrue(
-            "Screen should compose without error when fromNotification is true",
+            "Screen should compose without error when fromNotification is true, "
+                + "wiring the coordinator for the one-shot notification scroll",
             composeError == null,
         )
     }
 
     @Test
-    fun fromNotification_false_screenComposesWithoutError() {
+    fun fromNotification_false_screenComposesWithCoordinator() {
         // When - composing with fromNotification = false (default)
         var composeError: Throwable? = null
         runCatching {
@@ -1972,9 +1973,11 @@ class MessagingScreenTest {
             composeTestRule.waitForIdle()
         }.onFailure { composeError = it }
 
-        // Then - no composition error
+        // Then - no composition error; coordinator is created but will never
+        // return true from shouldScroll() because fromNotification is false.
         assertTrue(
-            "Screen should compose without error when fromNotification is false",
+            "Screen should compose without error when fromNotification is false, "
+                + "wiring a coordinator that never triggers forced scroll",
             composeError == null,
         )
     }

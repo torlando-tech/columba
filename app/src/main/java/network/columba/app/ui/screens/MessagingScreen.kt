@@ -756,16 +756,22 @@ fun MessagingScreen(
     // Notification-entry scroll: when the user taps a message notification, force-scroll
     // to the newest message even if the user was previously reading history. This is a
     // one-shot effect keyed on the destination hash so it only fires once per entry.
+    // The [NotificationScrollCoordinator] encapsulates the one-shot logic so it can be
+    // unit-tested without Compose.
+    val notifScrollCoordinator = remember(destinationHash, fromNotification) {
+        NotificationScrollCoordinator(fromNotification)
+    }
     LaunchedEffect(destinationHash, fromNotification) {
-        if (fromNotification) {
-            // Wait for messages to load before scrolling.
-            // IMPORTANT: newestMessageId is NOT a key above — if it were, the effect would
-            // re-run on every new inbound message and yank the user from history, even when
-            // fromNotification is still true (it persists as a nav argument for the lifetime
-            // of the composable). By reading newestMessageId inside via snapshotFlow instead,
-            // we wait for the initial load and then exit; the effect does NOT re-run on
-            // subsequent messages.
-            snapshotFlow { newestMessageId }.firstOrNull { it != null }
+        // Wait for messages to load.
+        // IMPORTANT: newestMessageId is NOT a key above — if it were, the effect would
+        // re-run on every new inbound message and yank the user from history, even when
+        // fromNotification is still true (it persists as a nav argument for the lifetime
+        // of the composable). By reading newestMessageId inside via snapshotFlow instead,
+        // we wait for the initial load and then exit; the effect does NOT re-run on
+        // subsequent messages.
+        snapshotFlow { newestMessageId }.firstOrNull { it != null }
+        notifScrollCoordinator.onContentReady()
+        if (notifScrollCoordinator.shouldScroll()) {
             Log.d("MessagingScreen", "Notification entry: scrolling to newest message")
             listState.scrollToItem(0)
             hasScrolledToBottom = true

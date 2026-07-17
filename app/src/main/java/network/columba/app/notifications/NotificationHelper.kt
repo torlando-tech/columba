@@ -42,7 +42,8 @@ class NotificationHelper
             private const val CHANNEL_ID_BLE_EVENTS = "ble_events"
 
             // Notification IDs
-            private const val NOTIFICATION_ID_MESSAGE = 1000
+            @VisibleForTesting
+            internal const val NOTIFICATION_ID_MESSAGE = 1000
             private const val NOTIFICATION_ID_ANNOUNCE = 2000
             private const val NOTIFICATION_ID_BLE = 3000
 
@@ -399,6 +400,23 @@ class NotificationHelper
             } catch (e: SecurityException) {
                 // Permission was revoked
             }
+        }
+
+        /**
+         * Cancel the message notification for a specific conversation destination.
+         *
+         * Uses the same ID formula as [notifyMessageReceived]:
+         * `NOTIFICATION_ID_MESSAGE + destinationHash.hashCode()`.
+         *
+         * This is safe and idempotent — cancelling a nonexistent notification
+         * is a no-op. It does not affect announce, BLE, or other conversations'
+         * notifications.
+         *
+         * @param destinationHash The destination hash whose notification should be dismissed
+         */
+        fun cancelNotificationForConversation(destinationHash: String) {
+            val notificationId = NOTIFICATION_ID_MESSAGE + destinationHash.hashCode()
+            notificationManager.cancel(notificationId)
         }
 
         /**

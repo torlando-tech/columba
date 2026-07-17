@@ -414,6 +414,69 @@ class NotificationHelperTest {
     // ========== Cancel Notification Tests ==========
 
     @Test
+    fun `cancelNotificationForConversation cancels only the matching message notification`() =
+        runBlocking {
+            // Given: Two conversations with notifications
+            val hashA = "conversation_a_hash_xyz"
+            val hashB = "conversation_b_hash_abc"
+            notificationHelper.notifyMessageReceived(
+                destinationHash = hashA,
+                peerName = "Peer A",
+                messagePreview = "Hello from A",
+                isFavorite = false,
+            )
+            notificationHelper.notifyMessageReceived(
+                destinationHash = hashB,
+                peerName = "Peer B",
+                messagePreview = "Hello from B",
+                isFavorite = false,
+            )
+            val shadowNotificationManager = shadowOf(notificationManager)
+            val aId = NotificationHelper.NOTIFICATION_ID_MESSAGE + hashA.hashCode()
+            val bId = NotificationHelper.NOTIFICATION_ID_MESSAGE + hashB.hashCode()
+            assertTrue("Notification A should exist", shadowNotificationManager.getNotification(aId) != null)
+            assertTrue("Notification B should exist", shadowNotificationManager.getNotification(bId) != null)
+            // When: Cancel only conversation A
+            notificationHelper.cancelNotificationForConversation(hashA)
+            // Then: Only A's notification is cancelled
+            assertTrue("Notification for conversation A should be cancelled", shadowNotificationManager.getNotification(aId) == null)
+            assertTrue("Notification for conversation B should still exist", shadowNotificationManager.getNotification(bId) != null)
+        }
+    @Test
+    fun `cancelNotificationForConversation is idempotent`() =
+        runBlocking {
+            // Given: One notification
+            val hash = "single_conversation_hash"
+            notificationHelper.notifyMessageReceived(
+                destinationHash = hash,
+                peerName = "Peer",
+                messagePreview = "Hello",
+                isFavorite = false,
+            )
+            // When: Cancel twice
+            notificationHelper.cancelNotificationForConversation(hash)
+            notificationHelper.cancelNotificationForConversation(hash)
+            // Then: No error, notification is cancelled
+            val shadowNotificationManager = shadowOf(notificationManager)
+            val id = NotificationHelper.NOTIFICATION_ID_MESSAGE + hash.hashCode()
+            assertTrue("Notification should be cancelled after idempotent calls", shadowNotificationManager.getNotification(id) == null)
+        }
+
+    @Test
+    fun `cancelNotificationForConversation is safe when no notification exists`() =
+        runBlocking {
+            // Given: No notifications posted
+
+            // When: Cancel a conversation that has no notification
+            val result = runCatching {
+                notificationHelper.cancelNotificationForConversation("nonexistent_hash")
+            }
+
+            // Then: No exception thrown
+            assertTrue("Cancellation of nonexistent notification should not throw", result.isSuccess)
+        }
+
+    @Test
     fun `cancelAllNotifications clears all notifications`() =
         runBlocking {
             // Given: Post a notification

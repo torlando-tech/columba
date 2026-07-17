@@ -16,6 +16,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
@@ -118,6 +119,9 @@ class MessagingViewModelImageLoadingTest {
                         mockk<IdentityResolutionManager>().also {
                             coEvery { it.requestPathForContact(any()) } just Runs
                         },
+                    notificationHelper = mockk<NotificationHelper>().also {
+                        every { it.cancelNotificationForConversation(any()) } just Runs
+                    },
                 )
             advanceUntilIdle()
             testBody()

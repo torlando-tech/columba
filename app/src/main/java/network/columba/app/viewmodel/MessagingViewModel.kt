@@ -94,6 +94,7 @@ class MessagingViewModel
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val blockedPeerRepository: network.columba.app.data.repository.BlockedPeerRepository,
         private val identityResolutionManager: network.columba.app.service.IdentityResolutionManager,
+        private val notificationHelper: network.columba.app.notifications.NotificationHelper,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -1078,6 +1079,12 @@ class MessagingViewModel
 
             // Register this conversation as active (suppresses notifications for this peer)
             activeConversationManager.setActive(destinationHash)
+
+            // Dismiss the message notification for this conversation now that the user
+            // is viewing it.  This covers both normal in-app entry and notification-tap
+            // entry, because both converge on loadMessages().  Safe and idempotent —
+            // cancelling a nonexistent notification is a no-op.
+            notificationHelper.cancelNotificationForConversation(destinationHash)
 
             // Enable fast polling (1s) for active conversation
             rnsLxmf.setConversationActive(true)

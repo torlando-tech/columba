@@ -73,6 +73,7 @@ class BleGattServer(
 ) {
     companion object {
         private const val TAG = "Columba:BLE:K:Server"
+        private const val TRANSPORT_IDENTITY_SIZE = 16
     }
 
     private var gattServer: BluetoothGattServer? = null
@@ -94,7 +95,7 @@ class BleGattServer(
     // Maps central address -> 16-byte identity (raw bytes received in handshake)
     private val addressToIdentity = mutableMapOf<String, ByteArray>()
 
-    // Maps 16-char identity hash -> central address (for identity-based keying)
+    // Maps 32-char hexadecimal identity hash -> central address
     private val identityToAddress = mutableMapOf<String, String>()
     private val identityMutex = Mutex()
 
@@ -574,7 +575,7 @@ class BleGattServer(
         }
 
         // Get MTU for this connection
-        val mtu = mtuMutex.withLock { centralMtus[address] ?: BleConstants.MIN_MTU }
+        val mtu = mtuMutex.withLock { centralMtus[address] ?: BleConstants.MIN_USABLE_MTU }
 
         Log.i(TAG, "Completing peripheral connection via external identity: $address, MTU=$mtu, identity=$identityHash")
 
@@ -619,12 +620,12 @@ class BleGattServer(
                 }
 
                 mtuMutex.withLock {
-                    centralMtus[address] = BleConstants.MIN_MTU
+                    centralMtus[address] = BleConstants.MIN_USABLE_MTU
                 }
 
                 // Fire connection callback immediately (Protocol logic moved to Python)
                 // Identity will be received later via RX characteristic write
-                val mtu = BleConstants.MIN_MTU
+                val mtu = BleConstants.MIN_USABLE_MTU
                 Log.i(TAG, "GATT connection established from $address, MTU=$mtu (identity pending)")
                 onCentralConnected?.invoke(address, mtu)
             }
@@ -756,11 +757,11 @@ class BleGattServer(
                             connectedCentrals[device.address] = device
                         }
                         mtuMutex.withLock {
-                            centralMtus[device.address] = BleConstants.MIN_MTU
+                            centralMtus[device.address] = BleConstants.MIN_USABLE_MTU
                         }
 
                         // Fire the connection callback so the bridge can register the peer
-                        val mtu = BleConstants.MIN_MTU
+                        val mtu = BleConstants.MIN_USABLE_MTU
                         Log.i(
                             TAG,
                             "DEFENSIVE: Firing retroactive onCentralConnected for ${device.address}, MTU=$mtu",
@@ -779,41 +780,40 @@ class BleGattServer(
                         )
                     }
 
-                    // 2026-01-17: Simplified identity detection - Python handles it (like Linux)
-                    // Previously, Kotlin detected 16-byte identity handshakes and called
-                    // onIdentityReceived, but Python also detected them via _handle_identity_handshake.
-                    // This created "double identity callback processing" complexity.
-                    // Now: Kotlin just passes ALL data to Python, which handles identity detection
-                    // in a single code path (matching the Linux/Bleak architecture).
-                    //
-                    // COMMENTED OUT - Kotlin-side identity detection:
-                    // val existingIdentity =
-                    //     identityMutex.withLock {
-                    //         addressToIdentity[device.address]
-                    //     }
-                    //
-                    // if (existingIdentity == null && value.size == 16) {
-                    //     // Likely identity handshake - store for Kotlin's address resolution
-                    //     val identityHash = value.toHex()
-                    //     Log.d(TAG, "Received 16-byte data from ${device.address} (likely identity): $identityHash")
-                    //
-                    //     identityMutex.withLock {
-                    //         addressToIdentity[device.address] = value
-                    //         identityToAddress[identityHash] = device.address
-                    //     }
-                    //
-                    //     // Notify identity callback (Python will also detect via data callback)
-                    //     onIdentityReceived?.invoke(device.address, identityHash)
-                    // }
+                    // Protocol v2.2 control boundary: the first RX write is the
+                    // 16-byte transport identity. Consume it natively so bridge
+                    // deduplication learns the identity before Python can create
+                    // a logical child, and never forward it as Reticulum data.
+                    val existingIdentity =
+                        identityMutex.withLock {
+                            addressToIdentity[device.address]
+                        }
+                    if (existingIdentity == null) {
+                        if (value.size != TRANSPORT_IDENTITY_SIZE) {
+                            Log.w(
+                                TAG,
+                                "Dropping pre-identity write from ${device.address}: len=${value.size}",
+                            )
+                            return@withContext
+                        }
 
-                    // Start keepalive on first data received (moved from identity detection)
-                    // This prevents supervision timeout regardless of whether it's identity or data
+                        val identityHash = value.toHex()
+                        identityMutex.withLock {
+                            addressToIdentity[device.address] = value.copyOf()
+                            identityToAddress[identityHash] = device.address
+                        }
+                        Log.i(TAG, "Received identity handshake from ${device.address}: $identityHash")
+                        onIdentityReceived?.invoke(device.address, identityHash)
+                        startPeripheralKeepalive(device.address)
+                        return@withContext
+                    }
+
+                    // Identified peers may now receive keepalives and publish
+                    // application fragments to Python.
                     val hasKeepalive = keepaliveMutex.withLock { peripheralKeepaliveJobs.containsKey(device.address) }
                     if (!hasKeepalive) {
                         startPeripheralKeepalive(device.address)
                     }
-
-                    // Pass ALL data to Python - it handles identity detection
                     onDataReceived?.invoke(device.address, value)
                 }
                 else -> {
@@ -931,8 +931,7 @@ class BleGattServer(
         device: BluetoothDevice,
         mtu: Int,
     ) {
-        // MTU includes 3-byte ATT header, so usable MTU is mtu - 3
-        val usableMtu = mtu - 3
+        val usableMtu = BleConstants.usableValueLength(mtu)
 
         mtuMutex.withLock {
             centralMtus[device.address] = usableMtu

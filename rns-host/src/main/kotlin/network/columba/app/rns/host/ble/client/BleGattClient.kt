@@ -77,7 +77,7 @@ class BleGattClient(
     private data class ConnectionData(
         val gatt: BluetoothGatt,
         val address: String,
-        var mtu: Int = BleConstants.MIN_MTU,
+        var mtu: Int = BleConstants.MIN_USABLE_MTU,
         var rxCharacteristic: BluetoothGattCharacteristic? = null,
         var txCharacteristic: BluetoothGattCharacteristic? = null,
         var identityHash: String? = null, // 32-char hex string (16 bytes)
@@ -687,8 +687,7 @@ class BleGattClient(
         status: Int,
     ) {
         if (status == BluetoothGatt.GATT_SUCCESS) {
-            // MTU includes 3-byte ATT header, so usable MTU is mtu - 3
-            val usableMtu = mtu - 3
+            val usableMtu = BleConstants.usableValueLength(mtu)
 
             connectionsMutex.withLock {
                 connections[address]?.mtu = usableMtu
@@ -700,8 +699,9 @@ class BleGattClient(
             // Complete MTU operation in queue
             operationQueue.completeOperationByKey("mtu", BleOperationQueue.OperationResult.Success())
         } else {
-            // MTU negotiation failed - use reasonable default instead of minimum
-            val fallbackMtu = BleConstants.DEFAULT_MTU - 3 // 182 bytes usable
+            // No successful exchange means the link remains at the mandatory
+            // ATT 23 / characteristic-value 20 fallback. Do not guess 185.
+            val fallbackMtu = BleConstants.MIN_USABLE_MTU
 
             connectionsMutex.withLock {
                 connections[address]?.mtu = fallbackMtu
@@ -820,7 +820,7 @@ class BleGattClient(
 
             // Connection complete!
             val connData = connectionsMutex.withLock { connections[address] }
-            val mtu = connData?.mtu ?: BleConstants.MIN_MTU
+            val mtu = connData?.mtu ?: BleConstants.MIN_USABLE_MTU
             val identityHash = connData?.identityHash
 
             Log.i(TAG, "=== CONNECTION ESTABLISHED ===")

@@ -522,7 +522,11 @@ object TestController {
                 Log.i(LOGCAT_TAG, "announce_err reason=no_active_destination")
                 return@launch
             }
-            val result = rnsCore!!.announceDestination(dest)
+            // Drive the live LXMF backend directly. Reconstructing a Destination
+            // through announceDestination() can fail after a debug-package reinstall
+            // if UI identity records were reset while the backend retained its active
+            // LXMF destination.
+            val result = rnsCore!!.triggerAutoAnnounce("Columba Android BLE Physical Test")
             if (result.isSuccess) {
                 Log.i(LOGCAT_TAG, "announced dest=${dest.hexHash}")
             } else {

@@ -92,6 +92,7 @@ class AndroidBLEDriver(BLEDriverInterface):
         self._state = DriverState.IDLE
         self.kotlin_bridge = None
         self._transport_identity = None
+        self._deferred_scan_requested = False
         self._service_uuid = None
         self._rx_char_uuid = None
         self._tx_char_uuid = None
@@ -180,6 +181,8 @@ class AndroidBLEDriver(BLEDriverInterface):
 
             self._connected_peers.clear()
             self._peer_roles.clear()
+            self._peer_mtus.clear()
+            self._deferred_scan_requested = False
             self._state = DriverState.IDLE
 
             RNS.log(f"{LOG_TAG}: Stopped", RNS.LOG_INFO)
@@ -198,6 +201,18 @@ class AndroidBLEDriver(BLEDriverInterface):
 
         if self.kotlin_bridge:
             self.kotlin_bridge.setIdentity(identity_bytes)
+
+            # BLEInterface may request scanning before Transport.identity is
+            # available. Do not form GATT links until Kotlin can send the
+            # mandatory 16-byte first-write handshake.
+            if self._deferred_scan_requested:
+                self._deferred_scan_requested = False
+                self.kotlin_bridge.startScanningAsync()
+                self._state = DriverState.SCANNING
+                RNS.log(
+                    f"{LOG_TAG}: Deferred scanning started after identity became available",
+                    RNS.LOG_DEBUG,
+                )
 
         hex_identity = identity_bytes.hex()
         RNS.log(f"{LOG_TAG}: Identity set: {hex_identity}", RNS.LOG_DEBUG)
@@ -222,6 +237,15 @@ class AndroidBLEDriver(BLEDriverInterface):
             if not self.kotlin_bridge:
                 raise Exception("Driver not started")
 
+            if self._transport_identity is None:
+                self._deferred_scan_requested = True
+                self._state = DriverState.SCANNING
+                RNS.log(
+                    f"{LOG_TAG}: Scanning deferred until transport identity is available",
+                    RNS.LOG_DEBUG,
+                )
+                return
+
             self.kotlin_bridge.startScanningAsync()
 
             self._state = DriverState.SCANNING
@@ -235,6 +259,7 @@ class AndroidBLEDriver(BLEDriverInterface):
     def stop_scanning(self):
         """Stop BLE scanning."""
         try:
+            self._deferred_scan_requested = False
             if self.kotlin_bridge:
                 self.kotlin_bridge.stopScanningAsync()
 
@@ -251,6 +276,11 @@ class AndroidBLEDriver(BLEDriverInterface):
         try:
             if not self.kotlin_bridge:
                 raise Exception("Driver not started")
+
+            if identity and identity != self._transport_identity:
+                self.set_identity(identity)
+            if self._transport_identity is None:
+                raise Exception("Transport identity not available")
 
             self.kotlin_bridge.startAdvertisingAsync(device_name)
 
@@ -316,6 +346,13 @@ class AndroidBLEDriver(BLEDriverInterface):
         This method now connects unconditionally when called.
         """
         try:
+            if self._transport_identity is None:
+                RNS.log(
+                    f"{LOG_TAG}: Deferring connection to {address} until transport identity is available",
+                    RNS.LOG_DEBUG,
+                )
+                return
+
             if not self.kotlin_bridge:
                 raise Exception("Driver not started")
 
@@ -636,6 +673,11 @@ class AndroidBLEDriver(BLEDriverInterface):
             if address not in self._connected_peers:
                 self._connected_peers.append(address)
 
+            # Kotlin always reports usable characteristic-value bytes. Cache
+            # the connection callback's value too: Android peripheral links
+            # may never receive a separate onMtuChanged callback.
+            self._peer_mtus[address] = mtu
+
             # Set role from parameter (passed from Kotlin)
             self._peer_roles[address] = role
 
@@ -788,7 +830,9 @@ class AndroidBLEDriver(BLEDriverInterface):
 
                         # IMPORTANT: Also call on_mtu_negotiated to create reassembler
                         # Without this, BLEInterface has identity but no reassembler
-                        mtu = self._peer_mtus.get(address, 23)  # Default to BLE 4.0 minimum
+                        # Kotlin/Python exchange usable characteristic-value
+                        # bytes, not raw ATT MTU. Raw 23 leaves 20 usable.
+                        mtu = self._peer_mtus.get(address, 20)
                         if self.on_mtu_negotiated:
                             self.on_mtu_negotiated(address, mtu)
 

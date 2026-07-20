@@ -239,7 +239,7 @@ class BleGattClientKeepaliveTest {
         return constructor.newInstance(
             mockGatt, // gatt
             address, // address
-            BleConstants.MIN_MTU, // mtu
+            BleConstants.MIN_USABLE_MTU, // usable characteristic-value bytes
             null, // rxCharacteristic
             null, // txCharacteristic
             null, // identityHash

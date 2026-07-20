@@ -22,6 +22,7 @@ import network.columba.app.rns.host.ble.server.BleGattServer
 import network.columba.app.rns.host.ble.util.BleOperationQueue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -33,6 +34,25 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+
+internal enum class PreferredBleRole {
+    CENTRAL,
+    PERIPHERAL,
+}
+
+/** Prefer the larger usable characteristic capacity; identity breaks ties. */
+internal fun preferredBleRole(
+    centralMtu: Int,
+    peripheralMtu: Int,
+    localIdentity: String,
+    peerIdentity: String,
+): PreferredBleRole =
+    when {
+        centralMtu > peripheralMtu -> PreferredBleRole.CENTRAL
+        peripheralMtu > centralMtu -> PreferredBleRole.PERIPHERAL
+        localIdentity < peerIdentity -> PreferredBleRole.CENTRAL
+        else -> PreferredBleRole.PERIPHERAL
+    }
 
 /**
  * Kotlin BLE Bridge.
@@ -186,6 +206,12 @@ class KotlinBLEBridge(
     // This set prevents treating such connections as "stale" during deduplication.
     private val pendingCentralConnections = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
+    // A peer may temporarily have two physical links. Keep each direction's
+    // usable characteristic capacity until deterministic convergence.
+    private val centralPeerMtus = ConcurrentHashMap<String, Int>()
+    private val peripheralPeerMtus = ConcurrentHashMap<String, Int>()
+    private val reciprocalConnectionTasks = ConcurrentHashMap<String, Job>()
+
     // Track addresses that are currently in deduplication (one connection closing)
     // Maps address -> DeduplicationTracker with timestamp and which connection is closing
     // During the grace period, we don't clean up the peer for unexpected disconnects
@@ -199,7 +225,7 @@ class KotlinBLEBridge(
     // Grace period after deduplication starts - ignore spurious disconnect events during this time
     // This handles Android BLE stack bugs where closing one GATT connection might trigger
     // spurious disconnect events for other connections to the same device
-    private val deduplicationGracePeriodMs = 2_000L
+    private val deduplicationGracePeriodMs = 10_000L
 
     // TEST HOOK: Delay between reading deduplicationState and using it in send()
     // This widens the TOCTOU race window for testing. Set to 0 in production.
@@ -573,7 +599,7 @@ class KotlinBLEBridge(
      */
     private data class PeerConnection(
         val address: String,
-        var mtu: Int = BleConstants.MIN_MTU,
+        var mtu: Int = BleConstants.MIN_USABLE_MTU,
         var isCentral: Boolean = false, // true if we connected to them
         var isPeripheral: Boolean = false, // true if they connected to us
         var identityHash: String? = null, // 32-char hex
@@ -924,6 +950,22 @@ class KotlinBLEBridge(
             callback()
             identityReadyCallback = null
         }
+
+        // A restored remote central can attach to the open GATT server before
+        // Python's Transport.identity is ready. Once both identities exist,
+        // release any reciprocal-link optimization that was intentionally held.
+        scope.launch {
+            val eligibleAddresses =
+                peersMutex.withLock {
+                    connectedPeers.values
+                        .filter { peer ->
+                            peer.isPeripheral &&
+                                !peer.isCentral &&
+                                peer.identityHash != null
+                        }.map { it.address }
+                }
+            eligibleAddresses.forEach(::scheduleReciprocalCentralConnection)
+        }
     }
 
     suspend fun startScanning(): Result<Unit> =
@@ -1136,14 +1178,22 @@ class KotlinBLEBridge(
                 return
             }
 
-            // Track as pending central connection (for race condition fix in stale detection)
-            // This prevents the connection from being treated as "stale" when identity arrives
-            // before handlePeerConnected() has added the peer to connectedPeers
-            pendingCentralConnections.add(address)
+            // Track atomically as pending before entering the GATT client. The
+            // scanner/Python path and the fallback-only reciprocal task may
+            // both request the same central connection.
+            if (!pendingCentralConnections.add(address)) {
+                Log.d(TAG, "Central connection already pending for $address")
+                return
+            }
 
             // Connect via GATT client
-            client.connect(address)
+            val result = client.connect(address)
+            if (result.isFailure) {
+                pendingCentralConnections.remove(address)
+                Log.w(TAG, "Failed to start central connection to $address: ${result.exceptionOrNull()?.message}")
+            }
         } catch (e: Exception) {
+            pendingCentralConnections.remove(address)
             Log.e(TAG, "Failed to connect to $address", e)
         }
     }
@@ -1617,7 +1667,7 @@ class KotlinBLEBridge(
 
         gattClient?.onMtuChanged = { address: String, mtu: Int ->
             scope.launch {
-                handleMtuChanged(address, mtu)
+                handleMtuChanged(address, mtu, isCentral = true)
             }
         }
 
@@ -1648,7 +1698,7 @@ class KotlinBLEBridge(
 
         gattServer?.onMtuChanged = { address: String, mtu: Int ->
             scope.launch {
-                handleMtuChanged(address, mtu)
+                handleMtuChanged(address, mtu, isCentral = false)
             }
         }
 
@@ -1703,10 +1753,16 @@ class KotlinBLEBridge(
 
             if (isCentral) {
                 peer.isCentral = true
+                centralPeerMtus[address] = mtu
+                reciprocalConnectionTasks.remove(address)?.cancel()
             } else {
                 peer.isPeripheral = true
+                peripheralPeerMtus[address] = mtu
             }
-            peer.mtu = maxOf(peer.mtu, mtu) // Use best MTU
+            peer.mtu = maxOf(
+                centralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU,
+                peripheralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU,
+            )
             // Update RSSI if we got a valid one (might be first connection as central)
             if (rssiAtConnection != -100) {
                 peer.rssi = rssiAtConnection
@@ -1727,16 +1783,26 @@ class KotlinBLEBridge(
                 val localIdentityBytes = transportIdentityHash
                 if (peerIdentity != null && localIdentityBytes != null) {
                     val localIdentityHex = localIdentityBytes.toHex()
+                    val centralMtu = centralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU
+                    val peripheralMtu = peripheralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU
+                    val preferredRole = preferredBleRole(centralMtu, peripheralMtu, localIdentityHex, peerIdentity)
                     // Acquire per-peer mutex before changing deduplicationState
                     // This ensures send() sees consistent state
                     peer.stateMutex.withLock {
-                        // Lower identity hash keeps central role
-                        if (localIdentityHex < peerIdentity) {
-                            Log.i(TAG, "Deduplication: keeping central (local=$localIdentityHex < peer=$peerIdentity)")
+                        if (preferredRole == PreferredBleRole.CENTRAL) {
+                            Log.i(
+                                TAG,
+                                "Deduplication: keeping central " +
+                                    "(centralMtu=$centralMtu peripheralMtu=$peripheralMtu)",
+                            )
                             peer.deduplicationState = DeduplicationState.CLOSING_PERIPHERAL
                             dedupeAction = DedupeAction.CLOSE_PERIPHERAL
                         } else {
-                            Log.i(TAG, "Deduplication: keeping peripheral (local=$localIdentityHex > peer=$peerIdentity)")
+                            Log.i(
+                                TAG,
+                                "Deduplication: keeping peripheral " +
+                                    "(centralMtu=$centralMtu peripheralMtu=$peripheralMtu)",
+                            )
                             peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
                             dedupeAction = DedupeAction.CLOSE_CENTRAL
                         }
@@ -1750,15 +1816,10 @@ class KotlinBLEBridge(
 
             val identityHash = addressToIdentity[address]
 
-            // ALWAYS notify Python of the connection — protocol decisions (timeout,
-            // duplicate handling, etc.) live in BLEInterface.py per v0.10.x parity.
-            // identityHash may be null at this point; handleIdentityReceived will
-            // re-fire when identity arrives if we register the pending connection below.
-            notifyPythonConnected(address, peer.mtu, isCentral, peer.isPeripheral, identityHash)
-
-            // Track pending connection if identity not yet received
-            // When identity arrives via handleIdentityReceived, we'll fire onConnected
-            // again with the now-known identity.
+            // Protocol v2.2 does not publish physical links to Python until the
+            // mandatory 16-byte identity handshake is complete. Publishing an
+            // identity-pending restored address lets BLEInterface's legacy-v1
+            // fallback create a second logical peer after address rotation.
             if (identityHash == null) {
                 pendingConnections[address] =
                     PendingConnection(
@@ -1767,7 +1828,9 @@ class KotlinBLEBridge(
                         isCentral = isCentral,
                         isPeripheral = peer.isPeripheral,
                     )
-                Log.d(TAG, "Connection $address pending identity - Python will handle timeout")
+                Log.d(TAG, "Connection $address pending identity - withholding Python callback")
+            } else {
+                notifyPythonConnected(address, peer.mtu, isCentral, peer.isPeripheral, identityHash)
             }
         }
 
@@ -1781,6 +1844,7 @@ class KotlinBLEBridge(
                         timestamp = System.currentTimeMillis(),
                         closingCentral = true,
                     )
+                scheduleDeduplicationTrackerCleanup(address)
                 Log.i(TAG, "Deduplication: disconnecting central connection to $address")
                 gattClient?.disconnect(address)
             }
@@ -1791,6 +1855,7 @@ class KotlinBLEBridge(
                         timestamp = System.currentTimeMillis(),
                         closingCentral = false,
                     )
+                scheduleDeduplicationTrackerCleanup(address)
                 Log.i(TAG, "Deduplication: disconnecting peripheral connection from $address")
                 gattServer?.disconnectCentral(address)
             }
@@ -1799,6 +1864,55 @@ class KotlinBLEBridge(
 
         // Notify native listeners of connection state change
         notifyConnectionChange()
+    }
+
+    private fun scheduleReciprocalCentralConnection(address: String) {
+        if (transportIdentityHash == null || addressToIdentity[address] == null) {
+            Log.d(TAG, "Reciprocal connection deferred for $address until both identities are available")
+            return
+        }
+        if (reciprocalConnectionTasks.containsKey(address)) return
+        val task =
+            scope.launch {
+                delay(2_000)
+                val shouldConnect =
+                    peersMutex.withLock {
+                        val peer = connectedPeers[address]
+                        peer?.isPeripheral == true &&
+                            !peer.isCentral &&
+                            peer.identityHash != null &&
+                            transportIdentityHash != null &&
+                            address !in pendingCentralConnections &&
+                            (peripheralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU) <=
+                            BleConstants.MIN_USABLE_MTU
+                    }
+                reciprocalConnectionTasks.remove(address)
+                if (shouldConnect) {
+                    Log.i(TAG, "Fallback-only inbound link at $address; forming reciprocal Android-central link")
+                    connect(address)
+                }
+            }
+        val existing = reciprocalConnectionTasks.putIfAbsent(address, task)
+        if (existing != null) task.cancel()
+    }
+
+    private fun scheduleDeduplicationTrackerCleanup(address: String) {
+        val tracker = deduplicationInProgress[address] ?: return
+        scope.launch {
+            delay(deduplicationGracePeriodMs)
+            if (!deduplicationInProgress.remove(address, tracker)) return@launch
+
+            val keptConnectionAlive =
+                if (tracker.closingCentral) {
+                    gattServer?.isConnected(address) == true
+                } else {
+                    gattClient?.isConnected(address) == true
+                }
+            if (!keptConnectionAlive) {
+                Log.w(TAG, "Deduplication grace expired without surviving link for $address")
+                handlePeerDisconnected(address, isCentral = !tracker.closingCentral)
+            }
+        }
     }
 
     /**
@@ -1843,14 +1957,17 @@ class KotlinBLEBridge(
                         )
                         return
                     }
-                    // Expected disconnect - process normally and clear tracker
+                    // Expected disconnect - process it, but retain the tracker.
+                    // On some Android stacks closing one GATT role tears down
+                    // the shared ACL and a second callback for the kept role
+                    // follows about a second later.
                     Log.d(TAG, "Deduplication disconnect processed for $address (${if (isCentral) "central" else "peripheral"})")
-                    deduplicationInProgress.remove(address)
                 }
             }
 
             if (isCentral) {
                 peer.isCentral = false
+                centralPeerMtus.remove(address)
                 // Also clean up pending central tracking
                 pendingCentralConnections.remove(address)
                 // Clear deduplication state if we were closing this connection
@@ -1863,6 +1980,8 @@ class KotlinBLEBridge(
                 }
             } else {
                 peer.isPeripheral = false
+                peripheralPeerMtus.remove(address)
+                reciprocalConnectionTasks.remove(address)?.cancel()
                 // Clear deduplication state if we were closing this connection
                 // Acquire per-peer mutex to ensure send() sees consistent state
                 peer.stateMutex.withLock {
@@ -1965,19 +2084,31 @@ class KotlinBLEBridge(
     private suspend fun handleMtuChanged(
         address: String,
         mtu: Int,
+        isCentral: Boolean,
     ) {
-        peersMutex.withLock {
+        val effectiveMtu = peersMutex.withLock {
             val peer = connectedPeers[address]
             if (peer != null) {
-                peer.mtu = maxOf(peer.mtu, mtu)
+                if (isCentral) {
+                    centralPeerMtus[address] = mtu
+                } else {
+                    peripheralPeerMtus[address] = mtu
+                }
+                peer.mtu = maxOf(
+                    centralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU,
+                    peripheralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU,
+                )
                 Log.d(TAG, "MTU updated for $address: ${peer.mtu}")
+                peer.mtu
+            } else {
+                mtu
             }
         }
         // Python driver sizes its fragmenter/reassembler on each MTU update.
         // Fire outside the mutex so a slow Python callback doesn't stall other
         // peers' connection callbacks waiting for the same lock.
         runCatching {
-            onMtuNegotiated?.callAttr("__call__", address, mtu)
+            onMtuNegotiated?.callAttr("__call__", address, effectiveMtu)
         }.onFailure { Log.w(TAG, "Python onMtuNegotiated threw for $address: ${it.message}") }
     }
 
@@ -2218,6 +2349,13 @@ class KotlinBLEBridge(
         runCatching {
             onIdentityReceived?.callAttr("__call__", address, identityHash)
         }.onFailure { Log.w(TAG, "Python onIdentityReceived threw for $address: ${it.message}") }
+
+        // Android can request a larger ATT MTU only as GATT client. Require a
+        // completed inbound identity handshake before connecting back, so an
+        // unrelated central cannot trigger a reciprocal connection attempt.
+        if (!isCentralConnection) {
+            scheduleReciprocalCentralConnection(address)
+        }
 
         // Notify Python of address change for MAC-rotation handling. Only fired
         // when the identity→address mapping actually moved (set inside the mutex

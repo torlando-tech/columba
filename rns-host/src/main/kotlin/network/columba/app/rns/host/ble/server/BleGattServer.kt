@@ -35,6 +35,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+internal const val BLE_TRANSPORT_IDENTITY_SIZE = 16
+
+internal fun acceptsRxWrite(
+    hasIdentity: Boolean,
+    valueSize: Int,
+): Boolean = hasIdentity || valueSize == BLE_TRANSPORT_IDENTITY_SIZE
+
 /**
  * BLE GATT Server for peripheral mode.
  *
@@ -73,7 +80,6 @@ class BleGattServer(
 ) {
     companion object {
         private const val TAG = "Columba:BLE:K:Server"
-        private const val TRANSPORT_IDENTITY_SIZE = 16
     }
 
     private var gattServer: BluetoothGattServer? = null
@@ -737,84 +743,7 @@ class BleGattServer(
 
             when (characteristic.uuid) {
                 BleConstants.CHARACTERISTIC_RX_UUID -> {
-                    // RX characteristic write - data received from central
-                    Log.i(TAG, "Received ${value.size} bytes from ${device.address}")
-
-                    // DEFENSIVE FIX: Android's onConnectionStateChange is unreliable and sometimes
-                    // doesn't fire. If we receive data from a device that's not in connectedCentrals,
-                    // retroactively register it. This prevents orphaned connections where keepalives
-                    // flow but data can't be sent back (because the address isn't tracked).
-                    val isKnown = centralsMutex.withLock { connectedCentrals.containsKey(device.address) }
-                    if (!isKnown) {
-                        Log.w(
-                            TAG,
-                            "DEFENSIVE RECOVERY: Data received from ${device.address} but " +
-                                "onConnectionStateChange was never called! Retroactively registering connection.",
-                        )
-
-                        // Simulate what onConnectionStateChange(STATE_CONNECTED) would have done
-                        centralsMutex.withLock {
-                            connectedCentrals[device.address] = device
-                        }
-                        mtuMutex.withLock {
-                            centralMtus[device.address] = BleConstants.MIN_USABLE_MTU
-                        }
-
-                        // Fire the connection callback so the bridge can register the peer
-                        val mtu = BleConstants.MIN_USABLE_MTU
-                        Log.i(
-                            TAG,
-                            "DEFENSIVE: Firing retroactive onCentralConnected for ${device.address}, MTU=$mtu",
-                        )
-                        onCentralConnected?.invoke(device.address, mtu)
-                    }
-
-                    // Send response if needed
-                    if (responseNeeded) {
-                        gattServer?.sendResponse(
-                            device,
-                            requestId,
-                            BluetoothGatt.GATT_SUCCESS,
-                            offset,
-                            value,
-                        )
-                    }
-
-                    // Protocol v2.2 control boundary: the first RX write is the
-                    // 16-byte transport identity. Consume it natively so bridge
-                    // deduplication learns the identity before Python can create
-                    // a logical child, and never forward it as Reticulum data.
-                    val existingIdentity =
-                        identityMutex.withLock {
-                            addressToIdentity[device.address]
-                        }
-                    if (existingIdentity == null) {
-                        if (value.size != TRANSPORT_IDENTITY_SIZE) {
-                            Log.w(
-                                TAG,
-                                "Dropping pre-identity write from ${device.address}: len=${value.size}",
-                            )
-                            return@withContext
-                        }
-
-                        val identityHash = value.toHex()
-                        identityMutex.withLock {
-                            addressToIdentity[device.address] = value.copyOf()
-                            identityToAddress[identityHash] = device.address
-                        }
-                        Log.i(TAG, "Received identity handshake from ${device.address}: $identityHash")
-                        onIdentityReceived?.invoke(device.address, identityHash)
-                        startPeripheralKeepalive(device.address)
-                        return@withContext
-                    }
-
-                    // Identified peers may now receive keepalives and publish
-                    // application fragments to Python.
-                    val hasKeepalive = keepaliveMutex.withLock { peripheralKeepaliveJobs.containsKey(device.address) }
-                    if (!hasKeepalive) {
-                        startPeripheralKeepalive(device.address)
-                    }
-                    onDataReceived?.invoke(device.address, value)
+                    handleRxWriteRequest(device, requestId, responseNeeded, offset, value)
                 }
                 else -> {
                     Log.w(TAG, "Write request for unknown characteristic: ${characteristic.uuid}")
@@ -832,6 +761,65 @@ class BleGattServer(
         } catch (e: SecurityException) {
             Log.e(TAG, "Permission denied in handleCharacteristicWriteRequest", e)
         }
+    }
+
+    private suspend fun handleRxWriteRequest(
+        device: BluetoothDevice,
+        requestId: Int,
+        responseNeeded: Boolean,
+        offset: Int,
+        value: ByteArray,
+    ) {
+        Log.i(TAG, "Received ${value.size} bytes from ${device.address}")
+
+        // Protocol v2.2 requires a 16-byte transport identity as the first
+        // write. Never fall back to an address-keyed Python peer: rotating BLE
+        // addresses would create duplicate logical interfaces. Reject and close
+        // incompatible centrals so they cannot remain as phantom GATT links.
+        val existingIdentity = identityMutex.withLock { addressToIdentity[device.address] }
+        if (!acceptsRxWrite(existingIdentity != null, value.size)) {
+            Log.w(TAG, "Rejecting pre-identity write from ${device.address}: len=${value.size}")
+            if (responseNeeded) {
+                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null)
+            }
+            gattServer?.cancelConnection(device)
+            return
+        }
+
+        // Android sometimes omits onConnectionStateChange. Receiving a valid
+        // identity/data write proves the physical link exists, so recover its
+        // address and conservative capacity before publishing any callbacks.
+        val isKnown = centralsMutex.withLock { connectedCentrals.containsKey(device.address) }
+        if (!isKnown) {
+            Log.w(TAG, "Recovering unregistered central ${device.address} from RX write")
+            centralsMutex.withLock { connectedCentrals[device.address] = device }
+            mtuMutex.withLock { centralMtus[device.address] = BleConstants.MIN_USABLE_MTU }
+            onCentralConnected?.invoke(device.address, BleConstants.MIN_USABLE_MTU)
+        }
+
+        if (responseNeeded) {
+            gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
+        }
+
+        if (existingIdentity == null) {
+            val identityHash = value.toHex()
+            identityMutex.withLock {
+                addressToIdentity[device.address] = value.copyOf()
+                identityToAddress[identityHash] = device.address
+            }
+            Log.i(TAG, "Received identity handshake from ${device.address}: $identityHash")
+            onIdentityReceived?.invoke(device.address, identityHash)
+            startPeripheralKeepalive(device.address)
+            return
+        }
+
+        val hasKeepalive = keepaliveMutex.withLock {
+            peripheralKeepaliveJobs.containsKey(device.address)
+        }
+        if (!hasKeepalive) {
+            startPeripheralKeepalive(device.address)
+        }
+        onDataReceived?.invoke(device.address, value)
     }
 
     private suspend fun handleDescriptorReadRequest(

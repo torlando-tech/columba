@@ -103,12 +103,24 @@ class AndroidBLEDriverStartupTests(unittest.TestCase):
             driver.kotlin_bridge.calls,
         )
 
-    def test_connect_is_blocked_before_identity(self):
+    def test_connect_waits_for_identity_then_replays_once(self):
         driver = self.new_driver()
+        address = "00:11:22:33:44:55"
 
-        driver.connect("00:11:22:33:44:55")
+        driver.connect(address)
+        driver.connect(address)
 
         self.assertEqual([], driver.kotlin_bridge.calls)
+        self.assertEqual({address}, driver._deferred_connection_addresses)
+
+        identity = b"z" * 16
+        driver.set_identity(identity)
+
+        self.assertEqual(
+            [("identity", identity), ("connect", address)],
+            driver.kotlin_bridge.calls,
+        )
+        self.assertEqual(set(), driver._deferred_connection_addresses)
 
     def test_advertising_installs_identity_before_start(self):
         driver = self.new_driver()

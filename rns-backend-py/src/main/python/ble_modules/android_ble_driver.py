@@ -93,6 +93,7 @@ class AndroidBLEDriver(BLEDriverInterface):
         self.kotlin_bridge = None
         self._transport_identity = None
         self._deferred_scan_requested = False
+        self._deferred_connection_addresses = set()
         self._service_uuid = None
         self._rx_char_uuid = None
         self._tx_char_uuid = None
@@ -183,6 +184,8 @@ class AndroidBLEDriver(BLEDriverInterface):
             self._peer_roles.clear()
             self._peer_mtus.clear()
             self._deferred_scan_requested = False
+            with self._identity_lock:
+                self._deferred_connection_addresses.clear()
             self._state = DriverState.IDLE
 
             RNS.log(f"{LOG_TAG}: Stopped", RNS.LOG_INFO)
@@ -197,7 +200,10 @@ class AndroidBLEDriver(BLEDriverInterface):
         if len(identity_bytes) != 16:
             raise ValueError("Identity must be 16 bytes")
 
-        self._transport_identity = identity_bytes
+        with self._identity_lock:
+            self._transport_identity = identity_bytes
+            deferred_connections = sorted(self._deferred_connection_addresses)
+            self._deferred_connection_addresses.clear()
 
         if self.kotlin_bridge:
             self.kotlin_bridge.setIdentity(identity_bytes)
@@ -211,6 +217,13 @@ class AndroidBLEDriver(BLEDriverInterface):
                 self._state = DriverState.SCANNING
                 RNS.log(
                     f"{LOG_TAG}: Deferred scanning started after identity became available",
+                    RNS.LOG_DEBUG,
+                )
+
+            for address in deferred_connections:
+                self.kotlin_bridge.connectAsync(address)
+                RNS.log(
+                    f"{LOG_TAG}: Replaying deferred connection to {address}",
                     RNS.LOG_DEBUG,
                 )
 
@@ -346,7 +359,11 @@ class AndroidBLEDriver(BLEDriverInterface):
         This method now connects unconditionally when called.
         """
         try:
-            if self._transport_identity is None:
+            with self._identity_lock:
+                defer_connection = self._transport_identity is None
+                if defer_connection:
+                    self._deferred_connection_addresses.add(address)
+            if defer_connection:
                 RNS.log(
                     f"{LOG_TAG}: Deferring connection to {address} until transport identity is available",
                     RNS.LOG_DEBUG,

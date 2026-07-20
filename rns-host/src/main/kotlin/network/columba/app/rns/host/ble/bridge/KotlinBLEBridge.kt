@@ -1155,42 +1155,36 @@ class KotlinBLEBridge(
 
             // NOTE: MAC sorting moved to Python. Python should call shouldConnect() first.
             // We still check for existing connections to avoid duplicate GATT operations.
-            connectedPeers[address]?.let { peer ->
-                if (peer.isCentral) {
-                    Log.w(TAG, "Already connected to $address as central")
-                    return
-                }
-                // NOTE: Dual connection handling moved to Python.
-                // We no longer skip connecting if peripheral exists - Python decides.
-            }
-
-            // Check connection limit
+            val alreadyCentral = connectedPeers[address]?.isCentral == true
             val centralCount = connectedPeers.count { it.value.isCentral }
-            if (centralCount >= BleConstants.MAX_CONNECTIONS) {
-                Log.w(TAG, "Maximum central connections reached ($centralCount/${BleConstants.MAX_CONNECTIONS})")
-                return
-            }
-
-            // Check if GATT client is available
             val client = gattClient
-            if (client == null) {
-                Log.w(TAG, "Cannot connect to $address - Bluetooth not available")
-                return
-            }
 
-            // Track atomically as pending before entering the GATT client. The
-            // scanner/Python path and the fallback-only reciprocal task may
-            // both request the same central connection.
-            if (!pendingCentralConnections.add(address)) {
-                Log.d(TAG, "Central connection already pending for $address")
-                return
-            }
-
-            // Connect via GATT client
-            val result = client.connect(address)
-            if (result.isFailure) {
-                pendingCentralConnections.remove(address)
-                Log.w(TAG, "Failed to start central connection to $address: ${result.exceptionOrNull()?.message}")
+            when {
+                alreadyCentral -> {
+                    Log.w(TAG, "Already connected to $address as central")
+                }
+                centralCount >= BleConstants.MAX_CONNECTIONS -> {
+                    Log.w(TAG, "Maximum central connections reached ($centralCount/${BleConstants.MAX_CONNECTIONS})")
+                }
+                client == null -> {
+                    Log.w(TAG, "Cannot connect to $address - Bluetooth not available")
+                }
+                !pendingCentralConnections.add(address) -> {
+                    Log.d(TAG, "Central connection already pending for $address")
+                }
+                else -> {
+                    // Track atomically as pending before entering the GATT client. The
+                    // scanner/Python path and the fallback-only reciprocal task may
+                    // both request the same central connection.
+                    val result = client.connect(address)
+                    if (result.isFailure) {
+                        pendingCentralConnections.remove(address)
+                        Log.w(
+                            TAG,
+                            "Failed to start central connection to $address: ${result.exceptionOrNull()?.message}",
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             pendingCentralConnections.remove(address)
@@ -1720,6 +1714,52 @@ class KotlinBLEBridge(
         }
     }
 
+    private suspend fun resolveDualConnectionAction(
+        address: String,
+        peer: PeerConnection,
+    ): DedupeAction {
+        if (!peer.isCentral || !peer.isPeripheral) return DedupeAction.NONE
+
+        dualConnectionRaceCount++
+        Log.d(TAG, "Dual connection count: $dualConnectionRaceCount")
+
+        val peerIdentity = addressToIdentity[address]
+        val localIdentityBytes = transportIdentityHash
+        if (peerIdentity == null || localIdentityBytes == null) {
+            Log.w(TAG, "Dual connection but identity not yet available - deferring deduplication")
+            return DedupeAction.NONE
+        }
+
+        val centralMtu = centralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU
+        val peripheralMtu = peripheralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU
+        val preferredRole = preferredBleRole(
+            centralMtu,
+            peripheralMtu,
+            localIdentityBytes.toHex(),
+            peerIdentity,
+        )
+
+        return peer.stateMutex.withLock {
+            if (preferredRole == PreferredBleRole.CENTRAL) {
+                Log.i(
+                    TAG,
+                    "Deduplication: keeping central " +
+                        "(centralMtu=$centralMtu peripheralMtu=$peripheralMtu)",
+                )
+                peer.deduplicationState = DeduplicationState.CLOSING_PERIPHERAL
+                DedupeAction.CLOSE_PERIPHERAL
+            } else {
+                Log.i(
+                    TAG,
+                    "Deduplication: keeping peripheral " +
+                        "(centralMtu=$centralMtu peripheralMtu=$peripheralMtu)",
+                )
+                peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
+                DedupeAction.CLOSE_CENTRAL
+            }
+        }
+    }
+
     /**
      * Handle peer connection established.
      *
@@ -1774,43 +1814,10 @@ class KotlinBLEBridge(
                 peer.identityHash = existingIdentity
             }
 
-            // Handle dual connection - decide which to keep based on identity comparison
-            if (peer.isCentral && peer.isPeripheral) {
-                dualConnectionRaceCount++
-                Log.d(TAG, "Dual connection count: $dualConnectionRaceCount")
-
-                val peerIdentity = addressToIdentity[address]
-                val localIdentityBytes = transportIdentityHash
-                if (peerIdentity != null && localIdentityBytes != null) {
-                    val localIdentityHex = localIdentityBytes.toHex()
-                    val centralMtu = centralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU
-                    val peripheralMtu = peripheralPeerMtus[address] ?: BleConstants.MIN_USABLE_MTU
-                    val preferredRole = preferredBleRole(centralMtu, peripheralMtu, localIdentityHex, peerIdentity)
-                    // Acquire per-peer mutex before changing deduplicationState
-                    // This ensures send() sees consistent state
-                    peer.stateMutex.withLock {
-                        if (preferredRole == PreferredBleRole.CENTRAL) {
-                            Log.i(
-                                TAG,
-                                "Deduplication: keeping central " +
-                                    "(centralMtu=$centralMtu peripheralMtu=$peripheralMtu)",
-                            )
-                            peer.deduplicationState = DeduplicationState.CLOSING_PERIPHERAL
-                            dedupeAction = DedupeAction.CLOSE_PERIPHERAL
-                        } else {
-                            Log.i(
-                                TAG,
-                                "Deduplication: keeping peripheral " +
-                                    "(centralMtu=$centralMtu peripheralMtu=$peripheralMtu)",
-                            )
-                            peer.deduplicationState = DeduplicationState.CLOSING_CENTRAL
-                            dedupeAction = DedupeAction.CLOSE_CENTRAL
-                        }
-                    }
-                } else {
-                    Log.w(TAG, "Dual connection but identity not yet available - deferring deduplication")
-                }
-            }
+            // Resolve a simultaneous central/peripheral pair only after both
+            // transport identities are known. The helper updates the peer's
+            // send-visible deduplication state under its per-peer mutex.
+            dedupeAction = resolveDualConnectionAction(address, peer)
 
             Log.i(TAG, "Peer connected: $address (central=$isCentral, peripheral=${peer.isPeripheral}, dedupe=${peer.deduplicationState}, MTU=$mtu)")
 

@@ -83,8 +83,11 @@ fun SavedPeersScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Deduplicate by destinationHash to prevent LazyColumn duplicate-key
+                // crash (COLUMBA-99) — multiple announce rows can share a destinationHash.
+                val uniqueSavedPeers = savedPeers.distinctBy { it.destinationHash }
                 items(
-                    savedPeers,
+                    uniqueSavedPeers,
                     key = { announce -> "saved_${announce.destinationHash}" },
                 ) { announce ->
                     Box {

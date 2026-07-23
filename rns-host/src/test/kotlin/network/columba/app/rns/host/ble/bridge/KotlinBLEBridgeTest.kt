@@ -479,7 +479,7 @@ class KotlinBLEBridgeTest {
         runTest {
             // Given
             val peerAddress = "AA:BB:CC:DD:EE:FF"
-            val mtuValue = 517
+            val mtuValue = 512
             coEvery { mockScanner.getDevicesSortedByPriority() } returns emptyList()
 
             val bridge = createBridgeWithMockScanner()
@@ -595,8 +595,8 @@ class KotlinBLEBridgeTest {
      *
      * BUG (before fix):
      * - BleGattServer.onCentralConnected callback signature: ((String) -> Unit)
-     * - KotlinBLEBridge uses MIN_MTU (23) when handling peripheral connections
-     * - Result: Peripheral connections report MTU 23 even when 514 was negotiated
+     * - KotlinBLEBridge used raw MIN_MTU (23) for peripheral connections
+     * - Result: Peripheral connections reported 23 instead of usable bytes
      *
      * FIX (after):
      * - BleGattServer.onCentralConnected callback signature: ((String, Int) -> Unit)
@@ -609,15 +609,15 @@ class KotlinBLEBridgeTest {
     @Test
     fun `peripheral connection should report actual MTU not default MIN_MTU`() =
         runTest {
-            // Given: A peripheral connection with negotiated MTU 514
+            // Given: A peripheral connection with maximum usable value length
             val laptopAddress = "28:95:29:83:A8:AA"
-            val negotiatedMtu = 514
+            val negotiatedMtu = 512
 
             val bridge = createBridgeWithMockScanner()
 
             // Simulate peripheral connection as it would be created by the callback
-            // NOTE: With BUGGY code, callback passes MIN_MTU (23) regardless of negotiation
-            //       With FIXED code, callback passes actual negotiated MTU (514)
+            // NOTE: Fixed callbacks pass usable characteristic-value bytes,
+            // capped at the 512-byte GATT attribute-value limit.
             // This simulates what SHOULD happen with the fix
             addMockPeer(
                 bridge = bridge,
@@ -631,7 +631,7 @@ class KotlinBLEBridgeTest {
             // When
             val details = bridge.getConnectionDetails()
 
-            // Then: MTU should be 514, not 23
+            // Then: capacity should be 512, not raw minimum 23
             val connection = details.find { it.currentMac == laptopAddress }
             assertNotNull("Connection should exist", connection)
             assertEquals(negotiatedMtu, connection!!.mtu)

@@ -61,18 +61,31 @@ object BleConstants {
      */
     const val MIN_RSSI_DBM = -85
 
-    /**
-     * Maximum MTU (Maximum Transmission Unit) to request.
-     * Android supports up to 517 bytes (512 data + 5 header).
-     * Requesting larger MTU reduces packet fragmentation.
-     */
+    /** Maximum raw ATT MTU to request from an Android GATT client. */
     const val MAX_MTU = 517
+
+    /** Maximum GATT attribute value defined by the Bluetooth specification. */
+    const val MAX_ATTRIBUTE_VALUE_LENGTH = 512
 
     /**
      * Minimum MTU guaranteed by BLE spec.
      * Used as fallback if MTU negotiation fails.
      */
     const val MIN_MTU = 23
+
+    /** ATT protocol overhead excluded from characteristic values. */
+    const val ATT_HEADER_SIZE = 3
+
+    /**
+     * Minimum characteristic payload available when no MTU callback occurs.
+     * CoreBluetooth centrals do not expose Android's explicit requestMtu API,
+     * so Android GATT-server links must use this fallback for interoperability.
+     */
+    const val MIN_USABLE_MTU = MIN_MTU - ATT_HEADER_SIZE
+
+    /** Convert a raw ATT MTU into bytes usable by one characteristic value. */
+    fun usableValueLength(rawAttMtu: Int): Int =
+        (rawAttMtu - ATT_HEADER_SIZE).coerceIn(MIN_USABLE_MTU, MAX_ATTRIBUTE_VALUE_LENGTH)
 
     /**
      * Default MTU if negotiation doesn't happen.

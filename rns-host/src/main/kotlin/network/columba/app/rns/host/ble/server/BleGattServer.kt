@@ -35,6 +35,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+internal const val BLE_TRANSPORT_IDENTITY_SIZE = 16
+
+internal fun acceptsRxWrite(
+    hasIdentity: Boolean,
+    valueSize: Int,
+): Boolean = hasIdentity || valueSize == BLE_TRANSPORT_IDENTITY_SIZE
+
 /**
  * BLE GATT Server for peripheral mode.
  *
@@ -94,7 +101,7 @@ class BleGattServer(
     // Maps central address -> 16-byte identity (raw bytes received in handshake)
     private val addressToIdentity = mutableMapOf<String, ByteArray>()
 
-    // Maps 16-char identity hash -> central address (for identity-based keying)
+    // Maps 32-char hexadecimal identity hash -> central address
     private val identityToAddress = mutableMapOf<String, String>()
     private val identityMutex = Mutex()
 
@@ -574,7 +581,7 @@ class BleGattServer(
         }
 
         // Get MTU for this connection
-        val mtu = mtuMutex.withLock { centralMtus[address] ?: BleConstants.MIN_MTU }
+        val mtu = mtuMutex.withLock { centralMtus[address] ?: BleConstants.MIN_USABLE_MTU }
 
         Log.i(TAG, "Completing peripheral connection via external identity: $address, MTU=$mtu, identity=$identityHash")
 
@@ -619,12 +626,12 @@ class BleGattServer(
                 }
 
                 mtuMutex.withLock {
-                    centralMtus[address] = BleConstants.MIN_MTU
+                    centralMtus[address] = BleConstants.MIN_USABLE_MTU
                 }
 
                 // Fire connection callback immediately (Protocol logic moved to Python)
                 // Identity will be received later via RX characteristic write
-                val mtu = BleConstants.MIN_MTU
+                val mtu = BleConstants.MIN_USABLE_MTU
                 Log.i(TAG, "GATT connection established from $address, MTU=$mtu (identity pending)")
                 onCentralConnected?.invoke(address, mtu)
             }
@@ -736,85 +743,7 @@ class BleGattServer(
 
             when (characteristic.uuid) {
                 BleConstants.CHARACTERISTIC_RX_UUID -> {
-                    // RX characteristic write - data received from central
-                    Log.i(TAG, "Received ${value.size} bytes from ${device.address}")
-
-                    // DEFENSIVE FIX: Android's onConnectionStateChange is unreliable and sometimes
-                    // doesn't fire. If we receive data from a device that's not in connectedCentrals,
-                    // retroactively register it. This prevents orphaned connections where keepalives
-                    // flow but data can't be sent back (because the address isn't tracked).
-                    val isKnown = centralsMutex.withLock { connectedCentrals.containsKey(device.address) }
-                    if (!isKnown) {
-                        Log.w(
-                            TAG,
-                            "DEFENSIVE RECOVERY: Data received from ${device.address} but " +
-                                "onConnectionStateChange was never called! Retroactively registering connection.",
-                        )
-
-                        // Simulate what onConnectionStateChange(STATE_CONNECTED) would have done
-                        centralsMutex.withLock {
-                            connectedCentrals[device.address] = device
-                        }
-                        mtuMutex.withLock {
-                            centralMtus[device.address] = BleConstants.MIN_MTU
-                        }
-
-                        // Fire the connection callback so the bridge can register the peer
-                        val mtu = BleConstants.MIN_MTU
-                        Log.i(
-                            TAG,
-                            "DEFENSIVE: Firing retroactive onCentralConnected for ${device.address}, MTU=$mtu",
-                        )
-                        onCentralConnected?.invoke(device.address, mtu)
-                    }
-
-                    // Send response if needed
-                    if (responseNeeded) {
-                        gattServer?.sendResponse(
-                            device,
-                            requestId,
-                            BluetoothGatt.GATT_SUCCESS,
-                            offset,
-                            value,
-                        )
-                    }
-
-                    // 2026-01-17: Simplified identity detection - Python handles it (like Linux)
-                    // Previously, Kotlin detected 16-byte identity handshakes and called
-                    // onIdentityReceived, but Python also detected them via _handle_identity_handshake.
-                    // This created "double identity callback processing" complexity.
-                    // Now: Kotlin just passes ALL data to Python, which handles identity detection
-                    // in a single code path (matching the Linux/Bleak architecture).
-                    //
-                    // COMMENTED OUT - Kotlin-side identity detection:
-                    // val existingIdentity =
-                    //     identityMutex.withLock {
-                    //         addressToIdentity[device.address]
-                    //     }
-                    //
-                    // if (existingIdentity == null && value.size == 16) {
-                    //     // Likely identity handshake - store for Kotlin's address resolution
-                    //     val identityHash = value.toHex()
-                    //     Log.d(TAG, "Received 16-byte data from ${device.address} (likely identity): $identityHash")
-                    //
-                    //     identityMutex.withLock {
-                    //         addressToIdentity[device.address] = value
-                    //         identityToAddress[identityHash] = device.address
-                    //     }
-                    //
-                    //     // Notify identity callback (Python will also detect via data callback)
-                    //     onIdentityReceived?.invoke(device.address, identityHash)
-                    // }
-
-                    // Start keepalive on first data received (moved from identity detection)
-                    // This prevents supervision timeout regardless of whether it's identity or data
-                    val hasKeepalive = keepaliveMutex.withLock { peripheralKeepaliveJobs.containsKey(device.address) }
-                    if (!hasKeepalive) {
-                        startPeripheralKeepalive(device.address)
-                    }
-
-                    // Pass ALL data to Python - it handles identity detection
-                    onDataReceived?.invoke(device.address, value)
+                    handleRxWriteRequest(device, requestId, responseNeeded, offset, value)
                 }
                 else -> {
                     Log.w(TAG, "Write request for unknown characteristic: ${characteristic.uuid}")
@@ -832,6 +761,65 @@ class BleGattServer(
         } catch (e: SecurityException) {
             Log.e(TAG, "Permission denied in handleCharacteristicWriteRequest", e)
         }
+    }
+
+    private suspend fun handleRxWriteRequest(
+        device: BluetoothDevice,
+        requestId: Int,
+        responseNeeded: Boolean,
+        offset: Int,
+        value: ByteArray,
+    ) {
+        Log.i(TAG, "Received ${value.size} bytes from ${device.address}")
+
+        // Protocol v2.2 requires a 16-byte transport identity as the first
+        // write. Never fall back to an address-keyed Python peer: rotating BLE
+        // addresses would create duplicate logical interfaces. Reject and close
+        // incompatible centrals so they cannot remain as phantom GATT links.
+        val existingIdentity = identityMutex.withLock { addressToIdentity[device.address] }
+        if (!acceptsRxWrite(existingIdentity != null, value.size)) {
+            Log.w(TAG, "Rejecting pre-identity write from ${device.address}: len=${value.size}")
+            if (responseNeeded) {
+                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null)
+            }
+            gattServer?.cancelConnection(device)
+            return
+        }
+
+        // Android sometimes omits onConnectionStateChange. Receiving a valid
+        // identity/data write proves the physical link exists, so recover its
+        // address and conservative capacity before publishing any callbacks.
+        val isKnown = centralsMutex.withLock { connectedCentrals.containsKey(device.address) }
+        if (!isKnown) {
+            Log.w(TAG, "Recovering unregistered central ${device.address} from RX write")
+            centralsMutex.withLock { connectedCentrals[device.address] = device }
+            mtuMutex.withLock { centralMtus[device.address] = BleConstants.MIN_USABLE_MTU }
+            onCentralConnected?.invoke(device.address, BleConstants.MIN_USABLE_MTU)
+        }
+
+        if (responseNeeded) {
+            gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
+        }
+
+        if (existingIdentity == null) {
+            val identityHash = value.toHex()
+            identityMutex.withLock {
+                addressToIdentity[device.address] = value.copyOf()
+                identityToAddress[identityHash] = device.address
+            }
+            Log.i(TAG, "Received identity handshake from ${device.address}: $identityHash")
+            onIdentityReceived?.invoke(device.address, identityHash)
+            startPeripheralKeepalive(device.address)
+            return
+        }
+
+        val hasKeepalive = keepaliveMutex.withLock {
+            peripheralKeepaliveJobs.containsKey(device.address)
+        }
+        if (!hasKeepalive) {
+            startPeripheralKeepalive(device.address)
+        }
+        onDataReceived?.invoke(device.address, value)
     }
 
     private suspend fun handleDescriptorReadRequest(
@@ -931,8 +919,7 @@ class BleGattServer(
         device: BluetoothDevice,
         mtu: Int,
     ) {
-        // MTU includes 3-byte ATT header, so usable MTU is mtu - 3
-        val usableMtu = mtu - 3
+        val usableMtu = BleConstants.usableValueLength(mtu)
 
         mtuMutex.withLock {
             centralMtus[device.address] = usableMtu

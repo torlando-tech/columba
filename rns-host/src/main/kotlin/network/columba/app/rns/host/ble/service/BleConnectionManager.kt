@@ -100,8 +100,8 @@ class BleConnectionManager(
         val observedMacs: MutableSet<String> = mutableSetOf(currentMac),
         var hasCentralConnection: Boolean = false,
         var hasPeripheralConnection: Boolean = false,
-        var centralMtu: Int = BleConstants.MIN_MTU,
-        var peripheralMtu: Int = BleConstants.MIN_MTU,
+        var centralMtu: Int = BleConstants.MIN_USABLE_MTU,
+        var peripheralMtu: Int = BleConstants.MIN_USABLE_MTU,
         val firstSeen: Long = System.currentTimeMillis(),
         var lastSeen: Long = System.currentTimeMillis(),
     ) {
@@ -127,8 +127,8 @@ class BleConnectionManager(
         val address: String,
         var hasCentralConnection: Boolean = false, // We connected to them
         var hasPeripheralConnection: Boolean = false, // They connected to us
-        var centralMtu: Int = BleConstants.MIN_MTU,
-        var peripheralMtu: Int = BleConstants.MIN_MTU,
+        var centralMtu: Int = BleConstants.MIN_USABLE_MTU,
+        var peripheralMtu: Int = BleConstants.MIN_USABLE_MTU,
         val connectedAt: Long = System.currentTimeMillis(),
     ) {
         val isConnected: Boolean

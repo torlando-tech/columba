@@ -42,7 +42,9 @@ internal class PyxisFlashCore(
         val callback =
             object : ESPToolFlasher.ProgressCallback {
                 override fun onProgress(percent: Int, message: String) {
-                    emitState(RNodeFlasher.FlashState.Progress(percent, message))
+                    if (message !in SUPPRESSED_RNODE_PROGRESS_MESSAGES) {
+                        emitState(RNodeFlasher.FlashState.Progress(percent, message))
+                    }
                 }
 
                 override fun onError(error: String) {
@@ -74,12 +76,26 @@ internal class PyxisFlashCore(
                 emitState(RNodeFlasher.FlashState.Error("Pyxis flash failed"))
             }
             success && !callbackError
-        } catch (e: ESPToolFlasher.ManualBootModeRequired) {
-            emitState(RNodeFlasher.FlashState.Error(e.message ?: "Manual boot mode required", recoverable = true))
+        } catch (_: ESPToolFlasher.ManualBootModeRequired) {
+            emitState(
+                RNodeFlasher.FlashState.Error(
+                    "Could not enter the Pyxis bootloader automatically. Put the T-Deck Plus " +
+                        "into ESP32-S3 download mode manually, then try again.",
+                    recoverable = true,
+                ),
+            )
             false
         } catch (e: Exception) {
             emitState(RNodeFlasher.FlashState.Error("Pyxis flash failed: ${e.message ?: "unknown error"}"))
             false
         }
+    }
+
+    private companion object {
+        val SUPPRESSED_RNODE_PROGRESS_MESSAGES =
+            setOf(
+                "Flashing bootloader...",
+                "Flashing partition table...",
+            )
     }
 }

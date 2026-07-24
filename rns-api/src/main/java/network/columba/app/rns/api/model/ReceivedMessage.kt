@@ -33,4 +33,17 @@ data class ReceivedMessage(
     // Mirrors the string vocabulary already used for outbound on
     // `MessageEntity.deliveryMethod` and `MessageDetailScreen.getDeliveryMethodInfo`.
     val deliveryMethod: String? = null,
+    // Whether the LXMF signature was verified against the sender's known
+    // identity at receive time. Surfaces LXMF-kt's `LXMessage.signatureValidated`
+    // so the UI can warn on unverified senders.
+    //   true  = signature checked against a known source identity, valid.
+    //   false = the sender's signature could not be verified — the message is
+    //           forgeable/untrusted and the UI warns. On the Kotlin backend
+    //           this is always SOURCE_UNKNOWN (we don't yet hold the sender's
+    //           identity; LXMF-kt drops SIGNATURE_INVALID at the router). On
+    //           the Python backend it may additionally be a failed signature
+    //           check, since python LXMF's `lxmf_delivery` delivers those too.
+    //   null  = the backend couldn't determine it, or a pre-feature path.
+    //           Treated as "no warning".
+    val signatureVerified: Boolean? = null,
 ) : Parcelable

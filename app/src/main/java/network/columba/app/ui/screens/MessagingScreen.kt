@@ -2,6 +2,7 @@ package network.columba.app.ui.screens
 
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
@@ -177,6 +178,7 @@ import network.columba.app.ui.components.FullEmojiPickerDialog
 import network.columba.app.ui.components.ImageOptionsSheet
 import network.columba.app.ui.components.ImageQualitySelectionDialog
 import network.columba.app.ui.components.LocationPermissionBottomSheet
+import network.columba.app.util.isPyxisUpdateFilename
 import network.columba.app.ui.components.QuickShareLocationBottomSheet
 import network.columba.app.ui.components.ReactionDisplayRow
 import network.columba.app.ui.components.ReactionModeOverlay
@@ -330,6 +332,7 @@ fun MessagingScreen(
     onViewMessageDetails: (messageId: String) -> Unit = {},
     onVoiceCall: (profileCode: Int) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
+    onUpdatePyxisPackage: (Uri) -> Unit = {},
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -1558,6 +1561,24 @@ fun MessagingScreen(
                 pendingFileSave = Triple(messageId, fileIndex, filename)
                 fileSaveLauncher.launch(filename)
             },
+            onUpdatePyxis =
+                if (isPyxisUpdateFilename(filename)) {
+                    {
+                        showFileOptionsSheet = false
+                        scope.launch {
+                            val result = viewModel.getFileAttachmentUri(context, messageId, fileIndex)
+                            if (result != null) {
+                                onUpdatePyxisPackage(result.first)
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Failed to load Pyxis package", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    null
+                },
             onDismiss = {
                 showFileOptionsSheet = false
                 selectedFileInfo = null

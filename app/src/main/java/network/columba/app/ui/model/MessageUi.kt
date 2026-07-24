@@ -2,6 +2,7 @@ package network.columba.app.ui.model
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.ImageBitmap
+import network.columba.app.rns.api.model.DeliveryState
 
 /**
  * UI model for messages with pre-decoded images and file attachments.
@@ -21,7 +22,12 @@ data class MessageUi(
     val content: String,
     val timestamp: Long,
     val isFromMe: Boolean,
-    val status: String,
+    /**
+     * Delivery lifecycle state. Null when the persisted status string is
+     * unrecognized (old databases are an open string set) — renderers show
+     * the neutral/unknown presentation for null.
+     */
+    val status: DeliveryState?,
     /**
      * Pre-decoded image bitmap. If the message contains an LXMF image field (type 6),
      * it's decoded asynchronously and cached in ImageCache.
@@ -61,7 +67,7 @@ data class MessageUi(
      */
     val deliveryMethod: String? = null,
     /**
-     * Error message if delivery failed (when status == "failed").
+     * Error message if delivery failed (when status == DeliveryState.Failed).
      * Null for successful deliveries or messages without errors.
      */
     val errorMessage: String? = null,

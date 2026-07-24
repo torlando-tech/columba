@@ -16,6 +16,7 @@ import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
@@ -780,7 +781,7 @@ class MessagingViewModel
                 try {
                     rnsLxmf.observeDeliveryStatus().collect { update ->
                         try {
-                            Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.status}")
+                            Log.d(TAG, "Delivery status update: ${update.messageHash.take(16)}... -> ${update.state.encode()}")
                             handleDeliveryStatusUpdate(update)
                         } catch (e: Exception) {
                             Log.e(TAG, "Error handling delivery status update", e)
@@ -870,21 +871,23 @@ class MessagingViewModel
                 }
 
                 if (message != null) {
-                    // Guard: 'delivered' is terminal — never regress to any other state.
+                    val currentState = DeliveryState.decode(message.status)
+
+                    // Guard: Delivered is terminal — never regress to any other state.
                     // LXMF may fire spurious failure/sent callbacks after delivery confirmation,
-                    // which can trigger propagation retries that overwrite 'delivered' with 'propagated'.
-                    if (message.status == "delivered" && update.status != "delivered") {
+                    // which can trigger propagation retries that overwrite Delivered with Propagated.
+                    if (currentState == DeliveryState.Delivered && update.state != DeliveryState.Delivered) {
                         Log.w(
                             TAG,
-                            "Blocking status regression from 'delivered' to '${update.status}' " +
+                            "Blocking status regression from 'delivered' to '${update.state.encode()}' " +
                                 "for message ${update.messageHash.take(16)}...",
                         )
                         return
                     }
 
-                    // Guard: Don't degrade from terminal success states to failed (Issue #257 fix)
+                    // Guard: Don't degrade from terminal success states to Failed (Issue #257 fix)
                     // This provides defense-in-depth in case Python layer misses the spurious callback
-                    if (update.status == "failed" && isTerminalSuccessStatus(message.status)) {
+                    if (update.state == DeliveryState.Failed && currentState?.isTerminalSuccess == true) {
                         Log.w(
                             TAG,
                             "Blocking status degradation from '${message.status}' to 'failed' " +
@@ -894,10 +897,10 @@ class MessagingViewModel
                     }
 
                     // Update status
-                    conversationRepository.updateMessageStatus(update.messageHash, update.status)
+                    conversationRepository.updateMessageStatus(update.messageHash, update.state.encode())
 
                     // When retrying via propagation, also update the delivery method
-                    if (update.status == "retrying_propagated") {
+                    if (update.state == DeliveryState.RetryingViaPropagation) {
                         conversationRepository.updateMessageDeliveryDetails(
                             update.messageHash,
                             deliveryMethod = "propagated",
@@ -907,21 +910,21 @@ class MessagingViewModel
 
                     // Record peer activity when delivery proof is received
                     // This proves the peer was recently online and received our message
-                    if (update.status == "delivered") {
+                    if (update.state == DeliveryState.Delivered) {
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
                     // Enrich sentInterface on a terminal-success state — the
                     // routing table still reflects the actual send path. For
-                    // DIRECT/OPPORTUNISTIC this fires on "delivered"; for
-                    // PROPAGATED on "propagated" (the propagation-node-accepted
+                    // DIRECT/OPPORTUNISTIC this fires on Delivered; for
+                    // PROPAGATED on Propagated (the propagation-node-accepted
                     // analogue). Failed / retrying paths carry too much routing
                     // ambiguity to produce accurate interface data.
-                    if (update.status == "delivered" || update.status == "propagated") {
+                    if (update.state == DeliveryState.Delivered || update.state == DeliveryState.Propagated) {
                         enrichSentInterfaceOnDelivery(message, update.messageHash)
                     }
 
-                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
+                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.state.encode()}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
@@ -1012,15 +1015,6 @@ class MessagingViewModel
                 Log.e(TAG, "Error handling incoming reaction: ${e.message}", e)
             }
         }
-
-        /**
-         * Check if a message status represents a terminal success state.
-         * Terminal success states should never degrade to "failed" (Issue #257 fix).
-         *
-         * @param status The current message status
-         * @return true if this is a terminal success status that shouldn't be degraded
-         */
-        private fun isTerminalSuccessStatus(status: String): Boolean = status in setOf("sent", "propagated", "delivered")
 
         private suspend fun saveMessageToDatabase(
             peerHash: String,
@@ -1368,7 +1362,7 @@ class MessagingViewModel
                     content = sanitized,
                     timestamp = receipt.timestamp,
                     isFromMe = true,
-                    status = "pending",
+                    status = DeliveryState.Pending.encode(),
                     fieldsJson = fieldsJson,
                     deliveryMethod = deliveryMethodString,
                     replyToMessageId = replyToMessageId,
@@ -1395,7 +1389,7 @@ class MessagingViewModel
                     content = sanitized,
                     timestamp = now,
                     isFromMe = true,
-                    status = "failed",
+                    status = DeliveryState.Failed.encode(),
                     deliveryMethod = deliveryMethodString,
                     errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
@@ -2278,7 +2272,7 @@ class MessagingViewModel
                     }
 
                     // Only retry failed messages
-                    if (failedMessage.status != "failed") {
+                    if (DeliveryState.decode(failedMessage.status) != DeliveryState.Failed) {
                         Log.w(TAG, "Message $messageId is not failed (status: ${failedMessage.status}), skipping retry")
                         return@launch
                     }
@@ -2314,7 +2308,7 @@ class MessagingViewModel
                     Log.d(TAG, "Retrying message via $deliveryMethod delivery")
 
                     // Mark message as pending before sending
-                    conversationRepository.updateMessageStatus(messageId, "pending")
+                    conversationRepository.updateMessageStatus(messageId, DeliveryState.Pending.encode())
 
                     // Send the message
                     val result =
@@ -2341,7 +2335,7 @@ class MessagingViewModel
                         }.onFailure { error ->
                             Log.e(TAG, "Retry failed: ${error.message}", error)
                             // Mark as failed again with the error message
-                            conversationRepository.updateMessageStatus(messageId, "failed")
+                            conversationRepository.updateMessageStatus(messageId, DeliveryState.Failed.encode())
                             conversationRepository.updateMessageDeliveryDetails(
                                 messageId,
                                 deliveryMethod = null,
@@ -2352,7 +2346,7 @@ class MessagingViewModel
                     Log.e(TAG, "Error retrying message", e)
                     // Restore failed status
                     try {
-                        conversationRepository.updateMessageStatus(messageId, "failed")
+                        conversationRepository.updateMessageStatus(messageId, DeliveryState.Failed.encode())
                     } catch (e2: Exception) {
                         Log.e(TAG, "Error restoring failed status", e2)
                     }

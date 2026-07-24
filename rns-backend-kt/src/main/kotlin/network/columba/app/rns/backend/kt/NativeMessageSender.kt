@@ -2,6 +2,7 @@ package network.columba.app.rns.backend.kt
 
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.model.FailedInterface
@@ -16,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import network.reticulum.common.DestinationDirection
+import network.columba.app.rns.api.util.DeliveryRetryPolicy
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
@@ -203,33 +205,38 @@ internal class NativeMessageSender(
             // callback runs). Distinguish by method, not state — checking state
             // alone risks misclassifying a future direct path that briefly
             // transitions through SENT before DELIVERED.
-            val status =
+            val state =
                 if (msg.method == NativeDeliveryMethod.PROPAGATED ||
                     msg.desiredMethod == NativeDeliveryMethod.PROPAGATED
                 ) {
-                    "propagated"
+                    DeliveryState.Propagated
                 } else {
-                    "delivered"
+                    DeliveryState.Delivered
                 }
             Log.i(
                 TAG,
-                "Delivery callback for $hash -> $status (state=${msg.state}, method=${msg.method}, desired=${msg.desiredMethod})",
+                "Delivery callback for $hash -> ${state.encode()} (state=${msg.state}, method=${msg.method}, desired=${msg.desiredMethod})",
             )
             deliveryStatusFlow.tryEmit(
-                DeliveryStatusUpdate(hash, status, System.currentTimeMillis()),
+                DeliveryStatusUpdate(hash, state, System.currentTimeMillis()),
             )
         }
         message.failedCallback = failedCallback@{ msg ->
             val hash = msg.hash?.toHex() ?: return@failedCallback
             val currentMethod = msg.desiredMethod
 
-            if (tryPropagationOnFail &&
-                currentMethod != NativeDeliveryMethod.PROPAGATED &&
-                router.getActivePropagationNode() != null
+            // Decision is the shared DeliveryRetryPolicy (same predicate the
+            // python flavor applies in PythonEventBridge.handleLxmfFailure);
+            // only the rebuild-and-resubmit mechanism below is lxmf-kt-local.
+            if (DeliveryRetryPolicy.shouldRetryViaPropagation(
+                    tryPropagationOnFail = tryPropagationOnFail,
+                    desiredMethodIsPropagated = currentMethod == NativeDeliveryMethod.PROPAGATED,
+                    propagationNodeConfigured = router.getActivePropagationNode() != null,
+                )
             ) {
                 Log.i(TAG, "${currentMethod ?: lxmfMethod} delivery failed for $hash, falling back to PROPAGATED")
                 deliveryStatusFlow.tryEmit(
-                    DeliveryStatusUpdate(hash, "retrying_propagated", System.currentTimeMillis()),
+                    DeliveryStatusUpdate(hash, DeliveryState.RetryingViaPropagation, System.currentTimeMillis()),
                 )
                 msg.desiredMethod = NativeDeliveryMethod.PROPAGATED
                 msg.state = network.reticulum.lxmf.MessageState.OUTBOUND
@@ -241,7 +248,7 @@ internal class NativeMessageSender(
             }
 
             deliveryStatusFlow.tryEmit(
-                DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()),
+                DeliveryStatusUpdate(hash, DeliveryState.Failed, System.currentTimeMillis()),
             )
         }
     }

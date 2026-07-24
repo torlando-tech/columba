@@ -95,6 +95,36 @@ class PyxisFlashCoreTest {
         assertFalse(states.any { it is RNodeFlasher.FlashState.Complete })
     }
 
+    @Test
+    fun `suppresses absent RNode region progress and rewrites manual boot error`() = runTest {
+        val states = mutableListOf<RNodeFlasher.FlashState>()
+        val core =
+            PyxisFlashCore(
+                findDevice = { usbDevice(it, 0x303A, 0x1001) },
+                transport = PyxisEspToolTransport { request ->
+                    request.progressCallback.onProgress(10, "Flashing bootloader...")
+                    request.progressCallback.onProgress(20, "Flashing partition table...")
+                    throw ESPToolFlasher.ManualBootModeRequired("RNode firmware is installed")
+                },
+                emitState = states::add,
+            )
+
+        assertFalse(core.flash(1, validPackage()))
+        val messages =
+            states.mapNotNull {
+                when (it) {
+                    is RNodeFlasher.FlashState.Progress -> it.message
+                    is RNodeFlasher.FlashState.Error -> it.message
+                    else -> null
+                }
+            }
+        assertFalse(messages.any { it.contains("partition table", ignoreCase = true) })
+        assertFalse(messages.any { it.contains("Flashing bootloader", ignoreCase = true) })
+        assertFalse(messages.any { it.contains("RNode", ignoreCase = true) })
+        assertTrue(messages.last().contains("Pyxis"))
+        assertTrue((states.last() as RNodeFlasher.FlashState.Error).recoverable)
+    }
+
     private fun usbDevice(deviceId: Int, vendorId: Int, productId: Int) =
         UsbDeviceInfo(deviceId, vendorId, productId, "usb", null, null, null, "test")
 

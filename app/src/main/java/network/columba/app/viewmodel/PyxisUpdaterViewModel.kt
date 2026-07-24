@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +40,14 @@ data class PyxisUpdaterUiState(
     val flashError: String? = null,
 )
 
+internal class PyxisPackageLoadGuard {
+    private var generation = 0L
+
+    fun next(): Long = ++generation
+
+    fun isCurrent(token: Long): Boolean = token == generation
+}
+
 @HiltViewModel
 class PyxisUpdaterViewModel
     @Inject
@@ -50,6 +59,8 @@ class PyxisUpdaterViewModel
         val state: StateFlow<PyxisUpdaterUiState> = _state.asStateFlow()
 
         private var validatedPackage: PyxisFirmwarePackage? = null
+        private var packageLoadJob: Job? = null
+        private val packageLoadGuard = PyxisPackageLoadGuard()
 
         init {
             observeFlashState()
@@ -138,6 +149,8 @@ class PyxisUpdaterViewModel
 
         fun loadPackage(uri: Uri) {
             if (_state.value.isFlashing) return
+            packageLoadJob?.cancel()
+            val loadToken = packageLoadGuard.next()
             validatedPackage = null
             _state.update {
                 it.copy(
@@ -152,7 +165,7 @@ class PyxisUpdaterViewModel
                 )
             }
 
-            viewModelScope.launch {
+            packageLoadJob = viewModelScope.launch {
                 val result =
                     withContext(Dispatchers.IO) {
                         runCatching {
@@ -161,6 +174,7 @@ class PyxisUpdaterViewModel
                         }
                     }
                 result.onSuccess { firmwarePackage ->
+                    if (!packageLoadGuard.isCurrent(loadToken)) return@onSuccess
                     validatedPackage = firmwarePackage
                     _state.update {
                         it.copy(
@@ -171,6 +185,7 @@ class PyxisUpdaterViewModel
                         )
                     }
                 }.onFailure { error ->
+                    if (!packageLoadGuard.isCurrent(loadToken)) return@onFailure
                     _state.update {
                         it.copy(
                             isLoadingPackage = false,

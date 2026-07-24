@@ -107,6 +107,7 @@ import network.columba.app.ui.screens.ThemeEditorScreen
 import network.columba.app.ui.screens.ThemeManagementScreen
 import network.columba.app.ui.screens.VoiceCallScreen
 import network.columba.app.ui.screens.buildFocusInterfaceDetails
+import network.columba.app.ui.screens.flasher.PyxisUpdaterScreen
 import network.columba.app.ui.screens.flasher.RNodeFlasherScreen
 import network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreen
 import network.columba.app.ui.screens.offlinemaps.OfflineMapsScreen
@@ -1015,6 +1016,7 @@ fun ColumbaNavigation(
             "rnode_wizard",
             "tcp_client_wizard",
             "rnode_flasher",
+            "pyxis_updater",
             "usb_device_action",
             "voice_call/",
             "incoming_call/",
@@ -1491,6 +1493,9 @@ fun ColumbaNavigation(
                                     onNavigateToFlasher = {
                                         navController.navigate("rnode_flasher")
                                     },
+                                    onNavigateToPyxisUpdater = {
+                                        navController.navigate("pyxis_updater")
+                                    },
                                     onNavigateToBlockedUsers = {
                                         navController.navigate("blocked_users")
                                     },
@@ -1591,6 +1596,23 @@ fun ColumbaNavigation(
                                     isDisablingTransport = isDisablingTransport,
                                     disableTransportResult = disableTransportResult,
                                     onDismissDisableResult = { disableTransportResult = null },
+                                )
+                            }
+
+                            composable(
+                                route = "pyxis_updater?packageUri={packageUri}",
+                                arguments =
+                                    listOf(
+                                        navArgument("packageUri") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                            nullable = true
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                PyxisUpdaterScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    initialPackageUri = backStackEntry.arguments?.getString("packageUri"),
                                 )
                             }
 
@@ -2065,6 +2087,11 @@ fun ColumbaNavigation(
                                             launchSingleTop = true
                                             restoreState = true
                                         }
+                                    },
+                                    onUpdatePyxisPackage = { packageUri ->
+                                        navController.navigate(
+                                            "pyxis_updater?packageUri=${Uri.encode(packageUri.toString())}",
+                                        )
                                     },
                                 )
                             }

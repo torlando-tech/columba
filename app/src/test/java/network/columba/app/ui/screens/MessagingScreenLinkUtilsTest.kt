@@ -1,6 +1,9 @@
 package network.columba.app.ui.screens
 
+import network.columba.app.util.isPyxisUpdateFilename
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -11,6 +14,20 @@ import org.junit.Test
  * to avoid Android framework dependencies in unit tests.
  */
 class MessagingScreenLinkUtilsTest {
+    @Test
+    fun `recognizes Pyxis update attachment names`() {
+        assertTrue(isPyxisUpdateFilename("pyxis-v0.3.0.pyxis.zip"))
+        assertTrue(isPyxisUpdateFilename("UPDATE.PYXIS"))
+        assertTrue(isPyxisUpdateFilename("  candidate.pyxis.zip  "))
+    }
+
+    @Test
+    fun `does not offer updater for generic archives or binaries`() {
+        assertFalse(isPyxisUpdateFilename("firmware.bin"))
+        assertFalse(isPyxisUpdateFilename("firmware.zip"))
+        assertFalse(isPyxisUpdateFilename("not-pyxis.zip"))
+    }
+
     // ==========================================
     // Scheme Handling Tests
     // ==========================================

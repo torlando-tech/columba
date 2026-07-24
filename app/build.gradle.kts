@@ -104,6 +104,8 @@ fun getReproducibleBuildTimestamp(): Long {
 }
 
 val (versionCodeValue, versionNameValue) = getVersionFromTag()
+val versionCodeOverride = providers.gradleProperty("columbaVersionCode").orNull?.toIntOrNull()
+val versionNameOverride = providers.gradleProperty("columbaVersionName").orNull
 
 android {
     namespace = "network.columba.app"
@@ -113,8 +115,8 @@ android {
         applicationId = "network.columba.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = versionCodeValue
-        versionName = versionNameValue
+        versionCode = versionCodeOverride ?: versionCodeValue
+        versionName = versionNameOverride ?: versionNameValue
 
         buildConfigField("String", "GIT_COMMIT_HASH", "\"${getGitCommitHash()}\"")
         buildConfigField("long", "BUILD_TIMESTAMP", "${getReproducibleBuildTimestamp()}L")
@@ -394,7 +396,7 @@ androidComponents {
                 }
             if (abiFilter != null) {
                 output.versionCode.set(
-                    (abiVersionCodes[abiFilter.identifier] ?: 0) + versionCodeValue,
+                    (abiVersionCodes[abiFilter.identifier] ?: 0) + (versionCodeOverride ?: versionCodeValue),
                 )
             }
         }

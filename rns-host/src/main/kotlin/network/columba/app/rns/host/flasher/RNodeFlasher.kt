@@ -69,6 +69,24 @@ class RNodeFlasher(
 
     val tncModeController = TncModeController(usbBridge, detector, _flashState)
 
+    private val pyxisFlashCore =
+        PyxisFlashCore(
+            findDevice = { deviceId -> usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId } },
+            transport =
+                PyxisEspToolTransport { request ->
+                    espToolFlasher.flash(
+                        firmwareZipStream = request.firmwareZipStream,
+                        deviceId = request.deviceId,
+                        board = request.board,
+                        vendorId = request.vendorId,
+                        productId = request.productId,
+                        consoleImageStream = request.consoleImageStream,
+                        progressCallback = request.progressCallback,
+                    )
+                },
+            emitState = { state -> _flashState.value = state },
+        )
+
     /**
      * Flash state for UI observation.
      */
@@ -186,6 +204,21 @@ class RNodeFlasher(
                 usbBridge.disconnect()
                 null
             }
+        }
+
+    /**
+     * Flash a validated Pyxis package without touching RNode or persistent partitions.
+     *
+     * This path writes only the package's boot_app0 and application images through
+     * [ESPToolFlasher]. It intentionally skips RNode update indication, console/NVS/
+     * LittleFS images, bootloader, partition table, reboot waits, and provisioning.
+     */
+    suspend fun flashPyxisFirmware(
+        deviceId: Int,
+        pyxisPackage: PyxisFirmwarePackage,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            pyxisFlashCore.flash(deviceId, pyxisPackage)
         }
 
     /**

@@ -102,6 +102,7 @@ fun SettingsScreen(
     onNavigateToMigration: () -> Unit = {},
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
     onNavigateToFlasher: () -> Unit = {},
+    onNavigateToPyxisUpdater: () -> Unit = {},
     onNavigateToApkSharing: () -> Unit = {},
     onNavigateToBlockedUsers: () -> Unit = {},
 ) {
@@ -524,6 +525,7 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.RNODE_FLASHER.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.RNODE_FLASHER, it) },
                     onOpenFlasher = onNavigateToFlasher,
+                    onOpenPyxisUpdater = onNavigateToPyxisUpdater,
                 )
 
                 AdvancedCard(

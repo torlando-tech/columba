@@ -11,13 +11,23 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipInputStream
 
-internal fun parseRomFlashMd5(response: ByteArray): String? {
-    if (response.size < 8) return null
+internal fun isSuccessfulEspResponse(
+    response: ByteArray,
+    expectedCommand: Byte,
+    expectedPayloadLength: Int,
+): Boolean {
+    if (response.size < 8 || response[0] != 0x01.toByte() || response[1] != expectedCommand) return false
     val dataLength =
         (response[2].toInt() and 0xFF) or
             ((response[3].toInt() and 0xFF) shl 8)
-    val digestLength = dataLength - 2 // trailing ROM status bytes
-    if (digestLength < 32 || response.size < 8 + digestLength) return null
+    if (response.size != 8 + dataLength || dataLength < expectedPayloadLength + 2) return false
+    // ESP32-family ROM responses append status/error and may append two
+    // reserved bytes. Status starts immediately after the documented payload.
+    return response[8 + expectedPayloadLength].toInt() == 0
+}
+
+internal fun parseRomFlashMd5(response: ByteArray): String? {
+    if (!isSuccessfulEspResponse(response, 0x13.toByte(), 32)) return null
     val digest = response.copyOfRange(8, 8 + 32).toString(Charsets.US_ASCII)
     return digest.lowercase(Locale.ROOT).takeIf { it.matches(Regex("[0-9a-f]{32}")) }
 }
@@ -290,6 +300,10 @@ class ESPToolFlasher(
                 // SPI attach configures flash pins (required before flash operations)
                 progressCallback.onProgress(13, "Attaching SPI flash...")
                 if (!spiAttach()) {
+                    if (verifyFlashWrites) {
+                        progressCallback.onError("Failed to attach SPI flash")
+                        return@withContext false
+                    }
                     Log.w(TAG, "SPI attach failed, attempting to continue anyway")
                 }
 
@@ -383,7 +397,10 @@ class ESPToolFlasher(
                 progressCallback.onProgress(95, "Finalizing...")
 
                 // Send FLASH_END to tell bootloader to reboot and run application
-                sendFlashEnd(reboot = true)
+                if (!sendFlashEnd(reboot = true)) {
+                    progressCallback.onError("Failed to submit final reboot command")
+                    return@withContext false
+                }
 
                 if (performBackupHardReset) {
                     delay(500)
@@ -800,7 +817,7 @@ class ESPToolFlasher(
 
         val sizeMb = data.size.toDouble() / (1024 * 1024)
         val timeout = maxOf(MIN_MD5_TIMEOUT_MS, (sizeMb * MD5_TIMEOUT_PER_MB_MS).toLong())
-        val response = sendCommand(ESP_SPI_FLASH_MD5, request, 0, timeout)
+        val response = sendCommand(ESP_SPI_FLASH_MD5, request, 0, timeout, expectedPayloadLength = 32)
         if (response == null) {
             Log.e(TAG, "Flash verification command failed for $name")
             return false
@@ -823,7 +840,7 @@ class ESPToolFlasher(
      * Send FLASH_END command to tell bootloader we're done flashing.
      * @param reboot If true, bootloader will reset and run the application.
      */
-    private suspend fun sendFlashEnd(reboot: Boolean) {
+    private suspend fun sendFlashEnd(reboot: Boolean): Boolean {
         Log.d(TAG, "Sending FLASH_END (reboot=$reboot)")
 
         // For ESP32-S3, clear force download boot mode to avoid getting stuck
@@ -846,10 +863,15 @@ class ESPToolFlasher(
         if (reboot) {
             val packet = buildCommandPacket(ESP_FLASH_END, data, 0)
             val slipPacket = slipEncode(packet)
-            usbBridge.write(slipPacket)
+            val bytesWritten = usbBridge.write(slipPacket)
+            if (bytesWritten != slipPacket.size) {
+                Log.e(TAG, "FLASH_END short write: $bytesWritten/${slipPacket.size}")
+                return false
+            }
             Log.d(TAG, "FLASH_END sent, device should reboot")
+            return true
         } else {
-            sendCommand(ESP_FLASH_END, data, 0)
+            return sendCommand(ESP_FLASH_END, data, 0) != null
         }
     }
 
@@ -891,6 +913,7 @@ class ESPToolFlasher(
         data: ByteArray,
         checksum: Int,
         timeoutMs: Long = COMMAND_TIMEOUT_MS,
+        expectedPayloadLength: Int = 0,
     ): ByteArray? {
         // Clear any pending data before sending
         usbBridge.drain(50)
@@ -907,12 +930,16 @@ class ESPToolFlasher(
         )
         val bytesWritten = usbBridge.write(slipPacket)
         Log.d(TAG, "Wrote $bytesWritten bytes")
+        if (bytesWritten != slipPacket.size) {
+            Log.e(TAG, "USB short write for command 0x${(command.toInt() and 0xFF).toString(16)}: $bytesWritten/${slipPacket.size}")
+            return null
+        }
 
         // Give USB CDC time to transmit
         delay(10)
 
         // Wait for response
-        return readResponse(command, timeoutMs)
+        return readResponse(command, timeoutMs, expectedPayloadLength)
     }
 
     /**
@@ -972,6 +999,7 @@ class ESPToolFlasher(
     private suspend fun readResponse(
         expectedCommand: Byte,
         timeoutMs: Long = COMMAND_TIMEOUT_MS,
+        expectedPayloadLength: Int = 0,
     ): ByteArray? =
         withTimeoutOrNull(timeoutMs) {
             val buffer = mutableListOf<Byte>()
@@ -1010,29 +1038,13 @@ class ESPToolFlasher(
                                 inPacket = false
 
                                 // Check if this is a valid response
-                                if (response[0] == 0x01.toByte() &&
-                                    response[1] == expectedCommand
-                                ) {
-                                    // Parse response: direction(1) + cmd(1) + size(2) + val(4) + data(size)
-                                    val dataLen =
-                                        (response[2].toInt() and 0xFF) or
-                                            ((response[3].toInt() and 0xFF) shl 8)
-
-                                    // Status is in the LAST 2 bytes of the data section
-                                    // If no data, check the 'val' field instead
-                                    val status =
-                                        if (dataLen >= 2) {
-                                            // Last 2 bytes of data (data starts at byte 8)
-                                            response.getOrNull(8 + dataLen - 2)?.toInt()?.and(0xFF) ?: 1
-                                        } else {
-                                            // For empty responses, val field indicates status (byte 4)
-                                            response.getOrNull(4)?.toInt()?.and(0xFF) ?: 1
-                                        }
-
-                                    if (status == 0) {
+                                if (response[0] == 0x01.toByte() && response[1] == expectedCommand) {
+                                    if (isSuccessfulEspResponse(response, expectedCommand, expectedPayloadLength)) {
                                         return@withTimeoutOrNull response
                                     } else {
-                                        val errorCode = response.getOrNull(8 + dataLen - 1)?.toInt()?.and(0xFF) ?: 0
+                                        val statusIndex = 8 + expectedPayloadLength
+                                        val status = response.getOrNull(statusIndex)?.toInt()?.and(0xFF) ?: -1
+                                        val errorCode = response.getOrNull(statusIndex + 1)?.toInt()?.and(0xFF) ?: -1
                                         Log.w(
                                             TAG,
                                             "Command 0x${expectedCommand.toInt().and(0xFF).toString(16)} " +

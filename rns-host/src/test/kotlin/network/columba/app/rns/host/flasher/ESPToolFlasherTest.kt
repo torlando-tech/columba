@@ -10,8 +10,10 @@ class ESPToolFlasherFlashVerificationTest {
     @Test
     fun `parses ROM flash MD5 response and rejects malformed digest`() {
         val digest = "0123456789abcdef0123456789abcdef"
-        val valid = ByteArray(8 + 34)
-        valid[2] = 34
+        val valid = ByteArray(8 + 36)
+        valid[0] = 1
+        valid[1] = 0x13
+        valid[2] = 36
         digest.toByteArray().copyInto(valid, 8)
         assertEquals(digest, parseRomFlashMd5(valid))
 
@@ -19,6 +21,21 @@ class ESPToolFlasherFlashVerificationTest {
         malformed[8] = 'z'.code.toByte()
         assertNull(parseRomFlashMd5(malformed))
         assertNull(parseRomFlashMd5(ByteArray(7)))
+    }
+
+    @Test
+    fun `rejects ESP32-S3 ROM error before reserved status bytes`() {
+        val response = ByteArray(12)
+        response[0] = 1
+        response[1] = 0x03
+        response[2] = 4
+        response[8] = 1
+        response[9] = 8
+        assertFalse(isSuccessfulEspResponse(response, 0x03.toByte(), 0))
+
+        response[8] = 0
+        response[9] = 0
+        assertTrue(isSuccessfulEspResponse(response, 0x03.toByte(), 0))
     }
 }
 

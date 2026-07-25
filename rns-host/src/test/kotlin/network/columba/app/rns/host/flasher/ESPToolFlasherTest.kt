@@ -2,8 +2,25 @@ package network.columba.app.rns.host.flasher
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+class ESPToolFlasherFlashVerificationTest {
+    @Test
+    fun `parses ROM flash MD5 response and rejects malformed digest`() {
+        val digest = "0123456789abcdef0123456789abcdef"
+        val valid = ByteArray(8 + 34)
+        valid[2] = 34
+        digest.toByteArray().copyInto(valid, 8)
+        assertEquals(digest, parseRomFlashMd5(valid))
+
+        val malformed = valid.copyOf()
+        malformed[8] = 'z'.code.toByte()
+        assertNull(parseRomFlashMd5(malformed))
+        assertNull(parseRomFlashMd5(ByteArray(7)))
+    }
+}
 
 /**
  * Unit tests for ESPToolFlasher static methods and constants.

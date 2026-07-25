@@ -81,6 +81,8 @@ class RNodeFlasher(
                         vendorId = request.vendorId,
                         productId = request.productId,
                         consoleImageStream = request.consoleImageStream,
+                        verifyFlashWrites = request.verifyFlashWrites,
+                        performBackupHardReset = request.performBackupHardReset,
                         progressCallback = request.progressCallback,
                     )
                 },

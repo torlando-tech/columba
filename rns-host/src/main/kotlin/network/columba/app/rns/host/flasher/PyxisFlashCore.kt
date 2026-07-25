@@ -15,6 +15,8 @@ internal data class PyxisFlashRequest(
     val vendorId: Int,
     val productId: Int,
     val consoleImageStream: InputStream?,
+    val verifyFlashWrites: Boolean,
+    val performBackupHardReset: Boolean,
     val progressCallback: ESPToolFlasher.ProgressCallback,
 )
 
@@ -67,6 +69,8 @@ internal class PyxisFlashCore(
                         vendorId = usbDevice.vendorId,
                         productId = usbDevice.productId,
                         consoleImageStream = null,
+                        verifyFlashWrites = true,
+                        performBackupHardReset = false,
                         progressCallback = callback,
                     ),
                 )

@@ -11,6 +11,17 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipInputStream
 
+internal fun parseRomFlashMd5(response: ByteArray): String? {
+    if (response.size < 8) return null
+    val dataLength =
+        (response[2].toInt() and 0xFF) or
+            ((response[3].toInt() and 0xFF) shl 8)
+    val digestLength = dataLength - 2 // trailing ROM status bytes
+    if (digestLength < 32 || response.size < 8 + digestLength) return null
+    val digest = response.copyOfRange(8, 8 + 32).toString(Charsets.US_ASCII)
+    return digest.lowercase(Locale.ROOT).takeIf { it.matches(Regex("[0-9a-f]{32}")) }
+}
+
 /**
  * ESPTool-compatible flasher for ESP32 devices.
  *
@@ -57,6 +68,8 @@ class ESPToolFlasher(
         private const val READ_TIMEOUT_MS = 100
         private const val ERASE_TIMEOUT_PER_MB_MS = 10000L // 10 seconds per MB for flash erase
         private const val MIN_ERASE_TIMEOUT_MS = 10000L // Minimum 10 seconds for any erase
+        private const val MD5_TIMEOUT_PER_MB_MS = 8000L
+        private const val MIN_MD5_TIMEOUT_MS = 3000L
 
         // ESP32 ROM commands
         private const val ESP_FLASH_BEGIN: Byte = 0x02
@@ -78,7 +91,7 @@ class ESPToolFlasher(
         // private const val ESP_FLASH_DEFL_BEGIN: Byte = 0x10
         // private const val ESP_FLASH_DEFL_DATA: Byte = 0x11
         // private const val ESP_FLASH_DEFL_END: Byte = 0x12
-        // private const val ESP_SPI_FLASH_MD5: Byte = 0x13
+        private const val ESP_SPI_FLASH_MD5: Byte = 0x13
 
         // SLIP constants
         private const val SLIP_END: Byte = 0xC0.toByte()
@@ -171,11 +184,13 @@ class ESPToolFlasher(
      * @param vendorId USB Vendor ID (used to detect native USB devices)
      * @param productId USB Product ID (used to detect native USB devices)
      * @param consoleImageStream Optional console image (SPIFFS) stream
+     * @param verifyFlashWrites Verify every written region with the ROM MD5 command
+     * @param performBackupHardReset Issue the legacy reset after FLASH_END
      * @param progressCallback Progress callback
      * @return true if flashing succeeded
      * @throws ManualBootModeRequired if the device needs manual bootloader entry
      */
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
     suspend fun flash(
         firmwareZipStream: InputStream,
         deviceId: Int,
@@ -184,6 +199,8 @@ class ESPToolFlasher(
         productId: Int = 0,
         consoleImageStream: InputStream? = null,
         progressCallback: ProgressCallback,
+        verifyFlashWrites: Boolean = false,
+        performBackupHardReset: Boolean = true,
     ): Boolean =
         withContext(Dispatchers.IO) {
             val bootloaderOffset = getBootloaderOffset(board)
@@ -291,6 +308,7 @@ class ESPToolFlasher(
                             "bootloader",
                             currentProgress,
                             20,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -308,6 +326,7 @@ class ESPToolFlasher(
                             "partition table",
                             currentProgress,
                             25,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -323,6 +342,7 @@ class ESPToolFlasher(
                             "boot_app0",
                             currentProgress,
                             30,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -339,6 +359,7 @@ class ESPToolFlasher(
                         "application",
                         currentProgress,
                         80,
+                        verifyFlashWrites,
                         progressCallback,
                     )
                 if (!success) return@withContext false
@@ -353,6 +374,7 @@ class ESPToolFlasher(
                             "console image",
                             80,
                             95,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -363,11 +385,10 @@ class ESPToolFlasher(
                 // Send FLASH_END to tell bootloader to reboot and run application
                 sendFlashEnd(reboot = true)
 
-                // Give the device time to reboot
-                delay(500)
-
-                // Hard reset as backup (may not work on native USB but doesn't hurt)
-                hardReset()
+                if (performBackupHardReset) {
+                    delay(500)
+                    hardReset()
+                }
 
                 progressCallback.onProgress(100, "Flash complete!")
                 progressCallback.onComplete()
@@ -669,12 +690,14 @@ class ESPToolFlasher(
     /**
      * Flash a region of memory.
      */
+    @Suppress("ReturnCount")
     private suspend fun flashRegion(
         data: ByteArray,
         offset: Int,
         name: String,
         startProgress: Int,
         endProgress: Int,
+        verifyWrite: Boolean,
         progressCallback: ProgressCallback,
     ): Boolean {
         Log.d(TAG, "Flashing $name: ${data.size} bytes at 0x${offset.toString(16)}")
@@ -754,7 +777,45 @@ class ESPToolFlasher(
             )
         }
 
-        Log.d(TAG, "Successfully flashed $name")
+        if (verifyWrite && !verifyFlashRegion(data, offset, name)) {
+            return false
+        }
+
+        Log.d(TAG, "Successfully flashed and verified $name")
+        return true
+    }
+
+    /** Verify the bytes written by the ROM loader before allowing a successful flash. */
+    @Suppress("ReturnCount")
+    private suspend fun verifyFlashRegion(
+        data: ByteArray,
+        offset: Int,
+        name: String,
+    ): Boolean {
+        val request = ByteArray(16)
+        putUInt32LE(request, 0, offset)
+        putUInt32LE(request, 4, data.size)
+        putUInt32LE(request, 8, 0)
+        putUInt32LE(request, 12, 0)
+
+        val sizeMb = data.size.toDouble() / (1024 * 1024)
+        val timeout = maxOf(MIN_MD5_TIMEOUT_MS, (sizeMb * MD5_TIMEOUT_PER_MB_MS).toLong())
+        val response = sendCommand(ESP_SPI_FLASH_MD5, request, 0, timeout)
+        if (response == null) {
+            Log.e(TAG, "Flash verification command failed for $name")
+            return false
+        }
+        val actual = parseRomFlashMd5(response)
+        if (actual == null) {
+            Log.e(TAG, "Invalid flash verification response for $name")
+            return false
+        }
+        val expected = calculateMd5(data).joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        if (actual != expected) {
+            Log.e(TAG, "Flash verification mismatch for $name")
+            return false
+        }
+        Log.d(TAG, "Verified $name MD5: $actual")
         return true
     }
 
@@ -810,19 +871,15 @@ class ESPToolFlasher(
         sendCommand(ESP_WRITE_REG, data, 0)
     }
 
-    /**
-     * Hard reset the device to exit bootloader.
-     */
+    /** Legacy backup reset retained for normal RNode flashing only. */
     private suspend fun hardReset() {
         Log.d(TAG, "Hard resetting device (S3=$currentBoardIsS3)")
 
         val resetDelay = if (currentBoardIsS3) RESET_DELAY_MS_USB else RESET_DELAY_MS
-
-        usbBridge.setDtrRts(false, true) // Assert RTS (EN low - reset)
+        usbBridge.setDtrRts(false, true)
         delay(resetDelay)
-        usbBridge.setDtrRts(false, false) // Release both
+        usbBridge.setDtrRts(false, false)
         delay(resetDelay)
-
         inBootloader = false
     }
 
@@ -1023,7 +1080,6 @@ class ESPToolFlasher(
     /**
      * Calculate MD5 hash for verification.
      */
-    @Suppress("unused")
     private fun calculateMd5(data: ByteArray): ByteArray = MessageDigest.getInstance("MD5").digest(data)
 
     /**

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import network.columba.app.data.db.entity.InterfaceFirstSeenEntity
 
 @Dao
@@ -11,6 +12,7 @@ interface InterfaceFirstSeenDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIfNotExists(entity: InterfaceFirstSeenEntity)
 
+    @Transaction
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAllIfNotExists(entities: List<InterfaceFirstSeenEntity>)
 

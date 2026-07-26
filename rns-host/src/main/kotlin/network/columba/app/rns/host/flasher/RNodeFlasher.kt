@@ -83,6 +83,7 @@ class RNodeFlasher(
                         consoleImageStream = request.consoleImageStream,
                         verifyFlashWrites = request.verifyFlashWrites,
                         performBackupHardReset = request.performBackupHardReset,
+                        flashSizeBytes = request.flashSizeBytes,
                         progressCallback = request.progressCallback,
                     )
                 },

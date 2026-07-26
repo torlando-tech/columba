@@ -41,6 +41,7 @@ class PyxisFlashCoreTest {
         assertNull(request.consoleImageStream)
         assertTrue(request.verifyFlashWrites)
         assertFalse(request.performBackupHardReset)
+        assertEquals(8 * 1024 * 1024, request.flashSizeBytes)
         assertEquals(setOf("manifest.json", "firmware.bin", "boot_app0.bin"), zipEntryNames(request.firmwareZipStream.readBytes()))
         assertTrue(states.any { it == RNodeFlasher.FlashState.Progress(50, "writing") })
         assertTrue(states.last() is RNodeFlasher.FlashState.Complete)

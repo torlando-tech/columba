@@ -45,6 +45,25 @@ class ESPToolFlasherFlashVerificationTest {
             formatEspRomError(0x03.toByte(), 1, 8),
         )
     }
+
+    @Test
+    fun `builds esptool-compatible 8 MiB SPI flash parameters`() {
+        val packet = buildSpiFlashParameters(8 * 1024 * 1024)
+        assertEquals(24, packet.size)
+
+        fun uint32(offset: Int): Int =
+            (packet[offset].toInt() and 0xFF) or
+                ((packet[offset + 1].toInt() and 0xFF) shl 8) or
+                ((packet[offset + 2].toInt() and 0xFF) shl 16) or
+                ((packet[offset + 3].toInt() and 0xFF) shl 24)
+
+        assertEquals(0, uint32(0))
+        assertEquals(8 * 1024 * 1024, uint32(4))
+        assertEquals(64 * 1024, uint32(8))
+        assertEquals(4 * 1024, uint32(12))
+        assertEquals(256, uint32(16))
+        assertEquals(0xFFFF, uint32(20))
+    }
 }
 
 /**

@@ -35,6 +35,20 @@ internal fun formatEspRomError(
         " (status=0x${status.and(0xFF).toString(16).padStart(2, '0')}," +
         " error=0x${errorCode.and(0xFF).toString(16).padStart(2, '0')})"
 
+internal fun buildSpiFlashParameters(sizeBytes: Int): ByteArray {
+    require(sizeBytes > 0 && sizeBytes and (sizeBytes - 1) == 0) {
+        "Flash size must be a positive power of two"
+    }
+    val values = intArrayOf(0, sizeBytes, 64 * 1024, 4 * 1024, 256, 0xFFFF)
+    return ByteArray(values.size * 4).also { packet ->
+        values.forEachIndexed { index, value ->
+            for (byteIndex in 0 until 4) {
+                packet[index * 4 + byteIndex] = (value ushr (byteIndex * 8)).toByte()
+            }
+        }
+    }
+}
+
 internal fun parseRomFlashMd5(response: ByteArray): String? {
     if (!isSuccessfulEspResponse(response, 0x13.toByte(), 32)) return null
     val digest = response.copyOfRange(8, 8 + 32).toString(Charsets.US_ASCII)
@@ -103,7 +117,7 @@ class ESPToolFlasher(
         private const val ESP_WRITE_REG: Byte = 0x09
         private const val ESP_READ_REG: Byte = 0x0A
 
-        // private const val ESP_SPI_SET_PARAMS: Byte = 0x0B // Reserved
+        private const val ESP_SPI_SET_PARAMS: Byte = 0x0B
         private const val ESP_SPI_ATTACH: Byte = 0x0D
         private const val ESP_CHANGE_BAUDRATE: Byte = 0x0F
         // Deflate commands (reserved - require stub loader)
@@ -206,6 +220,7 @@ class ESPToolFlasher(
      * @param consoleImageStream Optional console image (SPIFFS) stream
      * @param verifyFlashWrites Verify every written region with the ROM MD5 command
      * @param performBackupHardReset Issue the legacy reset after FLASH_END
+     * @param flashSizeBytes Explicit ROM flash geometry; required when an erase crosses the ROM's default 2 MiB limit
      * @param progressCallback Progress callback
      * @return true if flashing succeeded
      * @throws ManualBootModeRequired if the device needs manual bootloader entry
@@ -221,6 +236,7 @@ class ESPToolFlasher(
         progressCallback: ProgressCallback,
         verifyFlashWrites: Boolean = false,
         performBackupHardReset: Boolean = true,
+        flashSizeBytes: Int? = null,
     ): Boolean =
         withContext(Dispatchers.IO) {
             lastProtocolError = null
@@ -319,6 +335,17 @@ class ESPToolFlasher(
                         return@withContext false
                     }
                     Log.w(TAG, "SPI attach failed, attempting to continue anyway")
+                }
+
+                flashSizeBytes?.let { size ->
+                    progressCallback.onProgress(14, "Configuring ${size / (1024 * 1024)} MiB flash...")
+                    if (!spiSetParameters(size)) {
+                        progressCallback.onError(
+                            "Failed to configure ${size / (1024 * 1024)} MiB SPI flash: " +
+                                (lastProtocolError ?: "no bootloader response"),
+                        )
+                        return@withContext false
+                    }
                 }
 
                 progressCallback.onProgress(15, "Flashing bootloader...")
@@ -719,6 +746,12 @@ class ESPToolFlasher(
             Log.e(TAG, "SPI attach failed")
             return false
         }
+    }
+
+    /** Configure the flash geometry used by ROM-mode erase operations. */
+    private suspend fun spiSetParameters(sizeBytes: Int): Boolean {
+        Log.d(TAG, "Configuring SPI flash geometry: $sizeBytes bytes")
+        return sendCommand(ESP_SPI_SET_PARAMS, buildSpiFlashParameters(sizeBytes), 0) != null
     }
 
     /**

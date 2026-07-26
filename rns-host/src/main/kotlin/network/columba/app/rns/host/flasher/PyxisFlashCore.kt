@@ -17,6 +17,7 @@ internal data class PyxisFlashRequest(
     val consoleImageStream: InputStream?,
     val verifyFlashWrites: Boolean,
     val performBackupHardReset: Boolean,
+    val flashSizeBytes: Int,
     val progressCallback: ESPToolFlasher.ProgressCallback,
 )
 
@@ -71,6 +72,7 @@ internal class PyxisFlashCore(
                         consoleImageStream = null,
                         verifyFlashWrites = true,
                         performBackupHardReset = false,
+                        flashSizeBytes = 8 * 1024 * 1024,
                         progressCallback = callback,
                     ),
                 )

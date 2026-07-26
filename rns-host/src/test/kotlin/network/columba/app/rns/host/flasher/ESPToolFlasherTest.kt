@@ -37,6 +37,14 @@ class ESPToolFlasherFlashVerificationTest {
         response[9] = 0
         assertTrue(isSuccessfulEspResponse(response, 0x03.toByte(), 0))
     }
+
+    @Test
+    fun `formats copyable ROM command diagnostics`() {
+        assertEquals(
+            "ESP ROM command 0x03 rejected (status=0x01, error=0x08)",
+            formatEspRomError(0x03.toByte(), 1, 8),
+        )
+    }
 }
 
 /**

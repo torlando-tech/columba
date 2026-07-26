@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +47,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.rns.host.usb.UsbDeviceInfo
@@ -60,6 +63,7 @@ fun PyxisUpdaterScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showConfirmation by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
 
     val packagePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -213,9 +217,14 @@ fun PyxisUpdaterScreen(
         AlertDialog(
             onDismissRequest = viewModel::clearFlashError,
             title = { Text("Pyxis update failed") },
-            text = { Text(error) },
+            text = { SelectionContainer { Text(error) } },
             confirmButton = {
                 TextButton(onClick = viewModel::clearFlashError) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { clipboardManager.setText(AnnotatedString(error)) }) {
+                    Text("Copy error")
+                }
             },
         )
     }

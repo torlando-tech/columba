@@ -26,6 +26,15 @@ internal fun isSuccessfulEspResponse(
     return response[8 + expectedPayloadLength].toInt() == 0
 }
 
+internal fun formatEspRomError(
+    command: Byte,
+    status: Int,
+    errorCode: Int,
+): String =
+    "ESP ROM command 0x${command.toInt().and(0xFF).toString(16).padStart(2, '0')} rejected" +
+        " (status=0x${status.and(0xFF).toString(16).padStart(2, '0')}," +
+        " error=0x${errorCode.and(0xFF).toString(16).padStart(2, '0')})"
+
 internal fun parseRomFlashMd5(response: ByteArray): String? {
     if (!isSuccessfulEspResponse(response, 0x13.toByte(), 32)) return null
     val digest = response.copyOfRange(8, 8 + 32).toString(Charsets.US_ASCII)
@@ -170,6 +179,7 @@ class ESPToolFlasher(
     private var inBootloader = false
     private var currentBoardIsS3 = false
     private var isNativeUsb = false
+    private var lastProtocolError: String? = null
 
     /**
      * Callback interface for flash progress updates.
@@ -213,6 +223,7 @@ class ESPToolFlasher(
         performBackupHardReset: Boolean = true,
     ): Boolean =
         withContext(Dispatchers.IO) {
+            lastProtocolError = null
             val bootloaderOffset = getBootloaderOffset(board)
             val isS3 = isEsp32S3(board)
             currentBoardIsS3 = isS3
@@ -301,7 +312,10 @@ class ESPToolFlasher(
                 progressCallback.onProgress(13, "Attaching SPI flash...")
                 if (!spiAttach()) {
                     if (verifyFlashWrites) {
-                        progressCallback.onError("Failed to attach SPI flash")
+                        progressCallback.onError(
+                            "Failed to attach SPI flash: " +
+                                (lastProtocolError ?: "no bootloader response"),
+                        )
                         return@withContext false
                     }
                     Log.w(TAG, "SPI attach failed, attempting to continue anyway")
@@ -398,7 +412,10 @@ class ESPToolFlasher(
 
                 // Send FLASH_END to tell bootloader to reboot and run application
                 if (!sendFlashEnd(reboot = true)) {
-                    progressCallback.onError("Failed to submit final reboot command")
+                    progressCallback.onError(
+                        "Failed to submit final reboot command: " +
+                            (lastProtocolError ?: "USB write failed"),
+                    )
                     return@withContext false
                 }
 
@@ -750,7 +767,10 @@ class ESPToolFlasher(
 
         val beginResponse = sendCommand(ESP_FLASH_BEGIN, beginData, 0, eraseTimeout)
         if (beginResponse == null) {
-            Log.e(TAG, "Flash begin failed for $name")
+            val detail = lastProtocolError ?: "no bootloader response"
+            val error = "Failed to start $name transfer at 0x${offset.toString(16)}: $detail"
+            Log.e(TAG, error)
+            progressCallback.onError(error)
             return false
         }
 
@@ -780,7 +800,12 @@ class ESPToolFlasher(
 
             val dataResponse = sendCommand(ESP_FLASH_DATA, packet, checksum)
             if (dataResponse == null) {
-                Log.e(TAG, "Flash data failed for $name at block $blockNum")
+                val detail = lastProtocolError ?: "no bootloader response"
+                val error =
+                    "Failed to transfer $name block ${blockNum + 1}/$numBlocks " +
+                        "at 0x${(offset + blockStart).toString(16)}: $detail"
+                Log.e(TAG, error)
+                progressCallback.onError(error)
                 return false
             }
 
@@ -795,6 +820,10 @@ class ESPToolFlasher(
         }
 
         if (verifyWrite && !verifyFlashRegion(data, offset, name)) {
+            progressCallback.onError(
+                "Flash verification failed for $name at 0x${offset.toString(16)}: " +
+                    (lastProtocolError ?: "device digest did not match the package"),
+            )
             return false
         }
 
@@ -824,11 +853,13 @@ class ESPToolFlasher(
         }
         val actual = parseRomFlashMd5(response)
         if (actual == null) {
+            lastProtocolError = "ESP ROM returned an invalid MD5 response"
             Log.e(TAG, "Invalid flash verification response for $name")
             return false
         }
         val expected = calculateMd5(data).joinToString("") { "%02x".format(it.toInt() and 0xFF) }
         if (actual != expected) {
+            lastProtocolError = "device MD5 $actual does not match package MD5 $expected"
             Log.e(TAG, "Flash verification mismatch for $name")
             return false
         }
@@ -915,7 +946,8 @@ class ESPToolFlasher(
         timeoutMs: Long = COMMAND_TIMEOUT_MS,
         expectedPayloadLength: Int = 0,
     ): ByteArray? {
-        // Clear any pending data before sending
+        lastProtocolError = null
+        // Clear any stale response before sending the next command.
         usbBridge.drain(50)
 
         // Build command packet
@@ -931,7 +963,10 @@ class ESPToolFlasher(
         val bytesWritten = usbBridge.write(slipPacket)
         Log.d(TAG, "Wrote $bytesWritten bytes")
         if (bytesWritten != slipPacket.size) {
-            Log.e(TAG, "USB short write for command 0x${(command.toInt() and 0xFF).toString(16)}: $bytesWritten/${slipPacket.size}")
+            lastProtocolError =
+                "USB short write for command 0x${command.toInt().and(0xFF).toString(16)}: " +
+                    "$bytesWritten/${slipPacket.size} bytes"
+            Log.e(TAG, lastProtocolError!!)
             return null
         }
 
@@ -939,7 +974,14 @@ class ESPToolFlasher(
         delay(10)
 
         // Wait for response
-        return readResponse(command, timeoutMs, expectedPayloadLength)
+        val response = readResponse(command, timeoutMs, expectedPayloadLength)
+        if (response == null && lastProtocolError == null) {
+            lastProtocolError =
+                "Timed out after ${timeoutMs}ms waiting for ESP ROM command " +
+                    "0x${command.toInt().and(0xFF).toString(16).padStart(2, '0')}"
+            Log.e(TAG, lastProtocolError!!)
+        }
+        return response
     }
 
     /**
@@ -1045,11 +1087,14 @@ class ESPToolFlasher(
                                         val statusIndex = 8 + expectedPayloadLength
                                         val status = response.getOrNull(statusIndex)?.toInt()?.and(0xFF) ?: -1
                                         val errorCode = response.getOrNull(statusIndex + 1)?.toInt()?.and(0xFF) ?: -1
-                                        Log.w(
-                                            TAG,
-                                            "Command 0x${expectedCommand.toInt().and(0xFF).toString(16)} " +
-                                                "returned error: status=$status, code=$errorCode",
-                                        )
+                                        lastProtocolError =
+                                            if (status >= 0 && errorCode >= 0) {
+                                                formatEspRomError(expectedCommand, status, errorCode)
+                                            } else {
+                                                "Malformed ESP ROM response for command " +
+                                                    "0x${expectedCommand.toInt().and(0xFF).toString(16).padStart(2, '0')}"
+                                            }
+                                        Log.w(TAG, lastProtocolError!!)
                                         return@withTimeoutOrNull null
                                     }
                                 }

@@ -405,6 +405,20 @@ class MainActivity : ComponentActivity() {
         intentHandler.handle(intent)
     }
 
+    private suspend fun detectConnectedPyxis(
+        usbDevice: UsbDevice,
+    ): network.columba.app.rns.host.flasher.PyxisDeviceIdentity? {
+        if (!network.columba.app.rns.host.flasher.ESPToolFlasher.isNativeUsbDevice(
+                usbDevice.vendorId,
+                usbDevice.productId,
+            )
+        ) {
+            return null
+        }
+        return network.columba.app.rns.host.flasher.RNodeFlasher(this)
+            .detectPyxisDevice(usbDevice.deviceId)
+    }
+
     /**
      * Handle USB device attachment - check if it's already configured as an RNode interface.
      */
@@ -442,10 +456,21 @@ class MainActivity : ComponentActivity() {
                         16,
                     )}), PID=${usbDevice.productId} (0x${usbDevice.productId.toString(16)})",
                 )
-                // Check if this USB device is already configured as an RNode interface
-                // Use VID/PID matching since they are stable hardware identifiers (unlike device IDs which change)
-                val existingInterface = interfaceRepository.findRNodeByUsbVidPid(usbDevice.vendorId, usbDevice.productId)
-                Log.d(TAG, "🔌 findRNodeByUsbVidPid result: ${existingInterface?.name ?: "NOT FOUND"}")
+                val pyxisIdentity = detectConnectedPyxis(usbDevice)
+
+                // A Pyxis device can share the generic ESP32-S3 VID/PID with an
+                // RNode. Identify it before applying a saved RNode VID/PID match.
+                val existingInterface =
+                    if (pyxisIdentity == null) {
+                        interfaceRepository.findRNodeByUsbVidPid(usbDevice.vendorId, usbDevice.productId)
+                    } else {
+                        null
+                    }
+                Log.d(
+                    TAG,
+                    "🔌 USB classification: pyxis=${pyxisIdentity?.version ?: "no"}, " +
+                        "configuredRNode=${existingInterface?.name ?: "no"}",
+                )
 
                 if (existingInterface != null) {
                     // Device is already configured - trigger reconnect and navigate to stats screen
@@ -484,6 +509,7 @@ class MainActivity : ComponentActivity() {
                             vendorId = usbDevice.vendorId,
                             productId = usbDevice.productId,
                             deviceName = usbDevice.deviceName,
+                            pyxisVersion = pyxisIdentity?.version,
                         )
                     Log.d(TAG, "🔌 pendingNavigation set to UsbDeviceAction")
                 }
@@ -544,6 +570,7 @@ sealed class PendingNavigation {
         val vendorId: Int,
         val productId: Int,
         val deviceName: String,
+        val pyxisVersion: String? = null,
     ) : PendingNavigation()
 
     /** Navigate to RNode wizard with USB device pre-selected */
@@ -825,7 +852,8 @@ fun ColumbaNavigation(
                                 "?usbDeviceId=${navigation.usbDeviceId}" +
                                 "&usbVendorId=${navigation.vendorId}" +
                                 "&usbProductId=${navigation.productId}" +
-                                "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
+                                "&usbDeviceName=${Uri.encode(navigation.deviceName)}" +
+                                "&pyxisVersion=${Uri.encode(navigation.pyxisVersion ?: "")}"
                         navController.navigate(route)
                         Log.d("ColumbaNavigation", "Navigated to USB device action: ${navigation.usbDeviceId}")
                     }
@@ -1508,7 +1536,8 @@ fun ColumbaNavigation(
                                         "?usbDeviceId={usbDeviceId}" +
                                         "&usbVendorId={usbVendorId}" +
                                         "&usbProductId={usbProductId}" +
-                                        "&usbDeviceName={usbDeviceName}",
+                                        "&usbDeviceName={usbDeviceName}" +
+                                        "&pyxisVersion={pyxisVersion}",
                                 arguments =
                                     listOf(
                                         navArgument("usbDeviceId") {
@@ -1528,12 +1557,18 @@ fun ColumbaNavigation(
                                             defaultValue = ""
                                             nullable = true
                                         },
+                                        navArgument("pyxisVersion") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                            nullable = true
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
                                 val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                                 val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
                                 val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName") ?: "USB Device"
+                                val pyxisVersion = backStackEntry.arguments?.getString("pyxisVersion")?.ifBlank { null }
 
                                 // State for disable transport operation
                                 val context = androidx.compose.ui.platform.LocalContext.current
@@ -1547,7 +1582,18 @@ fun ColumbaNavigation(
 
                                 network.columba.app.ui.screens.UsbDeviceActionScreen(
                                     deviceName = usbDeviceName,
+                                    pyxisVersion = pyxisVersion,
+                                    isEsp32S3Candidate =
+                                        network.columba.app.rns.host.flasher.ESPToolFlasher.isNativeUsbDevice(
+                                            usbVendorId,
+                                            usbProductId,
+                                        ),
                                     onNavigateBack = { navController.popBackStack() },
+                                    onUpdatePyxis = {
+                                        navController.navigate("pyxis_updater") {
+                                            popUpTo("usb_device_action") { inclusive = true }
+                                        }
+                                    },
                                     onFlashFirmware = {
                                         val route =
                                             "rnode_flasher" +

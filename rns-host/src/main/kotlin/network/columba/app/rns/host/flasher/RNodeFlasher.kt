@@ -54,6 +54,9 @@ class RNodeFlasher(
         private const val NRF52_EEPROM_WIPE_WAIT_MS = 18_000L
         private const val NRF52_RECONNECT_RETRIES = 5
         private const val NRF52_RECONNECT_DELAY_MS = 2_000L
+        private const val PYXIS_DETECTION_TIMEOUT_MS = 1_500L
+        private const val PYXIS_DETECTION_POLL_MS = 25L
+        private const val PYXIS_DETECTION_MAX_BYTES = 4_096
     }
 
     private val usbBridge = KotlinUSBBridge.getInstance(context)
@@ -89,6 +92,8 @@ class RNodeFlasher(
                 },
             emitState = { state -> _flashState.value = state },
         )
+
+    private val pyxisDeviceDetector = PyxisDeviceDetector(::queryPyxisVersion)
 
     /**
      * Flash state for UI observation.
@@ -165,6 +170,64 @@ class RNodeFlasher(
     ) {
         usbBridge.requestPermission(deviceId, callback)
     }
+
+    /** Query the production Pyxis VERSION command without entering the ROM bootloader. */
+    suspend fun detectPyxisDevice(deviceId: Int): PyxisDeviceIdentity? {
+        if (!usbBridge.hasPermission(deviceId) && !usbBridge.requestPermissionSuspend(deviceId)) {
+            return null
+        }
+        return pyxisDeviceDetector.detect(deviceId)
+    }
+
+    private suspend fun queryPyxisVersion(deviceId: Int): String? =
+        withContext(Dispatchers.IO) {
+            var input: InputStream? = null
+            var output: java.io.OutputStream? = null
+            try {
+                val streams =
+                    usbBridge.openSerialStreams(
+                        vendorId = null,
+                        productId = null,
+                        deviceId = deviceId,
+                        baudRate = RNodeConstants.BAUD_RATE_DEFAULT,
+                        // Keep the native USB CDC session active without presenting
+                        // the DTR/RTS combination used for ESP bootloader entry.
+                        dtr = true,
+                        rts = false,
+                    )
+                input = streams.first
+                output = streams.second
+                output.write("VERSION\n".encodeToByteArray())
+                output.flush()
+
+                val transcript = StringBuilder()
+                val deadline = System.currentTimeMillis() + PYXIS_DETECTION_TIMEOUT_MS
+                while (System.currentTimeMillis() < deadline && transcript.length < PYXIS_DETECTION_MAX_BYTES) {
+                    while (input.available() > 0 && transcript.length < PYXIS_DETECTION_MAX_BYTES) {
+                        val next = input.read()
+                        if (next < 0) break
+                        transcript.append(next.toChar())
+                    }
+                    if (PyxisDeviceDetector.parseIdentity(transcript.toString()) != null) {
+                        return@withContext transcript.toString()
+                    }
+                    delay(PYXIS_DETECTION_POLL_MS)
+                }
+                transcript.toString()
+            } catch (e: Exception) {
+                Log.d(TAG, "Pyxis VERSION probe did not identify device $deviceId: ${e.message}")
+                null
+            } finally {
+                try {
+                    output?.close()
+                } catch (_: Exception) {
+                }
+                try {
+                    input?.close()
+                } catch (_: Exception) {
+                }
+            }
+        }
 
     /**
      * Detect if a connected device is an RNode and get its info.

@@ -570,6 +570,8 @@ class KotlinUSBBridge(
      * @param productId USB Product ID (optional, used with vendorId for device lookup)
      * @param deviceId Android USB device ID (optional, alternative to VID/PID lookup)
      * @param baudRate Baud rate (default: 115200)
+     * @param dtr initial Data Terminal Ready state
+     * @param rts initial Request To Send state
      * @return Pair of InputStream (reads from device) and OutputStream (writes to device)
      * @throws IllegalStateException if device not found, no permission, or no driver
      */
@@ -579,6 +581,8 @@ class KotlinUSBBridge(
         productId: Int?,
         deviceId: Int?,
         baudRate: Int = DEFAULT_BAUD_RATE,
+        dtr: Boolean = true,
+        rts: Boolean = true,
     ): Pair<java.io.InputStream, java.io.OutputStream> {
         val device =
             usbManager.deviceList.values.firstOrNull { dev ->
@@ -614,8 +618,8 @@ class KotlinUSBBridge(
             port.setParameters(baudRate, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_PARITY)
 
             try {
-                port.dtr = true
-                port.rts = true
+                port.dtr = dtr
+                port.rts = rts
             } catch (e: UnsupportedOperationException) {
                 Log.d(TAG, "Flow control not supported by this driver: ${e.message}")
             }

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.MainActivity
+import network.columba.app.R
 import network.columba.app.rns.host.flasher.PyxisFirmwarePackage
 import network.columba.app.rns.host.flasher.RNodeFlasher
 import network.columba.app.rns.host.usb.UsbDeviceInfo
@@ -86,7 +87,7 @@ class PyxisUpdaterViewModel
                                 it.copy(
                                     isFlashing = false,
                                     flashProgress = 100,
-                                    flashMessage = "Pyxis update installed",
+                                    flashMessage = context.getString(R.string.pyxis_update_status_installed),
                                     flashSucceeded = true,
                                     flashError = null,
                                 )
@@ -115,7 +116,11 @@ class PyxisUpdaterViewModel
                     _state.update {
                         it.copy(
                             isRefreshingDevices = false,
-                            permissionError = "Failed to scan USB devices: ${error.message}",
+                            permissionError =
+                                context.getString(
+                                    R.string.pyxis_update_usb_scan_failed,
+                                    error.message ?: error.javaClass.simpleName,
+                                ),
                         )
                     }
                     return@launch
@@ -141,7 +146,7 @@ class PyxisUpdaterViewModel
                 _state.update {
                     it.copy(
                         permissionPending = false,
-                        permissionError = if (granted) null else "USB permission denied",
+                        permissionError = if (granted) null else context.getString(R.string.pyxis_update_usb_permission_denied),
                     )
                 }
             }
@@ -170,7 +175,7 @@ class PyxisUpdaterViewModel
                     withContext(Dispatchers.IO) {
                         runCatching {
                             context.contentResolver.openInputStream(uri)?.use(PyxisFirmwarePackage::parse)
-                                ?: throw IllegalArgumentException("Unable to open the selected package")
+                                ?: throw IllegalArgumentException(context.getString(R.string.pyxis_update_package_open_failed))
                         }
                     }
                 result.onSuccess { firmwarePackage ->
@@ -189,7 +194,10 @@ class PyxisUpdaterViewModel
                     _state.update {
                         it.copy(
                             isLoadingPackage = false,
-                            packageError = error.message ?: "Invalid Pyxis update package",
+                            packageError =
+                                error.message?.let {
+                                    context.getString(R.string.pyxis_update_package_validation_failed, it)
+                                } ?: context.getString(R.string.pyxis_update_package_invalid),
                         )
                     }
                 }
@@ -217,7 +225,7 @@ class PyxisUpdaterViewModel
                 it.copy(
                     isFlashing = true,
                     flashProgress = 0,
-                    flashMessage = "Starting Pyxis update...",
+                    flashMessage = context.getString(R.string.pyxis_update_status_starting),
                     flashSucceeded = false,
                     flashError = null,
                 )
@@ -230,7 +238,7 @@ class PyxisUpdaterViewModel
                             it.copy(
                                 isFlashing = false,
                                 flashSucceeded = false,
-                                flashError = error.message ?: "Pyxis update failed",
+                                flashError = error.message ?: context.getString(R.string.pyxis_update_failed),
                             )
                         }
                     }

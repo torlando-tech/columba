@@ -1571,7 +1571,11 @@ fun MessagingScreen(
                                 onUpdatePyxisPackage(result.first)
                             } else {
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Failed to load Pyxis package", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.pyxis_update_attachment_load_failed),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
                                 }
                             }
                         }

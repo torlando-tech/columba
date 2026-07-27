@@ -48,9 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.rns.host.usb.UsbDeviceInfo
 import network.columba.app.viewmodel.PyxisUpdaterViewModel
 
@@ -84,13 +86,16 @@ fun PyxisUpdaterScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Update Pyxis") },
+                title = { Text(stringResource(R.string.pyxis_update_title)) },
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
                         enabled = !state.isFlashing,
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.pyxis_update_back),
+                        )
                     }
                 },
             )
@@ -134,14 +139,14 @@ fun PyxisUpdaterScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("Installing update", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.pyxis_update_installing), style = MaterialTheme.typography.titleMedium)
                         LinearProgressIndicator(
                             progress = { state.flashProgress.coerceIn(0, 100) / 100f },
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Text("${state.flashProgress}% — ${state.flashMessage}")
+                        Text(stringResource(R.string.pyxis_update_progress, state.flashProgress, state.flashMessage))
                         Text(
-                            "Keep the USB cable connected and do not power off either device.",
+                            stringResource(R.string.pyxis_update_keep_connected),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -161,8 +166,8 @@ fun PyxisUpdaterScreen(
                     ) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null)
                         Column {
-                            Text("Update installed", style = MaterialTheme.typography.titleMedium)
-                            Text("Pyxis was rebooted. Confirm its version and persistent data on the device.")
+                            Text(stringResource(R.string.pyxis_update_installed), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.pyxis_update_installed_body))
                         }
                     }
                 }
@@ -175,11 +180,11 @@ fun PyxisUpdaterScreen(
             ) {
                 Icon(Icons.Default.Memory, contentDescription = null)
                 Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                Text("Flash Pyxis over USB")
+                Text(stringResource(R.string.pyxis_update_flash_usb))
             }
 
             Text(
-                "This first version uses USB recovery flashing. Wireless phone-hosted OTA can be added after this path is physically validated.",
+                stringResource(R.string.pyxis_update_usb_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -190,12 +195,9 @@ fun PyxisUpdaterScreen(
         AlertDialog(
             onDismissRequest = { showConfirmation = false },
             icon = { Icon(Icons.Default.Warning, contentDescription = null) },
-            title = { Text("Install this Pyxis update?") },
+            title = { Text(stringResource(R.string.pyxis_update_confirm_title)) },
             text = {
-                Text(
-                    "The package hashes and target layout were verified. Confirm that the package came from a trusted LXMF sender. " +
-                        "The updater will write only OTA metadata and the application slot; NVS and LittleFS are not touched.",
-                )
+                Text(stringResource(R.string.pyxis_update_confirm_body))
             },
             confirmButton = {
                 Button(
@@ -204,11 +206,11 @@ fun PyxisUpdaterScreen(
                         viewModel.startFlash()
                     },
                 ) {
-                    Text("Install")
+                    Text(stringResource(R.string.pyxis_update_install))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirmation = false }) { Text("Cancel") }
+                TextButton(onClick = { showConfirmation = false }) { Text(stringResource(R.string.pyxis_update_cancel)) }
             },
         )
     }
@@ -216,14 +218,14 @@ fun PyxisUpdaterScreen(
     state.flashError?.let { error ->
         AlertDialog(
             onDismissRequest = viewModel::clearFlashError,
-            title = { Text("Pyxis update failed") },
+            title = { Text(stringResource(R.string.pyxis_update_failed_title)) },
             text = { SelectionContainer { Text(error) } },
             confirmButton = {
-                TextButton(onClick = viewModel::clearFlashError) { Text("OK") }
+                TextButton(onClick = viewModel::clearFlashError) { Text(stringResource(R.string.pyxis_update_ok)) }
             },
             dismissButton = {
                 TextButton(onClick = { clipboardManager.setText(AnnotatedString(error)) }) {
-                    Text("Copy error")
+                    Text(stringResource(R.string.pyxis_update_copy_error))
                 }
             },
         )
@@ -245,25 +247,27 @@ private fun PackageSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Pyxis update package", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.pyxis_update_package_title), style = MaterialTheme.typography.titleMedium)
             when {
                 isLoading -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.height(24.dp))
-                        Text("Verifying package...")
+                        Text(stringResource(R.string.pyxis_update_package_verifying))
                     }
                 }
                 packageVersion != null -> {
-                    Text(packageName ?: "Pyxis package")
-                    Text("Version: $packageVersion")
-                    firmwareSize?.let { Text("Application: ${formatBytes(it)}") }
+                    Text(packageName ?: stringResource(R.string.pyxis_update_package_default_name))
+                    Text(stringResource(R.string.pyxis_update_package_version, packageVersion))
+                    firmwareSize?.let {
+                        Text(stringResource(R.string.pyxis_update_package_application_size, it / (1024.0 * 1024.0)))
+                    }
                     Text(
-                        "Target: T-Deck Plus / ESP32-S3",
+                        stringResource(R.string.pyxis_update_package_target),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                else -> Text("Choose a .pyxis.zip attachment or downloaded package.")
+                else -> Text(stringResource(R.string.pyxis_update_package_prompt))
             }
             packageError?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
@@ -273,7 +277,15 @@ private fun PackageSection(
                 enabled = enabled && !isLoading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (packageVersion == null) "Choose package" else "Choose another package")
+                Text(
+                    stringResource(
+                        if (packageVersion == null) {
+                            R.string.pyxis_update_package_choose
+                        } else {
+                            R.string.pyxis_update_package_choose_another
+                        },
+                    ),
+                )
             }
         }
     }
@@ -291,9 +303,9 @@ private fun WarningCard() {
         ) {
             Icon(Icons.Default.Warning, contentDescription = null)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Development updater", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.pyxis_update_verify_title), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "SHA-256 protects package integrity, but this build does not yet verify a release signature. Only install packages received from a trusted identity.",
+                    stringResource(R.string.pyxis_update_verify_body),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -322,13 +334,13 @@ private fun DeviceSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("USB device", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.pyxis_update_usb_device_title), style = MaterialTheme.typography.titleMedium)
                 IconButton(onClick = onRefresh, enabled = enabled && !isRefreshing) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh USB devices")
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.pyxis_update_usb_refresh))
                 }
             }
             if (devices.isEmpty()) {
-                Text("Connect the T-Deck Plus to the phone with a USB OTG/data cable, then refresh.")
+                Text(stringResource(R.string.pyxis_update_usb_connect_prompt))
             } else {
                 devices.forEach { device ->
                     Row(
@@ -347,7 +359,12 @@ private fun DeviceSection(
                         Column {
                             Text(device.productName ?: device.deviceName)
                             Text(
-                                "VID %04x · PID %04x · %s".format(device.vendorId, device.productId, device.driverType),
+                                stringResource(
+                                    R.string.pyxis_update_usb_device_details,
+                                    device.vendorId,
+                                    device.productId,
+                                    device.driverType,
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -355,10 +372,8 @@ private fun DeviceSection(
                     }
                 }
             }
-            if (permissionPending) Text("Waiting for USB permission...")
+            if (permissionPending) Text(stringResource(R.string.pyxis_update_usb_permission_waiting))
             permissionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
 }
-
-private fun formatBytes(bytes: Int): String = "%.2f MiB".format(bytes / (1024.0 * 1024.0))

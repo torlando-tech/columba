@@ -14,7 +14,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 
 /**
@@ -38,21 +40,21 @@ fun RNodeFlasherCard(
     onOpenPyxisUpdater: () -> Unit,
 ) {
     CollapsibleSettingsCard(
-        title = "Firmware Flashers",
+        title = stringResource(R.string.firmware_flashers_title),
         icon = Icons.Default.Memory,
         isExpanded = isExpanded,
         onExpandedChange = onExpandedChange,
     ) {
         // Description
         Text(
-            text = "Flash RNode firmware or install Pyxis updates over USB.",
+            text = stringResource(R.string.firmware_flashers_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         // Supported devices info
         Text(
-            text = "Pyxis updates preserve device settings, identities, and conversations.",
+            text = stringResource(R.string.firmware_flashers_pyxis_preserves_data),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -68,7 +70,7 @@ fun RNodeFlasherCard(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Open RNode Flasher")
+            Text(stringResource(R.string.firmware_flashers_open_rnode))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -83,7 +85,7 @@ fun RNodeFlasherCard(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Update Pyxis")
+            Text(stringResource(R.string.pyxis_update_attachment_action))
         }
     }
 }

@@ -20,9 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 
 /**
  * Bottom sheet that shows options for a received file attachment.
@@ -72,8 +74,8 @@ fun FileAttachmentOptionsSheet(
 
             if (onUpdatePyxis != null) {
                 ListItem(
-                    headlineContent = { Text("Update Pyxis") },
-                    supportingContent = { Text("Verify and flash this package over USB") },
+                    headlineContent = { Text(stringResource(R.string.pyxis_update_attachment_action)) },
+                    supportingContent = { Text(stringResource(R.string.pyxis_update_attachment_action_description)) },
                     leadingContent = {
                         Icon(
                             Icons.Default.SystemUpdate,

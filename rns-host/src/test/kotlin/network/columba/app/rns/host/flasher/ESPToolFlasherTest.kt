@@ -2,8 +2,69 @@ package network.columba.app.rns.host.flasher
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+class ESPToolFlasherFlashVerificationTest {
+    @Test
+    fun `parses ROM flash MD5 response and rejects malformed digest`() {
+        val digest = "0123456789abcdef0123456789abcdef"
+        val valid = ByteArray(8 + 36)
+        valid[0] = 1
+        valid[1] = 0x13
+        valid[2] = 36
+        digest.toByteArray().copyInto(valid, 8)
+        assertEquals(digest, parseRomFlashMd5(valid))
+
+        val malformed = valid.copyOf()
+        malformed[8] = 'z'.code.toByte()
+        assertNull(parseRomFlashMd5(malformed))
+        assertNull(parseRomFlashMd5(ByteArray(7)))
+    }
+
+    @Test
+    fun `rejects ESP32-S3 ROM error before reserved status bytes`() {
+        val response = ByteArray(12)
+        response[0] = 1
+        response[1] = 0x03
+        response[2] = 4
+        response[8] = 1
+        response[9] = 8
+        assertFalse(isSuccessfulEspResponse(response, 0x03.toByte(), 0))
+
+        response[8] = 0
+        response[9] = 0
+        assertTrue(isSuccessfulEspResponse(response, 0x03.toByte(), 0))
+    }
+
+    @Test
+    fun `formats copyable ROM command diagnostics`() {
+        assertEquals(
+            "ESP ROM command 0x03 rejected (status=0x01, error=0x08)",
+            formatEspRomError(0x03.toByte(), 1, 8),
+        )
+    }
+
+    @Test
+    fun `builds esptool-compatible 8 MiB SPI flash parameters`() {
+        val packet = buildSpiFlashParameters(8 * 1024 * 1024)
+        assertEquals(24, packet.size)
+
+        fun uint32(offset: Int): Int =
+            (packet[offset].toInt() and 0xFF) or
+                ((packet[offset + 1].toInt() and 0xFF) shl 8) or
+                ((packet[offset + 2].toInt() and 0xFF) shl 16) or
+                ((packet[offset + 3].toInt() and 0xFF) shl 24)
+
+        assertEquals(0, uint32(0))
+        assertEquals(8 * 1024 * 1024, uint32(4))
+        assertEquals(64 * 1024, uint32(8))
+        assertEquals(4 * 1024, uint32(12))
+        assertEquals(256, uint32(16))
+        assertEquals(0xFFFF, uint32(20))
+    }
+}
 
 /**
  * Unit tests for ESPToolFlasher static methods and constants.

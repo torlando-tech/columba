@@ -69,8 +69,15 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
@@ -107,6 +114,7 @@ import network.columba.app.ui.screens.ThemeEditorScreen
 import network.columba.app.ui.screens.ThemeManagementScreen
 import network.columba.app.ui.screens.VoiceCallScreen
 import network.columba.app.ui.screens.buildFocusInterfaceDetails
+import network.columba.app.ui.screens.flasher.PyxisUpdaterScreen
 import network.columba.app.ui.screens.flasher.RNodeFlasherScreen
 import network.columba.app.ui.screens.offlinemaps.OfflineMapDownloadScreen
 import network.columba.app.ui.screens.offlinemaps.OfflineMapsScreen
@@ -197,6 +205,10 @@ class MainActivity : ComponentActivity() {
     private var lastHandledUsbDeviceId: Int = -1
     private var lastHandledUsbTimestamp: Long = 0
     private var lastUsbReconnectAttempted: Boolean = false // Track if reconnect was actually attempted
+    private var usbClassificationJob: Job? = null
+    private var usbClassificationDeviceId: Int = -1
+    private val detachedUsbDeviceIds = Channel<Int>(Channel.UNLIMITED)
+    private val detachedUsbDeviceEvents = detachedUsbDeviceIds.receiveAsFlow()
 
     @Suppress("VariableNaming") // Constant value uses SCREAMING_SNAKE_CASE by convention
     private val USB_DEBOUNCE_MS = 5000L // 5 second window to ignore duplicate USB events
@@ -233,6 +245,14 @@ class MainActivity : ComponentActivity() {
                             }
                         if (usbDevice != null) {
                             Log.d(TAG, "🔌 USB device detached: ${usbDevice.deviceName} (${usbDevice.deviceId})")
+                            val pendingUsbAction = pendingNavigation.value as? PendingNavigation.UsbDeviceAction
+                            if (pendingUsbAction?.usbDeviceId == usbDevice.deviceId) {
+                                pendingNavigation.value = null
+                            }
+                            detachedUsbDeviceIds.trySend(usbDevice.deviceId)
+                            if (usbDevice.deviceId == usbClassificationDeviceId) {
+                                usbClassificationJob?.cancel()
+                            }
                             // Clear debounce state for this device so re-plug will be handled
                             if (usbDevice.deviceId == lastHandledUsbDeviceId) {
                                 Log.d(TAG, "🔌 Clearing debounce state for detached device")
@@ -329,6 +349,7 @@ class MainActivity : ComponentActivity() {
                     pendingNavigation = pendingNavigation,
                     interfaceRepository = interfaceRepository,
                     crashReportManager = crashReportManager,
+                    detachedUsbDeviceEvents = detachedUsbDeviceEvents,
                 )
             }
         }
@@ -404,6 +425,73 @@ class MainActivity : ComponentActivity() {
         intentHandler.handle(intent)
     }
 
+    private fun isEsp32S3Candidate(usbDevice: UsbDevice): Boolean =
+        network.columba.app.rns.host.flasher.ESPToolFlasher.isNativeUsbDevice(
+            usbDevice.vendorId,
+            usbDevice.productId,
+        )
+
+    private suspend fun detectConnectedPyxis(
+        usbDevice: UsbDevice,
+    ): network.columba.app.rns.host.flasher.PyxisDeviceIdentity? {
+        if (!isEsp32S3Candidate(usbDevice)) return null
+        return network.columba.app.rns.host.flasher.RNodeFlasher(this)
+            .detectPyxisDevice(usbDevice.deviceId)
+    }
+
+    private suspend fun detectConnectedRNode(usbDevice: UsbDevice): Boolean {
+        val flasher = network.columba.app.rns.host.flasher.RNodeFlasher(this)
+        if (!flasher.hasPermission(usbDevice.deviceId)) return false
+        return flasher.isRNodeDevice(usbDevice.deviceId)
+    }
+
+    private data class UsbAttachmentClassification(
+        val pyxisIdentity: network.columba.app.rns.host.flasher.PyxisDeviceIdentity?,
+        val configuredRNode: InterfaceEntity?,
+    )
+
+    private suspend fun classifyAttachedUsbDevice(usbDevice: UsbDevice): UsbAttachmentClassification {
+        val pyxisIdentity = detectConnectedPyxis(usbDevice)
+        val isEsp32S3 = isEsp32S3Candidate(usbDevice)
+        val savedInterface = interfaceRepository.findRNodeByUsbVidPid(usbDevice.vendorId, usbDevice.productId)
+        val shouldProbeRNode = isEsp32S3 && pyxisIdentity == null
+        val confirmedRNode =
+            shouldProbeRNode && savedInterface != null && detectConnectedRNode(usbDevice)
+        val firmwareClassification =
+            classifySharedEsp32S3Firmware(
+                pyxisDetected = pyxisIdentity != null,
+                rnodeDetected = confirmedRNode,
+            )
+        val configuredRNode =
+            savedInterface?.takeIf {
+                !isEsp32S3 || firmwareClassification == SharedEsp32S3FirmwareClassification.RNODE
+            }
+        return UsbAttachmentClassification(pyxisIdentity, configuredRNode)
+    }
+
+    private fun isUsbDeviceAttached(deviceId: Int): Boolean =
+        getSystemService(UsbManager::class.java).deviceList.values.any { it.deviceId == deviceId }
+
+    private fun shouldIgnoreDuplicateUsbEvent(
+        deviceId: Int,
+        now: Long,
+    ): Boolean {
+        if (deviceId != lastHandledUsbDeviceId) return false
+        if ((now - lastHandledUsbTimestamp) >= USB_DEBOUNCE_MS) return false
+        return lastUsbReconnectAttempted || usbClassificationJob?.isActive == true
+    }
+
+    private fun beginUsbClassification(
+        deviceId: Int,
+        now: Long,
+    ): Job? {
+        lastHandledUsbDeviceId = deviceId
+        lastHandledUsbTimestamp = now
+        lastUsbReconnectAttempted = false
+        usbClassificationDeviceId = deviceId
+        return usbClassificationJob
+    }
+
     /**
      * Handle USB device attachment - check if it's already configured as an RNode interface.
      */
@@ -420,31 +508,34 @@ class MainActivity : ComponentActivity() {
         // Check if we've already handled this device recently (debounce)
         // But allow retry if previous attempt didn't reconnect due to missing permission
         val now = System.currentTimeMillis()
-        if (usbDevice.deviceId == lastHandledUsbDeviceId &&
-            (now - lastHandledUsbTimestamp) < USB_DEBOUNCE_MS &&
-            lastUsbReconnectAttempted
-        ) {
+        if (shouldIgnoreDuplicateUsbEvent(usbDevice.deviceId, now)) {
             Log.d(TAG, "🔌 Ignoring duplicate USB event for device ${usbDevice.deviceId} (debounce)")
             return
         }
 
-        // Mark this device as handled (reconnect attempt status will be set below)
-        lastHandledUsbDeviceId = usbDevice.deviceId
-        lastHandledUsbTimestamp = now
-        lastUsbReconnectAttempted = false // Will be set to true if reconnect is actually triggered
-
-        lifecycleScope.launch {
+        val previousClassificationJob = beginUsbClassification(usbDevice.deviceId, now)
+        usbClassificationJob = lifecycleScope.launch {
             try {
+                previousClassificationJob?.cancelAndJoin()
                 Log.d(
                     TAG,
                     "🔌 Looking up USB device: VID=${usbDevice.vendorId} (0x${usbDevice.vendorId.toString(
                         16,
                     )}), PID=${usbDevice.productId} (0x${usbDevice.productId.toString(16)})",
                 )
-                // Check if this USB device is already configured as an RNode interface
-                // Use VID/PID matching since they are stable hardware identifiers (unlike device IDs which change)
-                val existingInterface = interfaceRepository.findRNodeByUsbVidPid(usbDevice.vendorId, usbDevice.productId)
-                Log.d(TAG, "🔌 findRNodeByUsbVidPid result: ${existingInterface?.name ?: "NOT FOUND"}")
+                val classification = classifyAttachedUsbDevice(usbDevice)
+                val pyxisIdentity = classification.pyxisIdentity
+                val existingInterface = classification.configuredRNode
+                Log.d(
+                    TAG,
+                    "🔌 USB classification: pyxis=${pyxisIdentity?.version ?: "no"}, " +
+                        "configuredRNode=${existingInterface?.name ?: "no"}",
+                )
+
+                if (!isUsbDeviceAttached(usbDevice.deviceId)) {
+                    Log.d(TAG, "🔌 Device detached during classification; skipping navigation")
+                    return@launch
+                }
 
                 if (existingInterface != null) {
                     // Device is already configured - trigger reconnect and navigate to stats screen
@@ -483,12 +574,20 @@ class MainActivity : ComponentActivity() {
                             vendorId = usbDevice.vendorId,
                             productId = usbDevice.productId,
                             deviceName = usbDevice.deviceName,
+                            pyxisVersion = pyxisIdentity?.version,
                         )
                     Log.d(TAG, "🔌 pendingNavigation set to UsbDeviceAction")
                 }
                 Log.d(TAG, "🔌 pendingNavigation.value is now: ${pendingNavigation.value}")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "🔌 Error handling USB device attachment", e)
+            } finally {
+                if (usbClassificationDeviceId == usbDevice.deviceId) {
+                    usbClassificationJob = null
+                    usbClassificationDeviceId = -1
+                }
             }
         }
     }
@@ -543,6 +642,7 @@ sealed class PendingNavigation {
         val vendorId: Int,
         val productId: Int,
         val deviceName: String,
+        val pyxisVersion: String? = null,
     ) : PendingNavigation()
 
     /** Navigate to RNode wizard with USB device pre-selected */
@@ -596,11 +696,26 @@ fun ColumbaNavigation(
     pendingNavigation: MutableState<PendingNavigation?>,
     interfaceRepository: InterfaceRepository,
     crashReportManager: CrashReportManager,
+    detachedUsbDeviceEvents: Flow<Int>,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(detachedUsbDeviceEvents, navController) {
+        detachedUsbDeviceEvents.collect { deviceId ->
+            val currentEntry = navController.currentBackStackEntry
+            if (shouldDismissUsbAction(
+                    route = currentEntry?.destination?.route,
+                    activeDeviceId = currentEntry?.arguments?.getInt("usbDeviceId"),
+                    detachedDeviceId = deviceId,
+                )
+            ) {
+                navController.popBackStack()
+            }
+        }
+    }
 
     val sharedTextViewModel: SharedTextViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
     val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as ComponentActivity)
@@ -818,15 +933,21 @@ fun ColumbaNavigation(
                         }
                     }
                     is PendingNavigation.UsbDeviceAction -> {
-                        // Navigate to USB device action screen
-                        val route =
-                            "usb_device_action" +
-                                "?usbDeviceId=${navigation.usbDeviceId}" +
-                                "&usbVendorId=${navigation.vendorId}" +
-                                "&usbProductId=${navigation.productId}" +
-                                "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
-                        navController.navigate(route)
-                        Log.d("ColumbaNavigation", "Navigated to USB device action: ${navigation.usbDeviceId}")
+                        val usbManager = context.getSystemService(UsbManager::class.java)
+                        val isAttached = usbManager.deviceList.values.any { it.deviceId == navigation.usbDeviceId }
+                        if (isAttached) {
+                            val route =
+                                "usb_device_action" +
+                                    "?usbDeviceId=${navigation.usbDeviceId}" +
+                                    "&usbVendorId=${navigation.vendorId}" +
+                                    "&usbProductId=${navigation.productId}" +
+                                    "&usbDeviceName=${Uri.encode(navigation.deviceName)}" +
+                                    "&pyxisVersion=${Uri.encode(navigation.pyxisVersion ?: "")}"
+                            navController.navigate(route)
+                            Log.d("ColumbaNavigation", "Navigated to USB device action: ${navigation.usbDeviceId}")
+                        } else {
+                            Log.d("ColumbaNavigation", "Skipped detached USB device: ${navigation.usbDeviceId}")
+                        }
                     }
                     is PendingNavigation.RNodeWizardWithUsb -> {
                         // Navigate to RNode wizard with USB pre-selected
@@ -1015,6 +1136,7 @@ fun ColumbaNavigation(
             "rnode_wizard",
             "tcp_client_wizard",
             "rnode_flasher",
+            "pyxis_updater",
             "usb_device_action",
             "voice_call/",
             "incoming_call/",
@@ -1491,6 +1613,9 @@ fun ColumbaNavigation(
                                     onNavigateToFlasher = {
                                         navController.navigate("rnode_flasher")
                                     },
+                                    onNavigateToPyxisUpdater = {
+                                        navController.navigate("pyxis_updater")
+                                    },
                                     onNavigateToBlockedUsers = {
                                         navController.navigate("blocked_users")
                                     },
@@ -1503,7 +1628,8 @@ fun ColumbaNavigation(
                                         "?usbDeviceId={usbDeviceId}" +
                                         "&usbVendorId={usbVendorId}" +
                                         "&usbProductId={usbProductId}" +
-                                        "&usbDeviceName={usbDeviceName}",
+                                        "&usbDeviceName={usbDeviceName}" +
+                                        "&pyxisVersion={pyxisVersion}",
                                 arguments =
                                     listOf(
                                         navArgument("usbDeviceId") {
@@ -1523,12 +1649,18 @@ fun ColumbaNavigation(
                                             defaultValue = ""
                                             nullable = true
                                         },
+                                        navArgument("pyxisVersion") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                            nullable = true
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
                                 val usbVendorId = backStackEntry.arguments?.getInt("usbVendorId") ?: -1
                                 val usbProductId = backStackEntry.arguments?.getInt("usbProductId") ?: -1
                                 val usbDeviceName = backStackEntry.arguments?.getString("usbDeviceName") ?: "USB Device"
+                                val pyxisVersion = backStackEntry.arguments?.getString("pyxisVersion")?.ifBlank { null }
 
                                 // State for disable transport operation
                                 val context = androidx.compose.ui.platform.LocalContext.current
@@ -1542,7 +1674,18 @@ fun ColumbaNavigation(
 
                                 network.columba.app.ui.screens.UsbDeviceActionScreen(
                                     deviceName = usbDeviceName,
+                                    pyxisVersion = pyxisVersion,
+                                    isEsp32S3Candidate =
+                                        network.columba.app.rns.host.flasher.ESPToolFlasher.isNativeUsbDevice(
+                                            usbVendorId,
+                                            usbProductId,
+                                        ),
                                     onNavigateBack = { navController.popBackStack() },
+                                    onUpdatePyxis = {
+                                        navController.navigate("pyxis_updater?usbDeviceId=$usbDeviceId") {
+                                            popUpTo("usb_device_action") { inclusive = true }
+                                        }
+                                    },
                                     onFlashFirmware = {
                                         val route =
                                             "rnode_flasher" +
@@ -1591,6 +1734,29 @@ fun ColumbaNavigation(
                                     isDisablingTransport = isDisablingTransport,
                                     disableTransportResult = disableTransportResult,
                                     onDismissDisableResult = { disableTransportResult = null },
+                                )
+                            }
+
+                            composable(
+                                route = "pyxis_updater?packageUri={packageUri}&usbDeviceId={usbDeviceId}",
+                                arguments =
+                                    listOf(
+                                        navArgument("packageUri") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                            nullable = true
+                                        },
+                                        navArgument("usbDeviceId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        },
+                                    ),
+                            ) { backStackEntry ->
+                                PyxisUpdaterScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    initialPackageUri = backStackEntry.arguments?.getString("packageUri"),
+                                    initialDeviceId =
+                                        backStackEntry.arguments?.getInt("usbDeviceId")?.takeIf { it >= 0 },
                                 )
                             }
 
@@ -2065,6 +2231,11 @@ fun ColumbaNavigation(
                                             launchSingleTop = true
                                             restoreState = true
                                         }
+                                    },
+                                    onUpdatePyxisPackage = { packageUri ->
+                                        navController.navigate(
+                                            "pyxis_updater?packageUri=${Uri.encode(packageUri.toString())}",
+                                        )
                                     },
                                 )
                             }

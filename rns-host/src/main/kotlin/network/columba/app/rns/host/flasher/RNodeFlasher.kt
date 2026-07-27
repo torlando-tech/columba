@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import network.columba.app.rns.host.usb.UsbDeviceInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +55,9 @@ class RNodeFlasher(
         private const val NRF52_EEPROM_WIPE_WAIT_MS = 18_000L
         private const val NRF52_RECONNECT_RETRIES = 5
         private const val NRF52_RECONNECT_DELAY_MS = 2_000L
+        private const val PYXIS_DETECTION_TIMEOUT_MS = 1_500L
+        private const val PYXIS_DETECTION_POLL_MS = 25L
+        private const val PYXIS_DETECTION_MAX_BYTES = 4_096
     }
 
     private val usbBridge = KotlinUSBBridge.getInstance(context)
@@ -68,6 +72,29 @@ class RNodeFlasher(
     val flashState: StateFlow<FlashState> = _flashState.asStateFlow()
 
     val tncModeController = TncModeController(usbBridge, detector, _flashState)
+
+    private val pyxisFlashCore =
+        PyxisFlashCore(
+            findDevice = { deviceId -> usbBridge.getConnectedUsbDevices().find { it.deviceId == deviceId } },
+            transport =
+                PyxisEspToolTransport { request ->
+                    espToolFlasher.flash(
+                        firmwareZipStream = request.firmwareZipStream,
+                        deviceId = request.deviceId,
+                        board = request.board,
+                        vendorId = request.vendorId,
+                        productId = request.productId,
+                        consoleImageStream = request.consoleImageStream,
+                        verifyFlashWrites = request.verifyFlashWrites,
+                        performBackupHardReset = request.performBackupHardReset,
+                        flashSizeBytes = request.flashSizeBytes,
+                        progressCallback = request.progressCallback,
+                    )
+                },
+            emitState = { state -> _flashState.value = state },
+        )
+
+    private val pyxisDeviceDetector = PyxisDeviceDetector(::queryPyxisVersion)
 
     /**
      * Flash state for UI observation.
@@ -145,6 +172,66 @@ class RNodeFlasher(
         usbBridge.requestPermission(deviceId, callback)
     }
 
+    /** Query the production Pyxis VERSION command without entering the ROM bootloader. */
+    suspend fun detectPyxisDevice(deviceId: Int): PyxisDeviceIdentity? {
+        // Automatic attach classification must not trigger or race Android's USB
+        // permission dialog. Without an existing grant, use the neutral ESP32-S3
+        // action screen and let the selected workflow request permission.
+        if (!usbBridge.hasPermission(deviceId)) return null
+        return pyxisDeviceDetector.detect(deviceId)
+    }
+
+    private suspend fun queryPyxisVersion(deviceId: Int): String? =
+        withContext(Dispatchers.IO) {
+            var input: InputStream? = null
+            var output: java.io.OutputStream? = null
+            try {
+                val streams =
+                    usbBridge.openSerialStreams(
+                        vendorId = null,
+                        productId = null,
+                        deviceId = deviceId,
+                        baudRate = RNodeConstants.BAUD_RATE_DEFAULT,
+                        // Detection must not toggle ESP32-S3 reset/boot control lines.
+                        dtr = null,
+                        rts = null,
+                    )
+                input = streams.first
+                output = streams.second
+                output.write("VERSION\n".encodeToByteArray())
+                output.flush()
+
+                val transcript = StringBuilder()
+                val deadline = System.currentTimeMillis() + PYXIS_DETECTION_TIMEOUT_MS
+                while (System.currentTimeMillis() < deadline && transcript.length < PYXIS_DETECTION_MAX_BYTES) {
+                    while (input.available() > 0 && transcript.length < PYXIS_DETECTION_MAX_BYTES) {
+                        val next = input.read()
+                        if (next < 0) break
+                        transcript.append(next.toChar())
+                    }
+                    if (PyxisDeviceDetector.parseIdentity(transcript.toString()) != null) {
+                        return@withContext transcript.toString()
+                    }
+                    delay(PYXIS_DETECTION_POLL_MS)
+                }
+                transcript.toString()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.d(TAG, "Pyxis VERSION probe did not identify device $deviceId: ${e.message}")
+                null
+            } finally {
+                try {
+                    output?.close()
+                } catch (_: Exception) {
+                }
+                try {
+                    input?.close()
+                } catch (_: Exception) {
+                }
+            }
+        }
+
     /**
      * Detect if a connected device is an RNode and get its info.
      *
@@ -186,6 +273,50 @@ class RNodeFlasher(
                 usbBridge.disconnect()
                 null
             }
+        }
+
+    /**
+     * Perform only the bounded RNode KISS identity handshake.
+     *
+     * Used for USB attachment routing where reading the complete device profile
+     * would add unnecessary serial commands and latency.
+     */
+    suspend fun isRNodeDevice(deviceId: Int): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                if (!usbBridge.connect(
+                        deviceId = deviceId,
+                        baudRate = RNodeConstants.BAUD_RATE_DEFAULT,
+                        dtr = null,
+                        rts = null,
+                    )
+                ) {
+                    return@withContext false
+                }
+                detector.isRNode()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "RNode identity detection failed", e)
+                false
+            } finally {
+                usbBridge.disconnect()
+            }
+        }
+
+    /**
+     * Flash a validated Pyxis package without touching RNode or persistent partitions.
+     *
+     * This path writes only the package's boot_app0 and application images through
+     * [ESPToolFlasher]. It intentionally skips RNode update indication, console/NVS/
+     * LittleFS images, bootloader, partition table, reboot waits, and provisioning.
+     */
+    suspend fun flashPyxisFirmware(
+        deviceId: Int,
+        pyxisPackage: PyxisFirmwarePackage,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            pyxisFlashCore.flash(deviceId, pyxisPackage)
         }
 
     /**

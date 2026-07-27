@@ -570,6 +570,8 @@ class KotlinUSBBridge(
      * @param productId USB Product ID (optional, used with vendorId for device lookup)
      * @param deviceId Android USB device ID (optional, alternative to VID/PID lookup)
      * @param baudRate Baud rate (default: 115200)
+     * @param dtr initial Data Terminal Ready state, or null to leave unchanged
+     * @param rts initial Request To Send state, or null to leave unchanged
      * @return Pair of InputStream (reads from device) and OutputStream (writes to device)
      * @throws IllegalStateException if device not found, no permission, or no driver
      */
@@ -579,6 +581,8 @@ class KotlinUSBBridge(
         productId: Int?,
         deviceId: Int?,
         baudRate: Int = DEFAULT_BAUD_RATE,
+        dtr: Boolean? = true,
+        rts: Boolean? = true,
     ): Pair<java.io.InputStream, java.io.OutputStream> {
         val device =
             usbManager.deviceList.values.firstOrNull { dev ->
@@ -614,8 +618,8 @@ class KotlinUSBBridge(
             port.setParameters(baudRate, DEFAULT_DATA_BITS, DEFAULT_STOP_BITS, DEFAULT_PARITY)
 
             try {
-                port.dtr = true
-                port.rts = true
+                dtr?.let { port.dtr = it }
+                rts?.let { port.rts = it }
             } catch (e: UnsupportedOperationException) {
                 Log.d(TAG, "Flow control not supported by this driver: ${e.message}")
             }
@@ -658,6 +662,8 @@ class KotlinUSBBridge(
 
         val serialOutput =
             object : java.io.OutputStream() {
+                private val closed = AtomicBoolean(false)
+
                 override fun write(b: Int) {
                     port.write(byteArrayOf(b.toByte()), WRITE_TIMEOUT_MS)
                 }
@@ -671,9 +677,16 @@ class KotlinUSBBridge(
                 }
 
                 override fun close() {
-                    streamIoManager.stop()
-                    port.close()
-                    connection.close()
+                    if (!closed.compareAndSet(false, true)) return
+                    try {
+                        streamIoManager.stop()
+                    } finally {
+                        try {
+                            port.close()
+                        } finally {
+                            connection.close()
+                        }
+                    }
                 }
             }
 
@@ -696,6 +709,8 @@ class KotlinUSBBridge(
      *   port.read() → testConnection() → USB GET_STATUS kills the nRF52840's USB
      *   controller. When false, use readBlockingDirect()/writeBlockingDirect() which
      *   call bulkTransfer() directly without testConnection().
+     * @param dtr Initial DTR state, or null to leave the control line untouched.
+     * @param rts Initial RTS state, or null to leave the control line untouched.
      * @return true if connection successful, false otherwise
      */
     @JvmOverloads
@@ -704,6 +719,8 @@ class KotlinUSBBridge(
         deviceId: Int,
         baudRate: Int = DEFAULT_BAUD_RATE,
         startIoManager: Boolean = true,
+        dtr: Boolean? = true,
+        rts: Boolean? = true,
     ): Boolean {
         if (isConnected.get()) {
             if (connectedDeviceId == deviceId) {
@@ -752,8 +769,8 @@ class KotlinUSBBridge(
 
             // Set flow control if supported
             try {
-                port.dtr = true
-                port.rts = true
+                dtr?.let { port.dtr = it }
+                rts?.let { port.rts = it }
             } catch (e: UnsupportedOperationException) {
                 Log.d(TAG, "Flow control not supported by this driver: ${e.message}")
             }

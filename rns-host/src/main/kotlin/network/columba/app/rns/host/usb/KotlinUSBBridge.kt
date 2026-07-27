@@ -709,6 +709,8 @@ class KotlinUSBBridge(
      *   port.read() → testConnection() → USB GET_STATUS kills the nRF52840's USB
      *   controller. When false, use readBlockingDirect()/writeBlockingDirect() which
      *   call bulkTransfer() directly without testConnection().
+     * @param dtr Initial DTR state, or null to leave the control line untouched.
+     * @param rts Initial RTS state, or null to leave the control line untouched.
      * @return true if connection successful, false otherwise
      */
     @JvmOverloads
@@ -717,6 +719,8 @@ class KotlinUSBBridge(
         deviceId: Int,
         baudRate: Int = DEFAULT_BAUD_RATE,
         startIoManager: Boolean = true,
+        dtr: Boolean? = true,
+        rts: Boolean? = true,
     ): Boolean {
         if (isConnected.get()) {
             if (connectedDeviceId == deviceId) {
@@ -765,8 +769,8 @@ class KotlinUSBBridge(
 
             // Set flow control if supported
             try {
-                port.dtr = true
-                port.rts = true
+                dtr?.let { port.dtr = it }
+                rts?.let { port.rts = it }
             } catch (e: UnsupportedOperationException) {
                 Log.d(TAG, "Flow control not supported by this driver: ${e.message}")
             }

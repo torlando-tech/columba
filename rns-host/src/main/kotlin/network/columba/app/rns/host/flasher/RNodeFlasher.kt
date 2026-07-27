@@ -276,6 +276,35 @@ class RNodeFlasher(
         }
 
     /**
+     * Perform only the bounded RNode KISS identity handshake.
+     *
+     * Used for USB attachment routing where reading the complete device profile
+     * would add unnecessary serial commands and latency.
+     */
+    suspend fun isRNodeDevice(deviceId: Int): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                if (!usbBridge.connect(
+                        deviceId = deviceId,
+                        baudRate = RNodeConstants.BAUD_RATE_DEFAULT,
+                        dtr = null,
+                        rts = null,
+                    )
+                ) {
+                    return@withContext false
+                }
+                detector.isRNode()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "RNode identity detection failed", e)
+                false
+            } finally {
+                usbBridge.disconnect()
+            }
+        }
+
+    /**
      * Flash a validated Pyxis package without touching RNode or persistent partitions.
      *
      * This path writes only the package's boot_app0 and application images through

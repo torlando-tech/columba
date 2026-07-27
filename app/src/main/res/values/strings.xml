@@ -80,6 +80,7 @@
     <string name="pyxis_update_status_starting">Starting Pyxis update\u2026</string>
     <string name="pyxis_update_usb_scan_failed">Failed to scan USB devices: %1$s</string>
     <string name="pyxis_update_usb_permission_denied">USB permission denied</string>
+    <string name="pyxis_update_usb_target_disconnected">The selected USB device is no longer connected.</string>
     <string name="pyxis_update_package_open_failed">Unable to open the selected package</string>
     <string name="pyxis_update_package_invalid">Invalid Pyxis update package</string>
     <string name="pyxis_update_package_validation_failed">Package could not be verified: %1$s</string>

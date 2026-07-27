@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import network.columba.app.rns.host.usb.UsbDeviceInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -173,9 +174,10 @@ class RNodeFlasher(
 
     /** Query the production Pyxis VERSION command without entering the ROM bootloader. */
     suspend fun detectPyxisDevice(deviceId: Int): PyxisDeviceIdentity? {
-        if (!usbBridge.hasPermission(deviceId) && !usbBridge.requestPermissionSuspend(deviceId)) {
-            return null
-        }
+        // Automatic attach classification must not trigger or race Android's USB
+        // permission dialog. Without an existing grant, use the neutral ESP32-S3
+        // action screen and let the selected workflow request permission.
+        if (!usbBridge.hasPermission(deviceId)) return null
         return pyxisDeviceDetector.detect(deviceId)
     }
 
@@ -190,10 +192,9 @@ class RNodeFlasher(
                         productId = null,
                         deviceId = deviceId,
                         baudRate = RNodeConstants.BAUD_RATE_DEFAULT,
-                        // Keep the native USB CDC session active without presenting
-                        // the DTR/RTS combination used for ESP bootloader entry.
-                        dtr = true,
-                        rts = false,
+                        // Detection must not toggle ESP32-S3 reset/boot control lines.
+                        dtr = null,
+                        rts = null,
                     )
                 input = streams.first
                 output = streams.second
@@ -214,6 +215,8 @@ class RNodeFlasher(
                     delay(PYXIS_DETECTION_POLL_MS)
                 }
                 transcript.toString()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.d(TAG, "Pyxis VERSION probe did not identify device $deviceId: ${e.message}")
                 null

@@ -62,6 +62,7 @@ class PyxisUpdaterViewModel
         private var validatedPackage: PyxisFirmwarePackage? = null
         private var packageLoadJob: Job? = null
         private val packageLoadGuard = PyxisPackageLoadGuard()
+        private var requestedDeviceId: Int? = null
 
         init {
             observeFlashState()
@@ -125,19 +126,43 @@ class PyxisUpdaterViewModel
                     }
                     return@launch
                 }
+                val requestedDevice = requestedDeviceId?.let { requestedId -> devices.find { it.deviceId == requestedId } }
                 _state.update { current ->
                     current.copy(
                         connectedDevices = devices,
-                        selectedDevice = current.selectedDevice?.let { selected ->
-                            devices.find { it.deviceId == selected.deviceId }
-                        },
+                        selectedDevice =
+                            requestedDevice ?: current.selectedDevice?.let { selected ->
+                                devices.find { it.deviceId == selected.deviceId }
+                            },
                         isRefreshingDevices = false,
+                        permissionError =
+                            if (requestedDeviceId != null && requestedDevice == null) {
+                                context.getString(R.string.pyxis_update_usb_target_disconnected)
+                            } else {
+                                current.permissionError
+                            },
                     )
+                }
+                if (requestedDevice != null) {
+                    requestedDeviceId = null
+                    selectDevice(requestedDevice)
                 }
             }
         }
 
+        fun selectDeviceById(deviceId: Int) {
+            requestedDeviceId = deviceId
+            val connected = _state.value.connectedDevices.find { it.deviceId == deviceId }
+            if (connected != null) {
+                requestedDeviceId = null
+                selectDevice(connected)
+            } else {
+                refreshDevices()
+            }
+        }
+
         fun selectDevice(device: UsbDeviceInfo) {
+            requestedDeviceId = null
             _state.update { it.copy(selectedDevice = device, permissionError = null) }
             if (flasher.hasPermission(device.deviceId)) return
 

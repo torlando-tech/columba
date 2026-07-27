@@ -61,6 +61,7 @@ import network.columba.app.viewmodel.PyxisUpdaterViewModel
 fun PyxisUpdaterScreen(
     onNavigateBack: () -> Unit,
     initialPackageUri: String? = null,
+    initialDeviceId: Int? = null,
     viewModel: PyxisUpdaterViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -77,6 +78,10 @@ fun PyxisUpdaterScreen(
             ?.takeIf { it.isNotBlank() }
             ?.let(Uri::parse)
             ?.let(viewModel::loadPackage)
+    }
+
+    LaunchedEffect(initialDeviceId) {
+        initialDeviceId?.let(viewModel::selectDeviceById)
     }
 
     BackHandler(enabled = state.isFlashing) {

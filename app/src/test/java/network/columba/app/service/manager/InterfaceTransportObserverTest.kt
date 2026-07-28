@@ -92,6 +92,32 @@ class InterfaceTransportObserverTest {
         }
 
     @Test
+    fun `registration callback cannot be overwritten by an older startup snapshot`() =
+        runTest {
+            val oldNetwork = mockk<Network>()
+            val newNetwork = mockk<Network>()
+            val oldCaps = wifiCaps()
+            val newCaps = cellularCaps()
+            every { connectivityManager.getActiveNetwork() } returns oldNetwork
+            every { connectivityManager.getNetworkCapabilities(oldNetwork) } returns oldCaps
+            every { interfaceRepository.enabledInterfaces } returns flowOf(sampleConfigs())
+            every { connectivityManager.registerDefaultNetworkCallback(any()) } answers {
+                firstArg<ConnectivityManager.NetworkCallback>().apply {
+                    onAvailable(newNetwork)
+                    onCapabilitiesChanged(newNetwork, newCaps)
+                }
+                Unit
+            }
+
+            observer.start(testScope.backgroundScope)
+
+            assertEquals(CurrentTransport.CELLULAR, observer.currentTransport.value)
+            coVerify(timeout = 5_000, exactly = 1) {
+                transportAdmin.reloadInterfaces(any())
+            }
+        }
+
+    @Test
     fun `first default capabilities trigger filtering and reload`() =
         runTest {
             val defaultNetwork = mockk<Network>()

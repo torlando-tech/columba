@@ -108,18 +108,14 @@ class InterfaceTransportObserver
                         }
                     }
                 }
+            // Refresh the construction-time seed before registration. Registration may
+            // synchronously or asynchronously dispatch a newer default-network callback;
+            // no snapshot write may occur after that callback or it could overwrite the
+            // coherent callback result with stale transport A while `lastTransport` is B.
+            _currentTransport.value = currentTransportOf(connectivityManager)
             try {
                 connectivityManager.registerDefaultNetworkCallback(cb)
                 callback = cb
-                // Seed the reactive view at start() so the StateFlow's initial value
-                // reflects reality before the first capability callback fires. Without
-                // this, collectors that subscribe between start() and the first callback
-                // would briefly observe NONE even on a Wi-Fi-connected device. We do NOT
-                // touch `lastTransport` here — leaving it null preserves the
-                // "first callback always emits a transition" contract that
-                // `applyTransport()` relies on (boot-on-cellular drops a wifi-only
-                // AutoInterface immediately, not on the first carrier change).
-                _currentTransport.value = currentTransportOf(connectivityManager)
                 Log.d(TAG, "Transport observer started")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to register transport observer", e)

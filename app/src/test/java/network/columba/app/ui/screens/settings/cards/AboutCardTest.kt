@@ -1,18 +1,35 @@
 package network.columba.app.ui.screens.settings.cards
 
 import android.app.Application
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
+import network.columba.app.R
+import network.columba.app.service.AppUpdateResult
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.theme.ColumbaTheme
 import network.columba.app.util.SystemInfo
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -163,8 +180,81 @@ class AboutCardTest {
         composeTestRule.onNodeWithText("Report Bug").assertExists()
     }
 
-    // Note: Button click tests are skipped in Robolectric due to framework limitations
-    // with Compose UI interactions. These should be tested with instrumented tests.
+    @Test
+    fun `view license handles missing external activity without crashing`() {
+        assertMissingExternalActivityHandled("View License")
+    }
+
+    @Test
+    fun `resource link handles missing external activity without crashing`() {
+        assertMissingExternalActivityHandled("GitHub Repository")
+    }
+
+    @Test
+    fun `view release handles missing external activity without crashing`() {
+        assertMissingExternalActivityHandled(
+            buttonText = "View Release",
+            updateCheckResult =
+                AppUpdateResult.UpdateAvailable(
+                    currentVersion = "3.0.7",
+                    tagName = "v3.0.8",
+                    htmlUrl = "https://example.invalid/release",
+                    isPrerelease = false,
+                ),
+        )
+    }
+
+    @Test
+    fun `external links handle security exception without crashing`() {
+        assertMissingExternalActivityHandled(
+            buttonText = "View License",
+            launchFailure = SecurityException("External activities blocked"),
+        )
+    }
+
+    private fun assertMissingExternalActivityHandled(
+        buttonText: String,
+        updateCheckResult: AppUpdateResult = AppUpdateResult.Idle,
+        launchFailure: RuntimeException = ActivityNotFoundException("No browser installed"),
+    ) {
+        val baseContext = ApplicationProvider.getApplicationContext<Context>()
+        var launchAttempts = 0
+        val noExternalActivityContext =
+            object : ContextWrapper(baseContext) {
+                override fun startActivity(intent: Intent) {
+                    launchAttempts += 1
+                    throw launchFailure
+                }
+            }
+
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalContext provides noExternalActivityContext) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    ColumbaTheme {
+                        AboutCard(
+                            isExpanded = true,
+                            onExpandedChange = {},
+                            systemInfo = fullSystemInfo,
+                            onCopySystemInfo = {},
+                            onReportBug = {},
+                            updateCheckResult = updateCheckResult,
+                        )
+                    }
+                }
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText(buttonText)
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(1, launchAttempts)
+        assertEquals(
+            baseContext.getString(R.string.error_no_app_for_link),
+            ShadowToast.getTextOfLatestToast(),
+        )
+    }
 
     @Test
     fun `renders without crashing with full system info`() {

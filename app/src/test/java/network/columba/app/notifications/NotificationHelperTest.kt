@@ -12,6 +12,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -37,6 +39,12 @@ class NotificationHelperTest {
     private lateinit var notificationHelper: NotificationHelper
 
     private val activeConversationFlow = MutableStateFlow<String?>(null)
+
+    private fun messageNotification(destinationHash: String) =
+        notificationManager.activeNotifications.firstOrNull {
+            it.id == NotificationHelper.NOTIFICATION_ID_MESSAGE &&
+                it.tag == NotificationHelper.messageNotificationTag(destinationHash)
+        }
 
     @Before
     fun setup() {
@@ -362,6 +370,40 @@ class NotificationHelperTest {
     // ========== Notification ID Tests ==========
 
     @Test
+    fun `hash-colliding conversations remain independently cancellable`() =
+        runBlocking {
+            val hashA = "FB"
+            val hashB = "Ea"
+            assertEquals(hashA.hashCode(), hashB.hashCode())
+
+            notificationHelper.notifyMessageReceived(
+                destinationHash = hashA,
+                peerName = "Peer A",
+                messagePreview = "From A",
+                isFavorite = false,
+            )
+            notificationHelper.notifyMessageReceived(
+                destinationHash = hashB,
+                peerName = "Peer B",
+                messagePreview = "From B",
+                isFavorite = false,
+            )
+
+            val posted = notificationManager.activeNotifications
+            assertEquals(2, posted.size)
+            assertNotEquals(
+                posted[0].notification.contentIntent,
+                posted[1].notification.contentIntent,
+            )
+
+            notificationHelper.cancelNotificationForConversation(hashA)
+
+            val remaining = notificationManager.activeNotifications
+            assertEquals(1, remaining.size)
+            assertEquals("Peer B", shadowOf(remaining.single().notification).contentTitle)
+        }
+
+    @Test
     fun `notifyMessageReceived uses unique ID per sender`() =
         runBlocking {
             // Given: Two different senders
@@ -431,16 +473,13 @@ class NotificationHelperTest {
                 messagePreview = "Hello from B",
                 isFavorite = false,
             )
-            val shadowNotificationManager = shadowOf(notificationManager)
-            val aId = NotificationHelper.NOTIFICATION_ID_MESSAGE + hashA.hashCode()
-            val bId = NotificationHelper.NOTIFICATION_ID_MESSAGE + hashB.hashCode()
-            assertTrue("Notification A should exist", shadowNotificationManager.getNotification(aId) != null)
-            assertTrue("Notification B should exist", shadowNotificationManager.getNotification(bId) != null)
+            assertTrue("Notification A should exist", messageNotification(hashA) != null)
+            assertTrue("Notification B should exist", messageNotification(hashB) != null)
             // When: Cancel only conversation A
             notificationHelper.cancelNotificationForConversation(hashA)
             // Then: Only A's notification is cancelled
-            assertTrue("Notification for conversation A should be cancelled", shadowNotificationManager.getNotification(aId) == null)
-            assertTrue("Notification for conversation B should still exist", shadowNotificationManager.getNotification(bId) != null)
+            assertTrue("Notification for conversation A should be cancelled", messageNotification(hashA) == null)
+            assertTrue("Notification for conversation B should still exist", messageNotification(hashB) != null)
         }
     @Test
     fun `cancelNotificationForConversation is idempotent`() =
@@ -457,9 +496,7 @@ class NotificationHelperTest {
             notificationHelper.cancelNotificationForConversation(hash)
             notificationHelper.cancelNotificationForConversation(hash)
             // Then: No error, notification is cancelled
-            val shadowNotificationManager = shadowOf(notificationManager)
-            val id = NotificationHelper.NOTIFICATION_ID_MESSAGE + hash.hashCode()
-            assertTrue("Notification should be cancelled after idempotent calls", shadowNotificationManager.getNotification(id) == null)
+            assertTrue("Notification should be cancelled after idempotent calls", messageNotification(hash) == null)
         }
 
     @Test

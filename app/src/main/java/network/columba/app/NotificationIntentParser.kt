@@ -2,6 +2,7 @@ package network.columba.app
 
 import android.content.Intent
 import network.columba.app.notifications.NotificationHelper
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Pure helper that extracts a [PendingNavigation.Conversation] from a
@@ -12,6 +13,8 @@ import network.columba.app.notifications.NotificationHelper
  * layer — testable without Hilt or a running Activity.
  */
 object NotificationIntentParser {
+    private val notificationEventIds = AtomicLong(0L)
+
     /**
      * Parse a notification-open Intent into a [PendingNavigation.Conversation].
      *
@@ -34,6 +37,7 @@ object NotificationIntentParser {
             destinationHash = destinationHash,
             peerName = peerName,
             fromNotification = true,
+            notificationEventId = notificationEventIds.incrementAndGet(),
         )
     }
 }

@@ -15,11 +15,28 @@ object ConversationNavigation {
     private const val MESSAGING_ROUTE_PATTERN = "messaging/{destinationHash}/{peerName}"
     private const val MESSAGING_NOTIFICATION_ROUTE_PATTERN =
         "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}"
+    private const val MESSAGING_NOTIFICATION_EVENT_ROUTE_PATTERN =
+        "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}" +
+            "&notificationEventId={notificationEventId}"
 
     enum class Action {
         NAVIGATE,
         REUSE_CURRENT,
         SKIP,
+    }
+
+    fun routeFor(
+        encodedDestinationHash: String,
+        encodedPeerName: String,
+        fromNotification: Boolean,
+        notificationEventId: Long,
+    ): String {
+        val notificationParameters = if (fromNotification) {
+            "?fromNotification=true&notificationEventId=$notificationEventId"
+        } else {
+            ""
+        }
+        return "messaging/$encodedDestinationHash/$encodedPeerName$notificationParameters"
     }
 
     fun actionFor(
@@ -29,7 +46,8 @@ object ConversationNavigation {
         fromNotification: Boolean,
     ): Action {
         val isOnMessagingScreen = currentRoute == MESSAGING_ROUTE_PATTERN ||
-            currentRoute == MESSAGING_NOTIFICATION_ROUTE_PATTERN
+            currentRoute == MESSAGING_NOTIFICATION_ROUTE_PATTERN ||
+            currentRoute == MESSAGING_NOTIFICATION_EVENT_ROUTE_PATTERN
         val isSameConversation = isOnMessagingScreen &&
             currentDestinationHash == targetDestinationHash
 

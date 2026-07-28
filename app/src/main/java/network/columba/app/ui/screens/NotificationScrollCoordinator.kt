@@ -12,8 +12,8 @@ package network.columba.app.ui.screens
  *   through this coordinator — that path is handled by the "initial scroll"
  *   effect in [MessagingScreen].
  *
- * The [MessagingScreen] LaunchedEffect(keys = [destinationHash, fromNotification])
- * creates a fresh coordinator per destination and calls [onContentReady] when
+ * The [MessagingScreen] LaunchedEffect keys each notification event by destination,
+ * provenance, and notification event ID; it calls [onContentReady] when
  * [newestMessageId] becomes non-null.
  */
 class NotificationScrollCoordinator(

@@ -336,6 +336,7 @@ fun MessagingScreen(
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onUpdatePyxisPackage: (Uri) -> Unit = {},
     fromNotification: Boolean = false,
+    notificationEventId: Long = 0L,
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
@@ -755,13 +756,14 @@ fun MessagingScreen(
 
     // Notification-entry scroll: when the user taps a message notification, force-scroll
     // to the newest message even if the user was previously reading history. This is a
-    // one-shot effect keyed on the destination hash so it only fires once per entry.
+    // one-shot effect keyed on the notification event so each tap fires once, including
+    // repeated taps while the same conversation remains the current destination.
     // The [NotificationScrollCoordinator] encapsulates the one-shot logic so it can be
     // unit-tested without Compose.
-    val notifScrollCoordinator = remember(destinationHash, fromNotification) {
+    val notifScrollCoordinator = remember(destinationHash, fromNotification, notificationEventId) {
         NotificationScrollCoordinator(fromNotification)
     }
-    LaunchedEffect(destinationHash, fromNotification) {
+    LaunchedEffect(destinationHash, fromNotification, notificationEventId) {
         // Wait for messages to load.
         // IMPORTANT: newestMessageId is NOT a key above — if it were, the effect would
         // re-run on every new inbound message and yank the user from history, even when

@@ -2,6 +2,7 @@ package network.columba.app.navigation
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -64,6 +65,42 @@ class ConversationNavigationTest {
         )
 
         assertEquals(ConversationNavigation.Action.REUSE_CURRENT, action)
+    }
+
+    @Test
+    fun `successive notifications for current conversation reuse top with distinct event routes`() {
+        val currentRoute = "messaging/{destinationHash}/{peerName}" +
+            "?fromNotification={fromNotification}&notificationEventId={notificationEventId}"
+        val firstAction = ConversationNavigation.actionFor(
+            currentRoute = currentRoute,
+            currentDestinationHash = "abc123def456",
+            targetDestinationHash = "abc123def456",
+            fromNotification = true,
+        )
+        val secondAction = ConversationNavigation.actionFor(
+            currentRoute = currentRoute,
+            currentDestinationHash = "abc123def456",
+            targetDestinationHash = "abc123def456",
+            fromNotification = true,
+        )
+        val firstRoute = ConversationNavigation.routeFor(
+            encodedDestinationHash = "abc123def456",
+            encodedPeerName = "Alice",
+            fromNotification = true,
+            notificationEventId = 41L,
+        )
+        val secondRoute = ConversationNavigation.routeFor(
+            encodedDestinationHash = "abc123def456",
+            encodedPeerName = "Alice",
+            fromNotification = true,
+            notificationEventId = 42L,
+        )
+
+        assertEquals(ConversationNavigation.Action.REUSE_CURRENT, firstAction)
+        assertEquals(ConversationNavigation.Action.REUSE_CURRENT, secondAction)
+        assertNotEquals(firstRoute, secondRoute)
+        assertTrue(firstRoute.endsWith("notificationEventId=41"))
+        assertTrue(secondRoute.endsWith("notificationEventId=42"))
     }
 
     @Test

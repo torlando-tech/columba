@@ -5,6 +5,7 @@ import android.content.Intent
 import network.columba.app.notifications.NotificationHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -136,5 +137,25 @@ class NotificationIntentParserTest {
         )
         assertTrue(fromParser.fromNotification)
         assertFalse(defaultNav.fromNotification)
+    }
+
+    @Test
+    fun `successive notification taps receive distinct event ids`() {
+        val intent = Intent().apply {
+            action = NotificationHelper.ACTION_OPEN_CONVERSATION
+            putExtra(NotificationHelper.EXTRA_DESTINATION_HASH, "sameHash")
+            putExtra(NotificationHelper.EXTRA_PEER_NAME, "Same Peer")
+        }
+
+        val first = NotificationIntentParser.parseOpenConversation(intent)!!
+        val second = NotificationIntentParser.parseOpenConversation(intent)!!
+
+        assertTrue(first.notificationEventId > 0L)
+        assertTrue(second.notificationEventId > 0L)
+        assertNotEquals(
+            "Each notification tap needs a fresh event id so the one-shot scroll restarts",
+            first.notificationEventId,
+            second.notificationEventId,
+        )
     }
 }

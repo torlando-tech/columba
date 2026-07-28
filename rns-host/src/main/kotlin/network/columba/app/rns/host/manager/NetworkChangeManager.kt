@@ -78,12 +78,11 @@ class NetworkChangeManager(
 
                 override fun onLost(network: Network) {
                     Log.d(TAG, "Network lost: $network")
-                    // If no default network remains, emit NONE so transport-restricted
-                    // interfaces detach. ConnectivityManager.activeNetwork goes null only
-                    // after the OS finishes the disconnection, so check it here.
-                    if (connectivityManager.activeNetwork == null) {
-                        emitTransportIfChanged(CurrentTransport.NONE)
-                    }
+                    // The lost network may have been the default while an already-available
+                    // backup became active. Its capabilities need not change during that
+                    // handoff, so classify the current default here as well as in
+                    // onCapabilitiesChanged. This also emits NONE when no default remains.
+                    emitTransportIfChanged(currentTransportOf(connectivityManager))
                     // Don't clear lastNetworkId here - we want to detect when a new network connects
                 }
 
@@ -96,12 +95,10 @@ class NetworkChangeManager(
                     val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                     Log.v(TAG, "Network capabilities changed: internet=$hasInternet, validated=$isValidated")
 
-                    // Compute transport class and emit if it changed since last emission.
-                    // `onCapabilitiesChanged` fires after `onAvailable` and again whenever a
-                    // capability flips (validation, metered, etc.) — the last-value cache
-                    // collapses those into a single `onTransportChanged` per actual transport
-                    // transition.
-                    emitTransportIfChanged(currentTransportOf(networkCapabilities))
+                    // This callback fires for every network matching NET_CAPABILITY_INTERNET,
+                    // not only the active route. Classify the system's current active network
+                    // so capability updates from a backup network cannot emit a false switch.
+                    emitTransportIfChanged(currentTransportOf(connectivityManager))
                 }
             }
 

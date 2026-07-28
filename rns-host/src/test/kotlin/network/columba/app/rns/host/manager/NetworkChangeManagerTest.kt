@@ -271,23 +271,89 @@ class NetworkChangeManagerTest {
 
     // ========== onTransportChanged callback tests ==========
 
-    @Suppress("NoRelaxedMocks") // android.net.Network/NetworkCapabilities are system classes; relaxed mock is the standard pattern
+    @Suppress("NoRelaxedMocks")
     @Test
-    fun `onCapabilitiesChanged wifi to cellular fires onTransportChanged once`() {
+    fun `cellular backup capability change keeps wifi active transport`() {
         val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
-        mgr.start()
-        val network = mockk<android.net.Network>(relaxed = true)
+        val mgr = transportManager(transports)
+        val wifiNetwork = mockk<android.net.Network>(relaxed = true)
+        val cellularNetwork = mockk<android.net.Network>(relaxed = true)
         val wifiCaps = mockNetworkCapabilities(wifi = true)
-        val cellCaps = mockNetworkCapabilities(cellular = true)
+        val cellularCaps = mockNetworkCapabilities(cellular = true)
+        every { connectivityManager.activeNetwork } returns wifiNetwork
+        every { connectivityManager.getNetworkCapabilities(wifiNetwork) } returns wifiCaps
 
-        callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
-        callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
+        mgr.start()
+        callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, wifiCaps)
+        callbackSlot.captured.onCapabilitiesChanged(cellularNetwork, cellularCaps)
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `wifi backup capability change keeps cellular active transport`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val wifiNetwork = mockk<android.net.Network>(relaxed = true)
+        val cellularNetwork = mockk<android.net.Network>(relaxed = true)
+        val wifiCaps = mockNetworkCapabilities(wifi = true)
+        val cellularCaps = mockNetworkCapabilities(cellular = true)
+        every { connectivityManager.activeNetwork } returns cellularNetwork
+        every { connectivityManager.getNetworkCapabilities(cellularNetwork) } returns cellularCaps
+
+        mgr.start()
+        callbackSlot.captured.onCapabilitiesChanged(cellularNetwork, cellularCaps)
+        callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, wifiCaps)
+
+        assertEquals(listOf(CurrentTransport.CELLULAR), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `non-default network capability changes do not emit transport switch`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val wifiNetwork = mockk<android.net.Network>(relaxed = true)
+        val cellularNetwork = mockk<android.net.Network>(relaxed = true)
+        val wifiCaps = mockNetworkCapabilities(wifi = true)
+        every { connectivityManager.activeNetwork } returns wifiNetwork
+        every { connectivityManager.getNetworkCapabilities(wifiNetwork) } returns wifiCaps
+
+        mgr.start()
+        callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, wifiCaps)
+        callbackSlot.captured.onCapabilitiesChanged(
+            cellularNetwork,
+            mockNetworkCapabilities(cellular = true),
+        )
+        callbackSlot.captured.onCapabilitiesChanged(
+            cellularNetwork,
+            mockNetworkCapabilities(cellular = true, metered = true),
+        )
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `losing default emits transport of already available backup`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val wifiNetwork = mockk<android.net.Network>(relaxed = true)
+        val cellularNetwork = mockk<android.net.Network>(relaxed = true)
+        val wifiCaps = mockNetworkCapabilities(wifi = true)
+        val cellularCaps = mockNetworkCapabilities(cellular = true)
+        every { connectivityManager.activeNetwork } returns wifiNetwork
+        every { connectivityManager.getNetworkCapabilities(wifiNetwork) } returns wifiCaps
+
+        mgr.start()
+        callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, wifiCaps)
+        every { connectivityManager.activeNetwork } returns cellularNetwork
+        every { connectivityManager.getNetworkCapabilities(cellularNetwork) } returns cellularCaps
+        callbackSlot.captured.onLost(wifiNetwork)
 
         assertEquals(
             listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.CELLULAR),
@@ -298,28 +364,21 @@ class NetworkChangeManagerTest {
 
     @Suppress("NoRelaxedMocks")
     @Test
-    fun `onCapabilitiesChanged cellular twice does not refire`() {
+    fun `active network with unavailable capabilities emits NONE`() {
         val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
+        val mgr = transportManager(transports)
+        val activeNetwork = mockk<android.net.Network>(relaxed = true)
+        val callbackNetwork = mockk<android.net.Network>(relaxed = true)
+        every { connectivityManager.activeNetwork } returns activeNetwork
+        every { connectivityManager.getNetworkCapabilities(activeNetwork) } returns null
+
         mgr.start()
-        val network = mockk<android.net.Network>(relaxed = true)
-        val wifiCaps = mockNetworkCapabilities(wifi = true)
-        val cellCaps = mockNetworkCapabilities(cellular = true)
-
-        callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
-        callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
-        // Same transport class fired again — should be suppressed by the last-value cache.
-        callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
-
-        assertEquals(
-            listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.CELLULAR),
-            transports,
+        callbackSlot.captured.onCapabilitiesChanged(
+            callbackNetwork,
+            mockNetworkCapabilities(cellular = true),
         )
+
+        assertEquals(listOf(CurrentTransport.NONE), transports)
         mgr.stop()
     }
 
@@ -327,19 +386,14 @@ class NetworkChangeManagerTest {
     @Test
     fun `onLost when no default network remains fires NONE`() {
         val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
-        mgr.start()
+        val mgr = transportManager(transports)
         val network = mockk<android.net.Network>(relaxed = true)
-        callbackSlot.captured.onCapabilitiesChanged(
-            network,
-            mockNetworkCapabilities(wifi = true),
-        )
-        // Active network goes null — simulates last network gone.
+        val wifiCaps = mockNetworkCapabilities(wifi = true)
+        every { connectivityManager.activeNetwork } returns network
+        every { connectivityManager.getNetworkCapabilities(network) } returns wifiCaps
+
+        mgr.start()
+        callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
         every { connectivityManager.activeNetwork } returns null
         callbackSlot.captured.onLost(network)
 
@@ -352,29 +406,73 @@ class NetworkChangeManagerTest {
 
     @Suppress("NoRelaxedMocks")
     @Test
-    fun `ethernet capability buckets as wifi like`() {
+    fun `repeated callbacks and metered VPN changes are deduplicated by underlying active transport`() {
         val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
+        val mgr = transportManager(transports)
+        val vpnNetwork = mockk<android.net.Network>(relaxed = true)
+        val unmeteredVpnCaps = mockNetworkCapabilities(wifi = true, vpn = true)
+        val meteredVpnCaps = mockNetworkCapabilities(wifi = true, vpn = true, metered = true)
+        every { connectivityManager.activeNetwork } returns vpnNetwork
+        every { connectivityManager.getNetworkCapabilities(vpnNetwork) } returns unmeteredVpnCaps
+
         mgr.start()
-        val network = mockk<android.net.Network>(relaxed = true)
-        callbackSlot.captured.onCapabilitiesChanged(
-            network,
-            mockNetworkCapabilities(ethernet = true),
-        )
+        callbackSlot.captured.onCapabilitiesChanged(vpnNetwork, unmeteredVpnCaps)
+        every { connectivityManager.getNetworkCapabilities(vpnNetwork) } returns meteredVpnCaps
+        callbackSlot.captured.onCapabilitiesChanged(vpnNetwork, meteredVpnCaps)
+        callbackSlot.captured.onCapabilitiesChanged(vpnNetwork, meteredVpnCaps)
+
         assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
         mgr.stop()
     }
 
-    @Suppress("NoRelaxedMocks") // android.net.NetworkCapabilities is a system class; explicit hasTransport stubs follow
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `active VPN without underlying supported transport emits NONE`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val vpnNetwork = mockk<android.net.Network>(relaxed = true)
+        val vpnCaps = mockNetworkCapabilities(vpn = true)
+        every { connectivityManager.activeNetwork } returns vpnNetwork
+        every { connectivityManager.getNetworkCapabilities(vpnNetwork) } returns vpnCaps
+
+        mgr.start()
+        callbackSlot.captured.onCapabilitiesChanged(vpnNetwork, vpnCaps)
+
+        assertEquals(listOf(CurrentTransport.NONE), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `ethernet active network buckets as wifi like`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val network = mockk<android.net.Network>(relaxed = true)
+        val ethernetCaps = mockNetworkCapabilities(ethernet = true)
+        every { connectivityManager.activeNetwork } returns network
+        every { connectivityManager.getNetworkCapabilities(network) } returns ethernetCaps
+
+        mgr.start()
+        callbackSlot.captured.onCapabilitiesChanged(network, ethernetCaps)
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
+        mgr.stop()
+    }
+
+    private fun transportManager(transports: MutableList<CurrentTransport>) =
+        NetworkChangeManager(
+            context = context,
+            lockManager = lockManager,
+            onTransportChanged = { transports.add(it) },
+        )
+
+    @Suppress("NoRelaxedMocks")
     private fun mockNetworkCapabilities(
         wifi: Boolean = false,
         ethernet: Boolean = false,
         cellular: Boolean = false,
+        vpn: Boolean = false,
+        metered: Boolean = false,
     ): android.net.NetworkCapabilities {
         val caps = mockk<android.net.NetworkCapabilities>(relaxed = true)
         every { caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) } returns wifi
@@ -384,6 +482,10 @@ class NetworkChangeManagerTest {
         every {
             caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
         } returns cellular
+        every { caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) } returns vpn
+        every {
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        } returns !metered
         return caps
     }
 }

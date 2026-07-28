@@ -19,8 +19,8 @@ and not user-controllable, and no other interface type exposes a transport filte
 
 The field is enforced by `InterfaceTransportFilter.filterByTransport` against the
 device's current `NetworkCapabilities` (Wi-Fi/Ethernet → `WIFI_LIKE`, cellular →
-`CELLULAR`, none → `NONE`). On transport transitions, `InterfaceTransportObserver`
-re-applies the filter and feeds the resulting subset into
+`CELLULAR`, unsupported live default route → `UNKNOWN`, none → `NONE`). On transport
+transitions, `InterfaceTransportObserver` re-applies the filter and feeds the resulting subset into
 `ReticulumProtocol.reloadInterfaces`. The filter ignores the field for non-IP
 transports (`AndroidBLE` and `RNode` with `connectionMode != "tcp"`) — those don't
 ride on the IP carrier so the restriction is meaningless for them.

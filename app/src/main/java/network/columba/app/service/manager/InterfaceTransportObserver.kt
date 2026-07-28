@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -57,6 +56,7 @@ class InterfaceTransportObserver
         }
 
         private var callback: ConnectivityManager.NetworkCallback? = null
+        private var currentDefaultNetwork: Network? = null
 
         @Volatile
         private var lastTransport: CurrentTransport? = null
@@ -88,30 +88,28 @@ class InterfaceTransportObserver
             }
             val cb =
                 object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        currentDefaultNetwork = network
+                    }
+
                     override fun onCapabilitiesChanged(
                         network: Network,
                         networkCapabilities: NetworkCapabilities,
                     ) {
-                        // The callback fires for every network matching NET_CAPABILITY_INTERNET,
-                        // not just the default route — classify by activeNetwork so a cellular
-                        // backup network's capability update doesn't masquerade as a transport
-                        // change while Wi-Fi is still the default.
-                        applyTransport(snapshotTransport(), scope)
+                        if (network == currentDefaultNetwork) {
+                            applyTransport(currentTransportOf(networkCapabilities), scope)
+                        }
                     }
 
                     override fun onLost(network: Network) {
-                        if (connectivityManager.activeNetwork == null) {
+                        if (network == currentDefaultNetwork) {
+                            currentDefaultNetwork = null
                             applyTransport(CurrentTransport.NONE, scope)
                         }
                     }
                 }
-            val request =
-                NetworkRequest
-                    .Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build()
             try {
-                connectivityManager.registerNetworkCallback(request, cb)
+                connectivityManager.registerDefaultNetworkCallback(cb)
                 callback = cb
                 // Seed the reactive view at start() so the StateFlow's initial value
                 // reflects reality before the first capability callback fires. Without
@@ -140,6 +138,7 @@ class InterfaceTransportObserver
                 }
             }
             callback = null
+            currentDefaultNetwork = null
             lastTransport = null
             reloadJob?.cancel()
             reloadJob = null

@@ -57,6 +57,17 @@ class InterfaceManagementUtilsTest {
             InterfaceRestrictionView.NotApplicable,
             entity.restrictionView(CurrentTransport.NONE),
         )
+        assertEquals(
+            InterfaceRestrictionView.NotApplicable,
+            entity.restrictionView(CurrentTransport.UNKNOWN),
+        )
+    }
+
+    @Test
+    fun restrictionView_restrictedIpInterface_onUnknown_returnsBlockedNotNoNetwork() {
+        val entity = autoInterface(restrictionJsonValue = "wifi_only")
+        val result = entity.restrictionView(CurrentTransport.UNKNOWN)
+        assertEquals(InterfaceRestrictionView.Blocked(NetworkRestriction.WIFI_ONLY), result)
     }
 
     // region restrictionView — Non-IP bypass

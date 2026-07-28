@@ -1171,8 +1171,8 @@ fun ColumbaNavigation(
     }
 
     @Composable
-    fun DoubleBackToExitHandler(route: String) {
-        BackHandler(enabled = currentRoute == route) {
+    fun DoubleBackToExitHandler() {
+        BackHandler {
             if (backPressedOnce) {
                 (context as? ComponentActivity)?.finish()
             } else {
@@ -1285,7 +1285,7 @@ fun ColumbaNavigation(
                             }
 
                             composable(Screen.Chats.route) {
-                                DoubleBackToExitHandler(Screen.Chats.route)
+                                DoubleBackToExitHandler()
                                 ChatsScreen(
                                     onChatClick = { destinationHash, peerName ->
                                         val encodedHash = Uri.encode(destinationHash)
@@ -1340,7 +1340,7 @@ fun ColumbaNavigation(
                             }
 
                             composable(Screen.Contacts.route) {
-                                DoubleBackToExitHandler(Screen.Contacts.route)
+                                DoubleBackToExitHandler()
                                 val contactsViewModel: ContactsViewModel = hiltViewModel()
                                 ContactsScreen(
                                     onContactClick = { destinationHash, displayName ->
@@ -1385,7 +1385,7 @@ fun ColumbaNavigation(
                             }
 
                             composable(Screen.Map.route) {
-                                DoubleBackToExitHandler(Screen.Map.route)
+                                DoubleBackToExitHandler()
                                 MapScreen(
                                     viewModel = mapViewModel,
                                     onNavigateToConversation = { destinationHash ->
@@ -1563,7 +1563,7 @@ fun ColumbaNavigation(
                             }
 
                             composable(Screen.Settings.route) {
-                                DoubleBackToExitHandler(Screen.Settings.route)
+                                DoubleBackToExitHandler()
                                 SettingsScreen(
                                     viewModel = settingsViewModel,
                                     crashReportManager = crashReportManager,

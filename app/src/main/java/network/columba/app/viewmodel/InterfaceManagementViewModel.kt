@@ -68,8 +68,9 @@ data class InterfaceManagementState(
     val discoveredStaleCount: Int = 0,
     val isDiscoveryEnabled: Boolean = false,
     // The device's current transport class — drives the "this interface is paused
-    // because you're on cellular" indicator on each card. `NONE` means either no
-    // active default network or that the observer hasn't seen its first callback yet.
+    // because you're on cellular" indicator on each card. `NONE` means no active
+    // default network; `UNKNOWN` means a live default route that Android couldn't
+    // classify as Wi-Fi/Ethernet or cellular.
     val currentTransport: CurrentTransport = CurrentTransport.NONE,
 )
 

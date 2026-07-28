@@ -19,8 +19,8 @@ and not user-controllable, and no other interface type exposes a transport filte
 
 The field is enforced by `InterfaceTransportFilter.filterByTransport` against the
 device's current `NetworkCapabilities` (Wi-Fi/Ethernet → `WIFI_LIKE`, cellular →
-`CELLULAR`, none → `NONE`). On transport transitions, `InterfaceTransportObserver`
-re-applies the filter and feeds the resulting subset into
+`CELLULAR`, unsupported live default route → `UNKNOWN`, none → `NONE`). On transport
+transitions, `InterfaceTransportObserver` re-applies the filter and feeds the resulting subset into
 `ReticulumProtocol.reloadInterfaces`. The filter ignores the field for non-IP
 transports (`AndroidBLE` and `RNode` with `connectionMode != "tcp"`) — those don't
 ride on the IP carrier so the restriction is meaningless for them.
@@ -36,6 +36,9 @@ not a port gap.
 
 **ETHERNET bucketing.** `TRANSPORT_ETHERNET` is treated as `WIFI_LIKE` so USB tethering
 to a PC and dock setups behave like the user expects (a wired LAN-only TCP transport
-should reach a LAN node over Ethernet, not get filtered out as "not Wi-Fi"). VPN-over-X
-is treated as the underlying X — Android typically reports both transport flags on the
-same `NetworkCapabilities`, and the underlying transport check wins.
+should reach a LAN node over Ethernet, not get filtered out as "not Wi-Fi"). A
+VPN-only or otherwise unsupported live default network is classified as `UNKNOWN` so
+unrestricted IP interfaces stay up while Wi-Fi-only and cellular-only interfaces remain
+safely filtered out. If Android exposes a deterministic underlying transport on the same
+default-network capabilities, that underlying transport wins. `NONE` is reserved for the
+absence of a live default route.

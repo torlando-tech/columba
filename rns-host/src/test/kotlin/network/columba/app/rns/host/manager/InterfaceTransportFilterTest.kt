@@ -1,5 +1,9 @@
 package network.columba.app.rns.host.manager
 
+import android.net.ConnectivityManager
+import android.net.Network
+import io.mockk.every
+import io.mockk.mockk
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
 import org.junit.Assert.assertEquals
@@ -11,10 +15,29 @@ import org.junit.Test
  */
 class InterfaceTransportFilterTest {
     @Test
+    fun `snapshot with live default but unpublished capabilities is unknown`() {
+        val connectivityManager = mockk<ConnectivityManager>()
+        val activeNetwork = mockk<Network>()
+        every { connectivityManager.activeNetwork } returns activeNetwork
+        every { connectivityManager.getNetworkCapabilities(activeNetwork) } returns null
+
+        assertEquals(CurrentTransport.UNKNOWN, currentTransportOf(connectivityManager))
+    }
+
+    @Test
+    fun `snapshot without a default route is none`() {
+        val connectivityManager = mockk<ConnectivityManager>()
+        every { connectivityManager.activeNetwork } returns null
+
+        assertEquals(CurrentTransport.NONE, currentTransportOf(connectivityManager))
+    }
+
+    @Test
     fun `filter anyRestriction passes on all transports`() {
         val cfg = tcp("x", NetworkRestriction.ANY)
         assertEquals(listOf("x"), filterByTransport(listOf(cfg), CurrentTransport.WIFI_LIKE).map { it.name })
         assertEquals(listOf("x"), filterByTransport(listOf(cfg), CurrentTransport.CELLULAR).map { it.name })
+        assertEquals(listOf("x"), filterByTransport(listOf(cfg), CurrentTransport.UNKNOWN).map { it.name })
         // NONE drops IP interfaces regardless of restriction — no route, nothing to attach.
         assertEquals(emptyList<String>(), filterByTransport(listOf(cfg), CurrentTransport.NONE).map { it.name })
     }
@@ -34,9 +57,11 @@ class InterfaceTransportFilterTest {
         val cfg = tcp("x", NetworkRestriction.CELLULAR_ONLY)
         val onWifi = filterByTransport(listOf(cfg), CurrentTransport.WIFI_LIKE)
         val onCell = filterByTransport(listOf(cfg), CurrentTransport.CELLULAR)
+        val onUnknown = filterByTransport(listOf(cfg), CurrentTransport.UNKNOWN)
         assertEquals(0, onWifi.size)
         assertEquals(1, onCell.size)
         assertEquals("x", onCell.single().name)
+        assertEquals(0, onUnknown.size)
     }
 
     @Test
@@ -49,9 +74,12 @@ class InterfaceTransportFilterTest {
                 networkRestriction = NetworkRestriction.WIFI_ONLY,
             )
         val onCell = filterByTransport(listOf(cfg), CurrentTransport.CELLULAR)
+        val onUnknown = filterByTransport(listOf(cfg), CurrentTransport.UNKNOWN)
         val onNone = filterByTransport(listOf(cfg), CurrentTransport.NONE)
         assertEquals(1, onCell.size)
         assertEquals("ble", onCell.single().name)
+        assertEquals(1, onUnknown.size)
+        assertEquals("ble", onUnknown.single().name)
         // BLE survives even NONE — Bluetooth doesn't depend on Android's IP carrier.
         assertEquals(1, onNone.size)
         assertEquals("ble", onNone.single().name)
@@ -83,8 +111,11 @@ class InterfaceTransportFilterTest {
             )
         // connectionMode != "tcp" → not riding IP → restriction ignored.
         val onCell = filterByTransport(listOf(cfg), CurrentTransport.CELLULAR)
+        val onUnknown = filterByTransport(listOf(cfg), CurrentTransport.UNKNOWN)
         assertEquals(1, onCell.size)
         assertEquals("rnode-ble", onCell.single().name)
+        assertEquals(1, onUnknown.size)
+        assertEquals("rnode-ble", onUnknown.single().name)
     }
 
     @Test
@@ -98,8 +129,11 @@ class InterfaceTransportFilterTest {
                 networkRestriction = NetworkRestriction.CELLULAR_ONLY,
             )
         val onWifi = filterByTransport(listOf(cfg), CurrentTransport.WIFI_LIKE)
+        val onUnknown = filterByTransport(listOf(cfg), CurrentTransport.UNKNOWN)
         assertEquals(1, onWifi.size)
         assertEquals("rnode-usb", onWifi.single().name)
+        assertEquals(1, onUnknown.size)
+        assertEquals("rnode-usb", onUnknown.single().name)
     }
 
     @Test
@@ -123,6 +157,9 @@ class InterfaceTransportFilterTest {
 
         val onWifi = filterByTransport(configs, CurrentTransport.WIFI_LIKE)
         assertEquals(listOf("home-lan", "ble", "rnode-bt"), onWifi.map { it.name })
+
+        val onUnknown = filterByTransport(configs, CurrentTransport.UNKNOWN)
+        assertEquals(listOf("ble", "rnode-bt"), onUnknown.map { it.name })
     }
 
     private fun tcp(

@@ -165,6 +165,7 @@ fun InterfaceEntity.restrictionView(currentTransport: CurrentTransport): Interfa
     return when {
         restriction == NetworkRestriction.ANY -> InterfaceRestrictionView.NotApplicable
         currentTransport == CurrentTransport.NONE -> InterfaceRestrictionView.NoNetwork(restriction)
+        currentTransport == CurrentTransport.UNKNOWN -> InterfaceRestrictionView.Blocked(restriction)
         restrictionMatchesTransport(restriction, currentTransport) -> InterfaceRestrictionView.Allowed(restriction)
         else -> InterfaceRestrictionView.Blocked(restriction)
     }

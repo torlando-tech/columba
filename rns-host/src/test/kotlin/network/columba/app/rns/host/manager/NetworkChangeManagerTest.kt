@@ -2,15 +2,12 @@ package network.columba.app.rns.host.manager
 
 import android.content.Context
 import android.net.ConnectivityManager
-import android.net.NetworkRequest
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkConstructor
-import io.mockk.runs
 import io.mockk.slot
-import io.mockk.unmockkConstructor
+import io.mockk.runs
 import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -41,22 +38,13 @@ class NetworkChangeManagerTest {
         lockManager = mockk()
         networkChangedCallCount = 0
 
-        // Explicit stubs for LockManager
         every { lockManager.acquireAll() } returns Unit
         every { lockManager.releaseAll() } returns Unit
 
-        // Mock Android framework classes
-        mockkConstructor(NetworkRequest.Builder::class)
-        every { anyConstructed<NetworkRequest.Builder>().addCapability(any()) } answers {
-            self as NetworkRequest.Builder
-        }
-        @Suppress("NoRelaxedMocks") // Android NetworkRequest.Builder
-        val networkRequest = mockk<NetworkRequest>(relaxed = true)
-        every { anyConstructed<NetworkRequest.Builder>().build() } returns networkRequest
-
         every { context.getSystemService(any<String>()) } returns connectivityManager
+        every { connectivityManager.registerDefaultNetworkCallback(capture(callbackSlot)) } just runs
         every {
-            connectivityManager.registerNetworkCallback(any(), capture(callbackSlot))
+            connectivityManager.unregisterNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         } just runs
 
         networkChangeManager =
@@ -70,18 +58,16 @@ class NetworkChangeManagerTest {
     @After
     fun tearDown() {
         networkChangeManager.stop()
-        unmockkConstructor(NetworkRequest.Builder::class)
         clearAllMocks()
     }
 
     @Test
-    fun `start registers network callback`() {
+    fun `start registers default network callback`() {
         networkChangeManager.start()
 
-        val isMonitoring = networkChangeManager.isMonitoring()
-        assertTrue("Should be monitoring after start", isMonitoring)
+        assertTrue("Should be monitoring after start", networkChangeManager.isMonitoring())
         verify(exactly = 1) {
-            connectivityManager.registerNetworkCallback(any(), any<ConnectivityManager.NetworkCallback>())
+            connectivityManager.registerDefaultNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         }
     }
 
@@ -90,8 +76,7 @@ class NetworkChangeManagerTest {
         networkChangeManager.start()
         networkChangeManager.stop()
 
-        val isMonitoring = networkChangeManager.isMonitoring()
-        assertFalse("Should not be monitoring after stop", isMonitoring)
+        assertFalse("Should not be monitoring after stop", networkChangeManager.isMonitoring())
         verify(exactly = 1) {
             connectivityManager.unregisterNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         }
@@ -106,7 +91,6 @@ class NetworkChangeManagerTest {
     fun `stop is safe to call when not monitoring`() {
         assertFalse(networkChangeManager.isMonitoring())
 
-        // Should not throw
         networkChangeManager.stop()
 
         assertFalse(networkChangeManager.isMonitoring())
@@ -128,95 +112,74 @@ class NetworkChangeManagerTest {
         networkChangeManager.start()
         assertTrue(networkChangeManager.isMonitoring())
 
-        // Start again should work without error
         networkChangeManager.start()
 
-        val isMonitoring = networkChangeManager.isMonitoring()
-        assertTrue("Should still be monitoring after restart", isMonitoring)
-        // Should have unregistered previous callback
+        assertTrue("Should still be monitoring after restart", networkChangeManager.isMonitoring())
         verify(exactly = 1) {
             connectivityManager.unregisterNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         }
     }
 
-    @Suppress("NoRelaxedMocks") // Android Network framework class
+    @Suppress("NoRelaxedMocks")
     @Test
-    fun `first network available triggers callback for hot-add`() {
+    fun `first default network available reacquires locks`() {
         networkChangeManager.start()
 
-        // Simulate first network connection (e.g., WiFi connects after starting without it)
         val network = mockk<android.net.Network>(relaxed = true)
-        every { network.toString() } returns "network1"
-
         callbackSlot.captured.onAvailable(network)
 
-        // First network SHOULD trigger callback so AutoInterface can hot-add the new interface
-        assertTrue("Callback should trigger on first network", networkChangedCallCount == 1)
+        assertEquals(1, networkChangedCallCount)
         verify(exactly = 1) { lockManager.acquireAll() }
     }
 
-    @Suppress("NoRelaxedMocks") // Android Network framework class
+    @Suppress("NoRelaxedMocks")
     @Test
     fun `network change triggers callback and reacquires locks`() {
         networkChangeManager.start()
 
-        // Simulate first network (triggers once for initial connection)
         val network1 = mockk<android.net.Network>(relaxed = true)
-        every { network1.toString() } returns "network1"
-        callbackSlot.captured.onAvailable(network1)
-
-        // Simulate network change (triggers again for the switch)
         val network2 = mockk<android.net.Network>(relaxed = true)
-        every { network2.toString() } returns "network2"
+
+        callbackSlot.captured.onAvailable(network1)
         callbackSlot.captured.onAvailable(network2)
 
-        // Should trigger callback for both first connection and network switch
-        assertTrue("Callback should trigger on both connections", networkChangedCallCount == 2)
+        assertEquals(2, networkChangedCallCount)
         verify(exactly = 2) { lockManager.acquireAll() }
     }
 
-    @Suppress("NoRelaxedMocks") // Android Network framework class
+    @Suppress("NoRelaxedMocks")
     @Test
     fun `same network reconnecting does not trigger callback again`() {
         networkChangeManager.start()
 
-        // Simulate network
         val network = mockk<android.net.Network>(relaxed = true)
-        every { network.toString() } returns "network1"
 
-        // Connect twice with same network
         callbackSlot.captured.onAvailable(network)
         callbackSlot.captured.onAvailable(network)
 
-        // Should trigger once for first connection, but not for same-network reconnect
-        assertTrue("Callback should only trigger once for same network", networkChangedCallCount == 1)
+        assertEquals(1, networkChangedCallCount)
         verify(exactly = 1) { lockManager.acquireAll() }
     }
 
-    @Suppress("NoRelaxedMocks") // Android Network framework class
+    @Suppress("NoRelaxedMocks")
     @Test
     fun `exception in lock acquisition does not crash`() {
         every { lockManager.acquireAll() } throws RuntimeException("Test error")
 
         networkChangeManager.start()
 
-        // First connection triggers callback despite lock error
         val network1 = mockk<android.net.Network>(relaxed = true)
-        every { network1.toString() } returns "network1"
-        callbackSlot.captured.onAvailable(network1)
-
-        // Network switch also triggers callback despite lock error
         val network2 = mockk<android.net.Network>(relaxed = true)
-        every { network2.toString() } returns "network2"
 
-        // Should not throw despite lock acquisition failure
-        callbackSlot.captured.onAvailable(network2)
+        val result1 = runCatching { callbackSlot.captured.onAvailable(network1) }
+        val result2 = runCatching { callbackSlot.captured.onAvailable(network2) }
 
-        // Callback should be invoked for both connections
-        assertTrue("Callback should be invoked for both connections after lock error", networkChangedCallCount == 2)
+        assertTrue(result1.isSuccess)
+        assertTrue(result2.isSuccess)
+        assertEquals(2, networkChangedCallCount)
     }
 
-    @Suppress("NoRelaxedMocks") // Android Network framework class
+    @Suppress("NoRelaxedMocks")
     @Test
     fun `exception in callback does not crash`() {
         val crashingManager =
@@ -229,13 +192,10 @@ class NetworkChangeManagerTest {
         crashingManager.start()
 
         val network1 = mockk<android.net.Network>(relaxed = true)
-        every { network1.toString() } returns "network1"
+        val network2 = mockk<android.net.Network>(relaxed = true)
+
         callbackSlot.captured.onAvailable(network1)
 
-        val network2 = mockk<android.net.Network>(relaxed = true)
-        every { network2.toString() } returns "network2"
-
-        // Should not throw despite callback failure
         val result = runCatching { callbackSlot.captured.onAvailable(network2) }
 
         assertTrue("Exception in callback should not crash", result.isSuccess)
@@ -245,13 +205,11 @@ class NetworkChangeManagerTest {
     @Test
     fun `registration failure is handled gracefully`() {
         every {
-            connectivityManager.registerNetworkCallback(any(), any<ConnectivityManager.NetworkCallback>())
+            connectivityManager.registerDefaultNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         } throws RuntimeException("Registration failed")
 
-        // Should not throw
         networkChangeManager.start()
 
-        // Should not be monitoring since registration failed
         assertFalse(networkChangeManager.isMonitoring())
     }
 
@@ -263,7 +221,6 @@ class NetworkChangeManagerTest {
             connectivityManager.unregisterNetworkCallback(any<ConnectivityManager.NetworkCallback>())
         } throws RuntimeException("Unregistration failed")
 
-        // Should not throw
         networkChangeManager.stop()
 
         assertFalse(networkChangeManager.isMonitoring())
@@ -271,110 +228,200 @@ class NetworkChangeManagerTest {
 
     // ========== onTransportChanged callback tests ==========
 
-    @Suppress("NoRelaxedMocks") // android.net.Network/NetworkCapabilities are system classes; relaxed mock is the standard pattern
+    @Suppress("NoRelaxedMocks")
     @Test
-    fun `onCapabilitiesChanged wifi to cellular fires onTransportChanged once`() {
+    fun `broad backup capabilities do not drive transport when not default`() {
         val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
-        mgr.start()
-        val network = mockk<android.net.Network>(relaxed = true)
+        val mgr = transportManager(transports)
+        val defaultNetwork = mockk<android.net.Network>(relaxed = true)
+        val backupNetwork = mockk<android.net.Network>(relaxed = true)
         val wifiCaps = mockNetworkCapabilities(wifi = true)
-        val cellCaps = mockNetworkCapabilities(cellular = true)
+        val cellularCaps = mockNetworkCapabilities(cellular = true)
 
-        callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
-        callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
-
-        assertEquals(
-            listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.CELLULAR),
-            transports,
-        )
-        mgr.stop()
-    }
-
-    @Suppress("NoRelaxedMocks")
-    @Test
-    fun `onCapabilitiesChanged cellular twice does not refire`() {
-        val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
         mgr.start()
-        val network = mockk<android.net.Network>(relaxed = true)
-        val wifiCaps = mockNetworkCapabilities(wifi = true)
-        val cellCaps = mockNetworkCapabilities(cellular = true)
+        callbackSlot.captured.onAvailable(defaultNetwork)
+        callbackSlot.captured.onCapabilitiesChanged(defaultNetwork, wifiCaps)
+        callbackSlot.captured.onCapabilitiesChanged(backupNetwork, cellularCaps)
 
-        callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
-        callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
-        // Same transport class fired again — should be suppressed by the last-value cache.
-        callbackSlot.captured.onCapabilitiesChanged(network, cellCaps)
-
-        assertEquals(
-            listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.CELLULAR),
-            transports,
-        )
-        mgr.stop()
-    }
-
-    @Suppress("NoRelaxedMocks")
-    @Test
-    fun `onLost when no default network remains fires NONE`() {
-        val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
-        mgr.start()
-        val network = mockk<android.net.Network>(relaxed = true)
-        callbackSlot.captured.onCapabilitiesChanged(
-            network,
-            mockNetworkCapabilities(wifi = true),
-        )
-        // Active network goes null — simulates last network gone.
-        every { connectivityManager.activeNetwork } returns null
-        callbackSlot.captured.onLost(network)
-
-        assertEquals(
-            listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.NONE),
-            transports,
-        )
-        mgr.stop()
-    }
-
-    @Suppress("NoRelaxedMocks")
-    @Test
-    fun `ethernet capability buckets as wifi like`() {
-        val transports = mutableListOf<CurrentTransport>()
-        val mgr =
-            NetworkChangeManager(
-                context = context,
-                lockManager = lockManager,
-                onTransportChanged = { transports.add(it) },
-            )
-        mgr.start()
-        val network = mockk<android.net.Network>(relaxed = true)
-        callbackSlot.captured.onCapabilitiesChanged(
-            network,
-            mockNetworkCapabilities(ethernet = true),
-        )
         assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
         mgr.stop()
     }
 
-    @Suppress("NoRelaxedMocks") // android.net.NetworkCapabilities is a system class; explicit hasTransport stubs follow
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `wifi to cellular handoff emits both transports in order`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val wifiNetwork = mockk<android.net.Network>(relaxed = true)
+        val cellularNetwork = mockk<android.net.Network>(relaxed = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(wifiNetwork)
+        callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, mockNetworkCapabilities(wifi = true))
+        callbackSlot.captured.onAvailable(cellularNetwork)
+        callbackSlot.captured.onCapabilitiesChanged(
+            cellularNetwork,
+            mockNetworkCapabilities(cellular = true),
+        )
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.CELLULAR), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `old default onLost after replacement does not emit NONE`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val wifiNetwork = mockk<android.net.Network>(relaxed = true)
+        val cellularNetwork = mockk<android.net.Network>(relaxed = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(wifiNetwork)
+        callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, mockNetworkCapabilities(wifi = true))
+        callbackSlot.captured.onAvailable(cellularNetwork)
+        callbackSlot.captured.onCapabilitiesChanged(
+            cellularNetwork,
+            mockNetworkCapabilities(cellular = true),
+        )
+        callbackSlot.captured.onLost(wifiNetwork)
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.CELLULAR), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `true final default loss emits NONE`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val network = mockk<android.net.Network>(relaxed = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(network)
+        callbackSlot.captured.onCapabilitiesChanged(network, mockNetworkCapabilities(wifi = true))
+        callbackSlot.captured.onLost(network)
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE, CurrentTransport.NONE), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `vpn only keeps any active but does not satisfy wifi or cellular restrictions`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val vpnNetwork = mockk<android.net.Network>(relaxed = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(vpnNetwork)
+        callbackSlot.captured.onCapabilitiesChanged(vpnNetwork, mockNetworkCapabilities(vpn = true))
+
+        assertEquals(listOf(CurrentTransport.UNKNOWN), transports)
+        assertEquals(
+            listOf("any"),
+            filterByTransport(listOf(tcp("any", network.columba.app.rns.api.model.NetworkRestriction.ANY)), CurrentTransport.UNKNOWN)
+                .map { it.name },
+        )
+        assertEquals(
+            emptyList<String>(),
+            filterByTransport(
+                listOf(tcp("wifi", network.columba.app.rns.api.model.NetworkRestriction.WIFI_ONLY)),
+                CurrentTransport.UNKNOWN,
+            ).map { it.name },
+        )
+        assertEquals(
+            emptyList<String>(),
+            filterByTransport(
+                listOf(tcp("cell", network.columba.app.rns.api.model.NetworkRestriction.CELLULAR_ONLY)),
+                CurrentTransport.UNKNOWN,
+            ).map { it.name },
+        )
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `unsupported live default transport emits UNKNOWN rather than NONE`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val network = mockk<android.net.Network>(relaxed = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(network)
+        callbackSlot.captured.onCapabilitiesChanged(network, mockNetworkCapabilities())
+
+        assertEquals(listOf(CurrentTransport.UNKNOWN), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `vpn with deterministic wifi underlay classifies as wifi like`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val vpnNetwork = mockk<android.net.Network>(relaxed = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(vpnNetwork)
+        callbackSlot.captured.onCapabilitiesChanged(
+            vpnNetwork,
+            mockNetworkCapabilities(vpn = true, wifi = true),
+        )
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `duplicate capability updates remain deduplicated`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val network = mockk<android.net.Network>(relaxed = true)
+        val wifiCaps = mockNetworkCapabilities(wifi = true)
+        val wifiCapsMetered = mockNetworkCapabilities(wifi = true, metered = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(network)
+        callbackSlot.captured.onCapabilitiesChanged(network, wifiCaps)
+        callbackSlot.captured.onCapabilitiesChanged(network, wifiCapsMetered)
+        callbackSlot.captured.onCapabilitiesChanged(network, wifiCapsMetered)
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
+    fun `ethernet active network buckets as wifi like`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val network = mockk<android.net.Network>(relaxed = true)
+        val ethernetCaps = mockNetworkCapabilities(ethernet = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(network)
+        callbackSlot.captured.onCapabilitiesChanged(network, ethernetCaps)
+
+        assertEquals(listOf(CurrentTransport.WIFI_LIKE), transports)
+        mgr.stop()
+    }
+
+    private fun transportManager(transports: MutableList<CurrentTransport>) =
+        NetworkChangeManager(
+            context = context,
+            lockManager = lockManager,
+            onTransportChanged = { transports.add(it) },
+        )
+
+    @Suppress("NoRelaxedMocks")
     private fun mockNetworkCapabilities(
         wifi: Boolean = false,
         ethernet: Boolean = false,
         cellular: Boolean = false,
+        vpn: Boolean = false,
+        metered: Boolean = false,
     ): android.net.NetworkCapabilities {
         val caps = mockk<android.net.NetworkCapabilities>(relaxed = true)
         every { caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) } returns wifi
@@ -384,6 +431,21 @@ class NetworkChangeManagerTest {
         every {
             caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
         } returns cellular
+        every { caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) } returns vpn
+        every {
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        } returns !metered
         return caps
     }
+
+    private fun tcp(
+        name: String,
+        restriction: network.columba.app.rns.api.model.NetworkRestriction,
+    ): network.columba.app.rns.api.model.InterfaceConfig.TCPClient =
+        network.columba.app.rns.api.model.InterfaceConfig.TCPClient(
+            name = name,
+            targetHost = "10.0.0.1",
+            targetPort = 4242,
+            networkRestriction = restriction,
+        )
 }

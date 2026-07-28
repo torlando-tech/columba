@@ -13,6 +13,32 @@ package network.columba.app.navigation
  */
 object ConversationNavigation {
     private const val MESSAGING_ROUTE_PATTERN = "messaging/{destinationHash}/{peerName}"
+    private const val MESSAGING_NOTIFICATION_ROUTE_PATTERN =
+        "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}"
+
+    enum class Action {
+        NAVIGATE,
+        REUSE_CURRENT,
+        SKIP,
+    }
+
+    fun actionFor(
+        currentRoute: String?,
+        currentDestinationHash: String?,
+        targetDestinationHash: String,
+        fromNotification: Boolean,
+    ): Action {
+        val isOnMessagingScreen = currentRoute == MESSAGING_ROUTE_PATTERN ||
+            currentRoute == MESSAGING_NOTIFICATION_ROUTE_PATTERN
+        val isSameConversation = isOnMessagingScreen &&
+            currentDestinationHash == targetDestinationHash
+
+        return when {
+            !isSameConversation -> Action.NAVIGATE
+            fromNotification -> Action.REUSE_CURRENT
+            else -> Action.SKIP
+        }
+    }
 
     /**
      * Returns `true` if navigation to [targetDestinationHash] should proceed.
@@ -31,10 +57,10 @@ object ConversationNavigation {
         currentRoute: String?,
         currentDestinationHash: String?,
         targetDestinationHash: String,
-    ): Boolean {
-        val isOnMessagingScreen = currentRoute == MESSAGING_ROUTE_PATTERN
-        val isSameConversation = isOnMessagingScreen &&
-            currentDestinationHash == targetDestinationHash
-        return !isSameConversation
-    }
+    ): Boolean = actionFor(
+        currentRoute = currentRoute,
+        currentDestinationHash = currentDestinationHash,
+        targetDestinationHash = targetDestinationHash,
+        fromNotification = false,
+    ) == Action.NAVIGATE
 }

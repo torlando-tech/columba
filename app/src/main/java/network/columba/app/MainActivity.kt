@@ -844,17 +844,18 @@ fun ColumbaNavigation(
                         val backStackRoute = navController.currentBackStackEntry?.destination?.route
                         val backStackHash = navController.currentBackStackEntry?.arguments
                             ?.getString("destinationHash")
-                        val shouldNavigate = ConversationNavigation.shouldNavigateToConversation(
-                                backStackRoute,
-                                backStackHash,
-                                navigation.destinationHash,
-                            )
+                        val navigationAction = ConversationNavigation.actionFor(
+                            currentRoute = backStackRoute,
+                            currentDestinationHash = backStackHash,
+                            targetDestinationHash = navigation.destinationHash,
+                            fromNotification = navigation.fromNotification,
+                        )
                         val encodedHash = Uri.encode(navigation.destinationHash)
                         val encodedName = Uri.encode(navigation.peerName)
                         val notifParam = if (navigation.fromNotification) "?fromNotification=true" else ""
                         val conversationRoute = "messaging/$encodedHash/$encodedName$notifParam"
 
-                        if (!shouldNavigate && navigation.fromNotification) {
+                        if (navigationAction == ConversationNavigation.Action.REUSE_CURRENT) {
                             // Reuse the current conversation entry so notification provenance
                             // reaches the screen without creating a duplicate Back destination.
                             navController.navigate(conversationRoute) {
@@ -864,7 +865,7 @@ fun ColumbaNavigation(
                                 "ColumbaNavigation",
                                 "Reused current conversation for notification entry: ${navigation.peerName}",
                             )
-                        } else if (!shouldNavigate) {
+                        } else if (navigationAction == ConversationNavigation.Action.SKIP) {
                             Log.d(
                                 "ColumbaNavigation",
                                 "Already viewing conversation ${navigation.peerName} — skipping duplicate navigation",

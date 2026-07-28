@@ -1,5 +1,6 @@
 package network.columba.app.navigation
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,6 +41,53 @@ class ConversationNavigationTest {
         )
 
         assertFalse(result)
+    }
+
+    @Test
+    fun `notification route pattern is recognized as the current conversation`() {
+        val result = ConversationNavigation.shouldNavigateToConversation(
+            currentRoute = "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}",
+            currentDestinationHash = "abc123def456",
+            targetDestinationHash = "abc123def456",
+        )
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `notification for current conversation reuses top entry`() {
+        val action = ConversationNavigation.actionFor(
+            currentRoute = "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}",
+            currentDestinationHash = "abc123def456",
+            targetDestinationHash = "abc123def456",
+            fromNotification = true,
+        )
+
+        assertEquals(ConversationNavigation.Action.REUSE_CURRENT, action)
+    }
+
+    @Test
+    fun `ordinary duplicate conversation navigation is skipped`() {
+        val action = ConversationNavigation.actionFor(
+            currentRoute = "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}",
+            currentDestinationHash = "abc123def456",
+            targetDestinationHash = "abc123def456",
+            fromNotification = false,
+        )
+
+        assertEquals(ConversationNavigation.Action.SKIP, action)
+    }
+
+    @Test
+    fun `notification for different conversation pushes a new entry`() {
+        val action = ConversationNavigation.actionFor(
+            currentRoute = "messaging/{destinationHash}/{peerName}?fromNotification={fromNotification}",
+            currentDestinationHash = "abc123def456",
+            targetDestinationHash = "xyz789ghi012",
+            fromNotification = true,
+        )
+
+        assertEquals(ConversationNavigation.Action.NAVIGATE, action)
     }
 
     // ==================== Navigation to different conversations ====================

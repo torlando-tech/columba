@@ -425,6 +425,11 @@ class NotificationHelper
          * is included in the tag so Java hash collisions cannot overwrite or cancel another
          * conversation's notification.
          *
+         * Do not also cancel the legacy untagged hash-derived ID here: that would reintroduce the
+         * collision this identity prevents. Android's NotificationManagerService cancels a
+         * package's notifications during package replacement, so legacy and tagged identities do
+         * not coexist after an installed-app update.
+         *
          * This is safe and idempotent — cancelling a nonexistent notification
          * is a no-op. It does not affect announce, BLE, or other conversations'
          * notifications.

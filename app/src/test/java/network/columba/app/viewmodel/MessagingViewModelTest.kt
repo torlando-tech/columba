@@ -17,6 +17,7 @@ import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.RnsCore
@@ -1065,7 +1066,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "retrying_propagated",
+                            state = DeliveryState.RetryingViaPropagation,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1139,7 +1140,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "delivered",
+                            state = DeliveryState.Delivered,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1211,7 +1212,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            state = DeliveryState.Failed,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1271,7 +1272,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = unknownMessageHash,
-                            status = "delivered",
+                            state = DeliveryState.Delivered,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1345,7 +1346,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            state = DeliveryState.Failed,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1412,7 +1413,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            state = DeliveryState.Failed,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1479,7 +1480,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            state = DeliveryState.Failed,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1546,7 +1547,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            state = DeliveryState.Failed,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1613,7 +1614,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "delivered",
+                            state = DeliveryState.Delivered,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1678,7 +1679,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "propagated",
+                            state = DeliveryState.Propagated,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1739,7 +1740,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "retrying_propagated",
+                            state = DeliveryState.RetryingViaPropagation,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1800,7 +1801,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "sent",
+                            state = DeliveryState.Sent,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )

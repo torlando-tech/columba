@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import network.columba.app.data.repository.Message
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.util.FileUtils
 import network.columba.app.util.ImageUtils
 import org.json.JSONArray
@@ -62,7 +63,7 @@ fun Message.toMessageUi(): MessageUi {
         content = content,
         timestamp = timestamp,
         isFromMe = isFromMe,
-        status = status,
+        status = DeliveryState.decode(status),
         decodedImage = cachedImage,
         hasImageAttachment = hasImage,
         fileAttachments = fileAttachmentsList,

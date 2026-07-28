@@ -4,6 +4,8 @@ import android.os.Parcel
 import android.os.Parcelable
 import network.columba.app.rns.api.model.AnnounceRestoreEntry
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.rns.api.model.DeliveryState
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.FileAttachment
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.Link
@@ -297,6 +299,26 @@ class ParcelRoundTripTest {
         val original = AnnounceRestoreEntry("cafef00d", ByteArray(64) { (it * 2).toByte() })
         val restored = roundTripViaFramework(original)
         assertEquals(original, restored)
+    }
+
+    // ==================== DeliveryStatusUpdate ====================
+
+    @Test
+    fun `DeliveryStatusUpdate round-trips every DeliveryState across the AIDL boundary`() {
+        val states =
+            listOf(
+                DeliveryState.Pending,
+                DeliveryState.Sent,
+                DeliveryState.Delivered,
+                DeliveryState.Propagated,
+                DeliveryState.RetryingViaPropagation,
+                DeliveryState.Failed,
+            )
+        for (state in states) {
+            val original = DeliveryStatusUpdate("deadbeef".repeat(4), state, 1_700_000_000_000L)
+            val restored = roundTripViaFramework(original)
+            assertEquals(original, restored)
+        }
     }
 
     // ==================== Helpers ====================

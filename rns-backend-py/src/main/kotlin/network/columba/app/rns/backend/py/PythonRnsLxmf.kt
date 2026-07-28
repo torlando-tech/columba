@@ -147,12 +147,12 @@ class PythonRnsLxmf(
                 extraFields = extraFields,
             )
             // tryPropagationOnFail mirrors Sideband's `try_propagation_on_fail`
-            // pattern: tag the LXMessage so the failure callback (in
-            // `event_bridge.attach_lxmessage_callbacks`) rebuilds it as
-            // PROPAGATED and re-routes through `handle_outbound` instead of
-            // reporting failure. Upstream LXMF does not do the fallback
-            // itself — the retry lives in the Python side of event_bridge so
-            // it has direct access to the live LXMessage / LXMRouter.
+            // pattern: tag the LXMessage so its failure surfaces with the
+            // state the shared DeliveryRetryPolicy needs. The retry *decision*
+            // lives in Kotlin (PythonEventBridge.handleLxmfFailure); only the
+            // rebuild-as-PROPAGATED *mechanism* stays in event_bridge.py
+            // (`resubmit_as_propagated`), because it has direct access to the
+            // live LXMessage / LXMRouter.
             dispatchLxmessage(
                 destinationHash = destinationHash,
                 content = content,
@@ -235,16 +235,15 @@ class PythonRnsLxmf(
         //
         // `try_propagation_on_fail` only applies when the caller picked a
         // non-PROPAGATED method AND a propagation node is configured — the
-        // event_bridge helper re-checks both before doing the retry dance,
-        // but we skip wiring the retry hook for PROPAGATED sends here too so
-        // the LXMessage isn't tagged unnecessarily.
+        // shared DeliveryRetryPolicy re-checks both at failure time, but we
+        // skip wiring the retry hook for PROPAGATED sends here too so the
+        // LXMessage isn't tagged unnecessarily.
         val tryPropagation = tryPropagationOnFail && desiredMethod != LXMF_METHOD_PROPAGATED
         runtime.eventBridge.callAttr(
             "attach_lxmessage_callbacks",
             lxmessage,
             events.onLxmfDelivered,
             events.onLxmfFailure,
-            events.onLxmfRetryingPropagated,
             tryPropagation,
         )
 

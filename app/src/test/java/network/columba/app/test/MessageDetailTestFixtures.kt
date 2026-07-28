@@ -1,5 +1,6 @@
 package network.columba.app.test
 
+import network.columba.app.rns.api.model.DeliveryState
 import network.columba.app.ui.model.MessageUi
 
 /**
@@ -36,7 +37,7 @@ object MessageDetailTestFixtures {
             content = config.content,
             timestamp = config.timestamp,
             isFromMe = config.isFromMe,
-            status = config.status,
+            status = DeliveryState.decode(config.status),
             decodedImage = null,
             deliveryMethod = config.deliveryMethod,
             errorMessage = config.errorMessage,

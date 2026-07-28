@@ -116,10 +116,11 @@ object TestController {
         }
         deliveryJob = scope.launch {
             rnsLxmf!!.observeDeliveryStatus().collect { upd ->
-                // DeliveryStatusUpdate.messageHash is already a hex string;
-                // status is one of "delivered" | "failed" | "retrying_propagated"
+                // DeliveryStatusUpdate.messageHash is already a hex string.
+                // encode() keeps the exact legacy strings the maestro harness
+                // greps for (e.g. DELIVERED, RETRYING_PROPAGATED).
                 val idHex = upd.messageHash
-                val stateName = upd.status.uppercase()
+                val stateName = upd.state.encode().uppercase()
                 synchronized(deliveryLock) { deliveryStates[idHex] = stateName }
                 Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$stateName")
             }

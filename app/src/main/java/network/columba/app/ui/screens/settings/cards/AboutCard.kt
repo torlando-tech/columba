@@ -1,8 +1,7 @@
 package network.columba.app.ui.screens.settings.cards
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,8 +35,8 @@ import network.columba.app.R
 import network.columba.app.service.AppUpdateResult
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.util.SystemInfo
+import network.columba.app.util.safeOpenUrl
 import java.util.Locale
-import androidx.core.net.toUri
 
 @Composable
 fun AboutCard(
@@ -159,8 +158,7 @@ fun AboutCard(
                 )
                 TextButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, "https://github.com/torlando-tech/columba/blob/main/LICENSE.md".toUri())
-                        context.startActivity(intent)
+                        openExternalUrl(context, "https://github.com/torlando-tech/columba/blob/main/LICENSE.md")
                     },
                 ) {
                     Text("View License", style = MaterialTheme.typography.bodySmall)
@@ -238,8 +236,7 @@ fun AboutCard(
                             )
                             TextButton(
                                 onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, result.htmlUrl.toUri())
-                                    context.startActivity(intent)
+                                    openExternalUrl(context, result.htmlUrl)
                                 },
                             ) {
                                 Text("View Release")
@@ -344,11 +341,19 @@ private fun LinkButton(
 ) {
     TextButton(
         onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
-            context.startActivity(intent)
+            openExternalUrl(context, url)
         },
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(label)
+    }
+}
+
+private fun openExternalUrl(
+    context: Context,
+    url: String,
+) {
+    if (!safeOpenUrl(context, url)) {
+        Toast.makeText(context, R.string.error_no_app_for_link, Toast.LENGTH_SHORT).show()
     }
 }

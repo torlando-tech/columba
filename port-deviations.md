@@ -37,7 +37,8 @@ not a port gap.
 **ETHERNET bucketing.** `TRANSPORT_ETHERNET` is treated as `WIFI_LIKE` so USB tethering
 to a PC and dock setups behave like the user expects (a wired LAN-only TCP transport
 should reach a LAN node over Ethernet, not get filtered out as "not Wi-Fi"). A
-VPN-only default network is classified as `UNKNOWN` so unrestricted IP interfaces stay
-up while Wi-Fi-only and cellular-only interfaces remain safely filtered out. If Android
-also exposes a deterministic underlying transport on the same default-network
-capabilities, that underlying transport wins.
+VPN-only or otherwise unsupported live default network is classified as `UNKNOWN` so
+unrestricted IP interfaces stay up while Wi-Fi-only and cellular-only interfaces remain
+safely filtered out. If Android exposes a deterministic underlying transport on the same
+default-network capabilities, that underlying transport wins. `NONE` is reserved for the
+absence of a live default route.

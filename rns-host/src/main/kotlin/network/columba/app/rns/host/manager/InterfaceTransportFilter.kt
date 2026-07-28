@@ -89,17 +89,16 @@ fun currentTransportOf(connectivityManager: ConnectivityManager): CurrentTranspo
 /**
  * Map a `NetworkCapabilities` instance to the closest matching `CurrentTransport`.
  * Wi-Fi and Ethernet collapse to `WIFI_LIKE`; cellular maps to `CELLULAR`. If Android
- * exposes only a VPN transport on the default network, classify that as `UNKNOWN` so
- * unrestricted IP interfaces stay alive without falsely enabling Wi-Fi-only or
- * cellular-only ones.
+ * exposes only VPN or another unsupported transport on the live default network,
+ * classify that as `UNKNOWN` so unrestricted IP interfaces stay alive without falsely
+ * enabling Wi-Fi-only or cellular-only ones. `NONE` is reserved for no live default.
  */
 fun currentTransportOf(capabilities: NetworkCapabilities): CurrentTransport =
     when {
         capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> CurrentTransport.WIFI_LIKE
         capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> CurrentTransport.WIFI_LIKE
         capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> CurrentTransport.CELLULAR
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> CurrentTransport.UNKNOWN
-        else -> CurrentTransport.NONE
+        else -> CurrentTransport.UNKNOWN
     }
 
 /**

@@ -342,6 +342,21 @@ class NetworkChangeManagerTest {
 
     @Suppress("NoRelaxedMocks")
     @Test
+    fun `unsupported live default transport emits UNKNOWN rather than NONE`() {
+        val transports = mutableListOf<CurrentTransport>()
+        val mgr = transportManager(transports)
+        val network = mockk<android.net.Network>(relaxed = true)
+
+        mgr.start()
+        callbackSlot.captured.onAvailable(network)
+        callbackSlot.captured.onCapabilitiesChanged(network, mockNetworkCapabilities())
+
+        assertEquals(listOf(CurrentTransport.UNKNOWN), transports)
+        mgr.stop()
+    }
+
+    @Suppress("NoRelaxedMocks")
+    @Test
     fun `vpn with deterministic wifi underlay classifies as wifi like`() {
         val transports = mutableListOf<CurrentTransport>()
         val mgr = transportManager(transports)

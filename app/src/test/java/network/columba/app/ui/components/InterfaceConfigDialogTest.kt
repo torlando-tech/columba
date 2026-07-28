@@ -2,10 +2,14 @@ package network.columba.app.ui.components
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.InterfaceConfigState
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -23,6 +27,45 @@ class InterfaceConfigDialogTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    @Test
+    fun `fresh AutoInterface selector displays wifi only without persisting a choice`() {
+        val configState = InterfaceConfigState()
+
+        composeTestRule.setContent {
+            InterfaceConfigDialog(
+                configState = configState,
+                isEditing = false,
+                onDismiss = {},
+                onSave = {},
+                onConfigUpdate = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Advanced Options").performClick()
+        composeTestRule.onNodeWithText("Wi-Fi only").assertIsSelected()
+        composeTestRule.onNodeWithText("Any").assertIsNotSelected()
+        assertNull(configState.networkRestriction)
+    }
+
+    @Test
+    fun `explicit Any selector state displays Any`() {
+        val configState = InterfaceConfigState(networkRestriction = "any")
+
+        composeTestRule.setContent {
+            InterfaceConfigDialog(
+                configState = configState,
+                isEditing = false,
+                onDismiss = {},
+                onSave = {},
+                onConfigUpdate = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("Advanced Options").performClick()
+        composeTestRule.onNodeWithText("Any").assertIsSelected()
+        composeTestRule.onNodeWithText("Wi-Fi only").assertIsNotSelected()
+    }
 
     // ========== TCPServerFields UI Tests ==========
 

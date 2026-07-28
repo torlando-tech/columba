@@ -141,7 +141,9 @@ data class InterfaceConfigState(
     // Network transport restriction: "any", "wifi_only", or "cellular_only".
     // Stored as a string (matching the JSON wire form) so the existing copy()-based
     // dialog plumbing keeps working without an enum import for every screen.
-    val networkRestriction: String = NetworkRestriction.ANY.value,
+    // Null is the untouched sentinel. Save resolves it to the active type's default,
+    // while edit state and explicit selector choices remain non-null.
+    val networkRestriction: String? = null,
     // Validation
     val nameError: String? = null,
     val targetHostError: String? = null,
@@ -172,7 +174,14 @@ data class InterfaceConfigState(
             "RNode" -> connectionMode == "tcp"
             else -> true
         }
+
+    /** Restriction shown before the user makes an explicit selection. */
+    val effectiveNetworkRestriction: String
+        get() = networkRestriction ?: defaultNetworkRestriction(type).value
 }
+
+private fun defaultNetworkRestriction(type: String): NetworkRestriction =
+    if (type == "AutoInterface") NetworkRestriction.WIFI_ONLY else NetworkRestriction.ANY
 
 /**
  * ViewModel for managing Reticulum network interface configurations.
@@ -1033,9 +1042,10 @@ class InterfaceManagementViewModel
         private fun configStateToInterfaceConfig(state: InterfaceConfigState): InterfaceConfig {
             // Per-type defaults: AutoInterface defaults to WIFI_ONLY (UDP multicast on
             // cellular is meaningless), all other types default to ANY.
-            val defaultRestriction =
-                if (state.type == "AutoInterface") NetworkRestriction.WIFI_ONLY else NetworkRestriction.ANY
-            val restriction = NetworkRestriction.fromValue(state.networkRestriction) ?: defaultRestriction
+            val defaultRestriction = defaultNetworkRestriction(state.type)
+            val restriction =
+                state.networkRestriction?.let(NetworkRestriction::fromValue)
+                    ?: defaultRestriction
             return when (state.type) {
                 "AutoInterface" ->
                     InterfaceConfig.AutoInterface(

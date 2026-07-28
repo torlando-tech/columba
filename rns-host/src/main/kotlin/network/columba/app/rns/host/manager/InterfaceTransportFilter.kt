@@ -77,13 +77,13 @@ fun InterfaceConfig.ridesOnIpCarrier(): Boolean =
     }
 
 /**
- * Snapshot the device's current transport from the system `ConnectivityManager`. Returns
- * `NONE` if no default network is active or capabilities are unavailable.
+ * Snapshot the currently active default network. A missing default route maps to `NONE`;
+ * a live default whose capabilities are not yet published maps to `UNKNOWN`.
  */
 fun currentTransportOf(connectivityManager: ConnectivityManager): CurrentTransport {
-    val active = connectivityManager.activeNetwork ?: return CurrentTransport.NONE
-    val caps = connectivityManager.getNetworkCapabilities(active) ?: return CurrentTransport.NONE
-    return currentTransportOf(caps)
+    val activeNetwork = connectivityManager.activeNetwork ?: return CurrentTransport.NONE
+    val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return CurrentTransport.UNKNOWN
+    return currentTransportOf(capabilities)
 }
 
 /**

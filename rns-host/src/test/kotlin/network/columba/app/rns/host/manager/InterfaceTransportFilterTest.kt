@@ -1,5 +1,9 @@
 package network.columba.app.rns.host.manager
 
+import android.net.ConnectivityManager
+import android.net.Network
+import io.mockk.every
+import io.mockk.mockk
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
 import org.junit.Assert.assertEquals
@@ -10,6 +14,24 @@ import org.junit.Test
  * identity (by name) of the filtered set so behaviour change is caught precisely.
  */
 class InterfaceTransportFilterTest {
+    @Test
+    fun `snapshot with live default but unpublished capabilities is unknown`() {
+        val connectivityManager = mockk<ConnectivityManager>()
+        val activeNetwork = mockk<Network>()
+        every { connectivityManager.activeNetwork } returns activeNetwork
+        every { connectivityManager.getNetworkCapabilities(activeNetwork) } returns null
+
+        assertEquals(CurrentTransport.UNKNOWN, currentTransportOf(connectivityManager))
+    }
+
+    @Test
+    fun `snapshot without a default route is none`() {
+        val connectivityManager = mockk<ConnectivityManager>()
+        every { connectivityManager.activeNetwork } returns null
+
+        assertEquals(CurrentTransport.NONE, currentTransportOf(connectivityManager))
+    }
+
     @Test
     fun `filter anyRestriction passes on all transports`() {
         val cfg = tcp("x", NetworkRestriction.ANY)

@@ -190,7 +190,9 @@ class InterfaceTransportObserverTest {
             observer.start(testScope.backgroundScope)
             callbackSlot.captured.onAvailable(wifiNetwork)
             callbackSlot.captured.onCapabilitiesChanged(wifiNetwork, wifiCaps)
-            advanceUntilIdle()
+            coVerify(timeout = 5_000, exactly = 1) {
+                transportAdmin.reloadInterfaces(any())
+            }
 
             callbackSlot.captured.onLost(wifiNetwork)
             advanceUntilIdle()

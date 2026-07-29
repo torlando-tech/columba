@@ -1224,8 +1224,9 @@ def install_external_stamp_generator(java_callback):
     helper processes, the Manager deadlocks waiting on the dead worker).
     The torlando-tech LXMF fork exposes `LXStamper.set_external_generator`
     for exactly this — when set, `LXStamper.generate_stamp` calls
-    `external_generator(workblock, stamp_cost)` and gets `(stamp_bytes, rounds)`
-    back.
+    `external_generator(workblock, stamp_cost, cancellation_token)` and gets
+    `(stamp_bytes, rounds)` back. The token lets the native search stop promptly
+    when LXMF cancels the deferred-stamp job.
 
     Why this wrapper instead of registering the Kotlin callback directly:
     Chaquopy's `JavaObject.__call__` dispatcher on `BiFunction.apply`
@@ -1239,7 +1240,7 @@ def install_external_stamp_generator(java_callback):
     conversion before dispatching.
 
     Kotlin contract: `java_callback` exposes a method named `generate`
-    with signature `(workblock: byte[], stampCost: int) -> List` where
+    with signature `(workblock: byte[], stampCost: int, token: PyObject) -> List` where
     the returned list is `[stamp_bytes, rounds]`. See
     `PythonRnsRuntime.kt` `StampGeneratorCallback` for the implementation.
     """
@@ -1253,8 +1254,8 @@ def install_external_stamp_generator(java_callback):
         )
         return
 
-    def _wrapper(workblock, stamp_cost):
-        result = java_callback.generate(workblock, stamp_cost)
+    def _wrapper(workblock, stamp_cost, cancellation_token):
+        result = java_callback.generate(workblock, stamp_cost, cancellation_token)
         # `result` is a Java List exposed as a Python sequence; index access
         # returns Python bytes for index 0 and Python int for index 1
         # (Chaquopy auto-converts via the typed method's return signature).
@@ -1262,7 +1263,12 @@ def install_external_stamp_generator(java_callback):
         rounds = result[1]
         return stamp, rounds
 
-    LXStamper.set_external_generator(_wrapper)
+    LXStamper.set_external_generator(_wrapper, None, True)
+
+
+def uninstall_external_stamp_generator():
+    """Cancel active external stamp work and clear LXMF's global callback."""
+    LXMF.LXStamper.set_external_generator(None)
 
 
 # --- Per-Link packet bridge ------------------------------------------------

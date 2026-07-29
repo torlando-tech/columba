@@ -57,8 +57,8 @@ android {
         // in PINNED_VERSIONS.md, not the user-facing version line). RNS and LXMF
         // ARE torlando-tech forks of markqvist's upstream; ble-reticulum is
         // torlando-tech's own project, so it carries no "fork" label.
-        buildConfigField("String", "PY_RNS_VERSION", "\"1.3.8 (torlando-tech fork)\"")
-        buildConfigField("String", "PY_LXMF_VERSION", "\"0.9.2 (torlando-tech fork)\"")
+        buildConfigField("String", "PY_RNS_VERSION", "\"1.4.2 (torlando-tech fork)\"")
+        buildConfigField("String", "PY_LXMF_VERSION", "\"1.1.0 (torlando-tech fork)\"")
         buildConfigField("String", "PY_BLE_RETICULUM_VERSION", "\"0.2.2\"")
     }
 
@@ -99,18 +99,19 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Upstream RNS — torlando-tech fork pinned to commit SHA. This commit
-            // already carries all four effective fixes. RNS 1.3.8 includes the
-            // log file-handle fix upstream; the fork commit retains the ratchet
-            // file-handle changes, so the v0.10.x `patches/RNS/` tree is
+            // Upstream RNS 1.4.2 — torlando-tech fork pinned to commit SHA. The
+            // fork retains the socket cleanup, PHY-stats RPC handling and ratchet
+            // file-handle fixes. The old known-destinations recombine patch is
+            // obsolete because 1.4.2 ignores recombine and migrates on load. The
+            // v0.10.x `patches/RNS/` tree is
             // intentionally NOT restored (its runtime patch-deployer lived in
             // the deleted reticulum_wrapper.py — see PINNED_VERSIONS.md).
-            install("git+https://github.com/torlando-tech/Reticulum@817ecc31bd524c6268f816530c5115211b39cffc")
+            install("git+https://github.com/torlando-tech/Reticulum@08aee7382c5abb8fb8e34f4633b3c0584d9f38d8")
 
-            // Upstream LXMF — torlando-tech fork (external stamp generator +
-            // receiving-interface capture). Pinned to the commit SHA at the
-            // tip of feature/receiving-interface-capture for reproducibility.
-            install("git+https://github.com/torlando-tech/LXMF@158b771c4c65ff43fd25764b00f5555ea543ab2e")
+            // Upstream LXMF 1.1.0 — torlando-tech fork (external stamp generator
+            // plus opportunistic receiving-interface and hop capture). Pinned to
+            // the versioned successor branch's commit SHA for reproducibility.
+            install("git+https://github.com/torlando-tech/LXMF@54687b67623e9041c4c278de11af9a5a4a7a30e0")
 
             // ble-reticulum — RNS.Interface subclass for the Android BLE bridge.
             // Pinned to the commit SHA at the tip of main for reproducibility.

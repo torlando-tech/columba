@@ -237,6 +237,18 @@ class PythonEventBridge {
                 receivedRssi = payload.dictInt("rssi"),
                 receivedSnr = payload.dictDouble("snr")?.toFloat(),
                 deliveryMethod = lxmfMethodName(payload.dictInt("method")),
+                // LXMF signature-verification state, forwarded by
+                // `event_bridge.py` from python LXMF's `message.signature_validated`.
+                // false → the sender's signature could not be verified, so the
+                // UI warns. Note python LXMF's `lxmf_delivery` delivers BOTH
+                // SOURCE_UNKNOWN and SIGNATURE_INVALID to the callback (it never
+                // drops on signature), whereas the Kotlin backend's LXMF-kt
+                // router drops SIGNATURE_INVALID — so on this path a false may
+                // additionally mean "signature check failed", not only
+                // "unknown sender". Always present for delivered messages, so
+                // this is a definite true/false (never null) here, matching the
+                // Kotlin backend's `message.signatureValidated`.
+                signatureVerified = payload.dictBool("signature_validated"),
             )
 
             // Side-channels always route — independent of the chat-emit

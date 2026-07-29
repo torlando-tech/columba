@@ -230,6 +230,12 @@ class MessageCollector
                                 deliveryMethod = receivedMessage.deliveryMethod,
                                 // Local reception time for sort ordering
                                 receivedAt = now,
+                                // LXMF signature-verification state from the backend.
+                                // false = sender identity was unknown to our RNS at
+                                // receive time (potential forgery — see MessageEntity
+                                // for full semantics); the UI renders an "unverified
+                                // sender" warning on these.
+                                signatureVerified = receivedMessage.signatureVerified,
                             )
 
                         // Get peer name from cache, existing conversation, or use formatted hash

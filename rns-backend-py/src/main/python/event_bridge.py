@@ -1071,7 +1071,7 @@ def _lxmf_delivery_callback(message):
             )
         # Receiving-interface annotation + signal metrics. Two sources, in
         # priority order (mirrors release/v0.10.x's _on_lxmf_delivery):
-        #   1. torlando-tech LXMF fork (branch feature/receiving-interface-capture)
+        #   1. torlando-tech LXMF fork (branch feature/receiving-interface-capture-1.1.0)
         #      sets `message.receiving_interface` (RNS.Interface) +
         #      `message.receiving_hops` on inbound opportunistic messages.
         #      Upstream LXMF leaves these off entirely, so getattr-guard.

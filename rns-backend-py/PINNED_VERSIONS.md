@@ -17,8 +17,8 @@ moved into the Gradle build script).
 
 | Package | Ref | Pinned to | Notes |
 |---|---|---|---|
-| `rns` (Reticulum) | `git+https://github.com/torlando-tech/Reticulum` | **`08aee7382c5abb8fb8e34f4633b3c0584d9f38d8`** (SHA ✓) | RNS 1.4.2 + 3 torlando-tech fork patches: socket cleanup, PHY-stats RPC handling, and ratchet file-handle fixes. The former known-destinations recombine migration is obsolete in 1.4.2: recombination is ignored and the retained load path already migrates legacy four-field entries. |
-| `lxmf` (LXMF) | `git+https://github.com/torlando-tech/LXMF` | **`54687b67623e9041c4c278de11af9a5a4a7a30e0`** (SHA ✓) | LXMF 1.1.0 + torlando-tech hooks: `set_external_generator()` to bypass Python multiprocessing on Android, plus `receiving_interface` and `receiving_hops` on opportunistic delivery. SHA is the tip of `feature/receiving-interface-capture-1.1.0`. |
+| `rns` (Reticulum) | `git+https://github.com/torlando-tech/Reticulum` | **`1c2cf73443ce73613bd67ea8412e7923d34cd7e6`** (SHA ✓) | RNS 1.4.2 with socket cleanup, narrow PHY-stats RPC backoff, ratchet file-handle fixes, and deterministic AutoInterface listener/peer teardown. The former known-destinations recombine migration is obsolete in 1.4.2: recombination is ignored and the retained load path already migrates legacy four-field entries. |
+| `lxmf` (LXMF) | `git+https://github.com/torlando-tech/LXMF` | **`fbcb8f83109b93d2491632427716c7fcd645c605`** (SHA ✓) | LXMF 1.1.0 with validated external native stamping, cooperative cancellation and stale-result rejection, plus `receiving_interface` and `receiving_hops` on opportunistic delivery. |
 | `ble-reticulum` | `git+https://github.com/torlando-tech/ble-reticulum.git` | **`07d941304c9a1dc3a8e58087b3b974ff3d229e56`** (SHA ✓) | Provides `BLEInterface` + `bluetooth_driver` that the bundled `ble_modules/` adapters subclass. SHA is the tip of `main` as of 2026-05-14; builds as `ble-reticulum-0.2.2`. |
 | `cryptography` | PyPI | `>=42.0.0` | Range, not pinned — Chaquopy resolves a native wheel for the target ABI. Acceptable: it's a well-tested transitive dep, not a protocol-correctness surface. |
 | `u-msgpack-python` | PyPI | unpinned | Sideband-compatible telemetry + LXST signalling wire format. Pure-Python, stable API. |
@@ -31,7 +31,7 @@ moved into the Gradle build script).
 context-manager fixes for RNS file-handle leaks (ratchet I/O + the `log()`
 function). They are **not restored** here because:
 
-1. The pinned RNS fork commit `08aee738` **already includes** the ratchet I/O
+1. The pinned RNS fork commit `1c2cf734` **already includes** the ratchet I/O
    context-manager fixes, while upstream RNS 1.4.2 includes the equivalent
    `log()` context-manager fix. The plan's instruction is to skip the `patches/`
    tree when the pinned commit already has the fixes — it does.

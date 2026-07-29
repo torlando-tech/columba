@@ -100,18 +100,20 @@ chaquopy {
 
         pip {
             // Upstream RNS 1.4.2 — torlando-tech fork pinned to commit SHA. The
-            // fork retains the socket cleanup, PHY-stats RPC handling and ratchet
-            // file-handle fixes. The old known-destinations recombine patch is
+            // fork retains socket cleanup, PHY-stats RPC backoff, ratchet
+            // file-handle fixes, and deterministic AutoInterface teardown. The
+            // old known-destinations recombine patch is
             // obsolete because 1.4.2 ignores recombine and migrates on load. The
             // v0.10.x `patches/RNS/` tree is
             // intentionally NOT restored (its runtime patch-deployer lived in
             // the deleted reticulum_wrapper.py — see PINNED_VERSIONS.md).
-            install("git+https://github.com/torlando-tech/Reticulum@08aee7382c5abb8fb8e34f4633b3c0584d9f38d8")
+            install("git+https://github.com/torlando-tech/Reticulum@1c2cf73443ce73613bd67ea8412e7923d34cd7e6")
 
             // Upstream LXMF 1.1.0 — torlando-tech fork (external stamp generator
-            // plus opportunistic receiving-interface and hop capture). Pinned to
+            // plus validated/cancellable native stamping and opportunistic
+            // receiving-interface and hop capture). Pinned to
             // the versioned successor branch's commit SHA for reproducibility.
-            install("git+https://github.com/torlando-tech/LXMF@54687b67623e9041c4c278de11af9a5a4a7a30e0")
+            install("git+https://github.com/torlando-tech/LXMF@fbcb8f83109b93d2491632427716c7fcd645c605")
 
             // ble-reticulum — RNS.Interface subclass for the Android BLE bridge.
             // Pinned to the commit SHA at the tip of main for reproducibility.

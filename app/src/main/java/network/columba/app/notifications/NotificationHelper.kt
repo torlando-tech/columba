@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.ActivityCompat
@@ -42,9 +43,11 @@ class NotificationHelper
             private const val CHANNEL_ID_BLE_EVENTS = "ble_events"
 
             // Notification IDs
-            private const val NOTIFICATION_ID_MESSAGE = 1000
+            @VisibleForTesting
+            internal const val NOTIFICATION_ID_MESSAGE = 1000
             private const val NOTIFICATION_ID_ANNOUNCE = 2000
             private const val NOTIFICATION_ID_BLE = 3000
+            private const val NOTIFICATION_TAG_MESSAGE_PREFIX = "message:"
 
             // Intent actions
             const val ACTION_OPEN_ANNOUNCE = "network.columba.app.ACTION_OPEN_ANNOUNCE"
@@ -55,6 +58,10 @@ class NotificationHelper
             // Intent extras
             const val EXTRA_DESTINATION_HASH = "destination_hash"
             const val EXTRA_PEER_NAME = "peer_name"
+
+            @VisibleForTesting
+            internal fun messageNotificationTag(destinationHash: String): String =
+                NOTIFICATION_TAG_MESSAGE_PREFIX + destinationHash
         }
 
         private val notificationManager = NotificationManagerCompat.from(context)
@@ -171,6 +178,13 @@ class NotificationHelper
                 Intent(context, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     action = ACTION_OPEN_CONVERSATION
+                    data =
+                        Uri
+                            .Builder()
+                            .scheme("columba")
+                            .authority("conversation")
+                            .appendPath(destinationHash)
+                            .build()
                     putExtra(EXTRA_DESTINATION_HASH, destinationHash)
                     putExtra(EXTRA_PEER_NAME, peerName)
                 }
@@ -196,9 +210,12 @@ class NotificationHelper
                     .setContentIntent(openPendingIntent)
                     .build()
 
-            val notificationId = NOTIFICATION_ID_MESSAGE + destinationHash.hashCode()
             try {
-                notificationManager.notify(notificationId, notification)
+                notificationManager.notify(
+                    messageNotificationTag(destinationHash),
+                    NOTIFICATION_ID_MESSAGE,
+                    notification,
+                )
             } catch (e: SecurityException) {
                 // Permission was revoked
             }
@@ -399,6 +416,31 @@ class NotificationHelper
             } catch (e: SecurityException) {
                 // Permission was revoked
             }
+        }
+
+        /**
+         * Cancel the message notification for a specific conversation destination.
+         *
+         * Uses the same `(tag, id)` identity as [notifyMessageReceived]. The full destination hash
+         * is included in the tag so Java hash collisions cannot overwrite or cancel another
+         * conversation's notification.
+         *
+         * Do not also cancel the legacy untagged hash-derived ID here: that would reintroduce the
+         * collision this identity prevents. Android's NotificationManagerService cancels a
+         * package's notifications during package replacement, so legacy and tagged identities do
+         * not coexist after an installed-app update.
+         *
+         * This is safe and idempotent — cancelling a nonexistent notification
+         * is a no-op. It does not affect announce, BLE, or other conversations'
+         * notifications.
+         *
+         * @param destinationHash The destination hash whose notification should be dismissed
+         */
+        fun cancelNotificationForConversation(destinationHash: String) {
+            notificationManager.cancel(
+                messageNotificationTag(destinationHash),
+                NOTIFICATION_ID_MESSAGE,
+            )
         }
 
         /**

@@ -24,6 +24,7 @@ import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
@@ -94,6 +95,7 @@ class MessagingViewModelTest {
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
     private lateinit var blockedPeerRepository: network.columba.app.data.repository.BlockedPeerRepository
     private lateinit var identityResolutionManager: IdentityResolutionManager
+    private lateinit var notificationHelper: NotificationHelper
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -129,6 +131,9 @@ class MessagingViewModelTest {
         blockedPeerRepository = mockk()
         identityResolutionManager = mockk()
         coEvery { identityResolutionManager.requestPathForContact(any()) } just Runs
+
+        notificationHelper = mockk()
+        every { notificationHelper.cancelNotificationForConversation(any()) } just Runs
 
         // Mock receivedLocationRepository to return no location by default
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
@@ -240,6 +245,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
             testBody()
@@ -267,6 +273,7 @@ class MessagingViewModelTest {
             receivedLocationRepository,
             blockedPeerRepository,
             identityResolutionManager,
+        notificationHelper,
         )
 
     @Test
@@ -601,6 +608,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
 
             // Attempt to send message
@@ -1056,6 +1064,7 @@ class MessagingViewModelTest {
                 receivedLocationRepository,
                 blockedPeerRepository,
                 identityResolutionManager,
+            notificationHelper,
             )
             advanceUntilIdle()
 
@@ -1130,6 +1139,7 @@ class MessagingViewModelTest {
                 receivedLocationRepository,
                 blockedPeerRepository,
                 identityResolutionManager,
+            notificationHelper,
             )
             advanceUntilIdle()
 
@@ -1202,6 +1212,7 @@ class MessagingViewModelTest {
                 receivedLocationRepository,
                 blockedPeerRepository,
                 identityResolutionManager,
+            notificationHelper,
             )
             advanceUntilIdle()
 
@@ -1262,6 +1273,7 @@ class MessagingViewModelTest {
                 receivedLocationRepository,
                 blockedPeerRepository,
                 identityResolutionManager,
+            notificationHelper,
             )
             advanceUntilIdle()
 
@@ -1336,6 +1348,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 
@@ -1403,6 +1416,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 
@@ -1470,6 +1484,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 
@@ -1537,6 +1552,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 
@@ -1604,6 +1620,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 
@@ -1670,6 +1687,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 
@@ -1731,6 +1749,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 
@@ -1792,6 +1811,7 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
+                notificationHelper,
                 )
             advanceUntilIdle()
 

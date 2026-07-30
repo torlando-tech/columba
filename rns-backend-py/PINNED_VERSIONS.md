@@ -31,7 +31,7 @@ moved into the Gradle build script).
 context-manager fixes for RNS file-handle leaks (ratchet I/O + the `log()`
 function). They are **not restored** here because:
 
-1. The pinned RNS fork commit `1c2cf734` **already includes** the ratchet I/O
+1. The pinned RNS fork commit `7d021521` **already includes** the ratchet I/O
    context-manager fixes, while upstream RNS 1.4.2 includes the equivalent
    `log()` context-manager fix. The plan's instruction is to skip the `patches/`
    tree when the pinned commit already has the fixes — it does.

@@ -107,7 +107,7 @@ chaquopy {
             // v0.10.x `patches/RNS/` tree is
             // intentionally NOT restored (its runtime patch-deployer lived in
             // the deleted reticulum_wrapper.py — see PINNED_VERSIONS.md).
-            install("git+https://github.com/torlando-tech/Reticulum@7d02152122cc069b88c1a02920c71fbf96c1f8d8")
+            install("git+https://github.com/torlando-tech/Reticulum@5b3a6ee4f25e2925cf84d4a2b108e6a708fbd395")
 
             // Upstream LXMF 1.1.0 — torlando-tech fork (external stamp generator
             // plus validated/cancellable native stamping and opportunistic

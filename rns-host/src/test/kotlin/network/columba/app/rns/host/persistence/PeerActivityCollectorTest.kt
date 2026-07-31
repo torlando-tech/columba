@@ -91,24 +91,7 @@ class PeerActivityCollectorTest {
         links.emit(LinkEvent.Closed(link, "closed"))
         runCurrent()
 
-        val sourceHex = source.joinToString("") { "%02x".format(it) }
-        coVerify(exactly = 1) {
-            persistence.persistIncomingMessageActivity("message", sourceHex, null, 500L)
-        }
-        coVerify(exactly = 1) { persistence.recordPeerActivity(sourceHex, PeerActivityType.ANNOUNCE, 500L) }
-        coVerify(exactly = 1) { persistence.persistDeliveryProof("delivered", 500L) }
-        coVerify(exactly = 0) { persistence.persistDeliveryProof("failed", any()) }
-        coVerify(exactly = 0) { persistence.persistDeliveryProof("propagated", any()) }
-        coVerify(exactly = 1) {
-            persistence.persistTelemetryActivity("direct", "direct:${Long.MAX_VALUE}:${1.0.toBits()}:${2.0.toBits()}:${3f.toRawBits()}:false", 500L, true)
-        }
-        coVerify(exactly = 1) {
-            persistence.persistTelemetryActivity("relayed", "relayed:${Long.MAX_VALUE}:${1.0.toBits()}:${2.0.toBits()}:${3f.toRawBits()}:false", 500L, false)
-        }
-        coVerify(exactly = 1) {
-            persistence.persistReactionActivity("reaction-peer:target:👍:123", "reaction-peer", 500L)
-        }
-        coVerify(exactly = 1) { persistence.recordPeerActivity("linked-peer", PeerActivityType.LINK, 500L) }
+        verifyInboundPersistence(persistence, source)
 
         firstJob.cancel()
         runCurrent()
@@ -116,5 +99,43 @@ class PeerActivityCollectorTest {
         assertNotSame(firstJob, restartedJob)
         restartedJob.cancel()
         advanceUntilIdle()
+    }
+
+    private fun verifyInboundPersistence(
+        persistence: ServicePersistenceManager,
+        source: ByteArray,
+    ) {
+        val sourceHex = source.joinToString("") { "%02x".format(it) }
+        coVerify(exactly = 1) {
+            persistence.persistIncomingMessageActivity("message", sourceHex, null, 500L)
+        }
+        coVerify(exactly = 1) {
+            persistence.recordPeerActivity(sourceHex, PeerActivityType.ANNOUNCE, 500L)
+        }
+        coVerify(exactly = 1) { persistence.persistDeliveryProof("delivered", 500L) }
+        coVerify(exactly = 0) { persistence.persistDeliveryProof("failed", any()) }
+        coVerify(exactly = 0) { persistence.persistDeliveryProof("propagated", any()) }
+        coVerify(exactly = 1) {
+            persistence.persistTelemetryActivity(
+                "direct",
+                "direct:${Long.MAX_VALUE}:${1.0.toBits()}:${2.0.toBits()}:${3f.toRawBits()}:false",
+                500L,
+                true,
+            )
+        }
+        coVerify(exactly = 1) {
+            persistence.persistTelemetryActivity(
+                "relayed",
+                "relayed:${Long.MAX_VALUE}:${1.0.toBits()}:${2.0.toBits()}:${3f.toRawBits()}:false",
+                500L,
+                false,
+            )
+        }
+        coVerify(exactly = 1) {
+            persistence.persistReactionActivity("reaction-peer:target:👍:123", "reaction-peer", 500L)
+        }
+        coVerify(exactly = 1) {
+            persistence.recordPeerActivity("linked-peer", PeerActivityType.LINK, 500L)
+        }
     }
 }

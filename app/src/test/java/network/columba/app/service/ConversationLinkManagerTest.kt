@@ -3,6 +3,7 @@ package network.columba.app.service
 import network.columba.app.data.model.ImageCompressionPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -417,6 +418,7 @@ class ConversationLinkManagerTest {
                 network.columba.app.data.db.entity.PeerActivityType.LINK,
             )
         }
+        assertTrue(manager.getLinkState("00112233445566778899aabbccddeeff")?.isActive == true)
     }
 
     @Test

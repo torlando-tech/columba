@@ -15,6 +15,7 @@ import network.columba.app.data.db.dao.InterfaceFirstSeenDao
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.OfflineMapRegionDao
+import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
@@ -29,6 +30,8 @@ import network.columba.app.data.db.entity.InterfaceFirstSeenEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.OfflineMapRegionEntity
+import network.columba.app.data.db.entity.PeerActivityEntity
+import network.columba.app.data.db.entity.PeerActivityEventEntity
 import network.columba.app.data.db.entity.PeerIconEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
@@ -50,9 +53,11 @@ import network.columba.app.data.db.entity.RmspServerEntity
         DraftEntity::class,
         BlockedPeerEntity::class,
         InterfaceFirstSeenEntity::class,
+        PeerActivityEntity::class,
+        PeerActivityEventEntity::class,
     ],
-    version = 2,
-    exportSchema = false,
+    version = 3,
+    exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
     companion object {
@@ -109,6 +114,68 @@ abstract class ColumbaDatabase : RoomDatabase() {
             }
 
         /**
+         * v2 → v3: add the durable source of truth for verified inbound
+         * peer activity. Only local reception timestamps are backfilled.
+         */
+        val MIGRATION_2_3: Migration =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `peer_activity` (" +
+                            "`destinationHash` TEXT NOT NULL, " +
+                            "`lastReceivedAt` INTEGER NOT NULL, " +
+                            "`activityType` TEXT NOT NULL, " +
+                            "PRIMARY KEY(`destinationHash`))",
+                    )
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `peer_activity_events` (" +
+                            "`eventId` TEXT NOT NULL, PRIMARY KEY(`eventId`))",
+                    )
+                    // Existing messages/proofs must be marked as already admitted so
+                    // backend replay after upgrade cannot make them look newly received.
+                    db.execSQL(
+                        "INSERT OR IGNORE INTO peer_activity_events(eventId) " +
+                            "SELECT 'message:' || LOWER(id) FROM messages WHERE isFromMe = 0",
+                    )
+                    db.execSQL(
+                        "INSERT OR IGNORE INTO peer_activity_events(eventId) " +
+                            "SELECT 'proof:' || LOWER(id) FROM messages " +
+                            "WHERE isFromMe = 1 AND LOWER(status) = 'delivered'",
+                    )
+                    val maxTrustedReceivedAt = System.currentTimeMillis() + 5 * 60 * 1000L
+                    backfillPeerActivity(
+                        db,
+                        "SELECT LOWER(destinationHash) AS hash, MAX(lastSeenTimestamp) AS receivedAt " +
+                            "FROM announces WHERE lastSeenTimestamp > 0 " +
+                            "AND lastSeenTimestamp <= $maxTrustedReceivedAt " +
+                            "GROUP BY LOWER(destinationHash)",
+                        "ANNOUNCE",
+                    )
+                    backfillPeerActivity(
+                        db,
+                        "SELECT LOWER(conversationHash) AS hash, MAX(receivedAt) AS receivedAt " +
+                            "FROM messages WHERE isFromMe = 0 AND receivedAt IS NOT NULL " +
+                            "AND receivedAt > 0 AND receivedAt <= $maxTrustedReceivedAt " +
+                            "GROUP BY LOWER(conversationHash)",
+                        "MESSAGE",
+                    )
+                }
+            }
+
+        private fun backfillPeerActivity(
+            db: SupportSQLiteDatabase,
+            sourceQuery: String,
+            activityType: String,
+        ) {
+            db.execSQL(
+                "INSERT OR REPLACE INTO peer_activity(destinationHash, lastReceivedAt, activityType) " +
+                    "SELECT source.hash, source.receivedAt, '$activityType' FROM ($sourceQuery) source " +
+                    "LEFT JOIN peer_activity existing ON existing.destinationHash = source.hash " +
+                    "WHERE existing.lastReceivedAt IS NULL OR source.receivedAt > existing.lastReceivedAt",
+            )
+        }
+
+        /**
          * Extract the `fields[16].reactions` blob out of a legacy
          * `fieldsJson`, returning `(newFieldsJson, reactionsJson)`.
          * Returns null if there is no reactions blob to extract or if
@@ -143,6 +210,8 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun announceDao(): AnnounceDao
 
     abstract fun peerIdentityDao(): PeerIdentityDao
+
+    abstract fun peerActivityDao(): PeerActivityDao
 
     abstract fun peerIconDao(): PeerIconDao
 

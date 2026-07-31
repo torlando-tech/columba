@@ -18,6 +18,7 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.host.binder.ReticulumServiceBinder
 import network.columba.app.rns.host.di.ServiceModule
 import network.columba.app.rns.host.persistence.BackendInitializer
+import network.columba.app.rns.host.persistence.PeerActivityCollector
 import network.columba.app.rns.host.rnode.KotlinRNodeBridge
 import network.columba.app.rns.host.rnode.RNodeOnlineStatusListener
 import network.columba.app.rns.host.usb.KotlinUSBBridge
@@ -155,6 +156,10 @@ class ReticulumService : Service() {
                     }
                 },
             )
+
+        // Install one lifecycle-owned protocol activity collector before backend
+        // initialization, so non-replaying events cannot race startup.
+        PeerActivityCollector(rnsBackend, managers.persistenceManager).start(serviceScope)
 
         // Create notification channel
         managers.notificationManager.createNotificationChannel()

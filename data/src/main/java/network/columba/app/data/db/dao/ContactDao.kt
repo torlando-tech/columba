@@ -42,9 +42,14 @@ interface ContactDao {
             c.customNickname,
             COALESCE(c.customNickname, a.peerName, c.destinationHash) as displayName,
             a.peerName as announceName,
-            a.lastSeenTimestamp,
+            CASE
+                WHEN pa.lastReceivedAt IS NULL THEN
+                    CASE WHEN a.lastSeenTimestamp BETWEEN 1 AND (:currentTime + 300000) THEN a.lastSeenTimestamp ELSE NULL END
+                WHEN a.lastSeenTimestamp IS NULL OR a.lastSeenTimestamp NOT BETWEEN 1 AND (:currentTime + 300000) THEN pa.lastReceivedAt
+                ELSE MAX(pa.lastReceivedAt, a.lastSeenTimestamp)
+            END as lastSeenTimestamp,
             a.hops,
-            CASE WHEN a.lastSeenTimestamp > :onlineThreshold THEN 1 ELSE 0 END as isOnline,
+            0 as isOnline,
             CASE WHEN conv.peerHash IS NOT NULL THEN 1 ELSE 0 END as hasConversation,
             COALESCE(conv.unreadCount, 0) as unreadCount,
             conv.lastMessageTimestamp,
@@ -63,6 +68,7 @@ interface ContactDao {
             pi.backgroundColor as iconBackgroundColor
         FROM contacts c
         LEFT JOIN announces a ON c.destinationHash = a.destinationHash
+        LEFT JOIN peer_activity pa ON LOWER(c.destinationHash) = pa.destinationHash
         LEFT JOIN conversations conv ON c.destinationHash = conv.peerHash AND c.identityHash = conv.identityHash
         LEFT JOIN peer_icons pi ON c.destinationHash = pi.destinationHash
         LEFT JOIN (
@@ -80,7 +86,6 @@ interface ContactDao {
     )
     fun getEnrichedContacts(
         identityHash: String,
-        onlineThreshold: Long,
         currentTime: Long = System.currentTimeMillis(),
     ): Flow<List<EnrichedContact>>
 

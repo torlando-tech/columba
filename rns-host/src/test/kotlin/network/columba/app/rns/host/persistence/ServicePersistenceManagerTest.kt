@@ -7,6 +7,7 @@ import network.columba.app.data.db.dao.ContactDao
 import network.columba.app.data.db.dao.ConversationDao
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
+import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.entity.AnnounceEntity
@@ -51,6 +52,7 @@ class ServicePersistenceManagerTest {
     private lateinit var conversationDao: ConversationDao
     private lateinit var localIdentityDao: LocalIdentityDao
     private lateinit var peerIdentityDao: PeerIdentityDao
+    private lateinit var peerActivityDao: PeerActivityDao
     private lateinit var peerIconDao: PeerIconDao
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
@@ -72,6 +74,7 @@ class ServicePersistenceManagerTest {
         conversationDao = mockk()
         localIdentityDao = mockk()
         peerIdentityDao = mockk()
+        peerActivityDao = mockk()
         peerIconDao = mockk()
         settingsAccessor = mockk()
 
@@ -82,7 +85,9 @@ class ServicePersistenceManagerTest {
         every { database.conversationDao() } returns conversationDao
         every { database.localIdentityDao() } returns localIdentityDao
         every { database.peerIdentityDao() } returns peerIdentityDao
+        every { database.peerActivityDao() } returns peerActivityDao
         every { database.peerIconDao() } returns peerIconDao
+        coEvery { peerActivityDao.recordActivity(any(), any(), any()) } just Runs
 
         // Mock ServiceDatabaseProvider singleton
         mockkObject(ServiceDatabaseProvider)

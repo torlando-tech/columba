@@ -110,6 +110,9 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertEquals(2, saved?.hops)
             assertEquals("LXMF_PEER", saved?.nodeType)
             assertFalse("New announce should not be favorited", saved?.isFavorite ?: true)
+            val activity = database.peerActivityDao().getActivity(destinationHash)
+            assertEquals(saved?.lastSeenTimestamp, activity?.lastReceivedAt)
+            assertEquals("ANNOUNCE", activity?.activityType)
         }
 
     // Note: "persistAnnounce preserves favorite status on update" test was removed.
@@ -804,6 +807,257 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 "Unread should not increment for duplicate",
                 6,
                 conversationDao.getConversation(TEST_PEER_HASH, TEST_IDENTITY_HASH)?.unreadCount,
+            )
+        }
+
+    @Test
+    fun `incoming message records local reception time instead of sender clock`() =
+        testScope.runTest {
+            insertTestIdentity()
+            val before = System.currentTimeMillis()
+            persistenceManager.persistMessage(
+                messageHash = "clock-skew-message",
+                content = "from the future",
+                sourceHash = TEST_PEER_HASH,
+                timestamp = Long.MAX_VALUE,
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = "direct",
+            )
+            val after = System.currentTimeMillis()
+
+            val activity = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+            assertNotNull(activity)
+            assertTrue(activity!!.lastReceivedAt in before..after)
+            assertEquals("MESSAGE", activity.activityType)
+        }
+
+    @Test
+    fun `outgoing undelivered message does not update peer activity`() =
+        testScope.runTest {
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "pending",
+                    lastMessageTimestamp = 999L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "outgoing-pending",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 999L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                ),
+            )
+
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+            assertFalse(persistenceManager.persistDeliveryProof("unknown-message", 1_000L))
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+        }
+
+    @Test
+    fun `incoming activity admission rejects replay blocked unknown and propagated messages`() =
+        testScope.runTest {
+            insertTestIdentity()
+
+            assertTrue(persistenceManager.persistIncomingMessageActivity("fresh", TEST_PEER_HASH, "direct", 100L))
+            assertFalse(persistenceManager.persistIncomingMessageActivity("fresh", TEST_PEER_HASH, "direct", 200L))
+            assertEquals(100L, database.peerActivityDao().getActivity(TEST_PEER_HASH)?.lastReceivedAt)
+
+            database.blockedPeerDao().insertBlockedPeer(
+                network.columba.app.data.db.entity.BlockedPeerEntity(
+                    peerHash = "blocked-peer",
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerIdentityHash = null,
+                    displayName = "Blocked",
+                    blockedTimestamp = 1L,
+                    isBlackholeEnabled = false,
+                ),
+            )
+            assertFalse(persistenceManager.persistIncomingMessageActivity("blocked", "blocked-peer", "direct", 300L))
+            assertNull(database.peerActivityDao().getActivity("blocked-peer"))
+
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            assertFalse(persistenceManager.persistIncomingMessageActivity("unknown", "unknown-peer", "direct", 400L))
+            assertNull(database.peerActivityDao().getActivity("unknown-peer"))
+
+            every { settingsAccessor.getBlockUnknownSenders() } returns false
+            assertFalse(persistenceManager.persistIncomingMessageActivity("propagated", "relay-peer", "propagated", 500L))
+            assertNull(database.peerActivityDao().getActivity("relay-peer"))
+        }
+
+    @Test
+    fun `incoming activity admission requires active identity`() =
+        testScope.runTest {
+            assertFalse(persistenceManager.persistIncomingMessageActivity("message", TEST_PEER_HASH, "direct", 100L))
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+        }
+
+    @Test
+    fun `verified delivery proof updates outgoing recipient activity`() =
+        testScope.runTest {
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "sent",
+                    lastMessageTimestamp = 10L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "outgoing-delivered",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 10L,
+                    isFromMe = true,
+                    status = "sent",
+                    isRead = true,
+                ),
+            )
+
+            assertTrue(persistenceManager.persistDeliveryProof("outgoing-delivered", 500L))
+            assertFalse(persistenceManager.persistDeliveryProof("outgoing-delivered", 900L))
+            val activity = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+            assertEquals(500L, activity?.lastReceivedAt)
+            assertEquals("PROOF", activity?.activityType)
+        }
+
+    @Test
+    fun `incoming message cannot be mistaken for outgoing proof`() =
+        testScope.runTest {
+            insertTestIdentity()
+            persistenceManager.persistMessage(
+                messageHash = "incoming-proof-candidate",
+                content = "hello",
+                sourceHash = TEST_PEER_HASH,
+                timestamp = 1L,
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = "direct",
+            )
+            val original = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+
+            assertFalse(persistenceManager.persistDeliveryProof("incoming-proof-candidate", original!!.lastReceivedAt + 100L))
+            assertEquals(original, database.peerActivityDao().getActivity(TEST_PEER_HASH))
+        }
+
+    @Test
+    fun `delivery proof resolves message after active identity changes`() =
+        testScope.runTest {
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "sent",
+                    lastMessageTimestamp = 10L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "proof-after-switch",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 10L,
+                    isFromMe = true,
+                    status = "sent",
+                    isRead = true,
+                ),
+            )
+            database.localIdentityDao().insert(
+                network.columba.app.data.db.entity.LocalIdentityEntity(
+                    identityHash = "other-identity",
+                    displayName = "Other",
+                    destinationHash = "other-destination",
+                    filePath = "/other",
+                    createdTimestamp = 2L,
+                    lastUsedTimestamp = 2L,
+                    isActive = false,
+                ),
+            )
+            database.localIdentityDao().setActive("other-identity")
+
+            assertTrue(persistenceManager.persistDeliveryProof("proof-after-switch", 700L))
+            assertEquals(700L, database.peerActivityDao().getActivity(TEST_PEER_HASH)?.lastReceivedAt)
+        }
+
+    @Test
+    fun `direct telemetry applies provenance replay and privacy admission`() =
+        testScope.runTest {
+            insertTestIdentity()
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    TEST_PEER_HASH,
+                    eventId = "frame-1",
+                    receivedAt = 100L,
+                    isDirect = false,
+                ),
+            )
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+
+            assertTrue(
+                persistenceManager.persistTelemetryActivity(
+                    TEST_PEER_HASH,
+                    eventId = "frame-1",
+                    receivedAt = 200L,
+                    isDirect = true,
+                ),
+            )
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    TEST_PEER_HASH,
+                    eventId = "frame-1",
+                    receivedAt = 300L,
+                    isDirect = true,
+                ),
+            )
+            val activity = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+            assertEquals(200L, activity?.lastReceivedAt)
+            assertEquals("TELEMETRY", activity?.activityType)
+
+            database.blockedPeerDao().insertBlockedPeer(
+                network.columba.app.data.db.entity.BlockedPeerEntity(
+                    peerHash = "blocked-telemetry",
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerIdentityHash = null,
+                    displayName = "Blocked",
+                    blockedTimestamp = 1L,
+                    isBlackholeEnabled = false,
+                ),
+            )
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    "blocked-telemetry",
+                    eventId = "blocked-frame",
+                    receivedAt = 400L,
+                    isDirect = true,
+                ),
+            )
+
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    "unknown-telemetry",
+                    eventId = "unknown-frame",
+                    receivedAt = 500L,
+                    isDirect = true,
+                ),
             )
         }
 }

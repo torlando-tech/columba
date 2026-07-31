@@ -12,8 +12,10 @@ import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.util.LxmfFields
 import network.reticulum.lxmf.LXMessage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.ConcurrentHashMap
@@ -118,5 +120,24 @@ class NativeTelemetryHandlerTest {
                 "a phantom location event.",
             pollFlowNonBlocking(timeoutMillis = 150),
         )
+    }
+
+    @Test
+    fun `direct telemetry is marked direct`() {
+        val message = mockMessage(fields = mapOf(LxmfFields.FIELD_TELEMETRY to """{"lat":1.0,"lng":2.0}"""))
+
+        handler.handleIncomingTelemetry(message, timestamp = 0L)
+
+        assertTrue(pollFlowNonBlocking()!!.isDirect)
+    }
+
+    @Test
+    fun `collector stream telemetry is marked relayed`() {
+        val streamEntry = listOf(ByteArray(16) { 0x7f }, 123L, """{"lat":1.0,"lng":2.0}""")
+        val message = mockMessage(fields = mapOf(LxmfFields.FIELD_TELEMETRY_STREAM to listOf(streamEntry)))
+
+        handler.handleIncomingTelemetry(message, timestamp = 0L)
+
+        assertFalse(pollFlowNonBlocking()!!.isDirect)
     }
 }

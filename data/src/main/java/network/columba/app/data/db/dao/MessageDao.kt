@@ -86,6 +86,12 @@ interface MessageDao {
         identityHash: String,
     ): MessageEntity?
 
+    @Query(
+        "SELECT * FROM messages WHERE id = :messageId AND isFromMe = 1 " +
+            "ORDER BY timestamp DESC, identityHash ASC LIMIT 1",
+    )
+    suspend fun getOutgoingMessageByIdAcrossIdentities(messageId: String): MessageEntity?
+
     /**
      * Observe a message by ID for real-time updates (e.g., status changes).
      * Returns a Flow that emits whenever the message changes in the database.

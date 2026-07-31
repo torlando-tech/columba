@@ -154,6 +154,7 @@ class MessagingViewModelImageLoadingTest {
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
+        every { conversationLinkManager.observePeerActivity(any()) } returns flowOf(null)
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())

@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -118,6 +119,7 @@ class MessagingViewModel
 
         // Track the currently active conversation - drives reactive message loading
         private val _currentConversation = MutableStateFlow<String?>(null)
+        val currentConversationHash: StateFlow<String?> = _currentConversation.asStateFlow()
         private var currentPeerName: String = "Unknown"
 
         // Messages automatically update when conversation changes OR database changes
@@ -166,12 +168,35 @@ class MessagingViewModel
                     initialValue = null,
                 )
 
+        // Durable last verified packet received from the current peer.
+        val peerActivity: StateFlow<network.columba.app.data.db.entity.PeerActivityEntity?> =
+            _currentConversation
+                .flatMapLatest { peerHash ->
+                    if (peerHash != null) {
+                        flow<network.columba.app.data.db.entity.PeerActivityEntity?> {
+                            emit(null)
+                            conversationLinkManager.observePeerActivity(peerHash).collect { emit(it) }
+                        }
+                    } else {
+                        flowOf(null)
+                    }
+                }.stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = null,
+                )
+
         // Link state for current conversation - provides real-time connectivity status
         val conversationLinkState: StateFlow<network.columba.app.service.ConversationLinkManager.LinkState?> =
             _currentConversation
                 .flatMapLatest { peerHash ->
                     if (peerHash != null) {
-                        conversationLinkManager.linkStates.map { states -> states[peerHash] }
+                        flow<network.columba.app.service.ConversationLinkManager.LinkState?> {
+                            emit(null)
+                            conversationLinkManager.linkStates
+                                .map { states -> states[peerHash] }
+                                .collect { emit(it) }
+                        }
                     } else {
                         flowOf(null)
                     }

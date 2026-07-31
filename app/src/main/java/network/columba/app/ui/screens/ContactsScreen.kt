@@ -115,7 +115,8 @@ import network.columba.app.ui.components.LocalWindowSize
 import network.columba.app.ui.components.ProfileIcon
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.theme.MeshConnected
-import network.columba.app.util.formatRelativeTime
+import network.columba.app.ui.util.rememberLifecycleTickerMillis
+import network.columba.app.util.formatTimeSince
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.util.validation.ValidationResult
@@ -155,6 +156,7 @@ fun ContactsScreen(
     val currentRelayInfo by viewModel.currentRelayInfo.collectAsState()
     var isSearching by remember { mutableStateOf(false) }
     val contactsListState = rememberLazyListState()
+    val timestampTick = rememberLifecycleTickerMillis(periodMs = 30_000L)
 
     // Tab selection state - use rememberSaveable to preserve across navigation
     var selectedTab by androidx.compose.runtime.saveable
@@ -517,6 +519,7 @@ fun ContactsScreen(
                                 item(key = "relay_${relay.destinationHash}") {
                                     ContactListItemWithMenu(
                                         contact = relay,
+                                        nowMillis = timestampTick,
                                         onClick = {
                                             if (relay.status == ContactStatus.PENDING_IDENTITY ||
                                                 relay.status == ContactStatus.UNRESOLVED
@@ -560,6 +563,7 @@ fun ContactsScreen(
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
+                                        nowMillis = timestampTick,
                                         onClick = {
                                             if (contact.status == ContactStatus.PENDING_IDENTITY ||
                                                 contact.status == ContactStatus.UNRESOLVED
@@ -612,6 +616,7 @@ fun ContactsScreen(
                                 ) { contact ->
                                     ContactListItemWithMenu(
                                         contact = contact,
+                                        nowMillis = timestampTick,
                                         onClick = {
                                             if (contact.status == ContactStatus.PENDING_IDENTITY ||
                                                 contact.status == ContactStatus.UNRESOLVED
@@ -923,6 +928,7 @@ fun ContactsScreen(
 @Composable
 private fun ContactListItemWithMenu(
     contact: EnrichedContact,
+    nowMillis: Long,
     onClick: () -> Unit,
     onPinToggle: () -> Unit,
     onEditNickname: () -> Unit,
@@ -947,6 +953,7 @@ private fun ContactListItemWithMenu(
     Box(modifier = Modifier.fillMaxWidth()) {
         ContactListItem(
             contact = contact,
+            nowMillis = nowMillis,
             onClick = onClick,
             onPinClick = onPinToggle,
             onLongPress = {
@@ -991,6 +998,7 @@ private fun ContactListItemWithMenu(
 fun ContactListItem(
     contact: EnrichedContact,
     modifier: Modifier = Modifier,
+    nowMillis: Long = System.currentTimeMillis(),
     onClick: () -> Unit,
     onPinClick: () -> Unit,
     onLongPress: () -> Unit = {},
@@ -1073,17 +1081,6 @@ fun ContactListItem(
                             )
                         }
                     }
-                    contact.isOnline -> {
-                        // Online indicator for active contacts
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(14.dp)
-                                    .align(Alignment.BottomEnd)
-                                    .background(MeshConnected, CircleShape)
-                                    .clip(CircleShape),
-                        )
-                    }
                 }
 
                 // Relay badge overlay (Hub icon in top-right corner)
@@ -1155,23 +1152,10 @@ fun ContactListItem(
                             val lastSeen = contact.lastSeenTimestamp
                             if (lastSeen != null) {
                                 Text(
-                                    text = if (contact.isOnline) "Online" else formatRelativeTime(lastSeen),
+                                    text = formatTimeSince(lastSeen, nowMillis),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color =
-                                        if (contact.isOnline) {
-                                            MeshConnected
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-
-                                if (contact.isOnline && contact.hops != null) {
-                                    Text(
-                                        text = "• ${contact.hops} hops",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
                             } else {
                                 Text(
                                     text = "Never seen",

@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream
 import java.math.BigInteger
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -49,6 +50,7 @@ class StampGenerator {
             const val WORKBLOCK_EXPAND_ROUNDS_PN = 1000
             const val HKDF_OUTPUT_LENGTH = 256
             private const val PROGRESS_LOG_INTERVAL = 8000
+            private const val CANCELLATION_POLL_INTERVAL = 256L
         }
 
         data class StampResult(
@@ -123,11 +125,13 @@ class StampGenerator {
          *
          * @param workblock The pre-generated workblock
          * @param stampCost The required stamp cost (number of leading zero bits)
+         * @param isCancelled Polled every 256 candidates per worker for cooperative external cancellation
          * @return StampResult containing the stamp, its value, and total rounds tried
          */
         suspend fun generateStamp(
             workblock: ByteArray,
             stampCost: Int,
+            isCancelled: () -> Boolean = { false },
         ): StampResult =
             coroutineScope {
                 val startTime = System.currentTimeMillis()
@@ -137,6 +141,7 @@ class StampGenerator {
 
                 // Use atomic reference for thread-safe result sharing
                 val found = AtomicReference<ByteArray?>(null)
+                val cancelled = AtomicBoolean(false)
                 val roundCounters = LongArray(numWorkers)
 
                 val jobs =
@@ -146,28 +151,32 @@ class StampGenerator {
                             var localRounds = 0L
                             val stamp = ByteArray(STAMP_SIZE)
 
-                            while (found.get() == null && isActive) {
-                                localRandom.nextBytes(stamp)
-                                localRounds++
+                            while (found.get() == null && !cancelled.get() && isActive) {
+                                if (localRounds % CANCELLATION_POLL_INTERVAL == 0L && isCancelled()) {
+                                    cancelled.set(true)
+                                } else {
+                                    localRandom.nextBytes(stamp)
+                                    localRounds++
 
-                                if (isStampValid(stamp, stampCost, workblock)) {
-                                    // Use compareAndSet to ensure only one worker sets the result
-                                    found.compareAndSet(null, stamp.copyOf())
-                                    break
-                                }
+                                    if (isStampValid(stamp, stampCost, workblock)) {
+                                        // Use compareAndSet to ensure only one worker sets the result
+                                        found.compareAndSet(null, stamp.copyOf())
+                                        break
+                                    }
 
-                                // Periodically yield to allow cancellation and log progress
-                                if (localRounds % 1000 == 0L) {
-                                    yield()
-                                }
+                                    // Periodically yield to allow cancellation and log progress
+                                    if (localRounds % 1000 == 0L) {
+                                        yield()
+                                    }
 
-                                if (localRounds % PROGRESS_LOG_INTERVAL == 0L) {
-                                    roundCounters[workerId] = localRounds
-                                    val totalRounds = roundCounters.sum()
-                                    val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
-                                    if (elapsed > 0) {
-                                        val speed = (totalRounds / elapsed).toLong()
-                                        Log.d(TAG, "Stamp generation running. $totalRounds rounds, $speed rounds/sec")
+                                    if (localRounds % PROGRESS_LOG_INTERVAL == 0L) {
+                                        roundCounters[workerId] = localRounds
+                                        val totalRounds = roundCounters.sum()
+                                        val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
+                                        if (elapsed > 0) {
+                                            val speed = (totalRounds / elapsed).toLong()
+                                            Log.d(TAG, "Stamp generation running. $totalRounds rounds, $speed rounds/sec")
+                                        }
                                     }
                                 }
                             }
@@ -184,7 +193,7 @@ class StampGenerator {
                 val duration = (System.currentTimeMillis() - startTime) / 1000.0
                 val speed = if (duration > 0) (totalRounds / duration).toLong() else 0
 
-                val resultStamp = found.get()
+                val resultStamp = if (cancelled.get()) null else found.get()
                 val value = if (resultStamp != null) stampValue(workblock, resultStamp) else 0
 
                 Log.d(

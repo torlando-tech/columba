@@ -12,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Unit tests for StampGenerator.
@@ -235,6 +236,24 @@ class StampGeneratorTest {
             assertTrue(stampGenerator.isStampValid(result.stamp!!, stampCost, workblock))
             assertTrue(result.value >= stampCost)
             assertTrue(result.rounds > 0)
+        }
+
+    @Test
+    fun `generateStamp stops bounded high cost work when externally cancelled`() =
+        runTest {
+            val workblock = stampGenerator.generateWorkblock(ByteArray(32) { it.toByte() }, 1)
+            val cancellationChecks = AtomicInteger(0)
+            val workerCount = Runtime.getRuntime().availableProcessors().coerceIn(1, 8)
+
+            val result =
+                stampGenerator.generateStamp(workblock, 255) {
+                    cancellationChecks.incrementAndGet() > workerCount
+                }
+
+            assertEquals(null, result.stamp)
+            assertEquals(0, result.value)
+            assertTrue(result.rounds > 0)
+            assertTrue("Cancellation should bound native work, rounds=${result.rounds}", result.rounds <= workerCount * 512L)
         }
 
     @Test

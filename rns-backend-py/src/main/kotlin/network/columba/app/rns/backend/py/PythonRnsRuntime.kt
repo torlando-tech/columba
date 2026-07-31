@@ -394,6 +394,8 @@ class PythonRnsRuntime(
     @Synchronized
     fun stop() {
         if (!running.get()) return
+        runCatching { eventBridge.callAttr("uninstall_external_stamp_generator") }
+            .onFailure { Log.w(TAG, "External stamp generator unregister failed", it) }
         runCatching { eventBridge.callAttr("deregister_callbacks") }
             .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
         runCatching {
@@ -473,10 +475,9 @@ class PythonRnsRuntime(
  * Chaquopy's SAM-callable dispatch (`JavaObject.__call__` → bridge
  * apply) boxes args as `Object[]` instead of typed `byte[] / int`,
  * causing `ClassCastException` in the synthetic apply wrapper. A
- * normal class with a method whose JVM signature is
- * `generate([B, I) -> Object` makes Chaquopy take its typed-method
+ * normal class with typed `generate` overloads makes Chaquopy take its typed-method
  * dispatch path (`JavaMethod.__call__`), which correctly converts
- * Python `bytes → byte[]` and `int → int` before invocation.
+ * Python `bytes → byte[]`, `int → int`, and the cancellation token before invocation.
  *
  * Invoked from Python via
  * `event_bridge.install_external_stamp_generator(callback)`, which
@@ -489,7 +490,7 @@ class PythonRnsRuntime(
  * builtin so they expose the buffer protocol that LXStamper then
  * concatenates with the workblock.
  */
-@ReflectivelyKept // event_bridge.py calls generate(workblock, cost) by name via Chaquopy — R8 must not rename/strip it
+@ReflectivelyKept // event_bridge.py calls generate(workblock, cost, token) by name via Chaquopy — R8 must not rename/strip it
 internal class StampGeneratorCallback(
     private val generator: StampGenerator,
 ) {
@@ -500,6 +501,12 @@ internal class StampGeneratorCallback(
     fun generate(
         workblock: ByteArray,
         stampCost: Int,
+    ): PyObject = generate(workblock, stampCost, null)
+
+    fun generate(
+        workblock: ByteArray,
+        stampCost: Int,
+        cancellationToken: PyObject?,
     ): PyObject {
         Log.d(
             TAG,
@@ -509,7 +516,9 @@ internal class StampGeneratorCallback(
 
         val result =
             runBlocking(Dispatchers.Default) {
-                generator.generateStamp(workblock, stampCost)
+                generator.generateStamp(workblock, stampCost) {
+                    cancellationToken?.callAttr("is_cancelled")?.toBoolean() == true
+                }
             }
 
         Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")

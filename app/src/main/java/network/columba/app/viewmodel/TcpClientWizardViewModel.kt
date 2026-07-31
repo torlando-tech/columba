@@ -340,6 +340,11 @@ class TcpClientWizardViewModel
             _state.update { it.copy(currentStep = previousStep) }
         }
 
+        /** Consumes the one-shot save completion before navigation removes this screen. */
+        fun consumeSaveSuccess() {
+            _state.update { it.copy(saveSuccess = false) }
+        }
+
         /**
          * Save the TCP Client interface configuration.
          */

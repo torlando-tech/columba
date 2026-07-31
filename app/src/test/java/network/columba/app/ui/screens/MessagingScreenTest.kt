@@ -78,6 +78,9 @@ class MessagingScreenTest {
         // Setup default mock returns
         every { mockViewModel.messages } returns flowOf(PagingData.empty())
         every { mockViewModel.announceInfo } returns MutableStateFlow(null)
+        every { mockViewModel.peerActivity } returns MutableStateFlow(null)
+        every { mockViewModel.currentConversationHash } returns
+            MutableStateFlow(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH)
         every { mockViewModel.selectedImageData } returns MutableStateFlow(null)
         every { mockViewModel.selectedImageFormat } returns MutableStateFlow(null)
         every { mockViewModel.isProcessingImage } returns MutableStateFlow(false)
@@ -348,14 +351,15 @@ class MessagingScreenTest {
 
     @Test
     fun onlineStatus_displaysLastSeen_whenRecentlySeen() {
-        // Given - announce with recent lastSeenTimestamp (< 5 minutes ago).
-        // "Online" is now reserved for an active link only; announce-only
-        // presence renders as "Last seen X ago" so the user judges from
-        // the relative time, not a misleading "Online" label produced by
-        // RNS announce_table cache replays.
-        every { mockViewModel.announceInfo } returns
+        // Given - recent verified inbound peer activity.
+        // "Online" is reserved for an active link only.
+        every { mockViewModel.peerActivity } returns
             MutableStateFlow(
-                MessagingTestFixtures.createOnlineAnnounce(),
+                network.columba.app.data.db.entity.PeerActivityEntity(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    lastReceivedAt = System.currentTimeMillis() - 60_000L,
+                    activityType = network.columba.app.data.db.entity.PeerActivityType.MESSAGE,
+                ),
             )
 
         // When
@@ -375,10 +379,14 @@ class MessagingScreenTest {
 
     @Test
     fun onlineStatus_displaysOffline_whenNotRecentlySeen() {
-        // Given - announce with old lastSeenTimestamp (> 5 minutes ago)
-        every { mockViewModel.announceInfo } returns
+        // Given - old verified inbound activity.
+        every { mockViewModel.peerActivity } returns
             MutableStateFlow(
-                MessagingTestFixtures.createOfflineAnnounce(),
+                network.columba.app.data.db.entity.PeerActivityEntity(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    lastReceivedAt = System.currentTimeMillis() - 60 * 60 * 1_000L,
+                    activityType = network.columba.app.data.db.entity.PeerActivityType.ANNOUNCE,
+                ),
             )
 
         // When
@@ -392,6 +400,50 @@ class MessagingScreenTest {
         }
 
         // Then - should show relative time instead of "Online"
+        composeTestRule.onNodeWithText("Online").assertDoesNotExist()
+    }
+
+    @Test
+    fun onlineStatus_ignoresActivityFromPreviousConversation() {
+        every { mockViewModel.peerActivity } returns
+            MutableStateFlow(
+                network.columba.app.data.db.entity.PeerActivityEntity(
+                    destinationHash = "different-peer",
+                    lastReceivedAt = System.currentTimeMillis(),
+                    activityType = network.columba.app.data.db.entity.PeerActivityType.MESSAGE,
+                ),
+            )
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Last seen", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Online").assertDoesNotExist()
+    }
+
+    @Test
+    fun onlineStatus_ignoresActiveLinkFromPreviousConversation() {
+        every { mockViewModel.currentConversationHash } returns MutableStateFlow("different-peer")
+        every { mockViewModel.conversationLinkState } returns
+            MutableStateFlow(
+                network.columba.app.service.ConversationLinkManager.LinkState(isActive = true),
+            )
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
         composeTestRule.onNodeWithText("Online").assertDoesNotExist()
     }
 

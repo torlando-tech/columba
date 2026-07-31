@@ -3,6 +3,7 @@ package network.columba.app.service
 import network.columba.app.data.model.ImageCompressionPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -375,7 +376,11 @@ class ConversationLinkManagerTest {
                     linkMtu = 500,
                 )
 
-            val manager = ConversationLinkManager(mockProtocol)
+            val manager =
+                ConversationLinkManager(
+                    mockProtocol,
+                    io.mockk.mockk<network.columba.app.data.repository.PeerActivityRepository>(relaxed = true),
+                )
 
             // Set up an inactive, stale entry (would normally be cleaned up)
             val staleTimestamp = System.currentTimeMillis() - (20 * 60 * 1000L) // 20 min ago
@@ -395,4 +400,39 @@ class ConversationLinkManagerTest {
             org.junit.Assert.assertNotNull("Entry should not be cleaned up", finalState)
             org.junit.Assert.assertTrue("Entry should now be active", finalState!!.isActive)
         }
+
+    @Test
+    fun `successful link records durable peer activity`() {
+        val rnsCore = io.mockk.mockk<network.columba.app.rns.api.RnsCore>()
+        val repository = io.mockk.mockk<network.columba.app.data.repository.PeerActivityRepository>(relaxed = true)
+        io.mockk.coEvery { rnsCore.establishConversationLink(any(), any()) } returns
+            Result.success(network.columba.app.rns.api.model.ConversationLinkResult(isActive = true))
+        val manager = ConversationLinkManager(rnsCore, repository)
+
+        manager.openConversationLink("00112233445566778899aabbccddeeff")
+
+        io.mockk.coVerify(timeout = 2_000L) {
+            repository.recordActivity(
+                "00112233445566778899aabbccddeeff",
+                any(),
+                network.columba.app.data.db.entity.PeerActivityType.LINK,
+            )
+        }
+        assertTrue(manager.getLinkState("00112233445566778899aabbccddeeff")?.isActive == true)
+    }
+
+    @Test
+    fun `failed link probe does not record peer activity`() {
+        val rnsCore = io.mockk.mockk<network.columba.app.rns.api.RnsCore>()
+        val repository = io.mockk.mockk<network.columba.app.data.repository.PeerActivityRepository>(relaxed = true)
+        io.mockk.coEvery { rnsCore.establishConversationLink(any(), any()) } returns
+            Result.failure(IllegalStateException("offline"))
+        val manager = ConversationLinkManager(rnsCore, repository)
+
+        manager.openConversationLink("00112233445566778899aabbccddeeff")
+        Thread.sleep(200)
+
+        io.mockk.coVerify(exactly = 0) { repository.recordActivity(any(), any(), any()) }
+        assertEquals(0L, manager.getLinkState("00112233445566778899aabbccddeeff")?.lastActivityTimestamp)
+    }
 }

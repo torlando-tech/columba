@@ -42,7 +42,6 @@ class MessageCollectorTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var peerIconDao: PeerIconDao
-    private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var messageCollector: MessageCollector
 
     // Use extraBufferCapacity to ensure emissions aren't dropped before collector is ready
@@ -62,11 +61,6 @@ class MessageCollectorTest {
         identityRepository = mockk()
         notificationHelper = mockk()
         peerIconDao = mockk()
-        conversationLinkManager = mockk()
-
-        // Default behavior for conversationLinkManager
-        every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
-        every { conversationLinkManager.recordPeerActivity(any()) } just Runs
 
         // Explicit stubs for notificationHelper (suspend function)
         coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any()) } returns Unit
@@ -111,7 +105,6 @@ class MessageCollectorTest {
                 identityRepository = identityRepository,
                 notificationHelper = notificationHelper,
                 peerIconDao = peerIconDao,
-                conversationLinkManager = conversationLinkManager,
             )
     }
 

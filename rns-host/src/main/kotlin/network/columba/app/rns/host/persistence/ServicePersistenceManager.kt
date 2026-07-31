@@ -6,6 +6,7 @@ import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.PeerActivityType
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
@@ -73,6 +74,7 @@ class ServicePersistenceManager(
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
+    private val peerActivityDao by lazy { database.peerActivityDao() }
 
     /**
      * Check if a peer is explicitly blocked.
@@ -142,6 +144,11 @@ class ServicePersistenceManager(
                     )
 
                 announceDao.upsertAnnounce(entity)
+                peerActivityDao.recordActivity(
+                    destinationHash = destinationHash,
+                    receivedAt = timestamp,
+                    activityType = PeerActivityType.ANNOUNCE,
+                )
                 Log.d(TAG, "Service persisted announce: ${destinationHash.take(16)}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
@@ -220,6 +227,10 @@ class ServicePersistenceManager(
                 return false
             }
 
+            // Local wall-clock time at the protocol ingestion boundary. The
+            // sender-provided LXMF timestamp is display data, not presence.
+            val receivedAt = System.currentTimeMillis()
+
             // Check for duplicates (composite key is id + identityHash)
             val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
             if (existingMessage != null) {
@@ -245,18 +256,13 @@ class ServicePersistenceManager(
                     peerHash = sourceHash,
                     cachedName = existingConversation?.peerName,
                     contactNicknameLookup = {
-                        activeIdentity?.let {
-                            contactDao.getContact(sourceHash, it.identityHash)?.customNickname
-                        }
+                        contactDao.getContact(sourceHash, activeIdentity.identityHash)?.customNickname
                     },
                     announcePeerNameLookup = {
                         announceDao.getAnnounce(sourceHash)?.peerName
                     },
                 )
             val peerName = TextSanitizer.sanitizePeerName(resolvedName)
-
-            // Use local reception time for conversation ordering (immune to sender clock skew)
-            val receivedAt = System.currentTimeMillis()
 
             // Insert/update conversation
             if (existingConversation != null) {
@@ -309,6 +315,7 @@ class ServicePersistenceManager(
                     receivedAt = receivedAt,
                 )
             messageDao.insertMessage(messageEntity)
+            peerActivityDao.recordActivity(sourceHash, receivedAt, PeerActivityType.MESSAGE)
 
             // Check if this message has file attachments and should supersede a pending notification
             if (hasFileAttachments) {
@@ -331,6 +338,115 @@ class ServicePersistenceManager(
             return false
         }
     }
+
+    /**
+     * Admit one fresh inbound LXMF message for presence after applying the
+     * same identity-scoped privacy policy as message persistence.
+     */
+    suspend fun persistIncomingMessageActivity(
+        messageHash: String,
+        sourceHash: String,
+        deliveryMethod: String?,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean =
+        try {
+            if (messageHash.isBlank() || sourceHash.isBlank()) return false
+            // A propagated fetch proves relay availability, not current sender activity.
+            if (deliveryMethod.equals("propagated", ignoreCase = true)) return false
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) return false
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) return false
+            peerActivityDao.recordActivityOnce(
+                eventId = "message:$messageHash",
+                destinationHash = sourceHash,
+                receivedAt = receivedAt,
+                activityType = PeerActivityType.MESSAGE,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting inbound message activity for $sourceHash", e)
+            false
+        }
+
+    /** Admit one authenticated reaction-only LXMF frame once. */
+    suspend fun persistReactionActivity(
+        eventId: String,
+        sourceHash: String,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean =
+        try {
+            if (eventId.isBlank() || sourceHash.isBlank()) return false
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) return false
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) return false
+            peerActivityDao.recordActivityOnce(
+                eventId = "reaction:$eventId",
+                destinationHash = sourceHash,
+                receivedAt = receivedAt,
+                activityType = PeerActivityType.MESSAGE,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting reaction activity for $sourceHash", e)
+            false
+        }
+
+    /** Record an activity event captured directly by the service-owned backend. */
+    suspend fun recordPeerActivity(
+        destinationHash: String,
+        activityType: String,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean =
+        try {
+            if (destinationHash.isBlank()) return false
+            peerActivityDao.recordActivity(destinationHash, receivedAt, activityType)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting peer activity for $destinationHash", e)
+            false
+        }
+
+    /** Persist a verified delivery proof received for one of our outgoing messages. */
+    suspend fun persistDeliveryProof(
+        messageHash: String,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean =
+        try {
+            val message = messageDao.getOutgoingMessageByIdAcrossIdentities(messageHash) ?: return false
+            peerActivityDao.recordActivityOnce(
+                eventId = "proof:$messageHash",
+                destinationHash = message.conversationHash,
+                receivedAt = receivedAt,
+                activityType = PeerActivityType.PROOF,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting delivery-proof activity for $messageHash", e)
+            false
+        }
+
+    /**
+     * Persist direct telemetry reception. Collector-stream entries are
+     * historical relays and must not impersonate their original authors.
+     */
+    suspend fun persistTelemetryActivity(
+        sourceHash: String,
+        eventId: String,
+        receivedAt: Long = System.currentTimeMillis(),
+        isDirect: Boolean,
+    ): Boolean =
+        try {
+            if (!isDirect || sourceHash.isBlank() || eventId.isBlank()) return false
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) return false
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) return false
+            peerActivityDao.recordActivityOnce(
+                eventId = "telemetry:$eventId",
+                destinationHash = sourceHash,
+                receivedAt = receivedAt,
+                activityType = PeerActivityType.TELEMETRY,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting telemetry activity for $sourceHash", e)
+            false
+        }
 
     /**
      * Check if an announce exists (for de-duplication in app process).

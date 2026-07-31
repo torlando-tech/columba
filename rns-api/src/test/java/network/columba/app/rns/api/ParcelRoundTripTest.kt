@@ -9,6 +9,7 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.Link
 import network.columba.app.rns.api.model.LinkEvent
 import network.columba.app.rns.api.model.LinkStatus
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.PeerIdentityEntry
@@ -297,6 +298,22 @@ class ParcelRoundTripTest {
         val original = AnnounceRestoreEntry("cafef00d", ByteArray(64) { (it * 2).toByte() })
         val restored = roundTripViaFramework(original)
         assertEquals(original, restored)
+    }
+
+    @Test
+    fun `LocationTelemetry preserves relayed provenance across parcel`() {
+        val original =
+            LocationTelemetry(
+                lat = 1.0,
+                lng = 2.0,
+                acc = 3f,
+                ts = 4L,
+                sourceHash = "peer",
+                isDirect = false,
+            )
+        val restored = roundTripViaFramework(original)
+        assertEquals(original, restored)
+        assertEquals(false, restored.isDirect)
     }
 
     // ==================== Helpers ====================

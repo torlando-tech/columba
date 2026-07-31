@@ -417,7 +417,7 @@ class ContactsScreenTest {
     }
 
     @Test
-    fun contactListItem_online_displaysOnlineStatus() {
+    fun contactListItem_onlineFlag_doesNotClaimLiveOnlineState() {
         val contact =
             TestFactories.createEnrichedContact(
                 TestFactories.EnrichedContactConfig(
@@ -434,11 +434,11 @@ class ContactsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Online").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Online").assertDoesNotExist()
     }
 
     @Test
-    fun contactListItem_online_displaysHops() {
+    fun contactListItem_onlineFlag_doesNotDisplayLiveRouteHops() {
         val contact =
             TestFactories.createEnrichedContact(
                 TestFactories.EnrichedContactConfig(
@@ -456,7 +456,29 @@ class ContactsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("3 hops", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 hops", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun contactListItem_relativeTimeUsesInjectedLifecycleClock() {
+        val contact =
+            TestFactories.createEnrichedContact(
+                TestFactories.EnrichedContactConfig(
+                    displayName = "Alice",
+                    lastSeenTimestamp = 60_000L,
+                ),
+            )
+
+        composeTestRule.setContent {
+            ContactListItem(
+                contact = contact,
+                nowMillis = 6 * 60_000L,
+                onClick = {},
+                onPinClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("5 minutes ago").assertIsDisplayed()
     }
 
     @Test

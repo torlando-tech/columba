@@ -382,6 +382,7 @@ class PythonEventBridge {
             ts = entry.optLong(1, 0L).takeIf { it > 0 }?.let { it * 1000L } ?: decoded.ts,
             sourceHash = entrySourceHex.lowercase(),
             appearance = parseTelemetryStreamAppearance(entry.opt(3)),
+            isDirect = false,
         )
     }
 

@@ -23,6 +23,7 @@ import network.columba.app.data.db.dao.InterfaceFirstSeenDao
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.OfflineMapRegionDao
+import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
@@ -109,7 +110,7 @@ object DatabaseModule {
                 context,
                 ColumbaDatabase::class.java,
                 DATABASE_NAME,
-            ).addMigrations(ColumbaDatabase.MIGRATION_1_2)
+            ).addMigrations(ColumbaDatabase.MIGRATION_1_2, ColumbaDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
@@ -127,6 +128,9 @@ object DatabaseModule {
 
     @Provides
     fun providePeerIdentityDao(database: ColumbaDatabase): PeerIdentityDao = database.peerIdentityDao()
+
+    @Provides
+    fun providePeerActivityDao(database: ColumbaDatabase): PeerActivityDao = database.peerActivityDao()
 
     @Provides
     fun providePeerIconDao(database: ColumbaDatabase): PeerIconDao = database.peerIconDao()

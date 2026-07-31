@@ -203,6 +203,7 @@ import network.columba.app.util.ImageUtils
 import network.columba.app.util.LocationPermissionManager
 import network.columba.app.util.MediaPermissionManager
 import network.columba.app.util.formatRelativeTime
+import network.columba.app.util.formatTimeSince
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
@@ -340,7 +341,8 @@ fun MessagingScreen(
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
-    val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
+    val peerActivity by viewModel.peerActivity.collectAsStateWithLifecycle()
+    val currentConversationHash by viewModel.currentConversationHash.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
@@ -850,45 +852,20 @@ fun MessagingScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // Online status indicator - combines link activity, delivery proofs, and announces
-                        val lastSeenFromAnnounce = announceInfo?.lastSeenTimestamp ?: 0L
-                        val lastActivityFromLink = conversationLinkState?.lastActivityTimestamp ?: 0L
-                        val hasActiveLink = conversationLinkState?.isActive == true
-                        val isEstablishing = conversationLinkState?.isEstablishing == true
-
-                        // A failed link probe is a STRONGER negative signal than
-                        // a recent announce is a positive one: it proves we just
-                        // actively tried to reach the peer and couldn't. The
-                        // announce only proved the peer existed at announce time;
-                        // failure proves the path is broken right now. Suppress
-                        // the optimistic "recent activity" indicator when a
-                        // recent failure is on record.
-                        //
-                        // ConversationLinkManager stamps lastActivityTimestamp
-                        // even on the failure path (line ~286), so the timestamp
-                        // alone can't distinguish success-recent from
-                        // failure-recent — `error != null` is the discriminator.
-                        val recentLinkFailure =
-                            conversationLinkState?.error != null &&
-                                lastActivityFromLink > 0 &&
-                                System.currentTimeMillis() - lastActivityFromLink < (5 * 60 * 1000L)
-
-                        // "Last successful activity" — drives the relative-time
-                        // display and the hasRecentActivity check. When the most
-                        // recent link state is an error, the link's
-                        // lastActivityTimestamp is a failure marker (not real
-                        // activity), so fall back to the announce timestamp.
-                        val lastSuccessfulActivity =
-                            if (conversationLinkState?.error == null) {
-                                maxOf(lastSeenFromAnnounce, lastActivityFromLink)
-                            } else {
-                                lastSeenFromAnnounce
-                            }
-                        val lastActivity = lastSuccessfulActivity
+                        // "Online" is live-link state. "Last seen" comes from
+                        // the durable, verified inbound-activity record and never
+                        // from an outgoing message or a failed probe.
+                        val lastActivity =
+                            peerActivity
+                                ?.takeIf { it.destinationHash.equals(destinationHash, ignoreCase = true) }
+                                ?.lastReceivedAt ?: 0L
+                        val linkMatchesConversation =
+                            currentConversationHash?.equals(destinationHash, ignoreCase = true) == true
+                        val hasActiveLink = linkMatchesConversation && conversationLinkState?.isActive == true
+                        val isEstablishing = linkMatchesConversation && conversationLinkState?.isEstablishing == true
                         val hasRecentActivity =
-                            !recentLinkFailure &&
-                                lastSuccessfulActivity > 0 &&
-                                System.currentTimeMillis() - lastSuccessfulActivity < (5 * 60 * 1000L)
+                            lastActivity > 0 &&
+                                timestampTick - lastActivity in 0 until (5 * 60 * 1000L)
 
                         // Debug logging
                         android.util.Log.d(
@@ -968,7 +945,7 @@ fun MessagingScreen(
                                     when {
                                         isEstablishing -> "Connecting..."
                                         hasActiveLink -> "Online"
-                                        lastActivity > 0 -> "Last seen ${formatRelativeTime(lastActivity).lowercase()}"
+                                        lastActivity > 0 -> "Last seen ${formatTimeSince(lastActivity, timestampTick)}"
                                         else -> ""
                                     }
                                 Text(

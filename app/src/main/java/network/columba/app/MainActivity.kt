@@ -63,7 +63,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
@@ -79,7 +78,13 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.di.RnsTelephonyEntryPoint
+import network.columba.app.navigation.AppDestination
 import network.columba.app.navigation.ConversationNavigation
+import network.columba.app.navigation.appComposable
+import network.columba.app.navigation.completeCurrentFlow
+import network.columba.app.navigation.navigateToAnsweredCall
+import network.columba.app.navigation.navigateToEntity
+import network.columba.app.navigation.navigateToIncomingCall
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -676,21 +681,21 @@ sealed class Screen(
     val title: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
 ) {
-    object Welcome : Screen("welcome", "Welcome", Icons.Default.Sensors)
+    object Welcome : Screen(AppDestination.WELCOME.routePattern, "Welcome", Icons.Default.Sensors)
 
-    object IdentityUnlock : Screen("identity_unlock", "Restore Identity", Icons.Default.Sensors)
+    object IdentityUnlock : Screen(AppDestination.IDENTITY_UNLOCK.routePattern, "Restore Identity", Icons.Default.Sensors)
 
-    object Chats : Screen("chats", "Chats", Icons.Default.Chat)
+    object Chats : Screen(AppDestination.CHATS.routePattern, "Chats", Icons.Default.Chat)
 
     object Announces : Screen("announce_stream", "Announces", Icons.Default.Sensors)
 
-    object Contacts : Screen("contacts", "Contacts", Icons.Default.People)
+    object Contacts : Screen(AppDestination.CONTACTS.routePattern, "Contacts", Icons.Default.People)
 
-    object Map : Screen("map", "Map", Icons.Default.Map)
+    object Map : Screen(AppDestination.MAP.routePattern, "Map", Icons.Default.Map)
 
-    object Identity : Screen("identity", "Network Status", Icons.Default.Info)
+    object Identity : Screen(AppDestination.IDENTITY.routePattern, "Network Status", Icons.Default.Info)
 
-    object Settings : Screen("settings", "Settings", Icons.Default.Settings)
+    object Settings : Screen(AppDestination.SETTINGS.routePattern, "Settings", Icons.Default.Settings)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -834,7 +839,11 @@ fun ColumbaNavigation(
                 when (navigation) {
                     is PendingNavigation.AnnounceDetail -> {
                         val encodedHash = Uri.encode(navigation.destinationHash)
-                        navController.navigate("announce_detail/$encodedHash")
+                        navController.navigateToEntity(
+                            destination = AppDestination.ANNOUNCE_DETAIL,
+                            route = "announce_detail/$encodedHash",
+                            identityArguments = mapOf("destinationHash" to navigation.destinationHash),
+                        )
                         Log.d("ColumbaNavigation", "Navigated to announce detail: ${navigation.destinationHash}")
                     }
                     is PendingNavigation.Conversation -> {
@@ -899,7 +908,11 @@ fun ColumbaNavigation(
                     is PendingNavigation.ImportIdentityFromText -> {
                         // Navigate to Identity Manager with pre-filled Base32 key
                         val encodedKey = Uri.encode(navigation.base32Text)
-                        navController.navigate("identity_manager?base32Key=$encodedKey")
+                        navController.navigateToEntity(
+                            destination = AppDestination.IDENTITY_MANAGER,
+                            route = "identity_manager?base32Key=$encodedKey",
+                            identityArguments = mapOf("base32Key" to navigation.base32Text),
+                        )
                         Log.d("ColumbaNavigation", "Navigated to identity import from shared text")
                     }
                     is PendingNavigation.SharedText -> {
@@ -937,7 +950,7 @@ fun ColumbaNavigation(
                     is PendingNavigation.IncomingCall -> {
                         // Navigate to incoming call screen
                         val encodedHash = Uri.encode(navigation.identityHash)
-                        navController.navigate("incoming_call/$encodedHash")
+                        navController.navigateToIncomingCall("incoming_call/$encodedHash")
                         Log.d("ColumbaNavigation", "Navigated to incoming call: ${navigation.identityHash.take(16)}...")
                     }
                     is PendingNavigation.AnswerCall -> {
@@ -948,9 +961,7 @@ fun ColumbaNavigation(
                         val route = "voice_call/$encodedHash?autoAnswer=true"
                         Log.w("ColumbaNavigation", "📞 AnswerCall handler - navigating to $route")
                         Log.w("ColumbaNavigation", "📞 Current backstack: ${navController.currentBackStackEntry?.destination?.route}")
-                        navController.navigate(route) {
-                            launchSingleTop = true
-                        }
+                        navController.navigateToAnsweredCall(route)
                         Log.w("ColumbaNavigation", "📞 After navigation, current: ${navController.currentBackStackEntry?.destination?.route}")
                     }
                     is PendingNavigation.InterfaceStats -> {
@@ -986,7 +997,11 @@ fun ColumbaNavigation(
                                     "&usbProductId=${navigation.productId}" +
                                     "&usbDeviceName=${Uri.encode(navigation.deviceName)}" +
                                     "&pyxisVersion=${Uri.encode(navigation.pyxisVersion ?: "")}"
-                            navController.navigate(route)
+                            navController.navigateToEntity(
+                                destination = AppDestination.USB_DEVICE_ACTION,
+                                route = route,
+                                identityArguments = mapOf("usbDeviceId" to navigation.usbDeviceId),
+                            )
                             Log.d("ColumbaNavigation", "Navigated to USB device action: ${navigation.usbDeviceId}")
                         } else {
                             Log.d("ColumbaNavigation", "Skipped detached USB device: ${navigation.usbDeviceId}")
@@ -1000,7 +1015,11 @@ fun ColumbaNavigation(
                                 "&usbVendorId=${navigation.vendorId}" +
                                 "&usbProductId=${navigation.productId}" +
                                 "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
-                        navController.navigate(route)
+                        navController.navigateToEntity(
+                            destination = AppDestination.RNODE_WIZARD,
+                            route = route,
+                            identityArguments = mapOf("usbDeviceId" to navigation.usbDeviceId),
+                        )
                         Log.d("ColumbaNavigation", "Navigated to RNode wizard with USB: ${navigation.usbDeviceId}")
                     }
                     is PendingNavigation.DirectFlash -> {
@@ -1011,12 +1030,24 @@ fun ColumbaNavigation(
                                 "&usbVendorId=${navigation.vendorId}" +
                                 "&usbProductId=${navigation.productId}" +
                                 "&usbDeviceName=${Uri.encode(navigation.deviceName)}"
-                        navController.navigate(route)
+                        navController.navigateToEntity(
+                            destination = AppDestination.RNODE_FLASHER,
+                            route = route,
+                            identityArguments = mapOf("usbDeviceId" to navigation.usbDeviceId),
+                        )
                         Log.d("ColumbaNavigation", "Navigated to flasher (direct): ${navigation.usbDeviceId}")
                     }
                     is PendingNavigation.NomadNetBrowser -> {
                         val encoded = Uri.encode(navigation.path)
-                        navController.navigate("nomadnet_browser/${navigation.nodeHash}?path=$encoded")
+                        navController.navigateToEntity(
+                            destination = AppDestination.NOMADNET_BROWSER,
+                            route = "nomadnet_browser/${navigation.nodeHash}?path=$encoded",
+                            identityArguments =
+                                mapOf(
+                                    "destinationHash" to navigation.nodeHash,
+                                    "path" to navigation.path,
+                                ),
+                        )
                         Log.d("ColumbaNavigation", "Navigated to NomadNet browser: ${navigation.nodeHash}")
                     }
                 }
@@ -1146,7 +1177,7 @@ fun ColumbaNavigation(
                     Log.i("MainActivity", "📞 Navigating to IncomingCallScreen: $identityHash")
                     // Dismiss the notification — the user is now looking at the call screen
                     CallNotificationHelper(context).cancelIncomingCallNotification()
-                    navController.navigate("incoming_call/$encodedHash")
+                    navController.navigateToIncomingCall("incoming_call/$encodedHash")
                 } else {
                     Log.i("MainActivity", "📞 Skipping navigation (onCallScreen=$isOnCallScreen, isAnsweringCall=$isAnsweringCall)")
                 }
@@ -1201,7 +1232,7 @@ fun ColumbaNavigation(
 
     // Double-back-to-exit state: first back press on a root tab shows a toast,
     // second press within 2 seconds finishes the activity.
-    // The BackHandler is placed inside each root tab's composable() so it takes
+    // The BackHandler is placed inside each root tab's appComposable() so it takes
     // priority over NavHost's internal back-stack popping between tabs.
     var backPressedOnce by remember(currentRoute) { mutableStateOf(false) }
 
@@ -1293,7 +1324,7 @@ fun ColumbaNavigation(
                             popEnterTransition = { fadeIn(tween(150)) },
                             popExitTransition = { fadeOut(tween(75)) },
                         ) {
-                            composable(Screen.Welcome.route) {
+                            appComposable(AppDestination.WELCOME) {
                                 OnboardingPagerScreen(
                                     onOnboardingComplete = { navigateToRNodeWizard ->
                                         navController.navigate(Screen.Chats.route) {
@@ -1310,7 +1341,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(Screen.IdentityUnlock.route) {
+                            appComposable(AppDestination.IDENTITY_UNLOCK) {
                                 network.columba.app.ui.screens.IdentityUnlockScreen(
                                     onResolved = {
                                         // ColumbaApplication bailed out of Reticulum init when
@@ -1327,7 +1358,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(Screen.Chats.route) {
+                            appComposable(AppDestination.CHATS) {
                                 DoubleBackToExitHandler(Screen.Chats.route)
                                 ChatsScreen(
                                     onChatClick = { destinationHash, peerName ->
@@ -1356,8 +1387,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route = "${Screen.Announces.route}?filterType={filterType}",
+                            appComposable(
+                                AppDestination.ANNOUNCES,
                                 arguments =
                                     listOf(
                                         navArgument("filterType") {
@@ -1382,7 +1413,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(Screen.Contacts.route) {
+                            appComposable(AppDestination.CONTACTS) {
                                 DoubleBackToExitHandler(Screen.Contacts.route)
                                 val contactsViewModel: ContactsViewModel = hiltViewModel()
                                 ContactsScreen(
@@ -1427,7 +1458,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(Screen.Map.route) {
+                            appComposable(AppDestination.MAP) {
                                 DoubleBackToExitHandler(Screen.Map.route)
                                 MapScreen(
                                     viewModel = mapViewModel,
@@ -1456,11 +1487,8 @@ fun ColumbaNavigation(
                             }
 
                             // Map with focus location (for discovered interfaces)
-                            composable(
-                                route =
-                                    "map_focus?lat={lat}&lon={lon}&label={label}&type={type}&height={height}" +
-                                        "&reachableOn={reachableOn}&port={port}&frequency={frequency}&bandwidth={bandwidth}" +
-                                        "&sf={sf}&cr={cr}&modulation={modulation}&status={status}&lastHeard={lastHeard}&hops={hops}",
+                            appComposable(
+                                AppDestination.MAP_FOCUS,
                                 arguments =
                                     listOf(
                                         navArgument("lat") {
@@ -1589,7 +1617,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(Screen.Identity.route) {
+                            appComposable(AppDestination.IDENTITY) {
                                 IdentityScreen(
                                     onBackClick = { navController.popBackStack() },
                                     settingsViewModel = settingsViewModel,
@@ -1605,7 +1633,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(Screen.Settings.route) {
+                            appComposable(AppDestination.SETTINGS) {
                                 DoubleBackToExitHandler(Screen.Settings.route)
                                 SettingsScreen(
                                     viewModel = settingsViewModel,
@@ -1665,14 +1693,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route =
-                                    "usb_device_action" +
-                                        "?usbDeviceId={usbDeviceId}" +
-                                        "&usbVendorId={usbVendorId}" +
-                                        "&usbProductId={usbProductId}" +
-                                        "&usbDeviceName={usbDeviceName}" +
-                                        "&pyxisVersion={pyxisVersion}",
+                            appComposable(
+                                AppDestination.USB_DEVICE_ACTION,
                                 arguments =
                                     listOf(
                                         navArgument("usbDeviceId") {
@@ -1780,8 +1802,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route = "pyxis_updater?packageUri={packageUri}&usbDeviceId={usbDeviceId}",
+                            appComposable(
+                                AppDestination.PYXIS_UPDATER,
                                 arguments =
                                     listOf(
                                         navArgument("packageUri") {
@@ -1803,11 +1825,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route =
-                                    "rnode_flasher?skipDetection={skipDetection}&tncConfigOnly={tncConfigOnly}" +
-                                        "&usbDeviceId={usbDeviceId}" +
-                                        "&usbVendorId={usbVendorId}&usbProductId={usbProductId}&usbDeviceName={usbDeviceName}",
+                            appComposable(
+                                AppDestination.RNODE_FLASHER,
                                 arguments =
                                     listOf(
                                         navArgument("skipDetection") {
@@ -1852,7 +1871,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("interface_management") {
+                            appComposable(AppDestination.INTERFACE_MANAGEMENT) {
                                 InterfaceManagementScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                     onNavigateToRNodeWizard = { interfaceId ->
@@ -1878,7 +1897,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("discovered_interfaces") {
+                            appComposable(AppDestination.DISCOVERED_INTERFACES) {
                                 DiscoveredInterfacesScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                     onNavigateToTcpClientWizard = { host, port, name, ifacNet, ifacKey ->
@@ -1921,10 +1940,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route =
-                                    "tcp_client_wizard?interfaceId={interfaceId}&host={host}&port={port}&name={name}" +
-                                        "&ifacNetname={ifacNetname}&ifacNetkey={ifacNetkey}",
+                            appComposable(
+                                AppDestination.TCP_CLIENT_WIZARD,
                                 arguments =
                                     listOf(
                                         navArgument("interfaceId") {
@@ -1962,9 +1979,7 @@ fun ColumbaNavigation(
                                 TcpClientWizardScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                     onComplete = {
-                                        navController.navigate("interface_management") {
-                                            popUpTo("interface_management") { inclusive = true }
-                                        }
+                                        navController.completeCurrentFlow(AppDestination.TCP_CLIENT_WIZARD)
                                     },
                                     interfaceId = if (interfaceId > 0) interfaceId else null,
                                     initialHost = host.ifEmpty { null },
@@ -1975,19 +1990,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route =
-                                    "rnode_wizard?interfaceId={interfaceId}" +
-                                        "&connectionType={connectionType}" +
-                                        "&transportMode={transportMode}" +
-                                        "&usbDeviceId={usbDeviceId}" +
-                                        "&usbVendorId={usbVendorId}" +
-                                        "&usbProductId={usbProductId}" +
-                                        "&usbDeviceName={usbDeviceName}" +
-                                        "&loraFrequency={loraFrequency}" +
-                                        "&loraBandwidth={loraBandwidth}" +
-                                        "&loraSf={loraSf}" +
-                                        "&loraCr={loraCr}",
+                            appComposable(
+                                AppDestination.RNODE_WIZARD,
                                 arguments =
                                     listOf(
                                         navArgument("interfaceId") {
@@ -2066,16 +2070,14 @@ fun ColumbaNavigation(
                                         if (transportMode) {
                                             navController.popBackStack()
                                         } else {
-                                            navController.navigate("interface_management") {
-                                                popUpTo("interface_management") { inclusive = true }
-                                            }
+                                            navController.completeCurrentFlow(AppDestination.RNODE_WIZARD)
                                         }
                                     },
                                 )
                             }
 
-                            composable(
-                                route = "interface_stats/{interfaceId}",
+                            appComposable(
+                                AppDestination.INTERFACE_STATS,
                                 arguments =
                                     listOf(
                                         navArgument("interfaceId") {
@@ -2098,19 +2100,19 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("notification_settings") {
+                            appComposable(AppDestination.NOTIFICATION_SETTINGS) {
                                 NotificationSettingsScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                 )
                             }
 
-                            composable("blocked_users") {
+                            appComposable(AppDestination.BLOCKED_USERS) {
                                 BlockedUsersScreen(
                                     onBackClick = { navController.popBackStack() },
                                 )
                             }
 
-                            composable("theme_management") {
+                            appComposable(AppDestination.THEME_MANAGEMENT) {
                                 ThemeManagementScreen(
                                     onBackClick = { navController.popBackStack() },
                                     onCreateTheme = {
@@ -2125,7 +2127,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("theme_editor") {
+                            appComposable(AppDestination.THEME_EDITOR_NEW) {
                                 ThemeEditorScreen(
                                     themeId = null,
                                     onBackClick = { navController.popBackStack() },
@@ -2133,8 +2135,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route = "theme_editor/{themeId}",
+                            appComposable(
+                                AppDestination.THEME_EDITOR_EXISTING,
                                 arguments =
                                     listOf(
                                         navArgument("themeId") { type = NavType.LongType },
@@ -2149,14 +2151,14 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("ble_connection_status") {
+                            appComposable(AppDestination.BLE_CONNECTION_STATUS) {
                                 BleConnectionStatusScreen(
                                     onBackClick = { navController.popBackStack() },
                                 )
                             }
 
-                            composable(
-                                "identity_manager?base32Key={base32Key}",
+                            appComposable(
+                                AppDestination.IDENTITY_MANAGER,
                                 arguments =
                                     listOf(
                                         navArgument("base32Key") {
@@ -2173,7 +2175,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("migration") {
+                            appComposable(AppDestination.MIGRATION) {
                                 MigrationScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                     onImportComplete = {
@@ -2186,13 +2188,13 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("apk_sharing") {
+                            appComposable(AppDestination.APK_SHARING) {
                                 ApkSharingScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                 )
                             }
 
-                            composable("my_identity") {
+                            appComposable(AppDestination.MY_IDENTITY) {
                                 MyIdentityScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                     settingsViewModel = settingsViewModel,
@@ -2202,7 +2204,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("network_status") {
+                            appComposable(AppDestination.NETWORK_STATUS) {
                                 IdentityScreen(
                                     onBackClick = { navController.popBackStack() },
                                     settingsViewModel = settingsViewModel,
@@ -2218,7 +2220,7 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable("qr_scanner") {
+                            appComposable(AppDestination.QR_SCANNER) {
                                 val contactsViewModel: ContactsViewModel = hiltViewModel()
                                 QrScannerScreen(
                                     onBackClick = { navController.popBackStack() },
@@ -2238,10 +2240,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route = "messaging/{destinationHash}/{peerName}" +
-                                    "?fromNotification={fromNotification}" +
-                                    "&notificationEventId={notificationEventId}",
+                            appComposable(
+                                AppDestination.MESSAGING,
                                 arguments =
                                     listOf(
                                         navArgument("destinationHash") { type = NavType.StringType },
@@ -2298,8 +2298,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route = "message_detail/{messageId}",
+                            appComposable(
+                                AppDestination.MESSAGE_DETAIL,
                                 arguments =
                                     listOf(
                                         navArgument("messageId") { type = NavType.StringType },
@@ -2313,8 +2313,8 @@ fun ColumbaNavigation(
                                 )
                             }
 
-                            composable(
-                                route = "announce_detail/{destinationHash}",
+                            appComposable(
+                                AppDestination.ANNOUNCE_DETAIL,
                                 arguments =
                                     listOf(
                                         navArgument("destinationHash") { type = NavType.StringType },
@@ -2326,7 +2326,11 @@ fun ColumbaNavigation(
                                     destinationHash = destinationHash,
                                     onBackClick = { navController.popBackStack() },
                                     onViewAnnounce = { hash ->
-                                        navController.navigate("announce_detail/${Uri.encode(hash)}")
+                                        navController.navigateToEntity(
+                                            destination = AppDestination.ANNOUNCE_DETAIL,
+                                            route = "announce_detail/${Uri.encode(hash)}",
+                                            identityArguments = mapOf("destinationHash" to hash),
+                                        )
                                     },
                                     onStartChat = { destHash, peerName ->
                                         // Navigate back to chats tab
@@ -2344,14 +2348,22 @@ fun ColumbaNavigation(
                                         navController.navigate("messaging/$encodedHash/$encodedName")
                                     },
                                     onBrowseNode = { destHash ->
-                                        navController.navigate("nomadnet_browser/$destHash")
+                                        navController.navigateToEntity(
+                                            destination = AppDestination.NOMADNET_BROWSER,
+                                            route = "nomadnet_browser/$destHash",
+                                            identityArguments =
+                                                mapOf(
+                                                    "destinationHash" to destHash,
+                                                    "path" to "/page/index.mu",
+                                                ),
+                                        )
                                     },
                                 )
                             }
 
                             // NomadNet Browser screen
-                            composable(
-                                route = "nomadnet_browser/{destinationHash}?path={path}",
+                            appComposable(
+                                AppDestination.NOMADNET_BROWSER,
                                 arguments =
                                     listOf(
                                         navArgument("destinationHash") { type = NavType.StringType },
@@ -2376,7 +2388,7 @@ fun ColumbaNavigation(
                             }
 
                             // Offline Maps management screen
-                            composable("offline_maps") {
+                            appComposable(AppDestination.OFFLINE_MAPS) {
                                 OfflineMapsScreen(
                                     onNavigateBack = { navController.popBackStack() },
                                     onNavigateToDownload = { navController.navigate("offline_map_download") },
@@ -2387,8 +2399,8 @@ fun ColumbaNavigation(
                             }
 
                             // Offline Map download wizard (with optional update parameter)
-                            composable(
-                                route = "offline_map_download?updateRegionId={updateRegionId}",
+                            appComposable(
+                                AppDestination.OFFLINE_MAP_DOWNLOAD,
                                 arguments =
                                     listOf(
                                         navArgument("updateRegionId") {
@@ -2400,14 +2412,16 @@ fun ColumbaNavigation(
                                 val updateRegionId = backStackEntry.arguments?.getLong("updateRegionId") ?: -1L
                                 OfflineMapDownloadScreen(
                                     onNavigateBack = { navController.popBackStack() },
-                                    onDownloadComplete = { navController.popBackStack() },
+                                    onDownloadComplete = {
+                                        navController.completeCurrentFlow(AppDestination.OFFLINE_MAP_DOWNLOAD)
+                                    },
                                     updateRegionId = if (updateRegionId > 0) updateRegionId else null,
                                 )
                             }
 
                             // Voice Call Screen (outgoing/active call)
-                            composable(
-                                route = "voice_call/{destinationHash}?autoAnswer={autoAnswer}&profileCode={profileCode}",
+                            appComposable(
+                                AppDestination.VOICE_CALL,
                                 arguments =
                                     listOf(
                                         navArgument("destinationHash") { type = NavType.StringType },
@@ -2435,8 +2449,8 @@ fun ColumbaNavigation(
                             }
 
                             // Incoming Call Screen
-                            composable(
-                                route = "incoming_call/{identityHash}",
+                            appComposable(
+                                AppDestination.INCOMING_CALL,
                                 arguments =
                                     listOf(
                                         navArgument("identityHash") { type = NavType.StringType },
@@ -2449,9 +2463,7 @@ fun ColumbaNavigation(
                                     onCallAnswered = {
                                         // Navigate to voice call screen when answered
                                         val encodedHash = Uri.encode(identityHash)
-                                        navController.navigate("voice_call/$encodedHash") {
-                                            popUpTo("incoming_call/$identityHash") { inclusive = true }
-                                        }
+                                        navController.navigateToAnsweredCall("voice_call/$encodedHash")
                                     },
                                     onCallDeclined = exitCallFlow,
                                 )

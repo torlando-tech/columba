@@ -111,6 +111,7 @@ fun RNodeWizardScreen(
     // Handle save success
     LaunchedEffect(state.saveSuccess) {
         if (state.saveSuccess) {
+            viewModel.consumeSaveSuccess()
             onComplete()
         }
     }

@@ -645,6 +645,11 @@ class RNodeWizardViewModel
             }
         }
 
+        /** Consumes the one-shot save completion before navigation removes this screen. */
+        fun consumeSaveSuccess() {
+            _state.update { it.copy(saveSuccess = false) }
+        }
+
         fun canProceed(): Boolean {
             val state = _state.value
             return when (state.currentStep) {

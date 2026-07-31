@@ -3,6 +3,7 @@ package network.columba.app.ui.screens.offlinemaps
 import android.Manifest
 import android.location.Location
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -94,6 +95,17 @@ fun OfflineMapDownloadScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showCancelDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val handleBack = {
+        when (state.step) {
+            DownloadWizardStep.DOWNLOADING -> showCancelDialog = true
+            DownloadWizardStep.LOCATION -> onNavigateBack()
+            DownloadWizardStep.RADIUS,
+            DownloadWizardStep.CONFIRM,
+            -> viewModel.previousStep()
+        }
+    }
+
+    BackHandler(onBack = handleBack)
 
     // Pre-fill wizard when updating an existing region
     LaunchedEffect(updateRegionId) {
@@ -147,15 +159,7 @@ fun OfflineMapDownloadScreen(
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = {
-                            if (state.step == DownloadWizardStep.DOWNLOADING) {
-                                showCancelDialog = true
-                            } else if (state.step == DownloadWizardStep.LOCATION) {
-                                onNavigateBack()
-                            } else {
-                                viewModel.previousStep()
-                            }
-                        },
+                        onClick = handleBack,
                     ) {
                         Icon(
                             imageVector =

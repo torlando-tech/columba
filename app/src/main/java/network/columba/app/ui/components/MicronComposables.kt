@@ -262,7 +262,7 @@ private fun MicronLineComposable(
                                 Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp),
-                            singleLine = true,
+                            singleLine = false,
                             visualTransformation =
                                 if (element.masked) {
                                     androidx.compose.ui.text.input

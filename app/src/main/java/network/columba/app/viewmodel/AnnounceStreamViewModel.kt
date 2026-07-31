@@ -36,6 +36,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
+internal fun matchesRecentInterfaceFilter(
+    announce: Announce,
+    selectedInterfaces: Set<InterfaceType>,
+): Boolean {
+    if (selectedInterfaces.isEmpty()) return true
+    val recentInterfaces =
+        announce.recentInterfaceTypes.ifEmpty {
+            setOf(InterfaceType.fromName(announce.receivingInterface))
+        }
+    return recentInterfaces.any(selectedInterfaces::contains)
+}
+
 @Suppress("TooManyFunctions") // ViewModels naturally have many public functions for UI interactions
 @HiltViewModel
 class AnnounceStreamViewModel
@@ -131,8 +143,10 @@ class AnnounceStreamViewModel
                         .getAnnouncesPaged(
                             nodeTypes = typeStrings,
                             searchQuery = query.trim(),
+                            interfaceTypes = selectedInterfaces.map { it.storageName },
                         ).map { pagingData ->
-                            // Apply in-memory filters for nodeType, audio aspect, and interface type
+                            // Interface filtering is handled in SQL so Paging can fill pages correctly.
+                            // Keep only the audio/node-type compatibility filter in memory.
                             pagingData.filter { announce ->
                                 // Filter by nodeType
                                 // (exclude PEER if user didn't select it and we only added it for audio)
@@ -143,14 +157,7 @@ class AnnounceStreamViewModel
                                 val matchesTypeOrAudio =
                                     (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
 
-                                // Filter by interface type (empty set = show all)
-                                val matchesInterface =
-                                    selectedInterfaces.isEmpty() ||
-                                        selectedInterfaces.contains(
-                                            InterfaceType.fromName(announce.receivingInterface),
-                                        )
-
-                                matchesTypeOrAudio && matchesInterface
+                                matchesTypeOrAudio
                             }
                         }
                 }
@@ -412,6 +419,9 @@ class AnnounceStreamViewModel
          * Observe a specific announce reactively
          */
         fun getAnnounceFlow(destinationHash: String): Flow<Announce?> = announceRepository.getAnnounceFlow(destinationHash)
+
+        fun getRecentInterfaceSightings(destinationHash: String) =
+            announceRepository.getRecentInterfaceSightings(destinationHash)
 
         /**
          * Observe contact status reactively

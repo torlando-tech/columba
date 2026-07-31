@@ -27,6 +27,8 @@ data class EnrichedAnnounce(
     val stampCostFlexibility: Int?,
     val peeringCost: Int?,
     val propagationTransferLimitKb: Int?,
+    /** Comma-separated canonical interface storage names seen in the last 30 days. */
+    val recentInterfaceTypes: String? = null,
     // Profile icon (from peer_icons table)
     val iconName: String? = null,
     val iconForegroundColor: String? = null,
@@ -60,6 +62,7 @@ data class EnrichedAnnounce(
         if (stampCostFlexibility != other.stampCostFlexibility) return false
         if (peeringCost != other.peeringCost) return false
         if (propagationTransferLimitKb != other.propagationTransferLimitKb) return false
+        if (recentInterfaceTypes != other.recentInterfaceTypes) return false
         if (iconName != other.iconName) return false
         if (iconForegroundColor != other.iconForegroundColor) return false
         if (iconBackgroundColor != other.iconBackgroundColor) return false
@@ -84,6 +87,7 @@ data class EnrichedAnnounce(
         result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
         result = 31 * result + (peeringCost?.hashCode() ?: 0)
         result = 31 * result + (propagationTransferLimitKb?.hashCode() ?: 0)
+        result = 31 * result + (recentInterfaceTypes?.hashCode() ?: 0)
         result = 31 * result + (iconName?.hashCode() ?: 0)
         result = 31 * result + (iconForegroundColor?.hashCode() ?: 0)
         result = 31 * result + (iconBackgroundColor?.hashCode() ?: 0)

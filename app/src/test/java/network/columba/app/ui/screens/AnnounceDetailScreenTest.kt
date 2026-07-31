@@ -6,7 +6,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
+import network.columba.app.data.repository.AnnounceInterfaceSighting
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.AnnounceStreamViewModel
 import io.mockk.every
@@ -46,6 +48,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
         every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
+        every { mockViewModel.getRecentInterfaceSightings(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -77,6 +80,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
         every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
+        every { mockViewModel.getRecentInterfaceSightings(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -104,6 +108,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
         every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
+        every { mockViewModel.getRecentInterfaceSightings(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -131,6 +136,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
         every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
+        every { mockViewModel.getRecentInterfaceSightings(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -157,6 +163,7 @@ class AnnounceDetailScreenTest {
         every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
         every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
         every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
+        every { mockViewModel.getRecentInterfaceSightings(any()) } returns MutableStateFlow(emptyList())
 
         composeTestRule.setContent {
             MaterialTheme {
@@ -171,6 +178,53 @@ class AnnounceDetailScreenTest {
         }
 
         composeTestRule.onNodeWithText("Transfer Size Limit").assertDoesNotExist()
+    }
+
+    @Test
+    fun `node details distinguishes current path from recent interfaces`() {
+        val mockViewModel = mockk<AnnounceStreamViewModel>()
+        val announce = createLxmfPeerAnnounce().copy(
+            receivingInterface = "TCPClientInterface[Backbone]",
+            receivingInterfaceType = "TCP_CLIENT",
+        )
+        val sightings =
+            listOf(
+                AnnounceInterfaceSighting(
+                    interfaceType = InterfaceType.TCP_CLIENT,
+                    receivingInterface = "TCPClientInterface[Backbone]",
+                    lastSeenTimestamp = System.currentTimeMillis(),
+                    hops = 1,
+                ),
+                AnnounceInterfaceSighting(
+                    interfaceType = InterfaceType.RNODE,
+                    receivingInterface = "RNodeInterface[Radio]",
+                    lastSeenTimestamp = System.currentTimeMillis() - 60_000,
+                    hops = 2,
+                ),
+            )
+
+        every { mockViewModel.getAnnounceFlow(any()) } returns MutableStateFlow(announce)
+        every { mockViewModel.isContactFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isMyRelayFlow(any()) } returns MutableStateFlow(false)
+        every { mockViewModel.isTransportEnabled } returns MutableStateFlow(false)
+        every { mockViewModel.getLinkedAnnouncesFlow(any()) } returns MutableStateFlow(emptyList())
+        every { mockViewModel.getRecentInterfaceSightings(any()) } returns MutableStateFlow(sightings)
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                AnnounceDetailScreen(
+                    destinationHash = "test_hash",
+                    onBackClick = {},
+                    onStartChat = { _, _ -> },
+                    onViewAnnounce = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Current Path").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Seen Via — Last 30 Days").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("RNode").performScrollTo().assertIsDisplayed()
     }
 
     // ========== Helper Functions ==========

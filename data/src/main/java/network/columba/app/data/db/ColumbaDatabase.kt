@@ -21,6 +21,7 @@ import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
 import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.db.entity.BlockedPeerEntity
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ConversationEntity
@@ -42,6 +43,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         ConversationEntity::class,
         MessageEntity::class,
         AnnounceEntity::class,
+        AnnounceInterfaceSightingEntity::class,
         PeerIdentityEntity::class,
         PeerIconEntity::class,
         ContactEntity::class,
@@ -56,7 +58,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PeerActivityEntity::class,
         PeerActivityEventEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -158,6 +160,85 @@ abstract class ColumbaDatabase : RoomDatabase() {
                             "AND receivedAt > 0 AND receivedAt <= $maxTrustedReceivedAt " +
                             "GROUP BY LOWER(conversationHash)",
                         "MESSAGE",
+                    )
+                }
+            }
+
+        /**
+         * v3 → v4: retain recent accepted-path history by interface type.
+         * Existing announces are backfilled with their current interface so
+         * stable filtering works immediately after upgrade.
+         */
+        val MIGRATION_3_4: Migration =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `announce_interface_sightings` (
+                            `destinationHash` TEXT NOT NULL,
+                            `interfaceType` TEXT NOT NULL,
+                            `receivingInterface` TEXT,
+                            `lastSeenTimestamp` INTEGER NOT NULL,
+                            `hops` INTEGER NOT NULL,
+                            PRIMARY KEY(`destinationHash`, `interfaceType`),
+                            FOREIGN KEY(`destinationHash`) REFERENCES `announces`(`destinationHash`)
+                                ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_announce_interface_sightings_destinationHash` " +
+                            "ON `announce_interface_sightings` (`destinationHash`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_announce_interface_sightings_interfaceType_lastSeenTimestamp` " +
+                            "ON `announce_interface_sightings` (`interfaceType`, `lastSeenTimestamp`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_announce_interface_sightings_lastSeenTimestamp` " +
+                            "ON `announce_interface_sightings` (`lastSeenTimestamp`)",
+                    )
+                    db.execSQL(
+                        """
+                        INSERT OR REPLACE INTO announce_interface_sightings
+                            (destinationHash, interfaceType, receivingInterface, lastSeenTimestamp, hops)
+                        SELECT
+                            destinationHash,
+                            CASE
+                                WHEN receivingInterfaceType IN ('AUTO', 'AUTO_INTERFACE') THEN 'AUTO'
+                                WHEN receivingInterfaceType = 'TCP_CLIENT' THEN 'TCP_CLIENT'
+                                WHEN receivingInterfaceType = 'TCP_SERVER' THEN 'TCP_SERVER'
+                                WHEN receivingInterfaceType IN ('BLE', 'ANDROID_BLE') THEN 'BLE'
+                                WHEN receivingInterfaceType = 'RNODE' THEN 'RNODE'
+                                WHEN receivingInterfaceType = 'SHARED_INSTANCE' THEN 'SHARED_INSTANCE'
+                                WHEN lower(receivingInterface) LIKE '%autointerface%' OR
+                                     lower(receivingInterface) LIKE '%auto discovery%' THEN 'AUTO'
+                                WHEN lower(receivingInterface) LIKE '%rnode%' OR
+                                     lower(receivingInterface) LIKE '%kiss%' OR
+                                     lower(receivingInterface) LIKE '%lora%' OR
+                                     lower(receivingInterface) LIKE '%weave%' THEN 'RNODE'
+                                WHEN lower(receivingInterface) LIKE '%tcpserver%' THEN 'TCP_SERVER'
+                                WHEN lower(receivingInterface) LIKE '%tcpclient%' OR
+                                     lower(receivingInterface) LIKE '%tcpinterface%' OR
+                                     lower(receivingInterface) LIKE '%backbone%' THEN 'TCP_CLIENT'
+                                WHEN lower(receivingInterface) LIKE '%androidble%' OR
+                                     lower(receivingInterface) LIKE '%ble%' OR
+                                     lower(receivingInterface) LIKE '%bluetooth%' THEN 'BLE'
+                                WHEN lower(receivingInterface) LIKE '%shared instance%' THEN 'SHARED_INSTANCE'
+                                ELSE 'UNKNOWN'
+                            END,
+                            receivingInterface,
+                            lastSeenTimestamp,
+                            hops
+                        FROM announces
+                        """.trimIndent(),
+                    )
+                    // Persist the same canonical value on the parent so current-path
+                    // fallback remains filterable after the 30-day sighting expires.
+                    db.execSQL(
+                        "UPDATE announces SET receivingInterfaceType = (" +
+                            "SELECT interfaceType FROM announce_interface_sightings sighting " +
+                            "WHERE sighting.destinationHash = announces.destinationHash)",
                     )
                 }
             }

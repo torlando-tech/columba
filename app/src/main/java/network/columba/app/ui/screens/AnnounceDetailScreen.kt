@@ -84,6 +84,11 @@ fun AnnounceDetailScreen(
 
     // Observe specific announce reactively (not search in list)
     val announce by viewModel.getAnnounceFlow(destinationHash).collectAsState(initial = null)
+    val interfaceSightingsFlow =
+        remember(destinationHash, viewModel) {
+            viewModel.getRecentInterfaceSightings(destinationHash)
+        }
+    val interfaceSightings by interfaceSightingsFlow.collectAsState(initial = emptyList())
 
     // Separately observe contact status for star button
     val isContact by viewModel.isContactFlow(destinationHash).collectAsState(initial = false)
@@ -446,18 +451,47 @@ fun AnnounceDetailScreen(
                     )
                 }
 
-                // Show interface information if available
+                // Show the current Reticulum-selected path separately from
+                // the stable 30-day interface history used by list filters.
                 // The Python layer now provides the full interface name including user-configured names
                 // (e.g., "TCPInterface[Sideband Server/192.168.1.100:4965]")
                 // getInterfaceInfo() extracts the friendly name from this string
-                announceNonNull.receivingInterface?.let { interfaceName ->
+                val currentInterfaceName =
+                    announceNonNull.receivingInterface ?: announceNonNull.receivingInterfaceType
+                currentInterfaceName?.let { interfaceName ->
                     val interfaceInfo = getInterfaceInfo(interfaceName)
                     InfoCard(
                         icon = interfaceInfo.icon,
-                        title = "Received Via",
+                        title = "Current Path",
                         content = interfaceInfo.text,
-                        subtitle = interfaceInfo.subtitle,
+                        subtitle = "${interfaceInfo.subtitle} — latest Reticulum-selected route",
                     )
+                }
+
+                if (interfaceSightings.isNotEmpty()) {
+                    Text(
+                        text = "Seen Via — Last 30 Days",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = "Interfaces Reticulum selected for this destination",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    interfaceSightings.forEach { sighting ->
+                        val rawInterface = sighting.receivingInterface ?: sighting.interfaceType.storageName
+                        val interfaceInfo = getInterfaceInfo(rawInterface)
+                        InfoCard(
+                            icon = interfaceInfo.icon,
+                            title = sighting.interfaceType.displayLabel,
+                            content = interfaceInfo.text,
+                            subtitle =
+                                "${formatTimeSince(sighting.lastSeenTimestamp)} — " +
+                                    "${sighting.hops} ${if (sighting.hops == 1) "hop" else "hops"}",
+                        )
+                    }
                 }
 
                 // Show aspect information

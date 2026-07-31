@@ -5,8 +5,12 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Upsert
 import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.model.EnrichedAnnounce
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.model.MapAnnounceLookup
 import kotlinx.coroutines.flow.Flow
 
@@ -15,11 +19,82 @@ import kotlinx.coroutines.flow.Flow
 interface AnnounceDao {
     /**
      * Insert or update an announce. If the destinationHash already exists,
-     * the entire row is replaced (updating the timestamp and other fields).
+     * the row is updated in place (updating the timestamp and other fields).
      * This implements the "move to top" behavior when a peer re-announces.
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAnnounce(announce: AnnounceEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertInterfaceSighting(sighting: AnnounceInterfaceSightingEntity): Long
+
+    @Query(
+        """
+        UPDATE announce_interface_sightings
+        SET receivingInterface = :receivingInterface,
+            lastSeenTimestamp = :lastSeenTimestamp,
+            hops = :hops
+        WHERE destinationHash = :destinationHash
+          AND interfaceType = :interfaceType
+          AND lastSeenTimestamp < :lastSeenTimestamp
+        """,
+    )
+    suspend fun updateInterfaceSightingIfNewer(
+        destinationHash: String,
+        interfaceType: String,
+        receivingInterface: String?,
+        lastSeenTimestamp: Long,
+        hops: Int,
+    ): Int
+
+    /** Equal or older observations retain the existing newest metadata. */
+    @Transaction
+    suspend fun upsertInterfaceSighting(sighting: AnnounceInterfaceSightingEntity) {
+        val inserted = insertInterfaceSighting(sighting)
+        if (inserted == -1L) {
+            updateInterfaceSightingIfNewer(
+                destinationHash = sighting.destinationHash,
+                interfaceType = sighting.interfaceType,
+                receivingInterface = sighting.receivingInterface,
+                lastSeenTimestamp = sighting.lastSeenTimestamp,
+                hops = sighting.hops,
+            )
+        }
+    }
+
+    /** Atomically update the current announce and its accepted-path history. */
+    @Transaction
+    suspend fun upsertAnnounceWithSighting(
+        announce: AnnounceEntity,
+        sighting: AnnounceInterfaceSightingEntity,
+    ) {
+        val existing = getAnnounce(announce.destinationHash)
+        if (existing == null || announce.lastSeenTimestamp > existing.lastSeenTimestamp) {
+            upsertAnnounce(
+                announce.copy(
+                    isFavorite = existing?.isFavorite ?: announce.isFavorite,
+                    favoritedTimestamp = existing?.favoritedTimestamp ?: announce.favoritedTimestamp,
+                ),
+            )
+        }
+        upsertInterfaceSighting(sighting)
+    }
+
+    @Query(
+        """
+        SELECT * FROM announce_interface_sightings
+        WHERE destinationHash = :destinationHash
+        AND lastSeenTimestamp >= :cutoffTime
+        ORDER BY lastSeenTimestamp DESC
+        """,
+    )
+    fun getRecentInterfaceSightings(
+        destinationHash: String,
+        cutoffTime: Long,
+    ): Flow<List<AnnounceInterfaceSightingEntity>>
+
+    @Query("DELETE FROM announce_interface_sightings WHERE lastSeenTimestamp < :cutoffTime")
+    suspend fun deleteStaleInterfaceSightings(cutoffTime: Long): Int
 
     /**
      * Get all announces, sorted by most recently seen (descending).
@@ -48,11 +123,36 @@ interface AnnounceDao {
         offset: Int,
     ): List<AnnounceEntity>
 
+    @Upsert
+    suspend fun upsertAnnounceRows(announces: List<AnnounceEntity>)
+
     /**
-     * Insert multiple announces at once (for import).
+     * Insert multiple announces for import and seed their current interfaces
+     * as sightings. Updating in place avoids REPLACE cascading away history.
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAnnounces(announces: List<AnnounceEntity>)
+    @Transaction
+    suspend fun insertAnnounces(announces: List<AnnounceEntity>) {
+        val canonicalizedAnnounces =
+            announces.map { announce ->
+                val declaredInterfaceType = InterfaceType.fromName(announce.receivingInterfaceType)
+                val interfaceType =
+                    declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
+                        ?: InterfaceType.fromName(announce.receivingInterface)
+                announce.copy(receivingInterfaceType = interfaceType.storageName)
+            }
+        upsertAnnounceRows(canonicalizedAnnounces)
+        canonicalizedAnnounces.forEach { announce ->
+            upsertInterfaceSighting(
+                AnnounceInterfaceSightingEntity(
+                    destinationHash = announce.destinationHash,
+                    interfaceType = requireNotNull(announce.receivingInterfaceType),
+                    receivingInterface = announce.receivingInterface,
+                    lastSeenTimestamp = announce.lastSeenTimestamp,
+                    hops = announce.hops,
+                ),
+            )
+        }
+    }
 
     /**
      * Search announces by peer name or destination hash.
@@ -291,6 +391,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -346,6 +452,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -379,6 +491,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -413,6 +531,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -446,6 +570,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -480,6 +610,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -512,6 +648,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -553,16 +695,35 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
         FROM announces a
         LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
         WHERE (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
-        ORDER BY a.lastSeenTimestamp DESC
+        AND (
+            :interfaceTypeCount = 0 OR
+            a.receivingInterfaceType IN (:interfaceTypes) OR EXISTS (
+                SELECT 1 FROM announce_interface_sightings filter_sighting
+                WHERE filter_sighting.destinationHash = a.destinationHash
+                AND filter_sighting.interfaceType IN (:interfaceTypes)
+                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+            )
+        )
+        ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
         """,
     )
-    fun getEnrichedAnnouncesPaged(): PagingSource<Int, EnrichedAnnounce>
+    fun getEnrichedAnnouncesPaged(
+        interfaceTypes: List<String>,
+        interfaceTypeCount: Int,
+        interfaceCutoff: Long,
+    ): PagingSource<Int, EnrichedAnnounce>
 
     /**
      * Get announces filtered by node types with icon data and pagination support.
@@ -586,6 +747,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -593,10 +760,24 @@ interface AnnounceDao {
         LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
         WHERE a.nodeType IN (:nodeTypes)
         AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
-        ORDER BY a.lastSeenTimestamp DESC
+        AND (
+            :interfaceTypeCount = 0 OR
+            a.receivingInterfaceType IN (:interfaceTypes) OR EXISTS (
+                SELECT 1 FROM announce_interface_sightings filter_sighting
+                WHERE filter_sighting.destinationHash = a.destinationHash
+                AND filter_sighting.interfaceType IN (:interfaceTypes)
+                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+            )
+        )
+        ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
         """,
     )
-    fun getEnrichedAnnouncesByTypesPaged(nodeTypes: List<String>): PagingSource<Int, EnrichedAnnounce>
+    fun getEnrichedAnnouncesByTypesPaged(
+        nodeTypes: List<String>,
+        interfaceTypes: List<String>,
+        interfaceTypeCount: Int,
+        interfaceCutoff: Long,
+    ): PagingSource<Int, EnrichedAnnounce>
 
     /**
      * Search announces with icon data and pagination support.
@@ -620,6 +801,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -627,10 +814,24 @@ interface AnnounceDao {
         LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
         WHERE (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
         AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
-        ORDER BY a.lastSeenTimestamp DESC
+        AND (
+            :interfaceTypeCount = 0 OR
+            a.receivingInterfaceType IN (:interfaceTypes) OR EXISTS (
+                SELECT 1 FROM announce_interface_sightings filter_sighting
+                WHERE filter_sighting.destinationHash = a.destinationHash
+                AND filter_sighting.interfaceType IN (:interfaceTypes)
+                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+            )
+        )
+        ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
         """,
     )
-    fun searchEnrichedAnnouncesPaged(query: String): PagingSource<Int, EnrichedAnnounce>
+    fun searchEnrichedAnnouncesPaged(
+        query: String,
+        interfaceTypes: List<String>,
+        interfaceTypeCount: Int,
+        interfaceCutoff: Long,
+    ): PagingSource<Int, EnrichedAnnounce>
 
     /**
      * Get announces filtered by node types AND search query with icon data and pagination.
@@ -654,6 +855,12 @@ interface AnnounceDao {
             a.stampCostFlexibility,
             a.peeringCost,
             a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
             pi.iconName as iconName,
             pi.foregroundColor as iconForegroundColor,
             pi.backgroundColor as iconBackgroundColor
@@ -662,12 +869,24 @@ interface AnnounceDao {
         WHERE a.nodeType IN (:nodeTypes)
         AND (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
         AND (a.nodeType != 'PROPAGATION_NODE' OR a.stampCostFlexibility IS NOT NULL)
-        ORDER BY a.lastSeenTimestamp DESC
+        AND (
+            :interfaceTypeCount = 0 OR
+            a.receivingInterfaceType IN (:interfaceTypes) OR EXISTS (
+                SELECT 1 FROM announce_interface_sightings filter_sighting
+                WHERE filter_sighting.destinationHash = a.destinationHash
+                AND filter_sighting.interfaceType IN (:interfaceTypes)
+                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+            )
+        )
+        ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
         """,
     )
     fun getEnrichedAnnouncesByTypesAndSearchPaged(
         nodeTypes: List<String>,
         query: String,
+        interfaceTypes: List<String>,
+        interfaceTypeCount: Int,
+        interfaceCutoff: Long,
     ): PagingSource<Int, EnrichedAnnounce>
 
     // Paging3 methods for infinite scroll

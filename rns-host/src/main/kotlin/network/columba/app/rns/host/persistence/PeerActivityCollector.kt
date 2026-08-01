@@ -141,10 +141,6 @@ internal class PeerActivityCollector(
             peeringCost = announce.peeringCost,
             propagationTransferLimitKb = null,
         )
-        val identityHash = announce.identity.hash.toHex()
-        if (identityHash.isNotEmpty()) {
-            persistence.persistPeerIdentity(identityHash, publicKey)
-        }
     }
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }

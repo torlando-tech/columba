@@ -3,6 +3,7 @@ package network.columba.app.rns.host.persistence
 import android.content.Context
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.dao.AnnounceDao
+import network.columba.app.data.db.dao.BlockedPeerDao
 import network.columba.app.data.db.dao.ContactDao
 import network.columba.app.data.db.dao.ConversationDao
 import network.columba.app.data.db.dao.LocalIdentityDao
@@ -14,6 +15,7 @@ import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.util.HashUtils
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -47,6 +49,7 @@ class ServicePersistenceManagerTest {
     private lateinit var testScope: TestScope
     private lateinit var database: ColumbaDatabase
     private lateinit var announceDao: AnnounceDao
+    private lateinit var blockedPeerDao: BlockedPeerDao
     private lateinit var contactDao: ContactDao
     private lateinit var messageDao: MessageDao
     private lateinit var conversationDao: ConversationDao
@@ -69,6 +72,7 @@ class ServicePersistenceManagerTest {
         testScope = TestScope(UnconfinedTestDispatcher())
         database = mockk()
         announceDao = mockk()
+        blockedPeerDao = mockk()
         contactDao = mockk()
         messageDao = mockk()
         conversationDao = mockk()
@@ -80,6 +84,7 @@ class ServicePersistenceManagerTest {
 
         // Mock database DAOs
         every { database.announceDao() } returns announceDao
+        every { database.blockedPeerDao() } returns blockedPeerDao
         every { database.contactDao() } returns contactDao
         every { database.messageDao() } returns messageDao
         every { database.conversationDao() } returns conversationDao
@@ -88,6 +93,8 @@ class ServicePersistenceManagerTest {
         every { database.peerActivityDao() } returns peerActivityDao
         every { database.peerIconDao() } returns peerIconDao
         coEvery { peerActivityDao.recordActivity(any(), any(), any()) } just Runs
+        coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
+        coEvery { localIdentityDao.getActiveIdentitySync() } returns null
 
         // Mock ServiceDatabaseProvider singleton
         mockkObject(ServiceDatabaseProvider)
@@ -231,6 +238,14 @@ class ServicePersistenceManagerTest {
                     any(),
                 )
             }
+            coVerify {
+                peerIdentityDao.insertPeerIdentity(
+                    match { identity ->
+                        identity.peerHash == HashUtils.computeIdentityHash(testPublicKey) &&
+                            identity.publicKey.contentEquals(testPublicKey)
+                    },
+                )
+            }
         }
 
     @Test
@@ -263,6 +278,90 @@ class ServicePersistenceManagerTest {
 
             // Verify exception was handled (no crash)
             assertTrue("persistAnnounce should handle exception gracefully", result.isSuccess)
+        }
+
+    @Test
+    fun `persistAnnounce preserves valid name and propagation limit when omitted`() =
+        runTest {
+            val existing =
+                AnnounceEntity(
+                    destinationHash = testDestinationHash,
+                    peerName = "Known Peer",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = 100L,
+                    nodeType = "PROPAGATION_NODE",
+                    receivingInterface = "BLE",
+                    propagationTransferLimitKb = 512,
+                )
+            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existing
+            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
+
+            val persisted =
+                persistenceManager.persistAnnounce(
+                    destinationHash = testDestinationHash,
+                    peerName = "Peer 01020304",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 2,
+                    timestamp = 200L,
+                    nodeType = "PROPAGATION_NODE",
+                    receivingInterface = "BLE",
+                    receivingInterfaceType = "BLE",
+                    aspect = "lxmf.propagation",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                )
+
+            assertTrue(persisted)
+            coVerify {
+                announceDao.upsertAnnounceWithSighting(
+                    match { it.peerName == "Known Peer" && it.propagationTransferLimitKb == 512 },
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    fun `persistAnnounce rejects peers blocked for the active identity`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "local_destination",
+                    filePath = "/test/path",
+                    createdTimestamp = 1L,
+                    lastUsedTimestamp = 1L,
+                    isActive = true,
+                )
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { blockedPeerDao.isBlocked(testDestinationHash, testIdentityHash) } returns true
+
+            val persisted =
+                persistenceManager.persistAnnounce(
+                    destinationHash = testDestinationHash,
+                    peerName = "Blocked Peer",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    timestamp = 200L,
+                    nodeType = "PEER",
+                    receivingInterface = "BLE",
+                    receivingInterfaceType = "BLE",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                )
+
+            assertFalse(persisted)
+            coVerify(exactly = 0) { announceDao.upsertAnnounceWithSighting(any(), any()) }
+            coVerify(exactly = 0) { peerIdentityDao.insertPeerIdentity(any()) }
         }
 
     // ========== persistPeerIdentity() Tests ==========

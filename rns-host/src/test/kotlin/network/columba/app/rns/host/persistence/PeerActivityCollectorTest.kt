@@ -1,12 +1,9 @@
 package network.columba.app.rns.host.persistence
 
-import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -62,12 +59,11 @@ class PeerActivityCollectorTest {
         coEvery { persistence.persistReactionActivity(any(), any(), any()) } returns true
         coEvery { persistence.persistDeliveryProof(any(), any()) } returns true
         coEvery { persistence.persistTelemetryActivity(any(), any(), any(), any()) } returns true
-        every {
+        coEvery {
             persistence.persistAnnounce(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
             )
-        } just Runs
-        every { persistence.persistPeerIdentity(any(), any()) } just Runs
+        } returns true
 
         val collector = PeerActivityCollector(backend, persistence) { 500L }
         val firstJob = collector.start(this)
@@ -79,7 +75,7 @@ class PeerActivityCollectorTest {
         messages.emit(ReceivedMessage("message", "hello", source, ByteArray(16), Long.MAX_VALUE))
         val announcePublicKey = ByteArray(32) { (it + 1).toByte() }
         val announceIdentityHash = ByteArray(16) { (it + 32).toByte() }
-        announces.emit(iosDeliveryAnnounce(source, announceIdentityHash, announcePublicKey))
+        announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, announcePublicKey))
         statuses.emit(DeliveryStatusUpdate("delivered", "delivered", Long.MAX_VALUE))
         statuses.emit(DeliveryStatusUpdate("failed", "failed", Long.MAX_VALUE))
         statuses.emit(DeliveryStatusUpdate("propagated", "propagated", Long.MAX_VALUE))
@@ -95,7 +91,7 @@ class PeerActivityCollectorTest {
         links.emit(LinkEvent.Closed(link, "closed"))
         runCurrent()
 
-        verifyInboundPersistence(persistence, source, announceIdentityHash, announcePublicKey)
+        verifyInboundPersistence(persistence, source, announcePublicKey)
 
         firstJob.cancel()
         runCurrent()
@@ -105,7 +101,7 @@ class PeerActivityCollectorTest {
         advanceUntilIdle()
     }
 
-    private fun iosDeliveryAnnounce(
+    private fun lxmfDeliveryAnnounce(
         destinationHash: ByteArray,
         identityHash: ByteArray,
         publicKey: ByteArray,
@@ -119,7 +115,7 @@ class PeerActivityCollectorTest {
         appData =
             byteArrayOf(0x93.toByte(), 0xc4.toByte(), 0x08.toByte()) +
                 "iOS Name".encodeToByteArray() +
-                byteArrayOf(0xc0.toByte(), 0x91.toByte(), 0x01.toByte()),
+                byteArrayOf(0xc0.toByte(), 0x91.toByte(), 0x00.toByte()),
         hops = 1,
         timestamp = Long.MAX_VALUE,
         nodeType = NodeType.PEER,
@@ -131,15 +127,13 @@ class PeerActivityCollectorTest {
     private fun verifyInboundPersistence(
         persistence: ServicePersistenceManager,
         source: ByteArray,
-        announceIdentityHash: ByteArray,
         announcePublicKey: ByteArray,
     ) {
         val sourceHex = source.joinToString("") { "%02x".format(it) }
-        val identityHex = announceIdentityHash.joinToString("") { "%02x".format(it) }
         coVerify(exactly = 1) {
             persistence.persistIncomingMessageActivity("message", sourceHex, null, 500L)
         }
-        verify(exactly = 1) {
+        coVerify(exactly = 1) {
             persistence.persistAnnounce(
                 destinationHash = sourceHex,
                 peerName = "iOS Name",
@@ -157,7 +151,6 @@ class PeerActivityCollectorTest {
                 propagationTransferLimitKb = null,
             )
         }
-        verify(exactly = 1) { persistence.persistPeerIdentity(identityHex, announcePublicKey) }
         coVerify(exactly = 1) { persistence.persistDeliveryProof("delivered", 500L) }
         coVerify(exactly = 0) { persistence.persistDeliveryProof("failed", any()) }
         coVerify(exactly = 0) { persistence.persistDeliveryProof("propagated", any()) }

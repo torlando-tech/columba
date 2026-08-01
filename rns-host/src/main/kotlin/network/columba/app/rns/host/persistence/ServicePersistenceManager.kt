@@ -97,12 +97,13 @@ class ServicePersistenceManager(
 
     /**
      * Persist an announce to the database.
-     * Called from EventHandler.handleAnnounceEvent() in the service process.
+     * Called from PeerActivityCollector in the service process. This suspends
+     * until the announce, activity, and derived peer identity are persisted.
      *
      * This preserves existing favorite status and icon appearance.
      */
     @Suppress("LongParameterList") // Parameters mirror AnnounceEntity fields for direct persistence
-    fun persistAnnounce(
+    suspend fun persistAnnounce(
         destinationHash: String,
         peerName: String,
         publicKey: ByteArray,
@@ -117,22 +118,31 @@ class ServicePersistenceManager(
         stampCostFlexibility: Int?,
         peeringCost: Int?,
         propagationTransferLimitKb: Int?,
-    ) {
-        scope.launch {
-            try {
-                // Preserve favorite status if announce already exists
-                // Note: Icons are stored separately in peer_icons table (from LXMF messages)
-                val normalizedHash = destinationHash.lowercase()
+    ): Boolean =
+        try {
+            val normalizedHash = destinationHash.lowercase()
+            val activeIdentity = localIdentityDao.getActiveIdentitySync()
+            if (activeIdentity != null && isBlockedPeer(normalizedHash, activeIdentity.identityHash)) {
+                Log.d(TAG, "Ignoring announce from blocked peer: ${normalizedHash.take(16)}")
+                false
+            } else {
+                // Preserve favorite status and richer metadata if a later announce
+                // omits fields which were previously learned.
                 val existing = announceDao.getAnnounce(normalizedHash)
+                val persistedName =
+                    peerName.takeIf(PeerNameResolver::isValidPeerName)
+                        ?: existing?.peerName?.takeIf(PeerNameResolver::isValidPeerName)
+                        ?: PeerNameResolver.formatHashAsFallback(normalizedHash)
                 val declaredInterfaceType = InterfaceType.fromName(receivingInterfaceType)
                 val canonicalInterfaceType =
                     declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
                         ?: InterfaceType.fromName(receivingInterface)
+                val identityHash = HashUtils.computeIdentityHash(publicKey)
 
                 val entity =
                     AnnounceEntity(
                         destinationHash = normalizedHash,
-                        peerName = peerName,
+                        peerName = persistedName,
                         publicKey = publicKey,
                         appData = appData,
                         hops = hops,
@@ -146,8 +156,9 @@ class ServicePersistenceManager(
                         stampCost = stampCost,
                         stampCostFlexibility = stampCostFlexibility,
                         peeringCost = peeringCost,
-                        propagationTransferLimitKb = propagationTransferLimitKb,
-                        computedIdentityHash = HashUtils.computeIdentityHash(publicKey),
+                        propagationTransferLimitKb =
+                            propagationTransferLimitKb ?: existing?.propagationTransferLimitKb,
+                        computedIdentityHash = identityHash,
                     )
                 val sighting =
                     AnnounceInterfaceSightingEntity(
@@ -164,12 +175,20 @@ class ServicePersistenceManager(
                     receivedAt = timestamp,
                     activityType = PeerActivityType.ANNOUNCE,
                 )
-                Log.d(TAG, "Service persisted announce: ${destinationHash.take(16)}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
+                peerIdentityDao.insertPeerIdentity(
+                    PeerIdentityEntity(
+                        peerHash = identityHash,
+                        publicKey = publicKey,
+                        lastSeenTimestamp = timestamp,
+                    ),
+                )
+                Log.d(TAG, "Service persisted announce: ${normalizedHash.take(16)}")
+                true
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
+            false
         }
-    }
 
     /**
      * Persist a peer's public key to the database.

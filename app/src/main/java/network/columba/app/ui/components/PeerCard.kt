@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -92,7 +94,7 @@ fun PeerCard(
                     Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .padding(end = 32.dp),
+                        .padding(end = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 // Profile icon (with identicon fallback)
@@ -208,15 +210,51 @@ fun PeerCard(
                         isStarred = announce.isFavorite || !showFavoriteToggle,
                         onClick = onFavoriteClick,
                     )
-                    // Read the RAW `receivingInterface` here (not the cached
-                    // `receivingInterfaceType` column) so any classifier
-                    // improvement applies retroactively to existing rows
-                    // — the cache is set ONCE at announce-save time, so a
-                    // bug fix to `InterfaceType.fromName` would otherwise
-                    // only land for new announces. The icon has been the
-                    // recurring casualty of classifier-cache drift.
-                    InterfaceTypeIcon(interfaceType = announce.receivingInterface)
+                    // Prefer the raw receiving interface so classifier fixes apply
+                    // retroactively; fall back to the canonical cached type when
+                    // a backend does not provide a raw interface name.
+                    InterfaceHistoryIndicator(announce = announce)
                 }
+            }
+        }
+    }
+}
+
+/** Current Reticulum path icon plus a compact count of other recent path types. */
+@Composable
+private fun InterfaceHistoryIndicator(announce: Announce) {
+    val rawCurrentType = InterfaceType.fromName(announce.receivingInterface)
+    val currentType =
+        rawCurrentType.takeUnless { it == InterfaceType.UNKNOWN }
+            ?: InterfaceType.fromName(announce.receivingInterfaceType)
+    val recentTypes = announce.recentInterfaceTypes + currentType
+    val additionalCount = (recentTypes.size - 1).coerceAtLeast(0)
+    val accessibilityDescription =
+        if (additionalCount == 0) {
+            "Current path ${currentType.displayLabel}"
+        } else {
+            "Current path ${currentType.displayLabel}; also seen via $additionalCount other " +
+                "interface ${if (additionalCount == 1) "type" else "types"} in the past 30 days"
+        }
+
+    Row(
+        modifier = Modifier.clearAndSetSemantics { contentDescription = accessibilityDescription },
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        InterfaceTypeIcon(interfaceType = currentType.storageName)
+        if (additionalCount > 0) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Text(
+                    text = "+$additionalCount",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                )
             }
         }
     }

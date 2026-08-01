@@ -111,7 +111,7 @@ class ServicePersistenceManagerTest {
     fun `persistAnnounce saves new announce to database`() =
         runTest {
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
-            coEvery { announceDao.upsertAnnounce(any()) } just Runs
+            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
 
             val result =
                 runCatching {
@@ -136,7 +136,7 @@ class ServicePersistenceManagerTest {
             testScope.advanceUntilIdle()
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
-            coVerify { announceDao.upsertAnnounce(any()) }
+            coVerify { announceDao.upsertAnnounceWithSighting(any(), any()) }
         }
 
     @Test
@@ -157,7 +157,7 @@ class ServicePersistenceManagerTest {
                 )
 
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-            coEvery { announceDao.upsertAnnounce(any()) } just Runs
+            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
 
             val result =
                 runCatching {
@@ -183,10 +183,11 @@ class ServicePersistenceManagerTest {
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
             coVerify {
-                announceDao.upsertAnnounce(
+                announceDao.upsertAnnounceWithSighting(
                     match { entity ->
                         entity.isFavorite && entity.peerName == "New Name"
                     },
+                    any(),
                 )
             }
         }
@@ -195,7 +196,7 @@ class ServicePersistenceManagerTest {
     fun `persistAnnounce sets computedIdentityHash from publicKey`() =
         runTest {
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
-            coEvery { announceDao.upsertAnnounce(any()) } just Runs
+            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
 
             val result =
                 runCatching {
@@ -221,12 +222,13 @@ class ServicePersistenceManagerTest {
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
             coVerify {
-                announceDao.upsertAnnounce(
+                announceDao.upsertAnnounceWithSighting(
                     match { entity ->
                         entity.computedIdentityHash != null &&
                             entity.computedIdentityHash!!.length == 32 &&
                             entity.computedIdentityHash == entity.computedIdentityHash!!.lowercase()
                     },
+                    any(),
                 )
             }
         }

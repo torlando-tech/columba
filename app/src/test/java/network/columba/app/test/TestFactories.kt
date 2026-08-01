@@ -4,6 +4,7 @@ import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.model.EnrichedContact
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.Conversation
 import network.columba.app.service.RelayInfo
@@ -150,6 +151,7 @@ object TestFactories {
         isFavorite: Boolean = false,
         receivingInterface: String? = null,
         receivingInterfaceType: String? = null,
+        recentInterfaceTypes: Set<InterfaceType> = emptySet(),
     ) = Announce(
         destinationHash = destinationHash,
         peerName = peerName,
@@ -160,6 +162,7 @@ object TestFactories {
         nodeType = nodeType,
         receivingInterface = receivingInterface,
         receivingInterfaceType = receivingInterfaceType,
+        recentInterfaceTypes = recentInterfaceTypes,
         isFavorite = isFavorite,
     )
 

@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.LocalIdentityEntity
+import network.columba.app.data.model.InterfaceType
+import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
@@ -21,10 +23,12 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -120,7 +124,7 @@ class AnnounceStreamViewModelTest {
         // Mock repository methods
         every { announceRepository.getAnnounces() } returns flowOf(emptyList())
         every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
-        every { announceRepository.getAnnouncesPaged(any(), any()) } returns flowOf(PagingData.empty())
+        every { announceRepository.getAnnouncesPaged(any(), any(), any()) } returns flowOf(PagingData.empty())
         every { announceRepository.getAnnounceCountFlow() } returns flowOf(0)
         coEvery { announceRepository.saveAnnounce(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } just Runs
         coEvery { announceRepository.getAnnounceCount() } returns 0
@@ -156,6 +160,26 @@ class AnnounceStreamViewModelTest {
         clearAllMocks()
         // Reset update interval to default
         AnnounceStreamViewModel.updateIntervalMs = 30_000L
+    }
+
+    @Test
+    fun interfaceFilter_matchesRecentHistoryAfterCurrentPathChanges() {
+        val announce =
+            Announce(
+                destinationHash = "destination",
+                peerName = "Peer",
+                publicKey = ByteArray(32),
+                appData = null,
+                hops = 1,
+                lastSeenTimestamp = 1L,
+                nodeType = "PEER",
+                receivingInterface = "TCPClientInterface[Backbone]",
+                recentInterfaceTypes = setOf(InterfaceType.RNODE, InterfaceType.TCP_CLIENT),
+            )
+
+        assertTrue(matchesRecentInterfaceFilter(announce, setOf(InterfaceType.RNODE)))
+        assertTrue(matchesRecentInterfaceFilter(announce, setOf(InterfaceType.TCP_CLIENT)))
+        assertFalse(matchesRecentInterfaceFilter(announce, setOf(InterfaceType.BLE)))
     }
 
     @Test
@@ -396,7 +420,7 @@ class AnnounceStreamViewModelTest {
             advanceUntilIdle()
 
             // Verify repository was called with correct parameters (default PEER filter)
-            verify { announceRepository.getAnnouncesPaged(listOf("PEER"), "") }
+            verify { announceRepository.getAnnouncesPaged(listOf("PEER"), "", emptyList()) }
         }
 
     @Test
@@ -508,7 +532,7 @@ class AnnounceStreamViewModelTest {
             networkStatusFlow.value = NetworkStatus.READY
 
             // Mock both PEER (default) and the types we'll filter by
-            every { announceRepository.getAnnouncesPaged(any(), any()) } returns flowOf(PagingData.empty())
+            every { announceRepository.getAnnouncesPaged(any(), any(), any()) } returns flowOf(PagingData.empty())
 
             viewModel =
                 AnnounceStreamViewModel(
@@ -539,7 +563,85 @@ class AnnounceStreamViewModelTest {
             advanceUntilIdle()
 
             // Verify repository was called with new filter types
-            verify { announceRepository.getAnnouncesPaged(match { it.containsAll(listOf("NODE", "PROPAGATION_NODE")) }, "") }
+            verify {
+                announceRepository.getAnnouncesPaged(
+                    match { it.containsAll(listOf("NODE", "PROPAGATION_NODE")) },
+                    "",
+                    emptyList(),
+                )
+            }
+        }
+
+    @Test
+    fun interfaceFilter_isPassedToPagingQuery() =
+        runTest {
+            networkStatusFlow.value = NetworkStatus.READY
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
+            advanceUntilIdle()
+
+            viewModel.updateSelectedInterfaceTypes(setOf(InterfaceType.RNODE))
+            viewModel.announces.first()
+            advanceUntilIdle()
+
+            assertEquals(setOf(InterfaceType.RNODE), viewModel.selectedInterfaceTypes.value)
+            verify {
+                announceRepository.getAnnouncesPaged(
+                    listOf("PEER"),
+                    "",
+                    listOf(InterfaceType.RNODE.storageName),
+                )
+            }
+        }
+
+    @Test
+    fun interfaceFilterPager_isRecreatedWhenRetentionWindowAdvances() =
+        runTest {
+            AnnounceStreamViewModel.updateIntervalMs = 1_000L
+            networkStatusFlow.value = NetworkStatus.READY
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
+            runCurrent()
+
+            viewModel.updateSelectedInterfaceTypes(setOf(InterfaceType.RNODE))
+            val collection = launch { viewModel.announces.collect {} }
+            runCurrent()
+            verify(exactly = 1) {
+                announceRepository.getAnnouncesPaged(
+                    listOf("PEER"),
+                    "",
+                    listOf(InterfaceType.RNODE.storageName),
+                )
+            }
+
+            advanceTimeBy(1_000L)
+            runCurrent()
+            assertEquals(setOf(InterfaceType.RNODE), viewModel.selectedInterfaceTypes.value)
+            verify(atLeast = 2) {
+                announceRepository.getAnnouncesPaged(
+                    listOf("PEER"),
+                    "",
+                    listOf(InterfaceType.RNODE.storageName),
+                )
+            }
+            collection.cancel()
+            viewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -575,7 +677,7 @@ class AnnounceStreamViewModelTest {
 
             // With empty filter, repository should NOT be called (empty flow returned directly)
             // Verify that with empty types, we don't call the repository
-            verify(exactly = 0) { announceRepository.getAnnouncesPaged(emptyList(), any()) }
+            verify(exactly = 0) { announceRepository.getAnnouncesPaged(emptyList(), any(), any()) }
         }
 
     @Test
@@ -607,7 +709,7 @@ class AnnounceStreamViewModelTest {
             advanceUntilIdle()
 
             // Verify repository was called with search query
-            verify { announceRepository.getAnnouncesPaged(listOf("PEER"), "Alice") }
+            verify { announceRepository.getAnnouncesPaged(listOf("PEER"), "Alice", emptyList()) }
         }
 
     // ========== Manual Announce Tests ==========

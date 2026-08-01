@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TestFactories
+import network.columba.app.data.model.InterfaceType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -246,7 +247,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("WiFi").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path Local").assertIsDisplayed()
     }
 
     @Test
@@ -267,7 +268,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("WiFi").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path Local").assertIsDisplayed()
     }
 
     @Test
@@ -285,7 +286,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Internet").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path TCP").assertIsDisplayed()
     }
 
     @Test
@@ -303,7 +304,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Bluetooth").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path BLE").assertIsDisplayed()
     }
 
     @Test
@@ -321,7 +322,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path RNode").assertIsDisplayed()
     }
 
     @Test
@@ -342,7 +343,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path RNode").assertIsDisplayed()
     }
 
     @Test
@@ -366,7 +367,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Internet").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path TCP").assertIsDisplayed()
     }
 
     @Test
@@ -460,6 +461,30 @@ class PeerCardTest {
     }
 
     // ========== Signal Strength Indicator Tests ==========
+
+    @Test
+    fun peerCard_displaysAdditionalInterfaceCount() {
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterface = "RNodeInterface[Radio]",
+                recentInterfaceTypes =
+                    setOf(
+                        InterfaceType.RNODE,
+                        InterfaceType.TCP_CLIENT,
+                        InterfaceType.BLE,
+                    ),
+            )
+
+        composeTestRule.setContent {
+            PeerCard(announce = announce)
+        }
+
+        composeTestRule.onNodeWithText("+2", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription(
+                "Current path RNode; also seen via 2 other interface types in the past 30 days",
+            ).assertIsDisplayed()
+    }
 
     @Test
     fun peerCard_displaysWeakSignal_forHighHops() {

@@ -6,7 +6,9 @@ import androidx.paging.PagingData
 import androidx.paging.map
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.model.EnrichedAnnounce
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.util.HashUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -37,6 +39,7 @@ data class Announce(
     val iconForegroundColor: String? = null, // Hex RGB e.g., "FFFFFF"
     val iconBackgroundColor: String? = null, // Hex RGB e.g., "1E88E5"
     val propagationTransferLimitKb: Int? = null, // Per-message size limit for propagation nodes (in KB)
+    val recentInterfaceTypes: Set<InterfaceType> = emptySet(),
 ) {
     @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
@@ -68,6 +71,7 @@ data class Announce(
         if (iconForegroundColor != other.iconForegroundColor) return false
         if (iconBackgroundColor != other.iconBackgroundColor) return false
         if (propagationTransferLimitKb != other.propagationTransferLimitKb) return false
+        if (recentInterfaceTypes != other.recentInterfaceTypes) return false
 
         return true
     }
@@ -91,9 +95,18 @@ data class Announce(
         result = 31 * result + (iconForegroundColor?.hashCode() ?: 0)
         result = 31 * result + (iconBackgroundColor?.hashCode() ?: 0)
         result = 31 * result + (propagationTransferLimitKb?.hashCode() ?: 0)
+        result = 31 * result + recentInterfaceTypes.hashCode()
         return result
     }
 }
+
+/** A recent Reticulum-selected path for a destination and interface type. */
+data class AnnounceInterfaceSighting(
+    val interfaceType: InterfaceType,
+    val receivingInterface: String?,
+    val lastSeenTimestamp: Long,
+    val hops: Int,
+)
 
 /**
  * Repository for managing network announces.
@@ -106,6 +119,9 @@ class AnnounceRepository
     constructor(
         private val announceDao: AnnounceDao,
     ) {
+        companion object {
+            const val RECENT_INTERFACE_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
+        }
         /**
          * Get all announces as a Flow, sorted by most recently seen.
          * Automatically updates UI when announces are added or updated.
@@ -162,8 +178,10 @@ class AnnounceRepository
         fun getAnnouncesPaged(
             nodeTypes: List<String>,
             searchQuery: String,
-        ): Flow<PagingData<Announce>> =
-            Pager(
+            interfaceTypes: List<String> = emptyList(),
+        ): Flow<PagingData<Announce>> {
+            val interfaceTypeCount = interfaceTypes.size
+            return Pager(
                 config =
                     PagingConfig(
                         pageSize = 30,
@@ -175,21 +193,38 @@ class AnnounceRepository
                     when {
                         // Filter by node types AND search query
                         nodeTypes.isNotEmpty() && searchQuery.isNotEmpty() ->
-                            announceDao.getEnrichedAnnouncesByTypesAndSearchPaged(nodeTypes, searchQuery)
+                            announceDao.getEnrichedAnnouncesByTypesAndSearchPaged(
+                                nodeTypes,
+                                searchQuery,
+                                interfaceTypes,
+                                interfaceTypeCount,
+                            )
                         // Filter by node types only
                         nodeTypes.isNotEmpty() ->
-                            announceDao.getEnrichedAnnouncesByTypesPaged(nodeTypes)
+                            announceDao.getEnrichedAnnouncesByTypesPaged(
+                                nodeTypes,
+                                interfaceTypes,
+                                interfaceTypeCount,
+                            )
                         // Filter by search query only
                         searchQuery.isNotEmpty() ->
-                            announceDao.searchEnrichedAnnouncesPaged(searchQuery)
+                            announceDao.searchEnrichedAnnouncesPaged(
+                                searchQuery,
+                                interfaceTypes,
+                                interfaceTypeCount,
+                            )
                         // No filters
                         else ->
-                            announceDao.getEnrichedAnnouncesPaged()
+                            announceDao.getEnrichedAnnouncesPaged(
+                                interfaceTypes,
+                                interfaceTypeCount,
+                            )
                     }
                 },
             ).flow.map { pagingData ->
                 pagingData.map { enriched -> enriched.toAnnounce() }
             }
+        }
 
         /**
          * Get a specific announce by destination hash
@@ -239,6 +274,10 @@ class AnnounceRepository
             // Note: Icons are stored separately in peer_icons table (from LXMF messages)
             val existing = announceDao.getAnnounce(normalizedHash)
 
+            val declaredInterfaceType = InterfaceType.fromName(receivingInterfaceType)
+            val canonicalInterfaceType =
+                declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
+                    ?: InterfaceType.fromName(receivingInterface)
             val entity =
                 AnnounceEntity(
                     destinationHash = normalizedHash,
@@ -249,7 +288,7 @@ class AnnounceRepository
                     lastSeenTimestamp = timestamp,
                     nodeType = nodeType,
                     receivingInterface = receivingInterface,
-                    receivingInterfaceType = receivingInterfaceType,
+                    receivingInterfaceType = canonicalInterfaceType.storageName,
                     aspect = aspect,
                     isFavorite = existing?.isFavorite ?: false,
                     favoritedTimestamp = existing?.favoritedTimestamp,
@@ -259,8 +298,25 @@ class AnnounceRepository
                     propagationTransferLimitKb = propagationTransferLimitKb,
                     computedIdentityHash = HashUtils.computeIdentityHash(publicKey),
                 )
-            announceDao.upsertAnnounce(entity)
+            val sighting =
+                AnnounceInterfaceSightingEntity(
+                    destinationHash = normalizedHash,
+                    interfaceType = canonicalInterfaceType.storageName,
+                    receivingInterface = receivingInterface,
+                    lastSeenTimestamp = timestamp,
+                    hops = hops,
+                )
+            announceDao.upsertAnnounceWithSighting(entity, sighting)
         }
+
+        fun getRecentInterfaceSightings(destinationHash: String): Flow<List<AnnounceInterfaceSighting>> =
+            announceDao
+                .getRecentInterfaceSightings(
+                    destinationHash = destinationHash.lowercase(),
+                    cutoffTime = System.currentTimeMillis() - RECENT_INTERFACE_WINDOW_MS,
+                ).map { sightings ->
+                    sightings.map { it.toInterfaceSighting() }
+                }
 
         /**
          * Find all announces for the same identity, excluding a given destination hash.
@@ -430,6 +486,7 @@ class AnnounceRepository
                 iconForegroundColor = null,
                 iconBackgroundColor = null,
                 propagationTransferLimitKb = propagationTransferLimitKb,
+                recentInterfaceTypes = setOf(InterfaceType.fromName(receivingInterfaceType ?: receivingInterface)),
             )
 
         private fun EnrichedAnnounce.toAnnounce() =
@@ -453,5 +510,19 @@ class AnnounceRepository
                 iconForegroundColor = iconForegroundColor,
                 iconBackgroundColor = iconBackgroundColor,
                 propagationTransferLimitKb = propagationTransferLimitKb,
+                recentInterfaceTypes =
+                    recentInterfaceTypes
+                        ?.split(',')
+                        ?.filter(String::isNotBlank)
+                        ?.mapTo(linkedSetOf(), InterfaceType::fromName)
+                        .orEmpty(),
+            )
+
+        private fun AnnounceInterfaceSightingEntity.toInterfaceSighting() =
+            AnnounceInterfaceSighting(
+                interfaceType = InterfaceType.fromName(interfaceType),
+                receivingInterface = receivingInterface,
+                lastSeenTimestamp = lastSeenTimestamp,
+                hops = hops,
             )
     }

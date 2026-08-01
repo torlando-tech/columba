@@ -4,12 +4,14 @@ import android.content.Context
 import android.util.Log
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.PeerActivityType
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
 import kotlinx.coroutines.CoroutineScope
@@ -120,11 +122,16 @@ class ServicePersistenceManager(
             try {
                 // Preserve favorite status if announce already exists
                 // Note: Icons are stored separately in peer_icons table (from LXMF messages)
-                val existing = announceDao.getAnnounce(destinationHash)
+                val normalizedHash = destinationHash.lowercase()
+                val existing = announceDao.getAnnounce(normalizedHash)
+                val declaredInterfaceType = InterfaceType.fromName(receivingInterfaceType)
+                val canonicalInterfaceType =
+                    declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
+                        ?: InterfaceType.fromName(receivingInterface)
 
                 val entity =
                     AnnounceEntity(
-                        destinationHash = destinationHash,
+                        destinationHash = normalizedHash,
                         peerName = peerName,
                         publicKey = publicKey,
                         appData = appData,
@@ -132,7 +139,7 @@ class ServicePersistenceManager(
                         lastSeenTimestamp = timestamp,
                         nodeType = nodeType,
                         receivingInterface = receivingInterface,
-                        receivingInterfaceType = receivingInterfaceType,
+                        receivingInterfaceType = canonicalInterfaceType.storageName,
                         aspect = aspect,
                         isFavorite = existing?.isFavorite ?: false,
                         favoritedTimestamp = existing?.favoritedTimestamp,
@@ -142,10 +149,18 @@ class ServicePersistenceManager(
                         propagationTransferLimitKb = propagationTransferLimitKb,
                         computedIdentityHash = HashUtils.computeIdentityHash(publicKey),
                     )
+                val sighting =
+                    AnnounceInterfaceSightingEntity(
+                        destinationHash = normalizedHash,
+                        interfaceType = canonicalInterfaceType.storageName,
+                        receivingInterface = receivingInterface,
+                        lastSeenTimestamp = timestamp,
+                        hops = hops,
+                    )
 
-                announceDao.upsertAnnounce(entity)
+                announceDao.upsertAnnounceWithSighting(entity, sighting)
                 peerActivityDao.recordActivity(
-                    destinationHash = destinationHash,
+                    destinationHash = normalizedHash,
                     receivedAt = timestamp,
                     activityType = PeerActivityType.ANNOUNCE,
                 )
@@ -625,7 +640,11 @@ class ServicePersistenceManager(
         scope.launch {
             try {
                 val cutoffTime = System.currentTimeMillis() - ANNOUNCE_TTL_MS
+                val deletedSightings = announceDao.deleteStaleInterfaceSightings(cutoffTime)
                 val deleted = announceDao.deleteStaleAnnounces(cutoffTime)
+                if (deletedSightings > 0) {
+                    Log.d(TAG, "Cleaned up $deletedSightings stale interface sightings (>30 days old)")
+                }
                 if (deleted > 0) {
                     Log.d(TAG, "Cleaned up $deleted stale announces (>30 days old)")
                 }

@@ -36,6 +36,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
+internal fun matchesRecentInterfaceFilter(
+    announce: Announce,
+    selectedInterfaces: Set<InterfaceType>,
+): Boolean {
+    if (selectedInterfaces.isEmpty()) return true
+    val recentInterfaces =
+        announce.recentInterfaceTypes.ifEmpty {
+            setOf(InterfaceType.fromName(announce.receivingInterface))
+        }
+    return recentInterfaces.any(selectedInterfaces::contains)
+}
+
 @Suppress("TooManyFunctions") // ViewModels naturally have many public functions for UI interactions
 @HiltViewModel
 class AnnounceStreamViewModel
@@ -70,6 +82,7 @@ class AnnounceStreamViewModel
             val selectedTypes: Set<NodeType>,
             val showAudio: Boolean,
             val selectedInterfaces: Set<InterfaceType>,
+            val interfaceWindowGeneration: Long,
         )
 
         // Search query state
@@ -86,6 +99,7 @@ class AnnounceStreamViewModel
         // Interface type filter state - empty set means show all (no interface filter)
         private val _selectedInterfaceTypes = MutableStateFlow<Set<InterfaceType>>(emptySet())
         val selectedInterfaceTypes: StateFlow<Set<InterfaceType>> = _selectedInterfaceTypes.asStateFlow()
+        private val interfaceWindowGeneration = MutableStateFlow(0L)
 
         // Total announce count for tab label
         val announceCount: StateFlow<Int> =
@@ -105,8 +119,9 @@ class AnnounceStreamViewModel
                 _selectedNodeTypes,
                 _showAudioAnnounces,
                 _selectedInterfaceTypes,
-            ) { query, selectedTypes, showAudio, selectedInterfaces ->
-                FilterParams(query, selectedTypes, showAudio, selectedInterfaces)
+                interfaceWindowGeneration,
+            ) { query, selectedTypes, showAudio, selectedInterfaces, generation ->
+                FilterParams(query, selectedTypes, showAudio, selectedInterfaces, generation)
             }.flatMapLatest { params ->
                 val query = params.query
                 val selectedTypes = params.selectedTypes
@@ -131,8 +146,10 @@ class AnnounceStreamViewModel
                         .getAnnouncesPaged(
                             nodeTypes = typeStrings,
                             searchQuery = query.trim(),
+                            interfaceTypes = selectedInterfaces.map { it.storageName },
                         ).map { pagingData ->
-                            // Apply in-memory filters for nodeType, audio aspect, and interface type
+                            // Interface filtering is handled in SQL so Paging can fill pages correctly.
+                            // Keep only the audio/node-type compatibility filter in memory.
                             pagingData.filter { announce ->
                                 // Filter by nodeType
                                 // (exclude PEER if user didn't select it and we only added it for audio)
@@ -143,14 +160,7 @@ class AnnounceStreamViewModel
                                 val matchesTypeOrAudio =
                                     (matchesNodeType && (showAudio || !isAudioAnnounce)) || (isAudioAnnounce && showAudio)
 
-                                // Filter by interface type (empty set = show all)
-                                val matchesInterface =
-                                    selectedInterfaces.isEmpty() ||
-                                        selectedInterfaces.contains(
-                                            InterfaceType.fromName(announce.receivingInterface),
-                                        )
-
-                                matchesTypeOrAudio && matchesInterface
+                                matchesTypeOrAudio
                             }
                         }
                 }
@@ -197,6 +207,12 @@ class AnnounceStreamViewModel
                     while (true) {
                         if (reachableCountDirty.getAndSet(false)) {
                             updateReachableCount()
+                        }
+                        // Wall-clock advancement does not invalidate Room PagingSources.
+                        // Recreate active interface-filtered pagers so 30-day expirations
+                        // become visible without waiting for another database write.
+                        if (_selectedInterfaceTypes.value.isNotEmpty()) {
+                            interfaceWindowGeneration.value += 1
                         }
                         kotlinx.coroutines.delay(updateIntervalMs)
                     }
@@ -412,6 +428,9 @@ class AnnounceStreamViewModel
          * Observe a specific announce reactively
          */
         fun getAnnounceFlow(destinationHash: String): Flow<Announce?> = announceRepository.getAnnounceFlow(destinationHash)
+
+        fun getRecentInterfaceSightings(destinationHash: String) =
+            announceRepository.getRecentInterfaceSightings(destinationHash)
 
         /**
          * Observe contact status reactively

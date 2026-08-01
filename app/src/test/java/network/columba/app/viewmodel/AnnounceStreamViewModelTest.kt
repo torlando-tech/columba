@@ -23,10 +23,12 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -598,6 +600,48 @@ class AnnounceStreamViewModelTest {
                     listOf(InterfaceType.RNODE.storageName),
                 )
             }
+        }
+
+    @Test
+    fun interfaceFilterPager_isRecreatedWhenRetentionWindowAdvances() =
+        runTest {
+            AnnounceStreamViewModel.updateIntervalMs = 1_000L
+            networkStatusFlow.value = NetworkStatus.READY
+            viewModel =
+                AnnounceStreamViewModel(
+                    reticulumProtocol,
+                    announceRepository,
+                    contactRepository,
+                    propagationNodeManager,
+                    identityRepository,
+                    mockk(),
+                    identityResolutionManager,
+                )
+            runCurrent()
+
+            viewModel.updateSelectedInterfaceTypes(setOf(InterfaceType.RNODE))
+            val collection = launch { viewModel.announces.collect {} }
+            runCurrent()
+            verify(exactly = 1) {
+                announceRepository.getAnnouncesPaged(
+                    listOf("PEER"),
+                    "",
+                    listOf(InterfaceType.RNODE.storageName),
+                )
+            }
+
+            advanceTimeBy(1_000L)
+            runCurrent()
+            assertEquals(setOf(InterfaceType.RNODE), viewModel.selectedInterfaceTypes.value)
+            verify(atLeast = 2) {
+                announceRepository.getAnnouncesPaged(
+                    listOf("PEER"),
+                    "",
+                    listOf(InterfaceType.RNODE.storageName),
+                )
+            }
+            collection.cancel()
+            viewModel.viewModelScope.cancel()
         }
 
     @Test

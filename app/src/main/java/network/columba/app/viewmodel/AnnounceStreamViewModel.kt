@@ -82,6 +82,7 @@ class AnnounceStreamViewModel
             val selectedTypes: Set<NodeType>,
             val showAudio: Boolean,
             val selectedInterfaces: Set<InterfaceType>,
+            val interfaceWindowGeneration: Long,
         )
 
         // Search query state
@@ -98,6 +99,7 @@ class AnnounceStreamViewModel
         // Interface type filter state - empty set means show all (no interface filter)
         private val _selectedInterfaceTypes = MutableStateFlow<Set<InterfaceType>>(emptySet())
         val selectedInterfaceTypes: StateFlow<Set<InterfaceType>> = _selectedInterfaceTypes.asStateFlow()
+        private val interfaceWindowGeneration = MutableStateFlow(0L)
 
         // Total announce count for tab label
         val announceCount: StateFlow<Int> =
@@ -117,8 +119,9 @@ class AnnounceStreamViewModel
                 _selectedNodeTypes,
                 _showAudioAnnounces,
                 _selectedInterfaceTypes,
-            ) { query, selectedTypes, showAudio, selectedInterfaces ->
-                FilterParams(query, selectedTypes, showAudio, selectedInterfaces)
+                interfaceWindowGeneration,
+            ) { query, selectedTypes, showAudio, selectedInterfaces, generation ->
+                FilterParams(query, selectedTypes, showAudio, selectedInterfaces, generation)
             }.flatMapLatest { params ->
                 val query = params.query
                 val selectedTypes = params.selectedTypes
@@ -204,6 +207,12 @@ class AnnounceStreamViewModel
                     while (true) {
                         if (reachableCountDirty.getAndSet(false)) {
                             updateReachableCount()
+                        }
+                        // Wall-clock advancement does not invalidate Room PagingSources.
+                        // Recreate active interface-filtered pagers so 30-day expirations
+                        // become visible without waiting for another database write.
+                        if (_selectedInterfaceTypes.value.isNotEmpty()) {
+                            interfaceWindowGeneration.value += 1
                         }
                         kotlinx.coroutines.delay(updateIntervalMs)
                     }

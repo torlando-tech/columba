@@ -2,6 +2,7 @@ package network.columba.app.rns.host.persistence
 
 import android.content.Context
 import android.util.Log
+import androidx.room.withTransaction
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
@@ -126,62 +127,64 @@ class ServicePersistenceManager(
                 Log.d(TAG, "Ignoring announce from blocked peer: ${normalizedHash.take(16)}")
                 false
             } else {
-                // Preserve favorite status and richer metadata if a later announce
-                // omits fields which were previously learned.
-                val existing = announceDao.getAnnounce(normalizedHash)
-                val persistedName =
-                    peerName.takeIf(PeerNameResolver::isValidPeerName)
-                        ?: existing?.peerName?.takeIf(PeerNameResolver::isValidPeerName)
-                        ?: PeerNameResolver.formatHashAsFallback(normalizedHash)
-                val declaredInterfaceType = InterfaceType.fromName(receivingInterfaceType)
-                val canonicalInterfaceType =
-                    declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
-                        ?: InterfaceType.fromName(receivingInterface)
-                val identityHash = HashUtils.computeIdentityHash(publicKey)
+                database.withTransaction {
+                    // Preserve favorite status and richer metadata if a later announce
+                    // omits fields which were previously learned.
+                    val existing = announceDao.getAnnounce(normalizedHash)
+                    val persistedName =
+                        peerName.takeIf(PeerNameResolver::isValidPeerName)
+                            ?: existing?.peerName?.takeIf(PeerNameResolver::isValidPeerName)
+                            ?: PeerNameResolver.formatHashAsFallback(normalizedHash)
+                    val declaredInterfaceType = InterfaceType.fromName(receivingInterfaceType)
+                    val canonicalInterfaceType =
+                        declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
+                            ?: InterfaceType.fromName(receivingInterface)
+                    val identityHash = HashUtils.computeIdentityHash(publicKey)
 
-                val entity =
-                    AnnounceEntity(
-                        destinationHash = normalizedHash,
-                        peerName = persistedName,
-                        publicKey = publicKey,
-                        appData = appData,
-                        hops = hops,
-                        lastSeenTimestamp = timestamp,
-                        nodeType = nodeType,
-                        receivingInterface = receivingInterface,
-                        receivingInterfaceType = canonicalInterfaceType.storageName,
-                        aspect = aspect,
-                        isFavorite = existing?.isFavorite ?: false,
-                        favoritedTimestamp = existing?.favoritedTimestamp,
-                        stampCost = stampCost,
-                        stampCostFlexibility = stampCostFlexibility,
-                        peeringCost = peeringCost,
-                        propagationTransferLimitKb =
-                            propagationTransferLimitKb ?: existing?.propagationTransferLimitKb,
-                        computedIdentityHash = identityHash,
-                    )
-                val sighting =
-                    AnnounceInterfaceSightingEntity(
-                        destinationHash = normalizedHash,
-                        interfaceType = canonicalInterfaceType.storageName,
-                        receivingInterface = receivingInterface,
-                        lastSeenTimestamp = timestamp,
-                        hops = hops,
-                    )
+                    val entity =
+                        AnnounceEntity(
+                            destinationHash = normalizedHash,
+                            peerName = persistedName,
+                            publicKey = publicKey,
+                            appData = appData,
+                            hops = hops,
+                            lastSeenTimestamp = timestamp,
+                            nodeType = nodeType,
+                            receivingInterface = receivingInterface,
+                            receivingInterfaceType = canonicalInterfaceType.storageName,
+                            aspect = aspect,
+                            isFavorite = existing?.isFavorite ?: false,
+                            favoritedTimestamp = existing?.favoritedTimestamp,
+                            stampCost = stampCost,
+                            stampCostFlexibility = stampCostFlexibility,
+                            peeringCost = peeringCost,
+                            propagationTransferLimitKb =
+                                propagationTransferLimitKb ?: existing?.propagationTransferLimitKb,
+                            computedIdentityHash = identityHash,
+                        )
+                    val sighting =
+                        AnnounceInterfaceSightingEntity(
+                            destinationHash = normalizedHash,
+                            interfaceType = canonicalInterfaceType.storageName,
+                            receivingInterface = receivingInterface,
+                            lastSeenTimestamp = timestamp,
+                            hops = hops,
+                        )
 
-                announceDao.upsertAnnounceWithSighting(entity, sighting)
-                peerActivityDao.recordActivity(
-                    destinationHash = normalizedHash,
-                    receivedAt = timestamp,
-                    activityType = PeerActivityType.ANNOUNCE,
-                )
-                peerIdentityDao.insertPeerIdentity(
-                    PeerIdentityEntity(
-                        peerHash = identityHash,
-                        publicKey = publicKey,
-                        lastSeenTimestamp = timestamp,
-                    ),
-                )
+                    announceDao.upsertAnnounceWithSighting(entity, sighting)
+                    peerActivityDao.recordActivity(
+                        destinationHash = normalizedHash,
+                        receivedAt = timestamp,
+                        activityType = PeerActivityType.ANNOUNCE,
+                    )
+                    peerIdentityDao.insertPeerIdentity(
+                        PeerIdentityEntity(
+                            peerHash = identityHash,
+                            publicKey = publicKey,
+                            lastSeenTimestamp = timestamp,
+                        ),
+                    )
+                }
                 Log.d(TAG, "Service persisted announce: ${normalizedHash.take(16)}")
                 true
             }

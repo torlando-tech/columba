@@ -1,6 +1,7 @@
 package network.columba.app.rns.host.persistence
 
 import android.content.Context
+import androidx.room.withTransaction
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.BlockedPeerDao
@@ -25,7 +26,9 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.mockkStatic
 import io.mockk.unmockkObject
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -99,6 +102,10 @@ class ServicePersistenceManagerTest {
         // Mock ServiceDatabaseProvider singleton
         mockkObject(ServiceDatabaseProvider)
         every { ServiceDatabaseProvider.getDatabase(any()) } returns database
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction<Unit>(any()) } coAnswers {
+            secondArg<suspend () -> Unit>().invoke()
+        }
 
         // Default: don't block unknown senders
         every { settingsAccessor.getBlockUnknownSenders() } returns false
@@ -108,6 +115,7 @@ class ServicePersistenceManagerTest {
 
     @After
     fun tearDown() {
+        unmockkStatic("androidx.room.RoomDatabaseKt")
         unmockkObject(ServiceDatabaseProvider)
         clearAllMocks()
     }
@@ -143,6 +151,7 @@ class ServicePersistenceManagerTest {
             testScope.advanceUntilIdle()
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
+            coVerify(exactly = 1) { database.withTransaction<Unit>(any()) }
             coVerify { announceDao.upsertAnnounceWithSighting(any(), any()) }
         }
 

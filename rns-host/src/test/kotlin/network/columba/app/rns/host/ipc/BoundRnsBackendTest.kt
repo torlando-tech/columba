@@ -313,6 +313,7 @@ class BoundRnsBackendTest {
         override suspend fun getAutoconnectedEndpoints() = emptySet<String>()
         override suspend fun isSharedInstanceAvailable() = false
         override suspend fun isHostingSharedInstance() = false
+        override suspend fun getSharedInstanceAccessConfig(): String? = null
         override suspend fun getDebugInfo() = emptyMap<String, Any>()
         override suspend fun getFailedInterfaces(): List<FailedInterface> = emptyList()
         override suspend fun getInterfaceStats(interfaceName: String) = null

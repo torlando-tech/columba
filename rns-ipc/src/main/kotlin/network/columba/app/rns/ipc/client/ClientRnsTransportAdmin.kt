@@ -65,6 +65,9 @@ internal class ClientRnsTransportAdmin(
     override suspend fun isHostingSharedInstance(): Boolean =
         awaitBool { cb -> remote.isHostingSharedInstance(cb) }
 
+    override suspend fun getSharedInstanceAccessConfig(): String? =
+        awaitNullableString { cb -> remote.getSharedInstanceAccessConfig(cb) }
+
     override suspend fun getDebugInfo(): Map<String, Any> {
         val bundle = awaitResult { cb -> remote.getDebugInfo(cb) }
         return bundle.toAnyMap()

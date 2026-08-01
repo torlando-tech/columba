@@ -245,6 +245,9 @@ class PythonRnsTransportAdmin(
                 ?.toJava(Boolean::class.javaObjectType) ?: false
         }
 
+    override suspend fun getSharedInstanceAccessConfig(): String? =
+        pyCall { sharedInstanceAccessConfig(runtime.reticulumInstance) }
+
     // ==================== Diagnostics ====================
 
     override suspend fun getDebugInfo(): Map<String, Any> =
@@ -506,6 +509,31 @@ class PythonRnsTransportAdmin(
         putLong("discovered")
         return obj
     }
+}
+
+/** Build an access config only from the live instance which actually owns the shared server. */
+internal fun sharedInstanceAccessConfig(instance: PyObject?): String? {
+    val isHost = instance?.get("is_shared_instance")
+        ?.toJava(Boolean::class.javaObjectType) ?: false
+    val rpcKey =
+        if (isHost) {
+            instance.get("rpc_key")?.toJava(ByteArray::class.java)
+        } else {
+            null
+        }
+    return formatSharedInstanceAccessConfig(isHost, rpcKey)
+}
+
+internal fun formatSharedInstanceAccessConfig(isHosting: Boolean, rpcKey: ByteArray?): String? {
+    if (!isHosting || rpcKey == null || rpcKey.isEmpty()) return null
+    val hexKey = rpcKey.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    return """[reticulum]
+  share_instance = yes
+  shared_instance_type = tcp
+  shared_instance_port = 37428
+  instance_control_port = 37429
+  rpc_key = $hexKey
+"""
 }
 
 /**

@@ -2301,4 +2301,7 @@ class NativeRnsBackendImpl(
      * counterpart, gated by `BackendCapabilities.PerformanceCaps.shareInstanceHosting`.
      */
     override suspend fun isHostingSharedInstance(): Boolean = false
+
+    /** Shared-instance hosting and its access configuration are unsupported here. */
+    override suspend fun getSharedInstanceAccessConfig(): String? = null
 }

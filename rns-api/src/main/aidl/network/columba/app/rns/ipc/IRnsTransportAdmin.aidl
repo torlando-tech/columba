@@ -44,6 +44,7 @@ oneway interface IRnsTransportAdmin {
 
     void isSharedInstanceAvailable(in IRnsBoolCallback cb);
     void isHostingSharedInstance(in IRnsBoolCallback cb);
+    void getSharedInstanceAccessConfig(in IRnsStringCallback cb);
 
     // ==================== Diagnostics ====================
 

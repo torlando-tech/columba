@@ -72,6 +72,13 @@ enum class SettingsCardId {
     SHARED_INSTANCE_BANNER,
 }
 
+/** Secret-bearing shared-instance access results, delivered once and never retained in state. */
+sealed interface SharedInstanceAccessEvent {
+    data class Copy(val configuration: String) : SharedInstanceAccessEvent
+
+    data object Unavailable : SharedInstanceAccessEvent
+}
+
 @androidx.compose.runtime.Immutable
 data class SettingsState(
     val displayName: String = "",
@@ -249,6 +256,10 @@ class SettingsViewModel
                 ),
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
+
+        private val _sharedInstanceAccessEvents = MutableSharedFlow<SharedInstanceAccessEvent>(extraBufferCapacity = 1)
+        val sharedInstanceAccessEvents: SharedFlow<SharedInstanceAccessEvent> =
+            _sharedInstanceAccessEvents.asSharedFlow()
 
         /**
          * The active RNS backend's capabilities — forwards [RnsBackend.capabilities].
@@ -1860,6 +1871,19 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.saveShareInstanceHostingEnabled(enabled)
                 Log.d(TAG, "Share-instance hosting preference set to $enabled (pending restart to apply)")
+            }
+        }
+
+        /** Fetch the live host secret only on demand and hand it directly to the UI. */
+        fun copySharedInstanceAccessConfig() {
+            viewModelScope.launch {
+                val configuration = runCatching {
+                    rnsTransportAdmin.getSharedInstanceAccessConfig()
+                }.getOrNull()
+                _sharedInstanceAccessEvents.emit(
+                    configuration?.let(SharedInstanceAccessEvent::Copy)
+                        ?: SharedInstanceAccessEvent.Unavailable,
+                )
             }
         }
 

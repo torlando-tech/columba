@@ -70,6 +70,10 @@ internal class ServerRnsTransportAdmin(
         impl.isHostingSharedInstance()
     }
 
+    override fun getSharedInstanceAccessConfig(cb: IRnsStringCallback) = dispatchNullableString(cb, scope) {
+        impl.getSharedInstanceAccessConfig()
+    }
+
     override fun getDebugInfo(cb: IRnsResultCallback) = dispatch(cb, scope) {
         impl.getDebugInfo().toBundle()
     }

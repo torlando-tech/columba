@@ -269,6 +269,7 @@ class SettingsViewModelTest {
         coEvery { rnsCore.shutdown() } returns Result.success(Unit)
         coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
         coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+        coEvery { rnsTransportAdmin.getSharedInstanceAccessConfig() } returns null
 
         // Mock MapTileSourceManager flows
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
@@ -305,6 +306,34 @@ class SettingsViewModelTest {
             updateChecker = updateChecker,
             crashReportManager = crashReportManager,
         )
+
+    @Test
+    fun `copy host access config emits one shot without retaining secret in state`() =
+        runTest {
+            val secretConfig = "[reticulum]\n  rpc_key = 0011aaff\n"
+            coEvery { rnsTransportAdmin.getSharedInstanceAccessConfig() } returns secretConfig
+            viewModel = createViewModel()
+
+            viewModel.sharedInstanceAccessEvents.test {
+                viewModel.copySharedInstanceAccessConfig()
+                assertEquals(SharedInstanceAccessEvent.Copy(secretConfig), awaitItem())
+                assertFalse(viewModel.state.value.toString().contains(secretConfig))
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `copy host access config emits unavailable when backend returns null`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.sharedInstanceAccessEvents.test {
+                viewModel.copySharedInstanceAccessConfig()
+                assertEquals(SharedInstanceAccessEvent.Unavailable, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     // region parseRpcKey Tests
 

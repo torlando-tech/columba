@@ -104,6 +104,19 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `nullable shared instance access config round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        val expected = "[reticulum]\n  share_instance = yes\n  rpc_key = 00ff\n"
+        fake.transportAdminFake.sharedInstanceAccessConfig = expected
+
+        assertEquals(expected, client.transportAdmin.getSharedInstanceAccessConfig())
+
+        fake.transportAdminFake.sharedInstanceAccessConfig = null
+        assertEquals(null, client.transportAdmin.getSharedInstanceAccessConfig())
+    }
+
+    @Test
     fun `suspend Result-VoiceCallState getCallState marshals the payload`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
@@ -350,7 +363,8 @@ private class FakeRnsBackend : RnsBackend {
     override val telephony: FakeRnsTelephony = FakeRnsTelephony()
     override val telemetry: RnsTelemetry = FakeRnsTelemetry()
     override val nomadnet: RnsNomadnet = FakeRnsNomadnet()
-    override val transportAdmin: RnsTransportAdmin = FakeRnsTransportAdmin()
+    val transportAdminFake = FakeRnsTransportAdmin()
+    override val transportAdmin: RnsTransportAdmin = transportAdminFake
 }
 
 private class FakeRnsTelephony : RnsTelephony {
@@ -599,6 +613,8 @@ private class FakeRnsNomadnet : RnsNomadnet {
 }
 
 private class FakeRnsTransportAdmin : RnsTransportAdmin {
+    var sharedInstanceAccessConfig: String? = null
+
     override fun setBatteryProfile(profile: network.columba.app.rns.api.model.BatteryProfile) {}
     override suspend fun reloadInterfaces(configs: List<InterfaceConfig>) {}
     override suspend fun setDiscoveryEnabled(enabled: Boolean) {}
@@ -609,6 +625,7 @@ private class FakeRnsTransportAdmin : RnsTransportAdmin {
     override suspend fun getAutoconnectedEndpoints(): Set<String> = emptySet()
     override suspend fun isSharedInstanceAvailable(): Boolean = false
     override suspend fun isHostingSharedInstance(): Boolean = false
+    override suspend fun getSharedInstanceAccessConfig(): String? = sharedInstanceAccessConfig
     override suspend fun getDebugInfo(): Map<String, Any> = emptyMap()
     override suspend fun getFailedInterfaces(): List<FailedInterface> = emptyList()
     override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? = null

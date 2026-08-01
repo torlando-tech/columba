@@ -102,6 +102,13 @@ interface RnsTransportAdmin {
      */
     suspend fun isHostingSharedInstance(): Boolean
 
+    /**
+     * Returns a pasteable Reticulum access configuration for this live shared-instance host.
+     * Returns null unless this process is currently the host. Implementations must not persist
+     * or include this secret-bearing value in diagnostic surfaces.
+     */
+    suspend fun getSharedInstanceAccessConfig(): String?
+
     // ==================== Diagnostics ====================
 
     /** Free-form key/value debug snapshot. Surfaced on the developer screen. */

@@ -2,10 +2,13 @@ package network.columba.app.ui.screens
 
 import android.Manifest
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.PersistableBundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -85,6 +88,7 @@ import network.columba.app.viewmodel.BlockedUsersViewModel
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.SettingsCardId
 import network.columba.app.viewmodel.SettingsViewModel
+import network.columba.app.viewmodel.SharedInstanceAccessEvent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -200,6 +204,31 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.sharedInstanceAccessEvents.collect { event ->
+            when (event) {
+                is SharedInstanceAccessEvent.Copy -> {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("Shared instance access configuration", event.configuration)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        clip.description.extras = PersistableBundle().apply {
+                            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                        }
+                    }
+                    clipboard.setPrimaryClip(clip)
+                    snackbarHostState.showSnackbar(
+                        message = "Access configuration copied to clipboard",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+                SharedInstanceAccessEvent.Unavailable -> snackbarHostState.showSnackbar(
+                    message = "Host access configuration is unavailable",
+                    duration = SnackbarDuration.Short,
+                )
+            }
+        }
+    }
+
     // Show Snackbar when shared instance becomes available (ephemeral notification)
     LaunchedEffect(state.sharedInstanceAvailable) {
         if (state.sharedInstanceAvailable && !state.preferOwnInstance) {
@@ -271,6 +300,7 @@ fun SettingsScreen(
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                         onRpcKeyChange = { viewModel.saveRpcKey(it) },
+                        onCopyAccessConfiguration = { viewModel.copySharedInstanceAccessConfig() },
                     )
                 }
 

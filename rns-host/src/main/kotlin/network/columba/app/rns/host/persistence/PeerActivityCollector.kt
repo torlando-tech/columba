@@ -112,13 +112,8 @@ internal class PeerActivityCollector(
         val receivedAt = now()
 
         if (publicKey.isEmpty()) {
-            // A malformed/incomplete announce cannot populate the announce
-            // identity row, but it still proves receiver-side activity.
-            persistence.recordPeerActivity(
-                destinationHash = destinationHash,
-                activityType = PeerActivityType.ANNOUNCE,
-                receivedAt = receivedAt,
-            )
+            // Without a validated identity key, do not let malformed or
+            // blackholed announces repopulate durable activity.
             return
         }
 

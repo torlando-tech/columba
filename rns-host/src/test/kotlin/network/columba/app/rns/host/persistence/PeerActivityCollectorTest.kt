@@ -76,6 +76,7 @@ class PeerActivityCollectorTest {
         val announcePublicKey = ByteArray(32) { (it + 1).toByte() }
         val announceIdentityHash = ByteArray(16) { (it + 32).toByte() }
         announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, announcePublicKey))
+        announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, byteArrayOf()))
         statuses.emit(DeliveryStatusUpdate("delivered", "delivered", Long.MAX_VALUE))
         statuses.emit(DeliveryStatusUpdate("failed", "failed", Long.MAX_VALUE))
         statuses.emit(DeliveryStatusUpdate("propagated", "propagated", Long.MAX_VALUE))
@@ -150,6 +151,9 @@ class PeerActivityCollectorTest {
                 peeringCost = null,
                 propagationTransferLimitKb = null,
             )
+        }
+        coVerify(exactly = 0) {
+            persistence.recordPeerActivity(sourceHex, PeerActivityType.ANNOUNCE, any())
         }
         coVerify(exactly = 1) { persistence.persistDeliveryProof("delivered", 500L) }
         coVerify(exactly = 0) { persistence.persistDeliveryProof("failed", any()) }

@@ -6,8 +6,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import network.columba.app.data.db.entity.PeerActivityType
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.LinkEvent
+import network.columba.app.rns.api.util.AppDataParser
+import network.columba.app.rns.host.util.PeerNameResolver
 import org.json.JSONObject
 
 /**
@@ -39,13 +43,7 @@ internal class PeerActivityCollector(
                     }
                 }
                 launch(start = CoroutineStart.UNDISPATCHED) {
-                    backend.core.observeAnnounces().collect { announce ->
-                        persistence.recordPeerActivity(
-                            destinationHash = announce.destinationHash.toHex(),
-                            activityType = PeerActivityType.ANNOUNCE,
-                            receivedAt = now(),
-                        )
-                    }
+                    backend.core.observeAnnounces().collect(::persistAnnounceEvent)
                 }
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     backend.lxmf.observeDeliveryStatus().collect { update ->
@@ -98,6 +96,55 @@ internal class PeerActivityCollector(
                 }
             }
         }.also { collectionJob = it }
+    }
+
+    private suspend fun persistAnnounceEvent(announce: AnnounceEvent) {
+        val destinationHash = announce.destinationHash.toHex()
+        val publicKey = announce.identity.publicKey
+        val parsedName =
+            announce.displayName
+                ?: announce.appData?.let {
+                    AppDataParser.parseDisplayName(it, announce.aspect.orEmpty())
+                }
+        val peerName =
+            parsedName?.takeIf(PeerNameResolver::isValidPeerName)
+                ?: PeerNameResolver.formatHashAsFallback(destinationHash)
+        val receivedAt = now()
+
+        if (publicKey.isEmpty()) {
+            // A malformed/incomplete announce cannot populate the announce
+            // identity row, but it still proves receiver-side activity.
+            persistence.recordPeerActivity(
+                destinationHash = destinationHash,
+                activityType = PeerActivityType.ANNOUNCE,
+                receivedAt = receivedAt,
+            )
+            return
+        }
+
+        // Persist below the IPC boundary. Announce events are non-replaying;
+        // relying on the UI-process MessageCollector loses the display name
+        // whenever the UI is absent or attaches after this event.
+        persistence.persistAnnounce(
+            destinationHash = destinationHash,
+            peerName = peerName,
+            publicKey = publicKey,
+            appData = announce.appData,
+            hops = announce.hops,
+            timestamp = receivedAt,
+            nodeType = announce.nodeType.name,
+            receivingInterface = announce.receivingInterface,
+            receivingInterfaceType = InterfaceType.fromName(announce.receivingInterface).storageName,
+            aspect = announce.aspect,
+            stampCost = announce.stampCost,
+            stampCostFlexibility = announce.stampCostFlexibility,
+            peeringCost = announce.peeringCost,
+            propagationTransferLimitKb = null,
+        )
+        val identityHash = announce.identity.hash.toHex()
+        if (identityHash.isNotEmpty()) {
+            persistence.persistPeerIdentity(identityHash, publicKey)
+        }
     }
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }

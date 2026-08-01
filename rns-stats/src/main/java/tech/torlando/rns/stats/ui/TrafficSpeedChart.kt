@@ -41,6 +41,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tech.torlando.rns.stats.data.InterfaceHistoryPoint
+import tech.torlando.rns.stats.data.SpeedSample
 import tech.torlando.rns.stats.data.formatSpeed
 import tech.torlando.rns.stats.data.toSpeedSamples
 
@@ -62,8 +63,6 @@ fun TrafficSpeedChart(
     modifier: Modifier = Modifier,
 ) {
     val speeds = remember(history) { history.toSpeedSamples() }
-    val rxSpeeds = remember(speeds) { speeds.map { it.rxBytesPerSec } }
-    val txSpeeds = remember(speeds) { speeds.map { it.txBytesPerSec } }
 
     val maxSpeed = remember(speeds) {
         val m = speeds.maxOfOrNull { maxOf(it.rxBytesPerSec, it.txBytesPerSec) } ?: 0f
@@ -76,24 +75,23 @@ fun TrafficSpeedChart(
         label = "maxScale",
     )
 
-    // Animate line transitions
-    var startRx by remember { mutableStateOf(emptyList<Float>()) }
-    var endRx by remember { mutableStateOf(emptyList<Float>()) }
-    var startTx by remember { mutableStateOf(emptyList<Float>()) }
-    var endTx by remember { mutableStateOf(emptyList<Float>()) }
+    // Align animation by sample timestamp. Once the bounded history starts
+    // rolling, retained samples move to a new list index but still represent
+    // the same point in time and must not be interpolated with their neighbor.
+    var startSpeeds by remember { mutableStateOf(emptyList<SpeedSample>()) }
+    var endSpeeds by remember { mutableStateOf(emptyList<SpeedSample>()) }
     val progress = remember { Animatable(1f) }
 
     LaunchedEffect(speeds) {
-        startRx = lerpList(startRx, endRx, progress.value)
-        endRx = rxSpeeds
-        startTx = lerpList(startTx, endTx, progress.value)
-        endTx = txSpeeds
+        startSpeeds = interpolateSpeedSamples(startSpeeds, endSpeeds, progress.value)
+        endSpeeds = speeds
         progress.snapTo(0f)
         progress.animateTo(1f, tween(800, easing = FastOutSlowInEasing))
     }
 
-    val displayRx = lerpList(startRx, endRx, progress.value)
-    val displayTx = lerpList(startTx, endTx, progress.value)
+    val displaySpeeds = interpolateSpeedSamples(startSpeeds, endSpeeds, progress.value)
+    val displayRx = displaySpeeds.map { it.rxBytesPerSec }
+    val displayTx = displaySpeeds.map { it.txBytesPerSec }
 
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -224,11 +222,19 @@ private fun DrawScope.drawSpeedLine(
     )
 }
 
-private fun lerpList(from: List<Float>, to: List<Float>, progress: Float): List<Float> {
+internal fun interpolateSpeedSamples(
+    from: List<SpeedSample>,
+    to: List<SpeedSample>,
+    progress: Float,
+): List<SpeedSample> {
     if (from.isEmpty()) return to
     if (to.isEmpty()) return from
-    return to.mapIndexed { i, target ->
-        val source = if (i < from.size) from[i] else (from.lastOrNull() ?: target)
-        source + (target - source) * progress
+    val fromByTimestamp = from.associateBy { it.timestamp }
+    return to.map { target ->
+        val source = fromByTimestamp[target.timestamp] ?: target
+        target.copy(
+            rxBytesPerSec = source.rxBytesPerSec + (target.rxBytesPerSec - source.rxBytesPerSec) * progress,
+            txBytesPerSec = source.txBytesPerSec + (target.txBytesPerSec - source.txBytesPerSec) * progress,
+        )
     }
 }

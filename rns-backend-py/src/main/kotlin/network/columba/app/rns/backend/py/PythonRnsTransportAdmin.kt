@@ -513,11 +513,14 @@ class PythonRnsTransportAdmin(
 
 /** Build an access config only from the live instance which actually owns the shared server. */
 internal fun sharedInstanceAccessConfig(instance: PyObject?): String? {
-    instance ?: return null
-    val isHost = instance["is_shared_instance"]
+    val isHost = instance?.get("is_shared_instance")
         ?.toJava(Boolean::class.javaObjectType) ?: false
-    if (!isHost) return null
-    val rpcKey = instance["rpc_key"]?.toJava(ByteArray::class.java) ?: return null
+    val rpcKey =
+        if (isHost) {
+            instance.get("rpc_key")?.toJava(ByteArray::class.java)
+        } else {
+            null
+        }
     return formatSharedInstanceAccessConfig(isHost, rpcKey)
 }
 

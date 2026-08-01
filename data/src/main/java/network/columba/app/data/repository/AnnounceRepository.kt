@@ -180,7 +180,6 @@ class AnnounceRepository
             searchQuery: String,
             interfaceTypes: List<String> = emptyList(),
         ): Flow<PagingData<Announce>> {
-            val interfaceCutoff = System.currentTimeMillis() - RECENT_INTERFACE_WINDOW_MS
             val interfaceTypeCount = interfaceTypes.size
             return Pager(
                 config =
@@ -199,7 +198,6 @@ class AnnounceRepository
                                 searchQuery,
                                 interfaceTypes,
                                 interfaceTypeCount,
-                                interfaceCutoff,
                             )
                         // Filter by node types only
                         nodeTypes.isNotEmpty() ->
@@ -207,7 +205,6 @@ class AnnounceRepository
                                 nodeTypes,
                                 interfaceTypes,
                                 interfaceTypeCount,
-                                interfaceCutoff,
                             )
                         // Filter by search query only
                         searchQuery.isNotEmpty() ->
@@ -215,14 +212,12 @@ class AnnounceRepository
                                 searchQuery,
                                 interfaceTypes,
                                 interfaceTypeCount,
-                                interfaceCutoff,
                             )
                         // No filters
                         else ->
                             announceDao.getEnrichedAnnouncesPaged(
                                 interfaceTypes,
                                 interfaceTypeCount,
-                                interfaceCutoff,
                             )
                     }
                 },

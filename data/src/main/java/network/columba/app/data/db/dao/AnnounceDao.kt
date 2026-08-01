@@ -713,7 +713,7 @@ interface AnnounceDao {
                 SELECT 1 FROM announce_interface_sightings filter_sighting
                 WHERE filter_sighting.destinationHash = a.destinationHash
                 AND filter_sighting.interfaceType IN (:interfaceTypes)
-                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+                AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
             )
         )
         ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
@@ -722,7 +722,6 @@ interface AnnounceDao {
     fun getEnrichedAnnouncesPaged(
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-        interfaceCutoff: Long,
     ): PagingSource<Int, EnrichedAnnounce>
 
     /**
@@ -766,7 +765,7 @@ interface AnnounceDao {
                 SELECT 1 FROM announce_interface_sightings filter_sighting
                 WHERE filter_sighting.destinationHash = a.destinationHash
                 AND filter_sighting.interfaceType IN (:interfaceTypes)
-                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+                AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
             )
         )
         ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
@@ -776,7 +775,6 @@ interface AnnounceDao {
         nodeTypes: List<String>,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-        interfaceCutoff: Long,
     ): PagingSource<Int, EnrichedAnnounce>
 
     /**
@@ -820,7 +818,7 @@ interface AnnounceDao {
                 SELECT 1 FROM announce_interface_sightings filter_sighting
                 WHERE filter_sighting.destinationHash = a.destinationHash
                 AND filter_sighting.interfaceType IN (:interfaceTypes)
-                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+                AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
             )
         )
         ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
@@ -830,7 +828,6 @@ interface AnnounceDao {
         query: String,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-        interfaceCutoff: Long,
     ): PagingSource<Int, EnrichedAnnounce>
 
     /**
@@ -875,7 +872,7 @@ interface AnnounceDao {
                 SELECT 1 FROM announce_interface_sightings filter_sighting
                 WHERE filter_sighting.destinationHash = a.destinationHash
                 AND filter_sighting.interfaceType IN (:interfaceTypes)
-                AND filter_sighting.lastSeenTimestamp >= :interfaceCutoff
+                AND filter_sighting.lastSeenTimestamp >= (strftime('%s', 'now') * 1000) - 2592000000
             )
         )
         ORDER BY a.lastSeenTimestamp DESC, a.destinationHash ASC
@@ -886,7 +883,6 @@ interface AnnounceDao {
         query: String,
         interfaceTypes: List<String>,
         interfaceTypeCount: Int,
-        interfaceCutoff: Long,
     ): PagingSource<Int, EnrichedAnnounce>
 
     // Paging3 methods for infinite scroll

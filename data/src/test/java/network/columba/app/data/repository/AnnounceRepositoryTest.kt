@@ -88,7 +88,6 @@ class AnnounceRepositoryTest {
                     .getEnrichedAnnouncesPaged(
                         interfaceTypes = listOf(InterfaceType.RNODE.storageName),
                         interfaceTypeCount = 1,
-                        interfaceCutoff = now - AnnounceRepository.RECENT_INTERFACE_WINDOW_MS,
                     ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
             val filteredRows =
                 (filteredPage as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
@@ -138,7 +137,6 @@ class AnnounceRepositoryTest {
                 dao.getEnrichedAnnouncesPaged(
                     interfaceTypes = listOf(InterfaceType.RNODE.storageName),
                     interfaceTypeCount = 1,
-                    interfaceCutoff = System.currentTimeMillis() - AnnounceRepository.RECENT_INTERFACE_WINDOW_MS,
                 ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
             val filteredRows =
                 (filteredPage as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
@@ -177,11 +175,34 @@ class AnnounceRepositoryTest {
                 dao.getEnrichedAnnouncesPaged(
                     interfaceTypes = listOf(InterfaceType.BLE.storageName),
                     interfaceTypeCount = 1,
-                    interfaceCutoff = System.currentTimeMillis() - AnnounceRepository.RECENT_INTERFACE_WINDOW_MS,
                 ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
             val filteredRows =
                 (filteredPage as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
             assertEquals(listOf(destinationHash), filteredRows.map { it.destinationHash })
+        }
+
+    @Test
+    fun expiredHistoricalInterface_doesNotMatchCurrentPagingWindow() =
+        runTest {
+            val destinationHash = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+            val now = System.currentTimeMillis()
+            saveTestAnnounce(
+                destinationHash,
+                "RNodeInterface[Expired radio]",
+                now - AnnounceRepository.RECENT_INTERFACE_WINDOW_MS - 1_000,
+                hops = 3,
+            )
+            saveTestAnnounce(destinationHash, "TCPClientInterface[Current path]", now, hops = 1)
+
+            val page =
+                database
+                    .announceDao()
+                    .getEnrichedAnnouncesPaged(
+                        interfaceTypes = listOf(InterfaceType.RNODE.storageName),
+                        interfaceTypeCount = 1,
+                    ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
+            val rows = (page as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
+            assertTrue(rows.isEmpty())
         }
 
     private suspend fun saveTestAnnounce(

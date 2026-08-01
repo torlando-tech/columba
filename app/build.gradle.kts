@@ -480,6 +480,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material3.windowsizeclass)
     implementation(libs.compose.preview)
+    implementation(project(":rns-stats"))
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.composables:icons-lucide-android:2.2.1")
     debugImplementation(libs.compose.tooling)

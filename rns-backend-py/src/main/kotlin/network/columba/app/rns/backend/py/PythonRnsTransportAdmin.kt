@@ -303,19 +303,12 @@ class PythonRnsTransportAdmin(
 
     override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? =
         pyCall {
-            // Best-effort: RNS.Reticulum.get_interface_stats() returns a dict
-            // with an `interfaces` list; find the entry whose name matches.
-            val instance = runtime.reticulumInstance ?: return@pyCall null
-            val stats = instance.callAttr("get_interface_stats") ?: return@pyCall null
-            val ifaceList = stats.callAttr("get", "interfaces") ?: return@pyCall null
-            val match = runtime.python.builtins.callAttr("list", ifaceList).asList()
-                .firstOrNull { it.dictStr("name") == interfaceName }
-                ?: return@pyCall null
-            mapOf(
-                "online" to match.dictBool("status"),
-                "rxb" to (match.dictLong("rxb") ?: 0L),
-                "txb" to (match.dictLong("txb") ?: 0L),
-            )
+            // Reticulum.get_interface_stats() reads optional fields from every
+            // interface. One third-party/runtime interface missing one of those
+            // fields can therefore hide stats for every healthy interface.
+            // collectInterfaces() reads only Columba's required fields and
+            // isolates failures to the malformed interface.
+            interfaceStatsFromSnapshot(collectInterfaces(), interfaceName)
         }
 
     // ==================== RNode ====================
@@ -522,6 +515,18 @@ internal fun sharedInstanceAccessConfig(instance: PyObject?): String? {
             null
         }
     return formatSharedInstanceAccessConfig(isHost, rpcKey)
+}
+
+internal fun interfaceStatsFromSnapshot(
+    interfaces: List<Map<String, Any>>,
+    interfaceName: String,
+): Map<String, Any>? {
+    val match = interfaces.firstOrNull { it["name"] == interfaceName } ?: return null
+    return mapOf(
+        "online" to (match["online"] as? Boolean ?: false),
+        "rxb" to ((match["rx_bytes"] as? Number)?.toLong() ?: 0L),
+        "txb" to ((match["tx_bytes"] as? Number)?.toLong() ?: 0L),
+    )
 }
 
 internal fun formatSharedInstanceAccessConfig(isHosting: Boolean, rpcKey: ByteArray?): String? {

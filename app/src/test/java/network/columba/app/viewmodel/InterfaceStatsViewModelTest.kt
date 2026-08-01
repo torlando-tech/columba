@@ -298,6 +298,26 @@ class InterfaceStatsViewModelTest {
         }
 
     @Test
+    fun `refreshStats records cumulative counters for traffic chart`() =
+        runTest {
+            coEvery { interfaceRepository.getInterfaceByIdOnce(2L) } returns testTcpClientEntity
+            coEvery { reticulumProtocol.getInterfaceStats("Test TCP Client") } returnsMany
+                listOf(
+                    mapOf("online" to true, "rxb" to 100L, "txb" to 200L),
+                    mapOf("online" to true, "rxb" to 150L, "txb" to 225L),
+                )
+
+            val viewModel = createViewModel(2L)
+            advanceTimeBy(1100)
+            viewModel.refreshStats()
+            viewModel.refreshStats()
+
+            assertEquals(2, viewModel.state.value.trafficHistory.size)
+            assertEquals(100L, viewModel.state.value.trafficHistory.first().rxBytes)
+            assertEquals(225L, viewModel.state.value.trafficHistory.last().txBytes)
+        }
+
+    @Test
     fun `refreshStats updates RSSI for online RNode`() =
         runTest {
             coEvery { interfaceRepository.getInterfaceByIdOnce(1L) } returns testRNodeEntity

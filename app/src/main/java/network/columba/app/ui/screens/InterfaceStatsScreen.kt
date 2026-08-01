@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.util.InterfaceFormattingUtils
 import network.columba.app.viewmodel.InterfaceStatsViewModel
+import tech.torlando.rns.stats.ui.TrafficSpeedChart
 import java.util.Locale
 
 /**
@@ -203,6 +204,12 @@ private fun StatsContent(
             txBytes = state.txBytes,
             rssi = state.rssi,
             snr = state.snr,
+        )
+
+        TrafficSpeedChart(
+            history = state.trafficHistory,
+            rxColor = MaterialTheme.colorScheme.primary,
+            txColor = MaterialTheme.colorScheme.tertiary,
         )
 
         // Action Buttons - only show Edit for interfaces that support it

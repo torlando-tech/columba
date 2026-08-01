@@ -21,6 +21,7 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.Link
 import network.columba.app.rns.api.model.LinkEvent
 import network.columba.app.rns.api.model.LocationTelemetry
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.ReceivedMessage
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
@@ -58,6 +59,11 @@ class PeerActivityCollectorTest {
         coEvery { persistence.persistReactionActivity(any(), any(), any()) } returns true
         coEvery { persistence.persistDeliveryProof(any(), any()) } returns true
         coEvery { persistence.persistTelemetryActivity(any(), any(), any(), any()) } returns true
+        coEvery {
+            persistence.persistAnnounce(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+            )
+        } returns true
 
         val collector = PeerActivityCollector(backend, persistence) { 500L }
         val firstJob = collector.start(this)
@@ -67,15 +73,10 @@ class PeerActivityCollectorTest {
 
         val source = ByteArray(16) { it.toByte() }
         messages.emit(ReceivedMessage("message", "hello", source, ByteArray(16), Long.MAX_VALUE))
-        announces.emit(
-            AnnounceEvent(
-                destinationHash = source,
-                identity = Identity(ByteArray(16), ByteArray(32), null),
-                appData = null,
-                hops = 1,
-                timestamp = Long.MAX_VALUE,
-            ),
-        )
+        val announcePublicKey = ByteArray(32) { (it + 1).toByte() }
+        val announceIdentityHash = ByteArray(16) { (it + 32).toByte() }
+        announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, announcePublicKey))
+        announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, byteArrayOf()))
         statuses.emit(DeliveryStatusUpdate("delivered", "delivered", Long.MAX_VALUE))
         statuses.emit(DeliveryStatusUpdate("failed", "failed", Long.MAX_VALUE))
         statuses.emit(DeliveryStatusUpdate("propagated", "propagated", Long.MAX_VALUE))
@@ -91,7 +92,7 @@ class PeerActivityCollectorTest {
         links.emit(LinkEvent.Closed(link, "closed"))
         runCurrent()
 
-        verifyInboundPersistence(persistence, source)
+        verifyInboundPersistence(persistence, source, announcePublicKey)
 
         firstJob.cancel()
         runCurrent()
@@ -101,16 +102,58 @@ class PeerActivityCollectorTest {
         advanceUntilIdle()
     }
 
+    private fun lxmfDeliveryAnnounce(
+        destinationHash: ByteArray,
+        identityHash: ByteArray,
+        publicKey: ByteArray,
+    ) = AnnounceEvent(
+        destinationHash = destinationHash,
+        identity = Identity(identityHash, publicKey, null),
+        // Canonical LXMF delivery announce: msgpack
+        // [binary display_name, nil stamp_cost, supported_functions].
+        // Leave displayName null to prove service-side persistence can recover
+        // the iOS name directly from app_data below the IPC seam.
+        appData =
+            byteArrayOf(0x93.toByte(), 0xc4.toByte(), 0x08.toByte()) +
+                "iOS Name".encodeToByteArray() +
+                byteArrayOf(0xc0.toByte(), 0x91.toByte(), 0x00.toByte()),
+        hops = 1,
+        timestamp = Long.MAX_VALUE,
+        nodeType = NodeType.PEER,
+        receivingInterface = "Bluetooth_LE",
+        aspect = "lxmf.delivery",
+        displayName = null,
+    )
+
     private fun verifyInboundPersistence(
         persistence: ServicePersistenceManager,
         source: ByteArray,
+        announcePublicKey: ByteArray,
     ) {
         val sourceHex = source.joinToString("") { "%02x".format(it) }
         coVerify(exactly = 1) {
             persistence.persistIncomingMessageActivity("message", sourceHex, null, 500L)
         }
         coVerify(exactly = 1) {
-            persistence.recordPeerActivity(sourceHex, PeerActivityType.ANNOUNCE, 500L)
+            persistence.persistAnnounce(
+                destinationHash = sourceHex,
+                peerName = "iOS Name",
+                publicKey = announcePublicKey,
+                appData = any(),
+                hops = 1,
+                timestamp = 500L,
+                nodeType = NodeType.PEER.name,
+                receivingInterface = "Bluetooth_LE",
+                receivingInterfaceType = any(),
+                aspect = "lxmf.delivery",
+                stampCost = null,
+                stampCostFlexibility = null,
+                peeringCost = null,
+                propagationTransferLimitKb = null,
+            )
+        }
+        coVerify(exactly = 0) {
+            persistence.recordPeerActivity(sourceHex, PeerActivityType.ANNOUNCE, any())
         }
         coVerify(exactly = 1) { persistence.persistDeliveryProof("delivered", 500L) }
         coVerify(exactly = 0) { persistence.persistDeliveryProof("failed", any()) }

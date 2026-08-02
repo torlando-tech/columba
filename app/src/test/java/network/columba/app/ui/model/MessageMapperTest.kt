@@ -164,6 +164,48 @@ class MessageMapperTest {
         assertEquals("Connection timeout", result.errorMessage)
     }
 
+    @Test
+    fun `toMessageUi maps LXMF markdown renderer field`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"15":2}"""))
+
+        val result = message.toMessageUi()
+
+        assertEquals(MessageRenderer.MARKDOWN, result.renderer)
+        assertNull(result.fieldsJson)
+    }
+
+    @Test
+    fun `toMessageUi defaults to plain text without renderer field`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"1":"unrelated"}"""))
+
+        assertEquals(MessageRenderer.PLAIN, message.toMessageUi().renderer)
+    }
+
+    @Test
+    fun `toMessageUi preserves known non-markdown renderer values`() {
+        assertEquals(
+            MessageRenderer.MICRON,
+            createMessage(TestMessageConfig(fieldsJson = """{"15":1}""")).toMessageUi().renderer,
+        )
+        assertEquals(
+            MessageRenderer.BBCODE,
+            createMessage(TestMessageConfig(fieldsJson = """{"15":3}""")).toMessageUi().renderer,
+        )
+    }
+
+    @Test
+    fun `toMessageUi falls back to plain text for malformed or unknown renderer`() {
+        val malformed = createMessage(TestMessageConfig(fieldsJson = """{"15":"2"}"""))
+        val fractional = createMessage(TestMessageConfig(fieldsJson = """{"15":2.5}"""))
+        val unknown = createMessage(TestMessageConfig(fieldsJson = """{"15":99}"""))
+        val invalidJson = createMessage(TestMessageConfig(fieldsJson = "not-json"))
+
+        assertEquals(MessageRenderer.PLAIN, malformed.toMessageUi().renderer)
+        assertEquals(MessageRenderer.PLAIN, fractional.toMessageUi().renderer)
+        assertEquals(MessageRenderer.PLAIN, unknown.toMessageUi().renderer)
+        assertEquals(MessageRenderer.PLAIN, invalidJson.toMessageUi().renderer)
+    }
+
     // ========== decodeAndCacheImage() TESTS ==========
 
     @Test

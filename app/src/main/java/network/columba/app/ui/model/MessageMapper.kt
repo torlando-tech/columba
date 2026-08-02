@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import network.columba.app.data.repository.Message
+import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.util.FileUtils
 import network.columba.app.util.ImageUtils
 import org.json.JSONArray
@@ -34,6 +35,7 @@ private const val FILE_REF_KEY = "_file_ref"
  * - Image decoding happens asynchronously via decodeAndCacheImage()
  */
 fun Message.toMessageUi(): MessageUi {
+    val renderer = parseMessageRenderer(fieldsJson)
     val hasImage = hasImageField(fieldsJson)
     val cachedImage = if (hasImage) ImageCache.get(id) else null
 
@@ -63,6 +65,7 @@ fun Message.toMessageUi(): MessageUi {
         timestamp = timestamp,
         isFromMe = isFromMe,
         status = status,
+        renderer = renderer,
         decodedImage = cachedImage,
         hasImageAttachment = hasImage,
         fileAttachments = fileAttachmentsList,
@@ -80,6 +83,27 @@ fun Message.toMessageUi(): MessageUi {
         receivedAt = receivedAt,
         sentInterface = sentInterface,
     )
+}
+
+/**
+ * Parse LXMF FIELD_RENDERER without coercing strings or fractional JSON numbers.
+ * Missing, malformed, and unknown values fail closed to plain text.
+ */
+internal fun parseMessageRenderer(fieldsJson: String?): MessageRenderer {
+    val raw =
+        fieldsJson?.let {
+            runCatching {
+                JSONObject(it).opt(LxmfFields.FIELD_RENDERER.toString())
+            }.getOrNull()
+        }
+    val wireValue = (raw as? Number)?.toInt()
+    val isExactInteger = raw is Number && raw.toDouble() == wireValue?.toDouble()
+
+    return if (wireValue != null && isExactInteger) {
+        MessageRenderer.fromWireValue(wireValue) ?: MessageRenderer.PLAIN
+    } else {
+        MessageRenderer.PLAIN
+    }
 }
 
 /**

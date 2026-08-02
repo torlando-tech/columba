@@ -17,6 +17,7 @@ ktlint = "12.1.1"
 detekt = "1.23.7"
 serialization = "1.11.0"
 coil = "2.7.0"
+markdownRenderer = "0.41.0"
 desugarJdkLibs = "2.1.5"
 
 # JitPack-published libraries (formerly git submodules)
@@ -43,6 +44,7 @@ compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-activity = { module = "androidx.activity:activity-compose", version = "1.9.3" }
 compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
+markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 navigation = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
 
 # Hilt

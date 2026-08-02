@@ -2,6 +2,22 @@ package network.columba.app.ui.model
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.ImageBitmap
+import network.columba.app.rns.api.util.LxmfFields
+
+/** Rendering hint authenticated in the LXMF message fields. */
+enum class MessageRenderer(
+    val wireValue: Int,
+) {
+    PLAIN(LxmfFields.RENDERER_PLAIN),
+    MICRON(LxmfFields.RENDERER_MICRON),
+    MARKDOWN(LxmfFields.RENDERER_MARKDOWN),
+    BBCODE(LxmfFields.RENDERER_BBCODE),
+    ;
+
+    companion object {
+        fun fromWireValue(value: Int): MessageRenderer? = entries.firstOrNull { it.wireValue == value }
+    }
+}
 
 /**
  * UI model for messages with pre-decoded images and file attachments.
@@ -22,6 +38,8 @@ data class MessageUi(
     val timestamp: Long,
     val isFromMe: Boolean,
     val status: String,
+    /** Optional LXMF field 0x0F rendering hint. Unsupported values map to plain text. */
+    val renderer: MessageRenderer = MessageRenderer.PLAIN,
     /**
      * Pre-decoded image bitmap. If the message contains an LXMF image field (type 6),
      * it's decoded asynchronously and cached in ImageCache.

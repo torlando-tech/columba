@@ -64,6 +64,25 @@ internal fun toBrowsableUrl(rawUrl: String): String {
 internal fun toBrowsableUri(rawUrl: String): Uri = Uri.parse(toBrowsableUrl(rawUrl))
 
 /**
+ * Returns a browsable URI only for schemes Columba explicitly supports in messages.
+ * Markdown links are untrusted input, so file, content, intent, data, and script
+ * schemes are rejected instead of being delegated to Android.
+ */
+internal fun toSafeBrowsableUrl(rawUrl: String): String? {
+    val cleaned = cleanUrlForOpening(rawUrl)
+    return when {
+        cleaned.startsWith("http://", ignoreCase = true) ||
+            cleaned.startsWith("https://", ignoreCase = true) ||
+            cleaned.startsWith("nomadnetwork://", ignoreCase = true) ||
+            cleaned.startsWith("lxma://", ignoreCase = true) -> cleaned
+        BARE_NOMADNET_ADDRESS.matches(cleaned) -> "nomadnetwork://$cleaned"
+        else -> null
+    }
+}
+
+internal fun toSafeBrowsableUri(rawUrl: String): Uri? = toSafeBrowsableUrl(rawUrl)?.let(Uri::parse)
+
+/**
  * Detect clickable link ranges in [text] as `(start, endExclusive)` pairs, sorted by
  * start with overlaps removed.
  *

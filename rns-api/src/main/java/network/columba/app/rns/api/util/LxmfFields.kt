@@ -48,6 +48,21 @@ object LxmfFields {
     /** Command structures (Sideband telemetry-request RPCs). */
     const val FIELD_COMMANDS = 0x09
 
+    /** Optional hint describing how the UTF-8 message content should be rendered. */
+    const val FIELD_RENDERER = 0x0F
+
+    /** Plain-text renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_PLAIN = 0x00
+
+    /** Micron renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_MICRON = 0x01
+
+    /** Markdown renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_MARKDOWN = 0x02
+
+    /** BBCode renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_BBCODE = 0x03
+
     /**
      * Canonical tap-back reaction field — `fields[0x40] = {0x00: bytes, 0x01: bytes}`
      * per-event wire shape, standardised upstream in LXMF.py (commit

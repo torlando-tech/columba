@@ -2,6 +2,7 @@ package network.columba.app.rns.api.model
 
 import android.os.Parcel
 import android.os.Parcelable
+import androidx.core.os.ParcelCompat
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -514,13 +515,13 @@ sealed class InterfaceConfig : Parcelable {
         @JvmField
         @Suppress(
             "LongMethod", // Mechanical field deserialization mirroring writeToParcel.
-            "DEPRECATION", // readParcelable(ClassLoader) targets minSdk 24; ClassLoader+Class overload is API 33+.
         )
         val CREATOR: Parcelable.Creator<InterfaceConfig> = object : Parcelable.Creator<InterfaceConfig> {
             override fun createFromParcel(parcel: Parcel): InterfaceConfig {
                 val cl = InterfaceConfig::class.java.classLoader
                 fun readNetworkRestriction(): NetworkRestriction =
-                    parcel.readParcelable<NetworkRestriction>(cl) ?: NetworkRestriction.ANY
+                    ParcelCompat.readParcelable(parcel, cl, NetworkRestriction::class.java)
+                        ?: NetworkRestriction.ANY
                 return when (val tag = parcel.readInt()) {
                     TAG_AUTO_INTERFACE ->
                         AutoInterface(

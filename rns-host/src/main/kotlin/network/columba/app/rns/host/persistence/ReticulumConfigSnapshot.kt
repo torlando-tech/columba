@@ -3,6 +3,7 @@ package network.columba.app.rns.host.persistence
 import android.content.Context
 import android.os.Parcel
 import android.util.Log
+import androidx.core.os.ParcelCompat
 import java.io.File
 import network.columba.app.rns.api.model.ReticulumConfig
 
@@ -127,12 +128,15 @@ object ReticulumConfigSnapshot {
                 return null
             }
             val identityHashHex = parcel.readString().orEmpty().takeIf { it.isNotEmpty() }
-            // readParcelable(ClassLoader) works across the whole minSdk-24 fleet. The typed
-            // (ClassLoader, Class) overload is API 33+ and throws NoSuchMethodError below it —
-            // and that's an Error, NOT an Exception, so the catch below would NOT save us; it
-            // crashes :reticulum on FGS start. (Mirrors ReticulumConfig.kt / LinkEvent.kt.)
-            @Suppress("DEPRECATION")
-            val config = parcel.readParcelable<ReticulumConfig>(ReticulumConfig::class.java.classLoader)
+            // ParcelCompat.readParcelable dispatches to the correct Parcel overload for the
+            // running API level — the 2-arg (ClassLoader, Class) form on API 33+ and the
+            // deprecated 1-arg form below it — so we never hit NoSuchMethodError on pre-33
+            // devices. (Mirrors ReticulumConfig.kt / LinkEvent.kt.)
+            val config = ParcelCompat.readParcelable(
+                parcel,
+                ReticulumConfig::class.java.classLoader,
+                ReticulumConfig::class.java,
+            )
             config?.let {
                 Snapshot(
                     configWithoutKey = it,

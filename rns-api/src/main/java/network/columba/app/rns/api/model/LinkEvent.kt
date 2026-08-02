@@ -2,6 +2,7 @@ package network.columba.app.rns.api.model
 
 import android.os.Parcel
 import android.os.Parcelable
+import androidx.core.os.ParcelCompat
 
 /**
  * Events emitted from an RNS Link (observed via [RnsCore.observeLinks]).
@@ -58,10 +59,9 @@ sealed class LinkEvent : Parcelable {
 
         @JvmField
         val CREATOR: Parcelable.Creator<LinkEvent> = object : Parcelable.Creator<LinkEvent> {
-            @Suppress("DEPRECATION") // readParcelable(ClassLoader) targets API 24+ device fleet.
             override fun createFromParcel(parcel: Parcel): LinkEvent {
                 val tag = parcel.readInt()
-                val link = parcel.readParcelable<Link>(Link::class.java.classLoader)
+                val link = ParcelCompat.readParcelable(parcel, Link::class.java.classLoader, Link::class.java)
                     ?: error("LinkEvent.createFromParcel: link was null")
                 return when (tag) {
                     TAG_ESTABLISHED -> Established(link)

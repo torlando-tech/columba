@@ -113,6 +113,9 @@ dependencies {
     // production runtime never loads the class.
     testImplementation("com.chaquo.python.runtime:chaquopy_java:17.0.0")
 
+    // ParcelCompat — API-level-safe readParcelable dispatch (pre-33 vs 33+).
+    implementation(libs.core.ktx)
+
     // Hilt
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)

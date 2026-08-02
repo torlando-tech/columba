@@ -57,6 +57,9 @@ dependencies {
     // Java 8+ core library desugaring runtime (java.time backport for API < 26).
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
+    // ParcelCompat — API-level-safe readParcelable dispatch (pre-33 vs 33+).
+    implementation(libs.core.ktx)
+
     // Flow / StateFlow / suspend types appear in the seam contract.
     implementation(libs.coroutines.core)
 

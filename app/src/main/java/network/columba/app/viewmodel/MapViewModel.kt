@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -303,6 +305,15 @@ class MapViewModel
             )
         val state: StateFlow<MapState> = _state.asStateFlow()
 
+        // Tracks whether the map screen is currently visible (resumed).
+        // Used to pause the polling loop when the map is in the backstack.
+        private val _isVisible = MutableStateFlow(false)
+
+        /** Called by MapScreen on resume/pause to control polling. */
+        fun setVisible(visible: Boolean) {
+            _isVisible.value = visible
+        }
+
         // Refresh trigger for periodic staleness recalculation
         private val _refreshTrigger = MutableStateFlow(0L)
 
@@ -540,6 +551,9 @@ class MapViewModel
                 viewModelScope.launch {
                     while (isActive) {
                         delay(REFRESH_INTERVAL_MS)
+                        // Only poll when the map screen is visible; suspend otherwise
+                        // to avoid leaking N+1 DB spans into the foreground transaction.
+                        _isVisible.filter { it }.first()
                         _refreshTrigger.value = System.currentTimeMillis()
                         loadInterfaceMarkers()
                     }
@@ -788,16 +802,12 @@ class MapViewModel
                                 network.columba.app.data.db.entity
                                     .InterfaceFirstSeenEntity(id, now)
                             }
-                        if (entities.isNotEmpty()) {
-                            interfaceFirstSeenDao.insertAllIfNotExists(entities)
-                        }
-
-                        // Batch-fetch first-seen timestamps
-                        val ids = entities.map { it.interfaceId }
+                        // Insert and fetch first-seen timestamps in a single transaction
+                        // to avoid N+1 INSERT OR IGNORE spans per interface.
                         val firstSeenMap =
-                            if (ids.isNotEmpty()) {
+                            if (entities.isNotEmpty()) {
                                 interfaceFirstSeenDao
-                                    .getFirstSeenBatch(ids)
+                                    .insertAndGetFirstSeen(entities)
                                     .associate { it.interfaceId to it.firstSeenTimestamp }
                             } else {
                                 emptyMap()

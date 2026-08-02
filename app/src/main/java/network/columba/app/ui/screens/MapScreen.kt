@@ -220,6 +220,23 @@ fun MapScreen(
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
 
+    // Pause the MapViewModel polling loop when this screen is not visible
+    // (e.g. user navigated to /messaging with the map in the backstack).
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> viewModel.setVisible(true)
+                Lifecycle.Event.ON_PAUSE -> viewModel.setVisible(false)
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            viewModel.setVisible(false)
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     // Observe location-sharing refusals (master-gate OFF) and show Toast.
     // The actual sharing-start call was already refused inside
     // LocationSharingManager; this is purely user feedback.

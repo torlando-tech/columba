@@ -13,16 +13,20 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Density
 import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
+import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeFence
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
@@ -31,8 +35,15 @@ import com.mikepenz.markdown.model.ImageTransformer
 import com.mikepenz.markdown.model.ImageWidth
 import com.mikepenz.markdown.model.PlaceholderConfig
 import com.mikepenz.markdown.model.markdownAnimations
+import dev.snipme.highlights.Highlights
+import dev.snipme.highlights.model.SyntaxLanguage
+import dev.snipme.highlights.model.SyntaxThemes
 import network.columba.app.R
 import network.columba.app.ui.screens.toSafeBrowsableUri
+import org.intellij.markdown.MarkdownTokenTypes
+import org.intellij.markdown.ast.ASTNode
+import org.intellij.markdown.ast.findChildOfType
+import org.intellij.markdown.ast.getTextInNode
 
 private const val TAG = "MarkdownMessageText"
 
@@ -60,9 +71,17 @@ fun MarkdownMessageText(
     val bodyStyle = MaterialTheme.typography.bodyLarge
     val safeUriHandler = remember(context) { SafeMarkdownUriHandler(context) }
     val remoteImagePlaceholder = stringResource(R.string.markdown_remote_image_not_loaded)
-    val imageComponents =
+    val components =
         remember(remoteImagePlaceholder, textColor, bodyStyle, fontScale) {
             markdownComponents(
+                codeFence = { model ->
+                    SafeMarkdownCodeFence(
+                        content = model.content,
+                        node = model.node,
+                        style = model.typography.code,
+                        darkMode = textColor.luminance() > 0.5f,
+                    )
+                },
                 image = {
                     Text(
                         text = remoteImagePlaceholder,
@@ -118,7 +137,7 @@ fun MarkdownMessageText(
                         ),
                 ),
             imageTransformer = BlockedImageTransformer,
-            components = imageComponents,
+            components = components,
             animations = markdownAnimations(animateTextSize = { this }),
             error = { errorModifier ->
                 Text(
@@ -135,6 +154,39 @@ fun MarkdownMessageText(
                     .testTag("markdown-message-content"),
         )
     }
+}
+
+@Composable
+private fun SafeMarkdownCodeFence(
+    content: String,
+    node: ASTNode,
+    style: TextStyle,
+    darkMode: Boolean,
+) {
+    val language =
+        remember(content, node) {
+            node
+                .findChildOfType(MarkdownTokenTypes.FENCE_LANG)
+                ?.getTextInNode(content)
+                ?.toString()
+                ?.trim()
+        }
+    val supportedLanguage = remember(language) { language?.let(SyntaxLanguage::getByName) }
+    if (supportedLanguage == null) {
+        MarkdownCodeFence(content = content, node = node, style = style)
+        return
+    }
+
+    val highlightsBuilder =
+        remember(darkMode) {
+            Highlights.Builder().theme(SyntaxThemes.default(darkMode = darkMode))
+        }
+    MarkdownHighlightedCodeFence(
+        content = content,
+        node = node,
+        style = style,
+        highlightsBuilder = highlightsBuilder,
+    )
 }
 
 private fun androidx.compose.ui.text.TextStyle.scaled(scale: Float) = copy(fontSize = fontSize * scale)

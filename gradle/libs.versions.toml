@@ -45,6 +45,7 @@ compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-activity = { module = "androidx.activity:activity-compose", version = "1.9.3" }
 compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
 markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
+markdown-renderer-code = { module = "com.mikepenz:multiplatform-markdown-renderer-code", version.ref = "markdownRenderer" }
 navigation = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
 
 # Hilt

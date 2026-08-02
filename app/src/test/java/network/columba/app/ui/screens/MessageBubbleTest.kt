@@ -1,7 +1,10 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -12,6 +15,8 @@ import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.model.MessageRenderer
 import network.columba.app.ui.model.MessageUi
+import network.columba.app.ui.theme.ColumbaTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -189,6 +194,110 @@ class MessageBubbleTest {
         composeTestRule.onNodeWithText("Second item").assertIsDisplayed()
         composeTestRule.onNodeWithText("# Markdown heading").assertDoesNotExist()
     }
+
+    @Test
+    fun `markdown kotlin fence applies syntax colors`() {
+        val code = "fun greet(name: String) = println(\"Hello, ${'$'}name\")"
+        val message =
+            createTextMessage(
+                content = "```kotlin\n$code\n```",
+                renderer = MessageRenderer.MARKDOWN,
+            )
+
+        composeTestRule.setContent {
+            val clipboardManager = LocalClipboardManager.current
+            MessageBubble(
+                message = message,
+                isFromMe = false,
+                clipboardManager = clipboardManager,
+            )
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            syntaxColorsFor(code).size >= 2
+        }
+        val syntaxColors = syntaxColorsFor(code)
+        assertTrue("Expected at least two Kotlin syntax colors, found $syntaxColors", syntaxColors.size >= 2)
+    }
+
+    @Test
+    fun `markdown kotlin fence uses readable colors in dark theme`() {
+        val code = "val renderer = 2"
+        val message =
+            createTextMessage(
+                content = "```kotlin\n$code\n```",
+                renderer = MessageRenderer.MARKDOWN,
+            )
+
+        composeTestRule.setContent {
+            ColumbaTheme(darkTheme = true) {
+                val clipboardManager = LocalClipboardManager.current
+                MessageBubble(
+                    message = message,
+                    isFromMe = false,
+                    clipboardManager = clipboardManager,
+                )
+            }
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            syntaxColorsFor(code).size >= 2
+        }
+        val syntaxColors = syntaxColorsFor(code)
+        assertTrue(
+            "Dark-theme syntax colors must remain visible: $syntaxColors",
+            syntaxColors.all { it.luminance() > 0.05f },
+        )
+    }
+
+    @Test
+    fun `markdown text and unknown fences preserve code without source markers`() {
+        val message =
+            createTextMessage(
+                content =
+                    """
+                    ```text
+                    plain <payload>
+                    ```
+
+                    ```not-a-language
+                    val renderer = 2
+                    ```
+                    """.trimIndent(),
+                renderer = MessageRenderer.MARKDOWN,
+            )
+
+        composeTestRule.setContent {
+            val clipboardManager = LocalClipboardManager.current
+            MessageBubble(
+                message = message,
+                isFromMe = false,
+                clipboardManager = clipboardManager,
+            )
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodes(hasText("plain <payload>")).fetchSemanticsNodes().isNotEmpty() &&
+                composeTestRule.onAllNodes(hasText("val renderer = 2")).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("plain <payload>").assertIsDisplayed()
+        composeTestRule.onNodeWithText("val renderer = 2").assertIsDisplayed()
+        composeTestRule.onNodeWithText("text").assertDoesNotExist()
+        composeTestRule.onNodeWithText("not-a-language").assertDoesNotExist()
+        composeTestRule.onNodeWithText("```").assertDoesNotExist()
+        assertTrue("Text fences must remain unhighlighted", syntaxColorsFor("plain <payload>").size <= 1)
+        assertTrue("Unknown fences must remain unhighlighted", syntaxColorsFor("val renderer = 2").size <= 1)
+    }
+
+    private fun syntaxColorsFor(code: String): Set<Color> =
+        composeTestRule
+            .onAllNodes(hasText(code), useUnmergedTree = true)
+            .fetchSemanticsNodes()
+            .flatMap { it.config[SemanticsProperties.Text] }
+            .flatMap { it.spanStyles }
+            .map { it.item.color }
+            .filter { it != Color.Unspecified }
+            .toSet()
 
     @Test
     fun `markdown remote image renders compact blocked placeholder`() {

@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -123,6 +125,7 @@ class MarkdownReceivingE2ETest {
 
     @Test
     fun receivedMarkdown_formatsCodeAndOrderedListsWithoutLoadingRemoteImages() {
+        val kotlinCode = "val renderer = 2\nreceive(message)"
         val markdown =
             """
             ## Code and tasks
@@ -145,9 +148,24 @@ class MarkdownReceivingE2ETest {
 
         val message = persistAndReadInboundMessage("markdown-code", markdown)
         renderReceivedMessage(message, readyText = "Code and tasks")
+        waitForSyntaxColors(kotlinCode)
 
         composeRule.onNodeWithTag(MARKDOWN_TAG, useUnmergedTree = true).assertExists()
         assertOrRecordGolden("received-markdown-code.png")
+    }
+
+    private fun waitForSyntaxColors(code: String) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule
+                .onAllNodesWithText(code, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .flatMap { it.config[SemanticsProperties.Text] }
+                .flatMap { it.spanStyles }
+                .map { it.item.color }
+                .filter { it != Color.Unspecified }
+                .toSet()
+                .size >= 2
+        }
     }
 
     private fun persistAndReadInboundMessage(

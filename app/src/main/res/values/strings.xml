@@ -93,4 +93,5 @@
     <string name="firmware_flashers_description">Flash RNode firmware or install Pyxis updates over USB.</string>
     <string name="firmware_flashers_pyxis_preserves_data">Pyxis updates preserve device settings, identities, and conversations.</string>
     <string name="firmware_flashers_open_rnode">Open RNode Flasher</string>
+    <string name="markdown_remote_image_not_loaded">Remote image not loaded</string>
 </resources>

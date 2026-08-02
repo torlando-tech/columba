@@ -180,6 +180,7 @@ import network.columba.app.ui.components.FullEmojiPickerDialog
 import network.columba.app.ui.components.ImageOptionsSheet
 import network.columba.app.ui.components.ImageQualitySelectionDialog
 import network.columba.app.ui.components.LocationPermissionBottomSheet
+import network.columba.app.ui.components.MarkdownMessageText
 import network.columba.app.util.isPyxisUpdateFilename
 import network.columba.app.ui.components.QuickShareLocationBottomSheet
 import network.columba.app.ui.components.ReactionDisplayRow
@@ -193,6 +194,7 @@ import network.columba.app.ui.components.SyncStatusBottomSheet
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
+import network.columba.app.ui.model.MessageRenderer
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -2210,11 +2212,19 @@ fun MessageBubble(
                             }
                         }
 
-                        LinkifiedMessageText(
-                            text = message.content,
-                            isFromMe = isFromMe,
-                            fontScale = fontScale,
-                        )
+                        if (message.renderer == MessageRenderer.MARKDOWN) {
+                            MarkdownMessageText(
+                                markdown = message.content,
+                                isFromMe = isFromMe,
+                                fontScale = fontScale,
+                            )
+                        } else {
+                            LinkifiedMessageText(
+                                text = message.content,
+                                isFromMe = isFromMe,
+                                fontScale = fontScale,
+                            )
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),

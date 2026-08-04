@@ -539,28 +539,17 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048
           disable-animations: true
           emulator-boot-timeout: 600
-          script: |
-            echo "Running emulator health check..."
-            adb shell getprop ro.build.version.sdk
-            adb shell pm list packages | head -5
-            echo "Emulator is responsive, starting tests..."
-            # Use test orchestrator for app-test isolation (configured in build.gradle.kts).
-            # Run every independent group even if an earlier group fails, so all reports
-            # and logcat evidence are available from a single emulator session.
-            status=0
-
-            if ! ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace; then
-              status=1
-            fi
-
-            if ! ./gradlew :app:connectedNoSentryPythonBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.integration.IdentityRecoveryIpcInstrumentedTest,network.columba.app.integration.IdentityRecoveryPersistenceInstrumentedTest --stacktrace; then
-              status=1
-            fi
-
-            if ! ./gradlew :rns-backend-py:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.rns.backend.py.PythonRnsCoreIdentityRecoveryInstrumentedTest --stacktrace; then
-              status=1
-            fi
-
+          # The emulator action executes each literal-script line as a separate shell.
+          # Fold this into one command so status is retained across all test groups.
+          script: >-
+            echo "Running emulator health check...";
+            adb shell getprop ro.build.version.sdk;
+            adb shell pm list packages | head -5;
+            echo "Emulator is responsive, starting tests...";
+            status=0;
+            ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace || status=1;
+            ./gradlew :app:connectedNoSentryPythonBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.integration.IdentityRecoveryIpcInstrumentedTest,network.columba.app.integration.IdentityRecoveryPersistenceInstrumentedTest --stacktrace || status=1;
+            ./gradlew :rns-backend-py:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.rns.backend.py.PythonRnsCoreIdentityRecoveryInstrumentedTest --stacktrace || status=1;
             exit "$status"
 
       - name: Upload instrumented test results

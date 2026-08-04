@@ -248,6 +248,8 @@ private fun Map<String, Any>.toIdentityKeyBundle(): Bundle {
     // "No identity_hash in result" because (a) the bundle didn't carry
     // identity_hash at all, (b) it didn't carry destination_hash or
     // file_path either.
+    (this[BundleKeys.SUCCESS] as? Boolean)?.let { bundle.putBoolean(BundleKeys.SUCCESS, it) }
+    (this[BundleKeys.ERROR] as? String)?.let { bundle.putString(BundleKeys.ERROR, it) }
     (this[BundleKeys.KEY_DATA] as? ByteArray)?.let { bundle.putByteArray(BundleKeys.KEY_DATA, it) }
     (this[BundleKeys.DISPLAY_NAME] as? String)?.let { bundle.putString(BundleKeys.DISPLAY_NAME, it) }
     (this[BundleKeys.IDENTITY_HASH] as? String)?.let { bundle.putString(BundleKeys.IDENTITY_HASH, it) }

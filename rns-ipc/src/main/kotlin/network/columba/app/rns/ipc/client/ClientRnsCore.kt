@@ -318,7 +318,11 @@ internal class ClientRnsCore(
     }
 
     private fun identityKeyMapFromBundle(bundle: android.os.Bundle): Map<String, Any> {
-        val map = LinkedHashMap<String, Any>(6)
+        val map = LinkedHashMap<String, Any>(8)
+        if (bundle.containsKey(BundleKeys.SUCCESS)) {
+            map[BundleKeys.SUCCESS] = bundle.getBoolean(BundleKeys.SUCCESS)
+        }
+        bundle.getString(BundleKeys.ERROR)?.let { map[BundleKeys.ERROR] = it }
         bundle.getByteArray(BundleKeys.KEY_DATA)?.let { map[BundleKeys.KEY_DATA] = it }
         bundle.getString(BundleKeys.DISPLAY_NAME)?.let { map[BundleKeys.DISPLAY_NAME] = it }
         bundle.getString(BundleKeys.IDENTITY_HASH)?.let { map[BundleKeys.IDENTITY_HASH] = it }

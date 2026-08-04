@@ -13,6 +13,8 @@ internal object BundleKeys {
     const val IDENTITY = "identity"
     const val KEY_DATA = "key_data"
     const val DISPLAY_NAME = "display_name"
+    const val SUCCESS = "success"
+    const val ERROR = "error"
     // Identity create / import result keys. Names must match what
     // IdentityManagerViewModel reads from the reconstructed Map (see
     // IdentityManagerViewModel.kt:96-103) — previously the bundle was

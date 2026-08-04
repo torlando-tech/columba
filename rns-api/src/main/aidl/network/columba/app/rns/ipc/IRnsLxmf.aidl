@@ -28,6 +28,7 @@ import network.columba.app.rns.ipc.callback.IRnsMessageCallback;
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback;
 import network.columba.app.rns.ipc.callback.IRnsResultCallback;
 import network.columba.app.rns.ipc.callback.IRnsStringCallback;
+import network.columba.app.rns.ipc.callback.IRnsTransferProgressCallback;
 
 oneway interface IRnsLxmf {
     // ==================== Send ====================
@@ -68,6 +69,10 @@ oneway interface IRnsLxmf {
     // Flow<DeliveryStatusUpdate>: observer register/unregister.
     void registerDeliveryStatusObserver(in IRnsDeliveryStatusCallback cb);
     void unregisterDeliveryStatusObserver(in IRnsDeliveryStatusCallback cb);
+
+    // Flow<TransferProgressUpdate>: ephemeral Resource progress.
+    void registerTransferProgressObserver(in IRnsTransferProgressCallback cb);
+    void unregisterTransferProgressObserver(in IRnsTransferProgressCallback cb);
 
     // ==================== LXMF identity access ====================
 

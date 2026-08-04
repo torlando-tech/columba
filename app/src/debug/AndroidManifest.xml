@@ -8,7 +8,8 @@
         <!-- Test host for Compose instrumented tests (no launcher icon) -->
         <activity
             android:name="network.columba.app.test.TestHostActivity"
-            android:exported="true" />
+            android:exported="true"
+            android:theme="@style/Theme.Columba" />
 
         <!-- Disable LeakCanary's "Leaks" launcher icon -->
         <activity

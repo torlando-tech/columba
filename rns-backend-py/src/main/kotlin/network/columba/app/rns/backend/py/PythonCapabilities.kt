@@ -3,6 +3,7 @@ package network.columba.app.rns.backend.py
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.BackendCapabilities.BackendId
 import network.columba.app.rns.api.BackendCapabilities.InterfaceCaps
+import network.columba.app.rns.api.BackendCapabilities.MessagingCaps
 import network.columba.app.rns.api.BackendCapabilities.PerformanceCaps
 import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.BackendCapabilities.TelemetryCaps
@@ -68,6 +69,10 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         collectorHostMode = Support.FULL,
         storeOwnTelemetry = Support.FULL,
         allowedRequestersFilter = Support.FULL,
+    ),
+    messaging = MessagingCaps(
+        outgoingResourceProgress = Support.FULL,
+        incomingDirectResourceProgress = Support.FULL,
     ),
     performance = PerformanceCaps(
         batteryProfileTuning = Support.UNSUPPORTED,

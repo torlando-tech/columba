@@ -150,7 +150,6 @@ fun IdentityUnlockScreen(
                     HashMismatchDialog(
                         imported = state.importedHash,
                         active = state.activeHash,
-                        onConfirm = { viewModel.confirmReplaceMismatched() },
                         onDismiss = { viewModel.cancelHashMismatch() },
                     )
                 }
@@ -304,7 +303,6 @@ private fun ErrorBlock(
 private fun HashMismatchDialog(
     imported: String,
     active: String,
-    onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -315,11 +313,10 @@ private fun HashMismatchDialog(
                 "The file you picked holds a different identity than the one on this device.\n\n" +
                     "Imported: ${imported.take(8)}…\n" +
                     "Existing: ${active.take(8)}…\n\n" +
-                    "Replace the existing one? Your restored messages and contacts will stay " +
-                    "but won't be usable with this new identity.",
+                    "The file was not imported. Choose the original identity file that matches " +
+                    "the restored identity.",
             )
         },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Replace") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Choose another file") } },
     )
 }

@@ -74,6 +74,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +82,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -92,6 +92,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -178,6 +179,28 @@ internal fun deduplicateMarkersByDestination(markers: List<ContactMarker>): List
         .groupBy { it.destinationHash.lowercase() }
         .mapNotNull { (_, group) -> group.maxByOrNull { it.timestamp } }
 
+@Composable
+internal fun MapPollingLifecycleBinding(onPollingOwnerResumed: (Any, Boolean) -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val pollingOwnerId = remember { Any() }
+    val currentOnPollingOwnerResumed by rememberUpdatedState(onPollingOwnerResumed)
+
+    DisposableEffect(lifecycleOwner, pollingOwnerId) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> currentOnPollingOwnerResumed(pollingOwnerId, true)
+                Lifecycle.Event.ON_PAUSE -> currentOnPollingOwnerResumed(pollingOwnerId, false)
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            currentOnPollingOwnerResumed(pollingOwnerId, false)
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+}
+
 /**
  * Map screen displaying user location and contact markers.
  *
@@ -219,6 +242,12 @@ fun MapScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
+
+    // Pause the MapViewModel polling loop when this screen is not visible
+    // (e.g. user navigated to /messaging with the map in the backstack).
+    MapPollingLifecycleBinding { ownerId, resumed ->
+        viewModel.setPollingOwnerResumed(ownerId, resumed)
+    }
 
     // Observe location-sharing refusals (master-gate OFF) and show Toast.
     // The actual sharing-start call was already refused inside

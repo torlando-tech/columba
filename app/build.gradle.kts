@@ -556,6 +556,7 @@ dependencies {
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.arch.core.testing)
+    testImplementation(libs.lifecycle.runtime.testing)
     testImplementation(libs.robolectric)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.test)

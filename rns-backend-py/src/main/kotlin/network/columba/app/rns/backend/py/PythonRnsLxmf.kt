@@ -346,6 +346,7 @@ class PythonRnsLxmf(
                 TransferProgressUpdate(
                     transferId = transferId,
                     messageHash = null,
+                    sourceDestinationHash = resource.incomingSourceDestinationHash(),
                     direction = Direction.IN,
                     progress = resource.pyDoubleCall("get_progress").coerceIn(0.0, 1.0).toFloat(),
                     phase = TransferPhase.TRANSFERRING,
@@ -354,6 +355,21 @@ class PythonRnsLxmf(
                 )
             }.getOrNull()
         }
+    }
+
+    private fun PyObject.incomingSourceDestinationHash(): String? {
+        val link = callAttr("get_link")?.takeUnless { it.toString() == "None" }
+        val remoteIdentity =
+            link?.callAttr("get_remote_identity")?.takeUnless { it.toString() == "None" }
+        val destinationClass = runtime.rnsModule["Destination"]
+        val fullName = "${LxmfFields.APP_NAME}.${LxmfFields.DELIVERY_ASPECT}"
+        return if (remoteIdentity == null || destinationClass == null) {
+            null
+        } else {
+            destinationClass.callAttr("hash_from_name_and_identity", fullName, remoteIdentity)
+        }
+            ?.toJava(ByteArray::class.java)
+            ?.toHex()
     }
 
     private fun PyObject.pyInt(name: String): Int? =

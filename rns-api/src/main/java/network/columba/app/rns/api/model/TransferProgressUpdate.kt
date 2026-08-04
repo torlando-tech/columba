@@ -10,6 +10,8 @@ data class TransferProgressUpdate(
     val transferId: String,
     /** LXMF message hash for outgoing transfers. Incoming Resources have no message hash until decoded. */
     val messageHash: String? = null,
+    /** Sender's LXMF delivery destination for incoming direct Resources, when the link identifies it. */
+    val sourceDestinationHash: String? = null,
     val direction: Direction,
     /** Inclusive 0.0 to 1.0 progress reported by LXMF/RNS. */
     val progress: Float,
@@ -19,6 +21,10 @@ data class TransferProgressUpdate(
 ) : Parcelable {
     val isTerminal: Boolean
         get() = phase == TransferPhase.COMPLETE || phase == TransferPhase.FAILED
+
+    fun isIncomingForConversation(destinationHash: String): Boolean =
+        direction == Direction.IN &&
+            sourceDestinationHash?.equals(destinationHash, ignoreCase = true) == true
 }
 
 @Parcelize

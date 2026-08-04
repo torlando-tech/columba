@@ -428,7 +428,7 @@ fun MessagingScreen(
         capabilities.messaging.outgoingResourceProgress == Support.FULL ||
             capabilities.messaging.incomingDirectResourceProgress == Support.FULL
     val activeTransferProgress = if (supportsTransferProgress) transferProgress.values.toList() else emptyList()
-    val incomingTransfers = activeTransferProgress.filter { it.direction == Direction.IN }
+    val incomingTransfers = activeTransferProgress.filter { it.isIncomingForConversation(destinationHash) }
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()

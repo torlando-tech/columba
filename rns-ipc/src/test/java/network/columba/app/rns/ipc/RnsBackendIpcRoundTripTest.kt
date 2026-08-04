@@ -228,8 +228,9 @@ class RnsBackendIpcRoundTripTest {
         advanceUntilIdle()
         val update = TransferProgressUpdate(
             transferId = "resource-1",
-            messageHash = "aabbcc",
-            direction = Direction.OUT,
+            messageHash = null,
+            sourceDestinationHash = "aabbcc",
+            direction = Direction.IN,
             progress = 0.64f,
             phase = TransferPhase.TRANSFERRING,
             totalBytes = 4_800_000L,

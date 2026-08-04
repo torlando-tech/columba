@@ -1,7 +1,9 @@
 package network.columba.app.rns.api.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TransferProgressUpdateTest {
@@ -27,6 +29,7 @@ class TransferProgressUpdateTest {
         val update = TransferProgressUpdate(
             transferId = "resource-2",
             messageHash = null,
+            sourceDestinationHash = "deadbeef",
             direction = Direction.IN,
             progress = 0.38f,
             phase = TransferPhase.TRANSFERRING,
@@ -34,6 +37,10 @@ class TransferProgressUpdateTest {
         )
 
         assertNull(update.messageHash)
+        assertEquals("deadbeef", update.sourceDestinationHash)
         assertEquals(Direction.IN, update.direction)
+        assertTrue(update.isIncomingForConversation("DEADBEEF"))
+        assertFalse(update.isIncomingForConversation("cafebabe"))
+        assertFalse(update.copy(sourceDestinationHash = null).isIncomingForConversation("deadbeef"))
     }
 }

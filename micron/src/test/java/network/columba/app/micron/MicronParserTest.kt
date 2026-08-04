@@ -243,6 +243,38 @@ class MicronParserTest {
     }
 
     @Test
+    fun `rngit true colors render without leaking control payloads`() {
+        val markup =
+            "`BT282828`Fddd`FT8b949e# Add tasks`f\n" +
+                "`FTc9d1d9nt add `FTa5d6ff\"Buy groceries\"`f`b"
+
+        val doc = MicronParser.parse(markup)
+        val renderedText =
+            doc.lines.joinToString("\n") { line ->
+                line.elements.filterIsInstance<MicronElement.Text>().joinToString("") { it.content }
+            }
+
+        assertEquals("# Add tasks\nnt add \"Buy groceries\"", renderedText)
+
+        val comment = doc.lines[0].elements.filterIsInstance<MicronElement.Text>().single()
+        val command =
+            doc.lines[1]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "nt add " }
+        val argument =
+            doc.lines[1]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "\"Buy groceries\"" }
+
+        assertEquals(MicronColor.Hex(0x8B, 0x94, 0x9E), comment.style.foreground)
+        assertEquals(MicronColor.Hex(0x28, 0x28, 0x28), comment.style.background)
+        assertEquals(MicronColor.Hex(0xC9, 0xD1, 0xD9), command.style.foreground)
+        assertEquals(MicronColor.Hex(0xA5, 0xD6, 0xFF), argument.style.foreground)
+    }
+
+    @Test
     fun `foreground grayscale`() {
         val doc = MicronParser.parse("`Fg50Gray text")
         val elements = doc.lines[0].elements

@@ -269,38 +269,36 @@ class PythonRnsLxmf(
      */
     private fun resolveRecipientDestination(destinationHash: ByteArray): PyObject {
         val hex = destinationHash.toHex()
-        runtime.destinations[hex]?.let { return it }
+        return runtime.destinations.computeIfAbsent(hex) {
+            val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
+            val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+            val hashPy = destinationHash.toPyBytes()
 
-        val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
-        val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-        val hashPy = destinationHash.toPyBytes()
-
-        var recipientIdentity = identityClass.callAttr("recall", hashPy)
-        if (recipientIdentity == null) {
-            Log.d(TAG, "Recipient identity not cached, requesting path for ${hex.take(16)}")
-            transport().callAttr("request_path", hashPy)
-            val deadline = System.currentTimeMillis() + PATH_RESOLVE_TIMEOUT_MS
-            while (recipientIdentity == null && System.currentTimeMillis() < deadline) {
-                Thread.sleep(PATH_RESOLVE_POLL_MS)
-                recipientIdentity = identityClass.callAttr("recall", hashPy)
+            var recipientIdentity = identityClass.callAttr("recall", hashPy)
+            if (recipientIdentity == null) {
+                Log.d(TAG, "Recipient identity not cached, requesting path for ${hex.take(16)}")
+                transport().callAttr("request_path", hashPy)
+                val deadline = System.currentTimeMillis() + PATH_RESOLVE_TIMEOUT_MS
+                while (recipientIdentity == null && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(PATH_RESOLVE_POLL_MS)
+                    recipientIdentity = identityClass.callAttr("recall", hashPy)
+                }
             }
-        }
-        recipientIdentity
-            ?: throw RnsException(RnsError.IdentityNotFound(hex))
+            recipientIdentity
+                ?: throw RnsException(RnsError.IdentityNotFound(hex))
 
-        // RNS.Destination(identity, Destination.OUT, Destination.SINGLE, "lxmf", "delivery")
-        val pyDest = runtime.rnsModule.callAttr(
-            "Destination",
-            recipientIdentity,
-            destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
-            destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
-            LxmfFields.APP_NAME,
-            LxmfFields.DELIVERY_ASPECT,
-        ) ?: throw RnsException(
-            RnsError.Generic("RNS.Destination construction returned None for $hex", null),
-        )
-        runtime.destinations[hex] = pyDest
-        return pyDest
+            // RNS.Destination(identity, Destination.OUT, Destination.SINGLE, "lxmf", "delivery")
+            runtime.rnsModule.callAttr(
+                "Destination",
+                recipientIdentity,
+                destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
+                destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
+                LxmfFields.APP_NAME,
+                LxmfFields.DELIVERY_ASPECT,
+            ) ?: throw RnsException(
+                RnsError.Generic("RNS.Destination construction returned None for $hex", null),
+            )
+        }
     }
 
     /**

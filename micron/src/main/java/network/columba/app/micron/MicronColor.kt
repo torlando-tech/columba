@@ -3,8 +3,9 @@ package network.columba.app.micron
 /**
  * Represents a color in Micron markup.
  *
- * Micron supports three color formats:
+ * Micron supports four color formats:
  * - 3-char hex: each digit is doubled (e.g., "ddd" → 0xDD, 0xDD, 0xDD)
+ * - 6-char hex: full RGB true color (e.g., "282828" → 0x28, 0x28, 0x28)
  * - Grayscale: "gNN" where NN is 0-99 (0 = black, 99 = white)
  * - Default: inherit from theme
  */
@@ -42,7 +43,7 @@ sealed class MicronColor {
         private const val MAX_GRAYSCALE = 99
 
         /**
-         * Parse a Micron color string (3 chars after F/B command).
+         * Parse a Micron color string.
          * - "ddd" → Hex(0xDD, 0xDD, 0xDD)
          * - "g50" → Grayscale(50)
          */
@@ -56,12 +57,27 @@ sealed class MicronColor {
                 return if (level in 0..MAX_GRAYSCALE) Grayscale(level) else null
             }
 
-            // 3-char hex: each digit doubled
+            if (colorStr.length != 3) return null
+
             val r = colorStr[0].digitToIntOrNull(HEX_RADIX) ?: return null
             val g = colorStr[1].digitToIntOrNull(HEX_RADIX) ?: return null
             val b = colorStr[2].digitToIntOrNull(HEX_RADIX) ?: return null
-
             return Hex(r * HEX_DOUBLER, g * HEX_DOUBLER, b * HEX_DOUBLER)
+        }
+
+        /** Parse the six-digit payload of an inline `FT` or `BT` control. */
+        internal fun parseTrueColor(colorStr: String): MicronColor? {
+            if (colorStr.length != 6) return null
+
+            val components =
+                colorStr.chunked(2).mapNotNull { component ->
+                    component.toIntOrNull(HEX_RADIX)
+                }
+            return if (components.size == 3) {
+                Hex(components[0], components[1], components[2])
+            } else {
+                null
+            }
         }
     }
 }

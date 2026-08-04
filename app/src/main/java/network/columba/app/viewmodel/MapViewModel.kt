@@ -305,13 +305,18 @@ class MapViewModel
             )
         val state: StateFlow<MapState> = _state.asStateFlow()
 
-        // Tracks whether the map screen is currently visible (resumed).
-        // Used to pause the polling loop when the map is in the backstack.
-        private val _isVisible = MutableStateFlow(false)
+        // MAP and MAP_FOCUS share this ViewModel and can overlap during navigation.
+        // Track exact resumed owners so disposal of one destination cannot pause another.
+        private val resumedPollingOwners = MutableStateFlow<Set<Any>>(emptySet())
 
-        /** Called by MapScreen on resume/pause to control polling. */
-        fun setVisible(visible: Boolean) {
-            _isVisible.value = visible
+        /** Updates periodic polling ownership for one MapScreen composition. */
+        fun setPollingOwnerResumed(
+            ownerId: Any,
+            resumed: Boolean,
+        ) {
+            resumedPollingOwners.update { owners ->
+                if (resumed) owners + ownerId else owners - ownerId
+            }
         }
 
         // Refresh trigger for periodic staleness recalculation
@@ -553,7 +558,7 @@ class MapViewModel
                         delay(REFRESH_INTERVAL_MS)
                         // Only poll when the map screen is visible; suspend otherwise
                         // to avoid leaking N+1 DB spans into the foreground transaction.
-                        _isVisible.filter { it }.first()
+                        resumedPollingOwners.filter { it.isNotEmpty() }.first()
                         _refreshTrigger.value = System.currentTimeMillis()
                         loadInterfaceMarkers()
                     }
@@ -795,19 +800,23 @@ class MapViewModel
                                 id to iface
                             }
 
-                        // Batch-insert first-seen rows in a single Room transaction
-                        // to avoid N+1 INSERT OR IGNORE statements per interface.
+                        // Persist first-seen rows in one DAO call. Room's collection insert
+                        // adapter may still execute the prepared statement once per entity.
                         val entities =
                             withId.map { (id, _) ->
                                 network.columba.app.data.db.entity
                                     .InterfaceFirstSeenEntity(id, now)
                             }
-                        // Insert and fetch first-seen timestamps in a single transaction
-                        // to avoid N+1 INSERT OR IGNORE spans per interface.
+                        if (entities.isNotEmpty()) {
+                            interfaceFirstSeenDao.insertAllIfNotExists(entities)
+                        }
+
+                        // Batch-fetch first-seen timestamps
+                        val ids = entities.map { it.interfaceId }
                         val firstSeenMap =
-                            if (entities.isNotEmpty()) {
+                            if (ids.isNotEmpty()) {
                                 interfaceFirstSeenDao
-                                    .insertAndGetFirstSeen(entities)
+                                    .getFirstSeenBatch(ids)
                                     .associate { it.interfaceId to it.firstSeenTimestamp }
                             } else {
                                 emptyMap()

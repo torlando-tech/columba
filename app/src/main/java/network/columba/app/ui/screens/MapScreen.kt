@@ -217,22 +217,23 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val pollingOwnerId = remember(viewModel) { Any() }
     val state by viewModel.state.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
 
     // Pause the MapViewModel polling loop when this screen is not visible
     // (e.g. user navigated to /messaging with the map in the backstack).
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, pollingOwnerId) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> viewModel.setVisible(true)
-                Lifecycle.Event.ON_PAUSE -> viewModel.setVisible(false)
+                Lifecycle.Event.ON_RESUME -> viewModel.setPollingOwnerResumed(pollingOwnerId, true)
+                Lifecycle.Event.ON_PAUSE -> viewModel.setPollingOwnerResumed(pollingOwnerId, false)
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            viewModel.setVisible(false)
+            viewModel.setPollingOwnerResumed(pollingOwnerId, false)
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }

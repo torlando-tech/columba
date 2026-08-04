@@ -165,6 +165,11 @@ class MapViewModelTest {
             advanceTimeBy(5_000L)
             runCurrent()
             clearMocks(reticulumProtocol, answers = false)
+            var transportPolls = 0
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } answers {
+                transportPolls++
+                emptyList()
+            }
 
             val mapOwner = "MAP"
             val focusOwner = "MAP_FOCUS"
@@ -179,7 +184,7 @@ class MapViewModelTest {
             advanceTimeBy(25_000L)
             runCurrent()
 
-            coVerify(exactly = 1) { reticulumProtocol.getDiscoveredInterfaces() }
+            assertEquals(1, transportPolls)
 
             // Final disposal stops subsequent periodic polls, and cleanup remains
             // idempotent if both ON_PAUSE and onDispose release the same owner.
@@ -188,7 +193,7 @@ class MapViewModelTest {
             advanceTimeBy(30_000L)
             runCurrent()
 
-            coVerify(exactly = 1) { reticulumProtocol.getDiscoveredInterfaces() }
+            assertEquals(1, transportPolls)
         }
 
     @Test

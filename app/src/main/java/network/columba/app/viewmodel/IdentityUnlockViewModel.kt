@@ -7,12 +7,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
@@ -49,9 +51,8 @@ class IdentityUnlockViewModel
         /**
          * Parse the imported identity file and, if its hash matches the active
          * identity, re-wrap the key with the new device's Keystore and clear
-         * the `needs_identity_unlock` flag. Hash mismatch surfaces a confirm
-         * prompt via [IdentityUnlockUiState.HashMismatch]; the user can confirm
-         * (replaces the active row) or cancel.
+         * the `needs_identity_unlock` flag. A hash mismatch is fail-closed: the
+         * imported file is rejected without mutating the restored identity row.
          */
         fun importIdentityFile(fileUri: Uri) {
             viewModelScope.launch {
@@ -64,18 +65,13 @@ class IdentityUnlockViewModel
                 }
 
                 val fileData =
-                    try {
-                        context.contentResolver
-                            .openInputStream(fileUri)
-                            ?.use { it.readBytes() }
-                            ?: run {
-                                _uiState.value =
-                                    IdentityUnlockUiState.Error("Couldn't open file")
-                                return@launch
-                            }
-                    } catch (e: Exception) {
-                        _uiState.value =
-                            IdentityUnlockUiState.Error("Couldn't read file: ${e.message}")
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(fileUri)?.use(IdentityFileReader::read)
+                    }?.getOrElse { e ->
+                        _uiState.value = IdentityUnlockUiState.Error(e.message ?: "Couldn't read file")
+                        return@launch
+                    } ?: run {
+                        _uiState.value = IdentityUnlockUiState.Error("Couldn't open file")
                         return@launch
                     }
 
@@ -100,14 +96,6 @@ class IdentityUnlockViewModel
                             return@launch
                         }
 
-                val destHash =
-                    parse["destination_hash"] as? String
-                        ?: run {
-                            _uiState.value =
-                                IdentityUnlockUiState.Error("No destination hash in parse result")
-                            return@launch
-                        }
-
                 if (importedHash != active.identityHash) {
                     Log.w(
                         TAG,
@@ -118,80 +106,11 @@ class IdentityUnlockViewModel
                         IdentityUnlockUiState.HashMismatch(
                             importedHash = importedHash,
                             activeHash = active.identityHash,
-                            keyData = keyData,
-                            destHash = destHash,
                         )
                     return@launch
                 }
 
                 completeRewrap(active.identityHash, keyData)
-            }
-        }
-
-        /**
-         * Called after the user explicitly confirms importing an identity whose
-         * hash doesn't match the existing active row. We delete the orphaned
-         * row, then create a fresh one from the imported bytes and set it
-         * active. Conversations tied to the old hash are left in Room but will
-         * appear dormant (no active identity can decrypt them); a future PR
-         * could offer to purge them.
-         */
-        fun confirmReplaceMismatched() {
-            val current = _uiState.value
-            if (current !is IdentityUnlockUiState.HashMismatch) return
-            viewModelScope.launch {
-                _uiState.value = IdentityUnlockUiState.Loading("Replacing identity...")
-
-                // `importedHash`, `keyData`, and `destHash` are all carried
-                // through `HashMismatch` from the initial parse — no need to
-                // re-invoke the protocol here. Re-parsing with the already-
-                // extracted 64-byte `keyData` would fail anyway since
-                // `importIdentityFile` expects raw file bytes, not pre-parsed
-                // key material.
-                val active = identityRepository.getActiveIdentitySync()
-                if (active != null) {
-                    identityRepository
-                        .deleteIdentity(active.identityHash)
-                        .onFailure {
-                            _uiState.value =
-                                IdentityUnlockUiState.Error(
-                                    "Couldn't remove old identity row: ${it.message}",
-                                )
-                            return@launch
-                        }
-                }
-
-                val result =
-                    identityRepository.createIdentity(
-                        identityHash = current.importedHash,
-                        displayName = active?.displayName ?: "Imported Identity",
-                        destinationHash = current.destHash,
-                        filePath = "",
-                        keyData = current.keyData,
-                    )
-                result
-                    .onSuccess {
-                        // If switch fails the new row exists but isActive=0,
-                        // so the next boot sees no active identity and Chats
-                        // silently breaks. Surface the failure and leave the
-                        // unlock flag set so we route back here next launch.
-                        val switched =
-                            identityRepository.switchActiveIdentity(current.importedHash)
-                        switched.onFailure { e ->
-                            _uiState.value =
-                                IdentityUnlockUiState.Error(
-                                    "Couldn't activate imported identity: ${e.message}",
-                                )
-                            return@launch
-                        }
-                        settingsRepository.setNeedsIdentityUnlock(false)
-                        _uiState.value = IdentityUnlockUiState.Restored
-                    }.onFailure { e ->
-                        _uiState.value =
-                            IdentityUnlockUiState.Error(
-                                "Couldn't save imported identity: ${e.message}",
-                            )
-                    }
             }
         }
 
@@ -306,26 +225,7 @@ sealed class IdentityUnlockUiState {
     data class HashMismatch(
         val importedHash: String,
         val activeHash: String,
-        val keyData: ByteArray,
-        val destHash: String,
-    ) : IdentityUnlockUiState() {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is HashMismatch) return false
-            return importedHash == other.importedHash &&
-                activeHash == other.activeHash &&
-                keyData.contentEquals(other.keyData) &&
-                destHash == other.destHash
-        }
-
-        override fun hashCode(): Int {
-            var result = importedHash.hashCode()
-            result = 31 * result + activeHash.hashCode()
-            result = 31 * result + keyData.contentHashCode()
-            result = 31 * result + destHash.hashCode()
-            return result
-        }
-    }
+    ) : IdentityUnlockUiState()
 
     object Restored : IdentityUnlockUiState()
 

@@ -117,6 +117,48 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `identity import success map round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        val keyData = ByteArray(64) { it.toByte() }
+        val publicKey = ByteArray(64) { (it + 1).toByte() }
+        fake.core.nextImportResult =
+            mapOf(
+                "success" to true,
+                "identity_hash" to "bab3608daf86147268c8ef9bf62c0e08",
+                "destination_hash" to "73908a7266dd03521b47f2473f38481b",
+                "display_name" to "Anonymous Peer",
+                "public_key" to publicKey,
+                "key_data" to keyData,
+                "file_path" to "",
+            )
+
+        val result = client.core.importIdentityFile(keyData, "Anonymous Peer")
+        advanceUntilIdle()
+
+        assertEquals(true, result["success"])
+        assertEquals("bab3608daf86147268c8ef9bf62c0e08", result["identity_hash"])
+        assertEquals("73908a7266dd03521b47f2473f38481b", result["destination_hash"])
+        assertArrayEquals(keyData, result["key_data"] as ByteArray)
+        assertArrayEquals(publicKey, result["public_key"] as ByteArray)
+    }
+
+    @Test
+    fun `identity import error map round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        fake.core.nextImportResult =
+            mapOf(
+                "success" to false,
+                "error" to "Invalid identity data",
+            )
+
+        val result = client.core.importIdentityFile(ByteArray(64), "Anonymous Peer")
+        advanceUntilIdle()
+
+        assertEquals(false, result["success"])
+        assertEquals("Invalid identity data", result["error"])
+    }
+
+    @Test
     fun `suspend Result-VoiceCallState getCallState marshals the payload`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
@@ -358,7 +400,7 @@ private class FakeRnsBackend : RnsBackend {
     )
 
     override val capabilities: StateFlow<BackendCapabilities> get() = capabilitiesState.asStateFlow()
-    override val core: RnsCore = FakeRnsCore()
+    override val core: FakeRnsCore = FakeRnsCore()
     override val lxmf: FakeRnsLxmf = FakeRnsLxmf()
     override val telephony: FakeRnsTelephony = FakeRnsTelephony()
     override val telemetry: RnsTelemetry = FakeRnsTelemetry()
@@ -510,6 +552,7 @@ private class FakeRnsLxmf : RnsLxmf {
 
 /** Minimal stubs for the unused-in-tests sub-interfaces. */
 private class FakeRnsCore : RnsCore {
+    var nextImportResult: Map<String, Any> = emptyMap()
     private val status = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
     override val networkStatus: StateFlow<NetworkStatus> get() = status.asStateFlow()
     override suspend fun initialize(config: ReticulumConfig) = Result.success(Unit)
@@ -519,7 +562,7 @@ private class FakeRnsCore : RnsCore {
     override suspend fun saveIdentity(identity: Identity, path: String) = Result.success(Unit)
     override suspend fun recallIdentity(hash: ByteArray): Identity? = null
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> = emptyMap()
-    override suspend fun importIdentityFile(fileData: ByteArray, displayName: String): Map<String, Any> = emptyMap()
+    override suspend fun importIdentityFile(fileData: ByteArray, displayName: String): Map<String, Any> = nextImportResult
     override suspend fun exportIdentityFile(keyData: ByteArray, filePath: String): ByteArray = ByteArray(0)
     override suspend fun getFullIdentityKey(): ByteArray? = null
     override suspend fun createDestination(

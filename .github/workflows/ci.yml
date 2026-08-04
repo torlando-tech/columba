@@ -538,7 +538,7 @@ jobs:
             echo "Emulator is responsive, starting tests..."
             # Run smoke tests and integration tests
             # Use test orchestrator for isolation (configured in build.gradle.kts)
-            ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace
+            ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest,network.columba.app.ui.components.MicronTrueColorRenderingTest --stacktrace
 
       - name: Upload instrumented test results
         if: always()

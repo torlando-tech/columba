@@ -320,9 +320,47 @@ class MicronParserTest {
     }
 
     @Test
+    fun `truncated true-color controls fall back without changing style`() {
+        val foreground = MicronParser.parse("`FT12")
+        val background = MicronParser.parse("`BT12")
+        val bareForeground = MicronParser.parse("`F")
+        val bareBackground = MicronParser.parse("`B")
+        val foregroundText = foreground.singleText()
+        val backgroundText = background.singleText()
+        val bareForegroundText = bareForeground.singleText()
+        val bareBackgroundText = bareBackground.singleText()
+
+        assertEquals("T12", foregroundText.content)
+        assertEquals(MicronStyle(), foregroundText.style)
+        assertEquals("T12", backgroundText.content)
+        assertEquals(MicronStyle(), backgroundText.style)
+        assertEquals("", bareForegroundText.content)
+        assertEquals("", bareBackgroundText.content)
+    }
+
+    @Test
+    fun `malformed true-color payloads fall back without changing style`() {
+        val foreground = MicronParser.parse("`FTzzzzzztext")
+        val background = MicronParser.parse("`BTggggggtext")
+        val foregroundText = foreground.singleText()
+        val backgroundText = background.singleText()
+
+        assertEquals("Tzzzzzztext", foregroundText.content)
+        assertEquals(MicronStyle(), foregroundText.style)
+        assertEquals("Tggggggtext", backgroundText.content)
+        assertEquals(MicronStyle(), backgroundText.style)
+    }
+
+    @Test
     fun `color ddd expands correctly`() {
         val color = MicronColor.parse("ddd")
         assertEquals(MicronColor.Hex(0xDD, 0xDD, 0xDD), color)
+    }
+
+    @Test
+    fun `inline true-color parser rejects wrong length and invalid hex`() {
+        assertNull(MicronColor.parseTrueColor("fff"))
+        assertNull(MicronColor.parseTrueColor("gg0000"))
     }
 
     // ==================== Alignment ====================
@@ -1087,4 +1125,6 @@ class MicronParserTest {
         val divider = doc.lines[0].elements[0] as MicronElement.Divider
         assertEquals('\u2500', divider.character)
     }
+
+    private fun MicronDocument.singleText(): MicronElement.Text = lines.single().elements.single() as MicronElement.Text
 }

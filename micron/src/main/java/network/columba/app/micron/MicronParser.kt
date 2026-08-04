@@ -377,7 +377,12 @@ object MicronParser {
                 val colorLength = if (isTrueColor) 6 else 3
                 if (colorStart + colorLength <= line.length) {
                     val colorStr = line.substring(colorStart, colorStart + colorLength)
-                    val color = MicronColor.parse(colorStr)
+                    val color =
+                        if (isTrueColor) {
+                            MicronColor.parseTrueColor(colorStr)
+                        } else {
+                            MicronColor.parse(colorStr)
+                        }
                     if (color != null) {
                         FormatResult(style.copy(foreground = color), alignment, colorStart + colorLength)
                     } else {
@@ -395,7 +400,12 @@ object MicronParser {
                 val colorLength = if (isTrueColor) 6 else 3
                 if (colorStart + colorLength <= line.length) {
                     val colorStr = line.substring(colorStart, colorStart + colorLength)
-                    val color = MicronColor.parse(colorStr)
+                    val color =
+                        if (isTrueColor) {
+                            MicronColor.parseTrueColor(colorStr)
+                        } else {
+                            MicronColor.parse(colorStr)
+                        }
                     if (color != null) {
                         FormatResult(style.copy(background = color), alignment, colorStart + colorLength)
                     } else {

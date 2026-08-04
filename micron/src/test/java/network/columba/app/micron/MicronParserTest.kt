@@ -59,6 +59,14 @@ class MicronParserTest {
         assertEquals(MicronColor.Hex(0xDD, 0xDD, 0xDD), doc.pageForeground)
     }
 
+    @Test
+    fun `page directives do not accept inline true-color payloads`() {
+        val doc = MicronParser.parse("#!bg=282828\n#!fg=8b949e\ntext")
+
+        assertNull(doc.pageBackground)
+        assertNull(doc.pageForeground)
+    }
+
     // ==================== Cache Directive ====================
 
     @Test

@@ -45,7 +45,6 @@ sealed class MicronColor {
         /**
          * Parse a Micron color string.
          * - "ddd" → Hex(0xDD, 0xDD, 0xDD)
-         * - "282828" → Hex(0x28, 0x28, 0x28)
          * - "g50" → Grayscale(50)
          */
         @Suppress("ReturnCount")
@@ -58,20 +57,26 @@ sealed class MicronColor {
                 return if (level in 0..MAX_GRAYSCALE) Grayscale(level) else null
             }
 
-            return when (colorStr.length) {
-                3 -> {
-                    val r = colorStr[0].digitToIntOrNull(HEX_RADIX) ?: return null
-                    val g = colorStr[1].digitToIntOrNull(HEX_RADIX) ?: return null
-                    val b = colorStr[2].digitToIntOrNull(HEX_RADIX) ?: return null
-                    Hex(r * HEX_DOUBLER, g * HEX_DOUBLER, b * HEX_DOUBLER)
+            if (colorStr.length != 3) return null
+
+            val r = colorStr[0].digitToIntOrNull(HEX_RADIX) ?: return null
+            val g = colorStr[1].digitToIntOrNull(HEX_RADIX) ?: return null
+            val b = colorStr[2].digitToIntOrNull(HEX_RADIX) ?: return null
+            return Hex(r * HEX_DOUBLER, g * HEX_DOUBLER, b * HEX_DOUBLER)
+        }
+
+        /** Parse the six-digit payload of an inline `FT` or `BT` control. */
+        internal fun parseTrueColor(colorStr: String): MicronColor? {
+            if (colorStr.length != 6) return null
+
+            val components =
+                colorStr.chunked(2).mapNotNull { component ->
+                    component.toIntOrNull(HEX_RADIX)
                 }
-                6 -> {
-                    val r = colorStr.substring(0, 2).toIntOrNull(HEX_RADIX) ?: return null
-                    val g = colorStr.substring(2, 4).toIntOrNull(HEX_RADIX) ?: return null
-                    val b = colorStr.substring(4, 6).toIntOrNull(HEX_RADIX) ?: return null
-                    Hex(r, g, b)
-                }
-                else -> null
+            return if (components.size == 3) {
+                Hex(components[0], components[1], components[2])
+            } else {
+                null
             }
         }
     }

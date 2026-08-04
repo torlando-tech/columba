@@ -59,6 +59,14 @@ class MicronParserTest {
         assertEquals(MicronColor.Hex(0xDD, 0xDD, 0xDD), doc.pageForeground)
     }
 
+    @Test
+    fun `page directives do not accept inline true-color payloads`() {
+        val doc = MicronParser.parse("#!bg=282828\n#!fg=8b949e\ntext")
+
+        assertNull(doc.pageBackground)
+        assertNull(doc.pageForeground)
+    }
+
     // ==================== Cache Directive ====================
 
     @Test
@@ -243,6 +251,42 @@ class MicronParserTest {
     }
 
     @Test
+    fun `rngit true colors render without leaking control payloads`() {
+        val markup =
+            "`BT282828`Fddd`FT8b949e# Add tasks`f\n" +
+                "`FTc9d1d9nt add `FTa5d6ff\"Buy groceries\"`f`b"
+
+        val doc = MicronParser.parse(markup)
+        val renderedText =
+            doc.lines.joinToString("\n") { line ->
+                line.elements.filterIsInstance<MicronElement.Text>().joinToString("") { it.content }
+            }
+
+        assertEquals("# Add tasks\nnt add \"Buy groceries\"", renderedText)
+
+        val comment =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .single()
+        val command =
+            doc.lines[1]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "nt add " }
+        val argument =
+            doc.lines[1]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .first { it.content == "\"Buy groceries\"" }
+
+        assertEquals(MicronColor.Hex(0x8B, 0x94, 0x9E), comment.style.foreground)
+        assertEquals(MicronColor.Hex(0x28, 0x28, 0x28), comment.style.background)
+        assertEquals(MicronColor.Hex(0xC9, 0xD1, 0xD9), command.style.foreground)
+        assertEquals(MicronColor.Hex(0xA5, 0xD6, 0xFF), argument.style.foreground)
+    }
+
+    @Test
     fun `foreground grayscale`() {
         val doc = MicronParser.parse("`Fg50Gray text")
         val elements = doc.lines[0].elements
@@ -276,9 +320,47 @@ class MicronParserTest {
     }
 
     @Test
+    fun `truncated true-color controls fall back without changing style`() {
+        val foreground = MicronParser.parse("`FT12")
+        val background = MicronParser.parse("`BT12")
+        val bareForeground = MicronParser.parse("`F")
+        val bareBackground = MicronParser.parse("`B")
+        val foregroundText = foreground.singleText()
+        val backgroundText = background.singleText()
+        val bareForegroundText = bareForeground.singleText()
+        val bareBackgroundText = bareBackground.singleText()
+
+        assertEquals("T12", foregroundText.content)
+        assertEquals(MicronStyle(), foregroundText.style)
+        assertEquals("T12", backgroundText.content)
+        assertEquals(MicronStyle(), backgroundText.style)
+        assertEquals("", bareForegroundText.content)
+        assertEquals("", bareBackgroundText.content)
+    }
+
+    @Test
+    fun `malformed true-color payloads fall back without changing style`() {
+        val foreground = MicronParser.parse("`FTzzzzzztext")
+        val background = MicronParser.parse("`BTggggggtext")
+        val foregroundText = foreground.singleText()
+        val backgroundText = background.singleText()
+
+        assertEquals("Tzzzzzztext", foregroundText.content)
+        assertEquals(MicronStyle(), foregroundText.style)
+        assertEquals("Tggggggtext", backgroundText.content)
+        assertEquals(MicronStyle(), backgroundText.style)
+    }
+
+    @Test
     fun `color ddd expands correctly`() {
         val color = MicronColor.parse("ddd")
         assertEquals(MicronColor.Hex(0xDD, 0xDD, 0xDD), color)
+    }
+
+    @Test
+    fun `inline true-color parser rejects wrong length and invalid hex`() {
+        assertNull(MicronColor.parseTrueColor("fff"))
+        assertNull(MicronColor.parseTrueColor("gg0000"))
     }
 
     // ==================== Alignment ====================
@@ -1043,4 +1125,6 @@ class MicronParserTest {
         val divider = doc.lines[0].elements[0] as MicronElement.Divider
         assertEquals('\u2500', divider.character)
     }
+
+    private fun MicronDocument.singleText(): MicronElement.Text = lines.single().elements.single() as MicronElement.Text
 }

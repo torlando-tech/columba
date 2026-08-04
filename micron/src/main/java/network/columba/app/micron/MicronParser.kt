@@ -15,7 +15,8 @@ package network.columba.app.micron
  *
  * Inline formatting uses backtick + command character:
  * - `` `! `` bold, `` `* `` italic, `` `_ `` underline
- * - `` `Fxxx `` foreground color, `` `Bxxx `` background color
+ * - `` `Fxxx `` / `` `FTxxxxxx `` foreground color
+ * - `` `Bxxx `` / `` `BTxxxxxx `` background color
  * - `` `f `` reset foreground, `` `b `` reset background
  * - `` `c `` center, `` `l `` left, `` `r `` right, `` `a `` default alignment
  * - `` ` `` (backtick + backtick or end of token) reset all formatting
@@ -369,13 +370,21 @@ object MicronParser {
             // Reset background color
             'b' -> FormatResult(style.copy(background = MicronColor.Default), alignment, afterCmd)
 
-            // Foreground color: Fxxx (3 chars)
+            // Foreground color: Fxxx (3 chars) or FTxxxxxx (6-char true color)
             'F' -> {
-                if (afterCmd + 3 <= line.length) {
-                    val colorStr = line.substring(afterCmd, afterCmd + 3)
-                    val color = MicronColor.parse(colorStr)
+                val isTrueColor = afterCmd < line.length && line[afterCmd] == 'T'
+                val colorStart = afterCmd + if (isTrueColor) 1 else 0
+                val colorLength = if (isTrueColor) 6 else 3
+                if (colorStart + colorLength <= line.length) {
+                    val colorStr = line.substring(colorStart, colorStart + colorLength)
+                    val color =
+                        if (isTrueColor) {
+                            MicronColor.parseTrueColor(colorStr)
+                        } else {
+                            MicronColor.parse(colorStr)
+                        }
                     if (color != null) {
-                        FormatResult(style.copy(foreground = color), alignment, afterCmd + 3)
+                        FormatResult(style.copy(foreground = color), alignment, colorStart + colorLength)
                     } else {
                         null
                     }
@@ -384,13 +393,21 @@ object MicronParser {
                 }
             }
 
-            // Background color: Bxxx (3 chars)
+            // Background color: Bxxx (3 chars) or BTxxxxxx (6-char true color)
             'B' -> {
-                if (afterCmd + 3 <= line.length) {
-                    val colorStr = line.substring(afterCmd, afterCmd + 3)
-                    val color = MicronColor.parse(colorStr)
+                val isTrueColor = afterCmd < line.length && line[afterCmd] == 'T'
+                val colorStart = afterCmd + if (isTrueColor) 1 else 0
+                val colorLength = if (isTrueColor) 6 else 3
+                if (colorStart + colorLength <= line.length) {
+                    val colorStr = line.substring(colorStart, colorStart + colorLength)
+                    val color =
+                        if (isTrueColor) {
+                            MicronColor.parseTrueColor(colorStr)
+                        } else {
+                            MicronColor.parse(colorStr)
+                        }
                     if (color != null) {
-                        FormatResult(style.copy(background = color), alignment, afterCmd + 3)
+                        FormatResult(style.copy(background = color), alignment, colorStart + colorLength)
                     } else {
                         null
                     }

@@ -7,12 +7,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
@@ -64,18 +66,13 @@ class IdentityUnlockViewModel
                 }
 
                 val fileData =
-                    try {
-                        context.contentResolver
-                            .openInputStream(fileUri)
-                            ?.use { it.readBytes() }
-                            ?: run {
-                                _uiState.value =
-                                    IdentityUnlockUiState.Error("Couldn't open file")
-                                return@launch
-                            }
-                    } catch (e: Exception) {
-                        _uiState.value =
-                            IdentityUnlockUiState.Error("Couldn't read file: ${e.message}")
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(fileUri)?.use(IdentityFileReader::read)
+                    }?.getOrElse { e ->
+                        _uiState.value = IdentityUnlockUiState.Error(e.message ?: "Couldn't read file")
+                        return@launch
+                    } ?: run {
+                        _uiState.value = IdentityUnlockUiState.Error("Couldn't open file")
                         return@launch
                     }
 

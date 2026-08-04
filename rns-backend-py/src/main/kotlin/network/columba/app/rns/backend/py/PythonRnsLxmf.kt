@@ -36,6 +36,28 @@ import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
 
+internal enum class OutgoingTransferPollAction {
+    WAIT,
+    PUBLISH,
+    STOP,
+}
+
+internal fun outgoingTransferPollAction(
+    representation: Int?,
+    state: Int,
+): OutgoingTransferPollAction = when {
+    representation == PythonRnsLxmf.LXMF_REPRESENTATION_RESOURCE -> OutgoingTransferPollAction.PUBLISH
+    representation == PythonRnsLxmf.LXMF_REPRESENTATION_PACKET -> OutgoingTransferPollAction.STOP
+    state in setOf(
+        PythonRnsLxmf.LXMF_STATE_SENT,
+        PythonRnsLxmf.LXMF_STATE_DELIVERED,
+        PythonRnsLxmf.LXMF_STATE_REJECTED,
+        PythonRnsLxmf.LXMF_STATE_CANCELLED,
+        PythonRnsLxmf.LXMF_STATE_FAILED,
+    ) -> OutgoingTransferPollAction.STOP
+    else -> OutgoingTransferPollAction.WAIT
+}
+
 /**
  * `RnsLxmf` over upstream Python LXMF, driven through Chaquopy.
  *
@@ -57,14 +79,18 @@ class PythonRnsLxmf(
     private val runtime: PythonRnsRuntime,
     private val events: PythonEventBridge,
 ) : RnsLxmf {
-    private companion object {
+    internal companion object {
         const val TAG = "PythonRnsLxmf"
 
         // LXMF.LXMessage delivery-method ints (LXMF/LXMessage.py).
         const val LXMF_METHOD_OPPORTUNISTIC = 0x01
         const val LXMF_METHOD_DIRECT = 0x02
         const val LXMF_METHOD_PROPAGATED = 0x03
+        const val LXMF_REPRESENTATION_UNKNOWN = 0x00
+        const val LXMF_REPRESENTATION_PACKET = 0x01
         const val LXMF_REPRESENTATION_RESOURCE = 0x02
+        const val LXMF_STATE_OUTBOUND = 0x01
+        const val LXMF_STATE_SENDING = 0x02
         const val LXMF_STATE_SENT = 0x04
         const val LXMF_STATE_DELIVERED = 0x08
         const val LXMF_STATE_REJECTED = 0xFD
@@ -265,9 +291,9 @@ class PythonRnsLxmf(
         router.callAttr("handle_outbound", lxmessage)
 
         val hashBytes = lxmessage["hash"]?.toJava(ByteArray::class.java) ?: ByteArray(0)
-        if (lxmessage.pyInt("representation") == LXMF_REPRESENTATION_RESOURCE) {
-            startOutgoingTransferPoll(hashBytes.toHex(), lxmessage)
-        }
+        // handle_outbound() queues work on a Python thread. The representation is
+        // still UNKNOWN here and becomes PACKET or RESOURCE when LXMessage.send() runs.
+        startOutgoingTransferPoll(hashBytes.toHex(), lxmessage)
         return MessageReceipt(
             messageHash = hashBytes,
             timestamp = System.currentTimeMillis(),
@@ -283,7 +309,16 @@ class PythonRnsLxmf(
         backgroundScope.launch {
             var last: TransferProgressUpdate? = null
             while (isActive) {
-                val update = runCatching { outgoingTransferUpdate(messageHash, lxmessage) }
+                val state = lxmessage.pyInt("state") ?: 0
+                when (outgoingTransferPollAction(lxmessage.pyInt("representation"), state)) {
+                    OutgoingTransferPollAction.WAIT -> {
+                        delay(TRANSFER_POLL_INTERVAL_MS)
+                        continue
+                    }
+                    OutgoingTransferPollAction.STOP -> break
+                    OutgoingTransferPollAction.PUBLISH -> Unit
+                }
+                val update = runCatching { outgoingTransferUpdate(messageHash, lxmessage, state) }
                     .onFailure { Log.w(TAG, "Unable to read outgoing Resource progress", it) }
                     .getOrNull()
                 if (update != null && update != last) {
@@ -296,8 +331,11 @@ class PythonRnsLxmf(
         }
     }
 
-    private fun outgoingTransferUpdate(messageHash: String, lxmessage: PyObject): TransferProgressUpdate {
-        val state = lxmessage.pyInt("state") ?: 0
+    private fun outgoingTransferUpdate(
+        messageHash: String,
+        lxmessage: PyObject,
+        state: Int,
+    ): TransferProgressUpdate {
         val progress = lxmessage.pyDouble("progress").coerceIn(0.0, 1.0).toFloat()
         val resource = lxmessage["resource_representation"]?.takeUnless { it.toString() == "None" }
         return TransferProgressUpdate(

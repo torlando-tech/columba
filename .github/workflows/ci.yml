@@ -449,11 +449,11 @@ jobs:
           adb kill-server || true
 
   instrumented-tests:
-    name: Instrumented Tests
+    name: Instrumented Tests (Kotlin + Identity Recovery)
     # Run in parallel with other jobs
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code
@@ -467,6 +467,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 25
+
+      - name: Set up Python 3.11
+        # Required by Chaquopy when building the Python-backend recovery tests.
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6.2.0
@@ -493,6 +499,8 @@ jobs:
           echo "Building APKs before starting emulator..."
           ./gradlew :app:assembleNoSentryKotlinBackendDebugAndroidTest --stacktrace --max-workers=2
           ./gradlew :app:assembleNoSentryKotlinBackendDebug --stacktrace --max-workers=2
+          ./gradlew :app:assembleNoSentryPythonBackendDebugAndroidTest :app:assembleNoSentryPythonBackendDebug --stacktrace --max-workers=2
+          ./gradlew :rns-backend-py:assembleDebugAndroidTest :rns-backend-py:assembleDebug --stacktrace --max-workers=2
           echo "APKs built successfully"
 
       - name: AVD cache
@@ -536,9 +544,24 @@ jobs:
             adb shell getprop ro.build.version.sdk
             adb shell pm list packages | head -5
             echo "Emulator is responsive, starting tests..."
-            # Run smoke tests and integration tests
-            # Use test orchestrator for isolation (configured in build.gradle.kts)
-            ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace
+            # Use test orchestrator for app-test isolation (configured in build.gradle.kts).
+            # Run every independent group even if an earlier group fails, so all reports
+            # and logcat evidence are available from a single emulator session.
+            status=0
+
+            if ! ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace; then
+              status=1
+            fi
+
+            if ! ./gradlew :app:connectedNoSentryPythonBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.integration.IdentityRecoveryIpcInstrumentedTest,network.columba.app.integration.IdentityRecoveryPersistenceInstrumentedTest --stacktrace; then
+              status=1
+            fi
+
+            if ! ./gradlew :rns-backend-py:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.rns.backend.py.PythonRnsCoreIdentityRecoveryInstrumentedTest --stacktrace; then
+              status=1
+            fi
+
+            exit "$status"
 
       - name: Upload instrumented test results
         if: always()

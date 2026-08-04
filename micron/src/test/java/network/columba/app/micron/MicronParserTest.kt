@@ -256,7 +256,11 @@ class MicronParserTest {
 
         assertEquals("# Add tasks\nnt add \"Buy groceries\"", renderedText)
 
-        val comment = doc.lines[0].elements.filterIsInstance<MicronElement.Text>().single()
+        val comment =
+            doc.lines[0]
+                .elements
+                .filterIsInstance<MicronElement.Text>()
+                .single()
         val command =
             doc.lines[1]
                 .elements

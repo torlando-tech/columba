@@ -8,8 +8,10 @@ import org.json.JSONObject
 import java.io.File
 
 class AudioAttachmentLoader(
-    private val context: Context,
+    context: Context,
 ) {
+    private val attachmentsDir = File(context.applicationContext.filesDir, "attachments")
+
     suspend fun loadBytes(attachment: AudioAttachmentUi): ByteArray? =
         withContext(Dispatchers.IO) {
             resolvePayload(attachment.fieldsJson, attachment.payloadRef)?.let { readPayloadBytes(it) }
@@ -38,6 +40,10 @@ class AudioAttachmentLoader(
 
     private fun parseObjectPayload(field7: JSONObject): AudioAttachmentPayloadRef? {
         field7.optString("data", "").takeIf { it.isNotEmpty() }?.let { return it.toAudioPayloadRefOrNull() }
+        field7.optJSONObject("data")?.let { nested ->
+            val nestedRef = parseObjectPayload(nested) ?: return null
+            return AudioAttachmentPayloadRef.NestedFieldRef("data", nestedRef)
+        }
         field7.optString("_file_ref", "").takeIf { it.isNotEmpty() }?.let { return AudioAttachmentPayloadRef.FileRef(it) }
         field7.optJSONObject("payload")?.let { nested ->
             val nestedRef = parseObjectPayload(nested) ?: return null
@@ -58,7 +64,10 @@ class AudioAttachmentLoader(
 
     private fun readFilePayload(path: String, visitedPaths: MutableSet<String>): ByteArray? {
         val file = File(path)
-        if (!file.isFile || !visitedPaths.add(file.canonicalPath)) return null
+        val canonicalPath = runCatching { file.canonicalPath }.getOrNull() ?: return null
+        val attachmentsRoot = runCatching { attachmentsDir.canonicalPath }.getOrNull() ?: return null
+        if (!canonicalPath.startsWith("$attachmentsRoot${File.separator}")) return null
+        if (!file.isFile || !visitedPaths.add(canonicalPath)) return null
         val raw = file.readBytes()
         if (raw.size >= 4 && raw.copyOfRange(0, 4).contentEquals("OggS".encodeToByteArray())) {
             return raw

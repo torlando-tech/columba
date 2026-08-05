@@ -49,7 +49,7 @@ class AudioAttachmentLoaderTest {
     @Test
     fun `loads raw Ogg bytes from file reference`() = runTest {
         val expected = "OggSraw-payload".encodeToByteArray()
-        val file = File.createTempFile("audio_raw", ".ogg", context.cacheDir).apply { writeBytes(expected) }
+        val file = attachmentFile("raw", ".ogg").apply { writeBytes(expected) }
         val attachment =
             AudioAttachmentUi(
                 mode = AudioAttachmentMode.AM_OPUS_OGG,
@@ -58,6 +58,26 @@ class AudioAttachmentLoaderTest {
             )
 
         assertArrayEquals(expected, loader.loadBytes(attachment))
+    }
+
+    @Test
+    fun `loads nested data object consistently with mapper`() = runTest {
+        val attachment = attachment(fieldsJson = """{"7":[16,{"data":{"data":"4f676753"}}]}""")
+
+        assertArrayEquals("OggS".encodeToByteArray(), loader.loadBytes(attachment))
+    }
+
+    @Test
+    fun `rejects file references outside managed attachment storage`() = runTest {
+        val outside = File.createTempFile("audio_outside", ".ogg", context.cacheDir).apply { writeText("OggSsecret") }
+        val attachment =
+            AudioAttachmentUi(
+                mode = AudioAttachmentMode.AM_OPUS_OGG,
+                payloadRef = AudioAttachmentPayloadRef.FileRef(outside.absolutePath),
+                isPlayable = true,
+            )
+
+        assertNull(loader.loadBytes(attachment))
     }
 
     @Test
@@ -82,7 +102,12 @@ class AudioAttachmentLoaderTest {
         )
 
     private fun tempFile(prefix: String, contents: String): File =
-        File.createTempFile("audio_$prefix", ".data", context.cacheDir).apply { writeText(contents) }
+        attachmentFile(prefix, ".data").apply { writeText(contents) }
+
+    private fun attachmentFile(prefix: String, suffix: String): File {
+        val dir = File(context.filesDir, "attachments/test").apply { mkdirs() }
+        return File.createTempFile("audio_$prefix", suffix, dir)
+    }
 
     private fun jsonString(value: String): String = org.json.JSONObject.quote(value)
 }

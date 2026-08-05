@@ -446,6 +446,7 @@ fun MessagingScreen(
     val isProcessingFile by viewModel.isProcessingFile.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
     val voiceRecordingState by viewModel.voiceRecordingState.collectAsStateWithLifecycle()
+    val isVoiceRecordingBlockedByCall by viewModel.isVoiceRecordingBlockedByCall.collectAsStateWithLifecycle()
 
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
@@ -1388,6 +1389,7 @@ fun MessagingScreen(
                             ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
                         permissionPermanentlyDenied = audioPermissionPermanentlyDenied,
                         isSupported = viewModel.isVoiceMessageSupported,
+                        isBlockedByCall = isVoiceRecordingBlockedByCall,
                         onRequestPermission = {
                             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         },
@@ -1446,10 +1448,14 @@ fun MessagingScreen(
                         showVoiceControls = false
                     },
                     onSendClick = {
-                        if (
-                            messageText.isNotBlank() || selectedImageData != null ||
-                            selectedFileAttachments.isNotEmpty() || voiceRecordingState.selectedRecording != null
-                        ) {
+                        val hasComposerContent =
+                            listOf(
+                                messageText.isNotBlank(),
+                                selectedImageData != null,
+                                selectedFileAttachments.isNotEmpty(),
+                                voiceRecordingState.selectedRecording != null,
+                            ).any { it }
+                        if (hasComposerContent) {
                             voicePlayer.close()
                             val wasVoiceMessage = voiceRecordingState.selectedRecording != null
                             viewModel.sendMessage(destinationHash, messageText.trim())
@@ -1511,6 +1517,7 @@ fun MessagingScreen(
                             showVoiceControls = true
                             when {
                                 !viewModel.isVoiceMessageSupported -> Unit
+                                isVoiceRecordingBlockedByCall -> Unit
                                 androidx.core.content.ContextCompat.checkSelfPermission(
                                     context,
                                     Manifest.permission.RECORD_AUDIO,

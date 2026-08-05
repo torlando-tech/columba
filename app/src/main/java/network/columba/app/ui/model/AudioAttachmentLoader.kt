@@ -21,6 +21,8 @@ class AudioAttachmentLoader(
             resolvePayload(attachment.fieldsJson, attachment.payloadRef)?.let { readPayloadBytes(it) }
         }
 
+    // Fail-fast returns keep malformed and unsafe payload references out of later I/O.
+    @Suppress("ReturnCount")
     private fun resolvePayload(fieldsJson: String?, payloadRef: AudioAttachmentPayloadRef?): AudioAttachmentPayloadRef? {
         if (payloadRef != null) return payloadRef
         if (fieldsJson == null) return null
@@ -42,6 +44,8 @@ class AudioAttachmentLoader(
         }
     }
 
+    // Each accepted nested representation is validated independently and fails closed.
+    @Suppress("ReturnCount")
     private fun parseObjectPayload(field7: JSONObject): AudioAttachmentPayloadRef? {
         field7.optJSONObject("data")?.let { nested ->
             val nestedRef = parseObjectPayload(nested) ?: return null
@@ -66,6 +70,8 @@ class AudioAttachmentLoader(
             is AudioAttachmentPayloadRef.NestedFieldRef -> readPayloadBytes(ref.payload, visitedPaths)
         }
 
+    // Security checks intentionally return immediately before any untrusted file is read.
+    @Suppress("ReturnCount")
     private fun readFilePayload(path: String, visitedPaths: MutableSet<String>): ByteArray? {
         val file = File(path)
         val canonicalPath = runCatching { file.canonicalPath }.getOrNull() ?: return null

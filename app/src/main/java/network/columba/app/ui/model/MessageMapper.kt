@@ -329,6 +329,8 @@ private fun parseAudioArray(field7: JSONArray, fieldsJson: String): AudioAttachm
     }
 }
 
+// Fail closed at each unsupported or contradictory nested representation.
+@Suppress("ReturnCount")
 private fun parseAudioPayloadRef(json: JSONObject): AudioAttachmentPayloadRef? {
     json.optJSONObject("data")?.let { nested ->
         val ref = parseAudioPayloadRef(nested) ?: return null

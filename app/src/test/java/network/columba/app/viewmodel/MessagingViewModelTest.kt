@@ -21,7 +21,9 @@ import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.notifications.NotificationHelper
@@ -61,6 +63,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -97,6 +100,7 @@ class MessagingViewModelTest {
     private lateinit var blockedPeerRepository: network.columba.app.data.repository.BlockedPeerRepository
     private lateinit var identityResolutionManager: IdentityResolutionManager
     private lateinit var notificationHelper: NotificationHelper
+    private lateinit var rnsTelephony: RnsTelephony
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -137,6 +141,8 @@ class MessagingViewModelTest {
 
         notificationHelper = mockk()
         every { notificationHelper.cancelNotificationForConversation(any()) } just Runs
+        rnsTelephony = mockk()
+        every { rnsTelephony.callState } returns MutableStateFlow(CallState.Idle)
 
         // Mock receivedLocationRepository to return no location by default
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
@@ -254,6 +260,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
             testBody()
@@ -282,6 +289,7 @@ class MessagingViewModelTest {
             blockedPeerRepository,
             identityResolutionManager,
         notificationHelper,
+                rnsTelephony,
         )
 
     @Test
@@ -292,6 +300,19 @@ class MessagingViewModelTest {
             val result = runCatching { viewModel.messages.first() }
             assertTrue("Messages flow should be accessible", result.isSuccess)
             coVerify(exactly = 0) { conversationRepository.getMessagesPaged(any()) }
+        }
+
+    @Test
+    fun `voice recording is blocked while a call is active`() =
+        runTest {
+            every { rnsTelephony.callState } returns MutableStateFlow(CallState.Active("peer"))
+            viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.isVoiceRecordingBlockedByCall.value)
+            assertThrows(IllegalStateException::class.java) {
+                viewModel.startVoiceRecording()
+            }
         }
 
     @Test
@@ -571,6 +592,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Clear existing mocks and create new ones that fail identity loading
             clearAllMocks()
+            every { rnsTelephony.callState } returns MutableStateFlow(CallState.Idle)
 
             val failingRnsCore: RnsCore = mockk()
             val failingRnsLxmf: RnsLxmf = mockk()
@@ -640,6 +662,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
 
             // Attempt to send message
@@ -1124,6 +1147,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1199,6 +1223,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1272,6 +1297,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1333,6 +1359,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1408,6 +1435,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1476,6 +1504,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1544,6 +1573,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1612,6 +1642,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1680,6 +1711,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1747,6 +1779,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1809,6 +1842,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1871,6 +1905,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -4729,6 +4764,7 @@ class MessagingViewModelTest {
             viewModel.retryFailedMessage("voice-failed")
             advanceUntilIdle()
 
+            var sentExpectedAudio = false
             coVerify {
                 rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
@@ -4741,11 +4777,13 @@ class MessagingViewModelTest {
                     extraFields =
                         match { fields ->
                             val audio = fields?.get(7) as? List<*>
-                            audio?.getOrNull(0) == 16 &&
+                            sentExpectedAudio = audio?.getOrNull(0) == 16 &&
                                 (audio.getOrNull(1) as? ByteArray)?.contentEquals("OggS".encodeToByteArray()) == true
+                            sentExpectedAudio
                         },
                 )
             }
+            assertTrue(sentExpectedAudio)
         }
 
     @Test
@@ -4786,6 +4824,7 @@ class MessagingViewModelTest {
             viewModel.retryFailedMessage("voice-file")
             advanceUntilIdle()
 
+            var sentExpectedAudio = false
             coVerify {
                 rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
@@ -4798,10 +4837,13 @@ class MessagingViewModelTest {
                     extraFields =
                         match { fields ->
                             val audio = fields?.get(7) as? List<*>
-                            (audio?.getOrNull(1) as? ByteArray)?.contentEquals("OggS".encodeToByteArray()) == true
+                            sentExpectedAudio =
+                                (audio?.getOrNull(1) as? ByteArray)?.contentEquals("OggS".encodeToByteArray()) == true
+                            sentExpectedAudio
                         },
                 )
             }
+            assertTrue(sentExpectedAudio)
         }
 
     @Test

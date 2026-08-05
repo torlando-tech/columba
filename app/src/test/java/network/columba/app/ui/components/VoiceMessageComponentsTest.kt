@@ -86,6 +86,25 @@ class VoiceMessageComponentsTest {
     }
 
     @Test
+    fun `active call explains that voice recording is unavailable`() {
+        composeRule.setContent {
+            VoiceRecordingControls(
+                state = VoiceMessageRecordingState(),
+                hasPermission = true,
+                isSupported = true,
+                isBlockedByCall = true,
+                onRequestPermission = {},
+                onStart = {},
+                onStop = {},
+                onCancel = {},
+            )
+        }
+
+        composeRule.onNodeWithText("Voice recording is unavailable during a call.").assertIsDisplayed()
+        composeRule.onNodeWithText("Start recording").assertDoesNotExist()
+    }
+
+    @Test
     fun `recording state exposes stop and cancel actions`() {
         var stopped = false
         var cancelled = false

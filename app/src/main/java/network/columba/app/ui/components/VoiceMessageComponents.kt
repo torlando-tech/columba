@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -49,6 +50,7 @@ fun VoiceRecordingControls(
     hasPermission: Boolean,
     permissionPermanentlyDenied: Boolean = false,
     isSupported: Boolean,
+    isBlockedByCall: Boolean = false,
     onRequestPermission: () -> Unit,
     onOpenPermissionSettings: () -> Unit = {},
     onStart: () -> Unit,
@@ -75,6 +77,17 @@ fun VoiceRecordingControls(
                     Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         stringResource(R.string.attachment_voice_panel_unsupported),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.attachment_voice_panel_cancel))
+                    }
+                }
+                isBlockedByCall -> {
+                    Icon(Icons.Filled.MicOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.attachment_voice_panel_call_active),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
                     )

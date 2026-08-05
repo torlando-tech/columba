@@ -136,6 +136,7 @@ class MessagingScreenTest {
         // Voice-message recording mocks
         every { mockViewModel.voiceRecordingState } returns MutableStateFlow(VoiceMessageRecordingState())
         every { mockViewModel.isVoiceMessageSupported } returns true
+        every { mockViewModel.isVoiceRecordingBlockedByCall } returns MutableStateFlow(false)
     }
 
     // ========== Empty State Tests ==========

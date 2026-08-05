@@ -18,7 +18,9 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
@@ -99,6 +101,7 @@ class MessagingViewModel
         private val blockedPeerRepository: network.columba.app.data.repository.BlockedPeerRepository,
         private val identityResolutionManager: network.columba.app.service.IdentityResolutionManager,
         private val notificationHelper: network.columba.app.notifications.NotificationHelper,
+        private val rnsTelephony: RnsTelephony,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -229,6 +232,14 @@ class MessagingViewModel
         private val audioAttachmentLoader by lazy { AudioAttachmentLoader(applicationContext) }
         val voiceRecordingState = voiceMessageRecorder.state
         val isVoiceMessageSupported: Boolean get() = voiceMessageRecorder.isSupported
+        val isVoiceRecordingBlockedByCall: StateFlow<Boolean> =
+            rnsTelephony.callState
+                .map { state ->
+                    state is CallState.Connecting ||
+                        state is CallState.Ringing ||
+                        state is CallState.Incoming ||
+                        state is CallState.Active
+                }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
         // File attachment state (LXMF Field 5)
         private val _selectedFileAttachments = MutableStateFlow<List<FileAttachment>>(emptyList())
@@ -1337,7 +1348,7 @@ class MessagingViewModel
                     result
                         .onSuccess { receipt ->
                             // Clear pending reply and draft after successful send
-                            handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId, voiceRecording)
+                            handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId, voiceBytes)
                             clearReplyTo()
                             draftSaveJob?.cancel()
                             lastDraftText = ""
@@ -1374,7 +1385,7 @@ class MessagingViewModel
             fileAttachments: List<FileAttachment>,
             deliveryMethodString: String,
             replyToMessageId: String? = null,
-            voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
+            voiceBytes: ByteArray? = null,
         ) {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
             val fieldsJson =
@@ -1383,7 +1394,7 @@ class MessagingViewModel
                         imageData = imageData,
                         imageFormat = imageFormat,
                         fileAttachments = fileAttachments,
-                        voiceBytes = voiceRecording?.let { withContext(Dispatchers.IO) { it.file.readBytes() } },
+                        voiceBytes = voiceBytes,
                         replyToMessageId = replyToMessageId,
                         cacheDir = applicationContext.cacheDir,
                     )
@@ -1446,7 +1457,6 @@ class MessagingViewModel
             if (saveMessageToDatabase(actualDestHash, currentPeerName, message)) {
                 clearSelectedImage()
                 clearFileAttachments()
-                voiceRecording?.file?.delete()
                 voiceMessageRecorder.removeSelected()
             }
         }
@@ -1465,6 +1475,17 @@ class MessagingViewModel
         ) {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
             val now = System.currentTimeMillis()
+            val fieldsJson =
+                runCatching {
+                    buildFieldsJson(
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = fileAttachments,
+                        voiceBytes = voiceBytes,
+                        replyToMessageId = replyToMessageId,
+                        cacheDir = applicationContext.cacheDir,
+                    )
+                }.getOrNull()
             val message =
                 DataMessage(
                     id = UUID.randomUUID().toString(),
@@ -1473,23 +1494,15 @@ class MessagingViewModel
                     timestamp = now,
                     isFromMe = true,
                     status = "failed",
-                    fieldsJson =
-                        runCatching {
-                            buildFieldsJson(
-                                imageData = imageData,
-                                imageFormat = imageFormat,
-                                fileAttachments = fileAttachments,
-                                voiceBytes = voiceBytes,
-                                replyToMessageId = replyToMessageId,
-                                cacheDir = applicationContext.cacheDir,
-                            )
-                        }.getOrNull(),
+                    fieldsJson = fieldsJson,
                     deliveryMethod = deliveryMethodString,
                     errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
                 )
             val persisted = saveMessageToDatabase(destinationHash, currentPeerName, message)
-            if (persisted && voiceBytes != null) {
+            val hasRetryableVoicePayload =
+                voiceBytes == null || parseAudioAttachment(fieldsJson) != null
+            if (persisted && hasRetryableVoicePayload && voiceBytes != null) {
                 voiceMessageRecorder.removeSelected()
             }
         }
@@ -1566,7 +1579,12 @@ class MessagingViewModel
             _selectedFileAttachments.value = emptyList()
         }
 
-        fun startVoiceRecording(maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS): File = voiceMessageRecorder.start(maxDurationMillis)
+        fun startVoiceRecording(maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS): File {
+            check(!isVoiceRecordingBlockedByCall.value) {
+                "Voice recording is unavailable during a call"
+            }
+            return voiceMessageRecorder.start(maxDurationMillis)
+        }
         fun stopVoiceRecording() = voiceMessageRecorder.stop()
         fun cancelVoiceRecording() = voiceMessageRecorder.cancel()
         fun removeVoiceRecording() = voiceMessageRecorder.removeSelected()
@@ -2377,6 +2395,9 @@ class MessagingViewModel
          *
          * @param messageId The ID (hash) of the failed message to retry
          */
+        // Retry reconstructs every supported persisted attachment form and deliberately
+        // keeps the lifecycle in one coroutine so status restoration cannot be skipped.
+        @Suppress("LongMethod")
         fun retryFailedMessage(messageId: String) {
             viewModelScope.launch {
                 try {
@@ -2623,7 +2644,8 @@ internal fun validateAndSanitizeContent(
 ): String? {
     // Sideband requires non-empty content to save messages to its database.
     // When sending attachments without text, use a single space (matching Sideband's behavior).
-    if (content.trim().isEmpty() && (imageData != null || fileAttachments.isNotEmpty() || voiceBytes != null)) {
+    val hasAttachment = listOf(imageData != null, fileAttachments.isNotEmpty(), voiceBytes != null).any { it }
+    if (content.trim().isEmpty() && hasAttachment) {
         return " "
     }
     val validationResult = InputValidator.validateMessageContent(content)

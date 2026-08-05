@@ -95,6 +95,31 @@ def dismiss_optional(driver: AdbUiDriver, text: str, *, timeout: float = 12) -> 
         pass
 
 
+def complete_onboarding(driver: AdbUiDriver, timeout: float = 90) -> None:
+    """Keep advancing onboarding until the production chat list is visible."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            snapshot = driver.snapshot()
+        except (subprocess.CalledProcessError, ET.ParseError):
+            time.sleep(0.5)
+            continue
+        try:
+            snapshot.require_text("Chats")
+            return
+        except LookupError:
+            pass
+        for label in ("Not Now", "Skip"):
+            try:
+                driver.tap(snapshot.require_text(label))
+                break
+            except LookupError:
+                continue
+        time.sleep(0.5)
+    driver.screenshot("onboarding-timeout.png")
+    raise TimeoutError("Onboarding did not reach the Chats screen")
+
+
 def stop_process(process: subprocess.Popen[str] | None) -> None:
     if process is None or process.poll() is not None:
         return
@@ -216,9 +241,7 @@ def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
         driver.adb("shell", "pm", "clear", PKG)
         driver.adb("logcat", "-c")
         driver.adb("shell", "am", "start", "-n", ACTIVITY)
-        dismiss_optional(driver, "Not Now")
-        driver.click_text("Skip", timeout=30)
-        driver.wait_text("Chats", timeout=60)
+        complete_onboarding(driver)
 
         tcp_host = os.environ.get("COLUMBA_E2E_HOST", "10.0.2.2")
         broadcast_and_wait(

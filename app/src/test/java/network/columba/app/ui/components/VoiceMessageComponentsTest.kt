@@ -16,9 +16,7 @@ import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import tech.torlando.lxst.recording.RecordedAudio
 import tech.torlando.lxst.recording.RecorderState
-import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -40,7 +38,6 @@ class VoiceMessageComponentsTest {
                 onStart = {},
                 onStop = {},
                 onCancel = {},
-                onRemove = {},
             )
         }
 
@@ -59,7 +56,6 @@ class VoiceMessageComponentsTest {
                 onStart = {},
                 onStop = {},
                 onCancel = {},
-                onRemove = {},
             )
         }
 
@@ -73,49 +69,44 @@ class VoiceMessageComponentsTest {
         var cancelled = false
         composeRule.setContent {
             VoiceRecordingControls(
-                state = VoiceMessageRecordingState(recorderState = RecorderState.Recording(0L)),
+                state = VoiceMessageRecordingState(recorderState = RecorderState.Recording(0L), elapsedMillis = 5_000L),
                 hasPermission = true,
                 isSupported = true,
                 onRequestPermission = {},
                 onStart = {},
                 onStop = { stopped = true },
                 onCancel = { cancelled = true },
-                onRemove = {},
             )
         }
 
-        composeRule.onNodeWithText("Stop recording").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Cancel recording").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Recording").assertIsDisplayed()
+        composeRule.onNodeWithText("0:05").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Stop recording").performClick()
+        composeRule.onNodeWithContentDescription("Cancel recording").performClick()
         composeRule.onNodeWithText("Tap start to begin, stop to save, or cancel to discard.").assertDoesNotExist()
         assertTrue(stopped)
         assertTrue(cancelled)
     }
 
     @Test
-    fun `selected recording exposes duration and remove action`() {
+    fun `selected recording preview exposes playback duration and remove action`() {
         var removed = false
-        val recording = RecordedAudio(File("selected.ogg"), 65_000L, 10L)
+        var previewed = false
         composeRule.setContent {
-            VoiceRecordingControls(
-                state =
-                    VoiceMessageRecordingState(
-                        recorderState = RecorderState.Completed(recording),
-                        selectedRecording = recording,
-                    ),
-                hasPermission = true,
-                isSupported = true,
-                onRequestPermission = {},
-                onStart = {},
-                onStop = {},
-                onCancel = {},
+            VoiceDraftPreview(
+                durationMillis = 65_000L,
+                state = VoiceMessagePlayerState(),
+                onToggle = { previewed = true },
                 onRemove = { removed = true },
             )
         }
 
-        composeRule.onNodeWithText("Duration 1:05").assertIsDisplayed()
-        composeRule.onNodeWithText("Remove recording").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Cancel recording").assertDoesNotExist()
+        composeRule.onNodeWithText("Voice message").assertIsDisplayed()
+        composeRule.onNodeWithText("0:00 of 1:05").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Play voice message").performClick()
+        composeRule.onNodeWithContentDescription("Remove recording").performClick()
         assertTrue(removed)
+        assertTrue(previewed)
     }
 
     @Test

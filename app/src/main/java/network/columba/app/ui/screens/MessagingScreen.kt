@@ -174,6 +174,7 @@ import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.components.AttachmentPanel
 import network.columba.app.ui.components.VoiceMessageBubble
+import network.columba.app.ui.components.VoiceDraftPreview
 import network.columba.app.ui.components.VoiceRecordingControls
 import network.columba.app.ui.components.CodecSelectionDialog
 import network.columba.app.ui.components.FileAttachmentCard
@@ -222,6 +223,7 @@ import java.util.Date
 import java.util.Locale
 
 private const val URL_ANNOTATION_TAG = "url"
+private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
 
 @Composable
 private fun LinkifiedMessageText(
@@ -733,6 +735,12 @@ fun MessagingScreen(
     val voicePlayer = remember { VoiceMessagePlayer(context, scope) }
     val voicePlayerState by voicePlayer.state.collectAsStateWithLifecycle()
     DisposableEffect(Unit) { onDispose { voicePlayer.close() } }
+
+    BackHandler(enabled = showVoiceControls && voiceRecordingState.selectedRecording == null) {
+        voicePlayer.close()
+        viewModel.cancelVoiceRecording()
+        showVoiceControls = false
+    }
 
     // Back handler: dismiss panel on back press
     BackHandler(enabled = inputPanelMode == InputPanelMode.PANEL) {
@@ -1347,7 +1355,7 @@ fun MessagingScreen(
                     )
                 }
 
-                if (showVoiceControls) {
+                if (showVoiceControls && voiceRecordingState.selectedRecording == null) {
                     VoiceRecordingControls(
                         state = voiceRecordingState,
                         hasPermission =
@@ -1359,18 +1367,20 @@ fun MessagingScreen(
                         onRequestPermission = {
                             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         },
-                        onStart = { runCatching { viewModel.startVoiceRecording() } },
+                        onStart = {
+                            voicePlayer.close()
+                            runCatching { viewModel.startVoiceRecording() }
+                        },
                         onStop = { runCatching { viewModel.stopVoiceRecording() } },
                         onCancel = {
+                            voicePlayer.close()
                             viewModel.cancelVoiceRecording()
                             showVoiceControls = false
                         },
-                        onRemove = { viewModel.removeVoiceRecording() },
                     )
-                }
-
-                // Message Input Bar - at bottom of Column
-                MessageInputBar(
+                } else {
+                    // Message Input Bar - at bottom of Column
+                    MessageInputBar(
                     modifier =
                         Modifier
                             .fillMaxWidth(),
@@ -1389,12 +1399,29 @@ fun MessagingScreen(
                     totalAttachmentSize = totalAttachmentSize,
                     onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
                     hasVoiceAttachment = voiceRecordingState.selectedRecording != null,
+                    voiceAttachmentDurationMillis = voiceRecordingState.selectedRecording?.durationMillis,
+                    voicePreviewState =
+                        voicePlayerState.takeIf { it.messageKey == VOICE_PREVIEW_KEY }
+                            ?: VoiceMessagePlayerState(),
+                    onVoicePreviewToggle = {
+                        voiceRecordingState.selectedRecording?.file?.let { file ->
+                            voicePlayer.toggleFile(VOICE_PREVIEW_KEY, file)
+                        }
+                    },
+                    onRemoveVoiceAttachment = {
+                        voicePlayer.close()
+                        viewModel.removeVoiceRecording()
+                        showVoiceControls = false
+                    },
                     onSendClick = {
                         if (
                             messageText.isNotBlank() || selectedImageData != null ||
                             selectedFileAttachments.isNotEmpty() || voiceRecordingState.selectedRecording != null
                         ) {
+                            voicePlayer.close()
+                            val wasVoiceMessage = voiceRecordingState.selectedRecording != null
                             viewModel.sendMessage(destinationHash, messageText.trim())
+                            if (wasVoiceMessage) showVoiceControls = false
                             messageText = ""
                         }
                     },
@@ -1411,7 +1438,8 @@ fun MessagingScreen(
                         }
                     },
                     isAttachmentPanelActive = inputPanelMode == InputPanelMode.PANEL,
-                )
+                    )
+                }
 
                 // Bottom space: attachment panel, keyboard spacer, or nothing
                 when (inputPanelMode) {
@@ -2437,6 +2465,10 @@ fun MessageInputBar(
     totalAttachmentSize: Int = 0,
     onRemoveFileAttachment: (Int) -> Unit = {},
     hasVoiceAttachment: Boolean = false,
+    voiceAttachmentDurationMillis: Long? = null,
+    voicePreviewState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
+    onVoicePreviewToggle: () -> Unit = {},
+    onRemoveVoiceAttachment: () -> Unit = {},
     onSendClick: () -> Unit,
     isSending: Boolean = false,
     onAttachmentPanelToggle: () -> Unit = {},
@@ -2543,6 +2575,15 @@ fun MessageInputBar(
                         )
                     }
                 }
+            }
+
+            voiceAttachmentDurationMillis?.let { durationMillis ->
+                VoiceDraftPreview(
+                    durationMillis = durationMillis,
+                    state = voicePreviewState,
+                    onToggle = onVoicePreviewToggle,
+                    onRemove = onRemoveVoiceAttachment,
+                )
             }
 
             // Character count display

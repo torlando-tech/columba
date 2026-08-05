@@ -119,6 +119,23 @@ class VoiceMessagePlayerTest {
     }
 
     @Test
+    fun `toggleFile previews selected recording without deleting it`() = runTest {
+        val engine = FakePlaybackEngine(durationMs = 1_500)
+        val player = createPlayer(this, engine)
+        val recording = java.io.File.createTempFile("voice_preview", ".ogg", context.cacheDir).apply { writeText("OggS") }
+
+        player.toggleFile("preview", recording)
+        engine.completePreparation()
+
+        assertTrue(engine.started)
+        assertEquals(recording, engine.sourceFile)
+        assertEquals("preview", player.state.value.messageKey)
+        player.close()
+        assertTrue(recording.exists())
+        recording.delete()
+    }
+
+    @Test
     fun `missing payload produces unavailable state without creating engine`() = runTest {
         var factoryCalls = 0
         val dispatcher = StandardTestDispatcher(testScheduler)

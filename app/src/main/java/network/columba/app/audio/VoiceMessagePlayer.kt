@@ -110,6 +110,15 @@ internal class VoiceMessagePlayer(
         }
     }
 
+    fun toggleFile(messageKey: String, file: File) {
+        val current = _state.value
+        if (current.messageKey != messageKey || player == null) {
+            playFile(messageKey, file)
+            return
+        }
+        if (current.playing) pause() else resume()
+    }
+
     fun pause() {
         val active = player ?: return
         if (active.isPlaying) active.pause()
@@ -183,6 +192,48 @@ internal class VoiceMessagePlayer(
                     withContext(NonCancellable + ioDispatcher) { unownedFile?.delete() }
                 }
             }
+    }
+
+    private fun playFile(messageKey: String, file: File) {
+        releaseActive(clearState = false)
+        if (!file.isFile || file.length() <= 0L) {
+            _state.value = VoiceMessagePlayerState(error = "unavailable", messageKey = messageKey)
+            return
+        }
+        _state.value = VoiceMessagePlayerState(loading = true, messageKey = messageKey)
+        try {
+            val engine = playerFactory.create()
+            player = engine
+            engine.setDataSource(file)
+            engine.setOnPreparedListener { prepared ->
+                if (player !== prepared) return@setOnPreparedListener
+                prepared.start()
+                _state.value =
+                    VoiceMessagePlayerState(
+                        playing = true,
+                        durationMs = prepared.durationMs,
+                        messageKey = messageKey,
+                    )
+                startProgressUpdates(prepared)
+            }
+            engine.setOnCompletionListener { completed ->
+                if (player !== completed) return@setOnCompletionListener
+                progressJob?.cancel()
+                progressJob = null
+                _state.value =
+                    _state.value.copy(
+                        playing = false,
+                        progressMs = completed.durationMs,
+                        durationMs = completed.durationMs,
+                    )
+            }
+            engine.setOnErrorListener {
+                if (player === engine) failPlayback(messageKey, "error")
+            }
+            engine.prepareAsync()
+        } catch (error: Exception) {
+            failPlayback(messageKey, error.message ?: "error")
+        }
     }
 
     override fun close() = releaseActive(clearState = true)

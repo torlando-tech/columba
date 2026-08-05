@@ -1,21 +1,37 @@
 package network.columba.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -36,54 +52,171 @@ fun VoiceRecordingControls(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onCancel: () -> Unit,
-    onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.attachment_voice_panel_title), style = MaterialTheme.typography.titleMedium)
-        when {
-            !isSupported -> Text(stringResource(R.string.attachment_voice_panel_unsupported))
-            !hasPermission -> Button(onClick = onRequestPermission) { Text(stringResource(R.string.attachment_voice_panel_request_permission)) }
-            else -> {
-                val status =
-                    when {
-                        state.recorderState is RecorderState.Recording -> R.string.attachment_voice_panel_recording
-                        state.recorderState == RecorderState.Finalizing -> R.string.attachment_voice_panel_finalizing
-                        state.selectedRecording != null -> R.string.attachment_voice_panel_selected
-                        else -> R.string.attachment_voice_panel_ready
-                    }
-                val statusDescription = stringResource(R.string.attachment_voice_panel_status_label)
-                Text(
-                    stringResource(status),
-                    modifier = Modifier.semantics { contentDescription = statusDescription },
-                )
-                state.errorMessage?.let { Text(stringResource(R.string.attachment_voice_panel_error, it), color = MaterialTheme.colorScheme.error) }
-                when {
-                    state.selectedRecording != null -> {
-                        Text(stringResource(R.string.attachment_voice_panel_duration, formatMs(state.selectedRecording.durationMillis)))
-                    }
-                    state.recorderState !is RecorderState.Recording && state.recorderState != RecorderState.Finalizing -> {
-                        Text(stringResource(R.string.attachment_voice_panel_instructions))
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 72.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when {
+                !isSupported -> {
+                    Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.attachment_voice_panel_unsupported),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.attachment_voice_panel_cancel))
                     }
                 }
-                when (state.recorderState) {
-                    is RecorderState.Recording -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onStop) { Text(stringResource(R.string.attachment_voice_panel_stop)) }
-                            Button(onClick = onCancel) { Text(stringResource(R.string.attachment_voice_panel_cancel)) }
+                !hasPermission -> {
+                    Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        stringResource(R.string.attachment_voice_panel_permission_needed),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = onRequestPermission) {
+                        Text(stringResource(R.string.attachment_voice_panel_request_permission))
+                    }
+                    IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.attachment_voice_panel_cancel))
+                    }
+                }
+                state.recorderState is RecorderState.Recording -> {
+                    IconButton(
+                        onClick = onCancel,
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) {
+                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.attachment_voice_panel_cancel))
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(8.dp)
+                                        .background(MaterialTheme.colorScheme.error, CircleShape),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.attachment_voice_panel_recording),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        Text(formatMs(state.elapsedMillis), style = MaterialTheme.typography.titleLarge)
+                    }
+                    FilledIconButton(
+                        onClick = onStop,
+                        modifier = Modifier.size(48.dp),
+                        colors =
+                            IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                    ) {
+                        Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.attachment_voice_panel_stop))
+                    }
+                }
+                state.recorderState == RecorderState.Finalizing -> {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(stringResource(R.string.attachment_voice_panel_finalizing), style = MaterialTheme.typography.labelLarge)
+                        Text(formatMs(state.elapsedMillis), style = MaterialTheme.typography.titleLarge)
+                    }
+                    IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.attachment_voice_panel_cancel))
+                    }
+                }
+                else -> {
+                    Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(stringResource(R.string.attachment_voice_panel_ready), style = MaterialTheme.typography.labelLarge)
+                        state.errorMessage?.let {
+                            Text(
+                                stringResource(R.string.attachment_voice_panel_error, it),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
                         }
                     }
-                    RecorderState.Finalizing -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    else -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onStart) { Text(stringResource(R.string.attachment_voice_panel_start)) }
-                            if (state.selectedRecording != null) {
-                                Button(onClick = onRemove) { Text(stringResource(R.string.attachment_voice_panel_remove)) }
-                            }
-                        }
+                    FilledIconButton(onClick = onStart, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Mic, contentDescription = stringResource(R.string.attachment_voice_panel_start))
+                    }
+                    IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.attachment_voice_panel_cancel))
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun VoiceDraftPreview(
+    durationMillis: Long,
+    state: VoiceMessagePlayerState,
+    onToggle: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            FilledTonalIconButton(onClick = onToggle, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription =
+                        if (state.playing) {
+                            stringResource(R.string.message_voice_pause)
+                        } else {
+                            stringResource(R.string.message_voice_play)
+                        },
+                )
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.attachment_voice_panel_title), style = MaterialTheme.typography.labelLarge)
+                Text(
+                    stringResource(
+                        R.string.message_voice_progress,
+                        formatMs(state.progressMs.toLong()),
+                        formatMs(state.durationMs.toLong().takeIf { it > 0L } ?: durationMillis),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(48.dp),
+                colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.attachment_voice_panel_remove))
+            }
+        }
+        if (state.loading) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        } else if (state.durationMs > 0) {
+            LinearProgressIndicator(
+                progress = { (state.progressMs.toFloat() / state.durationMs).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -104,7 +237,7 @@ fun VoiceMessageBubble(
             else -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalIconButton(onClick = onToggle) {
-                        androidx.compose.material3.Icon(
+                        Icon(
                             imageVector = if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (state.playing) stringResource(R.string.message_voice_pause) else stringResource(R.string.message_voice_play),
                         )

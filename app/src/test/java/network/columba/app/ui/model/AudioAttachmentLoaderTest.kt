@@ -81,6 +81,20 @@ class AudioAttachmentLoaderTest {
     }
 
     @Test
+    fun `rejects oversized managed audio before reading`() = runTest {
+        val oversized = attachmentFile("oversized", ".ogg")
+        java.io.RandomAccessFile(oversized, "rw").use { it.setLength(128L * 1024 * 1024 + 1) }
+        val attachment =
+            AudioAttachmentUi(
+                mode = AudioAttachmentMode.AM_OPUS_OGG,
+                payloadRef = AudioAttachmentPayloadRef.FileRef(oversized.absolutePath),
+                isPlayable = true,
+            )
+
+        assertNull(loader.loadBytes(attachment))
+    }
+
+    @Test
     fun `rejects malformed and missing payloads`() = runTest {
         assertNull(loader.loadBytes(attachment(fieldsJson = """{"7":[16,"not-hex"]}""")))
         assertNull(

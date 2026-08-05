@@ -73,6 +73,7 @@ internal object AttachmentBlob {
         extraFields: Map<Int, Any>? = null,
     ): ParcelFileDescriptor? {
         if (isEmpty(imageData, fileAttachments, extraFields)) return null
+        validatePayload(imageData, fileAttachments.orEmpty(), extraFields.orEmpty())
 
         val dir = File(cacheDir, TEMP_SUBDIR).apply { mkdirs() }
         val tempFile = File.createTempFile("lxmf-attach-", ".bin", dir)
@@ -125,6 +126,7 @@ internal object AttachmentBlob {
             if (magic != MAGIC) throw IOException("Bad attachment blob magic: 0x${Integer.toHexString(magic)}")
             val version = inp.readInt()
             if (version != VERSION) throw IOException("Unsupported attachment blob version: $version")
+            val budget = ReadBudget()
 
             // Lengths come straight off the stream; a corrupt/truncated blob could
             // carry a negative count. Reject it as a clean IOException rather than
@@ -133,24 +135,28 @@ internal object AttachmentBlob {
             var imageData: ByteArray? = null
             var imageFormat: String? = null
             if (imageLen != NO_IMAGE) {
+                budget.consumeBytes(imageLen, "imageLen")
                 imageData = ByteArray(checkLen(imageLen, "imageLen", MAX_BINARY_BYTES)).also { inp.readFully(it) }
                 if (inp.readBoolean()) imageFormat = inp.readUTF()
             }
 
             val fileCount = checkLen(inp.readInt(), "fileCount", MAX_COLLECTION_SIZE)
+            budget.consumeNodes(fileCount, "fileCount")
             val files = ArrayList<Pair<String, ByteArray>>(fileCount)
             repeat(fileCount) {
                 val name = inp.readUTF()
                 val dataLen = checkLen(inp.readInt(), "dataLen", MAX_BINARY_BYTES)
+                budget.consumeBytes(dataLen, "dataLen")
                 val data = ByteArray(dataLen).also { inp.readFully(it) }
                 files.add(name to data)
             }
             val extraFieldCount = checkLen(inp.readInt(), "extraFieldCount", MAX_COLLECTION_SIZE)
+            budget.consumeNodes(extraFieldCount, "extraFieldCount")
             val extraFields = LinkedHashMap<Int, Any>(extraFieldCount)
             repeat(extraFieldCount) {
                 val field = inp.readInt()
                 if (extraFields.containsKey(field)) throw IOException("Duplicate LXMF extra field $field")
-                extraFields[field] = inp.readExtraFieldValue()
+                extraFields[field] = inp.readExtraFieldValue(budget, depth = 0)
             }
             return Payload(imageData, imageFormat, files, extraFields)
         }
@@ -181,18 +187,82 @@ internal object AttachmentBlob {
         }
     }
 
-    private fun DataInputStream.readExtraFieldValue(): Any =
-        when (val type = readUnsignedByte()) {
+    private fun DataInputStream.readExtraFieldValue(budget: ReadBudget, depth: Int): Any {
+        if (depth > MAX_NESTING_DEPTH) throw IOException("Attachment blob nesting exceeds $MAX_NESTING_DEPTH")
+        return when (val type = readUnsignedByte()) {
             TYPE_BOOLEAN -> readBoolean()
             TYPE_INT -> readInt()
             TYPE_LONG -> readLong()
             TYPE_FLOAT -> readFloat()
             TYPE_DOUBLE -> readDouble()
             TYPE_STRING -> readUTF()
-            TYPE_BYTES -> ByteArray(checkLen(readInt(), "extraFieldBytes", MAX_BINARY_BYTES)).also { readFully(it) }
-            TYPE_LIST -> List(checkLen(readInt(), "extraFieldListSize", MAX_COLLECTION_SIZE)) { readExtraFieldValue() }
+            TYPE_BYTES -> {
+                val size = checkLen(readInt(), "extraFieldBytes", MAX_BINARY_BYTES)
+                budget.consumeBytes(size, "extraFieldBytes")
+                ByteArray(size).also { readFully(it) }
+            }
+            TYPE_LIST -> {
+                val size = checkLen(readInt(), "extraFieldListSize", MAX_COLLECTION_SIZE)
+                budget.consumeNodes(size, "extraFieldListSize")
+                List(size) { readExtraFieldValue(budget, depth + 1) }
+            }
             else -> throw IOException("Unsupported LXMF extra-field value tag: $type")
         }
+    }
+
+    private fun validatePayload(
+        imageData: ByteArray?,
+        files: List<Pair<String, ByteArray>>,
+        fields: Map<Int, Any>,
+    ) {
+        require(files.size <= MAX_COLLECTION_SIZE) { "Too many file attachments" }
+        require(fields.size <= MAX_COLLECTION_SIZE) { "Too many LXMF extra fields" }
+        var totalBytes = imageData?.size?.toLong() ?: 0L
+        var totalNodes = files.size + fields.size
+        files.forEach { (_, data) ->
+            require(data.size <= MAX_BINARY_BYTES) { "File attachment exceeds $MAX_BINARY_BYTES bytes" }
+            totalBytes += data.size
+        }
+
+        fun validateValue(value: Any, depth: Int) {
+            require(depth <= MAX_NESTING_DEPTH) { "LXMF extra-field nesting exceeds $MAX_NESTING_DEPTH" }
+            when (value) {
+                is ByteArray -> {
+                    require(value.size <= MAX_BINARY_BYTES) { "LXMF extra-field bytes exceed $MAX_BINARY_BYTES" }
+                    totalBytes += value.size
+                }
+                is List<*> -> {
+                    require(value.size <= MAX_COLLECTION_SIZE) { "LXMF extra-field list is too large" }
+                    totalNodes += value.size
+                    value.forEach { validateValue(requireNotNull(it), depth + 1) }
+                }
+                is Boolean, is Int, is Long, is Float, is Double, is String -> Unit
+                else -> throw IllegalArgumentException("Unsupported LXMF extra-field value type: ${value::class.java.name}")
+            }
+            require(totalBytes <= MAX_TOTAL_BINARY_BYTES) { "Attachment payload exceeds $MAX_TOTAL_BINARY_BYTES bytes" }
+            require(totalNodes <= MAX_TOTAL_NODES) { "Attachment payload has too many values" }
+        }
+        fields.values.forEach { validateValue(it, depth = 0) }
+        require(totalBytes <= MAX_TOTAL_BINARY_BYTES) { "Attachment payload exceeds $MAX_TOTAL_BINARY_BYTES bytes" }
+        require(totalNodes <= MAX_TOTAL_NODES) { "Attachment payload has too many values" }
+    }
+
+    private class ReadBudget {
+        private var totalBytes = 0L
+        private var totalNodes = 0
+
+        fun consumeBytes(count: Int, field: String) {
+            if (count < 0) throw IOException("Bad attachment blob: invalid $field ($count)")
+            totalBytes += count
+            if (totalBytes > MAX_TOTAL_BINARY_BYTES) throw IOException("Attachment blob exceeds byte budget")
+        }
+
+        fun consumeNodes(count: Int, field: String) {
+            if (count < 0) throw IOException("Bad attachment blob: invalid $field ($count)")
+            totalNodes += count
+            if (totalNodes > MAX_TOTAL_NODES) throw IOException("Attachment blob exceeds value budget")
+        }
+    }
 
     /**
      * Reconstructed attachment payload. [fileAttachments] is empty (never null)
@@ -221,4 +291,7 @@ internal object AttachmentBlob {
     private const val TYPE_LIST = 8
     private const val MAX_BINARY_BYTES = 128 * 1024 * 1024
     private const val MAX_COLLECTION_SIZE = 4096
+    private const val MAX_TOTAL_BINARY_BYTES = 128L * 1024 * 1024
+    private const val MAX_TOTAL_NODES = 8192
+    private const val MAX_NESTING_DEPTH = 32
 }

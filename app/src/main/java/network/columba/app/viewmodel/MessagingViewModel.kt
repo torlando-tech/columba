@@ -26,6 +26,7 @@ import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.audio.VoiceMessageRecorder
+import network.columba.app.ui.model.AudioAttachmentLoader
 import network.columba.app.ui.model.DecodedImageResult
 import network.columba.app.ui.model.ImageCache
 import network.columba.app.ui.model.LocationSharingState
@@ -36,6 +37,7 @@ import network.columba.app.ui.model.getImageMetadata
 import network.columba.app.ui.model.loadFileAttachmentData
 import network.columba.app.ui.model.loadFileAttachmentMetadata
 import network.columba.app.ui.model.loadImageData
+import network.columba.app.ui.model.parseAudioAttachment
 import network.columba.app.ui.model.toMessageUi
 import network.columba.app.util.FileAttachment
 import network.columba.app.util.FileUtils
@@ -224,6 +226,7 @@ class MessagingViewModel
         val selectedImageIsAnimated: StateFlow<Boolean> = _selectedImageIsAnimated.asStateFlow()
 
         private val voiceMessageRecorder = VoiceMessageRecorder(applicationContext, viewModelScope)
+        private val audioAttachmentLoader by lazy { AudioAttachmentLoader(applicationContext) }
         val voiceRecordingState = voiceMessageRecorder.state
         val isVoiceMessageSupported: Boolean get() = voiceMessageRecorder.isSupported
 
@@ -2404,6 +2407,20 @@ class MessagingViewModel
                     // Parse image data from fieldsJson if present
                     val imageData = failedMessage.fieldsJson?.let { parseImageFromFieldsJson(it) }
                     val imageFormat = if (imageData != null) "jpg" else null
+                    val audioAttachment = parseAudioAttachment(failedMessage.fieldsJson)
+                    val voiceBytes =
+                        audioAttachment?.let { attachment ->
+                            audioAttachmentLoader.loadBytes(attachment)
+                        }
+                    if (audioAttachment != null && voiceBytes == null) {
+                        Log.e(TAG, "Stored voice attachment is unavailable for retry")
+                        conversationRepository.updateMessageDeliveryDetails(
+                            messageId,
+                            deliveryMethod = null,
+                            errorMessage = "Voice recording is no longer available",
+                        )
+                        return@launch
+                    }
 
                     // Parse file attachments from fieldsJson if present
                     // For retry, we need to reconstruct file attachments from stored data
@@ -2418,6 +2435,7 @@ class MessagingViewModel
                             sanitized = failedMessage.content,
                             imageData = imageData,
                             fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
                             defaultMethod = defaultMethod,
                         )
 
@@ -2436,6 +2454,13 @@ class MessagingViewModel
                             tryPropagationOnFail = tryPropOnFail,
                             imageData = imageData,
                             imageFormat = imageFormat,
+                            extraFields =
+                                voiceBytes?.let {
+                                    mapOf(
+                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                            listOf(network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG, it),
+                                    )
+                                },
                             // Preserve reply on retry
                             replyToMessageId = failedMessage.replyToMessageId,
                         )

@@ -7,10 +7,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
+private const val MAX_AUDIO_BYTES = 128L * 1024 * 1024
+
 class AudioAttachmentLoader(
     context: Context,
 ) {
-    private val attachmentsDir = File(context.applicationContext.filesDir, "attachments")
+    private val appContext = context.applicationContext
+    private val attachmentsDir: File
+        get() = File(appContext.filesDir, "attachments")
 
     suspend fun loadBytes(attachment: AudioAttachmentUi): ByteArray? =
         withContext(Dispatchers.IO) {
@@ -39,11 +43,11 @@ class AudioAttachmentLoader(
     }
 
     private fun parseObjectPayload(field7: JSONObject): AudioAttachmentPayloadRef? {
-        field7.optString("data", "").takeIf { it.isNotEmpty() }?.let { return it.toAudioPayloadRefOrNull() }
         field7.optJSONObject("data")?.let { nested ->
             val nestedRef = parseObjectPayload(nested) ?: return null
             return AudioAttachmentPayloadRef.NestedFieldRef("data", nestedRef)
         }
+        field7.optString("data", "").takeIf { it.isNotEmpty() }?.let { return it.toAudioPayloadRefOrNull() }
         field7.optString("_file_ref", "").takeIf { it.isNotEmpty() }?.let { return AudioAttachmentPayloadRef.FileRef(it) }
         field7.optJSONObject("payload")?.let { nested ->
             val nestedRef = parseObjectPayload(nested) ?: return null
@@ -67,7 +71,7 @@ class AudioAttachmentLoader(
         val canonicalPath = runCatching { file.canonicalPath }.getOrNull() ?: return null
         val attachmentsRoot = runCatching { attachmentsDir.canonicalPath }.getOrNull() ?: return null
         if (!canonicalPath.startsWith("$attachmentsRoot${File.separator}")) return null
-        if (!file.isFile || !visitedPaths.add(canonicalPath)) return null
+        if (!file.isFile || file.length() !in 1..MAX_AUDIO_BYTES || !visitedPaths.add(canonicalPath)) return null
         val raw = file.readBytes()
         if (raw.size >= 4 && raw.copyOfRange(0, 4).contentEquals("OggS".encodeToByteArray())) {
             return raw
@@ -86,7 +90,7 @@ class AudioAttachmentLoader(
     }
 
     private fun decodeHex(hex: String): ByteArray? {
-        if (hex.length % 2 != 0) return null
+        if (hex.length % 2 != 0 || hex.length.toLong() > MAX_AUDIO_BYTES * 2) return null
         val out = ByteArray(hex.length / 2)
         for (i in hex.indices step 2) {
             val hi = Character.digit(hex[i], 16)
@@ -95,11 +99,11 @@ class AudioAttachmentLoader(
             out[i / 2] = ((hi shl 4) + lo).toByte()
         }
         return out
-        }
     }
+}
 
-    private fun String.toAudioPayloadRefOrNull(): AudioAttachmentPayloadRef? {
-        if (isEmpty() || length % 2 != 0) return null
-        if (!all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return null
-        return AudioAttachmentPayloadRef.InlineHex(this)
-    }
+private fun String.toAudioPayloadRefOrNull(): AudioAttachmentPayloadRef? {
+    if (isEmpty() || length % 2 != 0) return null
+    if (!all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return null
+    return AudioAttachmentPayloadRef.InlineHex(this)
+}

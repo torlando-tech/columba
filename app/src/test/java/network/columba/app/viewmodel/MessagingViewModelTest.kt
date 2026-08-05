@@ -114,7 +114,9 @@ class MessagingViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         applicationContext = mockk(relaxed = true)
+        every { applicationContext.applicationContext } returns applicationContext
         every { applicationContext.cacheDir } returns java.io.File(System.getProperty("java.io.tmpdir"), "test_cache").apply { mkdirs() }
+        every { applicationContext.filesDir } returns java.io.File(System.getProperty("java.io.tmpdir"), "test_files").apply { mkdirs() }
         rnsCore = mockk()
         rnsLxmf = mockk()
         rnsTransportAdmin = mockk()
@@ -218,6 +220,10 @@ class MessagingViewModelTest {
         // Clean up temp hex files created during file attachment tests
         java.io
             .File(System.getProperty("java.io.tmpdir"), "test_cache")
+            .takeIf { it.exists() }
+            ?.deleteRecursively()
+        java.io
+            .File(System.getProperty("java.io.tmpdir"), "test_files")
             .takeIf { it.exists() }
             ?.deleteRecursively()
     }
@@ -4660,6 +4666,113 @@ class MessagingViewModelTest {
 
             // Should update message ID with new hash on success
             coVerify { conversationRepository.updateMessageId("msg-123", any()) }
+        }
+
+    @Test
+    fun `retryFailedMessage preserves inline voice audio field`() =
+        runViewModelTest {
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val failedMessage =
+                MessageEntity(
+                    id = "voice-failed",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = " ",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"7":[16,"4f676753"]}""",
+                )
+            coEvery { conversationRepository.getMessageById("voice-failed") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            val receipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { 0xAB.toByte() },
+                    timestamp = 3_000L,
+                    destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                )
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(receipt)
+
+            viewModel.retryFailedMessage("voice-failed")
+            advanceUntilIdle()
+
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = " ",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    extraFields =
+                        match { fields ->
+                            val audio = fields?.get(7) as? List<*>
+                            audio?.getOrNull(0) == 16 &&
+                                (audio.getOrNull(1) as? ByteArray)?.contentEquals("OggS".encodeToByteArray()) == true
+                        },
+                )
+            }
+        }
+
+    @Test
+    fun `retryFailedMessage preserves file backed voice audio field`() =
+        runViewModelTest {
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val audioFile =
+                java.io.File(applicationContext.filesDir, "attachments/voice-file/7_audio").apply {
+                    parentFile!!.mkdirs()
+                    writeText("4f676753")
+                }
+            val failedMessage =
+                MessageEntity(
+                    id = "voice-file",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = " ",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"7":[16,{"_file_ref":${org.json.JSONObject.quote(audioFile.absolutePath)}}]}""",
+                )
+            coEvery { conversationRepository.getMessageById("voice-file") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAC.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                )
+
+            viewModel.retryFailedMessage("voice-file")
+            advanceUntilIdle()
+
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = " ",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    extraFields =
+                        match { fields ->
+                            val audio = fields?.get(7) as? List<*>
+                            (audio?.getOrNull(1) as? ByteArray)?.contentEquals("OggS".encodeToByteArray()) == true
+                        },
+                )
+            }
         }
 
     @Test

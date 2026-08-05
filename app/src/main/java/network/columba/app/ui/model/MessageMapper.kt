@@ -275,7 +275,7 @@ private fun hasImageField(fieldsJson: String?): Boolean {
 }
 
 @Suppress("SwallowedException")
-private fun parseAudioAttachment(fieldsJson: String?): AudioAttachmentUi? {
+internal fun parseAudioAttachment(fieldsJson: String?): AudioAttachmentUi? {
     if (fieldsJson == null) return null
     return try {
         val fields = JSONObject(fieldsJson)
@@ -330,6 +330,10 @@ private fun parseAudioArray(field7: JSONArray, fieldsJson: String): AudioAttachm
 }
 
 private fun parseAudioPayloadRef(json: JSONObject): AudioAttachmentPayloadRef? {
+    json.optJSONObject("data")?.let { nested ->
+        val ref = parseAudioPayloadRef(nested) ?: return null
+        return AudioAttachmentPayloadRef.NestedFieldRef("data", ref)
+    }
     json.optString("data", "").takeIf { it.isNotEmpty() }?.let {
         return it.toAudioPayloadRefOrNull()
     }
@@ -339,10 +343,6 @@ private fun parseAudioPayloadRef(json: JSONObject): AudioAttachmentPayloadRef? {
     json.optJSONObject("payload")?.let { nested ->
         val ref = parseAudioPayloadRef(nested) ?: return null
         return AudioAttachmentPayloadRef.NestedFieldRef("payload", ref)
-    }
-    json.optJSONObject("data")?.let { nested ->
-        val ref = parseAudioPayloadRef(nested) ?: return null
-        return AudioAttachmentPayloadRef.NestedFieldRef("data", ref)
     }
     return null
 }

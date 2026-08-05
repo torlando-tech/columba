@@ -70,4 +70,23 @@ class AttachmentBlobTest {
 
         assertThrows(IOException::class.java) { AttachmentBlob.readFromPfd(pfd) }
     }
+
+    @Test
+    fun `writer rejects excessive nested value depth`() {
+        var value: Any = 1
+        repeat(34) { value = listOf(value) }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            AttachmentBlob.writeToPfd(tmp.root, null, null, null, mapOf(7 to value))
+        }
+    }
+
+    @Test
+    fun `writer rejects excessive aggregate value count`() {
+        val value = List(4096) { listOf(1) }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            AttachmentBlob.writeToPfd(tmp.root, null, null, null, mapOf(7 to value))
+        }
+    }
 }

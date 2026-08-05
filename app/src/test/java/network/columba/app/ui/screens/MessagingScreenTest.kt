@@ -1,11 +1,14 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.Manifest
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -16,6 +19,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.paging.PagingData
 import network.columba.app.audio.VoiceMessageRecordingState
 import network.columba.app.service.SyncProgress
@@ -41,6 +45,8 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -192,6 +198,27 @@ class MessagingScreenTest {
         composeTestRule.onNodeWithContentDescription("Back").performClick()
 
         // Then
+        assertTrue(backClicked)
+    }
+
+    @Test
+    fun topAppBar_backButton_cancelsActiveVoiceRecordingBeforeNavigation() {
+        shadowOf(RuntimeEnvironment.getApplication() as Application).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        var backClicked = false
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = { backClicked = true },
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Attach").performClick()
+        composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        verify { mockViewModel.cancelVoiceRecording() }
         assertTrue(backClicked)
     }
 
@@ -475,6 +502,23 @@ class MessagingScreenTest {
     }
 
     // ========== MessageInputBar Tests ==========
+
+    @Test
+    fun inputBar_sending_keepsAccessibleNameAndState() {
+        composeTestRule.setContent {
+            MessageInputBar(
+                messageText = "Sending",
+                onMessageTextChange = {},
+                onSendClick = {},
+                isSending = true,
+            )
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Send message")
+            .assertIsNotEnabled()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Sending message"))
+    }
 
     @Test
     fun inputBar_emptyText_sendButtonDisabled() {

@@ -47,8 +47,10 @@ import java.util.concurrent.TimeUnit
 fun VoiceRecordingControls(
     state: VoiceMessageRecordingState,
     hasPermission: Boolean,
+    permissionPermanentlyDenied: Boolean = false,
     isSupported: Boolean,
     onRequestPermission: () -> Unit,
+    onOpenPermissionSettings: () -> Unit = {},
     onStart: () -> Unit,
     onStop: () -> Unit,
     onCancel: () -> Unit,
@@ -83,12 +85,26 @@ fun VoiceRecordingControls(
                 !hasPermission -> {
                     Icon(Icons.Filled.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Text(
-                        stringResource(R.string.attachment_voice_panel_permission_needed),
+                        stringResource(
+                            if (permissionPermanentlyDenied) {
+                                R.string.attachment_voice_panel_permission_settings
+                            } else {
+                                R.string.attachment_voice_panel_permission_needed
+                            },
+                        ),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Button(onClick = onRequestPermission) {
-                        Text(stringResource(R.string.attachment_voice_panel_request_permission))
+                    Button(onClick = if (permissionPermanentlyDenied) onOpenPermissionSettings else onRequestPermission) {
+                        Text(
+                            stringResource(
+                                if (permissionPermanentlyDenied) {
+                                    R.string.attachment_voice_panel_open_settings
+                                } else {
+                                    R.string.attachment_voice_panel_request_permission
+                                },
+                            ),
+                        )
                     }
                     IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.attachment_voice_panel_cancel))

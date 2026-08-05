@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -147,6 +148,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -158,6 +162,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -180,6 +185,7 @@ import network.columba.app.ui.components.CodecSelectionDialog
 import network.columba.app.ui.components.FileAttachmentCard
 import network.columba.app.ui.components.FileAttachmentOptionsSheet
 import network.columba.app.ui.components.FileAttachmentPreviewRow
+import network.columba.app.ui.components.findActivity
 import network.columba.app.ui.components.FullEmojiPickerDialog
 import network.columba.app.ui.components.ImageOptionsSheet
 import network.columba.app.ui.components.ImageQualitySelectionDialog
@@ -723,23 +729,33 @@ fun MessagingScreen(
         }
 
     var showVoiceControls by remember { mutableStateOf(false) }
+    var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
     val audioPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
         ) { granted ->
             if (granted) {
+                audioPermissionPermanentlyDenied = false
                 showVoiceControls = true
                 runCatching { viewModel.startVoiceRecording() }
+            } else {
+                val activity = runCatching { context.findActivity() }.getOrNull()
+                audioPermissionPermanentlyDenied =
+                    activity != null &&
+                    !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
             }
         }
     val voicePlayer = remember { VoiceMessagePlayer(context, scope) }
     val voicePlayerState by voicePlayer.state.collectAsStateWithLifecycle()
     DisposableEffect(Unit) { onDispose { voicePlayer.close() } }
 
-    BackHandler(enabled = showVoiceControls && voiceRecordingState.selectedRecording == null) {
+    val cancelActiveVoiceRecording = {
         voicePlayer.close()
         viewModel.cancelVoiceRecording()
         showVoiceControls = false
+    }
+    BackHandler(enabled = showVoiceControls && voiceRecordingState.selectedRecording == null) {
+        cancelActiveVoiceRecording()
     }
 
     // Back handler: dismiss panel on back press
@@ -1004,7 +1020,14 @@ fun MessagingScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(
+                        onClick = {
+                            if (showVoiceControls && voiceRecordingState.selectedRecording == null) {
+                                cancelActiveVoiceRecording()
+                            }
+                            onBackClick()
+                        },
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -1363,9 +1386,18 @@ fun MessagingScreen(
                                 context,
                                 Manifest.permission.RECORD_AUDIO,
                             ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+                        permissionPermanentlyDenied = audioPermissionPermanentlyDenied,
                         isSupported = viewModel.isVoiceMessageSupported,
                         onRequestPermission = {
                             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        onOpenPermissionSettings = {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", context.packageName, null),
+                                ),
+                            )
                         },
                         onStart = {
                             voicePlayer.close()
@@ -1484,6 +1516,7 @@ fun MessagingScreen(
                                     Manifest.permission.RECORD_AUDIO,
                                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED ->
                                     runCatching { viewModel.startVoiceRecording() }
+                                audioPermissionPermanentlyDenied -> Unit
                                 else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                             }
                             inputPanelMode = InputPanelMode.NONE
@@ -2742,7 +2775,13 @@ fun MessageInputBar(
                 FilledIconButton(
                     onClick = onSendClick,
                     enabled = canSend,
-                    modifier = Modifier.size(48.dp),
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .semantics {
+                                contentDescription = "Send message"
+                                if (isSending) stateDescription = "Sending message"
+                            },
                     shape = CircleShape,
                     colors =
                         IconButtonDefaults.filledIconButtonColors(
@@ -2761,7 +2800,7 @@ fun MessageInputBar(
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send message",
+                            contentDescription = null,
                         )
                     }
                 }

@@ -64,6 +64,28 @@ class VoiceMessageComponentsTest {
     }
 
     @Test
+    fun `permanently denied microphone permission opens app settings`() {
+        var openedSettings = false
+        composeRule.setContent {
+            VoiceRecordingControls(
+                state = VoiceMessageRecordingState(),
+                hasPermission = false,
+                permissionPermanentlyDenied = true,
+                isSupported = true,
+                onRequestPermission = {},
+                onOpenPermissionSettings = { openedSettings = true },
+                onStart = {},
+                onStop = {},
+                onCancel = {},
+            )
+        }
+
+        composeRule.onNodeWithText("Microphone access is disabled. Enable it in app settings.").assertIsDisplayed()
+        composeRule.onNodeWithText("Open settings").performClick()
+        assertTrue(openedSettings)
+    }
+
+    @Test
     fun `recording state exposes stop and cancel actions`() {
         var stopped = false
         var cancelled = false

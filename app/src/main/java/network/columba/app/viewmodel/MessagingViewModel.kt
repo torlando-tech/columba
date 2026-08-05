@@ -1487,6 +1487,9 @@ class MessagingViewModel
                     receivedAt = now,
                 )
             saveMessageToDatabase(destinationHash, currentPeerName, message)
+            if (voiceBytes != null) {
+                voiceMessageRecorder.removeSelected()
+            }
         }
 
         fun selectImage(

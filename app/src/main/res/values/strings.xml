@@ -32,6 +32,8 @@
     <string name="attachment_voice_panel_ready">Ready to record a voice message</string>
     <string name="attachment_voice_panel_instructions">Tap start to begin, stop to save, or cancel to discard.</string>
     <string name="attachment_voice_panel_request_permission">Grant microphone access</string>
+    <string name="attachment_voice_panel_permission_settings">Microphone access is disabled. Enable it in app settings.</string>
+    <string name="attachment_voice_panel_open_settings">Open settings</string>
     <string name="attachment_voice_panel_status_label">Voice recording status</string>
     <string name="attachment_voice_panel_action_label">Voice recording actions</string>
     <string name="message_voice_play">Play voice message</string>

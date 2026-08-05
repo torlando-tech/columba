@@ -56,6 +56,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -1050,6 +1051,34 @@ class MessagingViewModelTest {
             // Assert: Image was cleared after successful send
             assertEquals(null, viewModel.selectedImageData.value)
             assertEquals(null, viewModel.selectedImageFormat.value)
+        }
+
+    @Test
+    fun `sendMessage retains composer attachment when local persistence fails`() =
+        runViewModelTest {
+            val destination = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { it.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = destination,
+                    ),
+                )
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } throws
+                IllegalStateException("database unavailable")
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val image = byteArrayOf(0x01, 0x02, 0x03)
+            viewModel.selectImage(image, "png")
+
+            viewModel.sendMessage(testPeerHash, "Keep attachment")
+            advanceUntilIdle()
+
+            assertArrayEquals(image, viewModel.selectedImageData.value)
+            assertEquals("png", viewModel.selectedImageFormat.value)
         }
 
     // ========== DELIVERY STATUS HANDLING TESTS ==========

@@ -1060,7 +1060,7 @@ class MessagingViewModel
             peerHash: String,
             peerName: String,
             message: DataMessage,
-        ) {
+        ): Boolean =
             try {
                 // Look up public key before calling saveMessage to avoid nested transaction issues.
                 // Prefer the conversation row, then peer_identities keyed by destination hash,
@@ -1069,10 +1069,11 @@ class MessagingViewModel
 
                 conversationRepository.saveMessage(peerHash, peerName, message, publicKey)
                 Log.d(TAG, "Saved message to database for conversation $peerHash")
+                true
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving message to database", e)
+                false
             }
-        }
 
         private suspend fun resolvePeerPublicKey(peerHash: String): ByteArray? =
             conversationRepository.getConversation(peerHash)?.peerPublicKey
@@ -1442,11 +1443,12 @@ class MessagingViewModel
                     receivedAt = receipt.timestamp, // For sent messages, receivedAt = our timestamp
                     sentInterface = sentInterface,
                 )
-            clearSelectedImage()
-            clearFileAttachments()
-            voiceRecording?.file?.delete()
-            voiceMessageRecorder.removeSelected()
-            saveMessageToDatabase(actualDestHash, currentPeerName, message)
+            if (saveMessageToDatabase(actualDestHash, currentPeerName, message)) {
+                clearSelectedImage()
+                clearFileAttachments()
+                voiceRecording?.file?.delete()
+                voiceMessageRecorder.removeSelected()
+            }
         }
 
         @Suppress("LongParameterList")
@@ -1486,8 +1488,8 @@ class MessagingViewModel
                     errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
                 )
-            saveMessageToDatabase(destinationHash, currentPeerName, message)
-            if (voiceBytes != null) {
+            val persisted = saveMessageToDatabase(destinationHash, currentPeerName, message)
+            if (persisted && voiceBytes != null) {
                 voiceMessageRecorder.removeSelected()
             }
         }

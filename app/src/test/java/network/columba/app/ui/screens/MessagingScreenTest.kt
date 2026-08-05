@@ -17,6 +17,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.withKeyDown
 import androidx.paging.PagingData
+import network.columba.app.audio.VoiceMessageRecordingState
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
@@ -126,6 +127,9 @@ class MessagingScreenTest {
         every { mockViewModel.messageFontScale } returns MutableStateFlow(1.0f)
         // Contact location mock (locate on map feature)
         every { mockViewModel.hasContactLocation } returns MutableStateFlow(false)
+        // Voice-message recording mocks
+        every { mockViewModel.voiceRecordingState } returns MutableStateFlow(VoiceMessageRecordingState())
+        every { mockViewModel.isVoiceMessageSupported } returns true
     }
 
     // ========== Empty State Tests ==========

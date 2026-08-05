@@ -981,6 +981,29 @@ class ConversationRepository
                         continue
                     }
 
+                    // Preserve the standardized audio mode while moving only the large
+                    // Ogg/Opus payload out of SQLite.
+                    if (key == "7" && value is JSONArray && value.length() >= 2) {
+                        val payload = value.optString(1, "")
+                        if (payload.length > AttachmentStorageManager.SIZE_THRESHOLD) {
+                            val filePath = attachmentStorage.saveAttachment(messageId, "7_audio", payload)
+                            if (filePath != null) {
+                                modifiedFields.put(
+                                    "7",
+                                    JSONArray()
+                                        .put(value.optInt(0, -1))
+                                        .put(
+                                            JSONObject().put(
+                                                AttachmentStorageManager.FILE_REF_KEY,
+                                                filePath,
+                                            ),
+                                        ),
+                                )
+                                continue
+                            }
+                        }
+                    }
+
                     // Get string representation of value for size check
                     val valueStr = value?.toString().orEmpty()
 

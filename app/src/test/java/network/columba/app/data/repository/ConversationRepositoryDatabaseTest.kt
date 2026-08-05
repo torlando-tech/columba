@@ -6,6 +6,7 @@ import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.test.DatabaseTest
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -20,6 +21,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Database-backed tests for ConversationRepository.
@@ -423,6 +426,38 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
         }
 
     // ========== Delete Conversation Tests ==========
+
+    @Test
+    fun `saveMessage preserves audio mode when large payload is extracted`() =
+        runTest {
+            val payload = "ab".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/audio_payload.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_large_audio", "7_audio", payload)
+            } returns storedPath
+            val fields = JSONObject().put("7", JSONArray().put(16).put(payload)).toString()
+            val message =
+                Message(
+                    id = "msg_large_audio",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_large_audio", TEST_IDENTITY_HASH)
+            val storedAudio = JSONObject(saved!!.fieldsJson!!).getJSONArray("7")
+            assertEquals(16, storedAudio.getInt(0))
+            assertEquals(storedPath, storedAudio.getJSONObject(1).getString("_file_ref"))
+            verify(exactly = 1) {
+                mockAttachmentStorage.saveAttachment("msg_large_audio", "7_audio", payload)
+            }
+        }
 
     @Test
     fun `deleteConversation removes conversation and messages`() =

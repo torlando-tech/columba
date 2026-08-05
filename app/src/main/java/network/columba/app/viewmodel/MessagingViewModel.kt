@@ -25,6 +25,7 @@ import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.model.CodecProfile
+import network.columba.app.audio.VoiceMessageRecorder
 import network.columba.app.ui.model.DecodedImageResult
 import network.columba.app.ui.model.ImageCache
 import network.columba.app.ui.model.LocationSharingState
@@ -221,6 +222,10 @@ class MessagingViewModel
 
         private val _selectedImageIsAnimated = MutableStateFlow(false)
         val selectedImageIsAnimated: StateFlow<Boolean> = _selectedImageIsAnimated.asStateFlow()
+
+        private val voiceMessageRecorder = VoiceMessageRecorder(applicationContext, viewModelScope)
+        val voiceRecordingState = voiceMessageRecorder.state
+        val isVoiceMessageSupported: Boolean get() = voiceMessageRecorder.isSupported
 
         // File attachment state (LXMF Field 5)
         private val _selectedFileAttachments = MutableStateFlow<List<FileAttachment>>(emptyList())
@@ -1217,6 +1222,11 @@ class MessagingViewModel
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
                     val fileAttachments = _selectedFileAttachments.value
+                    val voiceRecording = voiceMessageRecorder.state.value.selectedRecording
+                    val voiceBytes =
+                        voiceRecording?.let {
+                            withContext(Dispatchers.IO) { it.file.readBytes() }
+                        }
 
                     // Reject pathologically large attachments before sending.
                     // Attachment bytes now cross to :reticulum out-of-band (a
@@ -1226,7 +1236,9 @@ class MessagingViewModel
                     // instead of sending. Surface a friendly message rather than
                     // a buried failure.
                     val totalAttachmentBytes =
-                        (imageData?.size?.toLong() ?: 0L) + fileAttachments.sumOf { it.sizeBytes.toLong() }
+                        (imageData?.size?.toLong() ?: 0L) +
+                            fileAttachments.sumOf { it.sizeBytes.toLong() } +
+                            (voiceBytes?.size?.toLong() ?: 0L)
                     if (totalAttachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
                         Log.w(
                             TAG,
@@ -1240,7 +1252,7 @@ class MessagingViewModel
                         return@launch
                     }
 
-                    val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
+                    val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return@launch
                     val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
                         loadIdentityIfNeeded() ?: run {
@@ -1250,7 +1262,14 @@ class MessagingViewModel
 
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                     val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod = determineDeliveryMethod(sanitized, imageData, fileAttachments, defaultMethod)
+                    val deliveryMethod =
+                        determineDeliveryMethod(
+                            sanitized = sanitized,
+                            imageData = imageData,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            defaultMethod = defaultMethod,
+                        )
                     val deliveryMethodString = deliveryMethod.toStorageString()
 
                     // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
@@ -1293,6 +1312,7 @@ class MessagingViewModel
                             imageData = imageData,
                             imageFormat = imageFormat,
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
+                            extraFields = voiceBytes?.let { mapOf(network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to listOf(network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG, it)) },
                             replyToMessageId = replyToId,
                             // MeshChatX-interop reply format ships the
                             // quoted content inline (fields[0x31]) so
@@ -1313,14 +1333,24 @@ class MessagingViewModel
                     result
                         .onSuccess { receipt ->
                             // Clear pending reply and draft after successful send
-                            handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
+                            handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId, voiceRecording)
                             clearReplyTo()
                             draftSaveJob?.cancel()
                             lastDraftText = ""
                             conversationRepository.clearDraft(destinationHash)
                             _draftText.value = null
                         }.onFailure { error ->
-                            handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
+                            handleSendFailure(
+                                error = error,
+                                sanitized = sanitized,
+                                destinationHash = destinationHash,
+                                deliveryMethodString = deliveryMethodString,
+                                imageData = imageData,
+                                imageFormat = imageFormat,
+                                fileAttachments = fileAttachments,
+                                replyToMessageId = replyToId,
+                                voiceBytes = voiceBytes,
+                            )
                         }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
@@ -1340,15 +1370,17 @@ class MessagingViewModel
             fileAttachments: List<FileAttachment>,
             deliveryMethodString: String,
             replyToMessageId: String? = null,
+            voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
         ) {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
             val fieldsJson =
                 try {
                     buildFieldsJson(
-                        imageData,
-                        imageFormat,
-                        fileAttachments,
-                        replyToMessageId,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = fileAttachments,
+                        voiceBytes = voiceRecording?.let { withContext(Dispatchers.IO) { it.file.readBytes() } },
+                        replyToMessageId = replyToMessageId,
                         cacheDir = applicationContext.cacheDir,
                     )
                 } catch (e: java.io.IOException) {
@@ -1356,7 +1388,7 @@ class MessagingViewModel
                     // Fall back to text-only fields so the message is still saved to the database.
                     // The message was already delivered to the recipient — losing the local attachment
                     // reference is acceptable vs. losing the message from conversation history entirely.
-                    buildFieldsJson(null, null, emptyList(), replyToMessageId)
+                    buildFieldsJson(null, null, emptyList(), null, replyToMessageId)
                 }
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
@@ -1409,14 +1441,22 @@ class MessagingViewModel
                 )
             clearSelectedImage()
             clearFileAttachments()
+            voiceRecording?.file?.delete()
+            voiceMessageRecorder.removeSelected()
             saveMessageToDatabase(actualDestHash, currentPeerName, message)
         }
 
+        @Suppress("LongParameterList")
         private suspend fun handleSendFailure(
             error: Throwable,
             sanitized: String,
             destinationHash: String,
             deliveryMethodString: String,
+            imageData: ByteArray?,
+            imageFormat: String?,
+            fileAttachments: List<FileAttachment>,
+            replyToMessageId: String?,
+            voiceBytes: ByteArray?,
         ) {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
             val now = System.currentTimeMillis()
@@ -1428,6 +1468,17 @@ class MessagingViewModel
                     timestamp = now,
                     isFromMe = true,
                     status = "failed",
+                    fieldsJson =
+                        runCatching {
+                            buildFieldsJson(
+                                imageData = imageData,
+                                imageFormat = imageFormat,
+                                fileAttachments = fileAttachments,
+                                voiceBytes = voiceBytes,
+                                replyToMessageId = replyToMessageId,
+                                cacheDir = applicationContext.cacheDir,
+                            )
+                        }.getOrNull(),
                     deliveryMethod = deliveryMethodString,
                     errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
@@ -1506,6 +1557,11 @@ class MessagingViewModel
             Log.d(TAG, "Clearing all file attachments")
             _selectedFileAttachments.value = emptyList()
         }
+
+        fun startVoiceRecording(maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS): File = voiceMessageRecorder.start(maxDurationMillis)
+        fun stopVoiceRecording() = voiceMessageRecorder.stop()
+        fun cancelVoiceRecording() = voiceMessageRecorder.cancel()
+        fun removeVoiceRecording() = voiceMessageRecorder.removeSelected()
 
         /**
          * Set the file processing state.
@@ -2081,7 +2137,13 @@ class MessagingViewModel
 
                 val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                 val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                val deliveryMethod = determineDeliveryMethod(sanitized, imageData, emptyList(), defaultMethod)
+                val deliveryMethod =
+                    determineDeliveryMethod(
+                        sanitized = sanitized,
+                        imageData = imageData,
+                        fileAttachments = emptyList(),
+                        defaultMethod = defaultMethod,
+                    )
                 val deliveryMethodString = deliveryMethod.toStorageString()
 
                 val iconAppearance =
@@ -2120,7 +2182,17 @@ class MessagingViewModel
                     .onSuccess { receipt ->
                         handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, emptyList(), deliveryMethodString)
                     }.onFailure { error ->
-                        handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
+                        handleSendFailure(
+                            error = error,
+                            sanitized = sanitized,
+                            destinationHash = destinationHash,
+                            deliveryMethodString = deliveryMethodString,
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = emptyList(),
+                            replyToMessageId = null,
+                            voiceBytes = null,
+                        )
                     }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending shared image message", e)
@@ -2341,7 +2413,13 @@ class MessagingViewModel
                     // Get delivery settings
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                     val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod = determineDeliveryMethod(failedMessage.content, imageData, fileAttachments, defaultMethod)
+                    val deliveryMethod =
+                        determineDeliveryMethod(
+                            sanitized = failedMessage.content,
+                            imageData = imageData,
+                            fileAttachments = fileAttachments,
+                            defaultMethod = defaultMethod,
+                        )
 
                     Log.d(TAG, "Retrying message via $deliveryMethod delivery")
 
@@ -2464,6 +2542,7 @@ class MessagingViewModel
             }
 
         override fun onCleared() {
+            voiceMessageRecorder.close()
             super.onCleared()
 
             // Note: Conversation marking as read happens via loadMessages() when opening
@@ -2510,10 +2589,11 @@ internal fun validateAndSanitizeContent(
     content: String,
     imageData: ByteArray?,
     fileAttachments: List<FileAttachment> = emptyList(),
+    voiceBytes: ByteArray? = null,
 ): String? {
     // Sideband requires non-empty content to save messages to its database.
     // When sending attachments without text, use a single space (matching Sideband's behavior).
-    if (content.trim().isEmpty() && (imageData != null || fileAttachments.isNotEmpty())) {
+    if (content.trim().isEmpty() && (imageData != null || fileAttachments.isNotEmpty() || voiceBytes != null)) {
         return " "
     }
     val validationResult = InputValidator.validateMessageContent(content)
@@ -2582,10 +2662,11 @@ private fun determineDeliveryMethod(
     sanitized: String,
     imageData: ByteArray?,
     fileAttachments: List<FileAttachment> = emptyList(),
+    voiceBytes: ByteArray? = null,
     defaultMethod: String,
 ): DeliveryMethod {
     val contentSize = sanitized.toByteArray().size
-    val hasAttachments = imageData != null || fileAttachments.isNotEmpty()
+    val hasAttachments = imageData != null || fileAttachments.isNotEmpty() || voiceBytes != null
     return if (!hasAttachments && contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER) {
         Log.d(HELPER_TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
         DeliveryMethod.OPPORTUNISTIC
@@ -2599,15 +2680,17 @@ private suspend fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,
     fileAttachments: List<FileAttachment> = emptyList(),
+    voiceBytes: ByteArray? = null,
     replyToMessageId: String? = null,
     reactions: Map<String, List<String>>? = null,
     cacheDir: java.io.File? = null,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
+    val hasVoice = voiceBytes != null
     val hasReply = replyToMessageId != null
     val hasReactions = !reactions.isNullOrEmpty()
-    val hasAnyContent = hasImage || hasFiles || hasReply || hasReactions
+    val hasAnyContent = hasImage || hasFiles || hasVoice || hasReply || hasReactions
 
     if (!hasAnyContent) return null
 
@@ -2630,6 +2713,10 @@ private suspend fun buildFieldsJson(
         // Add file attachments field (Field 5)
         if (hasFiles) {
             json.put("5", buildFileAttachmentsArray(fileAttachments, cacheDir))
+        }
+
+        if (hasVoice && voiceBytes != null) {
+            json.put("7", org.json.JSONArray().put(network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG).put(voiceBytes.toHexString()))
         }
 
         // Add app extensions field (Field 16) for replies, reactions, and future features

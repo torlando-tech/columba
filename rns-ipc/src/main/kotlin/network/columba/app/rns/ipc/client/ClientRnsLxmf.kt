@@ -90,7 +90,7 @@ internal class ClientRnsLxmf(
         // Binder transaction (see AttachmentBlob). The PFD is ours to close once
         // the call settles; the server has read its own dup by then.
         val blob = withContext(Dispatchers.IO) {
-            AttachmentBlob.writeToPfd(attachmentCacheDir, imageData, imageFormat, fileAttachments)
+            AttachmentBlob.writeToPfd(attachmentCacheDir, imageData, imageFormat, fileAttachments, extraFields)
         }
         try {
             val bundle = awaitResult { cb ->
@@ -104,7 +104,7 @@ internal class ClientRnsLxmf(
                     replyToMessageId,
                     replyQuotedContent,
                     iconAppearance,
-                    extraFields?.toExtraFieldsBundle(),
+                    null,
                     cb,
                 )
             }
@@ -242,27 +242,4 @@ internal class ClientRnsLxmf(
     override fun setIncomingMessageSizeLimit(limitKb: Int) {
         runCatching { remote.setIncomingMessageSizeLimit(limitKb) }
     }
-}
-
-/**
- * Pack a `Map<Int, Any>` of LXMF field/value entries into a Bundle whose keys
- * are the stringified field numbers (`"4"`, `"5"`, `"16"`, ...). Mirrors the
- * AIDL contract documented on `IRnsLxmf.sendLxmfMessageWithMethod`.
- */
-private fun Map<Int, Any>.toExtraFieldsBundle(): Bundle {
-    val bundle = Bundle()
-    for ((field, value) in this) {
-        val key = field.toString()
-        when (value) {
-            is Boolean -> bundle.putBoolean(key, value)
-            is Int -> bundle.putInt(key, value)
-            is Long -> bundle.putLong(key, value)
-            is Float -> bundle.putFloat(key, value)
-            is Double -> bundle.putDouble(key, value)
-            is String -> bundle.putString(key, value)
-            is ByteArray -> bundle.putByteArray(key, value)
-            else -> bundle.putString(key, value.toString())
-        }
-    }
-    return bundle
 }

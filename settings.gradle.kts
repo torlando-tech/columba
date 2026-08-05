@@ -52,7 +52,7 @@ System.getenv("LOCAL_LXST_KT")?.let {
     includeBuild(it) {
         dependencySubstitution {
             substitute(module("com.github.torlando-tech:LXST-kt"))
-                .using(project(":lxst-core"))
+                .using(project(":lxst"))
         }
     }
 }

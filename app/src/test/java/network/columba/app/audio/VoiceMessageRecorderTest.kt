@@ -1,0 +1,136 @@
+package network.columba.app.audio
+
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import tech.torlando.lxst.recording.RecordedAudio
+import tech.torlando.lxst.recording.RecorderState
+import java.io.File
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
+class VoiceMessageRecorderTest {
+    private val context = ApplicationProvider.getApplicationContext<Application>()
+
+    @Test
+    fun `start rejects unsupported devices`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir, isSupported = false)
+        val controller = createController(this, backend)
+
+        assertFalse(controller.isSupported)
+        controller.close()
+    }
+
+    @Test
+    fun `start and stop select finalized recording`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+
+        val output = controller.start()
+        assertEquals(output, controller.state.value.activeRecordingFile)
+        assertTrue(controller.state.value.recorderState is RecorderState.Recording)
+
+        val recording = controller.stop()
+
+        assertEquals(recording, controller.state.value.selectedRecording)
+        assertTrue(recording.file.isFile)
+        assertNull(controller.state.value.activeRecordingFile)
+        controller.close()
+    }
+
+    @Test
+    fun `cancel discards active recording and resets state`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        controller.start()
+
+        controller.cancel()
+
+        assertTrue(backend.cancelled)
+        assertEquals(VoiceMessageRecordingState(), controller.state.value)
+        controller.close()
+    }
+
+    @Test
+    fun `remove selected deletes finalized recording`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        controller.start()
+        val recording = controller.stop()
+        assertTrue(recording.file.exists())
+
+        controller.removeSelected()
+
+        assertFalse(recording.file.exists())
+        assertNull(controller.state.value.selectedRecording)
+        controller.close()
+    }
+
+    @Test
+    fun `duration limit finalizes active recording`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        controller.start(maxDurationMillis = 1_000L)
+
+        advanceTimeBy(1_000L)
+        runCurrent()
+
+        assertEquals(1, backend.stopCount)
+        assertTrue(controller.state.value.selectedRecording?.file?.isFile == true)
+        controller.close()
+    }
+
+    private fun createController(scope: TestScope, backend: FakeRecorderBackend): VoiceMessageRecorder =
+        VoiceMessageRecorder(
+            context = context,
+            scope = scope,
+            recorderFactory = { backend },
+        )
+}
+
+private class FakeRecorderBackend(
+    private val cacheDir: File,
+    override val isSupported: Boolean = true,
+) : VoiceRecorderBackend {
+    override val state = MutableStateFlow<RecorderState>(RecorderState.Idle)
+    var cancelled = false
+    var stopCount = 0
+    private var outputFile: File? = null
+
+    override fun start(outputFile: File) {
+        this.outputFile = outputFile
+        state.value = RecorderState.Recording(0L)
+    }
+
+    override fun stop(): RecordedAudio {
+        stopCount += 1
+        val file = outputFile ?: File.createTempFile("voice_test", ".ogg", cacheDir)
+        file.parentFile?.mkdirs()
+        file.writeBytes("OggS".encodeToByteArray())
+        val recording = RecordedAudio(file, 1_000L, file.length())
+        state.value = RecorderState.Completed(recording)
+        return recording
+    }
+
+    override fun cancel() {
+        cancelled = true
+        state.value = RecorderState.Idle
+    }
+
+    override fun close() = cancel()
+}

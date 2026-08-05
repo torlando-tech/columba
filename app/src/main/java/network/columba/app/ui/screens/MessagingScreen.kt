@@ -114,6 +114,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -172,6 +173,8 @@ import network.columba.app.R
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.components.AttachmentPanel
+import network.columba.app.ui.components.VoiceMessageBubble
+import network.columba.app.ui.components.VoiceRecordingControls
 import network.columba.app.ui.components.CodecSelectionDialog
 import network.columba.app.ui.components.FileAttachmentCard
 import network.columba.app.ui.components.FileAttachmentOptionsSheet
@@ -195,6 +198,8 @@ import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.MessageRenderer
+import network.columba.app.audio.VoiceMessagePlayer
+import network.columba.app.audio.VoiceMessagePlayerState
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -211,6 +216,7 @@ import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import android.Manifest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -431,6 +437,7 @@ fun MessagingScreen(
     val totalAttachmentSize by viewModel.totalAttachmentSize.collectAsStateWithLifecycle()
     val isProcessingFile by viewModel.isProcessingFile.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
+    val voiceRecordingState by viewModel.voiceRecordingState.collectAsStateWithLifecycle()
 
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
@@ -712,6 +719,20 @@ fun MessagingScreen(
                 viewModel.loadRecentPhotos(context)
             }
         }
+
+    var showVoiceControls by remember { mutableStateOf(false) }
+    val audioPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                showVoiceControls = true
+                runCatching { viewModel.startVoiceRecording() }
+            }
+        }
+    val voicePlayer = remember { VoiceMessagePlayer(context, scope) }
+    val voicePlayerState by voicePlayer.state.collectAsStateWithLifecycle()
+    DisposableEffect(Unit) { onDispose { voicePlayer.close() } }
 
     // Back handler: dismiss panel on back press
     BackHandler(enabled = inputPanelMode == InputPanelMode.PANEL) {
@@ -1273,6 +1294,14 @@ fun MessagingScreen(
                                             isImageLoading = needsImageLoading,
                                             fontScale = messageFontScale,
                                             timestampTick = timestampTick,
+                                            voicePlayerState =
+                                                voicePlayerState.takeIf { it.messageKey == displayMessage.id }
+                                                    ?: VoiceMessagePlayerState(),
+                                            onVoiceToggle = {
+                                                displayMessage.audioAttachment?.let { attachment ->
+                                                    voicePlayer.toggle(displayMessage.id, attachment)
+                                                }
+                                            },
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1318,6 +1347,28 @@ fun MessagingScreen(
                     )
                 }
 
+                if (showVoiceControls) {
+                    VoiceRecordingControls(
+                        state = voiceRecordingState,
+                        hasPermission =
+                            androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO,
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+                        isSupported = viewModel.isVoiceMessageSupported,
+                        onRequestPermission = {
+                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        onStart = { runCatching { viewModel.startVoiceRecording() } },
+                        onStop = { runCatching { viewModel.stopVoiceRecording() } },
+                        onCancel = {
+                            viewModel.cancelVoiceRecording()
+                            showVoiceControls = false
+                        },
+                        onRemove = { viewModel.removeVoiceRecording() },
+                    )
+                }
+
                 // Message Input Bar - at bottom of Column
                 MessageInputBar(
                     modifier =
@@ -1337,8 +1388,12 @@ fun MessagingScreen(
                     selectedFileAttachments = selectedFileAttachments,
                     totalAttachmentSize = totalAttachmentSize,
                     onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
+                    hasVoiceAttachment = voiceRecordingState.selectedRecording != null,
                     onSendClick = {
-                        if (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()) {
+                        if (
+                            messageText.isNotBlank() || selectedImageData != null ||
+                            selectedFileAttachments.isNotEmpty() || voiceRecordingState.selectedRecording != null
+                        ) {
                             viewModel.sendMessage(destinationHash, messageText.trim())
                             messageText = ""
                         }
@@ -1378,7 +1433,7 @@ fun MessagingScreen(
                                 imageLauncher.launch("image/*")
                                 inputPanelMode = InputPanelMode.NONE
                             },
-                            onFileClick = {
+                    onFileClick = {
                                 try {
                                     filePickerLauncher.launch(arrayOf("*/*"))
                                 } catch (e: android.content.ActivityNotFoundException) {
@@ -1389,12 +1444,25 @@ fun MessagingScreen(
                                             context.getString(R.string.error_no_file_manager),
                                             Toast.LENGTH_SHORT,
                                         ).show()
-                                }
-                                inputPanelMode = InputPanelMode.NONE
-                            },
-                            modifier = Modifier.navigationBarsPadding(),
-                        )
-                    }
+                            }
+                            inputPanelMode = InputPanelMode.NONE
+                        },
+                        onVoiceClick = {
+                            showVoiceControls = true
+                            when {
+                                !viewModel.isVoiceMessageSupported -> Unit
+                                androidx.core.content.ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO,
+                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED ->
+                                    runCatching { viewModel.startVoiceRecording() }
+                                else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                            inputPanelMode = InputPanelMode.NONE
+                        },
+                        modifier = Modifier.navigationBarsPadding(),
+                    )
+                }
                     InputPanelMode.KEYBOARD -> {
                         // Manual IME spacer replaces .imePadding()
                         val imeHeightDp = with(density) { imeBottomInset.toDp() }
@@ -1801,6 +1869,8 @@ fun MessageBubble(
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
     @Suppress("UNUSED_PARAMETER") timestampTick: Long = 0L,
+    voicePlayerState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
+    onVoiceToggle: () -> Unit = {},
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
@@ -2195,6 +2265,20 @@ fun MessageBubble(
                             }
                         }
 
+                        message.audioAttachment?.let { audio ->
+                            VoiceMessageBubble(
+                                title = stringResource(R.string.message_voice_bubble_title),
+                                state =
+                                    if (audio.isPlayable) {
+                                        voicePlayerState
+                                    } else {
+                                        VoiceMessagePlayerState(error = "unsupported")
+                                    },
+                                onToggle = onVoiceToggle,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
                         if (message.hasFileAttachments) {
                             message.fileAttachments.forEach { fileAttachment ->
@@ -2352,6 +2436,7 @@ fun MessageInputBar(
     selectedFileAttachments: List<FileAttachment> = emptyList(),
     totalAttachmentSize: Int = 0,
     onRemoveFileAttachment: (Int) -> Unit = {},
+    hasVoiceAttachment: Boolean = false,
     onSendClick: () -> Unit,
     isSending: Boolean = false,
     onAttachmentPanelToggle: () -> Unit = {},
@@ -2480,7 +2565,10 @@ fun MessageInputBar(
             // shared by the send button and the bare-Enter key handler below.
             val canSend =
                 !isSending &&
-                    (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty())
+                    (
+                        messageText.isNotBlank() || selectedImageData != null ||
+                            selectedFileAttachments.isNotEmpty() || hasVoiceAttachment
+                    )
 
             Row(
                 modifier =

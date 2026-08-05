@@ -12,6 +12,37 @@
     <string name="call_decline_content_description">Decline call</string>
     <string name="error_no_file_manager">No file manager app found on this device</string>
     <string name="error_no_app_for_link">No app found to open link</string>
+    <string name="attachment_gallery">Gallery</string>
+    <string name="attachment_file">File</string>
+    <string name="attachment_voice">Voice</string>
+    <string name="attachment_voice_description">Record a voice message</string>
+    <string name="attachment_voice_panel_title">Voice message</string>
+    <string name="attachment_voice_panel_start">Start recording</string>
+    <string name="attachment_voice_panel_stop">Stop recording</string>
+    <string name="attachment_voice_panel_cancel">Cancel recording</string>
+    <string name="attachment_voice_panel_remove">Remove recording</string>
+    <string name="attachment_voice_panel_permission_needed">Microphone permission is required to record a voice message.</string>
+    <string name="attachment_voice_panel_unsupported">Voice messages are not supported on this device.</string>
+    <string name="attachment_voice_panel_recording">Recording</string>
+    <string name="attachment_voice_panel_finalizing">Finalizing</string>
+    <string name="attachment_voice_panel_selected">Selected voice message</string>
+    <string name="attachment_voice_panel_error">Recording error: %1$s</string>
+    <string name="attachment_voice_panel_elapsed">Recorded %1$s</string>
+    <string name="attachment_voice_panel_duration">Duration %1$s</string>
+    <string name="attachment_voice_panel_ready">Ready to record a voice message</string>
+    <string name="attachment_voice_panel_instructions">Tap start to begin, stop to save, or cancel to discard.</string>
+    <string name="attachment_voice_panel_request_permission">Grant microphone access</string>
+    <string name="attachment_voice_panel_status_label">Voice recording status</string>
+    <string name="attachment_voice_panel_action_label">Voice recording actions</string>
+    <string name="message_voice_play">Play voice message</string>
+    <string name="message_voice_pause">Pause voice message</string>
+    <string name="message_voice_replay">Replay voice message</string>
+    <string name="message_voice_loading">Loading voice message</string>
+    <string name="message_voice_unavailable">Voice message unavailable</string>
+    <string name="message_voice_unsupported">Unsupported voice message</string>
+    <string name="message_voice_bubble_title">Voice message</string>
+    <string name="message_voice_progress">%1$s of %2$s</string>
+    <string name="message_voice_error">Unable to play voice message</string>
 
     <!-- Locate on Map -->
     <string name="locate_on_map">Locate on Map</string>

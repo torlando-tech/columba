@@ -13,6 +13,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.audio.VoiceMessagePlayerState
+import network.columba.app.ui.model.AudioAttachmentMode
+import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.ui.model.MessageRenderer
 import network.columba.app.ui.model.MessageUi
 import network.columba.app.ui.theme.ColumbaTheme
@@ -38,6 +41,34 @@ class MessageBubbleTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    @Test
+    fun `audio attachment renders playable voice bubble`() {
+        var toggled = false
+        val message =
+            MessagingTestFixtures.createSentMessage().copy(
+                content = "",
+                audioAttachment =
+                    AudioAttachmentUi(
+                        mode = AudioAttachmentMode.AM_OPUS_OGG,
+                        isPlayable = true,
+                    ),
+            )
+        composeTestRule.setContent {
+            val clipboardManager = LocalClipboardManager.current
+            MessageBubble(
+                message = message,
+                isFromMe = true,
+                clipboardManager = clipboardManager,
+                voicePlayerState = VoiceMessagePlayerState(durationMs = 3_000),
+                onVoiceToggle = { toggled = true },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Voice message").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Play voice message").performClick()
+        assertTrue(toggled)
+    }
 
     // ========== Missing Image Placeholder Tests ==========
 

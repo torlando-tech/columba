@@ -82,6 +82,36 @@ class VoiceMessageRecorderTest {
     }
 
     @Test
+    fun `failed replacement start preserves finalized recording`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        controller.start()
+        val original = controller.stop()
+        backend.failNextStart = true
+
+        runCatching { controller.start() }
+
+        assertEquals(original, controller.state.value.selectedRecording)
+        assertTrue(original.file.exists())
+        controller.close()
+    }
+
+    @Test
+    fun `identity cleanup cannot remove a replacement recording`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        controller.start()
+        val original = controller.stop()
+        controller.start()
+        val replacement = controller.stop()
+
+        assertFalse(controller.removeSelected(original))
+        assertEquals(replacement, controller.state.value.selectedRecording)
+        assertTrue(replacement.file.exists())
+        controller.close()
+    }
+
+    @Test
     fun `duration limit finalizes active recording`() = runTest {
         val backend = FakeRecorderBackend(context.cacheDir)
         val controller = createController(this, backend)
@@ -110,9 +140,14 @@ private class FakeRecorderBackend(
     override val state = MutableStateFlow<RecorderState>(RecorderState.Idle)
     var cancelled = false
     var stopCount = 0
+    var failNextStart = false
     private var outputFile: File? = null
 
     override fun start(outputFile: File) {
+        if (failNextStart) {
+            failNextStart = false
+            error("simulated start failure")
+        }
         this.outputFile = outputFile
         state.value = RecorderState.Recording(0L)
     }

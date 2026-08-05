@@ -102,8 +102,7 @@ class VoiceMessageRecorder(
         check(isSupported) { "Voice messages are unsupported on this device" }
         check(_state.value.recorderState !is RecorderState.Recording) { "Recording already active" }
         val backend = backend()
-        _state.value.selectedRecording?.file?.delete()
-        _state.value = _state.value.copy(selectedRecording = null, errorMessage = null, elapsedMillis = 0L)
+        val previousRecording = _state.value.selectedRecording
         val tempDir =
             File(requireNotNull(appContext.cacheDir) { "Application cache directory is unavailable" }, "voice-notes")
                 .apply { mkdirs() }
@@ -114,9 +113,11 @@ class VoiceMessageRecorder(
             _state.value = _state.value.copy(errorMessage = error.message ?: "Unable to start recording")
             throw error
         }
+        previousRecording?.file?.delete()
         _state.value =
             _state.value.copy(
                 recorderState = backend.state.value,
+                selectedRecording = null,
                 activeRecordingFile = output,
                 elapsedMillis = 0L,
             )
@@ -161,9 +162,12 @@ class VoiceMessageRecorder(
         _state.value = VoiceMessageRecordingState()
     }
 
-    fun removeSelected() {
-        _state.value.selectedRecording?.file?.delete()
+    fun removeSelected(expectedRecording: RecordedAudio? = null): Boolean {
+        val selected = _state.value.selectedRecording ?: return false
+        if (expectedRecording != null && selected.file != expectedRecording.file) return false
+        selected.file.delete()
         _state.value = _state.value.copy(selectedRecording = null)
+        return true
     }
 
     override fun close() {

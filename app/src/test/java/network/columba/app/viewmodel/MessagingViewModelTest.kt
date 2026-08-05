@@ -44,6 +44,8 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -314,6 +316,16 @@ class MessagingViewModelTest {
                 viewModel.startVoiceRecording()
             }
         }
+
+    @Test
+    fun `call microphone ownership includes transitional call states`() {
+        assertTrue(callUsesMicrophone(CallState.Connecting("peer")))
+        assertTrue(callUsesMicrophone(CallState.Ringing("peer")))
+        assertTrue(callUsesMicrophone(CallState.Incoming("peer")))
+        assertTrue(callUsesMicrophone(CallState.Active("peer")))
+        assertFalse(callUsesMicrophone(CallState.Idle))
+        assertFalse(callUsesMicrophone(CallState.Ended))
+    }
 
     @Test
     fun `peerActivity exposes durable timestamp for current conversation`() =
@@ -1096,12 +1108,15 @@ class MessagingViewModelTest {
             advanceUntilIdle()
             val image = byteArrayOf(0x01, 0x02, 0x03)
             viewModel.selectImage(image, "png")
+            val sendResult = async { viewModel.composerSendResult.first() }
 
             viewModel.sendMessage(testPeerHash, "Keep attachment")
             advanceUntilIdle()
 
             assertArrayEquals(image, viewModel.selectedImageData.value)
             assertEquals("png", viewModel.selectedImageFormat.value)
+            assertFalse(sendResult.await().clearComposer)
+            coVerify(exactly = 0) { conversationRepository.clearDraft(testPeerHash) }
         }
 
     // ========== DELIVERY STATUS HANDLING TESTS ==========
@@ -4601,6 +4616,65 @@ class MessagingViewModelTest {
 
             // After sending complete
             assertFalse(viewModel.isSending.value)
+        }
+
+    @Test
+    fun `sendMessage admits only one in flight send`() =
+        runViewModelTest {
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val sendCompletion = CompletableDeferred<Result<MessageReceipt>>()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers { sendCompletion.await() }
+            val successfulResult =
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { it.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = destHashBytes,
+                    ),
+                )
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+
+            viewModel.sendMessage(testPeerHash, "Test message")
+            viewModel.sendMessage(testPeerHash, "Test message")
+            assertTrue(viewModel.isSending.value)
+            sendCompletion.complete(successfulResult)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            assertFalse(viewModel.isSending.value)
+        }
+
+    @Test
+    fun `send completion preserves a replacement attachment`() =
+        runViewModelTest {
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val sendCompletion = CompletableDeferred<Result<MessageReceipt>>()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers { sendCompletion.await() }
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            val original = byteArrayOf(0x01)
+            val replacement = byteArrayOf(0x02)
+            viewModel.selectImage(original, "png")
+
+            viewModel.sendMessage(testPeerHash, "Test message")
+            viewModel.selectImage(replacement, "png")
+            sendCompletion.complete(
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { it.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = destHashBytes,
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertArrayEquals(replacement, viewModel.selectedImageData.value)
         }
 
     @Test

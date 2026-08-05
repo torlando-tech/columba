@@ -29,6 +29,7 @@ import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
+import network.columba.app.viewmodel.ComposerSendResult
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -102,6 +103,7 @@ class MessagingScreenTest {
         every { mockViewModel.selectedFileAttachments } returns MutableStateFlow(emptyList())
         every { mockViewModel.totalAttachmentSize } returns MutableStateFlow(0)
         every { mockViewModel.fileAttachmentError } returns MutableSharedFlow()
+        every { mockViewModel.composerSendResult } returns MutableSharedFlow()
         every { mockViewModel.isProcessingFile } returns MutableStateFlow(false)
         // Location sharing mocks
         every { mockViewModel.contacts } returns MutableStateFlow(emptyList())
@@ -599,6 +601,42 @@ class MessagingScreenTest {
         // Then
         assertTrue("Send button click should succeed", result.isSuccess)
         verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, "Test message") }
+    }
+
+    @Test
+    fun inputBar_clearsSubmittedTextOnlyAfterDurableSendResult() {
+        val results = MutableSharedFlow<ComposerSendResult>(extraBufferCapacity = 2)
+        every { mockViewModel.composerSendResult } returns results
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.onNodeWithText("Type a message...").performTextInput("Test message")
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Test message",
+                clearComposer = false,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message").assertExists()
+
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Test message",
+                clearComposer = true,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message").assertDoesNotExist()
     }
 
     @Test

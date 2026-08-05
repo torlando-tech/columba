@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.SystemClock
@@ -163,7 +164,11 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -731,6 +736,19 @@ fun MessagingScreen(
 
     var showVoiceControls by remember { mutableStateOf(false) }
     var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+    LaunchedEffect(destinationHash, viewModel) {
+        viewModel.composerSendResult.collect { result ->
+            if (
+                result.destinationHash == destinationHash &&
+                result.clearComposer &&
+                messageText.trim() == result.submittedText.trim()
+            ) {
+                messageText = ""
+                showVoiceControls = false
+            }
+        }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val audioPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
@@ -748,7 +766,29 @@ fun MessagingScreen(
         }
     val voicePlayer = remember { VoiceMessagePlayer(context, scope) }
     val voicePlayerState by voicePlayer.state.collectAsStateWithLifecycle()
-    DisposableEffect(Unit) { onDispose { voicePlayer.close() } }
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> {
+                        if (
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            audioPermissionPermanentlyDenied = false
+                        }
+                    }
+                    Lifecycle.Event.ON_STOP -> viewModel.cancelActiveVoiceRecording()
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            voicePlayer.close()
+            viewModel.cancelActiveVoiceRecording()
+        }
+    }
 
     val cancelActiveVoiceRecording = {
         voicePlayer.close()
@@ -1459,8 +1499,7 @@ fun MessagingScreen(
                             voicePlayer.close()
                             val wasVoiceMessage = voiceRecordingState.selectedRecording != null
                             viewModel.sendMessage(destinationHash, messageText.trim())
-                            if (wasVoiceMessage) showVoiceControls = false
-                            messageText = ""
+                            if (!wasVoiceMessage) inputPanelMode = InputPanelMode.NONE
                         }
                     },
                     isSending = isSending,
@@ -1889,6 +1928,7 @@ fun MessagingScreen(
             onDismiss = { showCodecSelectionDialog = false },
             onProfileSelected = { profile ->
                 showCodecSelectionDialog = false
+                viewModel.cancelActiveVoiceRecording()
                 onVoiceCall(profile.code)
             },
         )

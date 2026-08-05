@@ -9,7 +9,9 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 import pytest
 
@@ -21,6 +23,17 @@ ACTIVITY = f"{PKG}/network.columba.app.MainActivity"
 RECEIVER = f"{PKG}/network.columba.app.test.TestReceiver"
 FILE_NAME = "columba-progress-e2e.bin"
 FILE_SIZE = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class HostPeer:
+    receiver: subprocess.Popen[str]
+    proxy: subprocess.Popen[str]
+    receiver_log: TextIO
+    proxy_log: TextIO
+    destination: str
+    result_file: Path
+    proxy_port: int
 
 
 def free_port() -> int:
@@ -131,7 +144,7 @@ def stop_process(process: subprocess.Popen[str] | None) -> None:
         process.wait(timeout=5)
 
 
-def start_host_peer(root: Path, artifact_dir: Path):
+def start_host_peer(root: Path, artifact_dir: Path) -> HostPeer:
     receiver_port = free_port()
     proxy_port = free_port()
     while proxy_port == receiver_port:
@@ -176,6 +189,7 @@ def start_host_peer(root: Path, artifact_dir: Path):
             text=True,
         )
         wait_file(destination_file, 20)
+        destination = destination_file.read_text(encoding="ascii").strip()
         time.sleep(1)
         if receiver.poll() is not None or proxy.poll() is not None:
             raise RuntimeError("Host LXMF receiver or throttled proxy exited during startup")
@@ -186,7 +200,15 @@ def start_host_peer(root: Path, artifact_dir: Path):
         proxy_log.close()
         raise
     assert receiver is not None and proxy is not None
-    return receiver, proxy, receiver_log, proxy_log, destination_file, result_file, proxy_port
+    return HostPeer(
+        receiver=receiver,
+        proxy=proxy,
+        receiver_log=receiver_log,
+        proxy_log=proxy_log,
+        destination=destination,
+        result_file=result_file,
+        proxy_port=proxy_port,
+    )
 
 
 def enter_field(driver: AdbUiDriver, placeholder: str, value: str) -> None:
@@ -220,21 +242,44 @@ def click_description_until_text(
     raise TimeoutError(f"Tapping {description!r} never revealed {expected_text!r}")
 
 
+def outgoing_resource_percentage(snapshot: UiSnapshot) -> int | None:
+    try:
+        snapshot.require_text(FILE_NAME)
+    except LookupError:
+        return None
+    return snapshot.semantic_percentage("Sending directly")
+
+
+def capture_verified_progress(driver: AdbUiDriver, timeout: float = 45) -> int:
+    """Capture a screenshot bracketed by matching intermediate UI semantics."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            before = outgoing_resource_percentage(driver.snapshot())
+            if before is None:
+                time.sleep(0.2)
+                continue
+            screenshot = driver.screenshot("outgoing-resource-progress.png")
+            after = outgoing_resource_percentage(driver.snapshot())
+            if after is not None and screenshot.stat().st_size > 10_000:
+                return after
+        except (OSError, subprocess.SubprocessError, ET.ParseError):
+            pass
+        time.sleep(0.2)
+    raise TimeoutError("Could not capture verified outgoing Resource progress")
+
+
 @pytest.mark.timeout(300)
 def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
     apk = Path(os.environ["COLUMBA_E2E_APK"]).resolve()
     serial = os.environ.get("COLUMBA_EMULATOR_SERIAL", "emulator-5554")
-    if (
-        not serial.startswith("emulator-")
-        and os.environ.get("COLUMBA_E2E_ALLOW_PHYSICAL") != "1"
-    ):
-        pytest.fail("Refusing to clear app data on a non-emulator Android target")
+    if not serial.startswith("emulator-"):
+        pytest.fail("This destructive E2E requires a disposable Android emulator")
     artifact_dir = Path(os.environ.get("COLUMBA_E2E_ARTIFACT_DIR", "artifacts/transfer-progress-e2e"))
     artifact_dir.mkdir(parents=True, exist_ok=True)
     driver = AdbUiDriver(serial, artifact_dir)
-    processes = start_host_peer(tmp_path, artifact_dir)
-    receiver, proxy, receiver_log, proxy_log, destination_file, result_file, proxy_port = processes
-    destination = destination_file.read_text(encoding="ascii").strip()
+    peer = start_host_peer(tmp_path, artifact_dir)
+    destination = peer.destination
 
     try:
         driver.adb("install", "-r", str(apk), timeout=180)
@@ -257,7 +302,7 @@ def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
             timeout=45,
             name="transfer_progress_e2e",
             host=tcp_host,
-            port=str(proxy_port),
+            port=str(peer.proxy_port),
         )
         time.sleep(1)
         driver.adb("shell", "am", "force-stop", PKG)
@@ -309,26 +354,11 @@ def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
         driver.wait_text(FILE_NAME, timeout=30)
         driver.click_description("Send message")
 
-        def live_progress(snapshot: UiSnapshot):
-            try:
-                snapshot.require_text(FILE_NAME)
-            except LookupError:
-                return None
-            percentage = snapshot.semantic_percentage("Sending directly")
-            return (snapshot, percentage) if percentage is not None else None
-
-        _, percentage = driver.wait_for(
-            live_progress,
-            timeout=45,
-            interval=0.25,
-            description="genuine outgoing Resource progress",
-        )
-        screenshot = driver.screenshot("outgoing-resource-progress.png")
-        assert screenshot.stat().st_size > 10_000
+        percentage = capture_verified_progress(driver)
         assert 0 < percentage < 100
 
-        wait_file(result_file, 90)
-        received = json.loads(result_file.read_text(encoding="utf-8"))
+        wait_file(peer.result_file, 90)
+        received = json.loads(peer.result_file.read_text(encoding="utf-8"))
         assert received["filename"] == FILE_NAME
         assert received["size"] == FILE_SIZE
         assert received["sha256"] == expected_sha
@@ -341,7 +371,7 @@ def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
             driver.adb("shell", "rm", "-f", "/sdcard/columba-e2e-window.xml")
         except (OSError, subprocess.SubprocessError):
             pass
-        for process in (proxy, receiver):
+        for process in (peer.proxy, peer.receiver):
             stop_process(process)
-        receiver_log.close()
-        proxy_log.close()
+        peer.receiver_log.close()
+        peer.proxy_log.close()

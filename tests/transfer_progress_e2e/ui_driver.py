@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import subprocess
-import tempfile
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -13,7 +12,6 @@ from typing import Callable, TypeVar
 
 
 _BOUNDS = re.compile(r"\[(\d+),(\d+)]\[(\d+),(\d+)]")
-_PERCENT = re.compile(r"^(\d{1,3})%$")
 T = TypeVar("T")
 
 
@@ -64,15 +62,6 @@ class UiSnapshot:
                 return node
         raise LookupError(f"UI description not found: {description!r}")
 
-    def live_percentage(self) -> int | None:
-        for node in self.nodes:
-            match = _PERCENT.fullmatch(node.text)
-            if match is not None:
-                value = int(match.group(1))
-                if 0 < value < 100:
-                    return value
-        return None
-
     def semantic_percentage(self, label: str) -> int | None:
         pattern = re.compile(rf"^{re.escape(label)}, (\d{{1,3}}) percent$")
         for node in self.nodes:
@@ -89,7 +78,7 @@ class AdbUiDriver:
         self.serial = serial
         self.artifact_dir = artifact_dir
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
-        self._dump_path = Path(tempfile.mkdtemp(prefix="columba-e2e-ui-")) / "window.xml"
+        self._dump_path = self.artifact_dir / "window.xml"
 
     def adb(
         self,

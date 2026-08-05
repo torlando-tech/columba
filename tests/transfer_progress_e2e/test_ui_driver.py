@@ -20,10 +20,9 @@ def test_snapshot_finds_text_and_content_description() -> None:
     assert snapshot.require_description("Attach").center == (950, 1750)
 
 
-def test_snapshot_extracts_live_percentage() -> None:
+def test_snapshot_extracts_semantic_percentage() -> None:
     snapshot = UiSnapshot.parse(SAMPLE_XML)
 
-    assert snapshot.live_percentage() == 10
     assert snapshot.semantic_percentage("Sending directly") == 10
 
 

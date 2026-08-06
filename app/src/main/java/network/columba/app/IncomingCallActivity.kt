@@ -21,11 +21,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import network.columba.app.notifications.CallNotificationHelper
+import network.columba.app.repository.SettingsRepository
 import network.columba.app.ui.screens.IncomingCallActivityScreen
+import network.columba.app.ui.theme.ThemeMode
 import kotlinx.coroutines.Job
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
@@ -62,6 +65,11 @@ class IncomingCallActivity : ComponentActivity() {
         EntryPointAccessors
             .fromApplication(applicationContext, RnsTelephonyEntryPoint::class.java)
             .telephony()
+    }
+    private val settingsRepository: SettingsRepository by lazy {
+        EntryPointAccessors
+            .fromApplication(applicationContext, RnsTelephonyEntryPoint::class.java)
+            .settingsRepository()
     }
     private var ringtone: Ringtone? = null
     private var ringtoneLoopJob: Job? = null
@@ -120,8 +128,11 @@ class IncomingCallActivity : ComponentActivity() {
 
         setContent {
             val hash = currentIdentityHash.value ?: return@setContent
+            // Respect the in-app theme mode (defaults to SYSTEM when unset),
+            // matching the main UI's appearance instead of the device theme alone.
+            val themeMode = settingsRepository.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM).value
             // Use a simple Material 3 theme (no Hilt-based theme needed)
-            val darkTheme = isSystemInDarkTheme()
+            val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
             MaterialTheme(
                 colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme(),
             ) {

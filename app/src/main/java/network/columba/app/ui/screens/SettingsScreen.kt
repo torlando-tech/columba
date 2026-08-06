@@ -528,7 +528,9 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.THEME, it) },
                     selectedTheme = state.selectedTheme,
                     customThemes = state.customThemes,
+                    themeMode = state.themeMode,
                     onThemeChange = { viewModel.setTheme(it) },
+                    onThemeModeChange = { viewModel.setThemeMode(it) },
                     onNavigateToCustomThemes = onNavigateToCustomThemes,
                 )
 

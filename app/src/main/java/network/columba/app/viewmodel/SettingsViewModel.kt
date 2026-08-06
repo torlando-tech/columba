@@ -45,6 +45,7 @@ import network.columba.app.service.RelayInfo
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 import javax.inject.Inject
 
 /**
@@ -103,6 +104,7 @@ data class SettingsState(
     val iconBackgroundColor: String? = null,
     val selectedTheme: AppTheme = PresetTheme.VIBRANT,
     val customThemes: List<AppTheme> = emptyList(),
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val isRestarting: Boolean = false,
     val networkStatus: NetworkStatus = NetworkStatus.CONNECTING,
     // Shared instance state
@@ -411,6 +413,7 @@ class SettingsViewModel
                         settingsRepository.retrievalIntervalSecondsFlow,
                         settingsRepository.shareInstanceHostingEnabledFlow,
                         settingsRepository.crashReportingConsentFlow,
+                        settingsRepository.themeModeFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as network.columba.app.data.db.entity.LocalIdentityEntity?
@@ -468,6 +471,9 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val crashReportingEnabled = flows[17] as Boolean
 
+                        @Suppress("UNCHECKED_CAST")
+                        val themeMode = flows[18] as ThemeMode
+
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
                         val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
@@ -493,6 +499,7 @@ class SettingsViewModel
                             iconBackgroundColor = activeIdentity?.iconBackgroundColor,
                             selectedTheme = selectedTheme,
                             customThemes = customThemes,
+                            themeMode = themeMode,
                             isRestarting = _state.value.isRestarting,
                             networkStatus = _state.value.networkStatus,
                             // Shared instance state from repository (set by service)
@@ -995,6 +1002,19 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.saveThemePreference(theme)
                 Log.d(TAG, "Theme changed to: ${theme.displayName}")
+            }
+        }
+
+        /**
+         * Set the theme mode (System/Light/Dark).
+         * The mode is applied immediately and persisted across app restarts.
+         *
+         * @param mode The theme mode to apply
+         */
+        fun setThemeMode(mode: ThemeMode) {
+            viewModelScope.launch {
+                settingsRepository.saveThemeModePreference(mode)
+                Log.d(TAG, "Theme mode changed to: ${mode.displayName}")
             }
         }
 

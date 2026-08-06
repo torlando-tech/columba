@@ -309,6 +309,8 @@ object FileUtils {
     private const val SHARE_IMAGES_DIR = "share_images"
     private const val INCOMING_SHARE_DIR = "incoming_shares"
     private const val OUTGOING_HEX_DIR = "outgoing_hex"
+    private const val VOICE_NOTES_DIR = "voice-notes"
+    private val voiceCachePrefixes = listOf("voice_message_", "voice_waveform_")
 
     /**
      * Write file data to a temporary file for large file transfer.
@@ -383,12 +385,23 @@ object FileUtils {
         maxAgeMs: Long = 60 * 60 * 1000,
     ): Int {
         val cutoffTime = System.currentTimeMillis() - maxAgeMs
-        val dirsToClean = listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR, INCOMING_SHARE_DIR, OUTGOING_HEX_DIR)
+        val dirsToClean =
+            listOf(TEMP_ATTACHMENTS_DIR, SHARE_IMAGES_DIR, INCOMING_SHARE_DIR, OUTGOING_HEX_DIR, VOICE_NOTES_DIR)
 
+        val voiceRootCount =
+            context.cacheDir.listFiles()
+                ?.asSequence()
+                ?.filter { file -> file.isFile && voiceCachePrefixes.any(file.name::startsWith) }
+                ?.filter { it.lastModified() < cutoffTime }
+                ?.count { file ->
+                    file.delete().also { deleted ->
+                        if (deleted) Log.d(TAG, "Cleaned up old voice temp file: ${file.name}")
+                    }
+                } ?: 0
         val cleanedCount =
             dirsToClean.sumOf { dirName ->
                 cleanupDirectory(File(context.cacheDir, dirName), cutoffTime, dirName)
-            }
+            } + voiceRootCount
 
         if (cleanedCount > 0) {
             Log.d(TAG, "Cleaned up $cleanedCount old temp file(s)")

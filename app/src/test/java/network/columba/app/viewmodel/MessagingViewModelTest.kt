@@ -8,6 +8,8 @@ package network.columba.app.viewmodel
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
+import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.audio.VoiceMessageRecorder
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -25,7 +27,9 @@ import network.columba.app.rns.api.model.TransferPhase
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.notifications.NotificationHelper
@@ -42,10 +46,13 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.slot
+
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,10 +67,12 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -100,6 +109,7 @@ class MessagingViewModelTest {
     private lateinit var blockedPeerRepository: network.columba.app.data.repository.BlockedPeerRepository
     private lateinit var identityResolutionManager: IdentityResolutionManager
     private lateinit var notificationHelper: NotificationHelper
+    private lateinit var rnsTelephony: RnsTelephony
     private lateinit var viewModel: MessagingViewModel
 
     private val testPeerHash = "abcdef0123456789abcdef0123456789" // Valid 32-char hex hash
@@ -118,7 +128,9 @@ class MessagingViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         applicationContext = mockk(relaxed = true)
+        every { applicationContext.applicationContext } returns applicationContext
         every { applicationContext.cacheDir } returns java.io.File(System.getProperty("java.io.tmpdir"), "test_cache").apply { mkdirs() }
+        every { applicationContext.filesDir } returns java.io.File(System.getProperty("java.io.tmpdir"), "test_files").apply { mkdirs() }
         rnsCore = mockk()
         rnsLxmf = mockk()
         rnsTransportAdmin = mockk()
@@ -138,6 +150,8 @@ class MessagingViewModelTest {
 
         notificationHelper = mockk()
         every { notificationHelper.cancelNotificationForConversation(any()) } just Runs
+        rnsTelephony = mockk()
+        every { rnsTelephony.callState } returns MutableStateFlow(CallState.Idle)
 
         // Mock receivedLocationRepository to return no location by default
         every { receivedLocationRepository.observeHasLocation(any()) } returns flowOf(false)
@@ -225,6 +239,10 @@ class MessagingViewModelTest {
             .File(System.getProperty("java.io.tmpdir"), "test_cache")
             .takeIf { it.exists() }
             ?.deleteRecursively()
+        java.io
+            .File(System.getProperty("java.io.tmpdir"), "test_files")
+            .takeIf { it.exists() }
+            ?.deleteRecursively()
     }
 
     /**
@@ -252,6 +270,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
             testBody()
@@ -261,7 +280,9 @@ class MessagingViewModelTest {
      * Creates a ViewModel for tests that need custom mock setup BEFORE ViewModel creation.
      * Use runViewModelTest {} for most tests; use this with runTest {} only when needed.
      */
-    private fun createTestViewModel(): MessagingViewModel =
+    private fun createTestViewModel(
+        microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
+    ): MessagingViewModel =
         MessagingViewModel(
             applicationContext,
             rnsCore,
@@ -279,7 +300,9 @@ class MessagingViewModelTest {
             receivedLocationRepository,
             blockedPeerRepository,
             identityResolutionManager,
-        notificationHelper,
+            notificationHelper,
+            rnsTelephony,
+            microphoneArbiter,
         )
 
     @Test
@@ -291,6 +314,42 @@ class MessagingViewModelTest {
             assertTrue("Messages flow should be accessible", result.isSuccess)
             coVerify(exactly = 0) { conversationRepository.getMessagesPaged(any()) }
         }
+
+    @Test
+    fun `voice recording is blocked while a call is active`() =
+        runTest {
+            every { rnsTelephony.callState } returns MutableStateFlow(CallState.Active("peer"))
+            viewModel = createTestViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.isVoiceRecordingBlockedByCall.value)
+            assertThrows(IllegalStateException::class.java) {
+                viewModel.startVoiceRecording()
+            }
+        }
+
+    @Test
+    fun `voice recording admission is blocked while outgoing call owns microphone`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            assertNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+            viewModel = createTestViewModel(arbiter)
+            advanceUntilIdle()
+
+            assertThrows(IllegalStateException::class.java) {
+                viewModel.startVoiceRecording()
+            }
+        }
+
+    @Test
+    fun `call microphone ownership includes transitional call states`() {
+        assertTrue(callUsesMicrophone(CallState.Connecting("peer")))
+        assertTrue(callUsesMicrophone(CallState.Ringing("peer")))
+        assertTrue(callUsesMicrophone(CallState.Incoming("peer")))
+        assertTrue(callUsesMicrophone(CallState.Active("peer")))
+        assertFalse(callUsesMicrophone(CallState.Idle))
+        assertFalse(callUsesMicrophone(CallState.Ended))
+    }
 
     @Test
     fun `peerActivity exposes durable timestamp for current conversation`() =
@@ -505,7 +564,7 @@ class MessagingViewModelTest {
 
             viewModel.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
-            // 400 bytes > OPPORTUNISTIC_MAX_BYTES (295) — falls into the method-selection branch
+            // 400 bytes > OPPORTUNISTIC_MAX_BYTES (295) - falls into the method-selection branch
             val result = runCatching { viewModel.sendMessage(testPeerHash, "x".repeat(400)) }
             advanceUntilIdle()
 
@@ -693,6 +752,7 @@ class MessagingViewModelTest {
         runViewModelTest {
             // Clear existing mocks and create new ones that fail identity loading
             clearAllMocks()
+            every { rnsTelephony.callState } returns MutableStateFlow(CallState.Idle)
 
             val failingRnsCore: RnsCore = mockk()
             val failingRnsLxmf: RnsLxmf = mockk()
@@ -762,6 +822,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
 
             // Attempt to send message
@@ -1175,6 +1236,37 @@ class MessagingViewModelTest {
             assertEquals(null, viewModel.selectedImageFormat.value)
         }
 
+    @Test
+    fun `sendMessage retains composer attachment when local persistence fails`() =
+        runViewModelTest {
+            val destination = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { it.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = destination,
+                    ),
+                )
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } throws
+                IllegalStateException("database unavailable")
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val image = byteArrayOf(0x01, 0x02, 0x03)
+            viewModel.selectImage(image, "png")
+            val sendResult = async { viewModel.composerSendResult.first() }
+
+            viewModel.sendMessage(testPeerHash, "Keep attachment")
+            advanceUntilIdle()
+
+            assertArrayEquals(image, viewModel.selectedImageData.value)
+            assertEquals("png", viewModel.selectedImageFormat.value)
+            assertFalse(sendResult.await().clearComposer)
+            coVerify(exactly = 0) { conversationRepository.clearDraft(testPeerHash) }
+        }
+
     // ========== DELIVERY STATUS HANDLING TESTS ==========
 
     @Test
@@ -1218,6 +1310,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1293,6 +1386,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1366,6 +1460,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1427,6 +1522,7 @@ class MessagingViewModelTest {
                 blockedPeerRepository,
                 identityResolutionManager,
             notificationHelper,
+                rnsTelephony,
             )
             advanceUntilIdle()
 
@@ -1502,6 +1598,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1570,6 +1667,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1638,6 +1736,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1706,6 +1805,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1774,6 +1874,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1841,6 +1942,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1903,6 +2005,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -1965,6 +2068,7 @@ class MessagingViewModelTest {
                     blockedPeerRepository,
                     identityResolutionManager,
                 notificationHelper,
+                rnsTelephony,
                 )
             advanceUntilIdle()
 
@@ -4663,6 +4767,65 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `sendMessage admits only one in flight send`() =
+        runViewModelTest {
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val sendCompletion = CompletableDeferred<Result<MessageReceipt>>()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers { sendCompletion.await() }
+            val successfulResult =
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { it.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = destHashBytes,
+                    ),
+                )
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+
+            viewModel.sendMessage(testPeerHash, "Test message")
+            viewModel.sendMessage(testPeerHash, "Test message")
+            assertTrue(viewModel.isSending.value)
+            sendCompletion.complete(successfulResult)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            assertFalse(viewModel.isSending.value)
+        }
+
+    @Test
+    fun `send completion preserves a replacement attachment`() =
+        runViewModelTest {
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val sendCompletion = CompletableDeferred<Result<MessageReceipt>>()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers { sendCompletion.await() }
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            val original = byteArrayOf(0x01)
+            val replacement = byteArrayOf(0x02)
+            viewModel.selectImage(original, "png")
+
+            viewModel.sendMessage(testPeerHash, "Test message")
+            viewModel.selectImage(replacement, "png")
+            sendCompletion.complete(
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { it.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = destHashBytes,
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertArrayEquals(replacement, viewModel.selectedImageData.value)
+        }
+
+    @Test
     fun `isSending is false after failed send`() =
         runViewModelTest {
             coEvery {
@@ -4789,6 +4952,311 @@ class MessagingViewModelTest {
 
             // Should update message ID with new hash on success
             coVerify { conversationRepository.updateMessageId("msg-123", any()) }
+        }
+
+    @Test
+    fun `retryFailedMessage preserves inline voice audio field`() =
+        runViewModelTest {
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val failedMessage =
+                MessageEntity(
+                    id = "voice-failed",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = " ",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"7":[16,"4f676753"]}""",
+                )
+            coEvery { conversationRepository.getMessageById("voice-failed") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            val receipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { 0xAB.toByte() },
+                    timestamp = 3_000L,
+                    destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                )
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(receipt)
+
+            viewModel.retryFailedMessage("voice-failed")
+            advanceUntilIdle()
+
+            var sentExpectedAudio = false
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = " ",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    extraFields =
+                        match { fields ->
+                            val audio = fields?.get(7) as? List<*>
+                            sentExpectedAudio = audio?.getOrNull(0) == 16 &&
+                                (audio.getOrNull(1) as? ByteArray)?.contentEquals("OggS".encodeToByteArray()) == true
+                            sentExpectedAudio
+                        },
+                )
+            }
+            assertTrue(sentExpectedAudio)
+        }
+
+    @Test
+    fun `retryFailedMessage preserves voice and file attachments together`() =
+        runViewModelTest {
+            val failedMessage =
+                MessageEntity(
+                    id = "voice-and-file",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = " ",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson =
+                        """{"5":[{"filename":"note.txt","size":4,"data":"64617461"}],"7":[16,"4f676753"]}""",
+                )
+            coEvery { conversationRepository.getMessageById("voice-and-file") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAD.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                )
+
+            viewModel.retryFailedMessage("voice-and-file")
+            advanceUntilIdle()
+
+            var preservedCombinedAttachments = false
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = " ",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    fileAttachments =
+                        match { files ->
+                            preservedCombinedAttachments = files.singleOrNull()?.let { (name, data) ->
+                                name == "note.txt" && data.contentEquals("data".encodeToByteArray())
+                            } == true
+                            preservedCombinedAttachments
+                        },
+                    extraFields = any(),
+                )
+            }
+            assertTrue(preservedCombinedAttachments)
+        }
+
+    @Test
+    fun `retryFailedMessage admits only one retry per message`() =
+        runViewModelTest {
+            val failedMessage =
+                MessageEntity(
+                    id = "single-retry",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = "Retry once",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                )
+            val completion = CompletableDeferred<Result<MessageReceipt>>()
+            var sendCount = 0
+            coEvery { conversationRepository.getMessageById("single-retry") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers {
+                sendCount += 1
+                completion.await()
+            }
+
+            viewModel.retryFailedMessage("single-retry")
+            viewModel.retryFailedMessage("single-retry")
+            completion.complete(
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAE.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            assertEquals(1, sendCount)
+        }
+
+    @Test
+    fun `retryFailedMessage preserves file backed image field`() =
+        runViewModelTest {
+            val imageFile =
+                java.io.File(applicationContext.filesDir, "attachments/image-file/6_image").apply {
+                    parentFile!!.mkdirs()
+                    writeText("01020304")
+                }
+            val failedMessage =
+                MessageEntity(
+                    id = "image-file",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = "image",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"6":{"_file_ref":${org.json.JSONObject.quote(imageFile.absolutePath)}}}""",
+                )
+            coEvery { conversationRepository.getMessageById("image-file") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAD.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                )
+
+            viewModel.retryFailedMessage("image-file")
+            advanceUntilIdle()
+
+            var preservedImage = false
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "image",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = match {
+                        preservedImage = it?.contentEquals(byteArrayOf(1, 2, 3, 4)) == true
+                        preservedImage
+                    },
+                    imageFormat = "jpg",
+                    extraFields = any(),
+                )
+            }
+            assertTrue(preservedImage)
+        }
+
+    @Test
+    fun `retryFailedMessage fails closed when persisted image is unavailable`() =
+        runViewModelTest {
+            val missingPath = java.io.File(applicationContext.filesDir, "attachments/missing/6_image").absolutePath
+            val failedMessage =
+                MessageEntity(
+                    id = "missing-image",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = "image",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"6":{"_file_ref":${org.json.JSONObject.quote(missingPath)}}}""",
+                )
+            coEvery { conversationRepository.getMessageById("missing-image") } returns failedMessage
+            var unavailableRecorded = false
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } answers {
+                unavailableRecorded = args[2] == "Image attachment is no longer available"
+            }
+
+            viewModel.retryFailedMessage("missing-image")
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            coVerify {
+                conversationRepository.updateMessageDeliveryDetails(
+                    "missing-image",
+                    deliveryMethod = null,
+                    errorMessage = "Image attachment is no longer available",
+                )
+            }
+            assertTrue(unavailableRecorded)
+        }
+
+    @Test
+    fun `retryFailedMessage preserves file backed voice audio field`() =
+        runViewModelTest {
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val audioFile =
+                java.io.File(applicationContext.filesDir, "attachments/voice-file/7_audio").apply {
+                    parentFile!!.mkdirs()
+                    writeText("4f676753")
+                }
+            val failedMessage =
+                MessageEntity(
+                    id = "voice-file",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = " ",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"7":[16,{"_file_ref":${org.json.JSONObject.quote(audioFile.absolutePath)}}]}""",
+                )
+            coEvery { conversationRepository.getMessageById("voice-file") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAC.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                )
+
+            viewModel.retryFailedMessage("voice-file")
+            advanceUntilIdle()
+
+            var sentExpectedAudio = false
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = " ",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    extraFields =
+                        match { fields ->
+                            val audio = fields?.get(7) as? List<*>
+                            sentExpectedAudio =
+                                (audio?.getOrNull(1) as? ByteArray)?.contentEquals("OggS".encodeToByteArray()) == true
+                            sentExpectedAudio
+                        },
+                )
+            }
+            assertTrue(sentExpectedAudio)
         }
 
     @Test
@@ -4957,7 +5425,50 @@ class MessagingViewModelTest {
             assertEquals(network.columba.app.service.SyncProgress.Starting, viewModel.syncProgress.value)
         }
 
-    // Note: onCleared() tests removed - method is protected and cannot be called directly
+    @Test
+    fun `onCleared releases owned voice recording lease`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            val ownedLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+            val testViewModel = createTestViewModel(arbiter)
+            testViewModel.javaClass.getDeclaredField("voiceRecordingLease").apply {
+                isAccessible = true
+                set(testViewModel, ownedLease)
+            }
+
+            testViewModel.javaClass.getDeclaredMethod("onCleared").apply {
+                isAccessible = true
+                invoke(testViewModel)
+            }
+
+            assertNull(arbiter.currentOwner())
+        }
+
+    @Test
+    fun `onCleared releases voice recording lease when recorder close fails`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            val ownedLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+            val throwingRecorder = mockk<VoiceMessageRecorder>()
+            every { throwingRecorder.close() } throws IllegalStateException("recorder close failed")
+            val testViewModel = createTestViewModel(arbiter)
+            testViewModel.javaClass.getDeclaredField("voiceRecordingLease").apply {
+                isAccessible = true
+                set(testViewModel, ownedLease)
+            }
+            testViewModel.javaClass.getDeclaredField("voiceMessageRecorder").apply {
+                isAccessible = true
+                set(testViewModel, throwingRecorder)
+            }
+
+            testViewModel.javaClass.getDeclaredMethod("onCleared").apply {
+                isAccessible = true
+                invoke(testViewModel)
+            }
+
+            verify(exactly = 1) { throwingRecorder.close() }
+            assertNull(arbiter.currentOwner())
+        }
 
     @Test
     fun `resource progress is exposed while active and removed at terminal state`() = runTest {

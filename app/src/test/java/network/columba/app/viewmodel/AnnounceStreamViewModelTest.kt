@@ -20,6 +20,9 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import io.mockk.*
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -621,27 +624,33 @@ class AnnounceStreamViewModelTest {
 
             viewModel.updateSelectedInterfaceTypes(setOf(InterfaceType.RNODE))
             val collection = launch { viewModel.announces.collect {} }
-            runCurrent()
-            verify(exactly = 1) {
-                announceRepository.getAnnouncesPaged(
-                    listOf("PEER"),
-                    "",
-                    listOf(InterfaceType.RNODE.storageName),
-                )
-            }
+            try {
+                runCurrent()
+                verify(exactly = 1) {
+                    announceRepository.getAnnouncesPaged(
+                        listOf("PEER"),
+                        "",
+                        listOf(InterfaceType.RNODE.storageName),
+                    )
+                }
 
-            advanceTimeBy(1_000L)
-            runCurrent()
-            assertEquals(setOf(InterfaceType.RNODE), viewModel.selectedInterfaceTypes.value)
-            verify(atLeast = 2) {
-                announceRepository.getAnnouncesPaged(
-                    listOf("PEER"),
-                    "",
-                    listOf(InterfaceType.RNODE.storageName),
-                )
+                advanceTimeBy(1_000L)
+                runCurrent()
+                assertEquals(setOf(InterfaceType.RNODE), viewModel.selectedInterfaceTypes.value)
+                verify(atLeast = 2) {
+                    announceRepository.getAnnouncesPaged(
+                        listOf("PEER"),
+                        "",
+                        listOf(InterfaceType.RNODE.storageName),
+                    )
+                }
+            } finally {
+                // Assertions run while the periodic loop is active. Always cancel it
+                // before runTest's automatic scheduler drain, including failure paths.
+                collection.cancel()
+                viewModel.viewModelScope.cancel()
+                runCurrent()
             }
-            collection.cancel()
-            viewModel.viewModelScope.cancel()
         }
 
     @Test
@@ -1381,9 +1390,11 @@ class AnnounceStreamViewModelTest {
             AnnounceStreamViewModel.updateIntervalMs = 100L
             networkStatusFlow.value = NetworkStatus.READY
 
-            var pathTableCallCount = 0
+            val pathTableCallCount = AtomicInteger(0)
+            val firstPathTableCall = CountDownLatch(1)
             coEvery { reticulumProtocol.getPathTableHashes() } answers {
-                pathTableCallCount++
+                pathTableCallCount.incrementAndGet()
+                firstPathTableCall.countDown()
                 emptyList()
             }
 
@@ -1397,28 +1408,41 @@ class AnnounceStreamViewModelTest {
                     mockk(),
                     identityResolutionManager,
                 )
-            // Run the init block tasks (startCollectingAnnouncesWhenReady + first loop iteration)
-            runCurrent()
+            try {
+                // The production code performs the path-table query on Dispatchers.IO.
+                // Under full-suite CPU load, virtual-time advancement can reach this
+                // before that real dispatcher starts. The old test then threw
+                // before cancelling viewModelScope, and runTest tried forever to drain
+                // the periodic delay loop. Use a wall-clock latch because runTest's
+                // virtual timeout would race the same real dispatcher.
+                runCurrent()
+                assertTrue(
+                    "Path-table IO should begin within 10 seconds",
+                    firstPathTableCall.await(10L, TimeUnit.SECONDS),
+                )
+                val callsBeforeCancel = pathTableCallCount.get()
 
-            // Advance past the first delay + second iteration
-            advanceTimeBy(150)
-            runCurrent()
-            val callsBeforeCancel = pathTableCallCount
-            assertTrue("Loop should have called getPathTableHashes at least once", callsBeforeCancel >= 1)
+                // Cancel before assertions so a failed assertion can never leave the
+                // infinite periodic job scheduled on TestCoroutineScheduler.
+                viewModel.viewModelScope.cancel()
+                runCurrent()
+                assertTrue("Loop should have called getPathTableHashes at least once", callsBeforeCancel >= 1)
 
-            // Cancel the viewModelScope (simulates ViewModel clearing)
-            viewModel.viewModelScope.cancel()
-            runCurrent()
+                // Advance time well past several more intervals.
+                advanceTimeBy(500)
+                runCurrent()
 
-            // Advance time well past several more intervals
-            advanceTimeBy(500)
-            runCurrent()
-
-            // No additional calls should have been made after cancellation
-            assertEquals(
-                "Loop should stop after scope cancellation (CancellationException must propagate)",
-                callsBeforeCancel,
-                pathTableCallCount,
-            )
+                // No additional calls should have been made after cancellation.
+                assertEquals(
+                    "Loop should stop after scope cancellation (CancellationException must propagate)",
+                    callsBeforeCancel,
+                    pathTableCallCount.get(),
+                )
+            } finally {
+                // Keep cleanup exception-safe: runTest auto-drains virtual tasks before
+                // JUnit @After executes, so @After alone cannot recover this kind of leak.
+                viewModel.viewModelScope.cancel()
+                runCurrent()
+            }
         }
 }

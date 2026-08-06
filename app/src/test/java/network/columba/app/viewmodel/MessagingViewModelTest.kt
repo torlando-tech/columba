@@ -9,6 +9,7 @@ import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
 import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.audio.VoiceMessageRecorder
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -5316,6 +5317,32 @@ class MessagingViewModelTest {
                 invoke(testViewModel)
             }
 
+            assertNull(arbiter.currentOwner())
+        }
+
+    @Test
+    fun `onCleared releases voice recording lease when recorder close fails`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            val ownedLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+            val throwingRecorder = mockk<VoiceMessageRecorder>()
+            every { throwingRecorder.close() } throws IllegalStateException("recorder close failed")
+            val testViewModel = createTestViewModel(arbiter)
+            testViewModel.javaClass.getDeclaredField("voiceRecordingLease").apply {
+                isAccessible = true
+                set(testViewModel, ownedLease)
+            }
+            testViewModel.javaClass.getDeclaredField("voiceMessageRecorder").apply {
+                isAccessible = true
+                set(testViewModel, throwingRecorder)
+            }
+
+            testViewModel.javaClass.getDeclaredMethod("onCleared").apply {
+                isAccessible = true
+                invoke(testViewModel)
+            }
+
+            verify(exactly = 1) { throwingRecorder.close() }
             assertNull(arbiter.currentOwner())
         }
 

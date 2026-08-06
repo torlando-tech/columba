@@ -2807,8 +2807,13 @@ class MessagingViewModel
 
         override fun onCleared() {
             synchronized(voiceRecorderOperationLock) {
-                voiceMessageRecorder.close()
-                releaseVoiceRecordingLeaseLocked()
+                try {
+                    voiceMessageRecorder.close()
+                } catch (error: Exception) {
+                    Log.e(TAG, "Failed to close voice message recorder", error)
+                } finally {
+                    releaseVoiceRecordingLeaseLocked()
+                }
             }
             super.onCleared()
 

@@ -6,6 +6,7 @@ package network.columba.app.viewmodel
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
+import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import io.mockk.clearAllMocks
@@ -44,6 +45,7 @@ class CallViewModelTest {
     private lateinit var mockContactRepository: ContactRepository
     private lateinit var mockAnnounceRepository: AnnounceRepository
     private lateinit var mockTelephony: RnsTelephony
+    private lateinit var microphoneArbiter: MicrophoneAdmissionArbiter
     private lateinit var viewModel: CallViewModel
 
     // StateFlows backing the mocked RnsTelephony
@@ -65,6 +67,7 @@ class CallViewModelTest {
         mockContactRepository = mockk()
         mockAnnounceRepository = mockk()
         mockTelephony = mockk()
+        microphoneArbiter = MicrophoneAdmissionArbiter()
 
         // Initialize state flows
         callStateFlow = MutableStateFlow<CallState>(CallState.Idle)
@@ -127,7 +130,7 @@ class CallViewModelTest {
         coEvery { mockAnnounceRepository.getAnnounce(any()) } returns null
         coEvery { mockAnnounceRepository.findByIdentityHash(any()) } returns null
 
-        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockTelephony)
+        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockTelephony, microphoneArbiter)
     }
 
     @After
@@ -143,6 +146,17 @@ class CallViewModelTest {
     @Test
     fun `callState exposes telephony callState`() {
         assertEquals(callStateFlow, viewModel.callState)
+    }
+
+    @Test
+    fun `outgoing call admission is blocked while voice recording owns microphone`() = runTest {
+        assertTrue(microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+
+        viewModel.initiateCall("aabbccdd")
+
+        coVerify(exactly = 0) { mockTelephony.setConnecting(any()) }
+        coVerify(exactly = 0) { mockTelephony.initiateCall(any(), any()) }
+        assertFalse(viewModel.isConnecting.value)
     }
 
     @Test

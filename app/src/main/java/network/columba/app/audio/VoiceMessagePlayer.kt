@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -112,9 +113,9 @@ internal class VoiceMessagePlayer(
     private val metadataSemaphore = Semaphore(permits = 1)
 
     fun prepareMetadata(messageKey: String, attachment: AudioAttachmentUi) {
-        if (_metadata.value.containsKey(messageKey) || metadataJobs.containsKey(messageKey)) return
-        metadataJobs[messageKey] =
-            scope.launch {
+        if (_metadata.value.containsKey(messageKey)) return
+        val candidate =
+            scope.launch(start = CoroutineStart.LAZY) {
                 try {
                     val result =
                         metadataSemaphore.withPermit {
@@ -134,6 +135,12 @@ internal class VoiceMessagePlayer(
                     }
                 }
             }
+        val existing = metadataJobs.putIfAbsent(messageKey, candidate)
+        if (existing == null) {
+            candidate.start()
+        } else {
+            candidate.cancel()
+        }
     }
 
     fun cancelMetadata(messageKey: String) {

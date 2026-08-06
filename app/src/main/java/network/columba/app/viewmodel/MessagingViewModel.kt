@@ -29,6 +29,7 @@ import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.audio.VoiceMessageRecorder
+import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.ui.model.AudioAttachmentLoader
 import network.columba.app.ui.model.DecodedImageResult
 import network.columba.app.ui.model.ImageCache
@@ -113,6 +114,7 @@ class MessagingViewModel
         private val identityResolutionManager: network.columba.app.service.IdentityResolutionManager,
         private val notificationHelper: network.columba.app.notifications.NotificationHelper,
         private val rnsTelephony: RnsTelephony,
+        private val microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -276,7 +278,8 @@ class MessagingViewModel
         private val composerSendResults = Channel<ComposerSendResult>(Channel.BUFFERED)
         val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
         private val sendInProgress = AtomicBoolean(false)
-        private val microphoneAdmissionLock = Any()
+        private val voiceRecordingAdmissionPending = AtomicBoolean(false)
+        private val voiceRecorderOperationLock = Any()
         private val retriesInProgress = ConcurrentHashMap.newKeySet<String>()
 
         // Shared image compression error events for UI feedback
@@ -801,6 +804,17 @@ class MessagingViewModel
             viewModelScope.launch {
                 rnsTelephony.callState.collect { state ->
                     if (callUsesMicrophone(state)) cancelActiveVoiceRecording()
+                }
+            }
+
+            viewModelScope.launch {
+                voiceMessageRecorder.state.collect { state ->
+                    val active =
+                        state.activeRecordingFile != null ||
+                            state.recorderState is tech.torlando.lxst.recording.RecorderState.Recording
+                    if (!active && !voiceRecordingAdmissionPending.get()) {
+                        microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                    }
                 }
             }
 
@@ -1659,28 +1673,58 @@ class MessagingViewModel
         }
 
         fun startVoiceRecording(maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS): File {
-            return synchronized(microphoneAdmissionLock) {
+            return synchronized(voiceRecorderOperationLock) {
                 check(!callUsesMicrophone(rnsTelephony.callState.value)) {
                     "Voice recording is unavailable during a call"
                 }
-                val output = voiceMessageRecorder.start(maxDurationMillis)
-                if (callUsesMicrophone(rnsTelephony.callState.value)) {
-                    voiceMessageRecorder.cancel()
-                    error("Voice recording is unavailable during a call")
+                voiceRecordingAdmissionPending.set(true)
+                if (!microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)) {
+                    voiceRecordingAdmissionPending.set(false)
+                    error("Microphone is already in use")
                 }
-                output
+                try {
+                    val output = voiceMessageRecorder.start(maxDurationMillis)
+                    if (callUsesMicrophone(rnsTelephony.callState.value)) {
+                        voiceMessageRecorder.cancel()
+                        error("Voice recording is unavailable during a call")
+                    }
+                    voiceRecordingAdmissionPending.set(false)
+                    output
+                } catch (error: Exception) {
+                    voiceRecordingAdmissionPending.set(false)
+                    microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                    throw error
+                }
             }
         }
-        fun stopVoiceRecording() = synchronized(microphoneAdmissionLock) { voiceMessageRecorder.stop() }
-        fun cancelVoiceRecording() = synchronized(microphoneAdmissionLock) { voiceMessageRecorder.cancel() }
+        fun stopVoiceRecording() =
+            synchronized(voiceRecorderOperationLock) {
+                try {
+                    voiceMessageRecorder.stop()
+                } finally {
+                    microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                }
+            }
+        fun cancelVoiceRecording() =
+            synchronized(voiceRecorderOperationLock) {
+                try {
+                    voiceMessageRecorder.cancel()
+                } finally {
+                    microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                }
+            }
         fun cancelActiveVoiceRecording() {
-            synchronized(microphoneAdmissionLock) {
+            synchronized(voiceRecorderOperationLock) {
                 val state = voiceMessageRecorder.state.value
                 if (
                     state.activeRecordingFile != null ||
                     state.recorderState is tech.torlando.lxst.recording.RecorderState.Recording
                 ) {
-                    voiceMessageRecorder.cancel()
+                    try {
+                        voiceMessageRecorder.cancel()
+                    } finally {
+                        microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                    }
                 }
             }
         }

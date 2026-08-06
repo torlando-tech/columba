@@ -8,6 +8,7 @@ package network.columba.app.viewmodel
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
+import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -272,7 +273,9 @@ class MessagingViewModelTest {
      * Creates a ViewModel for tests that need custom mock setup BEFORE ViewModel creation.
      * Use runViewModelTest {} for most tests; use this with runTest {} only when needed.
      */
-    private fun createTestViewModel(): MessagingViewModel =
+    private fun createTestViewModel(
+        microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
+    ): MessagingViewModel =
         MessagingViewModel(
             applicationContext,
             rnsCore,
@@ -290,8 +293,9 @@ class MessagingViewModelTest {
             receivedLocationRepository,
             blockedPeerRepository,
             identityResolutionManager,
-        notificationHelper,
-                rnsTelephony,
+            notificationHelper,
+            rnsTelephony,
+            microphoneArbiter,
         )
 
     @Test
@@ -312,6 +316,19 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.isVoiceRecordingBlockedByCall.value)
+            assertThrows(IllegalStateException::class.java) {
+                viewModel.startVoiceRecording()
+            }
+        }
+
+    @Test
+    fun `voice recording admission is blocked while outgoing call owns microphone`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            assertTrue(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+            viewModel = createTestViewModel(arbiter)
+            advanceUntilIdle()
+
             assertThrows(IllegalStateException::class.java) {
                 viewModel.startVoiceRecording()
             }

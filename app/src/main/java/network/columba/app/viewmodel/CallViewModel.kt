@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
+import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /**
@@ -40,6 +42,7 @@ class CallViewModel
         private val contactRepository: ContactRepository,
         private val announceRepository: AnnounceRepository,
         private val telephony: RnsTelephony,
+        private val microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
     ) : ViewModel() {
         companion object {
             private const val TAG = "CallViewModel"
@@ -47,6 +50,7 @@ class CallViewModel
 
         // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
         private val muteMutex = Mutex()
+        private val outgoingAdmissionPending = AtomicBoolean(false)
 
         // Expose call state from telephony seam
         val callState: StateFlow<CallState> = telephony.callState
@@ -75,6 +79,11 @@ class CallViewModel
             // Track call duration when active
             viewModelScope.launch {
                 callState.collect { state ->
+                    if (callUsesMicrophone(state)) {
+                        microphoneArbiter.ensureOwned(MicrophoneAdmissionArbiter.Owner.CALL)
+                    } else if (!outgoingAdmissionPending.get()) {
+                        microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.CALL)
+                    }
                     when (state) {
                         is CallState.Active -> {
                             startDurationTimer()
@@ -179,6 +188,12 @@ class CallViewModel
             destinationHash: String,
             profileCode: Int? = null,
         ) {
+            outgoingAdmissionPending.set(true)
+            if (!microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL)) {
+                outgoingAdmissionPending.set(false)
+                Log.w(TAG, "Call initiation blocked because the microphone is in use")
+                return
+            }
             Log.w(TAG, "📞📞📞 initiateCall() CALLED - destHash=${destinationHash.take(16)}, profile=${profileCode ?: "default"}...")
             Log.w(TAG, "📞 Current callState=${callState.value}")
             _isConnecting.value = true
@@ -186,39 +201,47 @@ class CallViewModel
 
             // Update local state then initiate via service IPC with retry for CallManager init
             viewModelScope.launch {
-                telephony.setConnecting(destinationHash)
+                var callStarted = false
+                try {
+                    telephony.setConnecting(destinationHash)
 
-                var retryCount = 0
-                val maxRetries = 10
-                val retryDelayMs = 1000L
+                    var retryCount = 0
+                    val maxRetries = 10
+                    val retryDelayMs = 1000L
 
-                while (retryCount < maxRetries) {
-                    Log.w(TAG, "📞 Calling telephony.initiateCall() (attempt ${retryCount + 1}/$maxRetries)...")
-                    val result = telephony.initiateCall(destinationHash, profileCode)
-                    Log.w(TAG, "📞 telephony.initiateCall() returned: success=${result.isSuccess}")
+                    while (retryCount < maxRetries) {
+                        Log.w(TAG, "📞 Calling telephony.initiateCall() (attempt ${retryCount + 1}/$maxRetries)...")
+                        val result = telephony.initiateCall(destinationHash, profileCode)
+                        Log.w(TAG, "📞 telephony.initiateCall() returned: success=${result.isSuccess}")
 
-                    if (result.isSuccess) {
-                        Log.w(TAG, "📞✅ Call initiated successfully!")
+                        if (result.isSuccess) {
+                            callStarted = true
+                            outgoingAdmissionPending.set(false)
+                            Log.w(TAG, "📞✅ Call initiated successfully!")
+                            return@launch
+                        }
+
+                        val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+
+                        // Retry if CallManager not initialized yet
+                        if (errorMsg.contains("not initialized", ignoreCase = true)) {
+                            retryCount++
+                            if (retryCount < maxRetries) {
+                                Log.w(TAG, "📞 CallManager not ready, retrying in ${retryDelayMs}ms...")
+                                kotlinx.coroutines.delay(retryDelayMs)
+                                continue
+                            }
+                        }
+
+                        // Non-retryable error or max retries reached
+                        Log.e(TAG, "📞❌ Failed to initiate call: $errorMsg")
+                        _isConnecting.value = false
+                        telephony.setEnded()
                         return@launch
                     }
-
-                    val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
-
-                    // Retry if CallManager not initialized yet
-                    if (errorMsg.contains("not initialized", ignoreCase = true)) {
-                        retryCount++
-                        if (retryCount < maxRetries) {
-                            Log.w(TAG, "📞 CallManager not ready, retrying in ${retryDelayMs}ms...")
-                            kotlinx.coroutines.delay(retryDelayMs)
-                            continue
-                        }
-                    }
-
-                    // Non-retryable error or max retries reached
-                    Log.e(TAG, "📞❌ Failed to initiate call: $errorMsg")
-                    _isConnecting.value = false
-                    telephony.setEnded()
-                    return@launch
+                } finally {
+                    outgoingAdmissionPending.set(false)
+                    if (!callStarted) microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.CALL)
                 }
             }
         }
@@ -234,9 +257,14 @@ class CallViewModel
          */
         fun answerCall() {
             Log.d(TAG, "Answering call")
+            if (!microphoneArbiter.ensureOwned(MicrophoneAdmissionArbiter.Owner.CALL)) {
+                Log.w(TAG, "Answer blocked because the microphone is in use")
+                return
+            }
             viewModelScope.launch {
                 val result = telephony.answerCall()
                 if (result.isFailure) {
+                    microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.CALL)
                     Log.e(TAG, "Failed to answer call: ${result.exceptionOrNull()?.message}")
                 }
             }

@@ -3,7 +3,6 @@ package network.columba.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,12 +72,12 @@ fun ThemeEditorScreen(
     themeId: Long? = null,
     onBackClick: () -> Unit = {},
     onSave: () -> Unit = {},
+    initialDarkTheme: Boolean = false,
     viewModel: ThemeEditorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     var showColorPicker by remember { mutableStateOf(false) }
-    val isDarkMode = isSystemInDarkTheme()
-    var previewMode by remember { mutableIntStateOf(if (isDarkMode) 1 else 0) } // 0 = Light, 1 = Dark
+    var previewMode by remember { mutableIntStateOf(if (initialDarkTheme) 1 else 0) } // 0 = Light, 1 = Dark
 
     Scaffold(
         topBar = {

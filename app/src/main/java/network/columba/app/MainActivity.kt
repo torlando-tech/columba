@@ -2135,6 +2135,7 @@ fun ColumbaNavigation(
                             appComposable(AppDestination.THEME_EDITOR_NEW) {
                                 ThemeEditorScreen(
                                     themeId = null,
+                                    initialDarkTheme = settingsState.themeMode.resolveDark(isSystemInDarkTheme()),
                                     onBackClick = { navController.popBackStack() },
                                     onSave = { navController.popBackStack() },
                                 )
@@ -2151,6 +2152,7 @@ fun ColumbaNavigation(
 
                                 ThemeEditorScreen(
                                     themeId = themeId,
+                                    initialDarkTheme = settingsState.themeMode.resolveDark(isSystemInDarkTheme()),
                                     onBackClick = { navController.popBackStack() },
                                     onSave = { navController.popBackStack() },
                                 )

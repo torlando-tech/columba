@@ -339,8 +339,7 @@ private fun VoiceWaveformProgress(
 
 private fun Int?.orZero(): Int = this ?: 0
 
-private val DEFAULT_WAVEFORM_LEVELS =
-    listOf(0.28f, 0.55f, 0.82f, 0.44f, 0.68f, 0.96f, 0.58f, 0.36f, 0.72f, 0.48f, 0.88f, 0.62f)
+private val DEFAULT_WAVEFORM_LEVELS = List(32) { 0.24f }
 
 private fun formatMs(ms: Long): String {
     val total = TimeUnit.MILLISECONDS.toSeconds(ms)

@@ -91,6 +91,7 @@ internal class VoiceMessagePlayer(
     private val loadBytes: suspend (AudioAttachmentUi) -> ByteArray? =
         AudioAttachmentLoader(context.applicationContext)::loadBytes,
     private val playerFactory: PlaybackEngineFactory = PlaybackEngineFactory { AndroidVoicePlaybackEngine() },
+    private val waveformReader: AudioWaveformReader = AndroidPcmWaveformReader(context.applicationContext),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AutoCloseable {
     private val appContext = context.applicationContext
@@ -112,7 +113,7 @@ internal class VoiceMessagePlayer(
                 try {
                     val result =
                         withContext(ioDispatcher) {
-                            loadBytes(attachment)?.let(OggOpusMetadataReader::read)
+                            loadBytes(attachment)?.let { analyzeMetadata(it) }
                         } ?: return@launch
                     cacheMetadata(messageKey, result)
                 } finally {
@@ -168,7 +169,7 @@ internal class VoiceMessagePlayer(
                         return@launch
                     }
                     val bytes = loadedBytes
-                    withContext(ioDispatcher) { OggOpusMetadataReader.read(bytes) }
+                    withContext(ioDispatcher) { analyzeMetadata(bytes) }
                         ?.let { cacheMetadata(messageKey, it) }
                     val file =
                         withContext(ioDispatcher) {
@@ -269,11 +270,17 @@ internal class VoiceMessagePlayer(
         releaseActive(clearState = true)
     }
 
-    private fun cacheMetadata(messageKey: String, result: OggOpusMetadata) {
+    private fun cacheMetadata(messageKey: String, result: VoiceMessageMetadata) {
         val updated = LinkedHashMap(_metadata.value)
-        updated[messageKey] = VoiceMessageMetadata(result.durationMs, result.waveformLevels)
+        updated[messageKey] = result
         while (updated.size > MAX_METADATA_ENTRIES) updated.remove(updated.keys.first())
         _metadata.value = updated
+    }
+
+    private suspend fun analyzeMetadata(bytes: ByteArray): VoiceMessageMetadata? {
+        val container = OggOpusMetadataReader.read(bytes) ?: return null
+        val waveform = waveformReader.read(bytes, container.durationMs).orEmpty()
+        return VoiceMessageMetadata(container.durationMs, waveform)
     }
 
     private fun resume() {

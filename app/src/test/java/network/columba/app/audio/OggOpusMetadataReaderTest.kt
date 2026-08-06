@@ -2,7 +2,6 @@ package network.columba.app.audio
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -21,8 +20,6 @@ class OggOpusMetadataReaderTest {
 
         assertNotNull(metadata)
         assertEquals(2_000, metadata!!.durationMs)
-        assertTrue(metadata.waveformLevels.isNotEmpty())
-        assertTrue(metadata.waveformLevels.all { it in 0f..1f })
     }
 
     @Test

@@ -1,9 +1,11 @@
 package network.columba.app.ui.screens
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -114,6 +116,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -146,6 +149,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -157,7 +163,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -175,10 +186,14 @@ import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.ui.components.AttachmentPanel
+import network.columba.app.ui.components.VoiceMessageBubble
+import network.columba.app.ui.components.VoiceDraftPreview
+import network.columba.app.ui.components.VoiceRecordingControls
 import network.columba.app.ui.components.CodecSelectionDialog
 import network.columba.app.ui.components.FileAttachmentCard
 import network.columba.app.ui.components.FileAttachmentOptionsSheet
 import network.columba.app.ui.components.FileAttachmentPreviewRow
+import network.columba.app.ui.components.findActivity
 import network.columba.app.ui.components.FullEmojiPickerDialog
 import network.columba.app.ui.components.ImageOptionsSheet
 import network.columba.app.ui.components.ImageQualitySelectionDialog
@@ -201,6 +216,10 @@ import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.MessageRenderer
+import network.columba.app.audio.VoiceMessagePlayer
+import network.columba.app.audio.VoiceMessageMetadata
+import network.columba.app.audio.VoiceMessagePlayerState
+import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -217,11 +236,13 @@ import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import android.Manifest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 private const val URL_ANNOTATION_TAG = "url"
+private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
 
 @Composable
 private fun LinkifiedMessageText(
@@ -444,6 +465,8 @@ fun MessagingScreen(
     val totalAttachmentSize by viewModel.totalAttachmentSize.collectAsStateWithLifecycle()
     val isProcessingFile by viewModel.isProcessingFile.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
+    val voiceRecordingState by viewModel.voiceRecordingState.collectAsStateWithLifecycle()
+    val isVoiceRecordingBlockedByCall by viewModel.isVoiceRecordingBlockedByCall.collectAsStateWithLifecycle()
 
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
@@ -726,6 +749,72 @@ fun MessagingScreen(
             }
         }
 
+    var showVoiceControls by remember { mutableStateOf(false) }
+    var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+    LaunchedEffect(destinationHash, viewModel) {
+        viewModel.composerSendResult.collect { result ->
+            if (
+                result.destinationHash == destinationHash &&
+                result.clearComposer &&
+                messageText == result.submittedText
+            ) {
+                messageText = ""
+                showVoiceControls = false
+            }
+        }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val audioPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                audioPermissionPermanentlyDenied = false
+                showVoiceControls = true
+                runCatching { viewModel.startVoiceRecording() }
+            } else {
+                val activity = runCatching { context.findActivity() }.getOrNull()
+                audioPermissionPermanentlyDenied =
+                    activity != null &&
+                    !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    val voicePlayer = remember { VoiceMessagePlayer(context, scope) }
+    val voicePlayerState by voicePlayer.state.collectAsStateWithLifecycle()
+    val voiceMetadata by voicePlayer.metadata.collectAsStateWithLifecycle()
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> {
+                        if (
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            audioPermissionPermanentlyDenied = false
+                        }
+                    }
+                    Lifecycle.Event.ON_STOP -> viewModel.cancelActiveVoiceRecording()
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            voicePlayer.close()
+            viewModel.cancelActiveVoiceRecording()
+        }
+    }
+
+    val cancelActiveVoiceRecording = {
+        voicePlayer.close()
+        viewModel.cancelVoiceRecording()
+        showVoiceControls = false
+    }
+    BackHandler(enabled = showVoiceControls && voiceRecordingState.selectedRecording == null) {
+        cancelActiveVoiceRecording()
+    }
+
     // Back handler: dismiss panel on back press
     BackHandler(enabled = inputPanelMode == InputPanelMode.PANEL) {
         inputPanelMode = InputPanelMode.NONE
@@ -988,7 +1077,14 @@ fun MessagingScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(
+                        onClick = {
+                            if (showVoiceControls && voiceRecordingState.selectedRecording == null) {
+                                cancelActiveVoiceRecording()
+                            }
+                            onBackClick()
+                        },
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -1297,6 +1393,19 @@ fun MessagingScreen(
                                             isImageLoading = needsImageLoading,
                                             fontScale = messageFontScale,
                                             timestampTick = timestampTick,
+                                            voicePlayerState =
+                                                voicePlayerState.takeIf { it.messageKey == displayMessage.id }
+                                                    ?: VoiceMessagePlayerState(),
+                                            voiceMetadata = voiceMetadata[displayMessage.id],
+                                            onVoiceMetadataNeeded = { attachment ->
+                                                voicePlayer.prepareMetadata(displayMessage.id, attachment)
+                                            },
+                                            onVoiceMetadataCancelled = voicePlayer::cancelMetadata,
+                                            onVoiceToggle = {
+                                                displayMessage.audioAttachment?.let { attachment ->
+                                                    voicePlayer.toggle(displayMessage.id, attachment)
+                                                }
+                                            },
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1342,8 +1451,42 @@ fun MessagingScreen(
                     )
                 }
 
-                // Message Input Bar - at bottom of Column
-                MessageInputBar(
+                if (showVoiceControls && voiceRecordingState.selectedRecording == null) {
+                    VoiceRecordingControls(
+                        state = voiceRecordingState,
+                        hasPermission =
+                            androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO,
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+                        permissionPermanentlyDenied = audioPermissionPermanentlyDenied,
+                        isSupported = viewModel.isVoiceMessageSupported,
+                        isBlockedByCall = isVoiceRecordingBlockedByCall,
+                        onRequestPermission = {
+                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        onOpenPermissionSettings = {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", context.packageName, null),
+                                ),
+                            )
+                        },
+                        onStart = {
+                            voicePlayer.close()
+                            runCatching { viewModel.startVoiceRecording() }
+                        },
+                        onStop = { runCatching { viewModel.stopVoiceRecording() } },
+                        onCancel = {
+                            voicePlayer.close()
+                            viewModel.cancelVoiceRecording()
+                            showVoiceControls = false
+                        },
+                    )
+                } else {
+                    // Message Input Bar - at bottom of Column
+                    MessageInputBar(
                     modifier =
                         Modifier
                             .fillMaxWidth(),
@@ -1361,10 +1504,34 @@ fun MessagingScreen(
                     selectedFileAttachments = selectedFileAttachments,
                     totalAttachmentSize = totalAttachmentSize,
                     onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
+                    hasVoiceAttachment = voiceRecordingState.selectedRecording != null,
+                    voiceAttachmentDurationMillis = voiceRecordingState.selectedRecording?.durationMillis,
+                    voicePreviewState =
+                        voicePlayerState.takeIf { it.messageKey == VOICE_PREVIEW_KEY }
+                            ?: VoiceMessagePlayerState(),
+                    onVoicePreviewToggle = {
+                        voiceRecordingState.selectedRecording?.file?.let { file ->
+                            voicePlayer.toggleFile(VOICE_PREVIEW_KEY, file)
+                        }
+                    },
+                    onRemoveVoiceAttachment = {
+                        voicePlayer.close()
+                        viewModel.removeVoiceRecording()
+                        showVoiceControls = false
+                    },
                     onSendClick = {
-                        if (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()) {
-                            viewModel.sendMessage(destinationHash, messageText.trim())
-                            messageText = ""
+                        val hasComposerContent =
+                            listOf(
+                                messageText.isNotBlank(),
+                                selectedImageData != null,
+                                selectedFileAttachments.isNotEmpty(),
+                                voiceRecordingState.selectedRecording != null,
+                            ).any { it }
+                        if (hasComposerContent) {
+                            voicePlayer.close()
+                            val wasVoiceMessage = voiceRecordingState.selectedRecording != null
+                            viewModel.sendMessage(destinationHash, messageText)
+                            if (!wasVoiceMessage) inputPanelMode = InputPanelMode.NONE
                         }
                     },
                     isSending = isSending,
@@ -1380,7 +1547,8 @@ fun MessagingScreen(
                         }
                     },
                     isAttachmentPanelActive = inputPanelMode == InputPanelMode.PANEL,
-                )
+                    )
+                }
 
                 // Bottom space: attachment panel, keyboard spacer, or nothing
                 when (inputPanelMode) {
@@ -1402,7 +1570,7 @@ fun MessagingScreen(
                                 imageLauncher.launch("image/*")
                                 inputPanelMode = InputPanelMode.NONE
                             },
-                            onFileClick = {
+                    onFileClick = {
                                 try {
                                     filePickerLauncher.launch(arrayOf("*/*"))
                                 } catch (e: android.content.ActivityNotFoundException) {
@@ -1413,12 +1581,27 @@ fun MessagingScreen(
                                             context.getString(R.string.error_no_file_manager),
                                             Toast.LENGTH_SHORT,
                                         ).show()
-                                }
-                                inputPanelMode = InputPanelMode.NONE
-                            },
-                            modifier = Modifier.navigationBarsPadding(),
-                        )
-                    }
+                            }
+                            inputPanelMode = InputPanelMode.NONE
+                        },
+                        onVoiceClick = {
+                            showVoiceControls = true
+                            when {
+                                !viewModel.isVoiceMessageSupported -> Unit
+                                isVoiceRecordingBlockedByCall -> Unit
+                                androidx.core.content.ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO,
+                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED ->
+                                    runCatching { viewModel.startVoiceRecording() }
+                                audioPermissionPermanentlyDenied -> Unit
+                                else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                            inputPanelMode = InputPanelMode.NONE
+                        },
+                        modifier = Modifier.navigationBarsPadding(),
+                    )
+                }
                     InputPanelMode.KEYBOARD -> {
                         // Manual IME spacer replaces .imePadding()
                         val imeHeightDp = with(density) { imeBottomInset.toDp() }
@@ -1777,6 +1960,7 @@ fun MessagingScreen(
             onDismiss = { showCodecSelectionDialog = false },
             onProfileSelected = { profile ->
                 showCodecSelectionDialog = false
+                viewModel.cancelActiveVoiceRecording()
                 onVoiceCall(profile.code)
             },
         )
@@ -1826,6 +2010,11 @@ fun MessageBubble(
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
     @Suppress("UNUSED_PARAMETER") timestampTick: Long = 0L,
+    voicePlayerState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
+    voiceMetadata: VoiceMessageMetadata? = null,
+    onVoiceMetadataNeeded: (AudioAttachmentUi) -> Unit = {},
+    onVoiceMetadataCancelled: (String) -> Unit = {},
+    onVoiceToggle: () -> Unit = {},
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
@@ -2227,6 +2416,31 @@ fun MessageBubble(
                             }
                         }
 
+                        message.audioAttachment?.let { audio ->
+                            DisposableEffect(message.id, audio) {
+                                if (audio.isPlayable) onVoiceMetadataNeeded(audio)
+                                onDispose { onVoiceMetadataCancelled(message.id) }
+                            }
+                            VoiceMessageBubble(
+                                title = stringResource(R.string.message_voice_bubble_title),
+                                state =
+                                    if (audio.isPlayable) {
+                                        voicePlayerState
+                                    } else {
+                                        VoiceMessagePlayerState(error = "unsupported")
+                                    },
+                                onToggle = onVoiceToggle,
+                                durationMillis = audio.durationMs?.toInt() ?: voiceMetadata?.durationMs,
+                                waveformLevels = voiceMetadata?.waveformLevels.orEmpty(),
+                            )
+                            Spacer(
+                                modifier =
+                                    Modifier.height(
+                                        if (message.hasFileAttachments || message.content.isNotBlank()) 8.dp else 4.dp,
+                                    ),
+                            )
+                        }
+
                         // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
                         if (message.hasFileAttachments) {
                             message.fileAttachments.forEach { fileAttachment ->
@@ -2244,18 +2458,21 @@ fun MessageBubble(
                             }
                         }
 
-                        if (message.renderer == MessageRenderer.MARKDOWN) {
-                            MarkdownMessageText(
-                                markdown = message.content,
-                                isFromMe = isFromMe,
-                                fontScale = fontScale,
-                            )
-                        } else {
-                            LinkifiedMessageText(
-                                text = message.content,
-                                isFromMe = isFromMe,
-                                fontScale = fontScale,
-                            )
+                        if (message.content.isNotBlank()) {
+                            if (message.renderer == MessageRenderer.MARKDOWN) {
+                                MarkdownMessageText(
+                                    markdown = message.content,
+                                    isFromMe = isFromMe,
+                                    fontScale = fontScale,
+                                )
+                            } else {
+                                LinkifiedMessageText(
+                                    text = message.content,
+                                    isFromMe = isFromMe,
+                                    fontScale = fontScale,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
                         transferProgress?.let { progress ->
                             Spacer(modifier = Modifier.height(8.dp))
@@ -2388,6 +2605,11 @@ fun MessageInputBar(
     selectedFileAttachments: List<FileAttachment> = emptyList(),
     totalAttachmentSize: Int = 0,
     onRemoveFileAttachment: (Int) -> Unit = {},
+    hasVoiceAttachment: Boolean = false,
+    voiceAttachmentDurationMillis: Long? = null,
+    voicePreviewState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
+    onVoicePreviewToggle: () -> Unit = {},
+    onRemoveVoiceAttachment: () -> Unit = {},
     onSendClick: () -> Unit,
     isSending: Boolean = false,
     onAttachmentPanelToggle: () -> Unit = {},
@@ -2496,6 +2718,15 @@ fun MessageInputBar(
                 }
             }
 
+            voiceAttachmentDurationMillis?.let { durationMillis ->
+                VoiceDraftPreview(
+                    durationMillis = durationMillis,
+                    state = voicePreviewState,
+                    onToggle = onVoicePreviewToggle,
+                    onRemove = onRemoveVoiceAttachment,
+                )
+            }
+
             // Character count display
             val remaining = ValidationConstants.MAX_MESSAGE_LENGTH - messageText.length
             if (remaining < 100) {
@@ -2516,7 +2747,10 @@ fun MessageInputBar(
             // shared by the send button and the bare-Enter key handler below.
             val canSend =
                 !isSending &&
-                    (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty())
+                    (
+                        messageText.isNotBlank() || selectedImageData != null ||
+                            selectedFileAttachments.isNotEmpty() || hasVoiceAttachment
+                    )
 
             Row(
                 modifier =
@@ -2649,7 +2883,13 @@ fun MessageInputBar(
                 FilledIconButton(
                     onClick = onSendClick,
                     enabled = canSend,
-                    modifier = Modifier.size(48.dp),
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .semantics {
+                                contentDescription = "Send message"
+                                if (isSending) stateDescription = "Sending message"
+                            },
                     shape = CircleShape,
                     colors =
                         IconButtonDefaults.filledIconButtonColors(
@@ -2668,7 +2908,7 @@ fun MessageInputBar(
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send message",
+                            contentDescription = null,
                         )
                     }
                 }

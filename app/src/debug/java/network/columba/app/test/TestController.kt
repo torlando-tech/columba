@@ -26,7 +26,10 @@ import network.columba.app.rns.api.RnsTelemetry
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.service.InterfaceConfigManager
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * Debug-only test surface for the columba phone harness.
@@ -112,6 +115,7 @@ object TestController {
                     "rx_msg source=stream from=${msg.sourceHash.toHex()} " +
                         "id=${msg.messageHash} content=${escape(msg.content)}",
                 )
+                logAudioField(msg)
             }
         }
         deliveryJob = scope.launch {
@@ -159,6 +163,34 @@ object TestController {
         }
         initialized = true
         Log.i(LOGCAT_TAG, "controller_ready")
+    }
+
+    private fun logAudioField(message: ReceivedMessage) {
+        val fields = message.fieldsJson?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return
+        val audio = fields.optJSONArray(LxmfFields.FIELD_AUDIO.toString()) ?: return
+        if (audio.length() != 2) return
+        val mode = audio.optInt(0, -1)
+        val payload = decodeInlineHex(audio.opt(1)) ?: return
+        val sha256 = MessageDigest.getInstance("SHA-256").digest(payload).toHex()
+        Log.i(
+            LOGCAT_TAG,
+            "rx_audio id=${message.messageHash} mode=$mode bytes=${payload.size} sha256=$sha256",
+        )
+    }
+
+    private fun decodeInlineHex(value: Any?): ByteArray? {
+        val hex =
+            when (value) {
+                is String -> value
+                is JSONArray -> value.optString(1, "")
+                else -> return null
+            }
+        if (hex.length % 2 != 0 || !hex.matches(Regex("[0-9a-fA-F]*"))) return null
+        return runCatching {
+            ByteArray(hex.length / 2) { index ->
+                hex.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+            }
+        }.getOrNull()
     }
 
     fun handleGetDest(context: Context) {

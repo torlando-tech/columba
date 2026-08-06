@@ -6,6 +6,8 @@ package network.columba.app.viewmodel
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
+import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
+import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import io.mockk.clearAllMocks
@@ -14,7 +16,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -24,6 +29,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -44,6 +50,9 @@ class CallViewModelTest {
     private lateinit var mockContactRepository: ContactRepository
     private lateinit var mockAnnounceRepository: AnnounceRepository
     private lateinit var mockTelephony: RnsTelephony
+    private lateinit var microphoneArbiter: MicrophoneAdmissionArbiter
+    private lateinit var coordinatorScope: CoroutineScope
+    private lateinit var callMicrophoneCoordinator: CallMicrophoneAdmissionCoordinator
     private lateinit var viewModel: CallViewModel
 
     // StateFlows backing the mocked RnsTelephony
@@ -65,6 +74,8 @@ class CallViewModelTest {
         mockContactRepository = mockk()
         mockAnnounceRepository = mockk()
         mockTelephony = mockk()
+        microphoneArbiter = MicrophoneAdmissionArbiter()
+        coordinatorScope = CoroutineScope(testDispatcher)
 
         // Initialize state flows
         callStateFlow = MutableStateFlow<CallState>(CallState.Idle)
@@ -127,13 +138,22 @@ class CallViewModelTest {
         coEvery { mockAnnounceRepository.getAnnounce(any()) } returns null
         coEvery { mockAnnounceRepository.findByIdentityHash(any()) } returns null
 
-        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockTelephony)
+        callMicrophoneCoordinator =
+            CallMicrophoneAdmissionCoordinator(microphoneArbiter, mockTelephony, coordinatorScope)
+        viewModel =
+            CallViewModel(
+                mockContactRepository,
+                mockAnnounceRepository,
+                mockTelephony,
+                callMicrophoneCoordinator,
+            )
     }
 
     @After
     fun tearDown() {
         // Transition to Idle to stop any running duration timer
         callStateFlow.value = CallState.Idle
+        coordinatorScope.cancel()
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -143,6 +163,17 @@ class CallViewModelTest {
     @Test
     fun `callState exposes telephony callState`() {
         assertEquals(callStateFlow, viewModel.callState)
+    }
+
+    @Test
+    fun `outgoing call admission is blocked while voice recording owns microphone`() = runTest {
+        assertNotNull(microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+
+        viewModel.initiateCall("aabbccdd")
+
+        coVerify(exactly = 0) { mockTelephony.setConnecting(any()) }
+        coVerify(exactly = 0) { mockTelephony.initiateCall(any(), any()) }
+        assertFalse(viewModel.isConnecting.value)
     }
 
     @Test
@@ -193,6 +224,25 @@ class CallViewModelTest {
 
             assertTrue(connectingHashSlot.isCaptured)
             assertEquals(testHash, connectingHashSlot.captured)
+        }
+
+    @Test
+    fun `duplicate outgoing call cannot clear active admission`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            coEvery { mockTelephony.initiateCall(any(), any()) } coAnswers {
+                gate.await()
+                Result.success(Unit)
+            }
+
+            viewModel.initiateCall("first")
+            viewModel.initiateCall("second")
+
+            coVerify(exactly = 1) { mockTelephony.setConnecting(any()) }
+            coVerify(exactly = 1) { mockTelephony.initiateCall(any(), any()) }
+            assertEquals(MicrophoneAdmissionArbiter.Owner.CALL, microphoneArbiter.currentOwner())
+
+            gate.complete(Unit)
         }
 
     @Test

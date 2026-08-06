@@ -19,7 +19,9 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.IdentityResolutionManager
@@ -121,6 +123,9 @@ class MessagingViewModelImageLoadingTest {
                         },
                     notificationHelper = mockk<NotificationHelper>().also {
                         every { it.cancelNotificationForConversation(any()) } just Runs
+                    },
+                    rnsTelephony = mockk<RnsTelephony>().also {
+                        every { it.callState } returns MutableStateFlow(CallState.Idle)
                     },
                 )
             advanceUntilIdle()

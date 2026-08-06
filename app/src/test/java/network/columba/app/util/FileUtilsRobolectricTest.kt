@@ -10,11 +10,16 @@ import io.mockk.mockk
 import io.mockk.unmockkAll
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
+import java.io.File
 
 /**
  * Unit tests for FileUtils Android-specific functions using MockK.
@@ -24,6 +29,9 @@ import java.io.ByteArrayInputStream
 // which have many methods that are not relevant to these tests
 @Suppress("NoRelaxedMocks")
 class FileUtilsRobolectricTest {
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
+
     private lateinit var mockContext: Context
     private lateinit var mockContentResolver: ContentResolver
 
@@ -37,6 +45,39 @@ class FileUtilsRobolectricTest {
     @After
     fun tearDown() {
         unmockkAll()
+    }
+
+    @Test
+    fun `cleanupAllTempFiles removes only stale voice cache artifacts`() {
+        val cacheDir = temporaryFolder.newFolder("cache")
+        every { mockContext.cacheDir } returns cacheDir
+        val voiceNotes = File(cacheDir, "voice-notes").apply { mkdirs() }
+        val staleFiles =
+            listOf(
+                File(voiceNotes, "recording.ogg"),
+                File(cacheDir, "voice_message_stale.ogg"),
+                File(cacheDir, "voice_waveform_stale.ogg"),
+            ).onEach { file ->
+                file.writeText("stale")
+                assertTrue(file.setLastModified(System.currentTimeMillis() - 2 * 60 * 60 * 1000))
+            }
+        val recentFiles =
+            listOf(
+                File(voiceNotes, "recent.ogg"),
+                File(cacheDir, "voice_message_recent.ogg"),
+                File(cacheDir, "voice_waveform_recent.ogg"),
+            ).onEach { it.writeText("recent") }
+        val unrelated =
+            File(cacheDir, "unrelated_stale.ogg").apply {
+                writeText("keep")
+                assertTrue(setLastModified(System.currentTimeMillis() - 2 * 60 * 60 * 1000))
+            }
+
+        assertEquals(3, FileUtils.cleanupAllTempFiles(mockContext, maxAgeMs = 60 * 60 * 1000))
+
+        staleFiles.forEach { assertFalse(it.exists()) }
+        recentFiles.forEach { assertTrue(it.exists()) }
+        assertTrue(unrelated.exists())
     }
 
     // ========== readFileFromUri Tests ==========

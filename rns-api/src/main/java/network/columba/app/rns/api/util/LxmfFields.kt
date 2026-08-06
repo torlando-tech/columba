@@ -45,6 +45,9 @@ object LxmfFields {
     /** Audio payload `[mode, bytes]`. */
     const val FIELD_AUDIO = 0x07
 
+    /** Canonical LXMF audio mode for Ogg/Opus voice notes. */
+    const val AM_OPUS_OGG = 0x10
+
     /** Command structures (Sideband telemetry-request RPCs). */
     const val FIELD_COMMANDS = 0x09
 

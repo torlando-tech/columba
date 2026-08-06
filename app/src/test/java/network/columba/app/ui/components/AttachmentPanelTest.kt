@@ -32,6 +32,7 @@ class AttachmentPanelTest {
     private var permissionRequested = false
     private var galleryClicked = false
     private var fileClicked = false
+    private var voiceClicked = false
     private var selectedPhoto: Uri? = null
 
     @Before
@@ -39,6 +40,7 @@ class AttachmentPanelTest {
         permissionRequested = false
         galleryClicked = false
         fileClicked = false
+        voiceClicked = false
         selectedPhoto = null
     }
 
@@ -169,6 +171,25 @@ class AttachmentPanelTest {
 
         composeTestRule.onNodeWithContentDescription("File").performClick()
         assertTrue(fileClicked)
+    }
+
+    @Test
+    fun `tapping voice button calls onVoiceClick`() {
+        composeTestRule.setContent {
+            AttachmentPanel(
+                panelHeight = 300.dp,
+                recentPhotos = emptyList(),
+                hasMediaPermission = true,
+                onRequestMediaPermission = {},
+                onPhotoSelected = {},
+                onGalleryClick = {},
+                onFileClick = {},
+                onVoiceClick = { voiceClicked = true },
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
+        assertTrue(voiceClicked)
     }
 
     // ========== Photo Grid Tests ==========

@@ -19,6 +19,44 @@ enum class MessageRenderer(
     }
 }
 
+enum class AudioAttachmentMode(
+    val wireValue: Int,
+) {
+    AM_OPUS_OGG(LxmfFields.AM_OPUS_OGG),
+    UNSUPPORTED(-1),
+    ;
+
+    companion object {
+        fun fromWireValue(value: Int): AudioAttachmentMode? = entries.firstOrNull { it.wireValue == value }
+    }
+}
+
+@Immutable
+sealed interface AudioAttachmentPayloadRef {
+    data class InlineHex(
+        val hex: String,
+    ) : AudioAttachmentPayloadRef
+
+    data class FileRef(
+        val path: String,
+    ) : AudioAttachmentPayloadRef
+
+    data class NestedFieldRef(
+        val fieldName: String,
+        val payload: AudioAttachmentPayloadRef,
+    ) : AudioAttachmentPayloadRef
+}
+
+@Immutable
+data class AudioAttachmentUi(
+    val mode: AudioAttachmentMode,
+    val fieldsJson: String? = null,
+    val payloadRef: AudioAttachmentPayloadRef? = null,
+    val isPlayable: Boolean = false,
+    val durationMs: Long? = null,
+    val sizeBytes: Int? = null,
+)
+
 /**
  * UI model for messages with pre-decoded images and file attachments.
  *
@@ -94,6 +132,7 @@ data class MessageUi(
      * Used to quickly determine if file attachment UI should be rendered.
      */
     val hasFileAttachments: Boolean = false,
+    val audioAttachment: AudioAttachmentUi? = null,
     /**
      * ID of the message this is replying to, if any.
      * Extracted from LXMF field 16 {"reply_to": "message_id"}.
@@ -167,6 +206,7 @@ data class MessageUi(
                 imageData != null &&
                 content.isBlank() &&
                 !hasFileAttachments &&
+                audioAttachment == null &&
                 replyPreview == null
 
     /**

@@ -1,11 +1,14 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.Manifest
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -16,7 +19,9 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.paging.PagingData
+import network.columba.app.audio.VoiceMessageRecordingState
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
@@ -24,6 +29,7 @@ import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
+import network.columba.app.viewmodel.ComposerSendResult
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -40,6 +46,8 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -95,6 +103,7 @@ class MessagingScreenTest {
         every { mockViewModel.selectedFileAttachments } returns MutableStateFlow(emptyList())
         every { mockViewModel.totalAttachmentSize } returns MutableStateFlow(0)
         every { mockViewModel.fileAttachmentError } returns MutableSharedFlow()
+        every { mockViewModel.composerSendResult } returns MutableSharedFlow()
         every { mockViewModel.isProcessingFile } returns MutableStateFlow(false)
         // Location sharing mocks
         every { mockViewModel.contacts } returns MutableStateFlow(emptyList())
@@ -126,6 +135,10 @@ class MessagingScreenTest {
         every { mockViewModel.messageFontScale } returns MutableStateFlow(1.0f)
         // Contact location mock (locate on map feature)
         every { mockViewModel.hasContactLocation } returns MutableStateFlow(false)
+        // Voice-message recording mocks
+        every { mockViewModel.voiceRecordingState } returns MutableStateFlow(VoiceMessageRecordingState())
+        every { mockViewModel.isVoiceMessageSupported } returns true
+        every { mockViewModel.isVoiceRecordingBlockedByCall } returns MutableStateFlow(false)
     }
 
     // ========== Empty State Tests ==========
@@ -188,6 +201,27 @@ class MessagingScreenTest {
         composeTestRule.onNodeWithContentDescription("Back").performClick()
 
         // Then
+        assertTrue(backClicked)
+    }
+
+    @Test
+    fun topAppBar_backButton_cancelsActiveVoiceRecordingBeforeNavigation() {
+        shadowOf(RuntimeEnvironment.getApplication() as Application).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        var backClicked = false
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = { backClicked = true },
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Attach").performClick()
+        composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        verify { mockViewModel.cancelVoiceRecording() }
         assertTrue(backClicked)
     }
 
@@ -473,6 +507,23 @@ class MessagingScreenTest {
     // ========== MessageInputBar Tests ==========
 
     @Test
+    fun inputBar_sending_keepsAccessibleNameAndState() {
+        composeTestRule.setContent {
+            MessageInputBar(
+                messageText = "Sending",
+                onMessageTextChange = {},
+                onSendClick = {},
+                isSending = true,
+            )
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Send message")
+            .assertIsNotEnabled()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Sending message"))
+    }
+
+    @Test
     fun inputBar_emptyText_sendButtonDisabled() {
         // Given - no text entered
         composeTestRule.setContent {
@@ -550,6 +601,70 @@ class MessagingScreenTest {
         // Then
         assertTrue("Send button click should succeed", result.isSuccess)
         verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, "Test message") }
+    }
+
+    @Test
+    fun inputBar_clearsSubmittedTextOnlyAfterDurableSendResult() {
+        val results = MutableSharedFlow<ComposerSendResult>(extraBufferCapacity = 2)
+        every { mockViewModel.composerSendResult } returns results
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.onNodeWithText("Type a message...").performTextInput("Test message")
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Test message",
+                clearComposer = false,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message").assertExists()
+
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Test message",
+                clearComposer = true,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message").assertDoesNotExist()
+    }
+
+    @Test
+    fun inputBar_preservesOriginalWhitespaceThroughDurableSendResult() {
+        val results = MutableSharedFlow<ComposerSendResult>(extraBufferCapacity = 1)
+        every { mockViewModel.composerSendResult } returns results
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val submitted = "  Test message  "
+        composeTestRule.onNodeWithText("Type a message...").performTextInput(submitted)
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, submitted) }
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                submitted,
+                clearComposer = true,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message", substring = true).assertDoesNotExist()
     }
 
     @Test

@@ -2946,11 +2946,20 @@ private fun determineDeliveryMethod(
 ): DeliveryMethod {
     val contentSize = sanitized.toByteArray().size
     val hasAttachments = imageData != null || fileAttachments.isNotEmpty() || voiceBytes != null
-    return if (!hasAttachments && contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER) {
+    val configuredMethod =
+        DeliveryMethod.entries.firstOrNull { method ->
+            method.name.equals(defaultMethod, ignoreCase = true)
+        } ?: DeliveryMethod.DIRECT
+    return if (configuredMethod != DeliveryMethod.PROPAGATED &&
+        !hasAttachments &&
+        contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER
+    ) {
         Log.d(HELPER_TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
         DeliveryMethod.OPPORTUNISTIC
+    } else if (configuredMethod == DeliveryMethod.PROPAGATED) {
+        DeliveryMethod.PROPAGATED
     } else {
-        if (defaultMethod == "propagated") DeliveryMethod.PROPAGATED else DeliveryMethod.DIRECT
+        DeliveryMethod.DIRECT
     }
 }
 

@@ -23,7 +23,7 @@ desugarJdkLibs = "2.1.5"
 # JitPack-published libraries (formerly git submodules)
 reticulumKt = "v0.0.22"
 lxmfKt = "v0.0.14"
-lxstKt = "c7c7f8f8166d2cdfc415996f10f1fe5a332bbe68"
+lxstKt = "9cff47218292e8f79e8f369f4aeecf76e4bb90fb"
 
 [libraries]
 # JitPack-published Reticulum/LXMF/LXST stack (migrated from git submodules)

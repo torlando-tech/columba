@@ -1035,8 +1035,15 @@ class ConversationRepository
             if (value.length() < 2) return false
 
             val payload = value.optString(1, "")
-            if (payload.length <= AttachmentStorageManager.SIZE_THRESHOLD) return false
-            val filePath = attachmentStorage.saveAttachment(messageId, "7_audio", payload) ?: return false
+            if (payload.length <= AttachmentStorageManager.SIZE_THRESHOLD) {
+                modifiedFields.put("7", value)
+                return true
+            }
+            val filePath = attachmentStorage.saveAttachment(messageId, "7_audio", payload)
+            if (filePath == null) {
+                modifiedFields.put("7", value)
+                return true
+            }
             modifiedFields.put(
                 "7",
                 JSONArray()

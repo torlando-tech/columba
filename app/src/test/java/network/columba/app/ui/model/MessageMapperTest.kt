@@ -4,6 +4,8 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import network.columba.app.data.repository.Message
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -121,6 +123,18 @@ class MessageMapperTest {
 
         assertNotNull(result.audioAttachment)
         assertEquals(AudioAttachmentMode.AM_OPUS_OGG, result.audioAttachment?.mode)
+    }
+
+    @Test
+    fun `toMessageUi rejects audio payload wrappers beyond structural depth limit`() {
+        var payload = JSONObject().put("data", "0a0b0c")
+        repeat(8) { payload = JSONObject().put("payload", payload) }
+        val fields = JSONObject().put("7", JSONArray().put(16).put(payload)).toString()
+
+        val result = createMessage(TestMessageConfig(fieldsJson = fields)).toMessageUi()
+
+        assertNotNull(result.audioAttachment)
+        assertNull(result.audioAttachment?.payloadRef)
     }
 
     @Test

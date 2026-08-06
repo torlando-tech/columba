@@ -127,6 +127,35 @@ class VoiceMessageRecorderTest {
     }
 
     @Test
+    fun `repeated stop preserves one finalized recording`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        controller.start()
+
+        val first = controller.stop()
+        val second = controller.stop()
+
+        assertEquals(first.file, second.file)
+        assertEquals(1, backend.stopCount)
+        assertEquals(first.file, controller.state.value.selectedRecording?.file)
+        controller.close()
+    }
+
+    @Test
+    fun `close deletes finalized unsent recording`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        controller.start()
+        val finalized = controller.stop()
+        assertTrue(finalized.file.exists())
+
+        controller.close()
+
+        assertFalse(finalized.file.exists())
+        assertNull(controller.state.value.selectedRecording)
+    }
+
+    @Test
     fun `failed stop clears active recording and cancels backend`() = runTest {
         val backend = FakeRecorderBackend(context.cacheDir)
         val controller = createController(this, backend)

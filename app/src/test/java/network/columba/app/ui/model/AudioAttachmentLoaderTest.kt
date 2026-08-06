@@ -3,6 +3,8 @@ package network.columba.app.ui.model
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -65,6 +67,15 @@ class AudioAttachmentLoaderTest {
         val attachment = attachment(fieldsJson = """{"7":[16,{"data":{"data":"4f676753"}}]}""")
 
         assertArrayEquals("OggS".encodeToByteArray(), loader.loadBytes(attachment))
+    }
+
+    @Test
+    fun `rejects audio payload wrappers beyond structural depth limit`() = runTest {
+        var payload = JSONObject().put("data", "4f676753")
+        repeat(8) { payload = JSONObject().put("payload", payload) }
+        val fields = JSONObject().put("7", JSONArray().put(16).put(payload)).toString()
+
+        assertNull(loader.loadBytes(attachment(fieldsJson = fields)))
     }
 
     @Test

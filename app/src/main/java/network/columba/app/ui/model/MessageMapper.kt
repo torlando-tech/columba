@@ -331,9 +331,13 @@ private fun parseAudioArray(field7: JSONArray, fieldsJson: String): AudioAttachm
 
 // Fail closed at each unsupported or contradictory nested representation.
 @Suppress("ReturnCount")
-private fun parseAudioPayloadRef(json: JSONObject): AudioAttachmentPayloadRef? {
+private fun parseAudioPayloadRef(
+    json: JSONObject,
+    depth: Int = 0,
+): AudioAttachmentPayloadRef? {
+    if (depth >= MAX_AUDIO_PAYLOAD_DEPTH) return null
     json.optJSONObject("data")?.let { nested ->
-        val ref = parseAudioPayloadRef(nested) ?: return null
+        val ref = parseAudioPayloadRef(nested, depth + 1) ?: return null
         return AudioAttachmentPayloadRef.NestedFieldRef("data", ref)
     }
     json.optString("data", "").takeIf { it.isNotEmpty() }?.let {
@@ -343,11 +347,13 @@ private fun parseAudioPayloadRef(json: JSONObject): AudioAttachmentPayloadRef? {
         return AudioAttachmentPayloadRef.FileRef(it)
     }
     json.optJSONObject("payload")?.let { nested ->
-        val ref = parseAudioPayloadRef(nested) ?: return null
+        val ref = parseAudioPayloadRef(nested, depth + 1) ?: return null
         return AudioAttachmentPayloadRef.NestedFieldRef("payload", ref)
     }
     return null
 }
+
+private const val MAX_AUDIO_PAYLOAD_DEPTH = 8
 
 private fun String.toAudioPayloadRefOrNull(): AudioAttachmentPayloadRef? {
     if (isEmpty() || length % 2 != 0) return null
@@ -441,7 +447,7 @@ fun decodeImageWithAnimation(
 
     return try {
         // Get raw image bytes
-        val rawBytes = extractImageBytes(fieldsJson) ?: return null
+        val rawBytes = loadImageBytes(fieldsJson) ?: return null
 
         // Check if it's an animated GIF
         val isAnimated = ImageUtils.isAnimatedGif(rawBytes)
@@ -502,7 +508,7 @@ fun decodeImageWithAnimation(
  * @return Raw image bytes, or null if not found
  */
 @Suppress("ReturnCount", "CyclomaticComplexMethod")
-private fun extractImageBytes(fieldsJson: String?): ByteArray? {
+internal fun loadImageBytes(fieldsJson: String?): ByteArray? {
     if (fieldsJson == null) return null
 
     return try {
@@ -1006,7 +1012,7 @@ fun loadFileAttachmentMetadata(
  * @param fieldsJson The message's fields JSON containing image data (field 6)
  * @return Raw image bytes, or null if not found or loading fails
  */
-fun loadImageData(fieldsJson: String?): ByteArray? = extractImageBytes(fieldsJson)
+fun loadImageData(fieldsJson: String?): ByteArray? = loadImageBytes(fieldsJson)
 
 /**
  * Get image metadata for save operations.
@@ -1021,7 +1027,7 @@ fun loadImageData(fieldsJson: String?): ByteArray? = extractImageBytes(fieldsJso
  * @return Pair of (mimeType, fileExtension) based on image format, or null if no image
  */
 fun getImageMetadata(fieldsJson: String?): Pair<String, String>? {
-    val bytes = extractImageBytes(fieldsJson) ?: return null
+    val bytes = loadImageBytes(fieldsJson) ?: return null
     if (bytes.size < 4) return null // Need at least 4 bytes for PNG detection
     return detectImageFormat(bytes)
 }

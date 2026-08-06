@@ -460,6 +460,39 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
         }
 
     @Test
+    fun `saveMessage preserves audio mode when another field triggers extraction`() =
+        runTest {
+            val audioPayload = "4f676753"
+            val largeOtherField = "ab".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            every {
+                mockAttachmentStorage.saveAttachment("msg_small_audio", "99", largeOtherField)
+            } returns "/tmp/other_payload.hex"
+            val fields =
+                JSONObject()
+                    .put("7", JSONArray().put(16).put(audioPayload))
+                    .put("99", largeOtherField)
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_small_audio",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_small_audio", TEST_IDENTITY_HASH)
+            val storedAudio = JSONObject(saved!!.fieldsJson!!).getJSONArray("7")
+            assertEquals(16, storedAudio.getInt(0))
+            assertEquals(audioPayload, storedAudio.getString(1))
+        }
+
+    @Test
     fun `deleteConversation removes conversation and messages`() =
         runTest {
             // Setup: Create conversation with messages

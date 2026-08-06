@@ -47,9 +47,11 @@ internal object OggOpusMetadataReader {
             pageCount += 1
         }
 
-        preSkip ?: return null
+        val parsedPreSkip = preSkip ?: return null
         if (finalGranule <= 0) return null
-        val durationMs = ((finalGranule * 1_000L) / SAMPLE_RATE).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+        val playableSamples = finalGranule - parsedPreSkip
+        if (playableSamples <= 0) return null
+        val durationMs = ((playableSamples * 1_000L) / SAMPLE_RATE).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
         return OggOpusMetadata(durationMs = durationMs)
     }
 

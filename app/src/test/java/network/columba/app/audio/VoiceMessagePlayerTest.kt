@@ -23,6 +23,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -250,6 +253,56 @@ class VoiceMessagePlayerTest {
         assertEquals(2, loadCalls.get())
         assertEquals(1, maximumActive.get())
     }
+
+    @Test
+    fun `waveform failure does not block playback`() = runTest {
+        val engine = FakePlaybackEngine(durationMs = 1_000)
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val bytes = validOggOpusBytes()
+        val player =
+            VoiceMessagePlayer(
+                context = context,
+                scope = this,
+                loadBytes = { bytes },
+                playerFactory = PlaybackEngineFactory { engine },
+                waveformReader = AudioWaveformReader { _, _ -> error("decoder failure") },
+                ioDispatcher = dispatcher,
+            )
+
+        player.prepareMetadata("message-1", attachment)
+        advanceUntilIdle()
+        assertTrue(player.metadata.value.isEmpty())
+
+        player.play("message-1", attachment)
+        advanceUntilIdle()
+        engine.completePreparation()
+
+        assertTrue(engine.started)
+        assertTrue(player.state.value.playing)
+        player.close()
+    }
+
+    private fun validOggOpusBytes(): ByteArray {
+        val opusHead =
+            ByteBuffer.allocate(19).order(ByteOrder.LITTLE_ENDIAN)
+                .put("OpusHead".encodeToByteArray())
+                .put(1).put(1).putShort(312.toShort()).putInt(48_000).putShort(0.toShort()).put(0).array()
+        return oggPage(0, 0, opusHead) + oggPage(1, 48_000, ByteArray(16) { 1 })
+    }
+
+    private fun oggPage(sequence: Int, granule: Long, payload: ByteArray): ByteArray =
+        ByteArrayOutputStream().apply {
+            write("OggS".encodeToByteArray())
+            write(0)
+            write(if (sequence == 0) 2 else 0)
+            write(ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(granule).array())
+            write(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(1).array())
+            write(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(sequence).array())
+            write(ByteArray(4))
+            write(1)
+            write(payload.size)
+            write(payload)
+        }.toByteArray()
 
     private fun createMetadataPlayer(
         scope: TestScope,

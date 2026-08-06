@@ -54,8 +54,9 @@ class VoiceMessageRecorder(
     private val _state = MutableStateFlow(VoiceMessageRecordingState())
     val state: StateFlow<VoiceMessageRecordingState> = _state.asStateFlow()
     private var deadlineJob: Job? = null
-    private var mirrorJob: Job? = null
     private var elapsedJob: Job? = null
+    private var mirrorJob: Job? = null
+    private val operationLock = Any()
 
     val isSupported: Boolean
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && backend().isSupported
@@ -97,7 +98,7 @@ class VoiceMessageRecorder(
         }
     }
 
-    fun start(maxDurationMillis: Long = MAX_DURATION_MILLIS): File {
+    fun start(maxDurationMillis: Long = MAX_DURATION_MILLIS): File = synchronized(operationLock) {
         check(isSupported) { "Voice messages are unsupported on this device" }
         check(_state.value.recorderState !is RecorderState.Recording) { "Recording already active" }
         val backend = backend()
@@ -129,10 +130,12 @@ class VoiceMessageRecorder(
                     stop()
                 }
             }
-        return output
+        output
     }
 
-    fun stop(): RecordedAudio {
+    fun stop(): RecordedAudio = synchronized(operationLock) {
+        _state.value.selectedRecording?.takeIf { _state.value.activeRecordingFile == null }?.let { return@synchronized it }
+        checkNotNull(_state.value.activeRecordingFile) { "No recording is active" }
         val backend = checkNotNull(recorder) { "Recording has not started" }
         val recording =
             try {
@@ -155,29 +158,41 @@ class VoiceMessageRecorder(
                 elapsedMillis = recording.durationMillis,
                 errorMessage = null,
             )
-        return recording
+        recording
     }
 
-    fun cancel() {
+    fun cancel() = synchronized(operationLock) {
+        cancelActiveLocked()
+    }
+
+    private fun cancelActiveLocked() {
         deadlineJob?.cancel()
         elapsedJob?.cancel()
         _state.value.activeRecordingFile?.delete()
         recorder?.cancel()
-        _state.value = VoiceMessageRecordingState()
+        _state.value = _state.value.copy(
+            recorderState = RecorderState.Idle,
+            activeRecordingFile = null,
+            elapsedMillis = _state.value.selectedRecording?.durationMillis ?: 0L,
+        )
     }
 
-    fun removeSelected(expectedRecording: RecordedAudio? = null): Boolean {
+    fun removeSelected(expectedRecording: RecordedAudio? = null): Boolean = synchronized(operationLock) {
         val selected = _state.value.selectedRecording ?: return false
         if (expectedRecording != null && selected.file != expectedRecording.file) return false
         selected.file.delete()
         _state.value = _state.value.copy(selectedRecording = null)
-        return true
+        true
     }
 
     override fun close() {
-        cancel()
-        mirrorJob?.cancel()
-        recorder?.close()
+        synchronized(operationLock) {
+            cancelActiveLocked()
+            _state.value.selectedRecording?.file?.delete()
+            _state.value = VoiceMessageRecordingState()
+            mirrorJob?.cancel()
+            recorder?.close()
+        }
     }
 
     private fun startElapsedTicker() {

@@ -3,6 +3,8 @@ package network.columba.app.ui.components
 import android.app.Application
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertIsDisplayed
@@ -12,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -187,8 +190,32 @@ class VoiceMessageComponentsTest {
             )
         }
 
-        composeRule.onNodeWithContentDescription("Play voice message").performClick()
+        val playNode = composeRule.onNodeWithContentDescription("Play voice message")
+        val playBounds = playNode.getUnclippedBoundsInRoot()
+        assertTrue(playBounds.right - playBounds.left >= 48.dp)
+        assertTrue(playBounds.bottom - playBounds.top >= 48.dp)
+        playNode.performClick()
         assertTrue(toggled)
+    }
+
+    @Test
+    fun `voice bubble remains readable and compact at two hundred percent font scale`() {
+        composeRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                VoiceMessageBubble(
+                    title = "Voice message",
+                    state = VoiceMessagePlayerState(durationMs = 65_000),
+                    onToggle = {},
+                    modifier = Modifier.width(268.dp).testTag("large-font-voice-bubble"),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Voice message").assertIsDisplayed()
+        composeRule.onNodeWithText("0:00 of 1:05").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Play voice message").assertIsDisplayed()
+        val bounds = composeRule.onNodeWithTag("large-font-voice-bubble").getUnclippedBoundsInRoot()
+        assertTrue(bounds.bottom - bounds.top < 160.dp)
     }
 
     @Test

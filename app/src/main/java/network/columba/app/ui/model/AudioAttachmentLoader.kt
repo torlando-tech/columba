@@ -8,6 +8,7 @@ import org.json.JSONObject
 import java.io.File
 
 internal const val MAX_AUDIO_BYTES = 16L * 1024 * 1024
+private const val MAX_AUDIO_PAYLOAD_DEPTH = 8
 
 class AudioAttachmentLoader(
     context: Context,
@@ -46,15 +47,19 @@ class AudioAttachmentLoader(
 
     // Each accepted nested representation is validated independently and fails closed.
     @Suppress("ReturnCount")
-    private fun parseObjectPayload(field7: JSONObject): AudioAttachmentPayloadRef? {
+    private fun parseObjectPayload(
+        field7: JSONObject,
+        depth: Int = 0,
+    ): AudioAttachmentPayloadRef? {
+        if (depth >= MAX_AUDIO_PAYLOAD_DEPTH) return null
         field7.optJSONObject("data")?.let { nested ->
-            val nestedRef = parseObjectPayload(nested) ?: return null
+            val nestedRef = parseObjectPayload(nested, depth + 1) ?: return null
             return AudioAttachmentPayloadRef.NestedFieldRef("data", nestedRef)
         }
         field7.optString("data", "").takeIf { it.isNotEmpty() }?.let { return it.toAudioPayloadRefOrNull() }
         field7.optString("_file_ref", "").takeIf { it.isNotEmpty() }?.let { return AudioAttachmentPayloadRef.FileRef(it) }
         field7.optJSONObject("payload")?.let { nested ->
-            val nestedRef = parseObjectPayload(nested) ?: return null
+            val nestedRef = parseObjectPayload(nested, depth + 1) ?: return null
             return AudioAttachmentPayloadRef.NestedFieldRef("payload", nestedRef)
         }
         return null

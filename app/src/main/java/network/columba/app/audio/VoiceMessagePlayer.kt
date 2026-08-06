@@ -15,6 +15,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -294,10 +295,12 @@ internal class VoiceMessagePlayer(
     }
 
     private fun cacheMetadata(messageKey: String, result: VoiceMessageMetadata) {
-        val updated = LinkedHashMap(_metadata.value)
-        updated[messageKey] = result
-        while (updated.size > MAX_METADATA_ENTRIES) updated.remove(updated.keys.first())
-        _metadata.value = updated
+        _metadata.update { current ->
+            LinkedHashMap(current).apply {
+                this[messageKey] = result
+                while (size > MAX_METADATA_ENTRIES) remove(keys.first())
+            }
+        }
     }
 
     private suspend fun analyzeMetadata(bytes: ByteArray): VoiceMessageMetadata? {

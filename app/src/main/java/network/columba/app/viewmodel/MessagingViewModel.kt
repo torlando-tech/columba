@@ -40,6 +40,7 @@ import network.columba.app.ui.model.decodeImageWithAnimation
 import network.columba.app.ui.model.getImageMetadata
 import network.columba.app.ui.model.loadFileAttachmentData
 import network.columba.app.ui.model.loadFileAttachmentMetadata
+import network.columba.app.ui.model.loadImageBytes
 import network.columba.app.ui.model.loadImageData
 import network.columba.app.ui.model.parseAudioAttachment
 import network.columba.app.ui.model.toMessageUi
@@ -2576,6 +2577,12 @@ class MessagingViewModel
             }
         }
 
+        private suspend fun reconstructImageForRetry(fieldsJson: String?): Pair<Boolean, ByteArray?> {
+            val hasImage = fieldsJson?.let { runCatching { JSONObject(it).has("6") }.getOrDefault(false) } == true
+            if (!hasImage) return false to null
+            return true to withContext(Dispatchers.IO) { loadImageBytes(fieldsJson) }
+        }
+
         /**
          * Retry sending a failed message.
          * Re-sends the message with the same content and destination,
@@ -2619,8 +2626,16 @@ class MessagingViewModel
                         return@launch
                     }
 
-                    // Parse image data from fieldsJson if present
-                    val imageData = failedMessage.fieldsJson?.let { parseImageFromFieldsJson(it) }
+                    val (hasPersistedImage, imageData) = reconstructImageForRetry(failedMessage.fieldsJson)
+                    if (hasPersistedImage && imageData == null) {
+                        Log.e(TAG, "Stored image attachment is unavailable for retry")
+                        conversationRepository.updateMessageDeliveryDetails(
+                            messageId,
+                            deliveryMethod = null,
+                            errorMessage = "Image attachment is no longer available",
+                        )
+                        return@launch
+                    }
                     val imageFormat = if (imageData != null) "jpg" else null
                     val audioAttachment = parseAudioAttachment(failedMessage.fieldsJson)
                     val voiceBytes =
@@ -2791,7 +2806,10 @@ class MessagingViewModel
             }
 
         override fun onCleared() {
-            voiceMessageRecorder.close()
+            synchronized(voiceRecorderOperationLock) {
+                voiceMessageRecorder.close()
+                releaseVoiceRecordingLeaseLocked()
+            }
             super.onCleared()
 
             // Note: Conversation marking as read happens via loadMessages() when opening
@@ -3057,24 +3075,6 @@ private fun resolveActualDestHash(
     } else {
         Log.w(HELPER_TAG, "Received empty destination hash from Python, falling back to original: $fallbackHash")
         fallbackHash
-    }
-
-/**
- * Parse image data from LXMF fields JSON.
- * Field 6 contains the image data as hex string.
- */
-private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? =
-    try {
-        val json = org.json.JSONObject(fieldsJson)
-        val hexImageData = json.optString("6", "")
-        if (hexImageData.isNotEmpty()) {
-            hexImageData.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        } else {
-            null
-        }
-    } catch (e: Exception) {
-        Log.w(HELPER_TAG, "Failed to parse image from fieldsJson: ${e.message}")
-        null
     }
 
 /**

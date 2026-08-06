@@ -278,7 +278,7 @@ fun VoiceMessageBubble(
             state.error != null -> Text(stringResource(R.string.message_voice_unavailable))
             else -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilledTonalIconButton(onClick = onToggle) {
+                    FilledTonalIconButton(onClick = onToggle, modifier = Modifier.size(48.dp)) {
                         Icon(
                             imageVector = if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (state.playing) stringResource(R.string.message_voice_pause) else stringResource(R.string.message_voice_play),

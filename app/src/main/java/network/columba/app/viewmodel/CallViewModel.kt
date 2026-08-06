@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
-import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,7 +42,7 @@ class CallViewModel
         private val contactRepository: ContactRepository,
         private val announceRepository: AnnounceRepository,
         private val telephony: RnsTelephony,
-        private val microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
+        private val callMicrophoneCoordinator: CallMicrophoneAdmissionCoordinator,
     ) : ViewModel() {
         companion object {
             private const val TAG = "CallViewModel"
@@ -50,9 +50,7 @@ class CallViewModel
 
         // Serializes mute IPC calls to prevent race conditions (e.g. PTT release vs toggle off)
         private val muteMutex = Mutex()
-        private val callAdmissionLock = Any()
-        private var callLease: MicrophoneAdmissionArbiter.Lease? = null
-        private var outgoingAdmissionPending = false
+
 
         // Expose call state from telephony seam
         val callState: StateFlow<CallState> = telephony.callState
@@ -81,7 +79,6 @@ class CallViewModel
             // Track call duration when active
             viewModelScope.launch {
                 callState.collect { state ->
-                    reconcileCallLease(state)
                     when (state) {
                         is CallState.Active -> {
                             startDurationTimer()
@@ -186,7 +183,7 @@ class CallViewModel
             destinationHash: String,
             profileCode: Int? = null,
         ) {
-            if (!acquireOutgoingCallLease()) {
+            if (!callMicrophoneCoordinator.tryAcquireForOutgoing()) {
                 Log.w(TAG, "Call initiation blocked because the microphone is in use")
                 return
             }
@@ -212,7 +209,7 @@ class CallViewModel
 
                         if (result.isSuccess) {
                             callStarted = true
-                            synchronized(callAdmissionLock) { outgoingAdmissionPending = false }
+                            callMicrophoneCoordinator.markOutgoingStarted()
                             Log.w(TAG, "📞✅ Call initiated successfully!")
                             return@launch
                         }
@@ -236,44 +233,11 @@ class CallViewModel
                         return@launch
                     }
                 } finally {
-                    if (!callStarted) releaseFailedOutgoingCallLease()
+                    if (!callStarted) callMicrophoneCoordinator.releaseFailedOutgoing()
                 }
             }
         }
 
-        private fun acquireOutgoingCallLease(): Boolean =
-            synchronized(callAdmissionLock) {
-                if (callLease != null) return@synchronized false
-                val lease = microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL)
-                    ?: return@synchronized false
-                callLease = lease
-                outgoingAdmissionPending = true
-                true
-            }
-
-        private fun releaseFailedOutgoingCallLease() {
-            synchronized(callAdmissionLock) {
-                outgoingAdmissionPending = false
-                releaseCallLeaseLocked()
-            }
-        }
-
-        private fun reconcileCallLease(state: CallState) {
-            synchronized(callAdmissionLock) {
-                if (callUsesMicrophone(state)) {
-                    if (callLease == null) {
-                        callLease = microphoneArbiter.adoptOrAcquire(MicrophoneAdmissionArbiter.Owner.CALL)
-                    }
-                } else if (!outgoingAdmissionPending && !callUsesMicrophone(callState.value)) {
-                    releaseCallLeaseLocked()
-                }
-            }
-        }
-
-        private fun releaseCallLeaseLocked() {
-            callLease?.let(microphoneArbiter::release)
-            callLease = null
-        }
 
         private fun resolvePeerNameSync(identityHash: String) {
             viewModelScope.launch {
@@ -286,11 +250,7 @@ class CallViewModel
          */
         fun answerCall() {
             Log.d(TAG, "Answering call")
-            val admitted =
-                synchronized(callAdmissionLock) {
-                    callLease != null ||
-                        microphoneArbiter.adoptOrAcquire(MicrophoneAdmissionArbiter.Owner.CALL)?.also { callLease = it } != null
-                }
+            val admitted = callMicrophoneCoordinator.ensureCallAdmission()
             if (!admitted) {
                 Log.w(TAG, "Answer blocked because the microphone is in use")
                 return

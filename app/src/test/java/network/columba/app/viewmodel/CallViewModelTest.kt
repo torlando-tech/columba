@@ -6,6 +6,7 @@ package network.columba.app.viewmodel
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
+import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
@@ -16,7 +17,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -48,6 +51,8 @@ class CallViewModelTest {
     private lateinit var mockAnnounceRepository: AnnounceRepository
     private lateinit var mockTelephony: RnsTelephony
     private lateinit var microphoneArbiter: MicrophoneAdmissionArbiter
+    private lateinit var coordinatorScope: CoroutineScope
+    private lateinit var callMicrophoneCoordinator: CallMicrophoneAdmissionCoordinator
     private lateinit var viewModel: CallViewModel
 
     // StateFlows backing the mocked RnsTelephony
@@ -70,6 +75,7 @@ class CallViewModelTest {
         mockAnnounceRepository = mockk()
         mockTelephony = mockk()
         microphoneArbiter = MicrophoneAdmissionArbiter()
+        coordinatorScope = CoroutineScope(testDispatcher)
 
         // Initialize state flows
         callStateFlow = MutableStateFlow<CallState>(CallState.Idle)
@@ -132,13 +138,22 @@ class CallViewModelTest {
         coEvery { mockAnnounceRepository.getAnnounce(any()) } returns null
         coEvery { mockAnnounceRepository.findByIdentityHash(any()) } returns null
 
-        viewModel = CallViewModel(mockContactRepository, mockAnnounceRepository, mockTelephony, microphoneArbiter)
+        callMicrophoneCoordinator =
+            CallMicrophoneAdmissionCoordinator(microphoneArbiter, mockTelephony, coordinatorScope)
+        viewModel =
+            CallViewModel(
+                mockContactRepository,
+                mockAnnounceRepository,
+                mockTelephony,
+                callMicrophoneCoordinator,
+            )
     }
 
     @After
     fun tearDown() {
         // Transition to Idle to stop any running duration timer
         callStateFlow.value = CallState.Idle
+        coordinatorScope.cancel()
         Dispatchers.resetMain()
         clearAllMocks()
     }

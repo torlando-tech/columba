@@ -45,6 +45,7 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.slot
+
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
@@ -4982,6 +4983,98 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `retryFailedMessage preserves file backed image field`() =
+        runViewModelTest {
+            val imageFile =
+                java.io.File(applicationContext.filesDir, "attachments/image-file/6_image").apply {
+                    parentFile!!.mkdirs()
+                    writeText("01020304")
+                }
+            val failedMessage =
+                MessageEntity(
+                    id = "image-file",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = "image",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"6":{"_file_ref":${org.json.JSONObject.quote(imageFile.absolutePath)}}}""",
+                )
+            coEvery { conversationRepository.getMessageById("image-file") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAD.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                )
+
+            viewModel.retryFailedMessage("image-file")
+            advanceUntilIdle()
+
+            var preservedImage = false
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "image",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = match {
+                        preservedImage = it?.contentEquals(byteArrayOf(1, 2, 3, 4)) == true
+                        preservedImage
+                    },
+                    imageFormat = "jpg",
+                    extraFields = any(),
+                )
+            }
+            assertTrue(preservedImage)
+        }
+
+    @Test
+    fun `retryFailedMessage fails closed when persisted image is unavailable`() =
+        runViewModelTest {
+            val missingPath = java.io.File(applicationContext.filesDir, "attachments/missing/6_image").absolutePath
+            val failedMessage =
+                MessageEntity(
+                    id = "missing-image",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = "image",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"6":{"_file_ref":${org.json.JSONObject.quote(missingPath)}}}""",
+                )
+            coEvery { conversationRepository.getMessageById("missing-image") } returns failedMessage
+            var unavailableRecorded = false
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } answers {
+                unavailableRecorded = args[2] == "Image attachment is no longer available"
+            }
+
+            viewModel.retryFailedMessage("missing-image")
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            coVerify {
+                conversationRepository.updateMessageDeliveryDetails(
+                    "missing-image",
+                    deliveryMethod = null,
+                    errorMessage = "Image attachment is no longer available",
+                )
+            }
+            assertTrue(unavailableRecorded)
+        }
+
+    @Test
     fun `retryFailedMessage preserves file backed voice audio field`() =
         runViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)
@@ -5207,7 +5300,24 @@ class MessagingViewModelTest {
             assertEquals(network.columba.app.service.SyncProgress.Starting, viewModel.syncProgress.value)
         }
 
-    // Note: onCleared() tests removed - method is protected and cannot be called directly
+    @Test
+    fun `onCleared releases owned voice recording lease`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            val ownedLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+            val testViewModel = createTestViewModel(arbiter)
+            testViewModel.javaClass.getDeclaredField("voiceRecordingLease").apply {
+                isAccessible = true
+                set(testViewModel, ownedLease)
+            }
+
+            testViewModel.javaClass.getDeclaredMethod("onCleared").apply {
+                isAccessible = true
+                invoke(testViewModel)
+            }
+
+            assertNull(arbiter.currentOwner())
+        }
 
     @Test
     fun `resource progress is exposed while active and removed at terminal state`() = runTest {

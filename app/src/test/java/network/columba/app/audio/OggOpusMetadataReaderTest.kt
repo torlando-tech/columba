@@ -19,7 +19,7 @@ class OggOpusMetadataReaderTest {
         val metadata = OggOpusMetadataReader.read(bytes)
 
         assertNotNull(metadata)
-        assertEquals(2_000, metadata!!.durationMs)
+        assertEquals(1_993, metadata!!.durationMs)
     }
 
     @Test

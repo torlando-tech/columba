@@ -2608,7 +2608,10 @@ private fun determineDeliveryMethod(
 ): DeliveryMethod {
     val contentSize = sanitized.toByteArray().size
     val hasAttachments = imageData != null || fileAttachments.isNotEmpty()
-    return if (!hasAttachments && contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER) {
+    return if (defaultMethod != "propagated" &&
+        !hasAttachments &&
+        contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER
+    ) {
         Log.d(HELPER_TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
         DeliveryMethod.OPPORTUNISTIC
     } else {

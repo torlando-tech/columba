@@ -401,6 +401,130 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `sendMessage with propagated default method sends short text via PROPAGATED`() =
+        runViewModelTest {
+            // The setup stubs getDefaultDeliveryMethod -> "direct"; override for this test
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "propagated"
+
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery {
+                conversationRepository.saveMessage(any(), any(), any(), any())
+            } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "Test message") }
+            advanceUntilIdle()
+
+            assertTrue("sendMessage should complete without error", result.isSuccess)
+
+            // Verify: Short text goes to the relay directly, not opportunistic first
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "Test message",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = DeliveryMethod.PROPAGATED,
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                )
+            }
+        }
+
+    @Test
+    fun `sendMessage with direct default method keeps OPPORTUNISTIC for short text`() =
+        runViewModelTest {
+            // setup() already stubs getDefaultDeliveryMethod -> "direct"
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery {
+                conversationRepository.saveMessage(any(), any(), any(), any())
+            } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "Test message") }
+            advanceUntilIdle()
+
+            assertTrue("sendMessage should complete without error", result.isSuccess)
+
+            // Verify: Direct default keeps the opportunistic fast path for short text
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "Test message",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = DeliveryMethod.OPPORTUNISTIC,
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                )
+            }
+        }
+
+    @Test
+    fun `sendMessage with propagated default method sends large text via PROPAGATED`() =
+        runViewModelTest {
+            // The setup stubs getDefaultDeliveryMethod -> "direct"; override for this test
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "propagated"
+
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = ByteArray(32) { it.toByte() },
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+
+            coEvery {
+                conversationRepository.saveMessage(any(), any(), any(), any())
+            } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            // 400 bytes > OPPORTUNISTIC_MAX_BYTES (295) — falls into the method-selection branch
+            val result = runCatching { viewModel.sendMessage(testPeerHash, "x".repeat(400)) }
+            advanceUntilIdle()
+
+            assertTrue("sendMessage should complete without error", result.isSuccess)
+
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "x".repeat(400),
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = DeliveryMethod.PROPAGATED,
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                )
+            }
+        }
+
+    @Test
     fun `sendMessage failure saves message to database with failed status`() =
         runViewModelTest {
             // Setup: Mock failed LXMF send

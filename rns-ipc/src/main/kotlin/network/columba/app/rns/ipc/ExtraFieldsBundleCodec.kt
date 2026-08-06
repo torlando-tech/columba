@@ -24,10 +24,12 @@ internal fun Map<Int, Any>.toExtraFieldsBundle(): Bundle =
 internal fun Bundle.toExtraFieldsMap(): Map<Int, Any> {
     val result = LinkedHashMap<Int, Any>(size())
     for (key in keySet()) {
-        val field = key.toIntOrNull() ?: continue
+        val field = key.toIntOrNull()
         @Suppress("DEPRECATION")
-        val encoded = get(key) ?: continue
-        result[field] = decodeExtraFieldValue(encoded)
+        val encoded = get(key)
+        if (field != null && encoded != null) {
+            result[field] = decodeExtraFieldValue(encoded)
+        }
     }
     return result
 }

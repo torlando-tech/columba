@@ -122,10 +122,7 @@ internal object AttachmentBlob {
     fun readFromPfd(pfd: ParcelFileDescriptor?): Payload {
         if (pfd == null) return Payload.EMPTY
         DataInputStream(BufferedInputStream(ParcelFileDescriptor.AutoCloseInputStream(pfd))).use { inp ->
-            val magic = inp.readInt()
-            if (magic != MAGIC) throw IOException("Bad attachment blob magic: 0x${Integer.toHexString(magic)}")
-            val version = inp.readInt()
-            if (version != VERSION) throw IOException("Unsupported attachment blob version: $version")
+            inp.requireSupportedHeader()
             val budget = ReadBudget()
 
             // Lengths come straight off the stream; a corrupt/truncated blob could
@@ -160,6 +157,13 @@ internal object AttachmentBlob {
             }
             return Payload(imageData, imageFormat, files, extraFields)
         }
+    }
+
+    private fun DataInputStream.requireSupportedHeader() {
+        val magic = readInt()
+        if (magic != MAGIC) throw IOException("Bad attachment blob magic: 0x${Integer.toHexString(magic)}")
+        val version = readInt()
+        if (version != VERSION) throw IOException("Unsupported attachment blob version: $version")
     }
 
     private fun checkLen(value: Int, field: String, maximum: Int): Int {

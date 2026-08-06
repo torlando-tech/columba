@@ -23,6 +23,7 @@ import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -94,6 +95,7 @@ class SettingsViewModelTest {
     private val lastAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val nextAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val themePreferenceFlow = MutableStateFlow(PresetTheme.VIBRANT)
+    private val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
     private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
     private val autoRetrieveEnabledFlow = MutableStateFlow(true)
@@ -177,6 +179,7 @@ class SettingsViewModelTest {
         every { settingsRepository.lastAutoAnnounceTimeFlow } returns lastAutoAnnounceTimeFlow
         every { settingsRepository.nextAutoAnnounceTimeFlow } returns nextAutoAnnounceTimeFlow
         every { settingsRepository.themePreferenceFlow } returns themePreferenceFlow
+        every { settingsRepository.themeModeFlow } returns themeModeFlow
         every { settingsRepository.getAllCustomThemes() } returns flowOf(emptyList())
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
@@ -221,6 +224,7 @@ class SettingsViewModelTest {
         coEvery { settingsRepository.saveAutoAnnounceIntervalHours(any()) } just Runs
         coEvery { settingsRepository.saveLastAutoAnnounceTime(any()) } just Runs
         coEvery { settingsRepository.saveThemePreference(any()) } just Runs
+        coEvery { settingsRepository.saveThemeModePreference(any()) } just Runs
         coEvery { settingsRepository.saveDefaultDeliveryMethod(any()) } just Runs
         coEvery { settingsRepository.saveTryPropagationOnFail(any()) } just Runs
         coEvery { settingsRepository.saveAutoSelectPropagationNode(any()) } just Runs
@@ -1883,6 +1887,38 @@ class SettingsViewModelTest {
                 }
 
                 assertEquals(PresetTheme.FOREST, state.selectedTheme)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `setThemeMode mode savesToRepository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            ThemeMode.entries.forEach { mode ->
+                val result = runCatching { viewModel.setThemeMode(mode) }
+
+                assertTrue("setThemeMode should complete successfully", result.isSuccess)
+                coVerify { settingsRepository.saveThemeModePreference(mode) }
+            }
+        }
+
+    @Test
+    fun `state collectsThemeModeFromRepository`() =
+        runTest {
+            themeModeFlow.value = ThemeMode.DARK
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertEquals(ThemeMode.DARK, state.themeMode)
 
                 cancelAndConsumeRemainingEvents()
             }

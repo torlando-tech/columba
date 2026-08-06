@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import network.columba.app.data.repository.CustomThemeRepository
+import network.columba.app.ui.theme.ThemeMode
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -1655,5 +1656,23 @@ class SettingsRepositoryTest {
             repository.saveLocationPrecisionRadius(0)
 
             assertTrue(repository.preciseLocationPromptDismissedFlow.first())
+        }
+
+    // ========== Theme Mode Tests ==========
+
+    @Test
+    fun themeModeFlow_defaultsToSystemWhenUnset() =
+        runTest {
+            val mode = repository.themeModeFlow.first()
+            assertEquals(ThemeMode.SYSTEM, mode)
+        }
+
+    @Test
+    fun themeModeFlow_persistsSavedMode() =
+        runTest {
+            ThemeMode.entries.forEach { mode ->
+                repository.saveThemeModePreference(mode)
+                assertEquals(mode, repository.themeModeFlow.first())
+            }
         }
 }

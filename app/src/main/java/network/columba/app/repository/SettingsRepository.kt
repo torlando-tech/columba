@@ -35,6 +35,7 @@ import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.CustomTheme
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -87,6 +88,7 @@ class SettingsRepository
 
             // Theme preference
             val THEME_PREFERENCE = stringPreferencesKey("app_theme")
+            val THEME_MODE_PREFERENCE = stringPreferencesKey("theme_mode")
 
             // Shared instance preferences
             val PREFER_OWN_INSTANCE = booleanPreferencesKey("prefer_own_instance")
@@ -760,6 +762,30 @@ class SettingsRepository
         suspend fun saveThemePreferenceByIdentifier(identifier: String) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.THEME_PREFERENCE] = identifier
+            }
+        }
+
+        // Theme mode preference
+
+        /**
+         * Flow of the selected theme mode (System/Light/Dark).
+         * Defaults to SYSTEM if not set or if the stored value is invalid,
+         * preserving the original system-following behavior.
+         */
+        val themeModeFlow: Flow<ThemeMode> =
+            context.dataStore.data
+                .map { preferences ->
+                    ThemeMode.fromIdentifier(preferences[PreferencesKeys.THEME_MODE_PREFERENCE])
+                }
+
+        /**
+         * Save the theme mode.
+         *
+         * @param mode The theme mode to apply
+         */
+        suspend fun saveThemeModePreference(mode: ThemeMode) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.THEME_MODE_PREFERENCE] = mode.name
             }
         }
 

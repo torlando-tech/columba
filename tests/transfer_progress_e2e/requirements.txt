@@ -1,0 +1,13 @@
+git+https://github.com/torlando-tech/Reticulum@5b3a6ee4f25e2925cf84d4a2b108e6a708fbd395
+git+https://github.com/torlando-tech/LXMF@8912186e48b482a76bf04e2ac4b6c8940991aecc
+cffi==2.1.1
+cryptography==50.0.0
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+pycparser==3.0
+Pygments==2.20.0
+pyserial==3.5
+pytest==9.1.1
+pytest-timeout==2.4.0
+u-msgpack-python==2.8.0

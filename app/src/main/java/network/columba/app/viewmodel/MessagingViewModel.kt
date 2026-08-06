@@ -354,6 +354,11 @@ class MessagingViewModel
         // Real-time sync progress for status UI
         val syncProgress: StateFlow<SyncProgress> = propagationNodeManager.syncProgress
 
+        private val _transferProgress =
+            MutableStateFlow<Map<String, network.columba.app.rns.api.model.TransferProgressUpdate>>(emptyMap())
+        val transferProgress: StateFlow<Map<String, network.columba.app.rns.api.model.TransferProgressUpdate>> =
+            _transferProgress.asStateFlow()
+
         // Track which images have been decoded - used to trigger recomposition
         // when images become available. The UI observes this to know when to re-check the cache.
         private val _loadedImageIds = MutableStateFlow<Set<String>>(emptySet())
@@ -869,6 +874,23 @@ class MessagingViewModel
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error collecting delivery status updates", e)
+                }
+            }
+
+            viewModelScope.launch {
+                try {
+                    rnsLxmf.observeTransferProgress().collect { update ->
+                        val key = (update.messageHash ?: update.transferId).lowercase()
+                        _transferProgress.value = if (update.isTerminal) {
+                            _transferProgress.value - key
+                        } else {
+                            _transferProgress.value + (key to update)
+                        }
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error collecting Resource transfer progress", e)
                 }
             }
 

@@ -595,3 +595,82 @@ jobs:
           pkill -9 qemu-system || true
           adb kill-server || true
 
+  transfer-progress-e2e:
+    name: Real LXMF Resource Progress E2E
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          cache-read-only: false
+
+      - name: Install E2E host dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r tests/transfer_progress_e2e/requirements.txt
+          python -m pytest -q tests/transfer_progress_e2e/test_ui_driver.py
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Python-backend E2E APK
+        run: ./gradlew :app:assembleNoSentryPythonBackendDebug --stacktrace --max-workers=2
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run real two-peer Resource progress E2E
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 3072
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: >-
+            COLUMBA_EMULATOR_SERIAL=emulator-5554
+            COLUMBA_E2E_APK=app/build/outputs/apk/noSentryPythonBackend/debug/app-noSentry-pythonBackend-x86_64-debug.apk
+            COLUMBA_E2E_ARTIFACT_DIR=artifacts/transfer-progress-e2e
+            python -m pytest -v tests/transfer_progress_e2e/test_transfer_progress_e2e.py
+            --junit-xml=artifacts/transfer-progress-e2e/results.xml;
+
+      - name: Upload Resource progress E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: transfer-progress-e2e-evidence
+          path: artifacts/transfer-progress-e2e/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Cleanup emulator
+        if: always()
+        run: |
+          adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+          pkill -9 qemu-system || true
+          adb kill-server || true
+

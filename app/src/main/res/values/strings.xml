@@ -128,4 +128,18 @@
     <string name="firmware_flashers_pyxis_preserves_data">Pyxis updates preserve device settings, identities, and conversations.</string>
     <string name="firmware_flashers_open_rnode">Open RNode Flasher</string>
     <string name="markdown_remote_image_not_loaded">Remote image not loaded</string>
+    <string name="transfer_sending">Sending</string>
+    <string name="transfer_sending_directly">Sending directly</string>
+    <string name="transfer_sending_to_relay">Sending to relay</string>
+    <string name="transfer_receiving_via_relay">Receiving messages via relay</string>
+    <plurals name="transfer_receiving_directly">
+        <item quantity="one">Receiving a message directly</item>
+        <item quantity="other">Receiving %1$d messages directly</item>
+    </plurals>
+    <plurals name="transfer_direct_also_active">
+        <item quantity="one">1 direct transfer also active</item>
+        <item quantity="other">%1$d direct transfers also active</item>
+    </plurals>
+    <string name="transfer_percent">%1$d%%</string>
+    <string name="transfer_progress_description">%1$s, %2$d percent</string>
 </resources>

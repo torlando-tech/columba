@@ -24,6 +24,7 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.ipc.AttachmentBlob
 import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.FieldsBlob
@@ -31,6 +32,7 @@ import network.columba.app.rns.ipc.IRnsLxmf
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback
 import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
+import network.columba.app.rns.ipc.callback.IRnsTransferProgressCallback
 import java.io.File
 
 internal class ClientRnsLxmf(
@@ -165,6 +167,16 @@ internal class ClientRnsLxmf(
         }
         if (!registerObserverOrClose { remote.registerDeliveryStatusObserver(cb) }) return@callbackFlow
         awaitClose { runCatching { remote.unregisterDeliveryStatusObserver(cb) } }
+    }
+
+    override fun observeTransferProgress(): Flow<TransferProgressUpdate> = callbackFlow {
+        val cb = object : IRnsTransferProgressCallback.Stub() {
+            override fun onTransferProgress(update: TransferProgressUpdate?) {
+                if (update != null) trySend(update)
+            }
+        }
+        if (!registerObserverOrClose { remote.registerTransferProgressObserver(cb) }) return@callbackFlow
+        awaitClose { runCatching { remote.unregisterTransferProgressObserver(cb) } }
     }
 
     override suspend fun getLxmfIdentity(): Result<Identity> = runCatching {

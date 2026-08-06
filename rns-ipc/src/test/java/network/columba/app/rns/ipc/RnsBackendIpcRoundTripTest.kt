@@ -49,6 +49,8 @@ import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.api.model.TransferPhase
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.model.VoiceCallState
 import kotlinx.coroutines.flow.Flow
 import org.junit.After
@@ -216,6 +218,30 @@ class RnsBackendIpcRoundTripTest {
             fake.lxmf.incomingMessages.emit(message)
             advanceUntilIdle()
             assertEquals(message, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `transfer progress observer round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        val update = TransferProgressUpdate(
+            transferId = "resource-1",
+            messageHash = null,
+            sourceDestinationHash = "aabbcc",
+            direction = Direction.IN,
+            progress = 0.64f,
+            phase = TransferPhase.TRANSFERRING,
+            totalBytes = 4_800_000L,
+            deliveryMethod = DeliveryMethod.DIRECT,
+        )
+
+        client.lxmf.observeTransferProgress().test {
+            advanceUntilIdle()
+            fake.lxmf.transferProgress.emit(update)
+            advanceUntilIdle()
+            assertEquals(update, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -470,6 +496,7 @@ private class FakeRnsTelephony : RnsTelephony {
 private class FakeRnsLxmf : RnsLxmf {
     val incomingMessages: MutableSharedFlow<ReceivedMessage> = MutableSharedFlow(extraBufferCapacity = 8)
     private val deliveryStatus: MutableSharedFlow<DeliveryStatusUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
+    val transferProgress: MutableSharedFlow<TransferProgressUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
     private val propagation: MutableSharedFlow<PropagationState> = MutableSharedFlow(extraBufferCapacity = 8)
 
     // Last-send capture so tests can assert exactly what reached the backend
@@ -531,6 +558,7 @@ private class FakeRnsLxmf : RnsLxmf {
 
     override fun observeMessages(): Flow<ReceivedMessage> = incomingMessages
     override fun observeDeliveryStatus(): Flow<DeliveryStatusUpdate> = deliveryStatus
+    override fun observeTransferProgress(): Flow<TransferProgressUpdate> = transferProgress
 
     override suspend fun getLxmfIdentity(): Result<Identity> = Result.failure(NotImplementedError())
     override suspend fun getLxmfDestination(): Result<Destination> = Result.failure(NotImplementedError())

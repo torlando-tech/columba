@@ -13,6 +13,7 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.ipc.AttachmentBlob
 import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.FieldsBlob
@@ -23,6 +24,7 @@ import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
 import network.columba.app.rns.ipc.callback.IRnsResultCallback
 import network.columba.app.rns.ipc.callback.IRnsStringCallback
+import network.columba.app.rns.ipc.callback.IRnsTransferProgressCallback
 import java.io.File
 import java.io.IOException
 
@@ -81,6 +83,12 @@ internal class ServerRnsLxmf(
         upstream = { impl.propagationStateFlow },
         callbackBinder = { it.asBinder() },
         emit = { cb, value -> cb.onPropagationState(value) },
+    )
+    private val transferProgressHub = ObserverHub<TransferProgressUpdate, IRnsTransferProgressCallback>(
+        scope = scope,
+        upstream = { impl.observeTransferProgress() },
+        callbackBinder = { it.asBinder() },
+        emit = { cb, value -> cb.onTransferProgress(value) },
     )
 
     override fun sendLxmfMessage(
@@ -160,6 +168,11 @@ internal class ServerRnsLxmf(
 
     override fun registerDeliveryStatusObserver(cb: IRnsDeliveryStatusCallback) = deliveryHub.registerObserver(cb)
     override fun unregisterDeliveryStatusObserver(cb: IRnsDeliveryStatusCallback) = deliveryHub.unregisterObserver(cb)
+
+    override fun registerTransferProgressObserver(cb: IRnsTransferProgressCallback) =
+        transferProgressHub.registerObserver(cb)
+    override fun unregisterTransferProgressObserver(cb: IRnsTransferProgressCallback) =
+        transferProgressHub.unregisterObserver(cb)
 
     override fun getLxmfIdentity(cb: IRnsResultCallback) = dispatch(cb, scope) {
         val identity = impl.getLxmfIdentity().getOrThrow()

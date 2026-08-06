@@ -196,6 +196,7 @@ class MessagingViewModelImageLoadingTest {
         coEvery { rnsLxmf.getLxmfIdentity() } returns Result.success(testIdentity)
         every { rnsLxmf.setConversationActive(any()) } just Runs
         every { rnsLxmf.observeDeliveryStatus() } returns flowOf()
+        every { rnsLxmf.observeTransferProgress() } returns flowOf()
         every { rnsTransportAdmin.reactionReceivedFlow } returns MutableSharedFlow()
     }
 

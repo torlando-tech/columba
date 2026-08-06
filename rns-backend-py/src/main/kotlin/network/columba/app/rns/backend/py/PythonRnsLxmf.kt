@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.RnsError
@@ -27,10 +29,34 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.TransferPhase
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
+
+internal enum class OutgoingTransferPollAction {
+    WAIT,
+    PUBLISH,
+    STOP,
+}
+
+internal fun outgoingTransferPollAction(
+    representation: Int?,
+    state: Int,
+): OutgoingTransferPollAction = when {
+    representation == PythonRnsLxmf.LXMF_REPRESENTATION_RESOURCE -> OutgoingTransferPollAction.PUBLISH
+    representation == PythonRnsLxmf.LXMF_REPRESENTATION_PACKET -> OutgoingTransferPollAction.STOP
+    state in setOf(
+        PythonRnsLxmf.LXMF_STATE_SENT,
+        PythonRnsLxmf.LXMF_STATE_DELIVERED,
+        PythonRnsLxmf.LXMF_STATE_REJECTED,
+        PythonRnsLxmf.LXMF_STATE_CANCELLED,
+        PythonRnsLxmf.LXMF_STATE_FAILED,
+    ) -> OutgoingTransferPollAction.STOP
+    else -> OutgoingTransferPollAction.WAIT
+}
 
 /**
  * `RnsLxmf` over upstream Python LXMF, driven through Chaquopy.
@@ -53,13 +79,23 @@ class PythonRnsLxmf(
     private val runtime: PythonRnsRuntime,
     private val events: PythonEventBridge,
 ) : RnsLxmf {
-    private companion object {
+    internal companion object {
         const val TAG = "PythonRnsLxmf"
 
         // LXMF.LXMessage delivery-method ints (LXMF/LXMessage.py).
         const val LXMF_METHOD_OPPORTUNISTIC = 0x01
         const val LXMF_METHOD_DIRECT = 0x02
         const val LXMF_METHOD_PROPAGATED = 0x03
+        const val LXMF_REPRESENTATION_UNKNOWN = 0x00
+        const val LXMF_REPRESENTATION_PACKET = 0x01
+        const val LXMF_REPRESENTATION_RESOURCE = 0x02
+        const val LXMF_STATE_OUTBOUND = 0x01
+        const val LXMF_STATE_SENDING = 0x02
+        const val LXMF_STATE_SENT = 0x04
+        const val LXMF_STATE_DELIVERED = 0x08
+        const val LXMF_STATE_REJECTED = 0xFD
+        const val LXMF_STATE_CANCELLED = 0xFE
+        const val LXMF_STATE_FAILED = 0xFF
 
         /** Bound on how long to wait for a recipient identity to resolve via a path request. */
         const val PATH_RESOLVE_TIMEOUT_MS = 10_000L
@@ -67,6 +103,7 @@ class PythonRnsLxmf(
 
         /** Live-poll cadence for upstream `propagation_transfer_state`. */
         const val PROPAGATION_POLL_INTERVAL_MS = 500L
+        const val TRANSFER_POLL_INTERVAL_MS = 500L
     }
 
     /**
@@ -90,6 +127,9 @@ class PythonRnsLxmf(
         MutableSharedFlow<PropagationState>(replay = 1, extraBufferCapacity = 8)
     override val propagationStateFlow: SharedFlow<PropagationState> =
         _propagationStateFlow.asSharedFlow()
+
+    private val outgoingTransferProgress =
+        MutableSharedFlow<TransferProgressUpdate>(replay = 8, extraBufferCapacity = 64)
 
     /** Mirrors `NativeRnsBackendImpl` — a polling hint with no LXMF-side effect on this backend. */
     @Volatile
@@ -251,12 +291,148 @@ class PythonRnsLxmf(
         router.callAttr("handle_outbound", lxmessage)
 
         val hashBytes = lxmessage["hash"]?.toJava(ByteArray::class.java) ?: ByteArray(0)
+        // handle_outbound() queues work on a Python thread. The representation is
+        // still UNKNOWN here and becomes PACKET or RESOURCE when LXMessage.send() runs.
+        startOutgoingTransferPoll(hashBytes.toHex(), lxmessage)
         return MessageReceipt(
             messageHash = hashBytes,
             timestamp = System.currentTimeMillis(),
             destinationHash = recipientDest["hash"]?.toJava(ByteArray::class.java)
                 ?: destinationHash,
         )
+    }
+
+    override fun observeTransferProgress(): Flow<TransferProgressUpdate> =
+        merge(outgoingTransferProgress.asSharedFlow(), incomingTransferProgress())
+
+    private fun startOutgoingTransferPoll(messageHash: String, lxmessage: PyObject) {
+        backgroundScope.launch {
+            var last: TransferProgressUpdate? = null
+            while (isActive) {
+                val state = lxmessage.pyInt("state") ?: 0
+                when (outgoingTransferPollAction(lxmessage.pyInt("representation"), state)) {
+                    OutgoingTransferPollAction.WAIT -> {
+                        delay(TRANSFER_POLL_INTERVAL_MS)
+                        continue
+                    }
+                    OutgoingTransferPollAction.STOP -> break
+                    OutgoingTransferPollAction.PUBLISH -> Unit
+                }
+                val update = runCatching { outgoingTransferUpdate(messageHash, lxmessage, state) }
+                    .onFailure { Log.w(TAG, "Unable to read outgoing Resource progress", it) }
+                    .getOrNull()
+                if (update != null && update != last) {
+                    outgoingTransferProgress.emit(update)
+                    last = update
+                }
+                if (update?.isTerminal == true) break
+                delay(TRANSFER_POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun outgoingTransferUpdate(
+        messageHash: String,
+        lxmessage: PyObject,
+        state: Int,
+    ): TransferProgressUpdate {
+        val progress = lxmessage.pyDouble("progress").coerceIn(0.0, 1.0).toFloat()
+        val resource = lxmessage["resource_representation"]?.takeUnless { it.toString() == "None" }
+        return TransferProgressUpdate(
+            transferId = resource?.get("hash")?.toJava(ByteArray::class.java)?.toHex() ?: messageHash,
+            messageHash = messageHash,
+            direction = Direction.OUT,
+            progress = progress,
+            phase = when (state) {
+                LXMF_STATE_SENT, LXMF_STATE_DELIVERED -> TransferPhase.COMPLETE
+                LXMF_STATE_REJECTED, LXMF_STATE_CANCELLED, LXMF_STATE_FAILED -> TransferPhase.FAILED
+                else -> if (progress > 0f) TransferPhase.TRANSFERRING else TransferPhase.PREPARING
+            },
+            totalBytes = resource?.pyLongCall("get_transfer_size"),
+            deliveryMethod = lxmfDeliveryMethod(lxmessage.pyInt("method")),
+        )
+    }
+
+    private fun incomingTransferProgress(): Flow<TransferProgressUpdate> = flow {
+        val previous = LinkedHashMap<String, TransferProgressUpdate>()
+        while (kotlin.coroutines.coroutineContext.isActive) {
+            val current = runCatching { readIncomingTransfers() }
+                .onFailure { Log.w(TAG, "Unable to read inbound Resources", it) }
+                .getOrNull()
+            if (current != null) {
+                val currentById = current.associateBy { it.transferId }
+                current.forEach { update ->
+                    if (previous[update.transferId] != update) emit(update)
+                }
+                previous.values
+                    .filter { it.transferId !in currentById }
+                    .forEach { emit(it.copy(progress = 1f, phase = TransferPhase.COMPLETE)) }
+                previous.clear()
+                previous.putAll(currentById)
+            }
+            delay(TRANSFER_POLL_INTERVAL_MS)
+        }
+    }
+
+    private fun readIncomingTransfers(): List<TransferProgressUpdate> {
+        val router = runtime.lxmRouter ?: return emptyList()
+        val resources = router.callAttr("inbound_resources") ?: return emptyList()
+        return resources.asList().mapNotNull { resource ->
+            runCatching {
+                val transferId = resource["hash"]?.toJava(ByteArray::class.java)?.toHex()
+                    ?: return@runCatching null
+                TransferProgressUpdate(
+                    transferId = transferId,
+                    messageHash = null,
+                    sourceDestinationHash = resource.incomingSourceDestinationHash(),
+                    direction = Direction.IN,
+                    progress = resource.pyDoubleCall("get_progress").coerceIn(0.0, 1.0).toFloat(),
+                    phase = TransferPhase.TRANSFERRING,
+                    totalBytes = resource.pyLongCall("get_transfer_size"),
+                    deliveryMethod = DeliveryMethod.DIRECT,
+                )
+            }.getOrNull()
+        }
+    }
+
+    private fun PyObject.incomingSourceDestinationHash(): String? {
+        val link = callAttr("get_link")?.takeUnless { it.toString() == "None" }
+        val remoteIdentity =
+            link?.callAttr("get_remote_identity")?.takeUnless { it.toString() == "None" }
+        val destinationClass = runtime.rnsModule["Destination"]
+        val fullName = "${LxmfFields.APP_NAME}.${LxmfFields.DELIVERY_ASPECT}"
+        return if (remoteIdentity == null || destinationClass == null) {
+            null
+        } else {
+            destinationClass.callAttr("hash_from_name_and_identity", fullName, remoteIdentity)
+        }
+            ?.toJava(ByteArray::class.java)
+            ?.toHex()
+    }
+
+    private fun PyObject.pyInt(name: String): Int? =
+        get(name)?.let { value ->
+            runCatching { value.toJava(Int::class.javaObjectType) }.getOrNull()
+                ?: runCatching { value.toJava(Long::class.javaObjectType).toInt() }.getOrNull()
+        }
+
+    private fun PyObject.pyDouble(name: String): Double =
+        get(name)?.let { runCatching { it.toJava(Double::class.javaObjectType) }.getOrNull() } ?: 0.0
+
+    private fun PyObject.pyDoubleCall(name: String): Double =
+        callAttr(name)?.let { runCatching { it.toJava(Double::class.javaObjectType) }.getOrNull() } ?: 0.0
+
+    private fun PyObject.pyLongCall(name: String): Long? =
+        callAttr(name)?.takeUnless { it.toString() == "None" }?.let { value ->
+            runCatching { value.toJava(Long::class.javaObjectType) }.getOrNull()
+                ?: runCatching { value.toJava(Int::class.javaObjectType).toLong() }.getOrNull()
+        }
+
+    private fun lxmfDeliveryMethod(method: Int?): DeliveryMethod? = when (method) {
+        LXMF_METHOD_OPPORTUNISTIC -> DeliveryMethod.OPPORTUNISTIC
+        LXMF_METHOD_DIRECT -> DeliveryMethod.DIRECT
+        LXMF_METHOD_PROPAGATED -> DeliveryMethod.PROPAGATED
+        else -> null
     }
 
     /**

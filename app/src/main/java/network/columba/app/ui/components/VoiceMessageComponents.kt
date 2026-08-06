@@ -1,12 +1,14 @@
 package network.columba.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import network.columba.app.R
@@ -256,7 +260,16 @@ fun VoiceMessageBubble(
     state: VoiceMessagePlayerState,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    durationMillis: Int? = null,
+    waveformLevels: List<Float> = emptyList(),
 ) {
+    val effectiveDuration = state.durationMs.takeIf { it > 0 } ?: durationMillis.orZero()
+    val progressFraction =
+        if (effectiveDuration > 0) {
+            (state.progressMs.toFloat() / effectiveDuration).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
     Column(modifier = modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall)
         when {
@@ -264,19 +277,70 @@ fun VoiceMessageBubble(
             state.error == "unsupported" -> Text(stringResource(R.string.message_voice_unsupported))
             state.error != null -> Text(stringResource(R.string.message_voice_unavailable))
             else -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     FilledTonalIconButton(onClick = onToggle) {
                         Icon(
                             imageVector = if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (state.playing) stringResource(R.string.message_voice_pause) else stringResource(R.string.message_voice_play),
                         )
                     }
-                    Text(stringResource(R.string.message_voice_progress, formatMs(state.progressMs.toLong()), formatMs(state.durationMs.toLong())))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        VoiceWaveformProgress(
+                            levels = waveformLevels,
+                            progress = progressFraction,
+                            modifier = Modifier.fillMaxWidth().height(32.dp),
+                        )
+                        Text(
+                            stringResource(
+                                R.string.message_voice_progress,
+                                formatMs(state.progressMs.toLong()),
+                                effectiveDuration.takeIf { it > 0 }?.let { formatMs(it.toLong()) } ?: "--:--",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun VoiceWaveformProgress(
+    levels: List<Float>,
+    progress: Float,
+    modifier: Modifier = Modifier,
+) {
+    val playedColor = MaterialTheme.colorScheme.primary
+    val remainingColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    val displayLevels = levels.ifEmpty { DEFAULT_WAVEFORM_LEVELS }
+    Canvas(
+        modifier =
+            modifier.semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f)
+            },
+    ) {
+        val gap = 2.dp.toPx()
+        val barWidth = ((size.width - gap * (displayLevels.size - 1)) / displayLevels.size).coerceAtLeast(1f)
+        displayLevels.forEachIndexed { index, level ->
+            val barHeight = (size.height * level.coerceIn(0.18f, 1f)).coerceAtLeast(2.dp.toPx())
+            val left = index * (barWidth + gap)
+            val played = (index + 0.5f) / displayLevels.size <= progress
+            drawRoundRect(
+                color = if (played) playedColor else remainingColor,
+                topLeft = androidx.compose.ui.geometry.Offset(left, (size.height - barHeight) / 2f),
+                size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f, barWidth / 2f),
+            )
+        }
+    }
+}
+
+private fun Int?.orZero(): Int = this ?: 0
+
+private val DEFAULT_WAVEFORM_LEVELS =
+    listOf(0.28f, 0.55f, 0.82f, 0.44f, 0.68f, 0.96f, 0.58f, 0.36f, 0.72f, 0.48f, 0.88f, 0.62f)
 
 private fun formatMs(ms: Long): String {
     val total = TimeUnit.MILLISECONDS.toSeconds(ms)

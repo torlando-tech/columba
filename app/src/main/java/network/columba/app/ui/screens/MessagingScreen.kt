@@ -211,7 +211,9 @@ import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.MessageRenderer
 import network.columba.app.audio.VoiceMessagePlayer
+import network.columba.app.audio.VoiceMessageMetadata
 import network.columba.app.audio.VoiceMessagePlayerState
+import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -741,7 +743,7 @@ fun MessagingScreen(
             if (
                 result.destinationHash == destinationHash &&
                 result.clearComposer &&
-                messageText.trim() == result.submittedText.trim()
+                messageText == result.submittedText
             ) {
                 messageText = ""
                 showVoiceControls = false
@@ -766,6 +768,7 @@ fun MessagingScreen(
         }
     val voicePlayer = remember { VoiceMessagePlayer(context, scope) }
     val voicePlayerState by voicePlayer.state.collectAsStateWithLifecycle()
+    val voiceMetadata by voicePlayer.metadata.collectAsStateWithLifecycle()
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer =
             LifecycleEventObserver { _, event ->
@@ -1369,6 +1372,10 @@ fun MessagingScreen(
                                             voicePlayerState =
                                                 voicePlayerState.takeIf { it.messageKey == displayMessage.id }
                                                     ?: VoiceMessagePlayerState(),
+                                            voiceMetadata = voiceMetadata[displayMessage.id],
+                                            onVoiceMetadataNeeded = { attachment ->
+                                                voicePlayer.prepareMetadata(displayMessage.id, attachment)
+                                            },
                                             onVoiceToggle = {
                                                 displayMessage.audioAttachment?.let { attachment ->
                                                     voicePlayer.toggle(displayMessage.id, attachment)
@@ -1978,6 +1985,8 @@ fun MessageBubble(
     fontScale: Float = 1.0f,
     @Suppress("UNUSED_PARAMETER") timestampTick: Long = 0L,
     voicePlayerState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
+    voiceMetadata: VoiceMessageMetadata? = null,
+    onVoiceMetadataNeeded: (AudioAttachmentUi) -> Unit = {},
     onVoiceToggle: () -> Unit = {},
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
@@ -2374,6 +2383,9 @@ fun MessageBubble(
                         }
 
                         message.audioAttachment?.let { audio ->
+                            LaunchedEffect(message.id, audio) {
+                                if (audio.isPlayable) onVoiceMetadataNeeded(audio)
+                            }
                             VoiceMessageBubble(
                                 title = stringResource(R.string.message_voice_bubble_title),
                                 state =
@@ -2383,6 +2395,8 @@ fun MessageBubble(
                                         VoiceMessagePlayerState(error = "unsupported")
                                     },
                                 onToggle = onVoiceToggle,
+                                durationMillis = audio.durationMs?.toInt() ?: voiceMetadata?.durationMs,
+                                waveformLevels = voiceMetadata?.waveformLevels.orEmpty(),
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                         }

@@ -6,6 +6,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import network.columba.app.audio.VoiceMessagePlayerState
 import network.columba.app.audio.VoiceMessageRecordingState
 import network.columba.app.test.RegisterComponentActivityRule
@@ -163,6 +166,28 @@ class VoiceMessageComponentsTest {
 
         composeRule.onNodeWithContentDescription("Play voice message").performClick()
         assertTrue(toggled)
+    }
+
+    @Test
+    fun `voice bubble shows probed duration before playback`() {
+        composeRule.setContent {
+            VoiceMessageBubble(
+                title = "Voice message",
+                state = VoiceMessagePlayerState(),
+                durationMillis = 65_000,
+                waveformLevels = listOf(0.2f, 0.6f, 1f, 0.4f),
+                onToggle = {},
+            )
+        }
+
+        composeRule.onNodeWithText("0:00 of 1:05").assertIsDisplayed()
+        composeRule
+            .onNode(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.ProgressBarRangeInfo,
+                    ProgressBarRangeInfo(0f, 0f..1f),
+                ),
+            ).assertIsDisplayed()
     }
 
     @Test

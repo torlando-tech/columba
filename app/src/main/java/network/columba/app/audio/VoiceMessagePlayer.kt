@@ -29,6 +29,11 @@ data class VoiceMessagePlayerState(
     val messageKey: String? = null,
 )
 
+data class VoiceMessageMetadata(
+    val durationMs: Int,
+    val waveformLevels: List<Float>,
+)
+
 internal interface VoicePlaybackEngine {
     val durationMs: Int
     val currentPositionMs: Int
@@ -91,11 +96,30 @@ internal class VoiceMessagePlayer(
     private val appContext = context.applicationContext
     private val _state = MutableStateFlow(VoiceMessagePlayerState())
     val state: StateFlow<VoiceMessagePlayerState> = _state.asStateFlow()
+    private val _metadata = MutableStateFlow<Map<String, VoiceMessageMetadata>>(emptyMap())
+    val metadata: StateFlow<Map<String, VoiceMessageMetadata>> = _metadata.asStateFlow()
 
     private var player: VoicePlaybackEngine? = null
     private var tempFile: File? = null
     private var loadJob: Job? = null
     private var progressJob: Job? = null
+    private val metadataJobs = mutableMapOf<String, Job>()
+
+    fun prepareMetadata(messageKey: String, attachment: AudioAttachmentUi) {
+        if (_metadata.value.containsKey(messageKey) || metadataJobs.containsKey(messageKey)) return
+        metadataJobs[messageKey] =
+            scope.launch {
+                try {
+                    val result =
+                        withContext(ioDispatcher) {
+                            loadBytes(attachment)?.let(OggOpusMetadataReader::read)
+                        } ?: return@launch
+                    cacheMetadata(messageKey, result)
+                } finally {
+                    metadataJobs.remove(messageKey)
+                }
+            }
+    }
 
     fun toggle(messageKey: String, attachment: AudioAttachmentUi) {
         val current = _state.value
@@ -144,6 +168,8 @@ internal class VoiceMessagePlayer(
                         return@launch
                     }
                     val bytes = loadedBytes
+                    withContext(ioDispatcher) { OggOpusMetadataReader.read(bytes) }
+                        ?.let { cacheMetadata(messageKey, it) }
                     val file =
                         withContext(ioDispatcher) {
                             File.createTempFile("voice_message_", ".ogg", appContext.cacheDir).also {
@@ -236,7 +262,19 @@ internal class VoiceMessagePlayer(
         }
     }
 
-    override fun close() = releaseActive(clearState = true)
+    override fun close() {
+        metadataJobs.values.toList().forEach(Job::cancel)
+        metadataJobs.clear()
+        _metadata.value = emptyMap()
+        releaseActive(clearState = true)
+    }
+
+    private fun cacheMetadata(messageKey: String, result: OggOpusMetadata) {
+        val updated = LinkedHashMap(_metadata.value)
+        updated[messageKey] = VoiceMessageMetadata(result.durationMs, result.waveformLevels)
+        while (updated.size > MAX_METADATA_ENTRIES) updated.remove(updated.keys.first())
+        _metadata.value = updated
+    }
 
     private fun resume() {
         val active = player ?: return
@@ -285,5 +323,6 @@ internal class VoiceMessagePlayer(
 
     private companion object {
         const val PROGRESS_INTERVAL_MILLIS = 250L
+        const val MAX_METADATA_ENTRIES = 128
     }
 }

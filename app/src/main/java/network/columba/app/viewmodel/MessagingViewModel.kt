@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import org.json.JSONObject
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -51,6 +52,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,6 +68,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
@@ -75,6 +78,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import network.columba.app.data.repository.Message as DataMessage
 import network.columba.app.rns.api.model.Message as ReticulumMessage
@@ -269,9 +273,10 @@ class MessagingViewModel
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
 
-        private val _composerSendResult = MutableSharedFlow<ComposerSendResult>(extraBufferCapacity = 1)
-        val composerSendResult: SharedFlow<ComposerSendResult> = _composerSendResult.asSharedFlow()
+        private val composerSendResults = Channel<ComposerSendResult>(Channel.BUFFERED)
+        val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
         private val sendInProgress = AtomicBoolean(false)
+        private val retriesInProgress = ConcurrentHashMap.newKeySet<String>()
 
         // Shared image compression error events for UI feedback
         private val _sharedImageError = MutableSharedFlow<String>()
@@ -1377,7 +1382,7 @@ class MessagingViewModel
                             if (persisted) {
                                 clearSubmittedDraft(destinationHash, content, replyToId)
                             }
-                            _composerSendResult.emit(ComposerSendResult(destinationHash, content, persisted))
+                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
                         }.onFailure { error ->
                             val persisted =
                                 handleSendFailure(
@@ -1393,7 +1398,7 @@ class MessagingViewModel
                                     voiceRecording = voiceRecording,
                                 )
                             if (persisted) clearSubmittedDraft(destinationHash, content, replyToId)
-                            _composerSendResult.emit(ComposerSendResult(destinationHash, content, persisted))
+                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
                         }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
@@ -1551,7 +1556,7 @@ class MessagingViewModel
         ) {
             if (
                 _currentConversation.value == destinationHash &&
-                lastDraftText.trim() == submittedText.trim()
+                lastDraftText == submittedText
             ) {
                 draftSaveJob?.cancel()
                 lastDraftText = ""
@@ -2457,6 +2462,28 @@ class MessagingViewModel
             }
         }
 
+        @Suppress("ReturnCount")
+        private fun reconstructFileAttachments(fieldsJson: String?): List<FileAttachment>? {
+            if (fieldsJson == null) return emptyList()
+            val fields = runCatching { JSONObject(fieldsJson) }.getOrNull() ?: return null
+            if (!fields.has("5")) return emptyList()
+            val attachments = fields.optJSONArray("5") ?: return null
+            return buildList {
+                for (index in 0 until attachments.length()) {
+                    val metadata = loadFileAttachmentMetadata(fieldsJson, index) ?: return null
+                    val data = loadFileAttachmentData(fieldsJson, index) ?: return null
+                    add(
+                        FileAttachment(
+                            filename = metadata.filename,
+                            data = data,
+                            mimeType = metadata.mimeType,
+                            sizeBytes = data.size,
+                        ),
+                    )
+                }
+            }
+        }
+
         /**
          * Retry sending a failed message.
          * Re-sends the message with the same content and destination,
@@ -2468,6 +2495,7 @@ class MessagingViewModel
         // keeps the lifecycle in one coroutine so status restoration cannot be skipped.
         @Suppress("LongMethod")
         fun retryFailedMessage(messageId: String) {
+            if (!retriesInProgress.add(messageId)) return
             viewModelScope.launch {
                 try {
                     Log.d(TAG, "Retrying failed message: $messageId")
@@ -2517,10 +2545,16 @@ class MessagingViewModel
                         return@launch
                     }
 
-                    // Parse file attachments from fieldsJson if present
-                    // For retry, we need to reconstruct file attachments from stored data
-                    // TODO: Implement file attachment parsing from fieldsJson when retrying
-                    val fileAttachments = emptyList<FileAttachment>()
+                    val fileAttachments = reconstructFileAttachments(failedMessage.fieldsJson)
+                    if (fileAttachments == null) {
+                        Log.e(TAG, "Stored file attachment is unavailable for retry")
+                        conversationRepository.updateMessageDeliveryDetails(
+                            messageId,
+                            deliveryMethod = null,
+                            errorMessage = "A file attachment is no longer available",
+                        )
+                        return@launch
+                    }
 
                     // Get delivery settings
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
@@ -2549,6 +2583,7 @@ class MessagingViewModel
                             tryPropagationOnFail = tryPropOnFail,
                             imageData = imageData,
                             imageFormat = imageFormat,
+                            fileAttachments = fileAttachments.map { it.filename to it.data }.ifEmpty { null },
                             extraFields =
                                 voiceBytes?.let {
                                     mapOf(
@@ -2586,6 +2621,8 @@ class MessagingViewModel
                     } catch (e2: Exception) {
                         Log.e(TAG, "Error restoring failed status", e2)
                     }
+                } finally {
+                    retriesInProgress.remove(messageId)
                 }
             }
         }

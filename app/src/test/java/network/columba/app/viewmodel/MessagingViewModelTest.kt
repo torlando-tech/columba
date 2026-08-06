@@ -4861,6 +4861,105 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `retryFailedMessage preserves voice and file attachments together`() =
+        runViewModelTest {
+            val failedMessage =
+                MessageEntity(
+                    id = "voice-and-file",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = " ",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson =
+                        """{"5":[{"filename":"note.txt","size":4,"data":"64617461"}],"7":[16,"4f676753"]}""",
+                )
+            coEvery { conversationRepository.getMessageById("voice-and-file") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAD.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                )
+
+            viewModel.retryFailedMessage("voice-and-file")
+            advanceUntilIdle()
+
+            var preservedCombinedAttachments = false
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = " ",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = null,
+                    imageFormat = null,
+                    fileAttachments =
+                        match { files ->
+                            preservedCombinedAttachments = files.singleOrNull()?.let { (name, data) ->
+                                name == "note.txt" && data.contentEquals("data".encodeToByteArray())
+                            } == true
+                            preservedCombinedAttachments
+                        },
+                    extraFields = any(),
+                )
+            }
+            assertTrue(preservedCombinedAttachments)
+        }
+
+    @Test
+    fun `retryFailedMessage admits only one retry per message`() =
+        runViewModelTest {
+            val failedMessage =
+                MessageEntity(
+                    id = "single-retry",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = "Retry once",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                )
+            val completion = CompletableDeferred<Result<MessageReceipt>>()
+            var sendCount = 0
+            coEvery { conversationRepository.getMessageById("single-retry") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } coAnswers {
+                sendCount += 1
+                completion.await()
+            }
+
+            viewModel.retryFailedMessage("single-retry")
+            viewModel.retryFailedMessage("single-retry")
+            completion.complete(
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xAE.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            }
+            assertEquals(1, sendCount)
+        }
+
+    @Test
     fun `retryFailedMessage preserves file backed voice audio field`() =
         runViewModelTest {
             viewModel.loadMessages(testPeerHash, testPeerName)

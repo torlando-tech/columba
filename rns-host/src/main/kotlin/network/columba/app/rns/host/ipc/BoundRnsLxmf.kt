@@ -21,6 +21,7 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.TransferProgressUpdate
 
 /**
  * UI-side proxy that delegates every [RnsLxmf] member to the currently-bound
@@ -96,6 +97,10 @@ internal class BoundRnsLxmf(
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeDeliveryStatus(): Flow<DeliveryStatusUpdate> =
         backendFlow.filterNotNull().flatMapLatest { it.lxmf.observeDeliveryStatus() }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeTransferProgress(): Flow<TransferProgressUpdate> =
+        backendFlow.filterNotNull().flatMapLatest { it.lxmf.observeTransferProgress() }
 
     override suspend fun getLxmfIdentity(): Result<Identity> = awaitBound().lxmf.getLxmfIdentity()
 

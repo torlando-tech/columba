@@ -18,7 +18,11 @@ import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.rns.api.model.TransferPhase
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
@@ -189,6 +193,7 @@ class MessagingViewModelTest {
 
         // Mock delivery status observer (returns empty flow by default)
         every { rnsLxmf.observeDeliveryStatus() } returns flowOf()
+        every { rnsLxmf.observeTransferProgress() } returns flowOf()
 
         // Mock reaction received flow (returns empty flow by default)
         every { rnsTransportAdmin.reactionReceivedFlow } returns MutableSharedFlow()
@@ -4829,6 +4834,30 @@ class MessagingViewModelTest {
         }
 
     // Note: onCleared() tests removed - method is protected and cannot be called directly
+
+    @Test
+    fun `resource progress is exposed while active and removed at terminal state`() = runTest {
+        val progressFlow = MutableSharedFlow<TransferProgressUpdate>(extraBufferCapacity = 4)
+        every { rnsLxmf.observeTransferProgress() } returns progressFlow
+        val viewModel = createTestViewModel()
+        advanceUntilIdle()
+        val active = TransferProgressUpdate(
+            transferId = "resource-1",
+            messageHash = "aabbcc",
+            direction = Direction.OUT,
+            progress = 0.64f,
+            phase = TransferPhase.TRANSFERRING,
+            deliveryMethod = DeliveryMethod.DIRECT,
+        )
+
+        progressFlow.emit(active)
+        advanceUntilIdle()
+        assertEquals(active, viewModel.transferProgress.value["aabbcc"])
+
+        progressFlow.emit(active.copy(progress = 1f, phase = TransferPhase.COMPLETE))
+        advanceUntilIdle()
+        assertTrue(viewModel.transferProgress.value.isEmpty())
+    }
     // The behavior is indirectly tested via the ViewModel lifecycle in integration tests
 
     // ========== TOTAL ATTACHMENT SIZE TESTS ==========

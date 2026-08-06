@@ -3,6 +3,7 @@ package network.columba.app.rns.backend.kt
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.BackendCapabilities.BackendId
 import network.columba.app.rns.api.BackendCapabilities.InterfaceCaps
+import network.columba.app.rns.api.BackendCapabilities.MessagingCaps
 import network.columba.app.rns.api.BackendCapabilities.PerformanceCaps
 import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.BackendCapabilities.TelemetryCaps
@@ -38,6 +39,10 @@ val NATIVE_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         storeOwnTelemetry = Support.FULL,
         allowedRequestersFilter = Support.FULL,
         degradationHint = "lxmf-kt FIELD_TELEMETRY_STREAM encoder pending parity test against upstream Python LXMF",
+    ),
+    messaging = MessagingCaps(
+        outgoingResourceProgress = Support.UNSUPPORTED,
+        incomingDirectResourceProgress = Support.UNSUPPORTED,
     ),
     performance = PerformanceCaps(
         batteryProfileTuning = Support.FULL,

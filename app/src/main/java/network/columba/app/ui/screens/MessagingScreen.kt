@@ -171,6 +171,9 @@ import kotlinx.coroutines.withContext
 import network.columba.app.R
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
+import network.columba.app.rns.api.BackendCapabilities.Support
+import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.ui.components.AttachmentPanel
 import network.columba.app.ui.components.CodecSelectionDialog
 import network.columba.app.ui.components.FileAttachmentCard
@@ -180,7 +183,9 @@ import network.columba.app.ui.components.FullEmojiPickerDialog
 import network.columba.app.ui.components.ImageOptionsSheet
 import network.columba.app.ui.components.ImageQualitySelectionDialog
 import network.columba.app.ui.components.LocationPermissionBottomSheet
+import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.MarkdownMessageText
+import network.columba.app.ui.components.MessageTransferProgress
 import network.columba.app.util.isPyxisUpdateFilename
 import network.columba.app.ui.components.QuickShareLocationBottomSheet
 import network.columba.app.ui.components.ReactionDisplayRow
@@ -191,6 +196,7 @@ import network.columba.app.ui.components.SelectableTextDialog
 import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SwipeableMessageBubble
 import network.columba.app.ui.components.SyncStatusBottomSheet
+import network.columba.app.ui.components.ConversationTransferTray
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
@@ -416,6 +422,13 @@ fun MessagingScreen(
     val isProcessingImage by viewModel.isProcessingImage.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val syncProgress by viewModel.syncProgress.collectAsStateWithLifecycle()
+    val transferProgress by viewModel.transferProgress.collectAsStateWithLifecycle()
+    val capabilities = LocalCapabilities.current
+    val supportsTransferProgress =
+        capabilities.messaging.outgoingResourceProgress == Support.FULL ||
+            capabilities.messaging.incomingDirectResourceProgress == Support.FULL
+    val activeTransferProgress = if (supportsTransferProgress) transferProgress.values.toList() else emptyList()
+    val incomingTransfers = activeTransferProgress.filter { it.isIncomingForConversation(destinationHash) }
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()
@@ -1150,6 +1163,12 @@ fun MessagingScreen(
                     ),
             )
 
+            ConversationTransferTray(
+                incomingTransfers = incomingTransfers,
+                syncProgress = syncProgress,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+
             // Messages + Input area using Google's official pattern
             Column(
                 modifier =
@@ -1270,6 +1289,11 @@ fun MessagingScreen(
                                             myIdentityHash = myIdentityHash,
                                             peerName = peerName,
                                             syncProgress = syncProgress,
+                                            transferProgress =
+                                                activeTransferProgress.firstOrNull {
+                                                    it.direction == Direction.OUT &&
+                                                        it.messageHash?.equals(message.id, ignoreCase = true) == true
+                                                },
                                             isImageLoading = needsImageLoading,
                                             fontScale = messageFontScale,
                                             timestampTick = timestampTick,
@@ -1798,6 +1822,7 @@ fun MessageBubble(
     myIdentityHash: String? = null,
     peerName: String = "",
     syncProgress: SyncProgress = SyncProgress.Idle,
+    transferProgress: TransferProgressUpdate? = null,
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
     @Suppress("UNUSED_PARAMETER") timestampTick: Long = 0L,
@@ -1976,6 +2001,13 @@ fun MessageBubble(
                         }
                     }
                 }
+            }
+
+            transferProgress?.let { progress ->
+                MessageTransferProgress(
+                    update = progress,
+                    modifier = Modifier.widthIn(max = 280.dp).padding(top = 8.dp),
+                )
             }
 
             // Fullscreen dialog for GIF-only messages
@@ -2224,6 +2256,10 @@ fun MessageBubble(
                                 isFromMe = isFromMe,
                                 fontScale = fontScale,
                             )
+                        }
+                        transferProgress?.let { progress ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            MessageTransferProgress(update = progress)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(

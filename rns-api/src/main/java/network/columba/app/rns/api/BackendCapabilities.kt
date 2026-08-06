@@ -26,6 +26,7 @@ data class BackendCapabilities(
     val interfaces: InterfaceCaps,
     val telemetry: TelemetryCaps,
     val performance: PerformanceCaps,
+    val messaging: MessagingCaps = MessagingCaps(),
 ) : Parcelable {
     /**
      * Versions of the underlying protocol libraries. Co-located with
@@ -82,6 +83,13 @@ data class BackendCapabilities(
         val storeOwnTelemetry: Support,
         val allowedRequestersFilter: Support,
         val degradationHint: String? = null,
+    ) : Parcelable
+
+    /** Live LXMF Resource progress. Propagation-node sync has its own existing state flow. */
+    @Parcelize
+    data class MessagingCaps(
+        val outgoingResourceProgress: Support = Support.UNSUPPORTED,
+        val incomingDirectResourceProgress: Support = Support.UNSUPPORTED,
     ) : Parcelable
 
     /**

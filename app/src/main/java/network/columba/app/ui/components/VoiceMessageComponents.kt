@@ -270,7 +270,7 @@ fun VoiceMessageBubble(
         } else {
             0f
         }
-    Column(modifier = modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall)
         when {
             state.loading -> Text(stringResource(R.string.message_voice_loading))

@@ -2398,7 +2398,12 @@ fun MessageBubble(
                                 durationMillis = audio.durationMs?.toInt() ?: voiceMetadata?.durationMs,
                                 waveformLevels = voiceMetadata?.waveformLevels.orEmpty(),
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(
+                                modifier =
+                                    Modifier.height(
+                                        if (message.hasFileAttachments || message.content.isNotBlank()) 8.dp else 4.dp,
+                                    ),
+                            )
                         }
 
                         // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
@@ -2418,20 +2423,22 @@ fun MessageBubble(
                             }
                         }
 
-                        if (message.renderer == MessageRenderer.MARKDOWN) {
-                            MarkdownMessageText(
-                                markdown = message.content,
-                                isFromMe = isFromMe,
-                                fontScale = fontScale,
-                            )
-                        } else {
-                            LinkifiedMessageText(
-                                text = message.content,
-                                isFromMe = isFromMe,
-                                fontScale = fontScale,
-                            )
+                        if (message.content.isNotBlank()) {
+                            if (message.renderer == MessageRenderer.MARKDOWN) {
+                                MarkdownMessageText(
+                                    markdown = message.content,
+                                    isFromMe = isFromMe,
+                                    fontScale = fontScale,
+                                )
+                            } else {
+                                LinkifiedMessageText(
+                                    text = message.content,
+                                    isFromMe = isFromMe,
+                                    fontScale = fontScale,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,

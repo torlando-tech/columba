@@ -110,6 +110,7 @@ class VoiceMessageRecorder(
         try {
             backend.start(output)
         } catch (error: Exception) {
+            output.delete()
             _state.value = _state.value.copy(errorMessage = error.message ?: "Unable to start recording")
             throw error
         }

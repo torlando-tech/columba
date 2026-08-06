@@ -1376,6 +1376,7 @@ fun MessagingScreen(
                                             onVoiceMetadataNeeded = { attachment ->
                                                 voicePlayer.prepareMetadata(displayMessage.id, attachment)
                                             },
+                                            onVoiceMetadataCancelled = voicePlayer::cancelMetadata,
                                             onVoiceToggle = {
                                                 displayMessage.audioAttachment?.let { attachment ->
                                                     voicePlayer.toggle(displayMessage.id, attachment)
@@ -1505,7 +1506,7 @@ fun MessagingScreen(
                         if (hasComposerContent) {
                             voicePlayer.close()
                             val wasVoiceMessage = voiceRecordingState.selectedRecording != null
-                            viewModel.sendMessage(destinationHash, messageText.trim())
+                            viewModel.sendMessage(destinationHash, messageText)
                             if (!wasVoiceMessage) inputPanelMode = InputPanelMode.NONE
                         }
                     },
@@ -1987,6 +1988,7 @@ fun MessageBubble(
     voicePlayerState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
     voiceMetadata: VoiceMessageMetadata? = null,
     onVoiceMetadataNeeded: (AudioAttachmentUi) -> Unit = {},
+    onVoiceMetadataCancelled: (String) -> Unit = {},
     onVoiceToggle: () -> Unit = {},
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
@@ -2383,8 +2385,9 @@ fun MessageBubble(
                         }
 
                         message.audioAttachment?.let { audio ->
-                            LaunchedEffect(message.id, audio) {
+                            DisposableEffect(message.id, audio) {
                                 if (audio.isPlayable) onVoiceMetadataNeeded(audio)
+                                onDispose { onVoiceMetadataCancelled(message.id) }
                             }
                             VoiceMessageBubble(
                                 title = stringResource(R.string.message_voice_bubble_title),

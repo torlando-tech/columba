@@ -7,7 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-private const val MAX_AUDIO_BYTES = 128L * 1024 * 1024
+internal const val MAX_AUDIO_BYTES = 16L * 1024 * 1024
 
 class AudioAttachmentLoader(
     context: Context,

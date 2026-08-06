@@ -276,6 +276,7 @@ class MessagingViewModel
         private val composerSendResults = Channel<ComposerSendResult>(Channel.BUFFERED)
         val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
         private val sendInProgress = AtomicBoolean(false)
+        private val microphoneAdmissionLock = Any()
         private val retriesInProgress = ConcurrentHashMap.newKeySet<String>()
 
         // Shared image compression error events for UI feedback
@@ -1524,6 +1525,15 @@ class MessagingViewModel
                         cacheDir = applicationContext.cacheDir,
                     )
                 }.getOrNull()
+            val requiresFields =
+                imageData != null ||
+                    fileAttachments.isNotEmpty() ||
+                    voiceBytes != null ||
+                    replyToMessageId != null
+            if (requiresFields && fieldsJson == null) {
+                Log.e(TAG, "Failed to serialize required fields for retry; retaining composer")
+                return false
+            }
             val message =
                 DataMessage(
                     id = UUID.randomUUID().toString(),
@@ -1649,16 +1659,29 @@ class MessagingViewModel
         }
 
         fun startVoiceRecording(maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS): File {
-            check(!callUsesMicrophone(rnsTelephony.callState.value)) {
-                "Voice recording is unavailable during a call"
+            return synchronized(microphoneAdmissionLock) {
+                check(!callUsesMicrophone(rnsTelephony.callState.value)) {
+                    "Voice recording is unavailable during a call"
+                }
+                val output = voiceMessageRecorder.start(maxDurationMillis)
+                if (callUsesMicrophone(rnsTelephony.callState.value)) {
+                    voiceMessageRecorder.cancel()
+                    error("Voice recording is unavailable during a call")
+                }
+                output
             }
-            return voiceMessageRecorder.start(maxDurationMillis)
         }
-        fun stopVoiceRecording() = voiceMessageRecorder.stop()
-        fun cancelVoiceRecording() = voiceMessageRecorder.cancel()
+        fun stopVoiceRecording() = synchronized(microphoneAdmissionLock) { voiceMessageRecorder.stop() }
+        fun cancelVoiceRecording() = synchronized(microphoneAdmissionLock) { voiceMessageRecorder.cancel() }
         fun cancelActiveVoiceRecording() {
-            if (voiceMessageRecorder.state.value.recorderState is tech.torlando.lxst.recording.RecorderState.Recording) {
-                voiceMessageRecorder.cancel()
+            synchronized(microphoneAdmissionLock) {
+                val state = voiceMessageRecorder.state.value
+                if (
+                    state.activeRecordingFile != null ||
+                    state.recorderState is tech.torlando.lxst.recording.RecorderState.Recording
+                ) {
+                    voiceMessageRecorder.cancel()
+                }
             }
         }
         fun removeVoiceRecording() = voiceMessageRecorder.removeSelected()

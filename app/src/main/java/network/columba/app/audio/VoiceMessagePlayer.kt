@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaPlayer
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -15,10 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import network.columba.app.ui.model.AudioAttachmentLoader
 import network.columba.app.ui.model.AudioAttachmentUi
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 data class VoiceMessagePlayerState(
     val loading: Boolean = false,
@@ -104,7 +108,8 @@ internal class VoiceMessagePlayer(
     private var tempFile: File? = null
     private var loadJob: Job? = null
     private var progressJob: Job? = null
-    private val metadataJobs = mutableMapOf<String, Job>()
+    private val metadataJobs = ConcurrentHashMap<String, Job>()
+    private val metadataSemaphore = Semaphore(permits = 1)
 
     fun prepareMetadata(messageKey: String, attachment: AudioAttachmentUi) {
         if (_metadata.value.containsKey(messageKey) || metadataJobs.containsKey(messageKey)) return
@@ -112,14 +117,27 @@ internal class VoiceMessagePlayer(
             scope.launch {
                 try {
                     val result =
-                        withContext(ioDispatcher) {
-                            loadBytes(attachment)?.let { analyzeMetadata(it) }
+                        metadataSemaphore.withPermit {
+                            withContext(ioDispatcher) {
+                                loadBytes(attachment)?.let { analyzeMetadata(it) }
+                            }
                         } ?: return@launch
                     cacheMetadata(messageKey, result)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Waveform metadata is decorative. Playback remains available and
+                    // the UI renders its neutral fallback if decoding fails.
                 } finally {
-                    metadataJobs.remove(messageKey)
+                    currentCoroutineContext()[Job]?.let { completed ->
+                        metadataJobs.remove(messageKey, completed)
+                    }
                 }
             }
+    }
+
+    fun cancelMetadata(messageKey: String) {
+        metadataJobs.remove(messageKey)?.cancel()
     }
 
     fun toggle(messageKey: String, attachment: AudioAttachmentUi) {
@@ -169,8 +187,6 @@ internal class VoiceMessagePlayer(
                         return@launch
                     }
                     val bytes = loadedBytes
-                    withContext(ioDispatcher) { analyzeMetadata(bytes) }
-                        ?.let { cacheMetadata(messageKey, it) }
                     val file =
                         withContext(ioDispatcher) {
                             File.createTempFile("voice_message_", ".ogg", appContext.cacheDir).also {

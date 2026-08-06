@@ -83,7 +83,7 @@ class AudioAttachmentLoaderTest {
     @Test
     fun `rejects oversized managed audio before reading`() = runTest {
         val oversized = attachmentFile("oversized", ".ogg")
-        java.io.RandomAccessFile(oversized, "rw").use { it.setLength(128L * 1024 * 1024 + 1) }
+        java.io.RandomAccessFile(oversized, "rw").use { it.setLength(MAX_AUDIO_BYTES + 1) }
         val attachment =
             AudioAttachmentUi(
                 mode = AudioAttachmentMode.AM_OPUS_OGG,

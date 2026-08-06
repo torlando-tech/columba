@@ -93,6 +93,7 @@ class VoiceMessageRecorderTest {
 
         assertEquals(original, controller.state.value.selectedRecording)
         assertTrue(original.file.exists())
+        assertFalse(checkNotNull(backend.lastStartOutput).exists())
         controller.close()
     }
 
@@ -141,11 +142,15 @@ private class FakeRecorderBackend(
     var cancelled = false
     var stopCount = 0
     var failNextStart = false
+    var lastStartOutput: File? = null
     private var outputFile: File? = null
 
     override fun start(outputFile: File) {
+        lastStartOutput = outputFile
         if (failNextStart) {
             failNextStart = false
+            outputFile.parentFile?.mkdirs()
+            outputFile.writeText("partial")
             error("simulated start failure")
         }
         this.outputFile = outputFile

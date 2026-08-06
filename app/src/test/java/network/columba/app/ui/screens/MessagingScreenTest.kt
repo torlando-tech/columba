@@ -640,6 +640,34 @@ class MessagingScreenTest {
     }
 
     @Test
+    fun inputBar_preservesOriginalWhitespaceThroughDurableSendResult() {
+        val results = MutableSharedFlow<ComposerSendResult>(extraBufferCapacity = 1)
+        every { mockViewModel.composerSendResult } returns results
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val submitted = "  Test message  "
+        composeTestRule.onNodeWithText("Type a message...").performTextInput(submitted)
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, submitted) }
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                submitted,
+                clearComposer = true,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun inputBar_attachmentButton_showsLoadingIndicator_whenProcessing() {
         // Given - image processing in progress
         every { mockViewModel.isProcessingImage } returns MutableStateFlow(true)

@@ -325,7 +325,7 @@ class MessagingViewModelTest {
     fun `voice recording admission is blocked while outgoing call owns microphone`() =
         runTest {
             val arbiter = MicrophoneAdmissionArbiter()
-            assertTrue(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+            assertNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
             viewModel = createTestViewModel(arbiter)
             advanceUntilIdle()
 

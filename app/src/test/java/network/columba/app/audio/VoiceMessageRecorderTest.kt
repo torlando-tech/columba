@@ -126,6 +126,23 @@ class VoiceMessageRecorderTest {
         controller.close()
     }
 
+    @Test
+    fun `failed stop clears active recording and cancels backend`() = runTest {
+        val backend = FakeRecorderBackend(context.cacheDir)
+        val controller = createController(this, backend)
+        val output = controller.start()
+        backend.failNextStop = true
+
+        val result = runCatching { controller.stop() }
+
+        assertTrue(result.isFailure)
+        assertNull(controller.state.value.activeRecordingFile)
+        assertNull(controller.state.value.selectedRecording)
+        assertFalse(output.exists())
+        assertTrue(backend.cancelled)
+        controller.close()
+    }
+
     private fun createController(scope: TestScope, backend: FakeRecorderBackend): VoiceMessageRecorder =
         VoiceMessageRecorder(
             context = context,
@@ -142,6 +159,7 @@ private class FakeRecorderBackend(
     var cancelled = false
     var stopCount = 0
     var failNextStart = false
+    var failNextStop = false
     var lastStartOutput: File? = null
     private var outputFile: File? = null
 
@@ -159,6 +177,10 @@ private class FakeRecorderBackend(
 
     override fun stop(): RecordedAudio {
         stopCount += 1
+        if (failNextStop) {
+            failNextStop = false
+            error("simulated stop failure")
+        }
         val file = outputFile ?: File.createTempFile("voice_test", ".ogg", cacheDir)
         file.parentFile?.mkdirs()
         file.writeBytes("OggS".encodeToByteArray())

@@ -1,6 +1,8 @@
 package network.columba.app.audio
 
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -9,25 +11,38 @@ class MicrophoneAdmissionArbiterTest {
     fun `call and voice recording admission are mutually exclusive`() {
         val arbiter = MicrophoneAdmissionArbiter()
 
-        assertTrue(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
-        assertFalse(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
-        assertTrue(arbiter.ensureOwned(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
-        assertFalse(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
-        assertTrue(arbiter.isOwnedBy(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+        val voiceLease = arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+        assertNotNull(voiceLease)
+        assertNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+        assertNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+        assertEquals(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING, arbiter.currentOwner())
 
-        arbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+        arbiter.release(requireNotNull(voiceLease))
 
-        assertTrue(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
-        assertFalse(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+        assertNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+        assertNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
     }
 
     @Test
-    fun `only the owning lifecycle can release admission`() {
+    fun `stale lease cannot release replacement admission`() {
         val arbiter = MicrophoneAdmissionArbiter()
-        assertTrue(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+        val original = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+        arbiter.release(original)
+        val replacement = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
 
-        arbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+        arbiter.release(original)
 
-        assertTrue(arbiter.isOwnedBy(MicrophoneAdmissionArbiter.Owner.CALL))
+        assertTrue(arbiter.isActive(replacement))
+    }
+
+    @Test
+    fun `matching owner can adopt active call lease after recreation`() {
+        val arbiter = MicrophoneAdmissionArbiter()
+        val original = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+
+        val adopted = arbiter.adoptOrAcquire(MicrophoneAdmissionArbiter.Owner.CALL)
+
+        assertEquals(original, adopted)
+        assertNull(arbiter.adoptOrAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
     }
 }

@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import tech.torlando.lxst.recording.AudioFileRecorder
-import tech.torlando.lxst.recording.AudioRecordingException
 import tech.torlando.lxst.recording.RecordedAudio
 import tech.torlando.lxst.recording.RecorderState
 import java.io.File
@@ -138,8 +137,12 @@ class VoiceMessageRecorder(
         val recording =
             try {
                 backend.stop()
-            } catch (error: AudioRecordingException) {
-                _state.value = _state.value.copy(errorMessage = error.message)
+            } catch (error: Exception) {
+                deadlineJob?.cancel()
+                elapsedJob?.cancel()
+                _state.value.activeRecordingFile?.delete()
+                runCatching { backend.cancel() }
+                _state.value = VoiceMessageRecordingState(errorMessage = error.message)
                 throw error
             }
         deadlineJob?.cancel()

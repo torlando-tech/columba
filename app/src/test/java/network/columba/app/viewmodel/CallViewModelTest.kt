@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -150,7 +152,7 @@ class CallViewModelTest {
 
     @Test
     fun `outgoing call admission is blocked while voice recording owns microphone`() = runTest {
-        assertTrue(microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+        assertNotNull(microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
 
         viewModel.initiateCall("aabbccdd")
 
@@ -207,6 +209,25 @@ class CallViewModelTest {
 
             assertTrue(connectingHashSlot.isCaptured)
             assertEquals(testHash, connectingHashSlot.captured)
+        }
+
+    @Test
+    fun `duplicate outgoing call cannot clear active admission`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            coEvery { mockTelephony.initiateCall(any(), any()) } coAnswers {
+                gate.await()
+                Result.success(Unit)
+            }
+
+            viewModel.initiateCall("first")
+            viewModel.initiateCall("second")
+
+            coVerify(exactly = 1) { mockTelephony.setConnecting(any()) }
+            coVerify(exactly = 1) { mockTelephony.initiateCall(any(), any()) }
+            assertEquals(MicrophoneAdmissionArbiter.Owner.CALL, microphoneArbiter.currentOwner())
+
+            gate.complete(Unit)
         }
 
     @Test

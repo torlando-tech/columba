@@ -278,8 +278,8 @@ class MessagingViewModel
         private val composerSendResults = Channel<ComposerSendResult>(Channel.BUFFERED)
         val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
         private val sendInProgress = AtomicBoolean(false)
-        private val voiceRecordingAdmissionPending = AtomicBoolean(false)
         private val voiceRecorderOperationLock = Any()
+        private var voiceRecordingLease: MicrophoneAdmissionArbiter.Lease? = null
         private val retriesInProgress = ConcurrentHashMap.newKeySet<String>()
 
         // Shared image compression error events for UI feedback
@@ -808,12 +808,13 @@ class MessagingViewModel
             }
 
             viewModelScope.launch {
-                voiceMessageRecorder.state.collect { state ->
-                    val active =
-                        state.activeRecordingFile != null ||
-                            state.recorderState is tech.torlando.lxst.recording.RecorderState.Recording
-                    if (!active && !voiceRecordingAdmissionPending.get()) {
-                        microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                voiceMessageRecorder.state.collect {
+                    synchronized(voiceRecorderOperationLock) {
+                        val current = voiceMessageRecorder.state.value
+                        val active =
+                            current.activeRecordingFile != null ||
+                                current.recorderState is tech.torlando.lxst.recording.RecorderState.Recording
+                        if (!active) releaseVoiceRecordingLeaseLocked()
                     }
                 }
             }
@@ -1677,22 +1678,19 @@ class MessagingViewModel
                 check(!callUsesMicrophone(rnsTelephony.callState.value)) {
                     "Voice recording is unavailable during a call"
                 }
-                voiceRecordingAdmissionPending.set(true)
-                if (!microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)) {
-                    voiceRecordingAdmissionPending.set(false)
-                    error("Microphone is already in use")
-                }
+                check(voiceRecordingLease == null) { "Voice recording is already active" }
+                voiceRecordingLease =
+                    microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                        ?: error("Microphone is already in use")
                 try {
                     val output = voiceMessageRecorder.start(maxDurationMillis)
                     if (callUsesMicrophone(rnsTelephony.callState.value)) {
                         voiceMessageRecorder.cancel()
                         error("Voice recording is unavailable during a call")
                     }
-                    voiceRecordingAdmissionPending.set(false)
                     output
                 } catch (error: Exception) {
-                    voiceRecordingAdmissionPending.set(false)
-                    microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                    releaseVoiceRecordingLeaseLocked()
                     throw error
                 }
             }
@@ -1702,7 +1700,7 @@ class MessagingViewModel
                 try {
                     voiceMessageRecorder.stop()
                 } finally {
-                    microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                    releaseVoiceRecordingLeaseLocked()
                 }
             }
         fun cancelVoiceRecording() =
@@ -1710,7 +1708,7 @@ class MessagingViewModel
                 try {
                     voiceMessageRecorder.cancel()
                 } finally {
-                    microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                    releaseVoiceRecordingLeaseLocked()
                 }
             }
         fun cancelActiveVoiceRecording() {
@@ -1723,10 +1721,15 @@ class MessagingViewModel
                     try {
                         voiceMessageRecorder.cancel()
                     } finally {
-                        microphoneArbiter.release(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                        releaseVoiceRecordingLeaseLocked()
                     }
                 }
             }
+        }
+
+        private fun releaseVoiceRecordingLeaseLocked() {
+            voiceRecordingLease?.let(microphoneArbiter::release)
+            voiceRecordingLease = null
         }
         fun removeVoiceRecording() = voiceMessageRecorder.removeSelected()
 

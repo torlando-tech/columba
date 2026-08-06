@@ -12,26 +12,33 @@ class MicrophoneAdmissionArbiter
             VOICE_RECORDING,
         }
 
-        private var owner: Owner? = null
+        class Lease internal constructor(
+            val owner: Owner,
+        )
+
+        private var activeLease: Lease? = null
 
         @Synchronized
-        fun tryAcquire(requester: Owner): Boolean {
-            if (owner != null) return false
-            owner = requester
-            return true
+        fun tryAcquire(owner: Owner): Lease? {
+            if (activeLease != null) return null
+            return Lease(owner).also { activeLease = it }
         }
 
         @Synchronized
-        fun ensureOwned(requester: Owner): Boolean {
-            if (owner == null) owner = requester
-            return owner == requester
+        fun adoptOrAcquire(owner: Owner): Lease? {
+            val current = activeLease
+            if (current != null) return current.takeIf { it.owner == owner }
+            return Lease(owner).also { activeLease = it }
         }
 
         @Synchronized
-        fun release(requester: Owner) {
-            if (owner == requester) owner = null
+        fun release(lease: Lease) {
+            if (activeLease === lease) activeLease = null
         }
 
         @Synchronized
-        fun isOwnedBy(requester: Owner): Boolean = owner == requester
+        fun isActive(lease: Lease): Boolean = activeLease === lease
+
+        @Synchronized
+        fun currentOwner(): Owner? = activeLease?.owner
     }

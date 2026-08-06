@@ -21,7 +21,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -133,6 +137,15 @@ class IncomingCallActivity : ComponentActivity() {
             val themeMode = settingsRepository.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM).value
             // Use a simple Material 3 theme (no Hilt-based theme needed)
             val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
+            // Match system-bar icon brightness to the forced color scheme
+            // (enableEdgeToEdge defaulted to the device theme at onCreate).
+            val view = LocalView.current
+            SideEffect {
+                val window = (view.context as ComponentActivity).window
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
             MaterialTheme(
                 colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme(),
             ) {

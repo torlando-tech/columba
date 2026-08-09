@@ -13,6 +13,8 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import network.columba.app.data.db.ColumbaDatabase
+import network.columba.app.data.db.dao.CallHistoryDao
+import network.columba.app.data.db.dao.CallHistoryDeletionDao
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.BlockedPeerDao
 import network.columba.app.data.db.dao.ContactDao
@@ -114,9 +116,8 @@ object DatabaseModule {
                 ColumbaDatabase.MIGRATION_1_2,
                 ColumbaDatabase.MIGRATION_2_3,
                 ColumbaDatabase.MIGRATION_3_4,
+                ColumbaDatabase.MIGRATION_4_5,
             )
-            .fallbackToDestructiveMigration()
-            .fallbackToDestructiveMigrationOnDowngrade()
             .enableMultiInstanceInvalidation()
             .addCallback(DURABILITY_CALLBACK)
             .build()
@@ -165,6 +166,12 @@ object DatabaseModule {
 
     @Provides
     fun provideInterfaceFirstSeenDao(database: ColumbaDatabase): InterfaceFirstSeenDao = database.interfaceFirstSeenDao()
+
+    @Provides
+    fun provideCallHistoryDao(database: ColumbaDatabase): CallHistoryDao = database.callHistoryDao()
+
+    @Provides
+    fun provideCallHistoryDeletionDao(database: ColumbaDatabase): CallHistoryDeletionDao = database.callHistoryDeletionDao()
 
     @Provides
     @Singleton

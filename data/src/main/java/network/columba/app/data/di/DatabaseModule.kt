@@ -13,8 +13,6 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import network.columba.app.data.db.ColumbaDatabase
-import network.columba.app.data.db.dao.CallHistoryDao
-import network.columba.app.data.db.dao.CallHistoryDeletionDao
 import network.columba.app.data.db.dao.AnnounceDao
 import network.columba.app.data.db.dao.BlockedPeerDao
 import network.columba.app.data.db.dao.ContactDao
@@ -166,12 +164,6 @@ object DatabaseModule {
 
     @Provides
     fun provideInterfaceFirstSeenDao(database: ColumbaDatabase): InterfaceFirstSeenDao = database.interfaceFirstSeenDao()
-
-    @Provides
-    fun provideCallHistoryDao(database: ColumbaDatabase): CallHistoryDao = database.callHistoryDao()
-
-    @Provides
-    fun provideCallHistoryDeletionDao(database: ColumbaDatabase): CallHistoryDeletionDao = database.callHistoryDeletionDao()
 
     @Provides
     @Singleton

@@ -74,12 +74,6 @@ object HostBackendModule {
 
     @Provides
     @Singleton
-    fun provideCallLifecycleRecorder(
-        serviceCallLifecycle: ServiceCallLifecycle,
-    ): CallLifecycleRecorder = serviceCallLifecycle
-
-    @Provides
-    @Singleton
     fun provideNativeRnsBackend(
         @ApplicationContext context: Context,
         bridge: RNodeHostBridge,

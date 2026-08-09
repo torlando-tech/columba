@@ -117,6 +117,7 @@ class MigrationImporter
                                     peerIdentityCount = bundle.peerIdentities.size,
                                     interfaceCount = bundle.interfaces.size,
                                     customThemeCount = bundle.customThemes.size,
+                                    callHistoryCount = bundle.callHistory.size,
                                     identityNames = bundle.identities.map { it.displayName },
                                 ),
                             zipBytes = zipBytes,
@@ -190,6 +191,12 @@ class MigrationImporter
                         )
                     }
 
+                    if (bundle.version < 8 && bundle.callHistoryDeletions.isNotEmpty()) {
+                        return@withContext ImportResult.Error(
+                            "Call-history deletion authority requires migration format version 8.",
+                        )
+                    }
+
                     // Check if password is required but not provided
                     if (bundle.keysEncrypted && importPassword == null) {
                         return@withContext ImportResult.Error(
@@ -234,6 +241,8 @@ class MigrationImporter
                         peerIdentitiesImported = txResult.peerIdentitiesImported,
                         interfacesImported = interfacesImported,
                         customThemesImported = txResult.customThemesImported,
+                        callHistoryImported = txResult.callHistoryImported,
+                        callHistoryConflictsSkipped = txResult.callHistoryConflictsSkipped,
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Migration import failed", e)
@@ -251,6 +260,8 @@ class MigrationImporter
             val announcesImported: Int,
             val peerIdentitiesImported: Int,
             val customThemesImported: Int,
+            val callHistoryImported: Int,
+            val callHistoryConflictsSkipped: Int,
             val themeIdMap: Map<Long, Long>,
             /** Destination hash of the relay contact restored from backup, if any. */
             val restoredRelayHash: String?,
@@ -303,6 +314,29 @@ class MigrationImporter
             val (themes, idMap) = importCustomThemes(bundle.customThemes)
             onProgress(0.82f)
 
+            val callHistoryImporter = CallHistoryMigrationImporter(database)
+            callHistoryImporter.validate(bundle.callHistory)
+            callHistoryImporter.validateDeletions(bundle.callHistoryDeletions)
+
+            callHistoryImporter.importDeletions(
+                bundle.callHistoryDeletions.onEach { deletion ->
+                    require(
+                        deletion.localIdentityHash.lowercase() in importedIdentityHashes.map(String::lowercase) ||
+                            database.localIdentityDao().identityExists(deletion.localIdentityHash.lowercase()),
+                    ) { "Call deletion references an unavailable local identity" }
+                },
+            )
+
+            val callHistoryResult =
+                callHistoryImporter.import(
+                    bundle.callHistory.onEach {
+                        require(
+                            it.localIdentityHash.lowercase() in importedIdentityHashes.map(String::lowercase) ||
+                                database.localIdentityDao().identityExists(it.localIdentityHash.lowercase()),
+                        ) { "Call history references an unavailable local identity" }
+                    },
+                )
+
             return TransactionResult(
                 identities,
                 messages,
@@ -310,6 +344,8 @@ class MigrationImporter
                 announces,
                 peerIdentities,
                 themes,
+                callHistoryResult.imported,
+                callHistoryResult.conflicts,
                 idMap,
                 contactResult.relayHash,
             )

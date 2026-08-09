@@ -78,6 +78,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.di.RnsTelephonyEntryPoint
+import network.columba.app.navigation.activeCallRoute
+import network.columba.app.navigation.callDetailsDestination
+import network.columba.app.navigation.callDetailsRoute
 import network.columba.app.navigation.AppDestination
 import network.columba.app.navigation.ConversationNavigation
 import network.columba.app.navigation.appComposable
@@ -1380,12 +1383,22 @@ fun ColumbaNavigation(
                                             restoreState = true
                                         }
                                     },
+                                    onCallHistoryClick = { callAttemptId ->
+                                        navController.navigate(callDetailsRoute(callAttemptId))
+                                    },
+                                    onActiveCallHistoryClick = { callAttemptId, localIdentityHash, remoteIdentityHash, profileCode ->
+                                        navController.navigate(
+                                            activeCallRoute(callAttemptId, remoteIdentityHash, profileCode, localIdentityHash),
+                                        )
+                                    },
                                     onNavigateToQrScanner = {
                                         navController.navigate("qr_scanner")
                                     },
                                     settingsViewModel = settingsViewModel,
                                 )
                             }
+
+                            callDetailsDestination(navController)
 
                             appComposable(
                                 AppDestination.ANNOUNCES,

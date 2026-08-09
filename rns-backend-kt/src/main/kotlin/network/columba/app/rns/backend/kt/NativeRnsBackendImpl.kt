@@ -256,6 +256,9 @@ class NativeRnsBackendImpl(
     private val blockedDestinations =
         java.util.concurrent.ConcurrentHashMap
             .newKeySet<String>()
+    private val blockedIdentities =
+        java.util.concurrent.ConcurrentHashMap
+            .newKeySet<String>()
     private val blackholedIdentities =
         java.util.concurrent.ConcurrentHashMap
             .newKeySet<String>()
@@ -2257,6 +2260,12 @@ class NativeRnsBackendImpl(
             blockedDestinations.remove(destinationHashHex)
             Log.d(TAG, "Unblocked destination: ${destinationHashHex.take(16)}")
         }
+
+    override suspend fun blockIdentity(identityHashHex: String): Result<Unit> =
+        runCatching { blockedIdentities.add(identityHashHex.lowercase()); Unit }
+
+    override suspend fun unblockIdentity(identityHashHex: String): Result<Unit> =
+        runCatching { blockedIdentities.remove(identityHashHex.lowercase()); Unit }
 
     override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
         runCatching {

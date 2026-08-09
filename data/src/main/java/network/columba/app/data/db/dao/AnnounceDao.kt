@@ -188,6 +188,15 @@ interface AnnounceDao {
     )
     suspend fun getApprovedPeerAnnounces(identityHash: String): List<AnnounceEntity>
 
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE computedIdentityHash = :identityHash AND aspect = 'lxst.telephony'
+        ORDER BY lastSeenTimestamp DESC LIMIT 1
+        """,
+    )
+    suspend fun getTelephonyAnnounceByIdentityHash(identityHash: String): AnnounceEntity?
+
     @Query("SELECT * FROM announces WHERE computedIdentityHash = :identityHash LIMIT 1")
     suspend fun getAnnounceByIdentityHash(identityHash: String): AnnounceEntity?
 

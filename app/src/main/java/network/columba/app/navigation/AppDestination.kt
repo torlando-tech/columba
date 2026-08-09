@@ -22,6 +22,8 @@ enum class AppDestination(
     WELCOME("welcome", backContract = BackContract.ENTRY_GATE),
     IDENTITY_UNLOCK("identity_unlock", backContract = BackContract.ENTRY_GATE),
     CHATS("chats", backContract = BackContract.TOP_LEVEL),
+    CALL_DETAILS("call_details/{callAttemptId}", "call_details/test-attempt"),
+
     ANNOUNCES("announce_stream?filterType={filterType}", "announce_stream?filterType=all"),
     CONTACTS("contacts", backContract = BackContract.TOP_LEVEL),
     MAP("map", backContract = BackContract.TOP_LEVEL),

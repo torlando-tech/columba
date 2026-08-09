@@ -245,6 +245,10 @@ interface RnsCore {
 
     suspend fun unblockDestination(destinationHashHex: String): Result<Unit>
 
+    suspend fun blockIdentity(identityHashHex: String): Result<Unit>
+
+    suspend fun unblockIdentity(identityHashHex: String): Result<Unit>
+
     suspend fun blackholeIdentity(identityHashHex: String): Result<Unit>
 
     suspend fun unblackholeIdentity(identityHashHex: String): Result<Unit>

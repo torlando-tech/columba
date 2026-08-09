@@ -64,7 +64,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PeerActivityEntity::class,
         PeerActivityEventEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -320,6 +320,14 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
+
+        /** Add identity-scoped blocking aspect to blocked_peers. */
+        val MIGRATION_5_6: Migration =
+            object : Migration(5, 6) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE blocked_peers ADD COLUMN routingAspect TEXT")
+                }
+            }
 
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =

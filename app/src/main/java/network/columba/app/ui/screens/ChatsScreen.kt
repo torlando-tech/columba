@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
@@ -66,6 +67,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -87,6 +89,7 @@ import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SyncStatusBottomSheet
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.viewmodel.ChatsViewModel
+import network.columba.app.viewmodel.ChatsSegment
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
@@ -98,6 +101,13 @@ import java.util.Locale
 @Composable
 fun ChatsScreen(
     onChatClick: (peerHash: String, peerName: String) -> Unit = { _, _ -> },
+    onCallHistoryClick: (callAttemptId: String) -> Unit = {},
+    onActiveCallHistoryClick: (
+        callAttemptId: String,
+        localIdentityHash: String,
+        remoteIdentityHash: String,
+        profileCode: Int,
+    ) -> Unit = { _, _, _, _ -> },
     onViewPeerDetails: (peerHash: String) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
@@ -107,6 +117,9 @@ fun ChatsScreen(
 ) {
     val chatsState by viewModel.chatsState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val voiceSearchQuery by viewModel.voiceSearchQuery.collectAsState()
+    val selectedSegment by viewModel.selectedSegment.collectAsState()
+    val voiceHistoryState by viewModel.voiceHistoryState.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
     val draftsMap by viewModel.draftsMap.collectAsState()
@@ -118,6 +131,7 @@ fun ChatsScreen(
     val sharedImageViewModel: SharedImageViewModel = viewModel(viewModelStoreOwner = context as androidx.activity.ComponentActivity)
 
     val listState = rememberLazyListState()
+    val voiceListState = rememberLazyListState()
 
     // Hoist shared-content state above LazyColumn so it's collected once at screen level
     // rather than per-item inside the items{} lambda (avoids redundant subscriptions).
@@ -128,6 +142,8 @@ fun ChatsScreen(
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showBlockDialog by remember { mutableStateOf(false) }
+    var showVoiceActions by remember { mutableStateOf(false) }
+    var showClearCallHistoryDialog by remember { mutableStateOf(false) }
 
     // Sync status bottom sheet state
     var showSyncStatusSheet by remember { mutableStateOf(false) }
@@ -140,6 +156,22 @@ fun ChatsScreen(
     val identityHash by debugViewModel.identityHash.collectAsState()
     val destinationHash by debugViewModel.destinationHash.collectAsState()
     val settingsState by settingsViewModel.state.collectAsState()
+
+    LaunchedEffect(viewModel) {
+        viewModel.callHistoryNavigation.collect { destination ->
+            when (destination) {
+                is network.columba.app.viewmodel.CallHistoryNavigation.Details ->
+                    onCallHistoryClick(destination.callAttemptId)
+                is network.columba.app.viewmodel.CallHistoryNavigation.ActiveCall ->
+                    onActiveCallHistoryClick(
+                        destination.callAttemptId,
+                        destination.localIdentityHash,
+                        destination.remoteIdentityHash,
+                        destination.profileCode,
+                    )
+            }
+        }
+    }
 
     // Observe manual sync results and show Toast
     LaunchedEffect(Unit) {
@@ -174,15 +206,38 @@ fun ChatsScreen(
 
     Scaffold(
         topBar = {
-            SearchableTopAppBar(
-                title = "Chats",
-                subtitle = "${chatsState.conversations.size} ${if (chatsState.conversations.size == 1) "conversation" else "conversations"}",
+            Column {
+                SearchableTopAppBar(
+                title = stringResource(R.string.chats_title),
+                subtitle = if (selectedSegment == ChatsSegment.TEXT) {
+                    pluralStringResource(
+                        R.plurals.conversation_count,
+                        chatsState.conversations.size,
+                        chatsState.conversations.size,
+                    )
+                } else {
+                    pluralStringResource(
+                        R.plurals.call_count,
+                        voiceHistoryState.records.size,
+                        voiceHistoryState.records.size,
+                    )
+                },
                 isSearching = isSearching,
-                searchQuery = searchQuery,
-                onSearchQueryChange = { viewModel.searchQuery.value = it },
+                searchQuery = if (selectedSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery,
+                onSearchQueryChange = {
+                    if (selectedSegment == ChatsSegment.TEXT) viewModel.searchQuery.value = it else viewModel.voiceSearchQuery.value = it
+                },
                 onSearchToggle = { isSearching = !isSearching },
-                searchPlaceholder = "Search conversations...",
+                searchPlaceholder =
+                    stringResource(
+                        if (selectedSegment == ChatsSegment.TEXT) {
+                            R.string.search_conversations_placeholder
+                        } else {
+                            R.string.search_call_history_placeholder
+                        },
+                    ),
                 additionalActions = {
+                    if (selectedSegment == ChatsSegment.TEXT) {
                     // QR Code button
                     IconButton(onClick = { showQrBottomSheet = true }) {
                         Icon(
@@ -212,10 +267,47 @@ fun ChatsScreen(
                             )
                         }
                     }
+                    } else {
+                        IconButton(onClick = { showVoiceActions = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.call_history_more_actions),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showVoiceActions,
+                            onDismissRequest = { showVoiceActions = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.call_history_clear)) },
+                                onClick = {
+                                    showVoiceActions = false
+                                    showClearCallHistoryDialog = true
+                                },
+                            )
+                        }
+                    }
                 },
             )
+                ChatsSegmentSelector(
+                    selected = selectedSegment,
+                    onSelected = {
+                        viewModel.selectedSegment.value = it
+                        isSearching = false
+                    },
+                )
+            }
         },
     ) { paddingValues ->
+        if (selectedSegment == ChatsSegment.VOICE) {
+            VoiceHistoryContent(
+                state = voiceHistoryState,
+                onRecordClick = viewModel::openCallHistory,
+                onRetry = viewModel::retryVoiceHistory,
+                listState = voiceListState,
+                modifier = Modifier.padding(paddingValues).consumeWindowInsets(paddingValues),
+            )
+        } else {
         // Only show loading spinner when loading AND list is empty
         // This prevents flickering when data updates while content is displayed
         when {
@@ -341,6 +433,28 @@ fun ChatsScreen(
                     }
                 }
             }
+        }
+        }
+
+        if (showClearCallHistoryDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearCallHistoryDialog = false },
+                title = { Text(stringResource(R.string.call_history_clear_title)) },
+                text = { Text(stringResource(R.string.call_history_clear_message)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.clearCallHistory()
+                            showClearCallHistoryDialog = false
+                        },
+                    ) { Text(stringResource(R.string.delete)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearCallHistoryDialog = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
         }
 
         // Delete confirmation dialog

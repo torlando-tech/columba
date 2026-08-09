@@ -115,6 +115,7 @@ object DatabaseModule {
                 ColumbaDatabase.MIGRATION_2_3,
                 ColumbaDatabase.MIGRATION_3_4,
                 ColumbaDatabase.MIGRATION_4_5,
+                ColumbaDatabase.MIGRATION_5_6,
             )
             .enableMultiInstanceInvalidation()
             .addCallback(DURABILITY_CALLBACK)

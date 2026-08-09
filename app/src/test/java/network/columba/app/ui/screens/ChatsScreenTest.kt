@@ -1011,6 +1011,12 @@ class ChatsScreenTest {
                 ),
             )
         every { mockViewModel.searchQuery } returns MutableStateFlow(searchQuery)
+        every { mockViewModel.voiceSearchQuery } returns MutableStateFlow("")
+        every { mockViewModel.selectedSegment } returns MutableStateFlow(network.columba.app.viewmodel.ChatsSegment.TEXT)
+        every { mockViewModel.voiceHistoryState } returns
+            MutableStateFlow(network.columba.app.viewmodel.VoiceHistoryState())
+        every { mockViewModel.callHistoryNavigation } returns
+            MutableSharedFlow<network.columba.app.viewmodel.CallHistoryNavigation>()
         every { mockViewModel.isSyncing } returns MutableStateFlow(isSyncing)
         every { mockViewModel.syncProgress } returns MutableStateFlow(network.columba.app.service.SyncProgress.Idle)
         every { mockViewModel.manualSyncResult } returns MutableSharedFlow()

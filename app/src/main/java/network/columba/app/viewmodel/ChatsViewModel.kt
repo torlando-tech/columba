@@ -1,28 +1,40 @@
 package network.columba.app.viewmodel
 
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.BlockedPeerRepository
+import network.columba.app.data.repository.CallHistoryRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.Conversation
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
+import network.columba.app.data.model.CallHistoryRecord
 import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallState
+import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -38,22 +50,96 @@ data class ChatsState(
     val isLoading: Boolean = true,
 )
 
+enum class ChatsSegment {
+    TEXT,
+    VOICE,
+}
+
+data class VoiceHistoryState(
+    val records: List<CallHistoryRecord> = emptyList(),
+    val isLoading: Boolean = true,
+    val hasError: Boolean = false,
+    val activeCallAttemptId: String? = null,
+)
+
+private data class VoiceHistoryScope(
+    val localIdentityHash: String?,
+    val query: String,
+)
+
+private data class LiveCallOwnership(
+    val callAttemptId: String,
+    val remoteIdentityHash: String,
+)
+
+private fun CallState.isLiveCallState(): Boolean =
+    when (this) {
+        is CallState.Connecting, is CallState.Ringing, is CallState.Incoming, is CallState.Active -> true
+        else -> false
+    }
+
+sealed interface CallHistoryNavigation {
+    data class Details(val callAttemptId: String) : CallHistoryNavigation
+
+    data class ActiveCall(
+        val callAttemptId: String,
+        val localIdentityHash: String,
+        val remoteIdentityHash: String,
+        val profileCode: Int,
+    ) : CallHistoryNavigation
+}
+
 @HiltViewModel
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChatsViewModel
     @Inject
+    @Suppress("LongParameterList")
     constructor(
         private val conversationRepository: ConversationRepository,
+        private val callHistoryRepository: CallHistoryRepository,
         private val contactRepository: ContactRepository,
         private val announceRepository: AnnounceRepository,
         private val blockedPeerRepository: BlockedPeerRepository,
         private val rnsCore: RnsCore,
+        private val rnsTelephony: RnsTelephony,
         private val propagationNodeManager: PropagationNodeManager,
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val identityResolutionManager: IdentityResolutionManager,
+        private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         companion object {
             private const val TAG = "ChatsViewModel"
+            private const val LIVE_OWNERSHIP_RETRY_MILLIS = 500L
+            private const val VOICE_QUERY_KEY = "voice_history_query"
+            private const val SELECTED_SEGMENT_KEY = "chats_selected_segment"
         }
+
+        private val _callHistoryNavigation = MutableSharedFlow<CallHistoryNavigation>()
+        val callHistoryNavigation = _callHistoryNavigation.asSharedFlow()
+
+        fun openCallHistory(record: CallHistoryRecord) {
+            viewModelScope.launch {
+                val liveCall = rnsTelephony.getCallState().getOrNull()
+                val destination =
+                    if (record.matchesLiveCall(liveCall)) {
+                        CallHistoryNavigation.ActiveCall(
+                            callAttemptId = record.callAttemptId,
+                            localIdentityHash = record.localIdentityHash,
+                            remoteIdentityHash = record.remoteIdentityHash,
+                            profileCode = record.codecProfileCode ?: -1,
+                        )
+                    } else {
+                        CallHistoryNavigation.Details(record.callAttemptId)
+                    }
+                _callHistoryNavigation.emit(destination)
+            }
+        }
+
+        private fun CallHistoryRecord.matchesLiveCall(liveCall: VoiceCallState?): Boolean =
+            endedAt == null &&
+                liveCall?.callAttemptId == callAttemptId &&
+                liveCall.status in setOf("connecting", "ringing", "incoming", "active") &&
+                liveCall.remoteIdentity.equals(remoteIdentityHash, ignoreCase = true)
 
         // Whether Reticulum transport mode is enabled (for blackhole option)
         private val _isTransportEnabled = MutableStateFlow(false)
@@ -96,6 +182,27 @@ class ChatsViewModel
 
         // Search query state
         val searchQuery = MutableStateFlow("")
+        val voiceSearchQuery = MutableStateFlow(savedStateHandle[VOICE_QUERY_KEY] ?: "")
+        private val voiceHistoryRefresh = MutableStateFlow(0)
+        private var cachedVoiceHistory = emptyList<CallHistoryRecord>()
+        private var cachedVoiceHistoryIdentity: String? = null
+        private var cachedVoiceHistoryQuery = ""
+        private var cachedActiveCallAttemptId: String? = null
+        val selectedSegment =
+            MutableStateFlow(
+                savedStateHandle.get<String>(SELECTED_SEGMENT_KEY)
+                    ?.let { runCatching { ChatsSegment.valueOf(it) }.getOrNull() }
+                    ?: ChatsSegment.TEXT,
+            )
+
+        init {
+            viewModelScope.launch {
+                voiceSearchQuery.collect { savedStateHandle[VOICE_QUERY_KEY] = it }
+            }
+            viewModelScope.launch {
+                selectedSegment.collect { savedStateHandle[SELECTED_SEGMENT_KEY] = it.name }
+            }
+        }
 
         // Filtered conversations based on search query, with loading state
         // onStart emits loading state each time flow is collected (tab switch, screen entry)
@@ -121,6 +228,109 @@ class ChatsViewModel
                     started = SharingStarted.WhileSubscribed(5000L),
                     initialValue = ChatsState(isLoading = true),
                 )
+
+        val voiceHistoryState: StateFlow<VoiceHistoryState> =
+            combine(
+                callHistoryRepository.observeActiveIdentityHash(),
+                voiceSearchQuery,
+                voiceHistoryRefresh,
+            ) { identityHash, query, _ -> VoiceHistoryScope(identityHash, query) }
+                .flatMapLatest { scope ->
+                    val preserveCache =
+                        cachedVoiceHistoryIdentity == scope.localIdentityHash &&
+                            cachedVoiceHistoryQuery == scope.query
+                    val loadingRecords = if (preserveCache) cachedVoiceHistory else emptyList()
+                    val history =
+                        scope.localIdentityHash?.let {
+                            callHistoryRepository.observeHistory(it, scope.query)
+                        } ?: flowOf(emptyList())
+                    val liveCall =
+                        rnsTelephony.callState
+                            .flatMapLatest { coarseState ->
+                                flow {
+                                    if (!coarseState.isLiveCallState()) {
+                                        emit(null)
+                                        return@flow
+                                    }
+                                    while (true) {
+                                        val ownership = currentLiveCallOwnership()
+                                        emit(ownership.getOrNull())
+                                        if (ownership.isSuccess) break
+                                        delay(LIVE_OWNERSHIP_RETRY_MILLIS)
+                                    }
+                                }
+                            }
+                            .catch { emit(null) }
+                    combine(history, liveCall) { records, liveOwnership ->
+                            val activeAttemptId =
+                                liveOwnership
+                                    ?.takeIf { ownership ->
+                                        records.any { record ->
+                                            record.callAttemptId == ownership.callAttemptId &&
+                                                record.remoteIdentityHash.equals(
+                                                    ownership.remoteIdentityHash,
+                                                    ignoreCase = true,
+                                                )
+                                        }
+                                    }?.callAttemptId
+                            cachedVoiceHistory = records
+                            cachedVoiceHistoryIdentity = scope.localIdentityHash
+                            cachedVoiceHistoryQuery = scope.query
+                            cachedActiveCallAttemptId = activeAttemptId
+                            VoiceHistoryState(
+                                records = records,
+                                isLoading = false,
+                                activeCallAttemptId = activeAttemptId,
+                            )
+                        }.catch {
+                            emit(
+                                VoiceHistoryState(
+                                    records = loadingRecords,
+                                    isLoading = false,
+                                    hasError = true,
+                                    activeCallAttemptId = cachedActiveCallAttemptId,
+                                ),
+                            )
+                        }.onStart {
+                            emit(
+                                VoiceHistoryState(
+                                    records = loadingRecords,
+                                    isLoading = true,
+                                    activeCallAttemptId = cachedActiveCallAttemptId.takeIf { preserveCache },
+                                ),
+                            )
+                        }
+                }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = VoiceHistoryState(isLoading = true),
+                )
+
+        private suspend fun currentLiveCallOwnership(): Result<LiveCallOwnership?> =
+            runCatching {
+                val call = rnsTelephony.getCallState().getOrThrow()
+                if (call.status !in setOf("connecting", "ringing", "incoming", "active")) return@runCatching null
+                val attemptId = call.callAttemptId?.takeIf(String::isNotBlank) ?: return@runCatching null
+                val remoteIdentity = call.remoteIdentity?.takeIf(String::isNotBlank) ?: return@runCatching null
+                LiveCallOwnership(attemptId, remoteIdentity)
+            }
+
+        fun retryVoiceHistory() {
+            voiceHistoryRefresh.value++
+        }
+
+        fun deleteCallHistory(callAttemptId: String) {
+            viewModelScope.launch {
+                callHistoryRepository.deleteFinalized(callAttemptId)
+            }
+        }
+
+        fun clearCallHistory() {
+            viewModelScope.launch {
+                callHistoryRepository.clearFinalized()
+            }
+        }
 
         fun deleteConversation(peerHash: String) {
             viewModelScope.launch {

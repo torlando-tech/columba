@@ -35,6 +35,19 @@ import javax.inject.Inject
  * seam contract that survives the AIDL boundary.
  */
 @Suppress("TooManyFunctions") // Call + PTT controls require many small action methods
+
+
+/** Reasons a Call-again / Call action can fail before or during initiation. */
+enum class CallInitiationFailure {
+    INVALID_IDENTITY,
+    LOCAL_IDENTITY_CHANGED,
+    REMOTE_IDENTITY_UNAVAILABLE,
+    BLOCKED_IDENTITY,
+    TELEPHONY_DESTINATION_UNAVAILABLE,
+    MICROPHONE_PERMISSION_DENIED,
+    SERVICE_FAILURE,
+}
+
 @HiltViewModel
 class CallViewModel
     @Inject

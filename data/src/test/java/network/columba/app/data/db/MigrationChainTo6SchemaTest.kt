@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
-class MigrationChainTo5SchemaTest {
+class MigrationChainTo6SchemaTest {
     @get:Rule
     val helper =
         MigrationTestHelper(
@@ -29,16 +29,17 @@ class MigrationChainTo5SchemaTest {
         )
 
     @Test
-    fun `full chain 2 to 5 matches exported Room version 5 schema`() {
+    fun `full chain 2 to 6 matches exported Room version 6 schema`() {
         helper.createDatabase(DATABASE_NAME, 2).close()
         helper
             .runMigrationsAndValidate(
                 DATABASE_NAME,
-                5,
+                6,
                 true,
                 ColumbaDatabase.MIGRATION_2_3,
                 ColumbaDatabase.MIGRATION_3_4,
                 ColumbaDatabase.MIGRATION_4_5,
+                ColumbaDatabase.MIGRATION_5_6,
             )
             .close()
     }

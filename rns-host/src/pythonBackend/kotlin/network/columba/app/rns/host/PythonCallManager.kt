@@ -12,7 +12,10 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.call.AcceptedCallLifecycle
+import network.columba.app.rns.api.call.CallAttemptDirection
+import network.columba.app.rns.api.call.CallCallbackAdapter
 import network.columba.app.rns.api.call.CallLifecycleRecorder
+import network.columba.app.rns.api.call.SerializedLifecycleCallbackAdapter
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.backend.py.ChaquopyRnsBackend
 import network.columba.app.rns.backend.py.PyEventCallback
@@ -89,6 +92,10 @@ class PythonCallManager(
             onCallerIdentified = ::onCallerIdentified,
         )
 
+    /** Symmetric callback adapter: routes LXST events into the shared serialized owner. */
+    private val callbackAdapter: CallCallbackAdapter =
+        SerializedLifecycleCallbackAdapter(acceptedCallLifecycle)
+
     /** Serialises [disableIncoming] / [enableIncoming] transitions. */
     private val incomingLock = Any()
 
@@ -164,6 +171,18 @@ class PythonCallManager(
             callBridge = callCoordinator,
         )
         callCoordinator.setCallManager(this)
+
+        // Route LXST call-state callbacks into the shared serialized lifecycle.
+        callCoordinator.setCallStateChangedListener { state, identityHash ->
+            when (state) {
+                "ringing" -> identityHash?.let(callbackAdapter::onRinging)
+                "established" -> identityHash?.let(callbackAdapter::onEstablished)
+                "busy" -> callbackAdapter.onBusy(identityHash)
+                "rejected" -> callbackAdapter.onRejected(identityHash)
+            }
+        }
+        callCoordinator.setCallEndedListener(callbackAdapter::onGenericEnded)
+
         inboundCalls.register(localIdentity)
         inboundCalls.announce()
 
@@ -278,6 +297,14 @@ class PythonCallManager(
     }
 
     override fun hangup() {
+        // Local decline (incoming pre-answer) / cancel (outgoing pre-connect) intent
+        // is latched BEFORE the telephone hangs up; the owner decides the exact outcome
+        // from the active attempt's direction. A connected call is unaffected here.
+        when (acceptedCallLifecycle.activeAttempt?.direction) {
+            CallAttemptDirection.INCOMING -> callbackAdapter.onLocalDecline()
+            CallAttemptDirection.OUTGOING -> callbackAdapter.onLocalCancel()
+            null -> Unit
+        }
         telephone.hangup()
     }
 

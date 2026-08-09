@@ -32,6 +32,12 @@ internal sealed interface AcceptedCallObservation {
         val outcome: UnconnectedOutcome,
     ) : AcceptedCallObservation
 
+    /** A Columba-observed prerequisite failure must be persisted for the exact attempt. */
+    data class FinalizeFailed(
+        override val callAttemptId: String,
+        val failureReason: CallFailureReason,
+    ) : AcceptedCallObservation
+
     /** Serialization barrier used to order lifecycle events across the service seam. */
     data class Barrier(
         override val callAttemptId: String,

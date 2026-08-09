@@ -31,7 +31,6 @@ class CallHistoryDaoTest {
         private const val IDENTITY = "identity_hash_12345678901234567"
         private const val IDENTITY_2 = "identity_hash_22345678901234567"
         private const val REMOTE = "remote_hash_1234567890123456789012"
-        private const val REMOTE_2 = "remote_hash_2234567890123456789012"
         private const val ATTEMPT = "call_attempt_1"
         private const val ATTEMPT_2 = "call_attempt_2"
     }

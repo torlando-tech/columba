@@ -7,6 +7,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.call.CallLifecycleRecorder
 import network.columba.app.rns.backend.py.ChaquopyRnsBackend
 import network.columba.app.rns.backend.py.PythonRnsTransportAdmin
 import network.columba.app.rns.host.ble.bridge.KotlinBLEBridge
@@ -104,6 +105,7 @@ object HostBackendModule {
         @ApplicationContext context: Context,
         backend: ChaquopyRnsBackend,
         transport: PythonNetworkTransport,
+        callLifecycleRecorder: CallLifecycleRecorder,
         callCoordinator: CallCoordinator,
         settingsAccessor: ServiceSettingsAccessor,
         contactsGate: CallsFromContactsGate,
@@ -112,6 +114,7 @@ object HostBackendModule {
             context = context,
             backend = backend,
             transport = transport,
+            recorder = callLifecycleRecorder,
             callCoordinator = callCoordinator,
             settingsAccessor = settingsAccessor,
             contactsGate = contactsGate,

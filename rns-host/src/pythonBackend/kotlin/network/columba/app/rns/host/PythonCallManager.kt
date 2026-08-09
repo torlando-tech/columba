@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import network.columba.app.rns.api.call.AcceptedCallLifecycle
+import network.columba.app.rns.api.call.CallLifecycleRecorder
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.backend.py.ChaquopyRnsBackend
 import network.columba.app.rns.backend.py.PyEventCallback
@@ -42,6 +44,7 @@ class PythonCallManager(
     private val context: Context,
     private val backend: ChaquopyRnsBackend,
     private val transport: PythonNetworkTransport,
+    private val recorder: CallLifecycleRecorder,
     private val callCoordinator: CallCoordinator,
     private val settingsAccessor: ServiceSettingsAccessor,
     private val contactsGate: CallsFromContactsGate,
@@ -50,10 +53,8 @@ class PythonCallManager(
     private val backendStatusFlow: StateFlow<NetworkStatus> = backend.core.networkStatus
     private companion object {
         const val TAG = "PythonCallManager"
-        const val LXST_APP_NAME = "lxst"
-        const val LXST_ASPECT = "telephony"
 
-        /** LXST signalling field id — must match NativeCallManager + PythonNetworkTransport. */
+        /** LXST signalling field id — must match PythonNetworkTransport. */
         const val FIELD_SIGNALLING = 0x00
     }
 
@@ -65,16 +66,40 @@ class PythonCallManager(
     private var setupRan: Boolean = false
 
     /**
-     * Master incoming-calls toggle state. Mirrors `:rns-backend-kt`'s
-     * sibling. Read by [onInboundLinkEstablished] as a TOCTOU guard
-     * against a link that crossed the wire just before
-     * [disableIncoming] ran; written only inside [incomingLock].
+     * Shared serialized call-lifecycle owner: durable admission, at-most-one owned
+     * attempt, and single-shot finalization for every accepted attempt.
      */
-    @Volatile
-    private var incomingDisabled: Boolean = false
+    private val acceptedCallLifecycle =
+        AcceptedCallLifecycle(
+            recorder = recorder,
+            scope = scope,
+            retainedAttempt = null,
+            onDeferredShutdownCleanupComplete = { scope.cancel() },
+        )
+
+    /** Reduced inbound adapter: destination registration + link handshake + durable admission. */
+    private val inboundCalls =
+        PythonInboundCallAdapter(
+            runtime = runtime,
+            transport = transport,
+            telephone = { telephone },
+            owner = acceptedCallLifecycle,
+            localIdentityHash = { localIdentityHash },
+            scope = scope,
+            onCallerIdentified = ::onCallerIdentified,
+        )
 
     /** Serialises [disableIncoming] / [enableIncoming] transitions. */
     private val incomingLock = Any()
+
+    /** Hex hash of the local identity once the backend is READY (used for durable admission). */
+    private val localIdentityHash: String
+        get() = runtime.localIdentity?.let { ident ->
+            (ident["hash"]
+                ?.toJava(ByteArray::class.java)
+                ?.joinToString("") { "%02x".format(it) })
+                .orEmpty()
+        }.orEmpty()
 
     init {
         // Auto-run setup() at backend READY (:rns-backend-py can't reach
@@ -101,14 +126,6 @@ class PythonCallManager(
     /** The [Telephone], created in [setup]. */
     lateinit var telephone: Telephone
         private set
-
-    /**
-     * Inbound `lxst.telephony` `RNS.Destination` registered in [setup].
-     * Held to prevent GC and to allow cleanup on [shutdown]. PyObject
-     * because upstream `RNS.Destination` is a Python class.
-     */
-    @Volatile
-    private var telephonyDestination: PyObject? = null
 
     /**
      * Wire the telephony stack and register the inbound-call destination.
@@ -147,8 +164,8 @@ class PythonCallManager(
             callBridge = callCoordinator,
         )
         callCoordinator.setCallManager(this)
-        registerTelephonyDestination(localIdentity)
-        announce()
+        inboundCalls.register(localIdentity)
+        inboundCalls.announce()
 
         // Re-announce lxst.telephony whenever lxmf.delivery is (re-)announced
         // (periodic auto-announce + network-change announce, both routed
@@ -156,7 +173,7 @@ class PythonCallManager(
         // announce alone lets the telephony path go stale, so inbound callers
         // silently fail to reach us. announce() no-ops when the destination is
         // deregistered (incoming disabled), so the hook is safe to leave set.
-        runtime.onLxmfReannounce = { announce() }
+        runtime.onLxmfReannounce = { inboundCalls.announce() }
 
         // Cold-start application of the persisted master toggle. If the
         // user turned voice calls OFF before the last :reticulum tear-down
@@ -166,129 +183,27 @@ class PythonCallManager(
         // (~ms of work) but correct + minimal-conditional.
         if (!settingsAccessor.getAllowVoiceCalls()) {
             Log.i(TAG, "Cold-start: Allow voice calls = false, deregistering destination")
-            disableIncoming()
+            inboundCalls.disable()
         }
 
         Log.i(TAG, "Python telephony stack ready")
     }
 
-    private fun registerTelephonyDestination(localIdentity: PyObject) {
-        try {
-            val destClass = runtime.rnsModule["Destination"]
-                ?: error("RNS.Destination not resolvable")
-            val destination = runtime.rnsModule.callAttr(
-                "Destination",
-                localIdentity,
-                destClass["IN"],
-                destClass["SINGLE"],
-                LXST_APP_NAME,
-                LXST_ASPECT,
-            )
-
-            // PROVE_NONE: per-call identify-callback handles peer auth, no
-            // crypto proof on link establishment. Matches upstream LXST.
-            destClass["PROVE_NONE"]?.let { proveNone ->
-                runCatching { destination.callAttr("set_proof_strategy", proveNone) }
-                    .onFailure { Log.w(TAG, "set_proof_strategy(PROVE_NONE) failed", it) }
-            }
-
-            val onEstablished = PyEventCallback { linkPy ->
-                runCatching { onInboundLinkEstablished(linkPy) }
-                    .onFailure { Log.e(TAG, "onInboundLinkEstablished threw", it) }
-            }
-            val handler = runtime.eventBridge.callAttr("make_link_established_handler", onEstablished)
-            destination.callAttr("set_link_established_callback", handler)
-
-            telephonyDestination = destination
-            val hexHash = destination["hash"]
-                ?.toJava(ByteArray::class.java)
-                ?.joinToString("") { "%02x".format(it) }
-                .orEmpty()
-            Log.i(TAG, "lxst.telephony destination registered: ${hexHash.take(16)}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to register lxst.telephony destination", e)
-        }
-    }
-
     /** Public so callers can couple lxst.telephony announces to LXMF reannounces. */
     fun announce(appData: ByteArray? = null) {
-        val dest = telephonyDestination ?: run {
-            // No destination is the expected, intended state when incoming
-            // calls are disabled (the master toggle deregistered it) — stay
-            // silent so the periodic LXMF-coupled re-announce doesn't spam a
-            // warning each interval. Warn only if it's missing unexpectedly.
-            if (incomingDisabled) {
-                Log.d(TAG, "Skipping lxst.telephony announce: incoming calls disabled")
-            } else {
-                Log.w(TAG, "Cannot announce lxst.telephony: destination not registered")
-            }
-            return
-        }
-        try {
-            if (appData != null) {
-                val pyData = runtime.python.builtins.callAttr("bytes", appData)
-                dest.callAttr("announce", pyData)
-            } else {
-                dest.callAttr("announce")
-            }
-            Log.i(TAG, "Announced lxst.telephony")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to announce lxst.telephony", e)
-        }
+        inboundCalls.announce(appData)
     }
 
     // ===== Incoming call handling =====
 
     /**
-     * RNS fires this when a remote peer opens a link to our
-     * lxst.telephony destination. Mirrors
-     * `NativeCallManager.onInboundLinkEstablished`.
+     * Called when the incoming caller has sent their Reticulum identity.
+     *
+     * Applies the calls-from-contacts policy gate and the busy-line check, then
+     * routes the accepted incoming attempt through the shared serialized owner's durable
+     * admission. Admission failures (another owned attempt awaiting finalization, or a
+     * durable insert failure) tear the link down without ringing or creating history.
      */
-    private fun onInboundLinkEstablished(link: PyObject) {
-        Log.i(TAG, "Inbound call link arrived")
-
-        // Defense-in-depth TOCTOU guard: an inbound link may have been
-        // admitted by RNS in the brief window before
-        // Transport.deregister_destination returned. Drop it silently —
-        // STATUS_AVAILABLE has not yet been sent, so the caller sees the
-        // same "remote went away" timeout as the toggle-off path below.
-        if (incomingDisabled) {
-            Log.d(TAG, "Inbound link but incoming disabled, silently tearing down")
-            runCatching { link.callAttr("teardown") }
-            return
-        }
-
-        if (telephone.isCallActive()) {
-            Log.w(TAG, "Line busy — signalling busy and rejecting inbound link")
-            sendSignalOnLink(link, Signalling.STATUS_BUSY)
-            runCatching { link.callAttr("teardown") }
-            return
-        }
-
-        // Install identify + closed callbacks BEFORE STATUS_AVAILABLE —
-        // caller can identify immediately on receipt and win the race
-        // against our registration otherwise.
-        val onIdentified = PyTwoArgCallback { linkPy, identityPy ->
-            runCatching { onCallerIdentified(linkPy, identityPy) }
-                .onFailure { Log.e(TAG, "onCallerIdentified threw", it) }
-        }
-        val identifyHandler = runtime.eventBridge.callAttr(
-            "make_remote_identified_handler",
-            onIdentified,
-        )
-        runCatching { link.callAttr("set_remote_identified_callback", identifyHandler) }
-            .onFailure { Log.w(TAG, "set_remote_identified_callback failed", it) }
-
-        val onClosed = PyEventCallback { _ ->
-            Log.d(TAG, "Inbound call link closed before identification")
-        }
-        val closedHandler = runtime.eventBridge.callAttr("make_link_closed_handler", onClosed)
-        runCatching { link.callAttr("set_link_closed_callback", closedHandler) }
-            .onFailure { Log.w(TAG, "set_link_closed_callback failed", it) }
-
-        sendSignalOnLink(link, Signalling.STATUS_AVAILABLE)
-    }
-
     private fun onCallerIdentified(link: PyObject, identity: PyObject) {
         val identityHash = identity["hash"]
             ?.toJava(ByteArray::class.java)
@@ -315,9 +230,9 @@ class PythonCallManager(
             return
         }
 
-        transport.acceptInboundLink(link)
-        telephone.onIncomingCall(identityHash)
-        transport.sendSignal(Signalling.STATUS_RINGING)
+        // Durable admission + ringing persistence happen inside the owner BEFORE the
+        // expose lambda accepts the link and rings. A rejection tears the link down.
+        inboundCalls.expose(link, identityHash)
     }
 
     /**
@@ -390,38 +305,25 @@ class PythonCallManager(
     }
 
     private fun disableIncoming() = synchronized(incomingLock) {
-        if (incomingDisabled) return@synchronized
-        incomingDisabled = true
-        telephonyDestination?.let { dest ->
-            runCatching {
-                runtime.rnsModule["Transport"]!!.callAttr("deregister_destination", dest)
-                Log.i(TAG, "lxst.telephony destination deregistered")
-            }.onFailure { Log.w(TAG, "deregister_destination failed", it) }
-        }
-        telephonyDestination = null
+        inboundCalls.disable()
         if (::telephone.isInitialized && telephone.isCallActive()) {
             // Hang up active call so the remote sees a clean drop rather
             // than dead air. Hangup signal must travel BEFORE the
-            // destination is gone, but we've already nulled it above —
-            // that's fine because outgoing audio uses transport.activeLink
-            // (set on accept) not the destination.
+            // destination is gone.
             runCatching { telephone.hangup() }
                 .onFailure { Log.w(TAG, "Ignored hangup error during disableIncoming", it) }
         }
     }
 
     private fun enableIncoming() = synchronized(incomingLock) {
-        if (!incomingDisabled && telephonyDestination != null) return@synchronized
-        incomingDisabled = false
         val ident = runtime.localIdentity
         if (ident == null) {
             // setup() hasn't run yet (cold-start before backend READY).
-            // The flag is now `false`; setup() will register normally.
+            // enable() will be a no-op until setup registers.
             Log.d(TAG, "enableIncoming: localIdentity not ready, will register at setup")
             return@synchronized
         }
-        registerTelephonyDestination(ident)
-        announce()
+        inboundCalls.enable(ident)
     }
 
     /** Tear down the telephony stack. Mirrors `NativeCallManager.shutdown()`. */
@@ -435,7 +337,7 @@ class PythonCallManager(
         callCoordinator.setCallManager(null)
         runCatching { transport.teardownLink() }
             .onFailure { Log.w(TAG, "Ignored error tearing down transport on shutdown", it) }
-        telephonyDestination = null
+        inboundCalls.clear()
         scope.cancel()
     }
 }

@@ -8,6 +8,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.call.CallLifecycleRecorder
+import network.columba.app.rns.host.call.ServiceCallLifecycle
 import network.columba.app.rns.backend.kt.CallPrivacyBridge
 import network.columba.app.rns.backend.kt.NativeRnsBackend
 import network.columba.app.rns.backend.kt.RNodeHostBridge
@@ -72,15 +74,23 @@ object HostBackendModule {
 
     @Provides
     @Singleton
+    fun provideCallLifecycleRecorder(
+        serviceCallLifecycle: ServiceCallLifecycle,
+    ): CallLifecycleRecorder = serviceCallLifecycle
+
+    @Provides
+    @Singleton
     fun provideNativeRnsBackend(
         @ApplicationContext context: Context,
         bridge: RNodeHostBridge,
         callPrivacyBridge: CallPrivacyBridge,
+        callLifecycleRecorder: CallLifecycleRecorder,
     ): NativeRnsBackend =
         NativeRnsBackend(
             appContext = context,
             rnodeHostBridge = bridge,
             callPrivacyBridge = callPrivacyBridge,
+            callLifecycleRecorder = callLifecycleRecorder,
         )
 
     /**

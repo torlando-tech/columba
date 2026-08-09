@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import network.columba.app.rns.api.call.AcceptedCallLifecycle
+import network.columba.app.rns.api.call.CallLifecycleRecorder
 import network.columba.app.rns.api.util.hexToBytes
 import network.reticulum.common.DestinationDirection
 import network.reticulum.common.DestinationType
@@ -64,12 +66,11 @@ class NativeCallManager(
     private val context: Context,
     private val deliveryIdentity: Identity,
     val transport: NativeNetworkTransport,
+    private val recorder: CallLifecycleRecorder,
     private val callPrivacyBridge: CallPrivacyBridge? = null,
 ) : CallController {
     companion object {
         private const val TAG = "NativeCallManager"
-        private const val LXST_APP_NAME = "lxst"
-        private const val LXST_ASPECT = "telephony"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -86,19 +87,28 @@ class NativeCallManager(
         private set
 
     /**
-     * Inbound `lxst.telephony` destination (registered in Transport for incoming calls).
-     * Held to prevent GC and to allow cleanup on [shutdown].
+     * Shared serialized call-lifecycle owner: durable admission, at-most-one owned
+     * attempt, and single-shot finalization for every accepted attempt.
      */
-    private var telephonyDestination: Destination? = null
+    private val acceptedCallLifecycle =
+        AcceptedCallLifecycle(
+            recorder = recorder,
+            scope = scope,
+            retainedAttempt = null,
+            onDeferredShutdownCleanupComplete = { scope.cancel() },
+        )
 
-    /**
-     * Master incoming-calls toggle state. Mirrors `:rns-host/pythonBackend`'s
-     * sibling. Read by [onInboundLinkEstablished] as a TOCTOU guard against
-     * an inbound link that crossed the wire just before [disableIncoming]
-     * ran; written only inside [incomingLock].
-     */
-    @Volatile
-    private var incomingDisabled: Boolean = false
+    /** Reduced inbound adapter: destination registration + link handshake + durable admission. */
+    private val inboundCalls =
+        NativeInboundCallAdapter(
+            deliveryIdentity = deliveryIdentity,
+            transport = transport,
+            telephone = { telephone },
+            owner = acceptedCallLifecycle,
+            localIdentityHash = { deliveryIdentity.hexHash },
+            scope = scope,
+            onCallerIdentified = ::onCallerIdentified,
+        )
 
     /** Serialises [disableIncoming] / [enableIncoming] transitions. */
     private val incomingLock = Any()
@@ -144,11 +154,11 @@ class NativeCallManager(
         callCoordinator.setCallManager(this)
 
         // 6. Register lxst.telephony destination so Transport routes incoming call links here
-        registerTelephonyDestination()
+        inboundCalls.register()
 
         // Announce immediately so peers can resolve a path to our telephony destination
         // even before the next coupled LXMF auto-announce fires.
-        announce()
+        inboundCalls.announce()
 
         // Cold-start application of the persisted master toggle. If the user
         // turned voice calls OFF before the last process tear-down (or before
@@ -156,124 +166,31 @@ class NativeCallManager(
         // is marginally wasteful but lets re-enable share one helper.
         if (callPrivacyBridge?.getAllowVoiceCalls() == false) {
             Log.i(TAG, "Cold-start: Allow voice calls = false, deregistering destination")
-            disableIncoming()
+            inboundCalls.disable()
         }
 
         Log.i(TAG, "Native telephony stack ready")
-    }
-
-    private fun registerTelephonyDestination() {
-        try {
-            val dest =
-                Destination.create(
-                    identity = deliveryIdentity,
-                    direction = DestinationDirection.IN,
-                    type = DestinationType.SINGLE,
-                    appName = LXST_APP_NAME,
-                    LXST_ASPECT,
-                )
-            // Fire when a remote peer opens a link to our telephony destination
-            dest.setLinkEstablishedCallback { anyLink ->
-                (anyLink as? Link)?.let { onInboundLinkEstablished(it) }
-            }
-            telephonyDestination = dest
-            Log.i(TAG, "lxst.telephony destination registered: ${dest.hexHash.take(16)}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to register lxst.telephony destination", e)
-        }
     }
 
     /**
      * Announce the local `lxst.telephony` destination.
      *
      * Kept public so [NativeReticulumProtocol] can couple telephony announces to every
-     * `lxmf.delivery` announce/reannounce. This mirrors the Python call manager's explicit
-     * telephony announce while keeping the native path in sync with delivery announces.
+     * `lxmf.delivery` announce/reannounce. Delegates to the reduced inbound adapter.
      */
     fun announce(appData: ByteArray? = null) {
-        val dest = telephonyDestination
-        if (dest == null) {
-            Log.w(TAG, "Cannot announce lxst.telephony: destination not registered")
-            return
-        }
-
-        try {
-            dest.announce(appData)
-            Log.i(
-                TAG,
-                "Announced lxst.telephony ${dest.hexHash.take(16)}" +
-                    if (appData != null) " (appData=${appData.size} bytes)" else "",
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to announce lxst.telephony", e)
-        }
+        inboundCalls.announce(appData)
     }
 
     // ===== Incoming Call Handling =====
 
     /**
-     * Handle a new inbound link request on the `lxst.telephony` destination.
-     *
-     * Sends STATUS_AVAILABLE to prompt the caller to identify themselves,
-     * then waits for [Link.setRemoteIdentifiedCallback] before accepting the call.
-     * If the line is already busy, sends STATUS_BUSY and tears down the link.
-     */
-    private fun onInboundLinkEstablished(link: Link) {
-        Log.i(TAG, "Inbound call link arrived")
-
-        // Defense-in-depth TOCTOU guard: an inbound link may have been
-        // admitted by reticulum-kt's Transport in the brief window before
-        // deregisterDestination returned. Drop it silently — STATUS_AVAILABLE
-        // has not yet been sent, so the caller sees the same "remote went
-        // away" timeout as the toggle-off path below.
-        if (incomingDisabled) {
-            Log.d(TAG, "Inbound link but incoming disabled, silently tearing down")
-            link.teardown()
-            return
-        }
-
-        if (telephone.isCallActive()) {
-            Log.w(TAG, "Line busy — signalling busy and rejecting inbound link")
-            link.send(packSignal(Signalling.STATUS_BUSY))
-            link.teardown()
-            return
-        }
-
-        // Install callbacks BEFORE signalling availability. Otherwise the caller can
-        // identify immediately after receiving STATUS_AVAILABLE and win the race against
-        // our callback registration, leaving the call stuck at "connecting".
-        link.setRemoteIdentifiedCallback { identifiedLink, identity ->
-            onCallerIdentified(identifiedLink, identity)
-        }
-
-        link.setLinkClosedCallback { l ->
-            Log.d(TAG, "Inbound call link closed before identification: reason=${l.teardownReason}")
-        }
-
-        // Tell the caller we're reachable so they call link.identify().
-        link.send(packSignal(Signalling.STATUS_AVAILABLE))
-    }
-
-    /**
-     * Pack a signal as msgpack {FIELD_SIGNALLING(0): [signal]} for Python LXST interop.
-     * Python sends signals via Channel with this wire format; raw bytes are not recognized.
-     */
-    private fun packSignal(signal: Int): ByteArray {
-        val packer =
-            org.msgpack.core.MessagePack
-                .newDefaultBufferPacker()
-        packer.packMapHeader(1)
-        packer.packInt(0x00) // FIELD_SIGNALLING
-        packer.packArrayHeader(1)
-        packer.packInt(signal)
-        return packer.toByteArray()
-    }
-
-    /**
      * Called when the incoming caller has sent their Reticulum identity.
      *
-     * Wires the link into [NativeNetworkTransport], notifies [Telephone] of the
-     * incoming call, and sends STATUS_RINGING to the remote caller.
+     * Applies the calls-from-contacts policy gate and the busy-line check, then
+     * routes the accepted incoming attempt through the shared serialized owner's durable
+     * admission. Admission failures (another owned attempt awaiting finalization, or a
+     * durable insert failure) tear the link down without ringing or creating history.
      */
     private fun onCallerIdentified(
         link: Link,
@@ -301,15 +218,21 @@ class NativeCallManager(
             return
         }
 
-        // Accept the link into transport so signals and audio can flow
-        transport.acceptInboundLink(link)
+        // Durable admission + ringing persistence happen inside the owner BEFORE the
+        // expose lambda accepts the link and rings. A rejection tears the link down.
+        inboundCalls.expose(link, identityHash)
+    }
 
-        // Notify Telephone — this sets isIncomingCall, activates ring tone, and
-        // updates CallCoordinator so the UI shows the incoming call screen
-        telephone.onIncomingCall(identityHash)
-
-        // Signal ringing to remote caller (they need this to activate dial tone)
-        transport.sendSignal(Signalling.STATUS_RINGING)
+    /** Pack a signal as msgpack {FIELD_SIGNALLING(0): [signal]} for Python LXST interop. */
+    private fun packSignal(signal: Int): ByteArray {
+        val packer =
+            org.msgpack.core.MessagePack
+                .newDefaultBufferPacker()
+        packer.packMapHeader(1)
+        packer.packInt(0x00) // FIELD_SIGNALLING
+        packer.packArrayHeader(1)
+        packer.packInt(signal)
+        return packer.toByteArray()
     }
 
     // ===== CallController Implementation =====
@@ -373,17 +296,7 @@ class NativeCallManager(
     }
 
     private fun disableIncoming() = synchronized(incomingLock) {
-        if (incomingDisabled) return@synchronized
-        incomingDisabled = true
-        telephonyDestination?.let { dest ->
-            try {
-                Transport.deregisterDestination(dest)
-                Log.i(TAG, "lxst.telephony destination deregistered")
-            } catch (e: Exception) {
-                Log.w(TAG, "deregisterDestination failed", e)
-            }
-        }
-        telephonyDestination = null
+        inboundCalls.disable()
         if (::telephone.isInitialized && telephone.isCallActive()) {
             // Hang up before the link's transport state goes away so the
             // remote sees a clean drop (hangup signal sent over the active
@@ -397,10 +310,7 @@ class NativeCallManager(
     }
 
     private fun enableIncoming() = synchronized(incomingLock) {
-        if (!incomingDisabled && telephonyDestination != null) return@synchronized
-        incomingDisabled = false
-        registerTelephonyDestination()
-        announce()
+        inboundCalls.enable()
     }
 
     // ===== Lifecycle =====
@@ -421,7 +331,7 @@ class NativeCallManager(
             }
         }
         callCoordinator.setCallManager(null)
-        telephonyDestination = null
+        inboundCalls.clear()
         // Tear down any active call link so NativeNetworkTransport.activeLink is
         // cleared — otherwise a subsequent setup() would see a stale closed link.
         try {

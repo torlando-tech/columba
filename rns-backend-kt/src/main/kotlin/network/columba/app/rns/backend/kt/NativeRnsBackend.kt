@@ -35,6 +35,7 @@ class NativeRnsBackend(
     appContext: Context? = null,
     rnodeHostBridge: RNodeHostBridge? = null,
     callPrivacyBridge: CallPrivacyBridge? = null,
+    callLifecycleRecorder: network.columba.app.rns.api.call.CallLifecycleRecorder? = null,
 ) : RnsBackend {
     init {
         // Defense-in-depth A.10 assertion: this constructor MUST only run in
@@ -70,6 +71,7 @@ class NativeRnsBackend(
         appContext = appContext,
         rnodeHostBridge = rnodeHostBridge,
         callPrivacyBridge = callPrivacyBridge,
+        callLifecycleRecorder = callLifecycleRecorder,
     )
 
     override val core: RnsCore = impl

@@ -99,6 +99,12 @@ class NativeRnsBackendImpl(
      * allowed through (preserves the pre-feature behaviour).
      */
     private val callPrivacyBridge: CallPrivacyBridge? = null,
+    /**
+     * Service-local call lifecycle admission boundary for native telephony.
+     * Supplied by the kotlinBackend Hilt module. Null in unit-test mode →
+     * native incoming admission is unavailable (call managers not constructed).
+     */
+    private val callLifecycleRecorder: network.columba.app.rns.api.call.CallLifecycleRecorder? = null,
 ) : network.columba.app.rns.api.RnsCore,
     network.columba.app.rns.api.RnsLxmf,
     network.columba.app.rns.api.RnsTelephony,
@@ -2043,6 +2049,10 @@ class NativeRnsBackendImpl(
                 context = ctx,
                 deliveryIdentity = identity,
                 transport = callTransport,
+                recorder =
+                    requireNotNull(callLifecycleRecorder) {
+                        "CallLifecycleRecorder is required when native telephony is initialized"
+                    },
                 callPrivacyBridge = callPrivacyBridge,
             )
         manager.setup()

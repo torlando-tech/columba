@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.call.AcceptedCallLifecycle
 import network.columba.app.rns.api.call.CallAttemptDirection
+import network.columba.app.rns.api.call.CallAttemptRequest
 import network.columba.app.rns.api.call.CallCallbackAdapter
 import network.columba.app.rns.api.call.CallLifecycleRecorder
 import network.columba.app.rns.api.call.SerializedLifecycleCallbackAdapter
@@ -287,8 +288,24 @@ class PythonCallManager(
                     if (it == null) Log.w(TAG, "Unknown LXST profile code 0x${code.toString(16)}, defaulting")
                 }
             } ?: Profile.DEFAULT
-            Log.i(TAG, "Calling with profile ${profile.abbreviation} (0x${profile.id.toString(16)})")
-            telephone.call(destBytes, profile)
+            // Durable admission happens BEFORE outbound signalling: the attempt row is
+            // created and the lifecycle owner latches it before telephone.call() launches.
+            // If admission fails, the call is not placed and no history is recorded.
+            val request =
+                CallAttemptRequest(
+                    direction = CallAttemptDirection.OUTGOING,
+                    localIdentityHash = localIdentityHash,
+                    remoteIdentityHash = destinationHash,
+                    codecProfileCode = profileCode,
+                )
+            val result =
+                acceptedCallLifecycle.admitOutgoing(request) { _ ->
+                    Log.i(TAG, "Calling with profile ${profile.abbreviation} (0x${profile.id.toString(16)})")
+                    telephone.call(destBytes, profile)
+                }
+            if (result.isFailure) {
+                Log.w(TAG, "Outgoing call not admitted: ${result.exceptionOrNull()}")
+            }
         }
     }
 

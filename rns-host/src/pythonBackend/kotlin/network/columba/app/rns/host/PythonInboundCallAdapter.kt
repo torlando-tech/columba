@@ -203,8 +203,11 @@ internal class PythonInboundCallAdapter(
         packer.packArrayHeader(1)
         packer.packInt(signal)
         val pyData = runtime.python.builtins.callAttr("bytes", packer.toByteArray())
-        val result = runtime.rnsModule.callAttr("Packet", link, pyData).callAttr("send")
-        check(result?.toJava(Boolean::class.javaObjectType) != false) { "Inbound signalling send failed" }
+        // RNS.Packet.send() returns a PacketReceipt (or None/False), never a Java
+        // Boolean true, so it must not be asserted as a Boolean success flag. Match
+        // the legacy sendSignalOnLink behavior: send best-effort and log failures.
+        runCatching { runtime.rnsModule.callAttr("Packet", link, pyData).callAttr("send") }
+            .onFailure { Log.w(TAG, "sendSignal($signal) failed: ${it.message}") }
     }
 
     private companion object {

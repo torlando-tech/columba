@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 1
 
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v6.2.0
+        uses: gradle/actions/wrapper-validation@v6.3.0
 
   lint:
     name: Code Quality (ktlint + detekt + CPD + Android Lint)
@@ -39,7 +39,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -196,7 +196,7 @@ jobs:
           java-version: 25
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -317,7 +317,7 @@ jobs:
           python-version: '3.11'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -404,7 +404,7 @@ jobs:
           java-version: 25
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -475,7 +475,7 @@ jobs:
           python-version: '3.11'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -620,7 +620,7 @@ jobs:
           python-version: '3.11'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 

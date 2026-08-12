@@ -110,7 +110,9 @@ class BluetoothLeConnection(
 
         val device: BluetoothDevice? =
             try {
-                adapter.bondedDevices.find { it.address == deviceAddress }
+                adapter.bondedDevices.find {
+                    it.address == deviceAddress || it.name == deviceAddress
+                }
             } catch (e: SecurityException) {
                 Log.e(TAG, "Missing BLUETOOTH_CONNECT permission", e)
                 null

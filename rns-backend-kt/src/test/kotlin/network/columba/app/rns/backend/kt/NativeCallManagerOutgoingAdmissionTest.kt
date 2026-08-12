@@ -11,7 +11,9 @@ import kotlinx.coroutines.runBlocking
 import network.columba.app.rns.api.call.CallAttemptDirection
 import network.columba.app.rns.api.call.CallAttemptRequest
 import network.columba.app.rns.api.call.CallAttemptSnapshot
+import network.columba.app.rns.api.call.CallFailureReason
 import network.columba.app.rns.api.call.CallLifecycleRecorder
+import network.columba.app.rns.api.call.UnconnectedOutcome
 import network.reticulum.identity.Identity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -36,14 +38,14 @@ class NativeCallManagerOutgoingAdmissionTest {
     @Before
     fun mockSingletons() {
         // NativeCallManager's property init calls AudioDevice / PacketRouter /
-        // CallCoordinator getInstance(). Mock them so a mock Context doesn't need a real
-        // AudioManager (which throws ClassCastException on a relaxed Context).
+        // CallCoordinator getInstance(). These objects are stored but never exercised
+        // (setup() is not called), so strict mocks are sufficient.
         mockkObject(AudioDevice)
         mockkObject(PacketRouter)
         mockkObject(CallCoordinator)
-        every { AudioDevice.getInstance(any()) } returns mockk(relaxed = true)
-        every { PacketRouter.getInstance(any()) } returns mockk(relaxed = true)
-        every { CallCoordinator.getInstance() } returns mockk(relaxed = true)
+        every { AudioDevice.getInstance(any()) } returns mockk()
+        every { PacketRouter.getInstance(any()) } returns mockk()
+        every { CallCoordinator.getInstance() } returns mockk()
     }
 
     @After
@@ -55,14 +57,18 @@ class NativeCallManagerOutgoingAdmissionTest {
 
     @Test
     fun `outgoing call admits an OUTGOING attempt before signalling`() = runBlocking {
+        // Context is an Android system service allowed to be relaxed.
         val context = mockk<Context>(relaxed = true)
-        val identity = mockk<Identity>(relaxed = true)
+        val identity = mockk<Identity>()
         every { identity.hexHash } returns "aabbccddaabbccdd"
-        val transport = mockk<NativeNetworkTransport>(relaxed = true)
-        val recorder = mockk<CallLifecycleRecorder>(relaxed = true)
+        // Transport is only stored; setup() is not called so no transport methods run.
+        val transport = mockk<NativeNetworkTransport>()
+        val recorder = mockk<CallLifecycleRecorder>()
 
         // Capture the admitted request and accept it so admitOutgoing proceeds to the
-        // launch lambda (which would start telephone.call()).
+        // launch lambda (which would start telephone.call()). telephone is not
+        // initialized (setup() not run), so the lifecycle's cleanup may finalize the
+        // attempt; stub every recorder write so the strict mock never throws.
         val captured = mutableListOf<CallAttemptRequest>()
         coEvery { recorder.acceptCallAttempt(any()) } answers {
             val req = firstArg<CallAttemptRequest>()
@@ -78,6 +84,15 @@ class NativeCallManagerOutgoingAdmissionTest {
                 ),
             )
         }
+        coEvery { recorder.recordCallRinging(any()) } returns Result.success(Unit)
+        coEvery { recorder.recordCallConnected(any()) } returns Result.success(Unit)
+        coEvery { recorder.completeConnectedCall(any()) } returns Result.success(Unit)
+        coEvery { recorder.interruptCall(any()) } returns Result.success(Unit)
+        coEvery { recorder.finalizeUnconnectedCall(any(), any<UnconnectedOutcome>()) } returns
+            Result.success(Unit)
+        coEvery { recorder.discardCallAttempt(any()) } returns Result.success(Unit)
+        coEvery { recorder.failCallAttempt(any(), any<CallFailureReason>()) } returns
+            Result.success(Unit)
 
         val manager =
             NativeCallManager(

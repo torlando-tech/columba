@@ -9,12 +9,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.os.ParcelUuid
 import android.util.Log
 import java.io.IOException
 import java.io.InputStream
@@ -52,7 +47,6 @@ class BluetoothLeConnection(
         private val NUS_TX_CHAR_UUID: UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e") // Notify FROM device
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        private const val BLE_SCAN_TIMEOUT_MS = 10_000L
         private const val BLE_CONNECT_TIMEOUT_MS = 15_000L
         private const val BLE_CONNECT_MAX_RETRIES = 3
         private const val BLE_RETRY_DELAY_MS = 1_000L
@@ -99,7 +93,7 @@ class BluetoothLeConnection(
     /**
      * Connect to the RNode BLE device.
      *
-     * Scans for or finds the device by address, connects GATT, negotiates MTU,
+     * Finds the paired device by address, connects GATT, negotiates MTU,
      * discovers NUS service, and enables TX notifications. Retries up to 3 times
      * for transient BLE failures (e.g., GATT error 133).
      *
@@ -114,20 +108,17 @@ class BluetoothLeConnection(
     private fun findDevice(): BluetoothDevice {
         val adapter = bluetoothAdapter ?: throw IOException("Bluetooth not available")
 
-        var device: BluetoothDevice? =
+        val device: BluetoothDevice? =
             try {
-                adapter.bondedDevices.find { it.address == deviceAddress }
+                adapter.bondedDevices.find {
+                    it.address == deviceAddress || it.name == deviceAddress
+                }
             } catch (e: SecurityException) {
                 Log.e(TAG, "Missing BLUETOOTH_CONNECT permission", e)
                 null
             }
 
-        if (device == null) {
-            Log.d(TAG, "Device not bonded, scanning for: $deviceAddress")
-            device = scanForDevice(deviceAddress)
-        }
-
-        return device ?: throw IOException("BLE device not found: $deviceAddress")
+        return device ?: throw IOException("Paired BLE device not found: $deviceAddress")
     }
 
     private fun connectWithRetries(device: BluetoothDevice): Pair<InputStream, OutputStream> {
@@ -191,64 +182,6 @@ class BluetoothLeConnection(
         }
     }
 
-    /**
-     * Scan for a BLE device by address or name.
-     */
-    private fun scanForDevice(address: String): BluetoothDevice? {
-        val scanner =
-            bluetoothAdapter?.bluetoothLeScanner ?: run {
-                Log.e(TAG, "BLE scanner not available")
-                return null
-            }
-
-        var result: BluetoothDevice? = null
-
-        val scanCallback =
-            object : ScanCallback() {
-                override fun onScanResult(
-                    callbackType: Int,
-                    scanResult: ScanResult,
-                ) {
-                    val dev = scanResult.device
-                    // Match by address or by name
-                    if (dev.address == address || dev.name == address) {
-                        Log.d(TAG, "Found BLE device: ${dev.name} (${dev.address})")
-                        result = dev
-                    }
-                }
-
-                override fun onScanFailed(errorCode: Int) {
-                    Log.e(TAG, "BLE scan failed: $errorCode")
-                }
-            }
-
-        val filter =
-            ScanFilter
-                .Builder()
-                .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
-                .build()
-
-        val settings =
-            ScanSettings
-                .Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build()
-
-        try {
-            scanner.startScan(listOf(filter), settings, scanCallback)
-
-            val startTime = System.currentTimeMillis()
-            while (result == null && (System.currentTimeMillis() - startTime) < BLE_SCAN_TIMEOUT_MS) {
-                Thread.sleep(100)
-            }
-
-            scanner.stopScan(scanCallback)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Missing BLUETOOTH_SCAN permission", e)
-        }
-
-        return result
-    }
 
     /**
      * GATT callback handling the full lifecycle:

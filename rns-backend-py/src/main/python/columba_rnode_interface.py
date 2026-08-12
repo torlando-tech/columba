@@ -338,10 +338,15 @@ class ColumbaRNodeInterface(Interface):
         self._read_thread = None
         self._running = threading.Event()  # Thread-safe flag for read loop control
         self._read_lock = threading.Lock()
+        self._start_lock = threading.Lock()
+        self._online_notification_lock = threading.RLock()
 
         # Auto-reconnection
+        self._reconnect_lock = threading.Lock()
         self._reconnect_thread = None
         self._reconnecting = False
+        self._reconnect_requested = False
+        self._reconnect_cancelled = threading.Event()
         self._max_reconnect_attempts = 30  # Try for ~5 minutes (30 * 10s)
         self._reconnect_interval = 10.0  # Seconds between reconnection attempts
 
@@ -464,6 +469,11 @@ class ColumbaRNodeInterface(Interface):
             raise ValueError(f"Invalid long-term airtime limit: {self.lt_alock}")
 
     def start(self):
+        """Run one complete transport/configuration attempt at a time."""
+        with self._start_lock:
+            return self._start_once()
+
+    def _start_once(self):
         """Start the interface - connect to RNode and configure radio."""
         # Handle USB mode separately
         if self.connection_mode == self.MODE_USB:
@@ -510,16 +520,8 @@ class ColumbaRNodeInterface(Interface):
 
         RNS.log(f"Connecting to RNode '{self.target_device_name}' via {mode_str}...", RNS.LOG_INFO)
 
-        # Connect via Kotlin bridge with specified mode
-        if not self.kotlin_bridge.connect(self.target_device_name, self.connection_mode):
-            RNS.log(f"Failed to connect to {self.target_device_name}", RNS.LOG_ERROR)
-            return False
-
-        # Set up data + connection-state callbacks. KotlinRNodeBridge in this
-        # codebase exposes listener-based registration via add*Listener
-        # methods rather than setOn*; wrap in try/except so a refactor doesn't
-        # block interface start. Polling-based reads in _read_loop are what
-        # actually drives data flow, so missing callbacks are non-fatal.
+        # Install observers before connect(). Kotlin can synchronously report
+        # both connection and immediate disconnection before connect returns.
         try:
             if hasattr(self.kotlin_bridge, "setOnDataReceived"):
                 self.kotlin_bridge.setOnDataReceived(self._on_data_received)
@@ -527,6 +529,16 @@ class ColumbaRNodeInterface(Interface):
                 self.kotlin_bridge.setOnConnectionStateChanged(self._on_connection_state_changed)
         except Exception as e:  # noqa: BLE001
             RNS.log(f"ColumbaRNodeInterface: optional callback registration failed (non-fatal): {e}", RNS.LOG_DEBUG)
+
+        # Connect via Kotlin bridge with specified mode
+        if not self.kotlin_bridge.connect(self.target_device_name, self.connection_mode):
+            RNS.log(f"Failed to connect to {self.target_device_name}", RNS.LOG_ERROR)
+            return False
+
+        if self._reconnect_cancelled.is_set():
+            self.kotlin_bridge.disconnect()
+            return False
+
 
         # Stop any stale read thread before starting a new one.
         # _on_connection_state_changed(False) does NOT clear _running, so an
@@ -551,6 +563,23 @@ class ColumbaRNodeInterface(Interface):
                 )
                 return False
 
+        # A prior connection's protocol responses must not validate this
+        # transport. Require fresh detection, firmware, and radio readback.
+        self.detected = False
+        self.firmware_ok = False
+        self.interface_ready = False
+        self.platform = None
+        self.mcu = None
+        self.maj_version = 0
+        self.min_version = 0
+        with self._read_lock:
+            self.r_frequency = None
+            self.r_bandwidth = None
+            self.r_txpower = None
+            self.r_sf = None
+            self.r_cr = None
+            self.r_state = None
+
         # Start read thread
         self._running.set()
         self._read_thread = threading.Thread(target=self._read_loop, daemon=True)
@@ -560,10 +589,15 @@ class ColumbaRNodeInterface(Interface):
         try:
             time.sleep(1.5)  # Allow BLE connection to fully stabilize
             self._configure_device()
+            if self._reconnect_cancelled.is_set() or not self.online:
+                raise IOError("RNode connection did not reach online state")
             return True
         except Exception as e:  # noqa: BLE001
             RNS.log(f"Failed to configure RNode: {e}", RNS.LOG_ERROR)
-            self.stop()
+            # GATT/RFCOMM transport readiness is not a complete reconnect.
+            # Keep the bounded reconnect owner alive when RNode detection or
+            # radio configuration fails after the transport connected.
+            self.stop(cancel_reconnection=False)
             return False
 
     def _start_usb(self):
@@ -656,10 +690,14 @@ class ColumbaRNodeInterface(Interface):
             RNS.log(f"[{self.name}] After disconnect: online={self.online}, read loop stopped", RNS.LOG_INFO)
             # Note: USB doesn't auto-reconnect - user must re-plug or re-select device
 
-    def stop(self):
-        """Stop the interface and disconnect."""
+    def stop(self, cancel_reconnection=True):
+        """Stop and disconnect, optionally preserving the reconnect owner."""
         self._running.clear()
-        self._reconnecting = False  # Stop any reconnection attempts
+        if cancel_reconnection:
+            with self._reconnect_lock:
+                self._reconnecting = False
+                self._reconnect_requested = False
+                self._reconnect_cancelled.set()
         self._set_online(False)
 
         # Disconnect based on connection mode
@@ -673,19 +711,28 @@ class ColumbaRNodeInterface(Interface):
         if self._read_thread:
             self._read_thread.join(timeout=2.0)
 
-        if self._reconnect_thread:
+        if (
+            cancel_reconnection
+            and self._reconnect_thread
+            and self._reconnect_thread is not threading.current_thread()
+        ):
             self._reconnect_thread.join(timeout=2.0)
 
         RNS.log(f"RNode interface '{self.name}' stopped", RNS.LOG_INFO)
 
     def _configure_device(self):
         """Detect and configure the RNode."""
+        if self._reconnect_cancelled.is_set():
+            raise IOError("RNode connection cancelled")
+
         # Send detect command
         self._detect()
 
         # Wait for detection response
         start_time = time.time()
         while not self.detected and (time.time() - start_time) < self.DETECT_TIMEOUT:
+            if self._reconnect_cancelled.is_set():
+                raise IOError("RNode connection cancelled")
             time.sleep(0.1)
 
         if not self.detected:
@@ -709,6 +756,8 @@ class ColumbaRNodeInterface(Interface):
         # Short bounded wait closes it without inventing an Event mechanism.
         fw_wait_start = time.time()
         while not self.firmware_ok and (time.time() - fw_wait_start) < 1.0:
+            if self._reconnect_cancelled.is_set():
+                raise IOError("RNode connection cancelled")
             time.sleep(0.02)
 
         if not self.firmware_ok:
@@ -721,9 +770,15 @@ class ColumbaRNodeInterface(Interface):
         RNS.log("Configuring RNode radio...", RNS.LOG_VERBOSE)
         self._init_radio()
 
+        if self._reconnect_cancelled.is_set():
+            raise IOError("RNode connection cancelled")
+
         # Validate configuration
         if self._validate_radio_state():
             self.interface_ready = True
+            if self._reconnect_cancelled.is_set():
+                self.interface_ready = False
+                raise IOError("RNode connection cancelled")
             self._set_online(True)
             RNS.log(f"RNode '{self.name}' is online", RNS.LOG_INFO)
 
@@ -1293,8 +1348,9 @@ class ColumbaRNodeInterface(Interface):
         """Callback when Bluetooth connection state changes."""
         if connected:
             RNS.log(f"RNode connected: {device_name}", RNS.LOG_INFO)
-            # Stop any reconnection attempts if we're now connected
-            self._reconnecting = False
+            # Transport connection alone is not successful recovery. The
+            # reconnect loop clears its owner only after start() completes
+            # RNode detection, radio configuration, and online validation.
         else:
             RNS.log(f"RNode disconnected: {device_name}", RNS.LOG_WARNING)
             self._set_online(False)
@@ -1334,45 +1390,69 @@ class ColumbaRNodeInterface(Interface):
 
         @param is_online: New online status
         """
-        with self._read_lock:
-            old_status = self.online
-            self.online = is_online
-        if old_status != is_online:
-            # Existing in-Python observer chain (callbacks registered by other
-            # python-side code that wants the live online state).
-            if self._on_online_status_changed:
-                try:
-                    self._on_online_status_changed(is_online)
-                except Exception as e:  # noqa: BLE001
-                    RNS.log(f"Error in online status callback: {e}", RNS.LOG_ERROR)
-            # Notify the Kotlin RNodeBridge so ServiceNotificationManager can
-            # raise / dismiss its "RNode Disconnected" heads-up notification.
-            # ReticulumService.onCreate registers an RNodeOnlineStatusListener
-            # against the bridge singleton.
-            #
-            # USB-mode interfaces don't share the BLE/Classic kotlin_bridge —
-            # for those, KotlinUSBBridge fires its own UsbConnectionListener
-            # on ACTION_USB_DEVICE_DETACHED system broadcast, which converges
-            # in the same notification path. Filter here to avoid invoking a
-            # bridge method that doesn't exist on KotlinUSBBridge.
-            if self.connection_mode != self.MODE_USB and self.kotlin_bridge is not None:
-                try:
-                    self.kotlin_bridge.notifyOnlineStatusChanged(is_online, self.name)
-                except Exception as e:  # noqa: BLE001
-                    RNS.log(
-                        f"Failed to notify kotlin bridge of online status change: {e}",
-                        RNS.LOG_DEBUG,
-                    )
+        # Serialize state mutation and observer publication so stop() cannot
+        # return before an older online=True notification finishes and then
+        # publish a stale True after the terminal False transition.
+        with self._online_notification_lock:
+            with self._read_lock:
+                if is_online and self._reconnect_cancelled.is_set():
+                    return False
+                old_status = self.online
+                self.online = is_online
+            if old_status != is_online:
+                # Existing in-Python observer chain (callbacks registered by other
+                # python-side code that wants the live online state).
+                if self._on_online_status_changed:
+                    try:
+                        self._on_online_status_changed(is_online)
+                    except Exception as e:  # noqa: BLE001
+                        RNS.log(f"Error in online status callback: {e}", RNS.LOG_ERROR)
+                # The Python observer may synchronously stop the interface and
+                # publish a newer state through this reentrant method. Do not
+                # send the superseded outer transition to Kotlin afterward.
+                with self._read_lock:
+                    transition_is_current = self.online == is_online
+                # Notify the Kotlin RNodeBridge so ServiceNotificationManager can
+                # raise / dismiss its "RNode Disconnected" heads-up notification.
+                # ReticulumService.onCreate registers an RNodeOnlineStatusListener
+                # against the bridge singleton.
+                #
+                # USB-mode interfaces don't share the BLE/Classic kotlin_bridge —
+                # for those, KotlinUSBBridge fires its own UsbConnectionListener
+                # on ACTION_USB_DEVICE_DETACHED system broadcast, which converges
+                # in the same notification path. Filter here to avoid invoking a
+                # bridge method that doesn't exist on KotlinUSBBridge.
+                if (
+                    transition_is_current
+                    and self.connection_mode != self.MODE_USB
+                    and self.kotlin_bridge is not None
+                ):
+                    try:
+                        self.kotlin_bridge.notifyOnlineStatusChanged(is_online, self.name)
+                    except Exception as e:  # noqa: BLE001
+                        RNS.log(
+                            f"Failed to notify kotlin bridge of online status change: {e}",
+                            RNS.LOG_DEBUG,
+                        )
+        return True
 
     def _start_reconnection_loop(self):
         """Start a background thread to attempt reconnection."""
-        if self._reconnecting:
-            RNS.log("Reconnection already in progress", RNS.LOG_DEBUG)
-            return
+        with self._reconnect_lock:
+            if self._reconnect_cancelled.is_set():
+                RNS.log("Ignoring reconnect request after explicit stop", RNS.LOG_DEBUG)
+                return
+            if self._reconnecting:
+                # Preserve a disconnect which arrives while the current owner
+                # is between successful start() and ownership teardown.
+                self._reconnect_requested = True
+                RNS.log("Reconnection already in progress", RNS.LOG_DEBUG)
+                return
 
-        self._reconnecting = True
-        self._reconnect_thread = threading.Thread(target=self._reconnection_loop, daemon=True)
-        self._reconnect_thread.start()
+            self._reconnect_requested = False
+            self._reconnecting = True
+            self._reconnect_thread = threading.Thread(target=self._reconnection_loop, daemon=True)
+            self._reconnect_thread.start()
         RNS.log(f"Started auto-reconnection loop for {self.target_device_name}", RNS.LOG_INFO)
 
     def _reconnection_loop(self):
@@ -1384,8 +1464,21 @@ class ColumbaRNodeInterface(Interface):
 
             try:
                 if self.start():
+                    with self._reconnect_lock:
+                        if self._reconnect_requested and not self._reconnect_cancelled.is_set():
+                            self._reconnect_requested = False
+                            retry_after_disconnect = True
+                        else:
+                            self._reconnecting = False
+                            retry_after_disconnect = False
+                    if retry_after_disconnect:
+                        RNS.log(
+                            f"Connection to {self.target_device_name} dropped during "
+                            "reconnect completion; retrying",
+                            RNS.LOG_WARNING,
+                        )
+                        continue
                     RNS.log(f"Successfully reconnected to {self.target_device_name}", RNS.LOG_INFO)
-                    self._reconnecting = False
                     return
                 else:
                     RNS.log(f"Reconnection attempt {attempt} failed, will retry in {self._reconnect_interval}s", RNS.LOG_WARNING)
@@ -1400,7 +1493,9 @@ class ColumbaRNodeInterface(Interface):
 
         if self._reconnecting:
             RNS.log(f"Failed to reconnect to {self.target_device_name} after {attempt} attempts", RNS.LOG_ERROR)
-            self._reconnecting = False
+            with self._reconnect_lock:
+                self._reconnecting = False
+                self._reconnect_requested = False
 
     def process_held_announces(self):
         """Process any held announces. Required by RNS Transport.

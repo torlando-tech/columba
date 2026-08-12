@@ -6,6 +6,7 @@ import android.content.Context
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
 import org.junit.After
@@ -44,6 +45,16 @@ class KotlinRNodeBridgeOnlineStatusTest {
         every { mockContext.getSystemService(Context.BLUETOOTH_SERVICE) } returns mockBluetoothManager
         every { mockBluetoothManager.adapter } returns mockBluetoothAdapter
         every { mockBluetoothAdapter.isEnabled } returns true
+    }
+
+    @Test
+    fun `runtime BLE connect rejects unbonded RNode without scanning`() {
+        every { mockBluetoothAdapter.bondedDevices } returns emptySet()
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        assertFalse(bridge.connect("RNode 1234", "ble"))
+
+        verify(exactly = 0) { mockBluetoothAdapter.bluetoothLeScanner }
     }
 
     @After

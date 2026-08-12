@@ -349,6 +349,7 @@ class ColumbaRNodeInterface(Interface):
         self._reconnect_cancelled = threading.Event()
         self._max_reconnect_attempts = 30  # Try for ~5 minutes (30 * 10s)
         self._reconnect_interval = 10.0  # Seconds between reconnection attempts
+        self._long_reconnect_interval = 15 * 60  # Indefinite low-duty recovery cadence
 
         # Error / status callbacks (Kotlin sets these via setOnErrorReceived /
         # setOnOnlineStatusChanged on the constructed interface — optional).
@@ -1458,9 +1459,16 @@ class ColumbaRNodeInterface(Interface):
     def _reconnection_loop(self):
         """Background thread that attempts to reconnect to the RNode."""
         attempt = 0
-        while self._reconnecting and attempt < self._max_reconnect_attempts:
+        while self._reconnecting and not self._reconnect_cancelled.is_set():
             attempt += 1
-            RNS.log(f"Reconnection attempt {attempt}/{self._max_reconnect_attempts} for {self.target_device_name}...", RNS.LOG_INFO)
+            if attempt <= self._max_reconnect_attempts:
+                attempt_label = f"{attempt}/{self._max_reconnect_attempts}"
+            else:
+                attempt_label = f"long-term {attempt - self._max_reconnect_attempts}"
+            RNS.log(
+                f"Reconnection attempt {attempt_label} for {self.target_device_name}...",
+                RNS.LOG_INFO,
+            )
 
             try:
                 if self.start():
@@ -1481,21 +1489,27 @@ class ColumbaRNodeInterface(Interface):
                     RNS.log(f"Successfully reconnected to {self.target_device_name}", RNS.LOG_INFO)
                     return
                 else:
-                    RNS.log(f"Reconnection attempt {attempt} failed, will retry in {self._reconnect_interval}s", RNS.LOG_WARNING)
+                    RNS.log(f"Reconnection attempt {attempt_label} failed", RNS.LOG_WARNING)
             except Exception as e:  # noqa: BLE001
-                RNS.log(f"Reconnection attempt {attempt} error: {e}", RNS.LOG_ERROR)
+                RNS.log(f"Reconnection attempt {attempt_label} error: {e}", RNS.LOG_ERROR)
 
-            # Wait before next attempt (but check if we should stop)
-            for _ in range(int(self._reconnect_interval * 10)):
-                if not self._reconnecting:
-                    return
-                time.sleep(0.1)
+            delay = (
+                self._reconnect_interval
+                if attempt < self._max_reconnect_attempts
+                else self._long_reconnect_interval
+            )
+            if attempt == self._max_reconnect_attempts:
+                RNS.log(
+                    f"Fast reconnect phase exhausted for {self.target_device_name}; "
+                    f"continuing every {int(self._long_reconnect_interval / 60)} minutes",
+                    RNS.LOG_WARNING,
+                )
+            if self._wait_for_reconnect(delay):
+                return
 
-        if self._reconnecting:
-            RNS.log(f"Failed to reconnect to {self.target_device_name} after {attempt} attempts", RNS.LOG_ERROR)
-            with self._reconnect_lock:
-                self._reconnecting = False
-                self._reconnect_requested = False
+    def _wait_for_reconnect(self, delay):
+        """Wait for the next attempt, returning true when lifecycle stop cancels it."""
+        return self._reconnect_cancelled.wait(delay) or not self._reconnecting
 
     def process_held_announces(self):
         """Process any held announces. Required by RNS Transport.

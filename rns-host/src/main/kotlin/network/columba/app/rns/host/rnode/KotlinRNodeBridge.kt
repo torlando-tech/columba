@@ -11,13 +11,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
-import android.bluetooth.le.BluetoothLeScanner
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.os.ParcelUuid
 import android.util.Log
 import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
@@ -122,7 +116,6 @@ class KotlinRNodeBridge(
         private const val STREAM_BUFFER_SIZE = 2048
 
         // BLE timeouts and retry settings
-        private const val BLE_SCAN_TIMEOUT_MS = 10000L
         private const val BLE_CONNECT_TIMEOUT_MS = 15000L
         private const val BLE_CONNECT_MAX_RETRIES = 3
         private const val BLE_RETRY_DELAY_MS = 1000L
@@ -179,10 +172,6 @@ class KotlinRNodeBridge(
     private var bleRxCharacteristic: BluetoothGattCharacteristic? = null
     private var bleTxCharacteristic: BluetoothGattCharacteristic? = null
     private var bleMtu: Int = 20 // Default BLE MTU (will be negotiated higher)
-    private val bleScanner: BluetoothLeScanner? by lazy { bluetoothAdapter?.bluetoothLeScanner }
-
-    @Volatile
-    private var bleScanResult: BluetoothDevice? = null
 
     @Volatile
     private var bleConnected = false
@@ -535,8 +524,9 @@ class KotlinRNodeBridge(
     ): Boolean {
         Log.d(TAG, "████ RNODE BLE CONNECT ████ deviceName=$deviceName")
 
-        // First check bonded devices
-        var device: BluetoothDevice? =
+        // Runtime connections only target devices paired by the setup wizard.
+        // Do not fall back to low-latency scanning during automatic reconnect.
+        val device: BluetoothDevice? =
             try {
                 adapter.bondedDevices.find { it.name == deviceName }
             } catch (e: SecurityException) {
@@ -544,14 +534,8 @@ class KotlinRNodeBridge(
                 null
             }
 
-        // If not bonded, try to scan for the device
         if (device == null) {
-            Log.d(TAG, "Device not bonded, scanning for BLE device: $deviceName")
-            device = scanForBleDevice(deviceName)
-        }
-
-        if (device == null) {
-            Log.e(TAG, "████ RNODE BLE FAILED ████ device not found: $deviceName")
+            Log.e(TAG, "████ RNODE BLE FAILED ████ paired device not found: $deviceName")
             return false
         }
 
@@ -633,65 +617,6 @@ class KotlinRNodeBridge(
         }
     }
 
-    /**
-     * Scan for a BLE device by name.
-     */
-    private fun scanForBleDevice(deviceName: String): BluetoothDevice? {
-        val scanner =
-            bleScanner ?: run {
-                Log.e(TAG, "BLE scanner not available")
-                return null
-            }
-
-        bleScanResult = null
-
-        val scanCallback =
-            object : ScanCallback() {
-                override fun onScanResult(
-                    callbackType: Int,
-                    result: ScanResult,
-                ) {
-                    val name = result.device.name ?: return
-                    if (name == deviceName) {
-                        Log.d(TAG, "Found BLE device: $name (${result.device.address})")
-                        bleScanResult = result.device
-                    }
-                }
-
-                override fun onScanFailed(errorCode: Int) {
-                    Log.e(TAG, "BLE scan failed: $errorCode")
-                }
-            }
-
-        // Start scan with filter for Nordic UART Service
-        val filter =
-            ScanFilter
-                .Builder()
-                .setServiceUuid(ParcelUuid(NUS_SERVICE_UUID))
-                .build()
-
-        val settings =
-            ScanSettings
-                .Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build()
-
-        try {
-            scanner.startScan(listOf(filter), settings, scanCallback)
-
-            // Wait for result
-            val startTime = System.currentTimeMillis()
-            while (bleScanResult == null && (System.currentTimeMillis() - startTime) < BLE_SCAN_TIMEOUT_MS) {
-                Thread.sleep(100)
-            }
-
-            scanner.stopScan(scanCallback)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Missing BLUETOOTH_SCAN permission", e)
-        }
-
-        return bleScanResult
-    }
 
     /**
      * BLE GATT callback for connection events.

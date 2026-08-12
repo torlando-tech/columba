@@ -157,20 +157,25 @@ class RNodeReconnectTests(unittest.TestCase):
 
         interface.stop()
 
-    def test_ble_reconnect_stops_at_existing_attempt_limit(self):
+    def test_ble_reconnect_enters_fifteen_minute_long_term_cadence(self):
         interface = self.new_interface()
+        interface._long_reconnect_interval = 15 * 60
         bridge = ScriptedBleBridge(interface, [False, False, False])
         interface.kotlin_bridge = bridge
-        real_sleep = time.sleep
+        waits = []
 
-        with mock.patch.object(
-            self.module.time,
-            "sleep",
-            side_effect=lambda _seconds: real_sleep(0.001),
-        ):
-            interface._reconnection_loop()
+        def wait_for_reconnect(delay):
+            waits.append(delay)
+            if delay == 15 * 60:
+                interface.stop()
+                return True
+            return False
+
+        interface._wait_for_reconnect = wait_for_reconnect
+        interface._reconnection_loop()
 
         self.assertEqual(3, bridge.connect_calls)
+        self.assertEqual([0, 0, 15 * 60], waits)
         self.assertFalse(interface.online)
         self.assertFalse(interface._reconnecting)
 

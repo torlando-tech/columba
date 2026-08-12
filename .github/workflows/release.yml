@@ -66,6 +66,25 @@ jobs:
             --no-daemon --stacktrace
           echo "✓ Release APKs built successfully"
 
+      - name: Build Release AAB (Play Store)
+        # Reuses compiled classes/resources from the assemble step above, so
+        # this is fast (~1m) despite the multi-flavor project. Only the
+        # pythonBackend flavor is built: it's the appId (network.columba.app)
+        # registered with the Play Console listing — kotlinBackend (`.kt`
+        # suffix) isn't published there.
+        timeout-minutes: 15
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+        run: |
+          ./gradlew :app:bundleSentryPythonBackendRelease --no-daemon --stacktrace
+          echo "✓ Release AAB built successfully"
+
       - name: Extract signing certificate fingerprints
         id: cert
         env:
@@ -124,6 +143,15 @@ jobs:
 
           ls -la columba-*.apk
           echo "✓ Renamed APKs"
+
+      - name: Rename AAB with version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cp app/build/outputs/bundle/sentryPythonBackendRelease/app-sentry-pythonBackend-release.aab \
+            "columba-${VERSION}-official-rns-py.aab"
+          sha256sum "columba-${VERSION}-official-rns-py.aab" > "columba-${VERSION}-official-rns-py.aab.sha256"
+          echo "✓ Renamed AAB"
 
       - name: Generate SHA256 checksums
         env:
@@ -277,9 +305,15 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          # The .aab isn't linked from the body below (users can't sideload
+          # it — it's Play Console upload material only) but still rides
+          # along as a release asset: those don't count against Actions
+          # storage quota the way workflow artifacts do.
           files: |
             columba-*.apk
             columba-*.apk.sha256
+            columba-*.aab
+            columba-*.aab.sha256
           draft: true
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generate_release_notes: true

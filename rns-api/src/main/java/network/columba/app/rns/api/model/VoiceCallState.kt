@@ -13,4 +13,5 @@ data class VoiceCallState(
     val isMuted: Boolean,
     val remoteIdentity: String?,
     val profile: String?,
+    val callAttemptId: String? = null,
 ) : Parcelable

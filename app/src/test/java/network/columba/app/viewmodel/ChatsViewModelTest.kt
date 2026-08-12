@@ -3,14 +3,20 @@
 package network.columba.app.viewmodel
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import network.columba.app.data.model.CallHistoryRecord
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.BlockedPeerRepository
+import network.columba.app.data.repository.CallHistoryRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.Conversation
 import network.columba.app.data.repository.ConversationRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallState
+import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
 import io.mockk.*
@@ -18,9 +24,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -45,11 +53,14 @@ class ChatsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var conversationRepository: ConversationRepository
+    private lateinit var callHistoryRepository: CallHistoryRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var receivedLocationRepository: ReceivedLocationRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var blockedPeerRepository: BlockedPeerRepository
     private lateinit var reticulumProtocol: RnsCore
+    private lateinit var rnsTelephony: RnsTelephony
+    private lateinit var liveCallState: MutableStateFlow<CallState>
     private lateinit var viewModel: ChatsViewModel
 
     private val testConversation1 =
@@ -93,10 +104,12 @@ class ChatsViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         conversationRepository = mockk()
+        callHistoryRepository = mockk()
         contactRepository = mockk()
         announceRepository = mockk()
         blockedPeerRepository = mockk()
         reticulumProtocol = mockk()
+        rnsTelephony = mockk()
         @Suppress("NoRelaxedMocks") // Service manager with many methods; explicit stubs for tested methods
         propagationNodeManager = mockk(relaxed = true)
         receivedLocationRepository = mockk()
@@ -106,6 +119,11 @@ class ChatsViewModelTest {
         // Default: no conversations, no drafts
         every { conversationRepository.getConversations() } returns flowOf(emptyList())
         every { conversationRepository.observeDrafts() } returns flowOf(emptyMap())
+        every { callHistoryRepository.observeActiveIdentityHash() } returns flowOf("local")
+        every { callHistoryRepository.observeHistory(any(), any()) } returns flowOf(emptyList())
+        liveCallState = MutableStateFlow(CallState.Idle)
+        every { rnsTelephony.callState } returns liveCallState
+        coEvery { rnsTelephony.getCallState() } returns Result.failure(IllegalStateException("No active call"))
 
         // Default: not syncing
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
@@ -117,10 +135,12 @@ class ChatsViewModelTest {
         viewModel =
             ChatsViewModel(
                 conversationRepository,
+                callHistoryRepository,
                 contactRepository,
                 announceRepository,
                 blockedPeerRepository,
                 reticulumProtocol,
+                rnsTelephony,
                 propagationNodeManager,
                 receivedLocationRepository,
                 identityResolutionManager,
@@ -143,6 +163,7 @@ class ChatsViewModelTest {
             }
         }
 
+
     @Test
     fun `chatsState flow emits repository data`() =
         runTest {
@@ -156,10 +177,12 @@ class ChatsViewModelTest {
             val newViewModel =
                 ChatsViewModel(
                     repository,
+                    callHistoryRepository,
                     mockk(),
                     announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
+                    rnsTelephony,
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
@@ -196,10 +219,12 @@ class ChatsViewModelTest {
             val newViewModel =
                 ChatsViewModel(
                     repository,
+                    callHistoryRepository,
                     mockk(),
                     announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
+                    rnsTelephony,
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
@@ -275,10 +300,12 @@ class ChatsViewModelTest {
             val newViewModel =
                 ChatsViewModel(
                     repository,
+                    callHistoryRepository,
                     mockk(),
                     announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
+                    rnsTelephony,
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
@@ -324,10 +351,12 @@ class ChatsViewModelTest {
             val newViewModel =
                 ChatsViewModel(
                     repository,
+                    callHistoryRepository,
                     mockk(),
                     announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
+                    rnsTelephony,
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
@@ -363,10 +392,12 @@ class ChatsViewModelTest {
             val newViewModel =
                 ChatsViewModel(
                     repository,
+                    callHistoryRepository,
                     mockk(),
                     announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
+                    rnsTelephony,
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
@@ -402,10 +433,12 @@ class ChatsViewModelTest {
             val newViewModel =
                 ChatsViewModel(
                     repository,
+                    callHistoryRepository,
                     mockk(),
                     announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
+                    rnsTelephony,
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
@@ -442,10 +475,12 @@ class ChatsViewModelTest {
             val newViewModel =
                 ChatsViewModel(
                     repository,
+                    callHistoryRepository,
                     mockk(),
                     announceRepository,
                     blockedPeerRepository,
                     reticulumProtocol,
+                    rnsTelephony,
                     propagationNodeManager,
                     receivedLocationRepository,
                     identityResolutionManager,
@@ -616,4 +651,5 @@ class ChatsViewModelTest {
             // Should not crash
             assertTrue("ViewModel should handle block errors gracefully", true)
         }
+
 }

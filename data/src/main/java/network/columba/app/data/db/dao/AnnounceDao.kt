@@ -178,6 +178,25 @@ interface AnnounceDao {
      * Identity hash = first 16 bytes of SHA-256(publicKey) as hex string.
      * Uses indexed column for O(1) lookup instead of full-table scan + hash computation.
      */
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE computedIdentityHash = :identityHash
+          AND aspect IN ('lxmf.delivery', 'lxst.telephony')
+        ORDER BY CASE aspect WHEN 'lxmf.delivery' THEN 0 ELSE 1 END, lastSeenTimestamp DESC
+        """,
+    )
+    suspend fun getApprovedPeerAnnounces(identityHash: String): List<AnnounceEntity>
+
+    @Query(
+        """
+        SELECT * FROM announces
+        WHERE computedIdentityHash = :identityHash AND aspect = 'lxst.telephony'
+        ORDER BY lastSeenTimestamp DESC LIMIT 1
+        """,
+    )
+    suspend fun getTelephonyAnnounceByIdentityHash(identityHash: String): AnnounceEntity?
+
     @Query("SELECT * FROM announces WHERE computedIdentityHash = :identityHash LIMIT 1")
     suspend fun getAnnounceByIdentityHash(identityHash: String): AnnounceEntity?
 

@@ -99,6 +99,12 @@ class NativeRnsBackendImpl(
      * allowed through (preserves the pre-feature behaviour).
      */
     private val callPrivacyBridge: CallPrivacyBridge? = null,
+    /**
+     * Service-local call lifecycle admission boundary for native telephony.
+     * Supplied by the kotlinBackend Hilt module. Null in unit-test mode →
+     * native incoming admission is unavailable (call managers not constructed).
+     */
+    private val callLifecycleRecorder: network.columba.app.rns.api.call.CallLifecycleRecorder? = null,
 ) : network.columba.app.rns.api.RnsCore,
     network.columba.app.rns.api.RnsLxmf,
     network.columba.app.rns.api.RnsTelephony,
@@ -248,6 +254,9 @@ class NativeRnsBackendImpl(
 
     // Blocked destinations and blackholed identities
     private val blockedDestinations =
+        java.util.concurrent.ConcurrentHashMap
+            .newKeySet<String>()
+    private val blockedIdentities =
         java.util.concurrent.ConcurrentHashMap
             .newKeySet<String>()
     private val blackholedIdentities =
@@ -2043,6 +2052,10 @@ class NativeRnsBackendImpl(
                 context = ctx,
                 deliveryIdentity = identity,
                 transport = callTransport,
+                recorder =
+                    requireNotNull(callLifecycleRecorder) {
+                        "CallLifecycleRecorder is required when native telephony is initialized"
+                    },
                 callPrivacyBridge = callPrivacyBridge,
             )
         manager.setup()
@@ -2247,6 +2260,12 @@ class NativeRnsBackendImpl(
             blockedDestinations.remove(destinationHashHex)
             Log.d(TAG, "Unblocked destination: ${destinationHashHex.take(16)}")
         }
+
+    override suspend fun blockIdentity(identityHashHex: String): Result<Unit> =
+        runCatching { blockedIdentities.add(identityHashHex.lowercase()); Unit }
+
+    override suspend fun unblockIdentity(identityHashHex: String): Result<Unit> =
+        runCatching { blockedIdentities.remove(identityHashHex.lowercase()); Unit }
 
     override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
         runCatching {

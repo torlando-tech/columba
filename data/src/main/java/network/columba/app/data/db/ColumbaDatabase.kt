@@ -20,6 +20,10 @@ import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
+import network.columba.app.data.db.dao.CallHistoryDao
+import network.columba.app.data.db.dao.CallHistoryDeletionDao
+import network.columba.app.data.db.entity.CallHistoryDeletionEntity
+import network.columba.app.data.db.entity.CallHistoryEntity
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.db.entity.BlockedPeerEntity
@@ -52,13 +56,15 @@ import network.columba.app.data.db.entity.RmspServerEntity
         ReceivedLocationEntity::class,
         OfflineMapRegionEntity::class,
         RmspServerEntity::class,
+        CallHistoryEntity::class,
+        CallHistoryDeletionEntity::class,
         DraftEntity::class,
         BlockedPeerEntity::class,
         InterfaceFirstSeenEntity::class,
         PeerActivityEntity::class,
         PeerActivityEventEntity::class,
     ],
-    version = 4,
+    version = 6,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -266,6 +272,63 @@ abstract class ColumbaDatabase : RoomDatabase() {
          * importing pre-v2 backup bundles whose messages still carry
          * the legacy overload.
          */
+
+        /** Add the reduced call-history tables. */
+        val MIGRATION_4_5: Migration =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `call_history` (
+                            `callAttemptId` TEXT NOT NULL,
+                            `localIdentityHash` TEXT NOT NULL,
+                            `remoteIdentityHash` TEXT NOT NULL,
+                            `direction` TEXT NOT NULL,
+                            `peerDisplayNameSnapshot` TEXT,
+                            `codecProfileCode` INTEGER,
+                            `attemptedAt` INTEGER NOT NULL,
+                            `ringingAt` INTEGER,
+                            `connectedAt` INTEGER,
+                            `endedAt` INTEGER,
+                            `outcome` TEXT,
+                            `inferredEnding` INTEGER NOT NULL,
+                            `failureReason` TEXT,
+                            `serviceInstanceId` TEXT NOT NULL,
+                            PRIMARY KEY(`callAttemptId`),
+                            FOREIGN KEY(`localIdentityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """,
+                    )
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `call_history_deletions` (" +
+                            "`callAttemptId` TEXT NOT NULL, " +
+                            "`localIdentityHash` TEXT NOT NULL, " +
+                            "`deletedAt` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`callAttemptId`), " +
+                            "FOREIGN KEY(`localIdentityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_call_history_localIdentityHash_attemptedAt` " +
+                            "ON `call_history` (`localIdentityHash`, `attemptedAt`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_call_history_remoteIdentityHash` ON `call_history` (`remoteIdentityHash`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_call_history_deletions_localIdentityHash` ON `call_history_deletions` (`localIdentityHash`)",
+                    )
+                }
+            }
+
+
+        /** Add identity-scoped blocking aspect to blocked_peers. */
+        val MIGRATION_5_6: Migration =
+            object : Migration(5, 6) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE blocked_peers ADD COLUMN routingAspect TEXT")
+                }
+            }
+
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =
             try {
@@ -313,4 +376,8 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun blockedPeerDao(): BlockedPeerDao
 
     abstract fun interfaceFirstSeenDao(): InterfaceFirstSeenDao
+
+    abstract fun callHistoryDao(): CallHistoryDao
+
+    abstract fun callHistoryDeletionDao(): CallHistoryDeletionDao
 }

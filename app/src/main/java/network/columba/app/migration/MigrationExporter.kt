@@ -106,6 +106,10 @@ class MigrationExporter
                     val customThemeExports = exportCustomThemes()
                     onProgress(0.64f)
 
+                    val callHistoryExports = exportCallHistory(identities)
+                    val callHistoryDeletionExports = exportCallHistoryDeletions()
+                    onProgress(0.645f)
+
                     val settingsExport = exportSettings()
                     onProgress(0.65f)
 
@@ -126,6 +130,8 @@ class MigrationExporter
                             peerIdentities = peerIdentityExports,
                             interfaces = interfaceExports,
                             customThemes = customThemeExports,
+                            callHistory = callHistoryExports,
+                            callHistoryDeletions = callHistoryDeletionExports,
                             settings = settingsExport,
                             attachmentManifest = attachmentRefs,
                             ratchetFiles = ratchetRefs,
@@ -353,6 +359,45 @@ class MigrationExporter
             return customThemes.map { it.toExport() }
         }
 
+        private suspend fun exportCallHistory(
+            identities: List<network.columba.app.data.db.entity.LocalIdentityEntity>,
+        ): List<CallHistoryExport> {
+            val records =
+                identities.flatMap { identity ->
+                    database.callHistoryDao().getForExport(identity.identityHash)
+                }
+            Log.d(TAG, "Collected ${records.size} call history records")
+            return records.map { record ->
+                CallHistoryExport(
+                    callAttemptId = record.callAttemptId,
+                    localIdentityHash = record.localIdentityHash,
+                    remoteIdentityHash = record.remoteIdentityHash,
+                    direction = record.direction,
+                    peerDisplayNameSnapshot = record.peerDisplayNameSnapshot,
+                    codecProfileCode = record.codecProfileCode,
+                    attemptedAt = record.attemptedAt,
+                    ringingAt = record.ringingAt,
+                    connectedAt = record.connectedAt,
+                    endedAt = record.endedAt,
+                    outcome = record.outcome,
+                    inferredEnding = record.inferredEnding,
+                    failureReason = record.failureReason,
+                )
+            }
+        }
+
+        private suspend fun exportCallHistoryDeletions(): List<CallHistoryDeletionExport> {
+            val deletions = database.callHistoryDeletionDao().getAllForExport()
+            Log.d(TAG, "Collected ${deletions.size} call history deletions")
+            return deletions.map { deletion ->
+                CallHistoryDeletionExport(
+                    callAttemptId = deletion.callAttemptId,
+                    localIdentityHash = deletion.localIdentityHash,
+                    deletedAt = deletion.deletedAt,
+                )
+            }
+        }
+
         private suspend fun exportSettings(): SettingsExport {
             // Automatic export of all DataStore preferences - includes any future settings automatically
             val allPreferences = settingsRepository.exportAllPreferences()
@@ -514,6 +559,10 @@ class MigrationExporter
                             .first()
                             .size
                     val customThemeCount = database.customThemeDao().getThemeCount()
+                    val callHistoryCount =
+                        identities.sumOf { identity ->
+                            database.callHistoryDao().getForExport(identity.identityHash).size
+                        }
 
                     ExportResult.Success(
                         identityCount = identities.size,
@@ -523,6 +572,7 @@ class MigrationExporter
                         peerIdentityCount = peerIdentityCount,
                         interfaceCount = interfaceCount,
                         customThemeCount = customThemeCount,
+                        callHistoryCount = callHistoryCount,
                     )
                 } catch (e: Exception) {
                     ExportResult.Error("Failed to get export preview: ${e.message}", e)

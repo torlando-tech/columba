@@ -640,6 +640,8 @@ private class FakeRnsCore : RnsCore {
         Result.success(0)
     override suspend fun blockDestination(destinationHashHex: String) = Result.success(Unit)
     override suspend fun unblockDestination(destinationHashHex: String) = Result.success(Unit)
+    override suspend fun blockIdentity(identityHashHex: String) = Result.success(Unit)
+    override suspend fun unblockIdentity(identityHashHex: String) = Result.success(Unit)
     override suspend fun blackholeIdentity(identityHashHex: String) = Result.success(Unit)
     override suspend fun unblackholeIdentity(identityHashHex: String) = Result.success(Unit)
 }

@@ -30,7 +30,9 @@ class BlockedPeerDaoTest {
         private const val IDENTITY_HASH_2 = "identity_hash_22345678901234567"
         private const val PEER_HASH = "peer_hash_1234567890123456789012"
         private const val PEER_HASH_2 = "peer_hash_2234567890123456789012"
+        private const val PEER_HASH_3 = "peer_hash_3234567890123456789012"
         private const val PEER_IDENTITY_HASH = "peer_id_hash_123456789012345678"
+        private const val PEER_IDENTITY_HASH_2 = "peer_id_hash_223456789012345678"
     }
 
     @Before
@@ -170,11 +172,18 @@ class BlockedPeerDaoTest {
                 blockedPeerDao.insertBlockedPeer(createBlockedPeer(peerHash = PEER_HASH))
                 assertEquals(1, awaitItem())
 
+                // Two destination rows for the SAME identity count as one identity.
                 blockedPeerDao.insertBlockedPeer(createBlockedPeer(peerHash = PEER_HASH_2))
+                assertEquals(1, awaitItem())
+
+                blockedPeerDao.insertBlockedPeer(
+                    createBlockedPeer(peerHash = PEER_HASH_3, peerIdentityHash = PEER_IDENTITY_HASH_2),
+                )
                 assertEquals(2, awaitItem())
 
                 blockedPeerDao.deleteBlockedPeer(PEER_HASH, IDENTITY_HASH)
-                assertEquals(1, awaitItem())
+                // Identity 1 still owns PEER_HASH_2; identity 2 still owns PEER_HASH_3.
+                assertEquals(2, awaitItem())
             }
         }
 

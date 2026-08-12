@@ -148,6 +148,8 @@ oneway interface IRnsCore {
 
     void blockDestination(String destinationHashHex, in IRnsResultCallback cb);
     void unblockDestination(String destinationHashHex, in IRnsResultCallback cb);
+    void blockIdentity(String identityHashHex, in IRnsResultCallback cb);
+    void unblockIdentity(String identityHashHex, in IRnsResultCallback cb);
     void blackholeIdentity(String identityHashHex, in IRnsResultCallback cb);
     void unblackholeIdentity(String identityHashHex, in IRnsResultCallback cb);
 

@@ -36,9 +36,11 @@ import network.columba.app.ui.theme.ThemeMode
 import kotlinx.coroutines.Job
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
@@ -134,7 +136,12 @@ class IncomingCallActivity : ComponentActivity() {
         lifecycleScope.launch {
             // Do not publish a SYSTEM-themed first frame while DataStore is still loading
             // a persisted LIGHT or DARK override.
-            val initialThemeMode = settingsRepository.themeModeFlow.first()
+            val initialThemeMode =
+                withTimeoutOrNull(250) {
+                    settingsRepository.themeModeFlow
+                        .catch { emit(ThemeMode.SYSTEM) }
+                        .first()
+                } ?: ThemeMode.SYSTEM
             setContent {
                 val hash = currentIdentityHash.value ?: return@setContent
                 val themeMode = settingsRepository.themeModeFlow.collectAsState(initial = initialThemeMode).value

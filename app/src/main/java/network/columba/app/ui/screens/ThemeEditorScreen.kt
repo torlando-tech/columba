@@ -77,7 +77,7 @@ fun ThemeEditorScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showColorPicker by remember { mutableStateOf(false) }
-    var previewMode by remember { mutableIntStateOf(if (initialDarkTheme) 1 else 0) } // 0 = Light, 1 = Dark
+    var previewMode by remember(initialDarkTheme) { mutableIntStateOf(if (initialDarkTheme) 1 else 0) } // 0 = Light, 1 = Dark
 
     Scaffold(
         topBar = {

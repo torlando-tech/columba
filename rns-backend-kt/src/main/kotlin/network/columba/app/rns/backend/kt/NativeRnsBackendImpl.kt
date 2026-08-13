@@ -775,13 +775,18 @@ class NativeRnsBackendImpl(
                     hops: Int,
                     receivingInterfaceName: String?,
                     matchedAspect: String?,
-                    // Added to RichAnnounceHandler in reticulum-kt v0.0.22 (conformance
-                    // work). Columba's announce handling doesn't need the announce-packet
-                    // hash, but the override must match the interface signature.
                     announcePacketHash: ByteArray?,
                 ): Boolean {
                     if (matchedAspect == null) return false // unknown aspect — not an app we handle
-                    handleAnnounce(matchedAspect, destinationHash, announcedIdentity, appData, hops, receivingInterfaceName)
+                    handleAnnounce(
+                        matchedAspect,
+                        destinationHash,
+                        announcedIdentity,
+                        appData,
+                        hops,
+                        receivingInterfaceName,
+                        announcePacketHash,
+                    )
                     return true
                 }
             },
@@ -871,6 +876,7 @@ class NativeRnsBackendImpl(
         appData: ByteArray?,
         announceHops: Int = 0,
         receivingInterfaceName: String? = null,
+        announcePacketHash: ByteArray? = null,
     ) {
         val destHex = destinationHash.toHex()
         if (blockedDestinations.contains(destHex) || blackholedIdentities.contains(announcedIdentity.hexHash)) return
@@ -894,6 +900,7 @@ class NativeRnsBackendImpl(
                 stampCostFlexibility = stampMeta.second,
                 peeringCost = stampMeta.third,
                 receivingInterface = receivingInterfaceName,
+                announcePacketHash = announcePacketHash,
             )
 
         _announces.tryEmit(event)

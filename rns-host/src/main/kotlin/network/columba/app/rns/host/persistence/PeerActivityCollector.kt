@@ -117,9 +117,9 @@ internal class PeerActivityCollector(
             return
         }
 
-        // Persist below the IPC boundary. Announce events are non-replaying;
-        // relying on the UI-process MessageCollector loses the display name
-        // whenever the UI is absent or attaches after this event.
+        // Persist metadata below the IPC boundary so the display name is not
+        // lost while the UI is absent. Persistence separately admits only
+        // non-path-response packet hashes to durable peer activity.
         persistence.persistAnnounce(
             destinationHash = destinationHash,
             peerName = peerName,
@@ -135,6 +135,8 @@ internal class PeerActivityCollector(
             stampCostFlexibility = announce.stampCostFlexibility,
             peeringCost = announce.peeringCost,
             propagationTransferLimitKb = null,
+            announcePacketHash = announce.announcePacketHash?.toHex(),
+            isPathResponse = announce.isPathResponse,
         )
     }
 

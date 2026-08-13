@@ -50,6 +50,8 @@ data class AnnounceEvent(
     val stampCost: Int? = null, // Pre-parsed by LXMF stamp cost functions
     val stampCostFlexibility: Int? = null, // For propagation nodes only
     val peeringCost: Int? = null, // For propagation nodes only
+    val announcePacketHash: ByteArray? = null,
+    val isPathResponse: Boolean = false,
 ) : Parcelable {
     @Suppress("CyclomaticComplexMethod")
     override fun equals(other: Any?): Boolean {
@@ -75,6 +77,13 @@ data class AnnounceEvent(
         if (stampCost != other.stampCost) return false
         if (stampCostFlexibility != other.stampCostFlexibility) return false
         if (peeringCost != other.peeringCost) return false
+        if (announcePacketHash != null) {
+            if (other.announcePacketHash == null) return false
+            if (!announcePacketHash.contentEquals(other.announcePacketHash)) return false
+        } else if (other.announcePacketHash != null) {
+            return false
+        }
+        if (isPathResponse != other.isPathResponse) return false
 
         return true
     }
@@ -92,6 +101,8 @@ data class AnnounceEvent(
         result = 31 * result + (stampCost?.hashCode() ?: 0)
         result = 31 * result + (stampCostFlexibility?.hashCode() ?: 0)
         result = 31 * result + (peeringCost?.hashCode() ?: 0)
+        result = 31 * result + (announcePacketHash?.contentHashCode() ?: 0)
+        result = 31 * result + isPathResponse.hashCode()
         return result
     }
 }

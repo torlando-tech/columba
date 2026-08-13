@@ -47,6 +47,22 @@ interface AnnounceDao {
         hops: Int,
     ): Int
 
+    @Query(
+        """
+        UPDATE announce_interface_sightings
+        SET receivingInterface = :receivingInterface,
+            hops = :hops
+        WHERE destinationHash = :destinationHash
+          AND interfaceType = :interfaceType
+        """,
+    )
+    suspend fun updateInterfaceSightingMetadata(
+        destinationHash: String,
+        interfaceType: String,
+        receivingInterface: String?,
+        hops: Int,
+    ): Int
+
     /** Equal or older observations retain the existing newest metadata. */
     @Transaction
     suspend fun upsertInterfaceSighting(sighting: AnnounceInterfaceSightingEntity) {
@@ -57,6 +73,20 @@ interface AnnounceDao {
                 interfaceType = sighting.interfaceType,
                 receivingInterface = sighting.receivingInterface,
                 lastSeenTimestamp = sighting.lastSeenTimestamp,
+                hops = sighting.hops,
+            )
+        }
+    }
+
+    /** Update path metadata without claiming a newer peer sighting. */
+    @Transaction
+    suspend fun upsertInterfaceSightingMetadata(sighting: AnnounceInterfaceSightingEntity) {
+        val inserted = insertInterfaceSighting(sighting.copy(lastSeenTimestamp = 0L))
+        if (inserted == -1L) {
+            updateInterfaceSightingMetadata(
+                destinationHash = sighting.destinationHash,
+                interfaceType = sighting.interfaceType,
+                receivingInterface = sighting.receivingInterface,
                 hops = sighting.hops,
             )
         }

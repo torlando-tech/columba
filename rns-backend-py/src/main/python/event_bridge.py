@@ -625,7 +625,14 @@ class _AnnounceHandler:
     aspect_filter = None
     receive_path_responses = True
 
-    def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None):
+    def received_announce(
+        self,
+        destination_hash,
+        announced_identity,
+        app_data,
+        announce_packet_hash=None,
+        is_path_response=False,
+    ):
         enrichment = _announce_enrichment(destination_hash, announced_identity, app_data)
         # Only surface announces for aspects Columba tracks. This matches the
         # kotlin backend's RichAnnounceHandler, which returns False (drops the
@@ -663,6 +670,7 @@ class _AnnounceHandler:
             "public_key": _hex(announced_identity.get_public_key()) if announced_identity is not None else None,
             "app_data": _hex(app_data),
             "announce_packet_hash": _hex(announce_packet_hash),
+            "is_path_response": bool(is_path_response),
             "receiving_interface": recv_iface_name,
         }
         payload.update(enrichment)

@@ -265,6 +265,8 @@ class DataModelsTest {
                 appData = appData,
                 hops = 3,
                 timestamp = 12345L,
+                announcePacketHash = byteArrayOf(1, 2, 3, 4),
+                isPathResponse = true,
             )
 
         val event2 =
@@ -274,6 +276,8 @@ class DataModelsTest {
                 appData = appData.copyOf(),
                 hops = 3,
                 timestamp = 12345L,
+                announcePacketHash = byteArrayOf(1, 2, 3, 4),
+                isPathResponse = true,
             )
 
         assertEquals(event1, event2)

@@ -96,6 +96,11 @@ class ServicePersistenceManagerTest {
         every { database.peerActivityDao() } returns peerActivityDao
         every { database.peerIconDao() } returns peerIconDao
         coEvery { peerActivityDao.recordActivity(any(), any(), any()) } just Runs
+        coEvery { peerActivityDao.recordActivityOnce(any(), any(), any(), any()) } returns false
+        coEvery { announceDao.upsertAnnounce(any()) } just Runs
+        coEvery { announceDao.upsertInterfaceSighting(any()) } just Runs
+        coEvery { announceDao.upsertInterfaceSightingMetadata(any()) } just Runs
+        coEvery { peerIdentityDao.getPeerIdentity(any()) } returns null
         coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
         coEvery { localIdentityDao.getActiveIdentitySync() } returns null
 
@@ -126,7 +131,7 @@ class ServicePersistenceManagerTest {
     fun `persistAnnounce saves new announce to database`() =
         runTest {
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
-            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
             val result =
                 runCatching {
@@ -152,7 +157,7 @@ class ServicePersistenceManagerTest {
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
             coVerify(exactly = 1) { database.withTransaction<Unit>(any()) }
-            coVerify { announceDao.upsertAnnounceWithSighting(any(), any()) }
+            coVerify { announceDao.upsertAnnounce(any()) }
         }
 
     @Test
@@ -173,7 +178,7 @@ class ServicePersistenceManagerTest {
                 )
 
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns existingAnnounce
-            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
             val result =
                 runCatching {
@@ -199,11 +204,10 @@ class ServicePersistenceManagerTest {
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
             coVerify {
-                announceDao.upsertAnnounceWithSighting(
+                announceDao.upsertAnnounce(
                     match { entity ->
                         entity.isFavorite && entity.peerName == "New Name"
                     },
-                    any(),
                 )
             }
         }
@@ -212,7 +216,7 @@ class ServicePersistenceManagerTest {
     fun `persistAnnounce sets computedIdentityHash from publicKey`() =
         runTest {
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns null
-            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
             val result =
                 runCatching {
@@ -238,13 +242,12 @@ class ServicePersistenceManagerTest {
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
             coVerify {
-                announceDao.upsertAnnounceWithSighting(
+                announceDao.upsertAnnounce(
                     match { entity ->
                         entity.computedIdentityHash != null &&
                             entity.computedIdentityHash!!.length == 32 &&
                             entity.computedIdentityHash == entity.computedIdentityHash!!.lowercase()
                     },
-                    any(),
                 )
             }
             coVerify {
@@ -305,7 +308,7 @@ class ServicePersistenceManagerTest {
                     propagationTransferLimitKb = 512,
                 )
             coEvery { announceDao.getAnnounce(testDestinationHash) } returns existing
-            coEvery { announceDao.upsertAnnounceWithSighting(any(), any()) } just Runs
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
 
             val persisted =
                 persistenceManager.persistAnnounce(
@@ -327,9 +330,8 @@ class ServicePersistenceManagerTest {
 
             assertTrue(persisted)
             coVerify {
-                announceDao.upsertAnnounceWithSighting(
+                announceDao.upsertAnnounce(
                     match { it.peerName == "Known Peer" && it.propagationTransferLimitKb == 512 },
-                    any(),
                 )
             }
         }
@@ -369,7 +371,7 @@ class ServicePersistenceManagerTest {
                 )
 
             assertFalse(persisted)
-            coVerify(exactly = 0) { announceDao.upsertAnnounceWithSighting(any(), any()) }
+            coVerify(exactly = 0) { announceDao.upsertAnnounce(any()) }
             coVerify(exactly = 0) { peerIdentityDao.insertPeerIdentity(any()) }
         }
 

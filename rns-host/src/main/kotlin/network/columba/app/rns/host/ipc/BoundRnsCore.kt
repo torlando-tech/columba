@@ -207,6 +207,12 @@ internal class BoundRnsCore(
     override suspend fun unblockDestination(destinationHashHex: String): Result<Unit> =
         awaitBound().core.unblockDestination(destinationHashHex)
 
+    override suspend fun blockIdentity(identityHashHex: String): Result<Unit> =
+        awaitBound().core.blockIdentity(identityHashHex)
+
+    override suspend fun unblockIdentity(identityHashHex: String): Result<Unit> =
+        awaitBound().core.unblockIdentity(identityHashHex)
+
     override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
         awaitBound().core.blackholeIdentity(identityHashHex)
 

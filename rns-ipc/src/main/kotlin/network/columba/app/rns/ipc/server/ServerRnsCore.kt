@@ -232,6 +232,10 @@ internal class ServerRnsCore(
         dispatch(cb, scope) { impl.blockDestination(destinationHashHex).bundleOrThrow() }
     override fun unblockDestination(destinationHashHex: String, cb: IRnsResultCallback) =
         dispatch(cb, scope) { impl.unblockDestination(destinationHashHex).bundleOrThrow() }
+    override fun blockIdentity(identityHashHex: String, cb: IRnsResultCallback) =
+        dispatch(cb, scope) { impl.blockIdentity(identityHashHex).bundleOrThrow() }
+    override fun unblockIdentity(identityHashHex: String, cb: IRnsResultCallback) =
+        dispatch(cb, scope) { impl.unblockIdentity(identityHashHex).bundleOrThrow() }
     override fun blackholeIdentity(identityHashHex: String, cb: IRnsResultCallback) =
         dispatch(cb, scope) { impl.blackholeIdentity(identityHashHex).bundleOrThrow() }
     override fun unblackholeIdentity(identityHashHex: String, cb: IRnsResultCallback) =

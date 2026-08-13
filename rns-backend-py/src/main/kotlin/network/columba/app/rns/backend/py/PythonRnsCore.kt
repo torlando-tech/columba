@@ -75,6 +75,7 @@ class PythonRnsCore(
 
     /** Local block/blackhole sets. Enforcement is shared app-logic in `:rns-host`. */
     private val blockedDestinations = ConcurrentHashMap.newKeySet<String>()
+    private val blockedIdentities = ConcurrentHashMap.newKeySet<String>()
     private val blackholedIdentities = ConcurrentHashMap.newKeySet<String>()
 
     // ==================== Initialization & lifecycle ====================
@@ -1355,6 +1356,12 @@ class PythonRnsCore(
 
     override suspend fun unblockDestination(destinationHashHex: String): Result<Unit> =
         pyResult { blockedDestinations.remove(destinationHashHex); Unit }
+
+    override suspend fun blockIdentity(identityHashHex: String): Result<Unit> =
+        pyResult { blockedIdentities.add(identityHashHex.lowercase()); Unit }
+
+    override suspend fun unblockIdentity(identityHashHex: String): Result<Unit> =
+        pyResult { blockedIdentities.remove(identityHashHex.lowercase()); Unit }
 
     override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
         pyResult { blackholedIdentities.add(identityHashHex); Unit }

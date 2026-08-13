@@ -6,6 +6,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import network.columba.app.data.db.dao.CallHistoryDao
+import network.columba.app.data.db.dao.CallHistoryDeletionDao
+import network.columba.app.rns.api.call.CallLifecycleRecorder
+import network.columba.app.rns.host.call.ServiceCallLifecycle
 import network.columba.app.rns.host.persistence.CallsFromContactsGate
 import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import javax.inject.Singleton
@@ -31,6 +35,22 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object PersistenceModule {
+    @Provides
+    @Singleton
+    fun provideCallHistoryDao(
+        @ApplicationContext context: Context,
+    ): CallHistoryDao = ServiceDatabaseProvider.getDatabase(context).callHistoryDao()
+
+    @Provides
+    @Singleton
+    fun provideCallHistoryDeletionDao(
+        @ApplicationContext context: Context,
+    ): CallHistoryDeletionDao = ServiceDatabaseProvider.getDatabase(context).callHistoryDeletionDao()
+
+    @Provides
+    @Singleton
+    fun provideCallLifecycleRecorder(lifecycle: ServiceCallLifecycle): CallLifecycleRecorder = lifecycle
+
     @Provides
     @Singleton
     fun provideServiceSettingsAccessor(

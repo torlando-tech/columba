@@ -238,6 +238,9 @@ class AnnounceRepository
          */
         suspend fun findByIdentityHash(identityHash: String): Announce? = announceDao.getAnnounceByIdentityHash(identityHash.lowercase())?.toAnnounce()
 
+        suspend fun findTelephonyByIdentityHash(identityHash: String): Announce? =
+            announceDao.getTelephonyAnnounceByIdentityHash(identityHash.lowercase())?.toAnnounce()
+
         /**
          * Save or update an announce. If an announce with the same destinationHash
          * already exists, it will be updated with the new timestamp, effectively

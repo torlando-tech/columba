@@ -307,6 +307,16 @@ internal class ClientRnsCore(
         Unit
     }
 
+    override suspend fun blockIdentity(identityHashHex: String): Result<Unit> = runCatching {
+        awaitResult { cb -> remote.blockIdentity(identityHashHex, cb) }
+        Unit
+    }
+
+    override suspend fun unblockIdentity(identityHashHex: String): Result<Unit> = runCatching {
+        awaitResult { cb -> remote.unblockIdentity(identityHashHex, cb) }
+        Unit
+    }
+
     override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> = runCatching {
         awaitResult { cb -> remote.blackholeIdentity(identityHashHex, cb) }
         Unit

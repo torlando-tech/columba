@@ -228,7 +228,7 @@ class MigrationDataTest {
             )
 
         assertEquals(MigrationBundle.CURRENT_VERSION, bundle.version)
-        assertEquals(7, bundle.version)
+        assertEquals(8, bundle.version)
     }
 
     @Test

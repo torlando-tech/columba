@@ -2149,8 +2149,8 @@ class MessagingScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        // Then - propagated shows single checkmark (same as sent)
-        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+        // Then - propagated shows the accepted-by-relay indicator
+        composeTestRule.onNodeWithContentDescription("Stored on relay network").assertIsDisplayed()
     }
 
     @Test
@@ -2170,8 +2170,8 @@ class MessagingScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        // Then - retrying_propagated shows single checkmark
-        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+        // Then - retrying_propagated shows the relay-upload indicator
+        composeTestRule.onNodeWithContentDescription("Sending to relay network").assertIsDisplayed()
     }
     // ========== Notification Entry Integration Tests ==========
 

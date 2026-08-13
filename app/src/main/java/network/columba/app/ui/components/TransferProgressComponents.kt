@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import network.columba.app.R
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.TransferPhase
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.service.SyncProgress
 import kotlin.math.roundToInt
@@ -30,10 +31,30 @@ fun MessageTransferProgress(
     update: TransferProgressUpdate,
     modifier: Modifier = Modifier,
 ) {
-    val label = when (update.deliveryMethod) {
-        DeliveryMethod.PROPAGATED -> stringResource(R.string.transfer_sending_to_relay)
-        DeliveryMethod.DIRECT -> stringResource(R.string.transfer_sending_directly)
-        DeliveryMethod.OPPORTUNISTIC, null -> stringResource(R.string.transfer_sending)
+    val isTransferringResource = update.phase == TransferPhase.TRANSFERRING
+    val currentAttempt = update.currentAttempt
+    val maxAttempts = update.maxAttempts
+    val label = when {
+        isTransferringResource -> stringResource(R.string.transfer_transferring_resource)
+        update.deliveryMethod == DeliveryMethod.PROPAGATED -> stringResource(R.string.transfer_sending_to_relay)
+        update.deliveryMethod == DeliveryMethod.DIRECT &&
+            currentAttempt != null &&
+            currentAttempt > 1 &&
+            maxAttempts != null -> stringResource(
+                R.string.transfer_retrying_direct,
+                currentAttempt,
+                maxAttempts,
+            )
+        update.deliveryMethod == DeliveryMethod.DIRECT -> stringResource(R.string.transfer_sending_directly)
+        else -> stringResource(R.string.transfer_sending)
+    }
+    if (!isTransferringResource) {
+        Text(
+            text = label,
+            modifier = modifier.fillMaxWidth().testTag("message_transfer_status"),
+            style = MaterialTheme.typography.labelSmall,
+        )
+        return
     }
     val percent = (update.progress.coerceIn(0f, 1f) * 100).roundToInt()
     val description = stringResource(R.string.transfer_progress_description, label, percent)
@@ -54,7 +75,7 @@ fun MessageTransferProgress(
         }
         LinearProgressIndicator(
             progress = { update.progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("message_resource_progress_bar"),
         )
     }
 }

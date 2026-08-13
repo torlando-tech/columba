@@ -1,5 +1,6 @@
 package network.columba.app.rns.backend.py
 
+import network.columba.app.rns.api.model.TransferPhase
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -37,6 +38,18 @@ class OutgoingTransferPollActionTest {
                 representation = PythonRnsLxmf.LXMF_REPRESENTATION_UNKNOWN,
                 state = PythonRnsLxmf.LXMF_STATE_FAILED,
             ),
+        )
+    }
+
+    @Test
+    fun `resource is only transferring while LXMF is sending`() {
+        assertEquals(
+            TransferPhase.TRANSFERRING,
+            outgoingTransferPhase(PythonRnsLxmf.LXMF_STATE_SENDING),
+        )
+        assertEquals(
+            TransferPhase.PREPARING,
+            outgoingTransferPhase(PythonRnsLxmf.LXMF_STATE_OUTBOUND),
         )
     }
 }

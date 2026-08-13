@@ -54,7 +54,7 @@ class TransferProgressComponentsInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Sending directly").assertIsDisplayed()
+        composeRule.onNodeWithText("Transferring Resource").assertIsDisplayed()
         saveScreenshot("transfer-progress-bubble.png", "message_transfer_progress")
     }
 

@@ -18,6 +18,10 @@ data class TransferProgressUpdate(
     val phase: TransferPhase,
     val totalBytes: Long? = null,
     val deliveryMethod: DeliveryMethod? = null,
+    /** Current backend delivery attempt while preparing/retrying, when available. */
+    val currentAttempt: Int? = null,
+    /** Backend-configured delivery attempt ceiling, when available. */
+    val maxAttempts: Int? = null,
 ) : Parcelable {
     val isTerminal: Boolean
         get() = phase == TransferPhase.COMPLETE || phase == TransferPhase.FAILED

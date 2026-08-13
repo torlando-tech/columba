@@ -26,11 +26,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -39,7 +42,9 @@ fun ThemeSelectionCard(
     onExpandedChange: (Boolean) -> Unit,
     selectedTheme: AppTheme,
     customThemes: List<AppTheme>,
+    themeMode: ThemeMode,
     onThemeChange: (AppTheme) -> Unit,
+    onThemeModeChange: (ThemeMode) -> Unit,
     onNavigateToCustomThemes: () -> Unit = {},
 ) {
     CollapsibleSettingsCard(
@@ -61,10 +66,32 @@ fun ThemeSelectionCard(
     ) {
         // Description
         Text(
-            text = "Choose your preferred color theme. Dark and light modes adapt automatically based on your system settings.",
+            text = stringResource(R.string.theme_selection_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // Theme mode section
+        Text(
+            text = stringResource(R.string.theme_mode_title),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+
+        ThemeChipRow(
+            options = ThemeMode.entries.toList(),
+            selected = themeMode,
+            onSelect = onThemeModeChange,
+        ) {
+            stringResource(
+                when (it) {
+                    ThemeMode.SYSTEM -> R.string.theme_mode_system
+                    ThemeMode.LIGHT -> R.string.theme_mode_light
+                    ThemeMode.DARK -> R.string.theme_mode_dark
+                },
+            )
+        }
 
         // Built-in themes section
         Text(
@@ -74,31 +101,11 @@ fun ThemeSelectionCard(
             modifier = Modifier.padding(top = 4.dp),
         )
 
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            PresetTheme.entries.forEach { theme ->
-                FilterChip(
-                    selected = selectedTheme == theme,
-                    onClick = { onThemeChange(theme) },
-                    label = { Text(theme.displayName) },
-                    leadingIcon =
-                        if (selectedTheme == theme) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        } else {
-                            null
-                        },
-                )
-            }
-        }
+        ThemeChipRow(
+            options = PresetTheme.entries.toList(),
+            selected = selectedTheme,
+            onSelect = onThemeChange,
+        ) { it.displayName }
 
         // Custom themes section (only show if there are custom themes)
         if (customThemes.isNotEmpty()) {
@@ -109,31 +116,11 @@ fun ThemeSelectionCard(
                 modifier = Modifier.padding(top = 8.dp),
             )
 
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                customThemes.forEach { theme ->
-                    FilterChip(
-                        selected = selectedTheme == theme,
-                        onClick = { onThemeChange(theme) },
-                        label = { Text(theme.displayName) },
-                        leadingIcon =
-                            if (selectedTheme == theme) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                    )
-                }
-            }
+            ThemeChipRow(
+                options = customThemes,
+                selected = selectedTheme,
+                onSelect = onThemeChange,
+            ) { it.displayName }
         }
 
         // Description of selected theme
@@ -145,16 +132,15 @@ fun ThemeSelectionCard(
         )
 
         // Color preview
-        ThemeColorPreview(theme = selectedTheme)
+        ThemeColorPreview(theme = selectedTheme, isDark = themeMode.resolveDark(isSystemInDarkTheme()))
     }
 }
 
 @Composable
-fun ThemeColorPreview(theme: AppTheme) {
-    val isDarkTheme = isSystemInDarkTheme()
+fun ThemeColorPreview(theme: AppTheme, isDark: Boolean) {
     val (primary, secondary, tertiary) =
-        remember(theme, isDarkTheme) {
-            theme.getPreviewColors(isDarkTheme)
+        remember(theme, isDark) {
+            theme.getPreviewColors(isDark)
         }
 
     Row(
@@ -192,9 +178,44 @@ fun ThemeColorPreview(theme: AppTheme) {
         Spacer(modifier = Modifier.weight(1f))
 
         Text(
-            text = if (isDarkTheme) "Dark mode" else "Light mode",
+            text = if (isDark) "Dark mode" else "Light mode",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> ThemeChipRow(
+    options: Collection<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    displayName: @Composable (T) -> String,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { option ->
+            FilterChip(
+                selected = selected == option,
+                onClick = { onSelect(option) },
+                label = { Text(displayName(option)) },
+                leadingIcon =
+                    if (selected == option) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = stringResource(R.string.selected),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
+            )
+        }
     }
 }

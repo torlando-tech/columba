@@ -25,6 +25,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Chat
@@ -130,6 +131,7 @@ import network.columba.app.ui.screens.offlinemaps.OfflineMapsScreen
 import network.columba.app.ui.screens.onboarding.OnboardingPagerScreen
 import network.columba.app.ui.screens.tcpclient.TcpClientWizardScreen
 import network.columba.app.ui.theme.ColumbaTheme
+import network.columba.app.ui.theme.ThemeMode
 import network.columba.app.ui.util.LifecycleGuard
 import network.columba.app.util.CrashReportManager
 import network.columba.app.util.InterfaceReconnectSignal
@@ -1259,7 +1261,10 @@ fun ColumbaNavigation(
         }
     }
 
-    ColumbaTheme(selectedTheme = settingsState.selectedTheme) {
+    ColumbaTheme(
+        darkTheme = settingsState.themeMode.resolveDark(isSystemInDarkTheme()),
+        selectedTheme = settingsState.selectedTheme,
+    ) {
         // Prompt for precise location when the user has enabled location sharing
         // and chosen precise precision but only approximate access is granted.
         // Fires on app start, after a settings import, and when sharing/precision
@@ -2143,6 +2148,7 @@ fun ColumbaNavigation(
                             appComposable(AppDestination.THEME_EDITOR_NEW) {
                                 ThemeEditorScreen(
                                     themeId = null,
+                                    initialDarkTheme = settingsState.themeMode.resolveDark(isSystemInDarkTheme()),
                                     onBackClick = { navController.popBackStack() },
                                     onSave = { navController.popBackStack() },
                                 )
@@ -2159,6 +2165,7 @@ fun ColumbaNavigation(
 
                                 ThemeEditorScreen(
                                     themeId = themeId,
+                                    initialDarkTheme = settingsState.themeMode.resolveDark(isSystemInDarkTheme()),
                                     onBackClick = { navController.popBackStack() },
                                     onSave = { navController.popBackStack() },
                                 )

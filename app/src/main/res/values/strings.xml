@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="theme_selection_description">Choose your preferred color theme. Theme mode follows your system settings by default and can be overridden below.</string>
+    <string name="theme_mode_title">Theme Mode</string>
+    <string name="theme_mode_system">System</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="selected">Selected</string>
     <string name="chats_segment_text">Text</string>
     <string name="chats_segment_voice">Voice</string>
     <string name="call_history_loading">Loading call history</string>

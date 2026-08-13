@@ -21,11 +21,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import network.columba.app.notifications.CallNotificationHelper
+import network.columba.app.repository.SettingsRepository
 import network.columba.app.ui.screens.IncomingCallActivityScreen
+import network.columba.app.ui.theme.ThemeMode
 import kotlinx.coroutines.Job
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
@@ -62,6 +69,11 @@ class IncomingCallActivity : ComponentActivity() {
         EntryPointAccessors
             .fromApplication(applicationContext, RnsTelephonyEntryPoint::class.java)
             .telephony()
+    }
+    private val settingsRepository: SettingsRepository by lazy {
+        EntryPointAccessors
+            .fromApplication(applicationContext, RnsTelephonyEntryPoint::class.java)
+            .settingsRepository()
     }
     private var ringtone: Ringtone? = null
     private var ringtoneLoopJob: Job? = null
@@ -120,8 +132,20 @@ class IncomingCallActivity : ComponentActivity() {
 
         setContent {
             val hash = currentIdentityHash.value ?: return@setContent
+            // Call controls must render immediately. DataStore updates the appearance as
+            // soon as the persisted override is available.
+            val themeMode = settingsRepository.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM).value
             // Use a simple Material 3 theme (no Hilt-based theme needed)
-            val darkTheme = isSystemInDarkTheme()
+            val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
+            // Match system-bar icon brightness to the forced color scheme
+            // (enableEdgeToEdge defaulted to the device theme at onCreate).
+            val view = LocalView.current
+            SideEffect {
+                val window = (view.context as ComponentActivity).window
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
             MaterialTheme(
                 colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme(),
             ) {

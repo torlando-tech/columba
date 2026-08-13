@@ -58,6 +58,13 @@ internal fun outgoingTransferPollAction(
     else -> OutgoingTransferPollAction.WAIT
 }
 
+internal fun outgoingTransferPhase(state: Int): TransferPhase =
+    if (state == PythonRnsLxmf.LXMF_STATE_SENDING) {
+        TransferPhase.TRANSFERRING
+    } else {
+        TransferPhase.PREPARING
+    }
+
 /**
  * `RnsLxmf` over upstream Python LXMF, driven through Chaquopy.
  *
@@ -336,20 +343,30 @@ class PythonRnsLxmf(
         lxmessage: PyObject,
         state: Int,
     ): TransferProgressUpdate {
-        val progress = lxmessage.pyDouble("progress").coerceIn(0.0, 1.0).toFloat()
         val resource = lxmessage["resource_representation"]?.takeUnless { it.toString() == "None" }
+        val phase = when (state) {
+            LXMF_STATE_SENT, LXMF_STATE_DELIVERED -> TransferPhase.COMPLETE
+            LXMF_STATE_REJECTED, LXMF_STATE_CANCELLED, LXMF_STATE_FAILED -> TransferPhase.FAILED
+            else -> outgoingTransferPhase(state)
+        }
+        val resourceProgress = if (phase == TransferPhase.TRANSFERRING) {
+            resource?.pyDoubleCall("get_progress") ?: 0.0
+        } else {
+            0.0
+        }
         return TransferProgressUpdate(
             transferId = resource?.get("hash")?.toJava(ByteArray::class.java)?.toHex() ?: messageHash,
             messageHash = messageHash,
             direction = Direction.OUT,
-            progress = progress,
-            phase = when (state) {
-                LXMF_STATE_SENT, LXMF_STATE_DELIVERED -> TransferPhase.COMPLETE
-                LXMF_STATE_REJECTED, LXMF_STATE_CANCELLED, LXMF_STATE_FAILED -> TransferPhase.FAILED
-                else -> if (progress > 0f) TransferPhase.TRANSFERRING else TransferPhase.PREPARING
-            },
+            progress = resourceProgress.coerceIn(0.0, 1.0).toFloat(),
+            phase = phase,
             totalBytes = resource?.pyLongCall("get_transfer_size"),
-            deliveryMethod = lxmfDeliveryMethod(lxmessage.pyInt("method")),
+            deliveryMethod = lxmfDeliveryMethod(
+                lxmessage.pyInt("desired_method") ?: lxmessage.pyInt("method"),
+            ),
+            currentAttempt = lxmessage.pyInt("delivery_attempts")
+                ?.coerceAtMost(runtime.lxmRouter?.pyInt("MAX_DELIVERY_ATTEMPTS") ?: Int.MAX_VALUE),
+            maxAttempts = runtime.lxmRouter?.pyInt("MAX_DELIVERY_ATTEMPTS"),
         )
     }
 

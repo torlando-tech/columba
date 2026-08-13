@@ -248,7 +248,11 @@
     <string name="markdown_remote_image_not_loaded">Remote image not loaded</string>
     <string name="transfer_sending">Sending</string>
     <string name="transfer_sending_directly">Sending directly</string>
-    <string name="transfer_sending_to_relay">Sending to relay</string>
+    <string name="transfer_retrying_direct">Retrying direct send (%1$d/%2$d)</string>
+    <string name="transfer_sending_to_relay">Sending to relay network</string>
+    <string name="transfer_transferring_resource">Transferring Resource</string>
+    <string name="message_status_sending_to_relay">Sending to relay network</string>
+    <string name="message_status_stored_on_relay">Stored on relay network</string>
     <string name="transfer_receiving_via_relay">Receiving messages via relay</string>
     <plurals name="transfer_receiving_directly">
         <item quantity="one">Receiving a message directly</item>

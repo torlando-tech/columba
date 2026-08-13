@@ -6,7 +6,7 @@ This suite proves the complete production path that previously dropped outgoing 
 2. A throttled TCP proxy keeps the genuine RNS Resource active long enough to observe multiple polls.
 3. A fresh Python-backend Columba APK runs on an Android emulator.
 4. The harness completes onboarding, configures the TCP interface, adds the real recipient through the Contacts UI, selects a 1 MiB file through Android DocumentsUI, and sends it from the production conversation UI.
-5. The test requires `Sending directly`, a genuine percentage between 1 and 99, and the attachment name in the outgoing bubble.
+5. The test requires `Transferring Resource`, a genuine Resource percentage between 1 and 99, and the attachment name in the outgoing bubble.
 6. The host recipient must receive the exact filename, byte count, SHA-256, and a valid LXMF message hash.
 
 The screenshot, logcat, receiver log, proxy log, and JUnit XML are uploaded by CI as `transfer-progress-e2e-evidence`.

@@ -247,7 +247,7 @@ def outgoing_resource_percentage(snapshot: UiSnapshot) -> int | None:
         snapshot.require_text(FILE_NAME)
     except LookupError:
         return None
-    return snapshot.semantic_percentage("Sending directly")
+    return snapshot.semantic_percentage("Transferring Resource")
 
 
 def capture_verified_progress(driver: AdbUiDriver, timeout: float = 45) -> int:

@@ -17,11 +17,15 @@ class TransferProgressUpdateTest {
             phase = TransferPhase.TRANSFERRING,
             totalBytes = 4_800_000L,
             deliveryMethod = DeliveryMethod.DIRECT,
+            currentAttempt = 2,
+            maxAttempts = 5,
         )
 
         assertEquals("aabbcc", update.messageHash)
         assertEquals(0.64f, update.progress)
         assertEquals(Direction.OUT, update.direction)
+        assertEquals(2, update.currentAttempt)
+        assertEquals(5, update.maxAttempts)
     }
 
     @Test

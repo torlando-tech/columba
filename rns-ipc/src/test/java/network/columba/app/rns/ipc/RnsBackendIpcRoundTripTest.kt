@@ -235,6 +235,8 @@ class RnsBackendIpcRoundTripTest {
             phase = TransferPhase.TRANSFERRING,
             totalBytes = 4_800_000L,
             deliveryMethod = DeliveryMethod.DIRECT,
+            currentAttempt = 2,
+            maxAttempts = 5,
         )
 
         client.lxmf.observeTransferProgress().test {

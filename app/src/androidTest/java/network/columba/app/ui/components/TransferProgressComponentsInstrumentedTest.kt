@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
@@ -72,6 +73,23 @@ class TransferProgressComponentsInstrumentedTest {
         composeRule.onNodeWithText("Receiving messages via relay").assertIsDisplayed()
         composeRule.onNodeWithText("1 direct transfer also active").assertIsDisplayed()
         saveScreenshot("transfer-progress-tray.png", "conversation_transfer_tray")
+    }
+
+    @Test
+    fun dismissesCompletedRelayTransferTray() {
+        composeRule.setContent {
+            MaterialTheme {
+                ConversationTransferTray(
+                    incomingTransfers = emptyList(),
+                    syncProgress = SyncProgress.InProgress("receiving", 1f),
+                    modifier = Modifier.width(360.dp).padding(16.dp),
+                )
+            }
+        }
+
+        assertTrue(
+            composeRule.onAllNodesWithText("Receiving messages via relay").fetchSemanticsNodes().isEmpty(),
+        )
     }
 
     private fun saveScreenshot(name: String, tag: String) {

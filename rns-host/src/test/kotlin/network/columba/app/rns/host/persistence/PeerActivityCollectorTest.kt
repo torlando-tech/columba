@@ -61,7 +61,7 @@ class PeerActivityCollectorTest {
         coEvery { persistence.persistTelemetryActivity(any(), any(), any(), any()) } returns true
         coEvery {
             persistence.persistAnnounce(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
             )
         } returns true
 
@@ -123,6 +123,8 @@ class PeerActivityCollectorTest {
         receivingInterface = "Bluetooth_LE",
         aspect = "lxmf.delivery",
         displayName = null,
+        announcePacketHash = byteArrayOf(1, 2, 3, 4),
+        isPathResponse = false,
     )
 
     private fun verifyInboundPersistence(
@@ -150,6 +152,8 @@ class PeerActivityCollectorTest {
                 stampCostFlexibility = null,
                 peeringCost = null,
                 propagationTransferLimitKb = null,
+                announcePacketHash = "01020304",
+                isPathResponse = false,
             )
         }
         coVerify(exactly = 0) {

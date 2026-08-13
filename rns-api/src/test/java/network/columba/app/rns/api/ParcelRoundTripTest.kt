@@ -3,15 +3,18 @@ package network.columba.app.rns.api
 import android.os.Parcel
 import android.os.Parcelable
 import network.columba.app.rns.api.model.AnnounceRestoreEntry
+import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.FileAttachment
 import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.Link
 import network.columba.app.rns.api.model.LinkEvent
 import network.columba.app.rns.api.model.LinkStatus
 import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.PeerIdentityEntry
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -298,6 +301,26 @@ class ParcelRoundTripTest {
         val original = AnnounceRestoreEntry("cafef00d", ByteArray(64) { (it * 2).toByte() })
         val restored = roundTripViaFramework(original)
         assertEquals(original, restored)
+    }
+
+    @Test
+    fun `AnnounceEvent provenance round-trips`() {
+        val original =
+            AnnounceEvent(
+                destinationHash = byteArrayOf(1, 2),
+                identity = Identity(byteArrayOf(3, 4), byteArrayOf(5, 6), null),
+                appData = byteArrayOf(7, 8),
+                hops = 2,
+                timestamp = 123L,
+                nodeType = NodeType.PEER,
+                announcePacketHash = byteArrayOf(9, 10),
+                isPathResponse = true,
+            )
+        val restored = roundTripViaFramework(original)
+
+        assertEquals(original, restored)
+        assertArrayEquals(original.announcePacketHash, restored.announcePacketHash)
+        assertTrue(restored.isPathResponse)
     }
 
     @Test

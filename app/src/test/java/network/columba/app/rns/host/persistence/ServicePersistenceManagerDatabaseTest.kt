@@ -12,6 +12,7 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -99,6 +100,8 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 stampCostFlexibility = null,
                 peeringCost = null,
                 propagationTransferLimitKb = null,
+                announcePacketHash = "00112233",
+                isPathResponse = false,
             )
             advanceUntilIdle()
             Thread.sleep(100) // Allow Room's IO dispatcher to complete
@@ -113,6 +116,126 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             val activity = database.peerActivityDao().getActivity(destinationHash)
             assertEquals(saved?.lastSeenTimestamp, activity?.lastReceivedAt)
             assertEquals("ANNOUNCE", activity?.activityType)
+        }
+
+    @Test
+    fun `path response updates announce metadata without advancing peer activity`() =
+        testScope.runTest {
+            val destinationHash = "path_response_peer"
+            insertTestIdentity()
+            contactDao.insertContact(
+                ContactEntity(
+                    destinationHash = destinationHash,
+                    identityHash = TEST_IDENTITY_HASH,
+                    publicKey = testPublicKey,
+                    addedTimestamp = 500L,
+                    addedVia = "MANUAL",
+                ),
+            )
+
+            database.peerActivityDao().recordActivity(
+                destinationHash = destinationHash,
+                receivedAt = 1_000L,
+                activityType = "MESSAGE",
+            )
+
+            assertTrue(
+                persistenceManager.persistAnnounce(
+                    destinationHash = destinationHash,
+                    peerName = "Cached Peer",
+                    publicKey = testPublicKey,
+                    appData = testAppData,
+                    hops = 3,
+                    timestamp = 2_000L,
+                    nodeType = "PEER",
+                    receivingInterface = "TCP",
+                    receivingInterfaceType = "TCP",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                    announcePacketHash = "aabbccdd",
+                    isPathResponse = true,
+                ),
+            )
+
+            val announce = announceDao.getAnnounce(destinationHash)
+            assertNotNull(announce)
+            assertEquals("Cached Peer", announce?.peerName)
+            assertEquals(3, announce?.hops)
+            assertEquals(0L, announce?.lastSeenTimestamp)
+            val activity = database.peerActivityDao().getActivity(destinationHash)
+            assertEquals(1_000L, activity?.lastReceivedAt)
+            assertEquals("MESSAGE", activity?.activityType)
+            val identityHash = network.columba.app.data.util.HashUtils.computeIdentityHash(testPublicKey)
+            assertEquals(0L, peerIdentityDao.getPeerIdentity(identityHash)?.lastSeenTimestamp)
+            val contact = contactDao.getEnrichedContacts(TEST_IDENTITY_HASH, currentTime = 2_000L).first().single()
+            assertEquals(1_000L, contact.lastSeenTimestamp)
+        }
+
+    @Test
+    fun `replayed announce packet updates peer activity only once`() =
+        testScope.runTest {
+            val destinationHash = "replayed_announce_peer"
+
+            suspend fun persist(timestamp: Long) =
+                persistenceManager.persistAnnounce(
+                    destinationHash = destinationHash,
+                    peerName = "Peer",
+                    publicKey = testPublicKey,
+                    appData = testAppData,
+                    hops = 1,
+                    timestamp = timestamp,
+                    nodeType = "PEER",
+                    receivingInterface = "TCP",
+                    receivingInterfaceType = "TCP",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                    announcePacketHash = "11223344",
+                    isPathResponse = false,
+                )
+
+            assertTrue(persist(1_000L))
+            assertTrue(persist(9_000L))
+
+            val activity = database.peerActivityDao().getActivity(destinationHash)
+            assertEquals(1_000L, activity?.lastReceivedAt)
+            assertEquals("ANNOUNCE", activity?.activityType)
+            assertEquals(1_000L, announceDao.getAnnounce(destinationHash)?.lastSeenTimestamp)
+        }
+
+    @Test
+    fun `hashless announce updates metadata without advancing peer activity`() =
+        testScope.runTest {
+            val destinationHash = "hashless_announce_peer"
+
+            assertTrue(
+                persistenceManager.persistAnnounce(
+                    destinationHash = destinationHash,
+                    peerName = "Peer",
+                    publicKey = testPublicKey,
+                    appData = testAppData,
+                    hops = 1,
+                    timestamp = 4_000L,
+                    nodeType = "PEER",
+                    receivingInterface = "TCP",
+                    receivingInterfaceType = "TCP",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                    announcePacketHash = null,
+                    isPathResponse = false,
+                ),
+            )
+
+            assertNotNull(announceDao.getAnnounce(destinationHash))
+            assertNull(database.peerActivityDao().getActivity(destinationHash))
         }
 
     // Note: "persistAnnounce preserves favorite status on update" test was removed.

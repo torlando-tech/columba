@@ -103,7 +103,7 @@ class ServicePersistenceManager(
      *
      * This preserves existing favorite status and icon appearance.
      */
-    @Suppress("LongParameterList") // Parameters mirror AnnounceEntity fields for direct persistence
+    @Suppress("LongParameterList", "LongMethod") // Parameters and transaction mirror announce persistence fields.
     suspend fun persistAnnounce(
         destinationHash: String,
         peerName: String,
@@ -119,6 +119,8 @@ class ServicePersistenceManager(
         stampCostFlexibility: Int?,
         peeringCost: Int?,
         propagationTransferLimitKb: Int?,
+        announcePacketHash: String? = null,
+        isPathResponse: Boolean = false,
     ): Boolean =
         try {
             val normalizedHash = destinationHash.lowercase()
@@ -140,6 +142,17 @@ class ServicePersistenceManager(
                         declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
                             ?: InterfaceType.fromName(receivingInterface)
                     val identityHash = HashUtils.computeIdentityHash(publicKey)
+                    val advancesLastSeen =
+                        !isPathResponse &&
+                            !announcePacketHash.isNullOrBlank() &&
+                            peerActivityDao.recordActivityOnce(
+                                eventId = "announce:$announcePacketHash",
+                                destinationHash = normalizedHash,
+                                receivedAt = timestamp,
+                                activityType = PeerActivityType.ANNOUNCE,
+                            )
+                    val lastSeenTimestamp =
+                        if (advancesLastSeen) timestamp else existing?.lastSeenTimestamp ?: 0L
 
                     val entity =
                         AnnounceEntity(
@@ -148,7 +161,7 @@ class ServicePersistenceManager(
                             publicKey = publicKey,
                             appData = appData,
                             hops = hops,
-                            lastSeenTimestamp = timestamp,
+                            lastSeenTimestamp = lastSeenTimestamp,
                             nodeType = nodeType,
                             receivingInterface = receivingInterface,
                             receivingInterfaceType = canonicalInterfaceType.storageName,
@@ -167,21 +180,23 @@ class ServicePersistenceManager(
                             destinationHash = normalizedHash,
                             interfaceType = canonicalInterfaceType.storageName,
                             receivingInterface = receivingInterface,
-                            lastSeenTimestamp = timestamp,
+                            lastSeenTimestamp = lastSeenTimestamp,
                             hops = hops,
                         )
 
-                    announceDao.upsertAnnounceWithSighting(entity, sighting)
-                    peerActivityDao.recordActivity(
-                        destinationHash = normalizedHash,
-                        receivedAt = timestamp,
-                        activityType = PeerActivityType.ANNOUNCE,
-                    )
+                    announceDao.upsertAnnounce(entity)
+                    if (advancesLastSeen) {
+                        announceDao.upsertInterfaceSighting(sighting)
+                    } else {
+                        announceDao.upsertInterfaceSightingMetadata(sighting)
+                    }
+                    val existingPeerIdentity = peerIdentityDao.getPeerIdentity(identityHash)
                     peerIdentityDao.insertPeerIdentity(
                         PeerIdentityEntity(
                             peerHash = identityHash,
                             publicKey = publicKey,
-                            lastSeenTimestamp = timestamp,
+                            lastSeenTimestamp =
+                                if (advancesLastSeen) timestamp else existingPeerIdentity?.lastSeenTimestamp ?: 0L,
                         ),
                     )
                 }

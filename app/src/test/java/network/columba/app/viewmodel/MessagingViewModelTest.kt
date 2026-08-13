@@ -390,20 +390,19 @@ class MessagingViewModelTest {
             // Verify: Repository was called with correct peer hash
             coVerify { conversationRepository.getMessagesPaged(testPeerHash) }
 
-            // Verify: Conversation marked as read
-            coVerify { conversationRepository.markConversationAsRead(testPeerHash) }
-
             // Verify: Fast polling enabled
             verify { rnsLxmf.setConversationActive(true) }
         }
 
     @Test
-    fun `loadMessages marks conversation as read`() =
+    fun `conversation visibility dismisses its notification and marks it read`() =
         runViewModelTest {
-            val result = runCatching { viewModel.loadMessages(testPeerHash, testPeerName) }
+            val result = runCatching { viewModel.onConversationVisible(testPeerHash) }
             advanceUntilIdle()
 
-            assertTrue("loadMessages should complete without error", result.isSuccess)
+            assertTrue("Visibility handling should complete without error", result.isSuccess)
+            verify { activeConversationManager.setActive(testPeerHash) }
+            verify { notificationHelper.cancelNotificationForConversation(testPeerHash) }
             coVerify { conversationRepository.markConversationAsRead(testPeerHash) }
         }
 
@@ -696,6 +695,7 @@ class MessagingViewModelTest {
 
             // Load first conversation
             val result1 = runCatching { viewModel.loadMessages(conversation1Hash, "Peer 1") }
+            viewModel.onConversationVisible(conversation1Hash)
             advanceUntilIdle()
 
             assertTrue("First loadMessages should succeed", result1.isSuccess)
@@ -709,6 +709,7 @@ class MessagingViewModelTest {
 
             // Switch to second conversation
             val result2 = runCatching { viewModel.loadMessages(conversation2Hash, "Peer 2") }
+            viewModel.onConversationVisible(conversation2Hash)
             advanceUntilIdle()
 
             assertTrue("Second loadMessages should succeed", result2.isSuccess)
@@ -720,7 +721,7 @@ class MessagingViewModelTest {
             // Verify second conversation was loaded
             coVerify { conversationRepository.getMessagesPaged(conversation2Hash) }
 
-            // Verify both conversations were marked as read
+            // Verify visibility for both conversations marked each one as read
             coVerify { conversationRepository.markConversationAsRead(conversation1Hash) }
             coVerify { conversationRepository.markConversationAsRead(conversation2Hash) }
         }

@@ -433,9 +433,6 @@ class PythonRnsLxmf(
                 ?: runCatching { value.toJava(Long::class.javaObjectType).toInt() }.getOrNull()
         }
 
-    private fun PyObject.pyDouble(name: String): Double =
-        get(name)?.let { runCatching { it.toJava(Double::class.javaObjectType) }.getOrNull() } ?: 0.0
-
     private fun PyObject.pyDoubleCall(name: String): Double =
         callAttr(name)?.let { runCatching { it.toJava(Double::class.javaObjectType) }.getOrNull() } ?: 0.0
 

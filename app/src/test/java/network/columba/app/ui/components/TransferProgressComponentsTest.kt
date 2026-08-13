@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import network.columba.app.rns.api.model.DeliveryMethod
@@ -12,6 +13,7 @@ import network.columba.app.rns.api.model.TransferPhase
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.RegisterComponentActivityRule
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -56,6 +58,23 @@ class TransferProgressComponentsTest {
         composeRule.onNodeWithText("Receiving messages via relay").assertIsDisplayed()
         composeRule.onNodeWithText("41%").assertIsDisplayed()
         composeRule.onNodeWithText("1 direct transfer also active").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tray dismisses relay transfer once byte progress reaches completion`() {
+        composeRule.setContent {
+            MaterialTheme {
+                ConversationTransferTray(
+                    incomingTransfers = emptyList(),
+                    syncProgress = SyncProgress.InProgress("receiving", 1f),
+                )
+            }
+        }
+
+        assertEquals(
+            0,
+            composeRule.onAllNodesWithText("Receiving messages via relay").fetchSemanticsNodes().size,
+        )
     }
 
     @Test

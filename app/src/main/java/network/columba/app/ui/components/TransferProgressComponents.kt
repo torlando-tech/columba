@@ -65,7 +65,9 @@ fun ConversationTransferTray(
     syncProgress: SyncProgress,
     modifier: Modifier = Modifier,
 ) {
-    val relayProgress = (syncProgress as? SyncProgress.InProgress)?.progress
+    val relayProgress = (syncProgress as? SyncProgress.InProgress)
+        ?.progress
+        ?.takeIf { it < 1f }
     val directProgress = incomingTransfers.weightedProgress()
     val progress = relayProgress ?: directProgress ?: return
     val label = if (relayProgress != null) {

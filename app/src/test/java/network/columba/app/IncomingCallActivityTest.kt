@@ -20,7 +20,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -133,7 +132,7 @@ class IncomingCallActivityTest {
     // ========== Window Configuration Tests ==========
 
     @Test
-    fun `waits for persisted theme mode before rendering first frame`() =
+    fun `renders call controls before persisted theme mode is available`() =
         runTest {
             val intent = buildCallIntent()
             val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
@@ -141,23 +140,11 @@ class IncomingCallActivityTest {
             controller.create()
 
             val content = controller.get().findViewById<android.view.ViewGroup>(android.R.id.content)
-            assertEquals("Content must stay hidden until the persisted mode is known", 0, content.childCount)
+            assertEquals("Call controls must render immediately", 1, content.childCount)
 
             themeModeFlow.emit(ThemeMode.DARK)
 
-            assertEquals("The first rendered frame should use the persisted mode", 1, content.childCount)
-        }
-
-    @Test
-    fun `renders call controls when persisted theme mode does not load`() =
-        runTest {
-            val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, buildCallIntent())
-
-            controller.create()
-            advanceTimeBy(251)
-
-            val content = controller.get().findViewById<android.view.ViewGroup>(android.R.id.content)
-            assertEquals("Call controls must not wait indefinitely for theme storage", 1, content.childCount)
+            assertEquals("Persisted theme updates must keep call controls visible", 1, content.childCount)
         }
 
     @Test

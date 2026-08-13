@@ -36,11 +36,8 @@ import network.columba.app.ui.theme.ThemeMode
 import kotlinx.coroutines.Job
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
@@ -133,39 +130,31 @@ class IncomingCallActivity : ComponentActivity() {
             }
         }
 
-        lifecycleScope.launch {
-            // Do not publish a SYSTEM-themed first frame while DataStore is still loading
-            // a persisted LIGHT or DARK override.
-            val initialThemeMode =
-                withTimeoutOrNull(250) {
-                    settingsRepository.themeModeFlow
-                        .catch { emit(ThemeMode.SYSTEM) }
-                        .first()
-                } ?: ThemeMode.SYSTEM
-            setContent {
-                val hash = currentIdentityHash.value ?: return@setContent
-                val themeMode = settingsRepository.themeModeFlow.collectAsState(initial = initialThemeMode).value
-                // Use a simple Material 3 theme (no Hilt-based theme needed)
-                val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
-                // Match system-bar icon brightness to the forced color scheme
-                // (enableEdgeToEdge defaulted to the device theme at onCreate).
-                val view = LocalView.current
-                SideEffect {
-                    val window = (view.context as ComponentActivity).window
-                    val insetsController = WindowCompat.getInsetsController(window, view)
-                    insetsController.isAppearanceLightStatusBars = !darkTheme
-                    insetsController.isAppearanceLightNavigationBars = !darkTheme
-                }
-                MaterialTheme(
-                    colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme(),
-                ) {
-                    IncomingCallActivityScreen(
-                        identityHash = hash,
-                        callerName = currentCallerName.value,
-                        onAnswer = { answerCall() },
-                        onDecline = { declineCall() },
-                    )
-                }
+        setContent {
+            val hash = currentIdentityHash.value ?: return@setContent
+            // Call controls must render immediately. DataStore updates the appearance as
+            // soon as the persisted override is available.
+            val themeMode = settingsRepository.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM).value
+            // Use a simple Material 3 theme (no Hilt-based theme needed)
+            val darkTheme = themeMode.resolveDark(isSystemInDarkTheme())
+            // Match system-bar icon brightness to the forced color scheme
+            // (enableEdgeToEdge defaulted to the device theme at onCreate).
+            val view = LocalView.current
+            SideEffect {
+                val window = (view.context as ComponentActivity).window
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
+            MaterialTheme(
+                colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme(),
+            ) {
+                IncomingCallActivityScreen(
+                    identityHash = hash,
+                    callerName = currentCallerName.value,
+                    onAnswer = { answerCall() },
+                    onDecline = { declineCall() },
+                )
             }
         }
     }

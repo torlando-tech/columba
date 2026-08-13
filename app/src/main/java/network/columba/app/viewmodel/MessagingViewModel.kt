@@ -1179,32 +1179,12 @@ class MessagingViewModel
             _currentConversation.value = destinationHash
             lastDraftText = ""
 
-            // Register this conversation as active (suppresses notifications for this peer)
-            activeConversationManager.setActive(destinationHash)
-
-            // Dismiss the message notification for this conversation now that the user
-            // is viewing it.  This covers both normal in-app entry and notification-tap
-            // entry, because both converge on loadMessages().  Safe and idempotent —
-            // cancelling a nonexistent notification is a no-op.
-            notificationHelper.cancelNotificationForConversation(destinationHash)
-
             // Enable fast polling (1s) for active conversation
             rnsLxmf.setConversationActive(true)
 
             // Request path for this conversation peer if we don't have one
             viewModelScope.launch(Dispatchers.IO) {
                 identityResolutionManager.requestPathForContact(destinationHash)
-            }
-
-            // Mark conversation as read when opening
-            viewModelScope.launch {
-                try {
-                    Log.d(TAG, "Marking conversation $destinationHash as read...")
-                    conversationRepository.markConversationAsRead(destinationHash)
-                    Log.d(TAG, "Conversation marked as read")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error marking conversation as read", e)
-                }
             }
 
             // Restore draft for this conversation
@@ -1271,6 +1251,13 @@ class MessagingViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving draft immediately", e)
             }
+        }
+
+        /** Re-asserts user-visible conversation state on initial display and foreground return. */
+        fun onConversationVisible(destinationHash: String) {
+            activeConversationManager.setActive(destinationHash)
+            notificationHelper.cancelNotificationForConversation(destinationHash)
+            markAsRead(destinationHash)
         }
 
         fun markAsRead(destinationHash: String) {

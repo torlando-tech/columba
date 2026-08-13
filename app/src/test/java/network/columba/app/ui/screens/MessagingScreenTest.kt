@@ -2,9 +2,10 @@ package network.columba.app.ui.screens
 
 import android.app.Application
 import android.Manifest
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
@@ -21,6 +23,9 @@ import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.withKeyDown
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.paging.PagingData
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.testing.TestLifecycleOwner
 import network.columba.app.audio.VoiceMessageRecordingState
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
@@ -58,6 +63,30 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessagingScreenTest {
+    @Test
+    fun `text send keeps keyboard panel while IME remains visible`() {
+        assertEquals(
+            InputPanelMode.KEYBOARD,
+            inputPanelModeAfterSend(
+                currentMode = InputPanelMode.KEYBOARD,
+                wasVoiceMessage = false,
+                imeIsVisible = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `text send clears stale panel mode when IME is hidden`() {
+        assertEquals(
+            InputPanelMode.NONE,
+            inputPanelModeAfterSend(
+                currentMode = InputPanelMode.PANEL,
+                wasVoiceMessage = false,
+                imeIsVisible = false,
+            ),
+        )
+    }
+
     private val registerActivityRule = RegisterComponentActivityRule()
     private val composeRule = createComposeRule()
 
@@ -601,6 +630,66 @@ class MessagingScreenTest {
         // Then
         assertTrue("Send button click should succeed", result.isSuccess)
         verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, "Test message") }
+    }
+
+    @Test
+    fun inputBar_sendClick_keepsComposerAboveVisibleKeyboard() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalMessagingImeBottomInsetOverride provides 900) {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Type a message...").performTextInput("Keep composer visible")
+        val spacerBeforeSend = composeTestRule.onNodeWithTag("messageKeyboardSpacer").fetchSemanticsNode()
+        assertTrue(spacerBeforeSend.layoutInfo.coordinates.isAttached)
+
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        verify {
+            mockViewModel.sendMessage(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Keep composer visible",
+            )
+        }
+        val spacerAfterSend = composeTestRule.onNodeWithTag("messageKeyboardSpacer").fetchSemanticsNode()
+        assertTrue(spacerAfterSend.layoutInfo.coordinates.isAttached)
+    }
+
+    @Test
+    fun screen_reportsConversationVisibleAgainWhenResumed() {
+        val lifecycleOwner = TestLifecycleOwner(initialState = Lifecycle.State.RESUMED)
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        verify(exactly = 1) {
+            mockViewModel.onConversationVisible(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH)
+        }
+
+        composeTestRule.runOnIdle {
+            lifecycleOwner.currentState = Lifecycle.State.STARTED
+        }
+        composeTestRule.runOnIdle {
+            lifecycleOwner.currentState = Lifecycle.State.RESUMED
+        }
+
+        verify(exactly = 2) {
+            mockViewModel.onConversationVisible(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH)
+        }
+        assertEquals(Lifecycle.State.RESUMED, lifecycleOwner.currentState)
     }
 
     @Test

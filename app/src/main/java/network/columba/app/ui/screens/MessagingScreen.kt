@@ -148,6 +148,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -705,7 +706,7 @@ fun MessagingScreen(
 
     // Track IME (keyboard) visibility
     val density = LocalDensity.current
-    val imeBottomInset = WindowInsets.ime.getBottom(density)
+    val imeBottomInset = LocalMessagingImeBottomInsetOverride.current ?: WindowInsets.ime.getBottom(density)
     val imeIsVisible = imeBottomInset > 0
 
     // Attachment panel state machine
@@ -918,6 +919,11 @@ fun MessagingScreen(
             listState.scrollToItem(0) // Instant scroll to index 0 (newest message)
         }
     }
+
+    // A notification can be posted while Columba is backgrounded even when this conversation
+    // remains composed. Re-assert visibility on every resume so that notification is dismissed
+    // and the newly visible messages are marked read.
+    ConversationVisibilityEffect(destinationHash, viewModel::onConversationVisible)
 
     // Load messages for this peer
     LaunchedEffect(destinationHash) {
@@ -1531,7 +1537,12 @@ fun MessagingScreen(
                             voicePlayer.close()
                             val wasVoiceMessage = voiceRecordingState.selectedRecording != null
                             viewModel.sendMessage(destinationHash, messageText)
-                            if (!wasVoiceMessage) inputPanelMode = InputPanelMode.NONE
+                            inputPanelMode =
+                                inputPanelModeAfterSend(
+                                    currentMode = inputPanelMode,
+                                    wasVoiceMessage = wasVoiceMessage,
+                                    imeIsVisible = imeIsVisible,
+                                )
                         }
                     },
                     isSending = isSending,
@@ -1605,7 +1616,12 @@ fun MessagingScreen(
                     InputPanelMode.KEYBOARD -> {
                         // Manual IME spacer replaces .imePadding()
                         val imeHeightDp = with(density) { imeBottomInset.toDp() }
-                        Spacer(modifier = Modifier.height(imeHeightDp))
+                        Spacer(
+                            modifier =
+                                Modifier
+                                    .height(imeHeightDp)
+                                    .testTag("messageKeyboardSpacer"),
+                        )
                     }
                     InputPanelMode.NONE -> {
                         // Nav bar padding only when nothing else is showing
@@ -2946,8 +2962,6 @@ fun EmptyMessagesState() {
         }
     }
 }
-
-private enum class InputPanelMode { NONE, KEYBOARD, PANEL }
 
 private fun formatTimestamp(timestamp: Long): String {
     val now = System.currentTimeMillis()

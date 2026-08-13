@@ -1014,7 +1014,7 @@ class SettingsViewModel
         fun setThemeMode(mode: ThemeMode) {
             viewModelScope.launch {
                 settingsRepository.saveThemeModePreference(mode)
-                Log.d(TAG, "Theme mode changed to: ${mode.displayName}")
+                Log.d(TAG, "Theme mode changed to: ${mode.name}")
             }
         }
 

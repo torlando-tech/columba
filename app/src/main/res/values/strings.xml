@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="theme_selection_description">Choose your preferred color theme. Theme mode follows your system settings by default and can be overridden below.</string>
+    <string name="theme_mode_title">Theme Mode</string>
+    <string name="theme_mode_system">System</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="selected">Selected</string>
     <!-- app_name is defined per build type in app/build.gradle.kts via resValue
          (release: "Columba", debug: "columbatest") so debug + release builds can
          coexist on a phone with distinct launcher labels. -->

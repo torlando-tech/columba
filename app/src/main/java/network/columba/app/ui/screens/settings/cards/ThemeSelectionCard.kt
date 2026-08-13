@@ -26,8 +26,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import network.columba.app.R
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.PresetTheme
@@ -64,14 +66,14 @@ fun ThemeSelectionCard(
     ) {
         // Description
         Text(
-            text = "Choose your preferred color theme. Theme mode follows your system settings by default and can be overridden below.",
+            text = stringResource(R.string.theme_selection_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         // Theme mode section
         Text(
-            text = "Theme Mode",
+            text = stringResource(R.string.theme_mode_title),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -81,7 +83,15 @@ fun ThemeSelectionCard(
             options = ThemeMode.entries.toList(),
             selected = themeMode,
             onSelect = onThemeModeChange,
-        ) { it.displayName }
+        ) {
+            stringResource(
+                when (it) {
+                    ThemeMode.SYSTEM -> R.string.theme_mode_system
+                    ThemeMode.LIGHT -> R.string.theme_mode_light
+                    ThemeMode.DARK -> R.string.theme_mode_dark
+                },
+            )
+        }
 
         // Built-in themes section
         Text(
@@ -181,7 +191,7 @@ private fun <T> ThemeChipRow(
     options: Collection<T>,
     selected: T,
     onSelect: (T) -> Unit,
-    displayName: (T) -> String,
+    displayName: @Composable (T) -> String,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -198,7 +208,7 @@ private fun <T> ThemeChipRow(
                         {
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Selected",
+                                contentDescription = stringResource(R.string.selected),
                                 modifier = Modifier.size(18.dp),
                             )
                         }

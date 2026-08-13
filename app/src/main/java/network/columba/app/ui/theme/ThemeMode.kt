@@ -5,10 +5,10 @@ package network.columba.app.ui.theme
  * selected theme is used. SYSTEM follows the device; LIGHT/DARK force a
  * variant for users without a system dark mode or who want a pinned look.
  */
-enum class ThemeMode(val displayName: String) {
-    SYSTEM("System"),
-    LIGHT("Light"),
-    DARK("Dark"),
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK,
     ;
 
     /** Resolve the effective dark-mode flag for this mode. */

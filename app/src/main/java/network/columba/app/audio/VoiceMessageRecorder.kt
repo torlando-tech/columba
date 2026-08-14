@@ -36,7 +36,11 @@ class LxstVoiceRecorderBackend(
     override val state: StateFlow<RecorderState> = recorder.state
     override val isSupported: Boolean get() = recorder.isSupported()
     override fun start(outputFile: File) = recorder.start(outputFile)
-    override fun stop(): RecordedAudio = recorder.stop()
+    override fun stop(): RecordedAudio {
+        val recording = recorder.stop()
+        OggOpusAndroidTimestampNormalizer.normalize(recording.file)
+        return recording.copy(sizeBytes = recording.file.length())
+    }
     override fun cancel() = recorder.cancel()
     override fun close() = recorder.close()
 }

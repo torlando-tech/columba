@@ -22,6 +22,13 @@ enum class MessageRenderer(
 enum class AudioAttachmentMode(
     val wireValue: Int,
 ) {
+    AM_CODEC2_700C(LxmfFields.AM_CODEC2_700C),
+    AM_CODEC2_1200(LxmfFields.AM_CODEC2_1200),
+    AM_CODEC2_1300(LxmfFields.AM_CODEC2_1300),
+    AM_CODEC2_1400(LxmfFields.AM_CODEC2_1400),
+    AM_CODEC2_1600(LxmfFields.AM_CODEC2_1600),
+    AM_CODEC2_2400(LxmfFields.AM_CODEC2_2400),
+    AM_CODEC2_3200(LxmfFields.AM_CODEC2_3200),
     AM_OPUS_OGG(LxmfFields.AM_OPUS_OGG),
     UNSUPPORTED(-1),
     ;
@@ -29,6 +36,9 @@ enum class AudioAttachmentMode(
     companion object {
         fun fromWireValue(value: Int): AudioAttachmentMode? = entries.firstOrNull { it.wireValue == value }
     }
+
+    val isCodec2: Boolean
+        get() = wireValue in LxmfFields.AM_CODEC2_700C..LxmfFields.AM_CODEC2_3200
 }
 
 @Immutable

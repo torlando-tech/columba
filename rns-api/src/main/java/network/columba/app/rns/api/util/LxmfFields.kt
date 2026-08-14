@@ -45,6 +45,14 @@ object LxmfFields {
     /** Audio payload `[mode, bytes]`. */
     const val FIELD_AUDIO = 0x07
 
+    const val AM_CODEC2_700C = 0x03
+    const val AM_CODEC2_1200 = 0x04
+    const val AM_CODEC2_1300 = 0x05
+    const val AM_CODEC2_1400 = 0x06
+    const val AM_CODEC2_1600 = 0x07
+    const val AM_CODEC2_2400 = 0x08
+    const val AM_CODEC2_3200 = 0x09
+
     /** Canonical LXMF audio mode for Ogg/Opus voice notes. */
     const val AM_OPUS_OGG = 0x10
 

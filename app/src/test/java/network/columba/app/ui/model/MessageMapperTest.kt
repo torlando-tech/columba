@@ -105,6 +105,23 @@ class MessageMapperTest {
     }
 
     @Test
+    fun `toMessageUi parses codec2 audio attachment as playable`() {
+        val modes =
+            listOf(
+                0x04 to AudioAttachmentMode.AM_CODEC2_1200,
+                0x08 to AudioAttachmentMode.AM_CODEC2_2400,
+                0x09 to AudioAttachmentMode.AM_CODEC2_3200,
+            )
+
+        modes.forEach { (wireMode, expectedMode) ->
+            val result = createMessage(TestMessageConfig(fieldsJson = """{"7":[$wireMode,"0a0b0c"]}""")).toMessageUi()
+
+            assertEquals(expectedMode, result.audioAttachment?.mode)
+            assertTrue(result.audioAttachment?.isPlayable == true)
+        }
+    }
+
+    @Test
     fun `toMessageUi preserves unsupported audio mode without crashing`() {
         val message = createMessage(TestMessageConfig(fieldsJson = """{"7":[99,"0a0b0c"]}"""))
 

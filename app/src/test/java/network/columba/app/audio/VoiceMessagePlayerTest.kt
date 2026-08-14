@@ -177,6 +177,7 @@ class VoiceMessagePlayerTest {
         val recording = java.io.File.createTempFile("voice_preview", ".ogg", context.cacheDir).apply { writeText("OggS") }
 
         player.toggleFile("preview", recording)
+        advanceUntilIdle()
         engine.completePreparation()
 
         assertTrue(engine.started)

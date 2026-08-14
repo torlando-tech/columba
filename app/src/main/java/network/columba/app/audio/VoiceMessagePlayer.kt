@@ -170,7 +170,9 @@ internal class VoiceMessagePlayer(
         val current = _state.value
         if (current.messageKey != messageKey || player == null) {
             if (format.codec2Mode == null) {
-                playFile(messageKey, file)
+                releaseActive(clearState = false)
+                _state.value = VoiceMessagePlayerState(loading = true, messageKey = messageKey)
+                loadJob = scope.launch(ioDispatcher) { playFile(messageKey, file, releaseFirst = false) }
             } else {
                 playCodec2File(messageKey, file, format.codec2Mode)
             }
@@ -199,7 +201,9 @@ internal class VoiceMessagePlayer(
                             }
                         }
                     currentCoroutineContext().ensureActive()
-                    playFile(messageKey, wave, ownsFile = true, releaseFirst = false)
+                    withContext(ioDispatcher) {
+                        playFile(messageKey, wave, ownsFile = true, releaseFirst = false)
+                    }
                     unownedFile = null
                 } catch (error: Exception) {
                     if (currentCoroutineContext().isActive) failPlayback(messageKey, error.message ?: "error")
@@ -252,8 +256,14 @@ internal class VoiceMessagePlayer(
                     unownedFile = null
 
                     val engine = playerFactory.create()
+                    try {
+                        withContext(ioDispatcher) { engine.setDataSource(file) }
+                        currentCoroutineContext().ensureActive()
+                    } catch (error: Throwable) {
+                        engine.release()
+                        throw error
+                    }
                     player = engine
-                    engine.setDataSource(file)
                     engine.setOnPreparedListener { prepared ->
                         if (player !== prepared) return@setOnPreparedListener
                         prepared.start()

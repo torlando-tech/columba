@@ -277,6 +277,14 @@ class MessagingScreenTest {
         composeTestRule.onNodeWithText("Codec2 1200").assertExists()
         composeTestRule.onNodeWithText("Codec2 2400").assertExists()
         composeTestRule.onNodeWithText("Codec2 3200").assertExists()
+        composeTestRule.onNodeWithText("Medium Quality").assertExists()
+        composeTestRule.onNodeWithText("High Quality").assertExists()
+        composeTestRule.onNodeWithText("Maximum Quality").assertExists()
+        composeTestRule.onNodeWithText("Original Quality").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Low Latency").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Ultra Low Latency").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Sideband", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("MeshChatX", substring = true).assertDoesNotExist()
         verify(exactly = 0) { mockViewModel.requestStartVoiceRecording(any(), any()) }
 
         composeTestRule.onNodeWithText("High Quality").performScrollTo().performClick()

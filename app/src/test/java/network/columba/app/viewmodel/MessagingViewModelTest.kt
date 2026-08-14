@@ -93,16 +93,38 @@ import network.columba.app.data.repository.Message as DataMessage
 class MessagingViewModelTest {
 
     @Test
-    fun `voice message quality maps opus formats to LXST recording settings`() {
-        assertEquals(24_000, VoiceMessageFormat.OPUS_ORIGINAL.recordingConfig?.bitRateBps)
-        assertEquals(48_000, VoiceMessageFormat.OPUS_ORIGINAL.recordingConfig?.sampleRateHz)
-        assertEquals(1, VoiceMessageFormat.OPUS_ORIGINAL.recordingConfig?.channelCount)
+    fun `voice message quality uses exact standard LXST Opus call profiles`() {
         assertEquals(8_000, VoiceMessageFormat.OPUS_MEDIUM.recordingConfig?.bitRateBps)
         assertEquals(24_000, VoiceMessageFormat.OPUS_MEDIUM.recordingConfig?.sampleRateHz)
+        assertEquals(1, VoiceMessageFormat.OPUS_MEDIUM.recordingConfig?.channelCount)
         assertEquals(16_000, VoiceMessageFormat.OPUS_HIGH.recordingConfig?.bitRateBps)
         assertEquals(48_000, VoiceMessageFormat.OPUS_HIGH.recordingConfig?.sampleRateHz)
+        assertEquals(1, VoiceMessageFormat.OPUS_HIGH.recordingConfig?.channelCount)
         assertEquals(32_000, VoiceMessageFormat.OPUS_MAXIMUM.recordingConfig?.bitRateBps)
+        assertEquals(48_000, VoiceMessageFormat.OPUS_MAXIMUM.recordingConfig?.sampleRateHz)
         assertEquals(2, VoiceMessageFormat.OPUS_MAXIMUM.recordingConfig?.channelCount)
+    }
+
+    @Test
+    fun `voice message picker excludes legacy and latency profiles without product compatibility copy`() {
+        assertEquals(VoiceMessageFormat.OPUS_MEDIUM, VoiceMessageFormat.DEFAULT)
+        assertEquals(
+            listOf(
+                VoiceMessageFormat.CODEC2_1200,
+                VoiceMessageFormat.CODEC2_2400,
+                VoiceMessageFormat.CODEC2_3200,
+                VoiceMessageFormat.OPUS_MEDIUM,
+                VoiceMessageFormat.OPUS_HIGH,
+                VoiceMessageFormat.OPUS_MAXIMUM,
+            ),
+            VoiceMessageFormat.OUTBOUND_OPTIONS,
+        )
+        assertTrue(VoiceMessageFormat.OUTBOUND_OPTIONS.none { it.displayName.contains("Original") })
+        assertTrue(
+            VoiceMessageFormat.OUTBOUND_OPTIONS.none { format ->
+                listOf("Columba", "Sideband", "MeshChatX").any(format.description::contains)
+            },
+        )
     }
 
     @Test

@@ -2,6 +2,11 @@ package network.columba.app.audio
 
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.channels.FileChannel
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 
 /**
  * Repairs the packet-start granule positions emitted by Android MediaRecorder's Ogg muxer.
@@ -22,7 +27,12 @@ internal object OggOpusAndroidTimestampNormalizer {
     private const val MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024
 
     /** Returns true when [file] was atomically replaced with corrected Ogg bytes. */
-    fun normalize(file: File): Boolean {
+    fun normalize(file: File): Boolean = normalize(file, ::replaceAtomically)
+
+    internal fun normalize(
+        file: File,
+        replace: (File, File) -> Unit,
+    ): Boolean {
         require(file.isFile) { "Ogg Opus recording does not exist: $file" }
         require(file.length() in 1..MAX_FILE_SIZE_BYTES.toLong()) { "Ogg Opus recording has an invalid size" }
         val original = file.readBytes()
@@ -31,24 +41,36 @@ internal object OggOpusAndroidTimestampNormalizer {
 
         val parent = checkNotNull(file.absoluteFile.parentFile) { "Ogg Opus recording has no parent directory" }
         val replacement = File.createTempFile(".${file.name}.", ".normalized", parent)
-        val backup = File.createTempFile(".${file.name}.", ".backup", parent).also { check(it.delete()) }
         try {
             FileOutputStream(replacement).use { output ->
                 output.write(normalized)
                 output.fd.sync()
             }
-            check(file.renameTo(backup)) { "Could not stage original Ogg Opus recording" }
-            if (!replacement.renameTo(file)) {
-                check(backup.renameTo(file)) { "Could not restore original Ogg Opus recording" }
-                error("Could not publish normalized Ogg Opus recording")
-            }
-            backup.delete()
+            replace(replacement, file)
+            syncDirectory(parent)
         } finally {
             replacement.delete()
-            if (!file.exists()) backup.renameTo(file)
-            backup.delete()
         }
         return true
+    }
+
+    private fun replaceAtomically(source: File, destination: File) {
+        try {
+            Files.move(
+                source.toPath(),
+                destination.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(source.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    private fun syncDirectory(directory: File) {
+        runCatching {
+            FileChannel.open(directory.toPath(), StandardOpenOption.READ).use { channel -> channel.force(true) }
+        }
     }
 
     /** Returns the original instance when the input already uses end-of-packet granules. */

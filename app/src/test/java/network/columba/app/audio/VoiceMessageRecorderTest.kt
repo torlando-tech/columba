@@ -195,6 +195,43 @@ class VoiceMessageRecorderTest {
         controller.close()
     }
 
+    @Test
+    fun `LXST backend withholds completed until normalization succeeds`() {
+        val output = File.createTempFile("voice_lxst", ".ogg", context.cacheDir).also { it.delete() }
+        val recorder = FakeLxstAudioRecorder()
+        lateinit var backend: LxstVoiceRecorderBackend
+        var stateDuringNormalization: RecorderState? = null
+        backend =
+            LxstVoiceRecorderBackend(recorder) {
+                stateDuringNormalization = backend.state.value
+                true
+            }
+
+        backend.start(output)
+        val recording = backend.stop()
+
+        assertEquals(RecorderState.Finalizing, stateDuringNormalization)
+        assertEquals(RecorderState.Completed(recording), backend.state.value)
+        assertTrue(recording.file.exists())
+        backend.close()
+    }
+
+    @Test
+    fun `LXST normalization failure publishes failed and deletes unpublished output`() {
+        val output = File.createTempFile("voice_lxst_failure", ".ogg", context.cacheDir).also { it.delete() }
+        val recorder = FakeLxstAudioRecorder()
+        val failure = IllegalStateException("normalization failed")
+        val backend = LxstVoiceRecorderBackend(recorder) { throw failure }
+
+        backend.start(output)
+        val result = runCatching { backend.stop() }
+
+        assertEquals(failure, result.exceptionOrNull())
+        assertTrue(backend.state.value is RecorderState.Failed)
+        assertFalse(output.exists())
+        backend.close()
+    }
+
     private fun createController(scope: TestScope, backend: FakeRecorderBackend): VoiceMessageRecorder =
         VoiceMessageRecorder(
             context = context,
@@ -202,6 +239,31 @@ class VoiceMessageRecorderTest {
             blockingDispatcher = StandardTestDispatcher(scope.testScheduler),
             recorderFactory = { _, _ -> backend },
         )
+}
+
+private class FakeLxstAudioRecorder : LxstAudioRecorder {
+    override val state = MutableStateFlow<RecorderState>(RecorderState.Idle)
+    override val isSupported = true
+    private var outputFile: File? = null
+
+    override fun start(outputFile: File) {
+        this.outputFile = outputFile
+        state.value = RecorderState.Recording(0L)
+    }
+
+    override fun stop(): RecordedAudio {
+        val file = checkNotNull(outputFile)
+        file.writeBytes("OggS".encodeToByteArray())
+        val recording = RecordedAudio(file, 1_000L, file.length())
+        state.value = RecorderState.Completed(recording)
+        return recording
+    }
+
+    override fun cancel() {
+        state.value = RecorderState.Idle
+    }
+
+    override fun close() = cancel()
 }
 
 private class FakeRecorderBackend(

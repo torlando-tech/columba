@@ -28,21 +28,75 @@ interface VoiceRecorderBackend : AutoCloseable {
     fun cancel()
 }
 
-class LxstVoiceRecorderBackend(
+internal interface LxstAudioRecorder : AutoCloseable {
+    val state: StateFlow<RecorderState>
+    val isSupported: Boolean
+    fun start(outputFile: File)
+    fun stop(): RecordedAudio
+    fun cancel()
+}
+
+private class LxstAudioFileRecorder(
     context: Context,
-    config: RecordingConfig = RecordingConfig(),
+    config: RecordingConfig,
+) : LxstAudioRecorder {
+    private val delegate = AudioFileRecorder(context, config)
+    override val state: StateFlow<RecorderState> = delegate.state
+    override val isSupported: Boolean get() = delegate.isSupported()
+    override fun start(outputFile: File) = delegate.start(outputFile)
+    override fun stop(): RecordedAudio = delegate.stop()
+    override fun cancel() = delegate.cancel()
+    override fun close() = delegate.close()
+}
+
+class LxstVoiceRecorderBackend internal constructor(
+    private val recorder: LxstAudioRecorder,
+    private val normalize: (File) -> Boolean = OggOpusAndroidTimestampNormalizer::normalize,
 ) : VoiceRecorderBackend {
-    private val recorder = AudioFileRecorder(context, config)
-    override val state: StateFlow<RecorderState> = recorder.state
-    override val isSupported: Boolean get() = recorder.isSupported()
-    override fun start(outputFile: File) = recorder.start(outputFile)
-    override fun stop(): RecordedAudio {
-        val recording = recorder.stop()
-        OggOpusAndroidTimestampNormalizer.normalize(recording.file)
-        return recording.copy(sizeBytes = recording.file.length())
+    constructor(
+        context: Context,
+        config: RecordingConfig = RecordingConfig(),
+    ) : this(LxstAudioFileRecorder(context, config))
+
+    private val mutableState = MutableStateFlow<RecorderState>(RecorderState.Idle)
+    override val state: StateFlow<RecorderState> = mutableState.asStateFlow()
+    override val isSupported: Boolean get() = recorder.isSupported
+
+    override fun start(outputFile: File) {
+        try {
+            recorder.start(outputFile)
+            mutableState.value = recorder.state.value
+        } catch (error: Throwable) {
+            mutableState.value = RecorderState.Failed(error)
+            throw error
+        }
     }
-    override fun cancel() = recorder.cancel()
-    override fun close() = recorder.close()
+
+    override fun stop(): RecordedAudio {
+        mutableState.value = RecorderState.Finalizing
+        var recording: RecordedAudio? = null
+        return try {
+            recording = recorder.stop()
+            normalize(recording.file)
+            recording.copy(sizeBytes = recording.file.length()).also { completed ->
+                mutableState.value = RecorderState.Completed(completed)
+            }
+        } catch (error: Throwable) {
+            recording?.file?.let { failedOutput -> runCatching { failedOutput.delete() } }
+            mutableState.value = RecorderState.Failed(error)
+            throw error
+        }
+    }
+
+    override fun cancel() {
+        recorder.cancel()
+        mutableState.value = recorder.state.value
+    }
+
+    override fun close() {
+        recorder.close()
+        mutableState.value = RecorderState.Idle
+    }
 }
 
 data class VoiceMessageRecordingState(

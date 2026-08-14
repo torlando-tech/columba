@@ -9,6 +9,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -56,6 +57,23 @@ class OggOpusAndroidTimestampNormalizerTest {
         assertEquals(listOf(960L, 1_920L), audioGranules(recording.readBytes()))
         assertFalse(OggOpusAndroidTimestampNormalizer.normalize(recording))
         assertTrue(allPageChecksumsAreValid(recording.readBytes()))
+    }
+
+    @Test
+    fun `failed atomic publication preserves the original recording`() {
+        val original = androidMediaRecorderOgg(granules = listOf(0L, 960L))
+        val recording = temporaryFolder.newFile("voice.ogg").apply { writeBytes(original) }
+
+        val failure =
+            runCatching {
+                OggOpusAndroidTimestampNormalizer.normalize(recording) { _, _ ->
+                    throw IOException("move failed")
+                }
+            }.exceptionOrNull()
+
+        assertTrue(failure is IOException)
+        assertArrayEquals(original, recording.readBytes())
+        assertEquals(listOf("voice.ogg"), temporaryFolder.root.listFiles()?.map { it.name })
     }
 
     private fun androidMediaRecorderOgg(granules: List<Long>): ByteArray {

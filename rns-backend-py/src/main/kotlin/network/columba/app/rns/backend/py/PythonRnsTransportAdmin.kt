@@ -2,6 +2,7 @@ package network.columba.app.rns.backend.py
 
 import android.util.Log
 import com.chaquo.python.PyObject
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -61,12 +62,31 @@ class PythonRnsTransportAdmin(
     private val _interfaceStatusChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val _bleConnectionsFlow = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 16)
     private val _debugInfoFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
-    private val _interfaceStatusFlow = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val _interfaceStatusFlow =
+        MutableSharedFlow<String>(
+            replay = 1,
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
 
     override val interfaceStatusChanged: SharedFlow<Unit> = _interfaceStatusChanged.asSharedFlow()
     override val bleConnectionsFlow: SharedFlow<String> = _bleConnectionsFlow.asSharedFlow()
     override val debugInfoFlow: SharedFlow<String> = _debugInfoFlow.asSharedFlow()
     override val interfaceStatusFlow: SharedFlow<String> = _interfaceStatusFlow.asSharedFlow()
+
+    /** Publish one replayable RNode status delta without re-entering Python. */
+    fun publishRNodeOnlineStatus(
+        interfaceName: String,
+        isOnline: Boolean,
+    ) {
+        val payload =
+            JSONObject()
+                .put("updates", JSONObject().put(interfaceName, isOnline))
+                .toString()
+        check(_interfaceStatusFlow.tryEmit(payload)) {
+            "Unable to publish replayable RNode status update"
+        }
+    }
 
     // ===== BLE peer connection details (Network Status "BLE Connections" card) =====
     // The host wires the live KotlinBLEBridge in via attachBleSource() right after

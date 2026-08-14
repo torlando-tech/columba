@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.BleConnectionsState
@@ -223,6 +226,7 @@ class InterfaceManagementViewModel
 
         private val _state = MutableStateFlow(InterfaceManagementState())
         val state: StateFlow<InterfaceManagementState> = _state.asStateFlow()
+        private val interfaceStatusMutex = Mutex()
 
         private val _configState = MutableStateFlow(InterfaceConfigState())
         val configState: StateFlow<InterfaceConfigState> = _configState.asStateFlow()
@@ -275,14 +279,42 @@ class InterfaceManagementViewModel
          * - `interfaceStatusFlow` provides lightweight online/offline updates
          * - `debugInfoFlow` provides full transport interface snapshots including spawned peers
          *
-         * The kotlin backend pushes status through the two flows; the Python
-         * backend's RNS has no interface-status event stream, so on that backend
-         * the flows stay idle and the poll is the only refresh — without it an
-         * interface that comes online *after* the initial fetch (e.g. after an
-         * "Apply & Restart") stays shown as offline. The poll is a harmless
-         * periodic re-sync on the kotlin backend.
+         * The Kotlin backend pushes complete status maps through these flows.
+         * The Python backend additionally publishes replayable RNode change
+         * notifications; those are resolved through getInterfaceStats before
+         * applying them so delayed replay cannot overwrite newer backend state.
+         * Polling remains a periodic authoritative re-sync for both backends.
          */
         private fun observeInterfaceStatusChanges() {
+            viewModelScope.launch(ioDispatcher, start = CoroutineStart.UNDISPATCHED) {
+                transportAdmin.interfaceStatusFlow.collect { statusJson ->
+                    try {
+                        interfaceStatusMutex.withLock {
+                            parseAndUpdateInterfaceStatus(statusJson)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing interface status from event", e)
+                    }
+                }
+            }
+
+            viewModelScope.launch(ioDispatcher, start = CoroutineStart.UNDISPATCHED) {
+                transportAdmin.debugInfoFlow.collect { debugInfoJson ->
+                    try {
+                        interfaceStatusMutex.withLock {
+                            parseAndUpdateDebugInfo(debugInfoJson)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing debug info event", e)
+                    }
+                }
+            }
+
+            // Subscribe to both replaying event streams before admitting the
+            // initial snapshot fetch. A cached event is therefore applied first
+            // and the authoritative snapshot wins; a newer event arriving while
+            // the fetch is in flight waits on interfaceStatusMutex and wins after
+            // the stale fetch completes.
             viewModelScope.launch(ioDispatcher) {
                 if (enableStatusPolling) {
                     while (isActive) {
@@ -294,39 +326,36 @@ class InterfaceManagementViewModel
                     fetchInterfaceStatus()
                 }
             }
-
-            viewModelScope.launch(ioDispatcher) {
-                transportAdmin.interfaceStatusFlow.collect { statusJson ->
-                    try {
-                        parseAndUpdateInterfaceStatus(statusJson)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error parsing interface status from event", e)
-                    }
-                }
-            }
-
-            viewModelScope.launch(ioDispatcher) {
-                transportAdmin.debugInfoFlow.collect { debugInfoJson ->
-                    try {
-                        parseAndUpdateDebugInfo(debugInfoJson)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error parsing debug info event", e)
-                    }
-                }
-            }
         }
 
         /**
          * Parse interface status JSON and update state.
          */
-        private fun parseAndUpdateInterfaceStatus(statusJson: String) {
+        private suspend fun parseAndUpdateInterfaceStatus(statusJson: String) {
             try {
                 val json = JSONObject(statusJson)
+                val updates = json.optJSONObject("updates")
                 val statusMap = mutableMapOf<String, Boolean>()
-                json.keys().forEach { name ->
-                    statusMap[name] = json.optBoolean(name, false)
+                if (updates != null) {
+                    updates.keys().forEach { name ->
+                        val online = transportAdmin.getInterfaceStats(name)?.get("online") as? Boolean
+                        if (online != null) statusMap[name] = online
+                    }
+                } else {
+                    json.keys().forEach { name ->
+                        statusMap[name] = json.optBoolean(name, false)
+                    }
                 }
-                _state.update { it.copy(interfaceOnlineStatus = statusMap) }
+                _state.update { state ->
+                    state.copy(
+                        interfaceOnlineStatus =
+                            if (updates != null) {
+                                state.interfaceOnlineStatus + statusMap
+                            } else {
+                                statusMap
+                            },
+                    )
+                }
                 Log.d(TAG, "Interface status updated from event: $statusMap")
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing interface status JSON", e)
@@ -411,36 +440,38 @@ class InterfaceManagementViewModel
          */
         @Suppress("UNCHECKED_CAST")
         private suspend fun fetchInterfaceStatus() {
-            try {
-                val debugInfo = transportAdmin.getDebugInfo()
-                val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return
+            interfaceStatusMutex.withLock {
+                try {
+                    val debugInfo = transportAdmin.getDebugInfo()
+                    val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return@withLock
 
-                val statusMap = mutableMapOf<String, Boolean>()
-                val transportList = mutableListOf<TransportInterfaceInfo>()
-                for (ifaceMap in interfacesData) {
-                    val name = ifaceMap["name"] as? String ?: continue
-                    val online = ifaceMap["online"] as? Boolean ?: false
-                    statusMap[name] = online
-                    transportList.add(
-                        TransportInterfaceInfo(
-                            name = name,
-                            type = ifaceMap["type"] as? String ?: name,
-                            isOnline = online,
-                            canSend = ifaceMap["can_send"] as? Boolean ?: false,
-                            parentName = (ifaceMap["parent_name"] as? String)?.takeIf { it.isNotEmpty() },
-                            rxBytes = (ifaceMap["rx_bytes"] as? Number)?.toLong() ?: 0L,
-                            txBytes = (ifaceMap["tx_bytes"] as? Number)?.toLong() ?: 0L,
-                        ),
-                    )
+                    val statusMap = mutableMapOf<String, Boolean>()
+                    val transportList = mutableListOf<TransportInterfaceInfo>()
+                    for (ifaceMap in interfacesData) {
+                        val name = ifaceMap["name"] as? String ?: continue
+                        val online = ifaceMap["online"] as? Boolean ?: false
+                        statusMap[name] = online
+                        transportList.add(
+                            TransportInterfaceInfo(
+                                name = name,
+                                type = ifaceMap["type"] as? String ?: name,
+                                isOnline = online,
+                                canSend = ifaceMap["can_send"] as? Boolean ?: false,
+                                parentName = (ifaceMap["parent_name"] as? String)?.takeIf { it.isNotEmpty() },
+                                rxBytes = (ifaceMap["rx_bytes"] as? Number)?.toLong() ?: 0L,
+                                txBytes = (ifaceMap["tx_bytes"] as? Number)?.toLong() ?: 0L,
+                            ),
+                        )
+                    }
+
+                    _state.value =
+                        _state.value.copy(
+                            interfaceOnlineStatus = statusMap,
+                            transportInterfaces = transportList,
+                        )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to fetch interface status", e)
                 }
-
-                _state.value =
-                    _state.value.copy(
-                        interfaceOnlineStatus = statusMap,
-                        transportInterfaces = transportList,
-                    )
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch interface status", e)
             }
         }
 

@@ -84,7 +84,9 @@ class RnsBackendClient(
         telephonyClient = ClientRnsTelephony(fetchTelephony(remote), scope)
         telemetryClient = ClientRnsTelemetry(fetchTelemetry(remote), scope)
         nomadnetClient = ClientRnsNomadnet(fetchNomadnet(remote), scope)
-        transportAdminClient = ClientRnsTransportAdmin(fetchTransportAdmin(remote), scope)
+        val transportAdmin = ClientRnsTransportAdmin(fetchTransportAdmin(remote), scope)
+        transportAdmin.awaitInterfaceStatusReady()
+        transportAdminClient = transportAdmin
 
         // Seed capabilities synchronously so the first downstream read sees a
         // real snapshot, not the placeholder UNKNOWN default. Observer

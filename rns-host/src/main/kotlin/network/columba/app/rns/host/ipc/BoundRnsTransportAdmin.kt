@@ -117,7 +117,7 @@ internal class BoundRnsTransportAdmin(
         backendFlow
             .filterNotNull()
             .flatMapLatest { it.transportAdmin.interfaceStatusFlow }
-            .shareIn(scope, SharingStarted.Eagerly, replay = 0)
+            .shareIn(scope, SharingStarted.Eagerly, replay = 1)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val reactionReceivedFlow: SharedFlow<String> =

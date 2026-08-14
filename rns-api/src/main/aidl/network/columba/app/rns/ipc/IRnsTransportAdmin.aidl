@@ -80,7 +80,10 @@ oneway interface IRnsTransportAdmin {
     void registerDebugInfoObserver(in IRnsStringEventCallback cb);
     void unregisterDebugInfoObserver(in IRnsStringEventCallback cb);
 
-    void registerInterfaceStatusObserver(in IRnsStringEventCallback cb);
+    void registerInterfaceStatusObserver(
+        in IRnsStringEventCallback cb,
+        in IRnsUnitEventCallback readyCb
+    );
     void unregisterInterfaceStatusObserver(in IRnsStringEventCallback cb);
 
     void registerReactionReceivedObserver(in IRnsStringEventCallback cb);

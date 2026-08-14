@@ -1531,7 +1531,7 @@ fun MessagingScreen(
                     },
                     onRemoveVoiceAttachment = {
                         voicePlayer.close()
-                        viewModel.removeVoiceRecording()
+                        viewModel.requestRemoveVoiceRecording()
                         showVoiceControls = false
                     },
                     onSendClick = {

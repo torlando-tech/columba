@@ -1818,7 +1818,12 @@ class MessagingViewModel
             voiceRecordingLease?.let(microphoneArbiter::release)
             voiceRecordingLease = null
         }
-        fun removeVoiceRecording() = voiceMessageRecorder.removeSelected()
+        fun requestRemoveVoiceRecording() {
+            val expectedRecording = voiceMessageRecorder.state.value.selectedRecording ?: return
+            viewModelScope.launch(attachmentIoDispatcher) {
+                voiceMessageRecorder.removeSelected(expectedRecording)
+            }
+        }
 
         /**
          * Set the file processing state.

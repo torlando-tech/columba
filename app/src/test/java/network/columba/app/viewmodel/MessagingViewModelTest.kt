@@ -11,6 +11,8 @@ import androidx.paging.PagingData
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.audio.VoiceMessageRecorder
+import network.columba.app.audio.VoiceMessageRecordingState
+import tech.torlando.lxst.recording.RecordedAudio
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -109,6 +111,26 @@ class MessagingViewModelTest {
         assertEquals(0x08, VoiceMessageFormat.CODEC2_2400.wireMode)
         assertEquals(0x09, VoiceMessageFormat.CODEC2_3200.wireMode)
     }
+
+    @Test
+    fun `remove voice recording deletes pinned draft on attachment IO dispatcher`() =
+        runViewModelTest {
+            val recordingFile = java.io.File.createTempFile("voice_remove", ".ogg", applicationContext.cacheDir)
+            val recording = RecordedAudio(recordingFile, durationMillis = 1_000L, sizeBytes = recordingFile.length())
+            val recorder = mockk<VoiceMessageRecorder>()
+            every { recorder.state } returns MutableStateFlow(VoiceMessageRecordingState(selectedRecording = recording))
+            every { recorder.removeSelected(recording) } returns true
+            viewModel.javaClass.getDeclaredField("voiceMessageRecorder").apply {
+                isAccessible = true
+                set(viewModel, recorder)
+            }
+
+            viewModel.requestRemoveVoiceRecording()
+
+            verify(exactly = 0) { recorder.removeSelected(any()) }
+            advanceUntilIdle()
+            verify(exactly = 1) { recorder.removeSelected(recording) }
+        }
 
     @Test
     fun `voice message fields preserve selected codec2 wire mode`() = runTest {

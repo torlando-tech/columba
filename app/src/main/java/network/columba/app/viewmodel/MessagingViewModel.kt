@@ -53,6 +53,7 @@ import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -283,6 +284,7 @@ class MessagingViewModel
         val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
         private val sendInProgress = AtomicBoolean(false)
         private val voiceRecorderOperationLock = Any()
+        internal var attachmentIoDispatcher: CoroutineDispatcher = Dispatchers.IO
         private var voiceRecordingLease: MicrophoneAdmissionArbiter.Lease? = null
         private var voiceRecordingStartJob: Job? = null
         @Volatile private var voiceRecorderCleanupThread: Thread? = null
@@ -1471,15 +1473,18 @@ class MessagingViewModel
             var attachmentFieldsPersisted = true
             val fieldsJson =
                 try {
-                    buildFieldsJson(
-                        imageData = imageData,
-                        imageFormat = imageFormat,
-                        fileAttachments = fileAttachments,
-                        voiceBytes = voiceBytes,
-                        voiceMode = voiceMode,
-                        replyToMessageId = replyToMessageId,
-                        cacheDir = applicationContext.cacheDir,
-                    )
+                    val buildFields: suspend () -> String? = {
+                        buildFieldsJson(
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            replyToMessageId = replyToMessageId,
+                            cacheDir = applicationContext.cacheDir,
+                        )
+                    }
+                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
                 } catch (e: java.io.IOException) {
                     attachmentFieldsPersisted = imageData == null && fileAttachments.isEmpty() && voiceBytes == null
                     Log.e(TAG, "Failed to build fieldsJson (attachment I/O error), saving message without attachments", e)
@@ -1562,15 +1567,18 @@ class MessagingViewModel
             val now = System.currentTimeMillis()
             val fieldsJson =
                 runCatching {
-                    buildFieldsJson(
-                        imageData = imageData,
-                        imageFormat = imageFormat,
-                        fileAttachments = fileAttachments,
-                        voiceBytes = voiceBytes,
-                        voiceMode = voiceMode,
-                        replyToMessageId = replyToMessageId,
-                        cacheDir = applicationContext.cacheDir,
-                    )
+                    val buildFields: suspend () -> String? = {
+                        buildFieldsJson(
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            replyToMessageId = replyToMessageId,
+                            cacheDir = applicationContext.cacheDir,
+                        )
+                    }
+                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
                 }.getOrNull()
             val requiresFields =
                 imageData != null ||
@@ -1623,14 +1631,16 @@ class MessagingViewModel
             if (_pendingReplyTo.value?.messageId == replyToMessageId) clearReplyTo()
         }
 
-        private fun clearSubmittedAttachments(
+        private suspend fun clearSubmittedAttachments(
             imageData: ByteArray?,
             fileAttachments: List<FileAttachment>,
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio?,
         ) {
             if (imageData != null && _selectedImageData.value === imageData) clearSelectedImage()
             if (_selectedFileAttachments.value === fileAttachments) clearFileAttachments()
-            voiceRecording?.let { voiceMessageRecorder.removeSelected(it) }
+            voiceRecording?.let { recording ->
+                withContext(attachmentIoDispatcher) { voiceMessageRecorder.removeSelected(recording) }
+            }
         }
 
         fun selectImage(

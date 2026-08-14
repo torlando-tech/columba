@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -307,9 +308,9 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
-                notificationHelper,
-                rnsTelephony,
-                )
+                    notificationHelper,
+                    rnsTelephony,
+                ).also { it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler) }
             advanceUntilIdle()
             testBody()
         }

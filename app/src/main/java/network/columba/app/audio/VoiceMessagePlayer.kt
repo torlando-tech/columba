@@ -98,6 +98,7 @@ internal class VoiceMessagePlayer(
         AudioAttachmentLoader(context.applicationContext)::loadBytes,
     private val playerFactory: PlaybackEngineFactory = PlaybackEngineFactory { AndroidVoicePlaybackEngine() },
     private val waveformReader: AudioWaveformReader = AndroidPcmWaveformReader(context.applicationContext),
+    private val codec2Codec: Codec2RawAudioCodec = Codec2RawAudioCodec(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AutoCloseable {
     private val appContext = context.applicationContext
@@ -121,7 +122,7 @@ internal class VoiceMessagePlayer(
                     val result =
                         metadataSemaphore.withPermit {
                             withContext(ioDispatcher) {
-                                loadBytes(attachment)?.let { analyzeMetadata(it) }
+                                loadBytes(attachment)?.let { analyzeMetadata(it, attachment) }
                             }
                         } ?: return@launch
                     cacheMetadata(messageKey, result)
@@ -161,13 +162,51 @@ internal class VoiceMessagePlayer(
         }
     }
 
-    fun toggleFile(messageKey: String, file: File) {
+    fun toggleFile(
+        messageKey: String,
+        file: File,
+        format: VoiceMessageFormat = VoiceMessageFormat.DEFAULT,
+    ) {
         val current = _state.value
         if (current.messageKey != messageKey || player == null) {
-            playFile(messageKey, file)
+            if (format.codec2Mode == null) {
+                playFile(messageKey, file)
+            } else {
+                playCodec2File(messageKey, file, format.codec2Mode)
+            }
             return
         }
         if (current.playing) pause() else resume()
+    }
+
+    private fun playCodec2File(
+        messageKey: String,
+        source: File,
+        mode: Int,
+    ) {
+        releaseActive(clearState = false)
+        _state.value = VoiceMessagePlayerState(loading = true, messageKey = messageKey)
+        loadJob =
+            scope.launch {
+                var unownedFile: File? = null
+                try {
+                    val wave =
+                        withContext(ioDispatcher) {
+                            val bytes = source.readBytes()
+                            File.createTempFile("voice_preview_", ".wav", appContext.cacheDir).also {
+                                unownedFile = it
+                                codec2Codec.writeWave(codec2Codec.decode(bytes, mode), it)
+                            }
+                        }
+                    currentCoroutineContext().ensureActive()
+                    playFile(messageKey, wave, ownsFile = true, releaseFirst = false)
+                    unownedFile = null
+                } catch (error: Exception) {
+                    if (currentCoroutineContext().isActive) failPlayback(messageKey, error.message ?: "error")
+                } finally {
+                    withContext(NonCancellable + ioDispatcher) { unownedFile?.delete() }
+                }
+            }
     }
 
     fun pause() {
@@ -195,11 +234,17 @@ internal class VoiceMessagePlayer(
                         return@launch
                     }
                     val bytes = loadedBytes
+                    val isCodec2 = attachment.mode.isCodec2
                     val file =
                         withContext(ioDispatcher) {
-                            File.createTempFile("voice_message_", ".ogg", appContext.cacheDir).also {
+                            File.createTempFile("voice_message_", if (isCodec2) ".wav" else ".ogg", appContext.cacheDir).also {
                                 unownedFile = it
-                                it.writeBytes(bytes)
+                                if (isCodec2) {
+                                    val mode = checkNotNull(attachment.mode.codec2Bitrate())
+                                    codec2Codec.writeWave(codec2Codec.decode(bytes, mode), it)
+                                } else {
+                                    it.writeBytes(bytes)
+                                }
                             }
                         }
                     currentCoroutineContext().ensureActive()
@@ -245,14 +290,20 @@ internal class VoiceMessagePlayer(
             }
     }
 
-    private fun playFile(messageKey: String, file: File) {
-        releaseActive(clearState = false)
+    private fun playFile(
+        messageKey: String,
+        file: File,
+        ownsFile: Boolean = false,
+        releaseFirst: Boolean = true,
+    ) {
+        if (releaseFirst) releaseActive(clearState = false)
         if (!file.isFile || file.length() <= 0L) {
             _state.value = VoiceMessagePlayerState(error = "unavailable", messageKey = messageKey)
             return
         }
         _state.value = VoiceMessagePlayerState(loading = true, messageKey = messageKey)
         try {
+            if (ownsFile) tempFile = file
             val engine = playerFactory.create()
             player = engine
             engine.setDataSource(file)
@@ -303,10 +354,33 @@ internal class VoiceMessagePlayer(
         }
     }
 
-    private suspend fun analyzeMetadata(bytes: ByteArray): VoiceMessageMetadata? {
+    private suspend fun analyzeMetadata(
+        bytes: ByteArray,
+        attachment: AudioAttachmentUi,
+    ): VoiceMessageMetadata? {
+        if (attachment.mode.isCodec2) {
+            val mode = attachment.mode.codec2Bitrate() ?: return null
+            val decoded = codec2Codec.decode(bytes, mode)
+            return VoiceMessageMetadata(decoded.durationMillis, codec2Waveform(decoded.samples))
+        }
         val container = OggOpusMetadataReader.read(bytes) ?: return null
         val waveform = waveformReader.read(bytes, container.durationMs).orEmpty()
         return VoiceMessageMetadata(container.durationMs, waveform)
+    }
+
+    private fun codec2Waveform(samples: ShortArray): List<Float> {
+        if (samples.isEmpty()) return emptyList()
+        return List(WAVEFORM_BARS) { index ->
+            val start = index * samples.size / WAVEFORM_BARS
+            val end = ((index + 1) * samples.size / WAVEFORM_BARS).coerceAtLeast(start + 1).coerceAtMost(samples.size)
+            if (start >= samples.size) {
+                0f
+            } else {
+                var peak = 0
+                for (sampleIndex in start until end) peak = maxOf(peak, kotlin.math.abs(samples[sampleIndex].toInt()))
+                (peak / 32_768f).coerceIn(0f, 1f)
+            }
+        }
     }
 
     private fun resume() {
@@ -357,5 +431,6 @@ internal class VoiceMessagePlayer(
     private companion object {
         const val PROGRESS_INTERVAL_MILLIS = 250L
         const val MAX_METADATA_ENTRIES = 128
+        const val WAVEFORM_BARS = 40
     }
 }

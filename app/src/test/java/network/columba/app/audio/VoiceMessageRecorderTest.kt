@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.torlando.lxst.recording.RecordedAudio
+
 import tech.torlando.lxst.recording.RecorderState
 import java.io.File
 
@@ -127,6 +128,28 @@ class VoiceMessageRecorderTest {
     }
 
     @Test
+    fun `support checks do not replace an active selected quality backend`() = runTest {
+        val createdFormats = mutableListOf<VoiceMessageFormat>()
+        val controller =
+            VoiceMessageRecorder(
+                context = context,
+                scope = this,
+                blockingDispatcher = StandardTestDispatcher(testScheduler),
+                recorderFactory = { _, format ->
+                    createdFormats += format
+                    FakeRecorderBackend(context.cacheDir)
+                },
+            )
+        assertTrue(controller.isSupported)
+        controller.start(format = VoiceMessageFormat.OPUS_HIGH)
+        assertTrue(controller.isSupported)
+
+        assertEquals(listOf(VoiceMessageFormat.DEFAULT, VoiceMessageFormat.OPUS_HIGH), createdFormats)
+        assertTrue(controller.state.value.recorderState is RecorderState.Recording)
+        controller.close()
+    }
+
+    @Test
     fun `repeated stop preserves one finalized recording`() = runTest {
         val backend = FakeRecorderBackend(context.cacheDir)
         val controller = createController(this, backend)
@@ -176,7 +199,8 @@ class VoiceMessageRecorderTest {
         VoiceMessageRecorder(
             context = context,
             scope = scope,
-            recorderFactory = { backend },
+            blockingDispatcher = StandardTestDispatcher(scope.testScheduler),
+            recorderFactory = { _, _ -> backend },
         )
 }
 

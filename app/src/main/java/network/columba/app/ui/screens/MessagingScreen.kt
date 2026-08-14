@@ -2026,7 +2026,7 @@ fun MessageBubble(
     transferProgress: TransferProgressUpdate? = null,
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
-    @Suppress("UNUSED_PARAMETER") timestampTick: Long = 0L,
+    timestampTick: Long = System.currentTimeMillis(),
     voicePlayerState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
     voiceMetadata: VoiceMessageMetadata? = null,
     onVoiceMetadataNeeded: (AudioAttachmentUi) -> Unit = {},
@@ -2194,7 +2194,7 @@ fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = formatTimestamp(message.receivedAt ?: message.timestamp),
+                            text = formatTimestamp(message.receivedAt ?: message.timestamp, timestampTick),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                         )
@@ -2500,7 +2500,7 @@ fun MessageBubble(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = formatTimestamp(message.receivedAt ?: message.timestamp),
+                                text = formatTimestamp(message.receivedAt ?: message.timestamp, timestampTick),
                                 style = MaterialTheme.typography.labelSmall,
                                 color =
                                     if (isFromMe) {
@@ -2962,8 +2962,10 @@ fun EmptyMessagesState() {
     }
 }
 
-private fun formatTimestamp(timestamp: Long): String {
-    val now = System.currentTimeMillis()
+private fun formatTimestamp(
+    timestamp: Long,
+    now: Long,
+): String {
     val diff = now - timestamp
 
     return when {

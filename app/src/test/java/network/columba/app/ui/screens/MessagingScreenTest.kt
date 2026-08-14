@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
@@ -27,9 +28,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.testing.TestLifecycleOwner
 import network.columba.app.audio.VoiceMessageRecordingState
+import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
 import network.columba.app.viewmodel.ContactToggleResult
@@ -248,10 +251,38 @@ class MessagingScreenTest {
 
         composeTestRule.onNodeWithContentDescription("Attach").performClick()
         composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
+        composeTestRule.onNodeWithText("Record").performClick()
         composeTestRule.onNodeWithContentDescription("Back").performClick()
 
-        verify { mockViewModel.cancelVoiceRecording() }
+        verify { mockViewModel.requestCancelVoiceRecording() }
         assertTrue(backClicked)
+    }
+
+    @Test
+    fun voiceMessageButton_opensQualityPicker_andStartsSelectedProfile() {
+        shadowOf(RuntimeEnvironment.getApplication() as Application).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Attach").performClick()
+        composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
+
+        composeTestRule.onNodeWithText("Select Voice Message Quality").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Codec2 1200").assertExists()
+        composeTestRule.onNodeWithText("Codec2 2400").assertExists()
+        composeTestRule.onNodeWithText("Codec2 3200").assertExists()
+        verify(exactly = 0) { mockViewModel.requestStartVoiceRecording(any(), any()) }
+
+        composeTestRule.onNodeWithText("High Quality").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Record").performClick()
+
+        verify { mockViewModel.requestStartVoiceRecording(VoiceMessageFormat.OPUS_HIGH, any()) }
     }
 
     @Test

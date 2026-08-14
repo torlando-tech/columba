@@ -1,5 +1,7 @@
 package network.columba.app.audio
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.channels.FileChannel
@@ -27,8 +29,10 @@ internal object OggOpusAndroidTimestampNormalizer {
     private const val MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024
 
     /** Returns true when [file] was atomically replaced with corrected Ogg bytes. */
+    @RequiresApi(Build.VERSION_CODES.O)
     fun normalize(file: File): Boolean = normalize(file, ::replaceAtomically)
 
+    @RequiresApi(Build.VERSION_CODES.O)
     internal fun normalize(
         file: File,
         replace: (File, File) -> Unit,
@@ -54,6 +58,7 @@ internal object OggOpusAndroidTimestampNormalizer {
         return true
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun replaceAtomically(source: File, destination: File) {
         try {
             Files.move(
@@ -67,6 +72,7 @@ internal object OggOpusAndroidTimestampNormalizer {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun syncDirectory(directory: File) {
         runCatching {
             FileChannel.open(directory.toPath(), StandardOpenOption.READ).use { channel -> channel.force(true) }

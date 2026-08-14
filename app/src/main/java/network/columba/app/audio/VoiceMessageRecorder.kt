@@ -2,6 +2,7 @@ package network.columba.app.audio
 
 import android.content.Context
 import android.os.Build
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,7 @@ private class LxstAudioFileRecorder(
     override fun close() = delegate.close()
 }
 
+@RequiresApi(Build.VERSION_CODES.Q)
 class LxstVoiceRecorderBackend internal constructor(
     private val recorder: LxstAudioRecorder,
     private val normalize: (File) -> Boolean = OggOpusAndroidTimestampNormalizer::normalize,
@@ -114,7 +116,11 @@ class VoiceMessageRecorder(
     private val blockingDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val recorderFactory: (Context, VoiceMessageFormat) -> VoiceRecorderBackend = { recorderContext, format ->
         format.codec2Mode?.let(::Codec2VoiceRecorderBackend)
-            ?: LxstVoiceRecorderBackend(recorderContext, checkNotNull(format.recordingConfig))
+            ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                LxstVoiceRecorderBackend(recorderContext, checkNotNull(format.recordingConfig))
+            } else {
+                error("Ogg Opus recording requires Android 10 or newer")
+            }
     },
 ) : AutoCloseable {
     private val appContext = context.applicationContext ?: context

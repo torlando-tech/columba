@@ -1,6 +1,7 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -68,6 +69,32 @@ class MessageBubbleTest {
         composeTestRule.onNodeWithText("Voice message").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Play voice message").performClick()
         assertTrue(toggled)
+    }
+
+    @Test
+    fun `timestamp tick refreshes an already composed message bubble`() {
+        val messageTimestamp = System.currentTimeMillis()
+        val timestampTick = mutableLongStateOf(messageTimestamp)
+        val message = MessagingTestFixtures.createSentMessage(timestamp = messageTimestamp)
+
+        composeTestRule.setContent {
+            val clipboardManager = LocalClipboardManager.current
+            MessageBubble(
+                message = message,
+                isFromMe = true,
+                clipboardManager = clipboardManager,
+                timestampTick = timestampTick.longValue,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Just now").assertIsDisplayed()
+
+        composeTestRule.runOnIdle {
+            timestampTick.longValue = messageTimestamp + 60_000L
+        }
+
+        composeTestRule.onNodeWithText("1 min ago").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Just now").assertDoesNotExist()
     }
 
     // ========== Missing Image Placeholder Tests ==========

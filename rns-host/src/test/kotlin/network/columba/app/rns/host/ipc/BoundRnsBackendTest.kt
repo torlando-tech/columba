@@ -193,6 +193,23 @@ class BoundRnsBackendTest {
     }
 
     @Test
+    fun `BoundRnsTransportAdmin replays interface status emitted before bind`() = runTest {
+        val flow = MutableStateFlow<RnsBackend?>(null)
+        val admin = BoundRnsTransportAdmin(flow.asStateFlow(), backgroundScope)
+        val fake = FakeRnsBackend()
+        val payload = """{"updates":{"Test RNode":true}}"""
+        fake.transportAdminFake.emitInterfaceStatus(payload)
+
+        flow.value = fake
+        advanceUntilIdle()
+
+        admin.interfaceStatusFlow.test {
+            assertEquals(payload, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `BoundRnsTelephony callState republishes across rebinds`() = runTest {
         val flow = MutableStateFlow<RnsBackend?>(null)
         val tel = BoundRnsTelephony(flow.asStateFlow(), backgroundScope)
@@ -329,7 +346,7 @@ class BoundRnsBackendTest {
         private val statusChangedEmitter = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 16)
         private val bleConnectionsEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 32)
         private val debugInfoEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
-        private val interfaceStatusEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 32)
+        private val interfaceStatusEmitter = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 32)
         private val reactionReceivedEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 32)
 
         override fun setBatteryProfile(profile: BatteryProfile) { batteryProfileSets.add(profile) }
@@ -349,6 +366,9 @@ class BoundRnsBackendTest {
         override suspend fun reconnectRNodeInterface() {}
         override fun getRNodeRssi(): Int = rssi
         override fun getBleConnectionDetails(): String = bleConnections
+        fun emitInterfaceStatus(payload: String) {
+            check(interfaceStatusEmitter.tryEmit(payload))
+        }
         override val interfaceStatusChanged: SharedFlow<Unit> = statusChangedEmitter.asSharedFlow()
         override val bleConnectionsFlow: SharedFlow<String> = bleConnectionsEmitter.asSharedFlow()
         override val debugInfoFlow: SharedFlow<String> = debugInfoEmitter.asSharedFlow()

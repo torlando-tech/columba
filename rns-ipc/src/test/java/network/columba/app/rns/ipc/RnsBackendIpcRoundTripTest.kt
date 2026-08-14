@@ -223,6 +223,19 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `interface status published before client setup is replayed across AIDL`() = runTest {
+        val payload = """{"updates":{"Test RNode":true}}"""
+        fake.transportAdminFake.emitInterfaceStatus(payload)
+
+        val (client, _) = buildClientAndServer()
+
+        client.transportAdmin.interfaceStatusFlow.test {
+            assertEquals(payload, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `transfer progress observer round-trips through the stub`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
@@ -689,6 +702,11 @@ private class FakeRnsNomadnet : RnsNomadnet {
 
 private class FakeRnsTransportAdmin : RnsTransportAdmin {
     var sharedInstanceAccessConfig: String? = null
+    private val interfaceStatuses = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 8)
+
+    fun emitInterfaceStatus(payload: String) {
+        check(interfaceStatuses.tryEmit(payload))
+    }
 
     override fun setBatteryProfile(profile: network.columba.app.rns.api.model.BatteryProfile) {}
     override suspend fun reloadInterfaces(configs: List<InterfaceConfig>) {}
@@ -710,6 +728,6 @@ private class FakeRnsTransportAdmin : RnsTransportAdmin {
     override val interfaceStatusChanged: SharedFlow<Unit> = MutableSharedFlow()
     override val bleConnectionsFlow: SharedFlow<String> = MutableSharedFlow()
     override val debugInfoFlow: SharedFlow<String> = MutableSharedFlow()
-    override val interfaceStatusFlow: SharedFlow<String> = MutableSharedFlow()
+    override val interfaceStatusFlow: SharedFlow<String> = interfaceStatuses.asSharedFlow()
     override val reactionReceivedFlow: SharedFlow<String> = MutableSharedFlow()
 }

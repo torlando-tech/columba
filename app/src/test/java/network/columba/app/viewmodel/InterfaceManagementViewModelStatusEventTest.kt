@@ -20,6 +20,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -57,6 +59,7 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
     private lateinit var rnsBackend: RnsBackend
     private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
+    private lateinit var interfaceStatusChanged: MutableSharedFlow<Unit>
     private lateinit var debugInfoFlow: MutableSharedFlow<String>
     private lateinit var viewModel: InterfaceManagementViewModel
 
@@ -111,7 +114,9 @@ class InterfaceManagementViewModelStatusEventTest {
 
         // Mock event flows for NativeReticulumProtocol (event-driven updates)
         interfaceStatusFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        interfaceStatusChanged = MutableSharedFlow(extraBufferCapacity = 1)
         debugInfoFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        every { serviceProtocol.interfaceStatusChanged } returns interfaceStatusChanged
         every { serviceProtocol.interfaceStatusFlow } returns interfaceStatusFlow
         every { serviceProtocol.debugInfoFlow } returns debugInfoFlow
 
@@ -202,6 +207,98 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
+    fun `replayed RNode status delta updates reconnect state without clearing siblings`() =
+        runTest {
+            coEvery { serviceProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf("online" to true)
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "Test RNode", "online" to false),
+                            mapOf("name" to "Sibling", "online" to true),
+                        ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
+
+            interfaceStatusFlow.emit("""{"updates":{"Test RNode":true}}""")
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["Sibling"])
+        }
+
+    @Test
+    fun `RNode delta wins when stale poll completes after reconnect event`() =
+        runTest {
+            coEvery { serviceProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf("online" to true)
+            val fetchStarted = CompletableDeferred<Unit>()
+            val releaseFetch = CompletableDeferred<Unit>()
+            coEvery { serviceProtocol.getDebugInfo() } coAnswers {
+                fetchStarted.complete(Unit)
+                releaseFetch.await()
+                mapOf(
+                    "interfaces" to
+                        listOf(mapOf("name" to "Test RNode", "online" to false)),
+                )
+            }
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+
+            runCurrent()
+            fetchStarted.await()
+            interfaceStatusFlow.emit("""{"updates":{"Test RNode":true}}""")
+            releaseFetch.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
+        }
+
+    @Test
+    fun `current snapshot wins over stale RNode replay cached before ViewModel starts`() =
+        runTest {
+            interfaceStatusFlow.emit("""{"updates":{"Test RNode":true}}""")
+            coEvery { serviceProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf("online" to false)
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(mapOf("name" to "Test RNode", "online" to false)),
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
+        }
+
+    @Test
     fun `interface online status is updated in state after event`() =
         runTest {
             viewModel =
@@ -270,6 +367,7 @@ class InterfaceManagementViewModelStatusEventTest {
         runTest {
             // Use a generic ReticulumProtocol mock instead of NativeReticulumProtocol
             val genericProtocol: RnsTransportAdmin = mockk()
+            every { genericProtocol.interfaceStatusChanged } returns MutableSharedFlow()
             every { genericProtocol.interfaceStatusFlow } returns MutableSharedFlow()
             every { genericProtocol.debugInfoFlow } returns MutableSharedFlow()
             coEvery { genericProtocol.getDebugInfo() } returns emptyMap()

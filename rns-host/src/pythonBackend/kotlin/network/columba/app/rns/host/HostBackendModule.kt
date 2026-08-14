@@ -15,6 +15,7 @@ import network.columba.app.rns.host.di.LocalBackend
 import network.columba.app.rns.host.persistence.CallsFromContactsGate
 import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.rns.host.rnode.KotlinRNodeBridge
+import network.columba.app.rns.host.rnode.RNodeOnlineStatusListener
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import tech.torlando.lxst.core.CallCoordinator
 import javax.inject.Singleton
@@ -89,7 +90,16 @@ object HostBackendModule {
             // duplicates. PythonRnsRuntime.start forwards them via
             // event_bridge.set_rnode_bridge + usb_bridge.set_usb_bridge
             // before Reticulum() constructs the bundled interface.
-            it.runtime.rnodeHostBridge = KotlinRNodeBridge.getInstance(context)
+            val rnodeBridge = KotlinRNodeBridge.getInstance(context)
+            it.runtime.rnodeHostBridge = rnodeBridge
+            val transportAdmin = it.transportAdmin as? PythonRnsTransportAdmin
+            rnodeBridge.addOnlineStatusListener(
+                object : RNodeOnlineStatusListener {
+                    override fun onRNodeOnlineStatusChanged(isOnline: Boolean, interfaceName: String) {
+                        transportAdmin?.publishRNodeOnlineStatus(interfaceName, isOnline)
+                    }
+                },
+            )
             it.runtime.usbBridge = KotlinUSBBridge.getInstance(context)
         }
 

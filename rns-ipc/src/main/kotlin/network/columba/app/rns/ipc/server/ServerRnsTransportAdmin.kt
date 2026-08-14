@@ -117,7 +117,13 @@ internal class ServerRnsTransportAdmin(
     override fun registerDebugInfoObserver(cb: IRnsStringEventCallback) = debugHub.registerObserver(cb)
     override fun unregisterDebugInfoObserver(cb: IRnsStringEventCallback) = debugHub.unregisterObserver(cb)
 
-    override fun registerInterfaceStatusObserver(cb: IRnsStringEventCallback) = ifStatusHub.registerObserver(cb)
+    override fun registerInterfaceStatusObserver(
+        cb: IRnsStringEventCallback,
+        readyCb: IRnsUnitEventCallback,
+    ) {
+        ifStatusHub.registerObserver(cb)
+        readyCb.onEvent()
+    }
     override fun unregisterInterfaceStatusObserver(cb: IRnsStringEventCallback) = ifStatusHub.unregisterObserver(cb)
 
     override fun registerReactionReceivedObserver(cb: IRnsStringEventCallback) = reactionHub.registerObserver(cb)

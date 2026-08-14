@@ -1,12 +1,15 @@
 package network.columba.app.rns.ipc.client
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -110,7 +113,8 @@ internal class ClientRnsTransportAdmin(
     private val interfaceStatusChangedShared = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val bleConnectionsShared = MutableSharedFlow<String>(extraBufferCapacity = 32)
     private val debugInfoShared = MutableSharedFlow<String>(extraBufferCapacity = 64)
-    private val interfaceStatusShared = MutableSharedFlow<String>(extraBufferCapacity = 32)
+    private val interfaceStatusShared = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 32)
+    private val interfaceStatusReady = CompletableDeferred<Unit>()
     private val reactionReceivedShared = MutableSharedFlow<String>(extraBufferCapacity = 32)
 
     init {
@@ -130,10 +134,20 @@ internal class ClientRnsTransportAdmin(
             unregister = { remote.unregisterDebugInfoObserver(it) },
         ).onEach { debugInfoShared.emit(it) }.launchIn(scope)
 
-        stringEventFlow(
-            register = { remote.registerInterfaceStatusObserver(it) },
-            unregister = { remote.unregisterInterfaceStatusObserver(it) },
-        ).onEach { interfaceStatusShared.emit(it) }.launchIn(scope)
+        val interfaceStatusJob =
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                interfaceStatusEventFlow(
+                    register = { cb, readyCb -> remote.registerInterfaceStatusObserver(cb, readyCb) },
+                    unregister = { remote.unregisterInterfaceStatusObserver(it) },
+                ).collect { interfaceStatusShared.emit(it) }
+            }
+        interfaceStatusJob.invokeOnCompletion { cause ->
+            if (!interfaceStatusReady.isCompleted) {
+                interfaceStatusReady.completeExceptionally(
+                    cause ?: IllegalStateException("Interface status observer ended before registration was ready"),
+                )
+            }
+        }
 
         stringEventFlow(
             register = { remote.registerReactionReceivedObserver(it) },
@@ -158,6 +172,28 @@ internal class ClientRnsTransportAdmin(
         }
         if (!registerObserverOrClose { register(cb) }) return@callbackFlow
         awaitClose { runCatching { unregister(cb) } }
+    }
+
+    private fun interfaceStatusEventFlow(
+        register: (IRnsStringEventCallback, IRnsUnitEventCallback) -> Unit,
+        unregister: (IRnsStringEventCallback) -> Unit,
+    ): Flow<String> = callbackFlow {
+        val cb = object : IRnsStringEventCallback.Stub() {
+            override fun onString(value: String?) {
+                if (value != null) trySend(value)
+            }
+        }
+        val readyCb = object : IRnsUnitEventCallback.Stub() {
+            override fun onEvent() {
+                interfaceStatusReady.complete(Unit)
+            }
+        }
+        if (!registerObserverOrClose { register(cb, readyCb) }) return@callbackFlow
+        awaitClose { runCatching { unregister(cb) } }
+    }
+
+    internal suspend fun awaitInterfaceStatusReady() {
+        interfaceStatusReady.await()
     }
 
     override val interfaceStatusChanged: SharedFlow<Unit> get() = interfaceStatusChangedShared.asSharedFlow()

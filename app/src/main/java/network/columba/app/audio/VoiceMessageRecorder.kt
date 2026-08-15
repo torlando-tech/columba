@@ -51,6 +51,7 @@ private class LxstAudioFileRecorder(
 }
 
 @RequiresApi(Build.VERSION_CODES.Q)
+@Suppress("TooGenericExceptionCaught") // Recorder state and files must be finalized before rethrowing any failure.
 class LxstVoiceRecorderBackend internal constructor(
     private val recorder: LxstAudioRecorder,
     private val normalize: (File) -> Boolean = OggOpusAndroidTimestampNormalizer::normalize,
@@ -179,6 +180,7 @@ class VoiceMessageRecorder(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught") // Remove the unpublished file before rethrowing any start failure.
     fun start(
         maxDurationMillis: Long = MAX_DURATION_MILLIS,
         format: VoiceMessageFormat = VoiceMessageFormat.DEFAULT,

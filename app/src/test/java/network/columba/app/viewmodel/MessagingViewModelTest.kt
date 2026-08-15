@@ -141,7 +141,10 @@ class MessagingViewModelTest {
             val recording = RecordedAudio(recordingFile, durationMillis = 1_000L, sizeBytes = recordingFile.length())
             val recorder = mockk<VoiceMessageRecorder>()
             every { recorder.state } returns MutableStateFlow(VoiceMessageRecordingState(selectedRecording = recording))
-            every { recorder.removeSelected(recording) } returns true
+            every { recorder.removeSelected(recording) } answers {
+                recordingFile.delete()
+                true
+            }
             viewModel.javaClass.getDeclaredField("voiceMessageRecorder").apply {
                 isAccessible = true
                 set(viewModel, recorder)
@@ -152,6 +155,7 @@ class MessagingViewModelTest {
             verify(exactly = 0) { recorder.removeSelected(any()) }
             advanceUntilIdle()
             verify(exactly = 1) { recorder.removeSelected(recording) }
+            assertFalse(recordingFile.exists())
         }
 
     @Test

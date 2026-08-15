@@ -225,6 +225,7 @@ internal class VoiceMessagePlayer(
             )
     }
 
+    @Suppress("TooGenericExceptionCaught") // Release a newly created player before rethrowing any setup failure.
     fun play(messageKey: String, attachment: AudioAttachmentUi) {
         releaseActive(clearState = false)
         _state.value = VoiceMessagePlayerState(loading = true, messageKey = messageKey)
@@ -368,14 +369,19 @@ internal class VoiceMessagePlayer(
         bytes: ByteArray,
         attachment: AudioAttachmentUi,
     ): VoiceMessageMetadata? {
-        if (attachment.mode.isCodec2) {
-            val mode = attachment.mode.codec2Bitrate() ?: return null
-            val decoded = codec2Codec.decode(bytes, mode)
-            return VoiceMessageMetadata(decoded.durationMillis, codec2Waveform(decoded.samples))
-        }
-        val container = OggOpusMetadataReader.read(bytes) ?: return null
-        val waveform = waveformReader.read(bytes, container.durationMs).orEmpty()
-        return VoiceMessageMetadata(container.durationMs, waveform)
+        val result =
+            if (attachment.mode.isCodec2) {
+                attachment.mode.codec2Bitrate()?.let { mode ->
+                    val decoded = codec2Codec.decode(bytes, mode)
+                    VoiceMessageMetadata(decoded.durationMillis, codec2Waveform(decoded.samples))
+                }
+            } else {
+                OggOpusMetadataReader.read(bytes)?.let { container ->
+                    val waveform = waveformReader.read(bytes, container.durationMs).orEmpty()
+                    VoiceMessageMetadata(container.durationMs, waveform)
+                }
+            }
+        return result
     }
 
     private fun codec2Waveform(samples: ShortArray): List<Float> {

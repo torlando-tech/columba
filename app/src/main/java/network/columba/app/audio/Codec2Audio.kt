@@ -184,6 +184,7 @@ private class AndroidPcmCapture : PcmCapture {
     override fun close() = recorder.release()
 }
 
+@Suppress("TooGenericExceptionCaught") // Recorder ownership must be released before rethrowing any failure.
 internal class Codec2VoiceRecorderBackend(
     private val mode: Int,
     private val captureFactory: () -> PcmCapture = { AndroidPcmCapture() },
@@ -240,16 +241,7 @@ internal class Codec2VoiceRecorderBackend(
         try {
             output.outputStream().buffered().use { sink ->
                 val frame = ShortArray(activeSession.samplesPerFrame)
-                while (running.get()) {
-                    var filled = 0
-                    while (running.get() && filled < frame.size) {
-                        val read = activeCapture.read(frame, filled, frame.size - filled)
-                        if (!running.get()) break
-                        if (read < 0) error("AudioRecord read failed: $read")
-                        if (read == 0) continue
-                        filled += read
-                    }
-                    if (filled != frame.size) break
+                while (running.get() && readFrame(activeCapture, frame)) {
                     val encoded = ByteArray(activeSession.bytesPerFrame)
                     check(activeSession.encode(frame, encoded) == encoded.size) { "Codec2 encoding failed" }
                     sink.write(encoded)
@@ -268,6 +260,17 @@ internal class Codec2VoiceRecorderBackend(
                 _state.value = RecorderState.Failed(error)
             }
         }
+    }
+
+    private fun readFrame(activeCapture: PcmCapture, frame: ShortArray): Boolean {
+        var filled = 0
+        while (running.get() && filled < frame.size) {
+            val read = activeCapture.read(frame, filled, frame.size - filled)
+            if (!running.get()) return false
+            check(read >= 0) { "AudioRecord read failed: $read" }
+            filled += read
+        }
+        return filled == frame.size
     }
 
     override fun stop(): RecordedAudio {

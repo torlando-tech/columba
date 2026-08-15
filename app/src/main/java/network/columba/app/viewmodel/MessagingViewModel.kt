@@ -1715,6 +1715,7 @@ class MessagingViewModel
             _selectedFileAttachments.value = emptyList()
         }
 
+        @Suppress("TooGenericExceptionCaught") // Release the microphone lease before rethrowing any start failure.
         fun startVoiceRecording(
             format: VoiceMessageFormat = VoiceMessageFormat.DEFAULT,
             maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS,

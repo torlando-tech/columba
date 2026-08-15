@@ -8,6 +8,7 @@ package network.columba.app.viewmodel
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
+import network.columba.app.R
 import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.audio.VoiceMessageRecorder
@@ -119,11 +120,27 @@ class MessagingViewModelTest {
             ),
             VoiceMessageFormat.OUTBOUND_OPTIONS,
         )
-        assertTrue(VoiceMessageFormat.OUTBOUND_OPTIONS.none { it.displayName.contains("Original") })
-        assertTrue(
-            VoiceMessageFormat.OUTBOUND_OPTIONS.none { format ->
-                listOf("Columba", "Sideband", "MeshChatX").any(format.description::contains)
-            },
+        assertEquals(
+            listOf(
+                R.string.voice_message_quality_codec2_1200,
+                R.string.voice_message_quality_codec2_2400,
+                R.string.voice_message_quality_codec2_3200,
+                R.string.voice_message_quality_medium,
+                R.string.voice_message_quality_high,
+                R.string.voice_message_quality_maximum,
+            ),
+            VoiceMessageFormat.OUTBOUND_OPTIONS.map(VoiceMessageFormat::displayNameRes),
+        )
+        assertEquals(
+            listOf(
+                R.string.voice_message_quality_codec2_1200_description,
+                R.string.voice_message_quality_codec2_2400_description,
+                R.string.voice_message_quality_codec2_3200_description,
+                R.string.voice_message_quality_medium_description,
+                R.string.voice_message_quality_high_description,
+                R.string.voice_message_quality_maximum_description,
+            ),
+            VoiceMessageFormat.OUTBOUND_OPTIONS.map(VoiceMessageFormat::descriptionRes),
         )
     }
 

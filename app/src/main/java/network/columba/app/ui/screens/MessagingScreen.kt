@@ -1959,16 +1959,20 @@ fun MessagingScreen(
 
     if (showVoiceMessageQualityDialog) {
         QualitySelectionDialog(
-            title = "Select Voice Message Quality",
-            subtitle = "Choose the recording format and bandwidth",
+            title = stringResource(R.string.voice_message_quality_dialog_title),
+            subtitle = stringResource(R.string.voice_message_quality_dialog_subtitle),
             options =
                 VoiceMessageFormat.OUTBOUND_OPTIONS.map { format ->
-                    QualityOption(format, format.displayName, format.description)
+                    QualityOption(
+                        format,
+                        stringResource(format.displayNameRes),
+                        stringResource(format.descriptionRes),
+                    )
                 },
             initialSelection = voiceMessageFormat,
             recommendedOption = VoiceMessageFormat.DEFAULT,
             linkState = conversationLinkState,
-            confirmButtonText = "Record",
+            confirmButtonText = stringResource(R.string.voice_message_quality_dialog_record),
             onDismiss = { showVoiceMessageQualityDialog = false },
             onConfirm = { format ->
                 showVoiceMessageQualityDialog = false

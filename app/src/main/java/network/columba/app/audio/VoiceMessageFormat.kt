@@ -1,50 +1,52 @@
 package network.columba.app.audio
 
+import androidx.annotation.StringRes
+import network.columba.app.R
 import network.columba.app.rns.api.util.LxmfFields
 import tech.torlando.lxst.codec.Codec2
 import tech.torlando.lxst.recording.RecordingConfig
 
 enum class VoiceMessageFormat(
     val wireMode: Int,
-    val displayName: String,
-    val description: String,
+    @param:StringRes val displayNameRes: Int,
+    @param:StringRes val descriptionRes: Int,
     val recordingConfig: RecordingConfig? = null,
     val codec2Mode: Int? = null,
 ) {
     CODEC2_1200(
         wireMode = LxmfFields.AM_CODEC2_1200,
-        displayName = "Codec2 1200",
-        description = "Very low bandwidth voice",
+        displayNameRes = R.string.voice_message_quality_codec2_1200,
+        descriptionRes = R.string.voice_message_quality_codec2_1200_description,
         codec2Mode = Codec2.CODEC2_1200,
     ),
     CODEC2_2400(
         wireMode = LxmfFields.AM_CODEC2_2400,
-        displayName = "Codec2 2400",
-        description = "Low bandwidth voice",
+        displayNameRes = R.string.voice_message_quality_codec2_2400,
+        descriptionRes = R.string.voice_message_quality_codec2_2400_description,
         codec2Mode = Codec2.CODEC2_2400,
     ),
     CODEC2_3200(
         wireMode = LxmfFields.AM_CODEC2_3200,
-        displayName = "Codec2 3200",
-        description = "Clearer speech at low bandwidth",
+        displayNameRes = R.string.voice_message_quality_codec2_3200,
+        descriptionRes = R.string.voice_message_quality_codec2_3200_description,
         codec2Mode = Codec2.CODEC2_3200,
     ),
     OPUS_MEDIUM(
         wireMode = LxmfFields.AM_OPUS_OGG,
-        displayName = "Medium Quality",
-        description = "Opus 8 kbps mono - good balance of quality and bandwidth",
+        displayNameRes = R.string.voice_message_quality_medium,
+        descriptionRes = R.string.voice_message_quality_medium_description,
         recordingConfig = RecordingConfig(sampleRateHz = 24_000, channelCount = 1, bitRateBps = 8_000),
     ),
     OPUS_HIGH(
         wireMode = LxmfFields.AM_OPUS_OGG,
-        displayName = "High Quality",
-        description = "Opus 16 kbps mono - higher fidelity audio",
+        displayNameRes = R.string.voice_message_quality_high,
+        descriptionRes = R.string.voice_message_quality_high_description,
         recordingConfig = RecordingConfig(sampleRateHz = 48_000, channelCount = 1, bitRateBps = 16_000),
     ),
     OPUS_MAXIMUM(
         wireMode = LxmfFields.AM_OPUS_OGG,
-        displayName = "Maximum Quality",
-        description = "Opus 32 kbps stereo - best audio, requires more bandwidth",
+        displayNameRes = R.string.voice_message_quality_maximum,
+        descriptionRes = R.string.voice_message_quality_maximum_description,
         recordingConfig = RecordingConfig(sampleRateHz = 48_000, channelCount = 2, bitRateBps = 32_000),
     ),
     ;

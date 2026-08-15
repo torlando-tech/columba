@@ -249,8 +249,8 @@ internal class Codec2VoiceRecorderBackend(
                 }
             }
         } catch (error: Throwable) {
+            workerFailure = error
             if (running.compareAndSet(true, false)) {
-                workerFailure = error
                 runCatching { activeCapture.stop() }
                 runCatching { activeCapture.close() }
                 runCatching { activeSession.close() }
@@ -279,7 +279,12 @@ internal class Codec2VoiceRecorderBackend(
         runCatching { capture?.stop() }
         worker?.join(WORKER_JOIN_TIMEOUT_MILLIS)
         check(worker?.isAlive != true) { "Codec2 recorder did not stop" }
-        workerFailure?.let { throw IllegalStateException("Codec2 recording failed", it) }
+        workerFailure?.let { failure ->
+            outputFile?.delete()
+            _state.value = RecorderState.Failed(failure)
+            releaseRuntime()
+            throw IllegalStateException("Codec2 recording failed", failure)
+        }
         val file = checkNotNull(outputFile)
         check(file.isFile && file.length() > 0L) { "Codec2 recording produced no audio" }
         val recording =

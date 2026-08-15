@@ -72,6 +72,32 @@ class Codec2AudioTest {
     }
 
     @Test
+    fun `worker failure overlapping stop rejects and deletes partial recording`() {
+        val session = StopRaceFailingCodec2Session()
+        val capture = StopRacePcmCapture(session::releaseFailure)
+        val backend =
+            Codec2VoiceRecorderBackend(
+                mode = Codec2.CODEC2_1200,
+                captureFactory = { capture },
+                sessionFactory = { session },
+            )
+        val output = File(context.cacheDir, "codec2-recorder-stop-race-${System.nanoTime()}.c2")
+
+        backend.start(output)
+        assertTrue(session.failureStarted.await(2, TimeUnit.SECONDS))
+
+        val failure = assertThrows(IllegalStateException::class.java) { backend.stop() }
+
+        assertTrue(failure.message?.contains("Codec2 recording failed") == true)
+        assertTrue(backend.state.value is RecorderState.Failed)
+        assertFalse(output.exists())
+        assertFalse(capture.active.get())
+        assertTrue(capture.closed.get())
+        assertTrue(session.closed.get())
+        backend.close()
+    }
+
+    @Test
     fun `capture failure releases microphone codec and partial output`() {
         val capture = FailingPcmCapture()
         val session = FakeCodec2Session()
@@ -149,6 +175,66 @@ class Codec2AudioTest {
 
         override fun close() {
             active.set(false)
+        }
+    }
+
+    private class StopRacePcmCapture(
+        private val onStop: () -> Unit,
+    ) : PcmCapture {
+        override val isSupported = true
+        val active = AtomicBoolean(false)
+        val closed = AtomicBoolean(false)
+
+        override fun start() {
+            active.set(true)
+        }
+
+        override fun read(buffer: ShortArray, offset: Int, size: Int): Int {
+            if (!active.get()) return 0
+            repeat(size) { buffer[offset + it] = 1 }
+            return size
+        }
+
+        override fun stop() {
+            active.set(false)
+            onStop()
+        }
+
+        override fun close() {
+            active.set(false)
+            closed.set(true)
+            onStop()
+        }
+    }
+
+    private class StopRaceFailingCodec2Session : Codec2Session {
+        override val samplesPerFrame = 160
+        override val bytesPerFrame = 2
+        val closed = AtomicBoolean(false)
+        val failureStarted = CountDownLatch(1)
+        private val releaseFailure = CountDownLatch(1)
+        private var encodes = 0
+
+        override fun encode(pcm: ShortArray, output: ByteArray): Int {
+            encodes += 1
+            if (encodes == 1) {
+                output.fill(1)
+                return output.size
+            }
+            failureStarted.countDown()
+            check(releaseFailure.await(2, TimeUnit.SECONDS))
+            return 0
+        }
+
+        fun releaseFailure() {
+            releaseFailure.countDown()
+        }
+
+        override fun decode(encoded: ByteArray, output: ShortArray): Int = output.size
+
+        override fun close() {
+            closed.set(true)
+            releaseFailure.countDown()
         }
     }
 

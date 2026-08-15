@@ -56,6 +56,7 @@ class FileUtilsRobolectricTest {
             listOf(
                 File(voiceNotes, "recording.ogg"),
                 File(cacheDir, "voice_message_stale.ogg"),
+                File(cacheDir, "voice_preview_stale.wav"),
                 File(cacheDir, "voice_waveform_stale.ogg"),
             ).onEach { file ->
                 file.writeText("stale")
@@ -65,6 +66,7 @@ class FileUtilsRobolectricTest {
             listOf(
                 File(voiceNotes, "recent.ogg"),
                 File(cacheDir, "voice_message_recent.ogg"),
+                File(cacheDir, "voice_preview_recent.wav"),
                 File(cacheDir, "voice_waveform_recent.ogg"),
             ).onEach { it.writeText("recent") }
         val unrelated =
@@ -73,7 +75,7 @@ class FileUtilsRobolectricTest {
                 assertTrue(setLastModified(System.currentTimeMillis() - 2 * 60 * 60 * 1000))
             }
 
-        assertEquals(3, FileUtils.cleanupAllTempFiles(mockContext, maxAgeMs = 60 * 60 * 1000))
+        assertEquals(4, FileUtils.cleanupAllTempFiles(mockContext, maxAgeMs = 60 * 60 * 1000))
 
         staleFiles.forEach { assertFalse(it.exists()) }
         recentFiles.forEach { assertTrue(it.exists()) }

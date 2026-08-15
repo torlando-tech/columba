@@ -448,6 +448,45 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `maximum duration terminal transition releases voice recording microphone lease`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            val testViewModel = createTestViewModel(arbiter)
+            advanceUntilIdle()
+            val ownedLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+            testViewModel.javaClass.getDeclaredField("voiceRecordingLease").apply {
+                isAccessible = true
+                set(testViewModel, ownedLease)
+            }
+            val recorder =
+                testViewModel.javaClass.getDeclaredField("voiceMessageRecorder").let { field ->
+                    field.isAccessible = true
+                    field.get(testViewModel) as VoiceMessageRecorder
+                }
+            val recordingFile = java.io.File.createTempFile("voice_deadline", ".ogg", applicationContext.cacheDir)
+            val recording = RecordedAudio(recordingFile, durationMillis = 300_000L, sizeBytes = recordingFile.length())
+            @Suppress("UNCHECKED_CAST")
+            val recorderState =
+                VoiceMessageRecorder::class.java.getDeclaredField("_state").let { field ->
+                    field.isAccessible = true
+                    field.get(recorder) as MutableStateFlow<VoiceMessageRecordingState>
+                }
+
+            recorderState.value =
+                VoiceMessageRecordingState(
+                    recorderState = tech.torlando.lxst.recording.RecorderState.Completed(recording),
+                    selectedRecording = recording,
+                    selectedFormat = VoiceMessageFormat.OPUS_MEDIUM,
+                )
+            advanceUntilIdle()
+
+            assertNull(arbiter.currentOwner())
+            val callLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+            arbiter.release(callLease)
+            recordingFile.delete()
+        }
+
+    @Test
     fun `call microphone ownership includes transitional call states`() {
         assertTrue(callUsesMicrophone(CallState.Connecting("peer")))
         assertTrue(callUsesMicrophone(CallState.Ringing("peer")))

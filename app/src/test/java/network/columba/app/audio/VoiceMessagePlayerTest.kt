@@ -56,6 +56,48 @@ class VoiceMessagePlayerTest {
     }
 
     @Test
+    fun `codec2 attachment is decoded to wave before playback`() = runTest {
+        val engine = FakePlaybackEngine(durationMs = 20)
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val codec2 =
+            Codec2RawAudioCodec {
+                object : Codec2Session {
+                    override val samplesPerFrame = 160
+                    override val bytesPerFrame = 2
+
+                    override fun encode(pcm: ShortArray, output: ByteArray): Int = error("unused")
+
+                    override fun decode(encoded: ByteArray, output: ShortArray): Int {
+                        output.fill(1_000)
+                        return output.size
+                    }
+
+                    override fun close() = Unit
+                }
+            }
+        val codec2Attachment = AudioAttachmentUi(mode = AudioAttachmentMode.AM_CODEC2_1200, isPlayable = true)
+        val player =
+            VoiceMessagePlayer(
+                context = context,
+                scope = this,
+                loadBytes = { byteArrayOf(1, 2) },
+                playerFactory = PlaybackEngineFactory { engine },
+                codec2Codec = codec2,
+                ioDispatcher = dispatcher,
+            )
+
+        player.play("codec2", codec2Attachment)
+        advanceUntilIdle()
+
+        val wave = requireNotNull(engine.sourceFile).readBytes()
+        assertEquals("RIFF", wave.copyOfRange(0, 4).decodeToString())
+        assertEquals("WAVE", wave.copyOfRange(8, 12).decodeToString())
+        engine.completePreparation()
+        assertTrue(engine.started)
+        player.close()
+    }
+
+    @Test
     fun `toggle pauses and resumes same message without seeking to start`() = runTest {
         val engine = FakePlaybackEngine(durationMs = 2_500)
         val player = createPlayer(this, engine)
@@ -135,6 +177,7 @@ class VoiceMessagePlayerTest {
         val recording = java.io.File.createTempFile("voice_preview", ".ogg", context.cacheDir).apply { writeText("OggS") }
 
         player.toggleFile("preview", recording)
+        advanceUntilIdle()
         engine.completePreparation()
 
         assertTrue(engine.started)

@@ -191,6 +191,8 @@ import network.columba.app.ui.components.VoiceMessageBubble
 import network.columba.app.ui.components.VoiceDraftPreview
 import network.columba.app.ui.components.VoiceRecordingControls
 import network.columba.app.ui.components.CodecSelectionDialog
+import network.columba.app.ui.components.QualityOption
+import network.columba.app.ui.components.QualitySelectionDialog
 import network.columba.app.ui.components.FileAttachmentCard
 import network.columba.app.ui.components.FileAttachmentOptionsSheet
 import network.columba.app.ui.components.FileAttachmentPreviewRow
@@ -221,6 +223,7 @@ import network.columba.app.ui.model.MessageRenderer
 import network.columba.app.audio.VoiceMessagePlayer
 import network.columba.app.audio.VoiceMessageMetadata
 import network.columba.app.audio.VoiceMessagePlayerState
+import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
@@ -245,7 +248,6 @@ import java.util.Locale
 
 private const val URL_ANNOTATION_TAG = "url"
 private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
-
 @Composable
 private fun LinkifiedMessageText(
     text: String,
@@ -488,6 +490,8 @@ fun MessagingScreen(
     var showCodecSelectionDialog by remember { mutableStateOf(false) }
     var recommendedCodecProfile by remember { mutableStateOf(CodecProfile.DEFAULT) }
     var isProbingLinkSpeed by remember { mutableStateOf(false) }
+    var showVoiceMessageQualityDialog by remember { mutableStateOf(false) }
+    var voiceMessageFormat by remember(destinationHash) { mutableStateOf(VoiceMessageFormat.DEFAULT) }
 
     // Location permission launcher
     val locationPermissionLauncher =
@@ -773,7 +777,7 @@ fun MessagingScreen(
             if (granted) {
                 audioPermissionPermanentlyDenied = false
                 showVoiceControls = true
-                runCatching { viewModel.startVoiceRecording() }
+                viewModel.requestStartVoiceRecording(voiceMessageFormat)
             } else {
                 val activity = runCatching { context.findActivity() }.getOrNull()
                 audioPermissionPermanentlyDenied =
@@ -796,7 +800,7 @@ fun MessagingScreen(
                             audioPermissionPermanentlyDenied = false
                         }
                     }
-                    Lifecycle.Event.ON_STOP -> viewModel.cancelActiveVoiceRecording()
+                    Lifecycle.Event.ON_STOP -> viewModel.requestCancelActiveVoiceRecording()
                     else -> Unit
                 }
             }
@@ -804,13 +808,13 @@ fun MessagingScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             voicePlayer.close()
-            viewModel.cancelActiveVoiceRecording()
+            viewModel.requestCancelActiveVoiceRecording()
         }
     }
 
     val cancelActiveVoiceRecording = {
         voicePlayer.close()
-        viewModel.cancelVoiceRecording()
+        viewModel.requestCancelVoiceRecording()
         showVoiceControls = false
     }
     BackHandler(enabled = showVoiceControls && voiceRecordingState.selectedRecording == null) {
@@ -1482,12 +1486,12 @@ fun MessagingScreen(
                         },
                         onStart = {
                             voicePlayer.close()
-                            runCatching { viewModel.startVoiceRecording() }
+                            viewModel.requestStartVoiceRecording(voiceMessageFormat)
                         },
-                        onStop = { runCatching { viewModel.stopVoiceRecording() } },
+                        onStop = { viewModel.requestStopVoiceRecording() },
                         onCancel = {
                             voicePlayer.close()
-                            viewModel.cancelVoiceRecording()
+                            viewModel.requestCancelVoiceRecording()
                             showVoiceControls = false
                         },
                     )
@@ -1518,12 +1522,16 @@ fun MessagingScreen(
                             ?: VoiceMessagePlayerState(),
                     onVoicePreviewToggle = {
                         voiceRecordingState.selectedRecording?.file?.let { file ->
-                            voicePlayer.toggleFile(VOICE_PREVIEW_KEY, file)
+                            voicePlayer.toggleFile(
+                                VOICE_PREVIEW_KEY,
+                                file,
+                                voiceRecordingState.selectedFormat ?: VoiceMessageFormat.DEFAULT,
+                            )
                         }
                     },
                     onRemoveVoiceAttachment = {
                         voicePlayer.close()
-                        viewModel.removeVoiceRecording()
+                        viewModel.requestRemoveVoiceRecording()
                         showVoiceControls = false
                     },
                     onSendClick = {
@@ -1597,18 +1605,7 @@ fun MessagingScreen(
                             inputPanelMode = InputPanelMode.NONE
                         },
                         onVoiceClick = {
-                            showVoiceControls = true
-                            when {
-                                !viewModel.isVoiceMessageSupported -> Unit
-                                isVoiceRecordingBlockedByCall -> Unit
-                                androidx.core.content.ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.RECORD_AUDIO,
-                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED ->
-                                    runCatching { viewModel.startVoiceRecording() }
-                                audioPermissionPermanentlyDenied -> Unit
-                                else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
+                            showVoiceMessageQualityDialog = true
                             inputPanelMode = InputPanelMode.NONE
                         },
                         modifier = Modifier.navigationBarsPadding(),
@@ -1960,6 +1957,42 @@ fun MessagingScreen(
         )
     }
 
+    if (showVoiceMessageQualityDialog) {
+        QualitySelectionDialog(
+            title = stringResource(R.string.voice_message_quality_dialog_title),
+            subtitle = stringResource(R.string.voice_message_quality_dialog_subtitle),
+            options =
+                VoiceMessageFormat.OUTBOUND_OPTIONS.map { format ->
+                    QualityOption(
+                        format,
+                        stringResource(format.displayNameRes),
+                        stringResource(format.descriptionRes),
+                    )
+                },
+            initialSelection = voiceMessageFormat,
+            recommendedOption = VoiceMessageFormat.DEFAULT,
+            linkState = conversationLinkState,
+            confirmButtonText = stringResource(R.string.voice_message_quality_dialog_record),
+            onDismiss = { showVoiceMessageQualityDialog = false },
+            onConfirm = { format ->
+                showVoiceMessageQualityDialog = false
+                voiceMessageFormat = format
+                showVoiceControls = true
+                when {
+                    !viewModel.isVoiceMessageSupported -> Unit
+                    isVoiceRecordingBlockedByCall -> Unit
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.RECORD_AUDIO,
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED ->
+                        viewModel.requestStartVoiceRecording(format)
+                    audioPermissionPermanentlyDenied -> Unit
+                    else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+        )
+    }
+
     // Codec selection dialog for voice calls. Fires the link-speed
     // probe via LaunchedEffect when the dialog enters composition (and
     // re-fires on re-open). isProbingLinkSpeed flips to false when the
@@ -1977,8 +2010,10 @@ fun MessagingScreen(
             onDismiss = { showCodecSelectionDialog = false },
             onProfileSelected = { profile ->
                 showCodecSelectionDialog = false
-                viewModel.cancelActiveVoiceRecording()
-                onVoiceCall(profile.code)
+                scope.launch {
+                    withContext(Dispatchers.IO) { viewModel.cancelActiveVoiceRecording() }
+                    onVoiceCall(profile.code)
+                }
             },
         )
     }

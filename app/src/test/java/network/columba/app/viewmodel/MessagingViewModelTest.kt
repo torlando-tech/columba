@@ -8,8 +8,12 @@ package network.columba.app.viewmodel
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.paging.PagingData
+import network.columba.app.R
+import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.audio.VoiceMessageRecorder
+import network.columba.app.audio.VoiceMessageRecordingState
+import tech.torlando.lxst.recording.RecordedAudio
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -23,6 +27,7 @@ import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.ui.model.CodecProfile
 import network.columba.app.rns.api.model.TransferPhase
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.RnsCore
@@ -59,6 +64,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -86,6 +92,104 @@ import network.columba.app.data.repository.Message as DataMessage
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessagingViewModelTest {
+
+    @Test
+    fun `voice message quality uses exact standard LXST Opus call profiles`() {
+        assertEquals(8_000, VoiceMessageFormat.OPUS_MEDIUM.recordingConfig?.bitRateBps)
+        assertEquals(24_000, VoiceMessageFormat.OPUS_MEDIUM.recordingConfig?.sampleRateHz)
+        assertEquals(1, VoiceMessageFormat.OPUS_MEDIUM.recordingConfig?.channelCount)
+        assertEquals(16_000, VoiceMessageFormat.OPUS_HIGH.recordingConfig?.bitRateBps)
+        assertEquals(48_000, VoiceMessageFormat.OPUS_HIGH.recordingConfig?.sampleRateHz)
+        assertEquals(1, VoiceMessageFormat.OPUS_HIGH.recordingConfig?.channelCount)
+        assertEquals(32_000, VoiceMessageFormat.OPUS_MAXIMUM.recordingConfig?.bitRateBps)
+        assertEquals(48_000, VoiceMessageFormat.OPUS_MAXIMUM.recordingConfig?.sampleRateHz)
+        assertEquals(2, VoiceMessageFormat.OPUS_MAXIMUM.recordingConfig?.channelCount)
+    }
+
+    @Test
+    fun `voice message picker excludes legacy and latency profiles without product compatibility copy`() {
+        assertEquals(VoiceMessageFormat.OPUS_MEDIUM, VoiceMessageFormat.DEFAULT)
+        assertEquals(
+            listOf(
+                VoiceMessageFormat.CODEC2_1200,
+                VoiceMessageFormat.CODEC2_2400,
+                VoiceMessageFormat.CODEC2_3200,
+                VoiceMessageFormat.OPUS_MEDIUM,
+                VoiceMessageFormat.OPUS_HIGH,
+                VoiceMessageFormat.OPUS_MAXIMUM,
+            ),
+            VoiceMessageFormat.OUTBOUND_OPTIONS,
+        )
+        assertEquals(
+            listOf(
+                R.string.voice_message_quality_codec2_1200,
+                R.string.voice_message_quality_codec2_2400,
+                R.string.voice_message_quality_codec2_3200,
+                R.string.voice_message_quality_medium,
+                R.string.voice_message_quality_high,
+                R.string.voice_message_quality_maximum,
+            ),
+            VoiceMessageFormat.OUTBOUND_OPTIONS.map(VoiceMessageFormat::displayNameRes),
+        )
+        assertEquals(
+            listOf(
+                R.string.voice_message_quality_codec2_1200_description,
+                R.string.voice_message_quality_codec2_2400_description,
+                R.string.voice_message_quality_codec2_3200_description,
+                R.string.voice_message_quality_medium_description,
+                R.string.voice_message_quality_high_description,
+                R.string.voice_message_quality_maximum_description,
+            ),
+            VoiceMessageFormat.OUTBOUND_OPTIONS.map(VoiceMessageFormat::descriptionRes),
+        )
+    }
+
+    @Test
+    fun `voice message formats include interoperable codec2 modes`() {
+        assertEquals(0x04, VoiceMessageFormat.CODEC2_1200.wireMode)
+        assertEquals(0x08, VoiceMessageFormat.CODEC2_2400.wireMode)
+        assertEquals(0x09, VoiceMessageFormat.CODEC2_3200.wireMode)
+    }
+
+    @Test
+    fun `remove voice recording deletes pinned draft on attachment IO dispatcher`() =
+        runViewModelTest {
+            val recordingFile = java.io.File.createTempFile("voice_remove", ".ogg", applicationContext.cacheDir)
+            val recording = RecordedAudio(recordingFile, durationMillis = 1_000L, sizeBytes = recordingFile.length())
+            val recorder = mockk<VoiceMessageRecorder>()
+            every { recorder.state } returns MutableStateFlow(VoiceMessageRecordingState(selectedRecording = recording))
+            every { recorder.removeSelected(recording) } answers {
+                recordingFile.delete()
+                true
+            }
+            viewModel.javaClass.getDeclaredField("voiceMessageRecorder").apply {
+                isAccessible = true
+                set(viewModel, recorder)
+            }
+
+            viewModel.requestRemoveVoiceRecording()
+
+            verify(exactly = 0) { recorder.removeSelected(any()) }
+            advanceUntilIdle()
+            verify(exactly = 1) { recorder.removeSelected(recording) }
+            assertFalse(recordingFile.exists())
+        }
+
+    @Test
+    fun `voice message fields preserve selected codec2 wire mode`() = runTest {
+        val fields =
+            buildFieldsJson(
+                imageData = null,
+                imageFormat = null,
+                voiceBytes = byteArrayOf(1, 2, 3),
+                voiceMode = VoiceMessageFormat.CODEC2_1200.wireMode,
+            )
+        val audio = org.json.JSONObject(fields).getJSONArray("7")
+
+        assertEquals(0x04, audio.getInt(0))
+        assertEquals("010203", audio.getString(1))
+    }
+
     @get:Rule
     val instantExecutorRule = InstantTaskExecutorRule()
 
@@ -269,9 +373,9 @@ class MessagingViewModelTest {
                     receivedLocationRepository,
                     blockedPeerRepository,
                     identityResolutionManager,
-                notificationHelper,
-                rnsTelephony,
-                )
+                    notificationHelper,
+                    rnsTelephony,
+                ).also { it.attachmentIoDispatcher = StandardTestDispatcher(testScheduler) }
             advanceUntilIdle()
             testBody()
         }
@@ -339,6 +443,64 @@ class MessagingViewModelTest {
             assertThrows(IllegalStateException::class.java) {
                 viewModel.startVoiceRecording()
             }
+        }
+
+    @Test
+    fun `codec linkage failure releases voice recording microphone lease`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            val failingRecorder = mockk<VoiceMessageRecorder>()
+            every { failingRecorder.start(any(), any()) } throws UnsatisfiedLinkError("codec2 unavailable")
+            val testViewModel = createTestViewModel(arbiter)
+            testViewModel.javaClass.getDeclaredField("voiceMessageRecorder").apply {
+                isAccessible = true
+                set(testViewModel, failingRecorder)
+            }
+
+            assertThrows(UnsatisfiedLinkError::class.java) {
+                testViewModel.startVoiceRecording(VoiceMessageFormat.CODEC2_1200)
+            }
+
+            assertNull(arbiter.currentOwner())
+        }
+
+    @Test
+    fun `maximum duration terminal transition releases voice recording microphone lease`() =
+        runTest {
+            val arbiter = MicrophoneAdmissionArbiter()
+            val testViewModel = createTestViewModel(arbiter)
+            advanceUntilIdle()
+            val ownedLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING))
+            testViewModel.javaClass.getDeclaredField("voiceRecordingLease").apply {
+                isAccessible = true
+                set(testViewModel, ownedLease)
+            }
+            val recorder =
+                testViewModel.javaClass.getDeclaredField("voiceMessageRecorder").let { field ->
+                    field.isAccessible = true
+                    field.get(testViewModel) as VoiceMessageRecorder
+                }
+            val recordingFile = java.io.File.createTempFile("voice_deadline", ".ogg", applicationContext.cacheDir)
+            val recording = RecordedAudio(recordingFile, durationMillis = 300_000L, sizeBytes = recordingFile.length())
+            @Suppress("UNCHECKED_CAST")
+            val recorderState =
+                VoiceMessageRecorder::class.java.getDeclaredField("_state").let { field ->
+                    field.isAccessible = true
+                    field.get(recorder) as MutableStateFlow<VoiceMessageRecordingState>
+                }
+
+            recorderState.value =
+                VoiceMessageRecordingState(
+                    recorderState = tech.torlando.lxst.recording.RecorderState.Completed(recording),
+                    selectedRecording = recording,
+                    selectedFormat = VoiceMessageFormat.OPUS_MEDIUM,
+                )
+            advanceUntilIdle()
+
+            assertNull(arbiter.currentOwner())
+            val callLease = requireNotNull(arbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.CALL))
+            arbiter.release(callLease)
+            recordingFile.delete()
         }
 
     @Test
@@ -5441,6 +5603,13 @@ class MessagingViewModelTest {
                 isAccessible = true
                 invoke(testViewModel)
             }
+            val cleanupThread =
+                testViewModel.javaClass.getDeclaredField("voiceRecorderCleanupThread").run {
+                    isAccessible = true
+                    get(testViewModel) as Thread
+                }
+            cleanupThread.join(5_000)
+            assertFalse(cleanupThread.isAlive)
 
             assertNull(arbiter.currentOwner())
         }
@@ -5466,6 +5635,13 @@ class MessagingViewModelTest {
                 isAccessible = true
                 invoke(testViewModel)
             }
+            val cleanupThread =
+                testViewModel.javaClass.getDeclaredField("voiceRecorderCleanupThread").run {
+                    isAccessible = true
+                    get(testViewModel) as Thread
+                }
+            cleanupThread.join(5_000)
+            assertFalse(cleanupThread.isAlive)
 
             verify(exactly = 1) { throwingRecorder.close() }
             assertNull(arbiter.currentOwner())

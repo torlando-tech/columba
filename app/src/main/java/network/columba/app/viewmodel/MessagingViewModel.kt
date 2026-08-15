@@ -29,6 +29,7 @@ import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.audio.VoiceMessageRecorder
+import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.audio.MicrophoneAdmissionArbiter
 import network.columba.app.ui.model.AudioAttachmentLoader
 import network.columba.app.ui.model.DecodedImageResult
@@ -51,6 +52,8 @@ import network.columba.app.util.streamHexToFile
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -80,6 +83,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import network.columba.app.data.repository.Message as DataMessage
@@ -280,7 +284,10 @@ class MessagingViewModel
         val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
         private val sendInProgress = AtomicBoolean(false)
         private val voiceRecorderOperationLock = Any()
+        internal var attachmentIoDispatcher: CoroutineDispatcher = Dispatchers.IO
         private var voiceRecordingLease: MicrophoneAdmissionArbiter.Lease? = null
+        private var voiceRecordingStartJob: Job? = null
+        @Volatile private var voiceRecorderCleanupThread: Thread? = null
         private val retriesInProgress = ConcurrentHashMap.newKeySet<String>()
 
         // Shared image compression error events for UI feedback
@@ -809,7 +816,10 @@ class MessagingViewModel
         init {
             viewModelScope.launch {
                 rnsTelephony.callState.collect { state ->
-                    if (callUsesMicrophone(state)) cancelActiveVoiceRecording()
+                    if (callUsesMicrophone(state)) {
+                        voiceRecordingStartJob?.cancel()
+                        withContext(Dispatchers.IO) { cancelActiveVoiceRecording() }
+                    }
                 }
             }
 
@@ -1282,7 +1292,9 @@ class MessagingViewModel
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
                     val fileAttachments = _selectedFileAttachments.value
-                    val voiceRecording = voiceMessageRecorder.state.value.selectedRecording
+                    val voiceState = voiceMessageRecorder.state.value
+                    val voiceRecording = voiceState.selectedRecording
+                    val voiceMode = voiceState.selectedFormat?.wireMode
                     val voiceBytes =
                         voiceRecording?.let {
                             withContext(Dispatchers.IO) { it.file.readBytes() }
@@ -1372,7 +1384,13 @@ class MessagingViewModel
                             imageData = imageData,
                             imageFormat = imageFormat,
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
-                            extraFields = voiceBytes?.let { mapOf(network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to listOf(network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG, it)) },
+                            extraFields =
+                                voiceBytes?.let {
+                                    mapOf(
+                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                            listOf(checkNotNull(voiceMode), it),
+                                    )
+                                },
                             replyToMessageId = replyToId,
                             // MeshChatX-interop reply format ships the
                             // quoted content inline (fields[0x31]) so
@@ -1404,6 +1422,7 @@ class MessagingViewModel
                                     replyToId,
                                     voiceRecording,
                                     voiceBytes,
+                                    voiceMode,
                                 )
                             if (persisted) {
                                 clearSubmittedDraft(destinationHash, content, replyToId)
@@ -1421,6 +1440,7 @@ class MessagingViewModel
                                     fileAttachments = fileAttachments,
                                     replyToMessageId = replyToId,
                                     voiceBytes = voiceBytes,
+                                    voiceMode = voiceMode,
                                     voiceRecording = voiceRecording,
                                 )
                             if (persisted) clearSubmittedDraft(destinationHash, content, replyToId)
@@ -1447,25 +1467,30 @@ class MessagingViewModel
             replyToMessageId: String? = null,
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
             voiceBytes: ByteArray? = null,
+            voiceMode: Int? = null,
         ): Boolean {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
             var attachmentFieldsPersisted = true
             val fieldsJson =
                 try {
-                    buildFieldsJson(
-                        imageData = imageData,
-                        imageFormat = imageFormat,
-                        fileAttachments = fileAttachments,
-                        voiceBytes = voiceBytes,
-                        replyToMessageId = replyToMessageId,
-                        cacheDir = applicationContext.cacheDir,
-                    )
+                    val buildFields: suspend () -> String? = {
+                        buildFieldsJson(
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            replyToMessageId = replyToMessageId,
+                            cacheDir = applicationContext.cacheDir,
+                        )
+                    }
+                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
                 } catch (e: java.io.IOException) {
                     attachmentFieldsPersisted = imageData == null && fileAttachments.isEmpty() && voiceBytes == null
                     Log.e(TAG, "Failed to build fieldsJson (attachment I/O error), saving message without attachments", e)
                     // Keep the delivered text in conversation history, but report incomplete local
                     // persistence so the composer retains the original attachment for recovery.
-                    buildFieldsJson(null, null, emptyList(), null, replyToMessageId)
+                    buildFieldsJson(null, null, emptyList(), null, null, replyToMessageId)
                 }
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
@@ -1535,20 +1560,25 @@ class MessagingViewModel
             fileAttachments: List<FileAttachment>,
             replyToMessageId: String?,
             voiceBytes: ByteArray?,
+            voiceMode: Int? = null,
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
         ): Boolean {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
             val now = System.currentTimeMillis()
             val fieldsJson =
                 runCatching {
-                    buildFieldsJson(
-                        imageData = imageData,
-                        imageFormat = imageFormat,
-                        fileAttachments = fileAttachments,
-                        voiceBytes = voiceBytes,
-                        replyToMessageId = replyToMessageId,
-                        cacheDir = applicationContext.cacheDir,
-                    )
+                    val buildFields: suspend () -> String? = {
+                        buildFieldsJson(
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            replyToMessageId = replyToMessageId,
+                            cacheDir = applicationContext.cacheDir,
+                        )
+                    }
+                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
                 }.getOrNull()
             val requiresFields =
                 imageData != null ||
@@ -1601,14 +1631,16 @@ class MessagingViewModel
             if (_pendingReplyTo.value?.messageId == replyToMessageId) clearReplyTo()
         }
 
-        private fun clearSubmittedAttachments(
+        private suspend fun clearSubmittedAttachments(
             imageData: ByteArray?,
             fileAttachments: List<FileAttachment>,
             voiceRecording: tech.torlando.lxst.recording.RecordedAudio?,
         ) {
             if (imageData != null && _selectedImageData.value === imageData) clearSelectedImage()
             if (_selectedFileAttachments.value === fileAttachments) clearFileAttachments()
-            voiceRecording?.let { voiceMessageRecorder.removeSelected(it) }
+            voiceRecording?.let { recording ->
+                withContext(attachmentIoDispatcher) { voiceMessageRecorder.removeSelected(recording) }
+            }
         }
 
         fun selectImage(
@@ -1683,7 +1715,11 @@ class MessagingViewModel
             _selectedFileAttachments.value = emptyList()
         }
 
-        fun startVoiceRecording(maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS): File {
+        @Suppress("TooGenericExceptionCaught") // Release the microphone lease before rethrowing any start failure.
+        fun startVoiceRecording(
+            format: VoiceMessageFormat = VoiceMessageFormat.DEFAULT,
+            maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS,
+        ): File {
             return synchronized(voiceRecorderOperationLock) {
                 check(!callUsesMicrophone(rnsTelephony.callState.value)) {
                     "Voice recording is unavailable during a call"
@@ -1693,13 +1729,17 @@ class MessagingViewModel
                     microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
                         ?: error("Microphone is already in use")
                 try {
-                    val output = voiceMessageRecorder.start(maxDurationMillis)
+                    val output =
+                        voiceMessageRecorder.start(
+                            maxDurationMillis = maxDurationMillis,
+                            format = format,
+                        )
                     if (callUsesMicrophone(rnsTelephony.callState.value)) {
                         voiceMessageRecorder.cancel()
                         error("Voice recording is unavailable during a call")
                     }
                     output
-                } catch (error: Exception) {
+                } catch (error: Throwable) {
                     releaseVoiceRecordingLeaseLocked()
                     throw error
                 }
@@ -1713,6 +1753,30 @@ class MessagingViewModel
                     releaseVoiceRecordingLeaseLocked()
                 }
             }
+        fun requestStartVoiceRecording(
+            format: VoiceMessageFormat = VoiceMessageFormat.DEFAULT,
+            maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS,
+        ) {
+            voiceRecordingStartJob?.cancel()
+            voiceRecordingStartJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        startVoiceRecording(format, maxDurationMillis)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        Log.e(TAG, "Unable to start voice recording", error)
+                    } catch (error: LinkageError) {
+                        Log.e(TAG, "Unable to initialize voice recording codec", error)
+                    }
+                }
+        }
+        fun requestStopVoiceRecording() {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { stopVoiceRecording() }
+                    .onFailure { Log.e(TAG, "Unable to finalize voice recording", it) }
+            }
+        }
         fun cancelVoiceRecording() =
             synchronized(voiceRecorderOperationLock) {
                 try {
@@ -1721,6 +1785,13 @@ class MessagingViewModel
                     releaseVoiceRecordingLeaseLocked()
                 }
             }
+        fun requestCancelVoiceRecording() {
+            voiceRecordingStartJob?.cancel()
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { cancelVoiceRecording() }
+                    .onFailure { Log.e(TAG, "Unable to cancel voice recording", it) }
+            }
+        }
         fun cancelActiveVoiceRecording() {
             synchronized(voiceRecorderOperationLock) {
                 val state = voiceMessageRecorder.state.value
@@ -1736,12 +1807,24 @@ class MessagingViewModel
                 }
             }
         }
+        fun requestCancelActiveVoiceRecording() {
+            voiceRecordingStartJob?.cancel()
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { cancelActiveVoiceRecording() }
+                    .onFailure { Log.e(TAG, "Unable to cancel active voice recording", it) }
+            }
+        }
 
         private fun releaseVoiceRecordingLeaseLocked() {
             voiceRecordingLease?.let(microphoneArbiter::release)
             voiceRecordingLease = null
         }
-        fun removeVoiceRecording() = voiceMessageRecorder.removeSelected()
+        fun requestRemoveVoiceRecording() {
+            val expectedRecording = voiceMessageRecorder.state.value.selectedRecording ?: return
+            viewModelScope.launch(attachmentIoDispatcher) {
+                voiceMessageRecorder.removeSelected(expectedRecording)
+            }
+        }
 
         /**
          * Set the file processing state.
@@ -2625,6 +2708,7 @@ class MessagingViewModel
                     }
                     val imageFormat = if (imageData != null) "jpg" else null
                     val audioAttachment = parseAudioAttachment(failedMessage.fieldsJson)
+                    val voiceMode = audioAttachment?.mode?.wireValue
                     val voiceBytes =
                         audioAttachment?.let { attachment ->
                             audioAttachmentLoader.loadBytes(attachment)
@@ -2682,7 +2766,7 @@ class MessagingViewModel
                                 voiceBytes?.let {
                                     mapOf(
                                         network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
-                                            listOf(network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG, it),
+                                            listOf(checkNotNull(voiceMode), it),
                                     )
                                 },
                             // Preserve reply on retry
@@ -2793,15 +2877,19 @@ class MessagingViewModel
             }
 
         override fun onCleared() {
-            synchronized(voiceRecorderOperationLock) {
-                try {
-                    voiceMessageRecorder.close()
-                } catch (error: Exception) {
-                    Log.e(TAG, "Failed to close voice message recorder", error)
-                } finally {
-                    releaseVoiceRecordingLeaseLocked()
+            voiceRecordingStartJob?.cancel()
+            voiceRecorderCleanupThread =
+                thread(name = "voice-recorder-cleanup", isDaemon = true) {
+                    synchronized(voiceRecorderOperationLock) {
+                        try {
+                            voiceMessageRecorder.close()
+                        } catch (error: Exception) {
+                            Log.e(TAG, "Failed to close voice message recorder", error)
+                        } finally {
+                            releaseVoiceRecordingLeaseLocked()
+                        }
+                    }
                 }
-            }
             super.onCleared()
 
             // Note: Conversation marking as read happens via loadMessages() when opening
@@ -2951,11 +3039,12 @@ private fun determineDeliveryMethod(
 }
 
 @Suppress("LongParameterList", "CyclomaticComplexMethod")
-private suspend fun buildFieldsJson(
+internal suspend fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,
     fileAttachments: List<FileAttachment> = emptyList(),
     voiceBytes: ByteArray? = null,
+    voiceMode: Int? = network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG,
     replyToMessageId: String? = null,
     reactions: Map<String, List<String>>? = null,
     cacheDir: java.io.File? = null,
@@ -2991,7 +3080,7 @@ private suspend fun buildFieldsJson(
         }
 
         if (hasVoice && voiceBytes != null) {
-            json.put("7", org.json.JSONArray().put(network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG).put(voiceBytes.toHexString()))
+            json.put("7", org.json.JSONArray().put(checkNotNull(voiceMode)).put(voiceBytes.toHexString()))
         }
 
         // Add app extensions field (Field 16) for replies, reactions, and future features

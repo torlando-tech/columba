@@ -310,7 +310,7 @@ object FileUtils {
     private const val INCOMING_SHARE_DIR = "incoming_shares"
     private const val OUTGOING_HEX_DIR = "outgoing_hex"
     private const val VOICE_NOTES_DIR = "voice-notes"
-    private val voiceCachePrefixes = listOf("voice_message_", "voice_waveform_")
+    private val voiceCachePrefixes = listOf("voice_message_", "voice_preview_", "voice_waveform_")
 
     /**
      * Write file data to a temporary file for large file transfer.

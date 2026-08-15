@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tech.torlando.lxst.recording.RecordedAudio
+
 import tech.torlando.lxst.recording.RecorderState
 import java.io.File
 
@@ -127,6 +128,28 @@ class VoiceMessageRecorderTest {
     }
 
     @Test
+    fun `support checks do not replace an active selected quality backend`() = runTest {
+        val createdFormats = mutableListOf<VoiceMessageFormat>()
+        val controller =
+            VoiceMessageRecorder(
+                context = context,
+                scope = this,
+                blockingDispatcher = StandardTestDispatcher(testScheduler),
+                recorderFactory = { _, format ->
+                    createdFormats += format
+                    FakeRecorderBackend(context.cacheDir)
+                },
+            )
+        assertTrue(controller.isSupported)
+        controller.start(format = VoiceMessageFormat.OPUS_HIGH)
+        assertTrue(controller.isSupported)
+
+        assertEquals(listOf(VoiceMessageFormat.DEFAULT, VoiceMessageFormat.OPUS_HIGH), createdFormats)
+        assertTrue(controller.state.value.recorderState is RecorderState.Recording)
+        controller.close()
+    }
+
+    @Test
     fun `repeated stop preserves one finalized recording`() = runTest {
         val backend = FakeRecorderBackend(context.cacheDir)
         val controller = createController(this, backend)
@@ -172,12 +195,75 @@ class VoiceMessageRecorderTest {
         controller.close()
     }
 
+    @Test
+    fun `LXST backend withholds completed until normalization succeeds`() {
+        val output = File.createTempFile("voice_lxst", ".ogg", context.cacheDir).also { it.delete() }
+        val recorder = FakeLxstAudioRecorder()
+        lateinit var backend: LxstVoiceRecorderBackend
+        var stateDuringNormalization: RecorderState? = null
+        backend =
+            LxstVoiceRecorderBackend(recorder) {
+                stateDuringNormalization = backend.state.value
+                true
+            }
+
+        backend.start(output)
+        val recording = backend.stop()
+
+        assertEquals(RecorderState.Finalizing, stateDuringNormalization)
+        assertEquals(RecorderState.Completed(recording), backend.state.value)
+        assertTrue(recording.file.exists())
+        backend.close()
+    }
+
+    @Test
+    fun `LXST normalization failure publishes failed and deletes unpublished output`() {
+        val output = File.createTempFile("voice_lxst_failure", ".ogg", context.cacheDir).also { it.delete() }
+        val recorder = FakeLxstAudioRecorder()
+        val failure = IllegalStateException("normalization failed")
+        val backend = LxstVoiceRecorderBackend(recorder) { throw failure }
+
+        backend.start(output)
+        val result = runCatching { backend.stop() }
+
+        assertEquals(failure, result.exceptionOrNull())
+        assertTrue(backend.state.value is RecorderState.Failed)
+        assertFalse(output.exists())
+        backend.close()
+    }
+
     private fun createController(scope: TestScope, backend: FakeRecorderBackend): VoiceMessageRecorder =
         VoiceMessageRecorder(
             context = context,
             scope = scope,
-            recorderFactory = { backend },
+            blockingDispatcher = StandardTestDispatcher(scope.testScheduler),
+            recorderFactory = { _, _ -> backend },
         )
+}
+
+private class FakeLxstAudioRecorder : LxstAudioRecorder {
+    override val state = MutableStateFlow<RecorderState>(RecorderState.Idle)
+    override val isSupported = true
+    private var outputFile: File? = null
+
+    override fun start(outputFile: File) {
+        this.outputFile = outputFile
+        state.value = RecorderState.Recording(0L)
+    }
+
+    override fun stop(): RecordedAudio {
+        val file = checkNotNull(outputFile)
+        file.writeBytes("OggS".encodeToByteArray())
+        val recording = RecordedAudio(file, 1_000L, file.length())
+        state.value = RecorderState.Completed(recording)
+        return recording
+    }
+
+    override fun cancel() {
+        state.value = RecorderState.Idle
+    }
+
+    override fun close() = cancel()
 }
 
 private class FakeRecorderBackend(

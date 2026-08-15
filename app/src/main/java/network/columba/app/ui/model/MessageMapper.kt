@@ -298,7 +298,7 @@ private fun parseAudioObject(field7: JSONObject, fieldsJson: String): AudioAttac
         mode = modeEnum,
         fieldsJson = fieldsJson,
         payloadRef = payloadRef,
-        isPlayable = modeEnum == AudioAttachmentMode.AM_OPUS_OGG,
+        isPlayable = modeEnum != AudioAttachmentMode.UNSUPPORTED,
         sizeBytes = payloadRef?.let { estimateAudioPayloadSize(it) },
     )
 }
@@ -312,7 +312,7 @@ private fun parseAudioArray(field7: JSONArray, fieldsJson: String): AudioAttachm
             mode = modeEnum,
             fieldsJson = fieldsJson,
             payloadRef = payload.toAudioPayloadRefOrNull(),
-            isPlayable = modeEnum == AudioAttachmentMode.AM_OPUS_OGG,
+            isPlayable = modeEnum != AudioAttachmentMode.UNSUPPORTED,
             sizeBytes = payload.toAudioPayloadRefOrNull()?.let { estimateAudioPayloadSize(it) },
         )
         is JSONObject -> {
@@ -321,7 +321,7 @@ private fun parseAudioArray(field7: JSONArray, fieldsJson: String): AudioAttachm
                 mode = modeEnum,
                 fieldsJson = fieldsJson,
                 payloadRef = payloadRef,
-                isPlayable = modeEnum == AudioAttachmentMode.AM_OPUS_OGG,
+                isPlayable = modeEnum != AudioAttachmentMode.UNSUPPORTED,
                 sizeBytes = payloadRef?.let { estimateAudioPayloadSize(it) },
             )
         }

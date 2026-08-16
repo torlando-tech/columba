@@ -1715,6 +1715,16 @@ class RNodeWizardViewModelTest {
             assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
 
             viewModel.selectDevice(unpairedDevice.copy(isPaired = true))
+            val stateField = RNodeWizardViewModel::class.java.getDeclaredField("_state")
+            stateField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val stateFlow = stateField.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<RNodeWizardState>
+            stateFlow.update { it.copy(isPairingInProgress = true) }
+            assertFalse(viewModel.canProceed())
+            viewModel.goToNextStep()
+            assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
+
+            stateFlow.update { it.copy(isPairingInProgress = false) }
             assertTrue(viewModel.canProceed())
             viewModel.goToNextStep()
 

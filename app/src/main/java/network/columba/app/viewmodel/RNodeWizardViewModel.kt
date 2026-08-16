@@ -578,11 +578,7 @@ class RNodeWizardViewModel
 
         fun goToNextStep() {
             val currentState = _state.value
-            if (
-                currentState.currentStep == WizardStep.DEVICE_DISCOVERY &&
-                currentState.isPairingRepairMode &&
-                currentState.selectedDevice?.isPaired != true
-            ) {
+            if (pairingRepairCannotAdvance(currentState)) {
                 return
             }
             val nextStep =
@@ -693,6 +689,13 @@ class RNodeWizardViewModel
             }
         }
 
+        private fun pairingRepairCannotAdvance(state: RNodeWizardState): Boolean {
+            if (state.currentStep != WizardStep.DEVICE_DISCOVERY || !state.isPairingRepairMode) {
+                return false
+            }
+            return state.isPairingInProgress || state.selectedDevice?.isPaired != true
+        }
+
         private fun canProceedFromDeviceDiscovery(state: RNodeWizardState): Boolean =
             when (state.connectionType) {
                 RNodeConnectionType.TCP_WIFI -> state.tcpHost.isNotBlank()
@@ -703,7 +706,7 @@ class RNodeWizardViewModel
 
         private fun canProceedWithBluetooth(state: RNodeWizardState): Boolean =
             if (state.isPairingRepairMode) {
-                state.selectedDevice?.isPaired == true
+                !state.isPairingInProgress && state.selectedDevice?.isPaired == true
             } else {
                 state.selectedDevice != null ||
                     (
@@ -3011,6 +3014,7 @@ class RNodeWizardViewModel
                 _state.update {
                     it.copy(
                         isPairingInProgress = true,
+                        selectedDevice = null,
                         pairingError = null,
                         pairingTimeRemaining = 0,
                         lastPairingDeviceAddress = device.address,

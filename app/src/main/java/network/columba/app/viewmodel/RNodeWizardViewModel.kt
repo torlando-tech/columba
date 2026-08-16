@@ -2920,6 +2920,11 @@ class RNodeWizardViewModel
          * just auto-discovers and selects the USB device first.
          */
         fun startUsbAssistedPairing() {
+            if (_state.value.isPairingRepairMode) return
+            launchUsbAssistedPairing()
+        }
+
+        private fun launchUsbAssistedPairing() =
             viewModelScope.launch {
                 Log.d(TAG, "USB-assisted pairing from Bluetooth tab: scanning for USB devices")
 
@@ -3008,7 +3013,6 @@ class RNodeWizardViewModel
                         )
                     }
                 }
-            }
         }
 
         // Pairing handler to auto-confirm Just Works pairing

@@ -643,7 +643,7 @@ private fun BluetoothDeviceDiscovery(
             }
 
             // USB-assisted pairing section
-            if (!state.showManualEntry) {
+            if (!state.showManualEntry && !state.isPairingRepairMode) {
                 item {
                     Spacer(Modifier.height(16.dp))
                     Text(

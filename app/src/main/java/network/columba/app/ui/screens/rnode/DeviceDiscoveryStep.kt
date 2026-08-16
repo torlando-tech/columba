@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -313,6 +314,45 @@ private fun BluetoothDeviceDiscovery(
     state: RNodeWizardState,
 ) {
     Column {
+        if (state.isPairingRepairMode) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.rnode_pairing_required),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text =
+                            stringResource(
+                                R.string.rnode_pairing_repair_explanation,
+                                state.pairingRepairDeviceName.orEmpty(),
+                            ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.rnode_pairing_repair_heltec_v3),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.rnode_pairing_repair_select_device),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         // Scanning indicator
         if (state.isScanning) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -510,8 +550,10 @@ private fun BluetoothDeviceDiscovery(
             Spacer(Modifier.height(16.dp))
         }
 
-        // Current device (in edit mode)
-        if (state.isEditMode && state.selectedDevice != null && !state.showManualEntry) {
+        // Current device (in ordinary edit mode only)
+        val currentDevice = state.selectedDevice
+        val showCurrentDevice = state.isEditMode && !state.isPairingRepairMode && !state.showManualEntry
+        if (showCurrentDevice && currentDevice != null) {
             Text(
                 "Current Device",
                 style = MaterialTheme.typography.labelMedium,
@@ -519,11 +561,11 @@ private fun BluetoothDeviceDiscovery(
             )
             Spacer(Modifier.height(8.dp))
             BluetoothDeviceCard(
-                device = state.selectedDevice!!,
+                device = currentDevice,
                 isSelected = true,
                 onSelect = { },
                 onPair = { },
-                onSetType = { viewModel.setDeviceType(state.selectedDevice!!, it) },
+                onSetType = { viewModel.setDeviceType(currentDevice, it) },
                 isPairingInProgress = false,
             )
             Spacer(Modifier.height(16.dp))
@@ -543,8 +585,12 @@ private fun BluetoothDeviceDiscovery(
             items(
                 items =
                     state.discoveredDevices.filter {
-                        // In edit mode, don't show the current device in the list
-                        !(state.isEditMode && it.name == state.selectedDevice?.name)
+                        // Ordinary edit mode shows the current device separately. Repair keeps it in this list.
+                        !(
+                            state.isEditMode &&
+                                !state.isPairingRepairMode &&
+                                it.name == currentDevice?.name
+                        )
                     },
                 key = { it.address },
             ) { device ->

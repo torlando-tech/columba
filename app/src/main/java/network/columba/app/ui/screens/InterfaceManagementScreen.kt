@@ -104,6 +104,7 @@ import network.columba.app.viewmodel.InterfaceManagementViewModel
 fun InterfaceManagementScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
+    onNavigateToRNodePairingRepair: (interfaceId: Long) -> Unit = {},
     onNavigateToTcpClientWizard: (interfaceId: Long?) -> Unit = {},
     onNavigateToInterfaceStats: (interfaceId: Long) -> Unit = {},
     onNavigateToDiscoveredInterfaces: () -> Unit = {},
@@ -340,7 +341,7 @@ fun InterfaceManagementScreen(
                                             peerCount = spawnedPeers.size,
                                             onErrorClick = { errorDialogInterface = iface },
                                             onRepairPairing = {
-                                                onNavigateToRNodeWizard(iface.id)
+                                                onNavigateToRNodePairingRepair(iface.id)
                                             },
                                             onRequestPermissions =
                                                 if (iface.isBleInterface()) {

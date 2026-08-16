@@ -32,6 +32,7 @@ import network.columba.app.viewmodel.WizardStep
 @Composable
 fun RNodeWizardScreen(
     editingInterfaceId: Long? = null,
+    repairPairing: Boolean = false,
     preselectedConnectionType: String? = null,
     preselectedUsbDeviceId: Int? = null,
     preselectedUsbVendorId: Int? = null,
@@ -65,9 +66,9 @@ fun RNodeWizardScreen(
     }
 
     // Load existing config if editing
-    LaunchedEffect(editingInterfaceId) {
+    LaunchedEffect(editingInterfaceId, repairPairing) {
         if (editingInterfaceId != null && editingInterfaceId >= 0) {
-            viewModel.loadExistingConfig(editingInterfaceId)
+            viewModel.loadExistingConfig(editingInterfaceId, repairPairing)
         }
     }
 
@@ -125,6 +126,7 @@ fun RNodeWizardScreen(
                             WizardStep.DEVICE_DISCOVERY ->
                                 when {
                                     state.transportMode -> "Configure Transport"
+                                    state.isPairingRepairMode -> "Repair RNode Pairing"
                                     state.isEditMode -> "Change RNode Device"
                                     else -> "Select RNode Device"
                                 }

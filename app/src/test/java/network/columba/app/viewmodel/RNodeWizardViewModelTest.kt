@@ -1656,6 +1656,62 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
+    fun `loadExistingConfig for pairing repair starts discovery without claiming current device is paired`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            val interfaceId = 3L
+            val entity =
+                InterfaceEntity(
+                    id = interfaceId,
+                    name = "RNode E517 BLE",
+                    type = "RNode",
+                    enabled = true,
+                    configJson = """{"connection_mode":"ble","target_device_name":"RNode E517"}""",
+                )
+            val rnodeConfig =
+                InterfaceConfig.RNode(
+                    name = "RNode E517 BLE",
+                    enabled = true,
+                    connectionMode = "ble",
+                    targetDeviceName = "RNode E517",
+                    tcpHost = null,
+                    tcpPort = 7633,
+                    frequency = 915000000,
+                    bandwidth = 125000,
+                    txPower = 17,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                )
+
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns rnodeConfig
+
+            viewModel.loadExistingConfig(interfaceId, repairPairing = true)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.isEditMode)
+            assertTrue(state.isPairingRepairMode)
+            assertEquals(WizardStep.DEVICE_DISCOVERY, state.currentStep)
+            assertEquals("RNode E517", state.pairingRepairDeviceName)
+            assertNull(state.selectedDevice)
+
+            viewModel.selectDevice(
+                DiscoveredRNode(
+                    name = "RNode E517",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = null,
+                    isPaired = true,
+                ),
+            )
+            viewModel.goToNextStep()
+
+            assertEquals(WizardStep.REVIEW_CONFIGURE, viewModel.state.value.currentStep)
+        }
+
+    @Test
     fun `loadExistingConfig handles interface not found`() =
         runViewModelTest {
             advanceUntilIdle()

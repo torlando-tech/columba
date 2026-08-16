@@ -108,6 +108,8 @@ data class RNodeWizardState(
     // Edit mode
     val editingInterfaceId: Long? = null,
     val isEditMode: Boolean = false,
+    val isPairingRepairMode: Boolean = false,
+    val pairingRepairDeviceName: String? = null,
     // Transport mode - sends TNC KISS commands instead of saving interface config
     val transportMode: Boolean = false,
     val transportConfiguring: Boolean = false,
@@ -345,7 +347,10 @@ class RNodeWizardViewModel
          * Initialize wizard for editing an existing RNode interface.
          */
         @Suppress("LongMethod", "CyclomaticComplexMethod") // Complex config mapping is inherent
-        fun loadExistingConfig(interfaceId: Long) {
+        fun loadExistingConfig(
+            interfaceId: Long,
+            repairPairing: Boolean = false,
+        ) {
             viewModelScope.launch {
                 try {
                     val entity = interfaceRepository.getInterfaceById(interfaceId).first()
@@ -405,8 +410,15 @@ class RNodeWizardViewModel
                         state.copy(
                             editingInterfaceId = interfaceId,
                             isEditMode = true,
-                            // Skip straight to review — user doesn't need to re-walk the wizard
-                            currentStep = WizardStep.REVIEW_CONFIGURE,
+                            isPairingRepairMode = repairPairing,
+                            pairingRepairDeviceName = config.targetDeviceName.takeIf { repairPairing },
+                            // Editing skips to review. Pairing repair must begin at device discovery.
+                            currentStep =
+                                if (repairPairing) {
+                                    WizardStep.DEVICE_DISCOVERY
+                                } else {
+                                    WizardStep.REVIEW_CONFIGURE
+                                },
                             showAdvancedSettings = true,
                             // Connection type
                             connectionType = connectionType,
@@ -417,7 +429,7 @@ class RNodeWizardViewModel
                             selectedUsbDevice = usbDevice,
                             // Pre-populate Bluetooth device (for Bluetooth mode)
                             selectedDevice =
-                                if (isTcp || isUsb) {
+                                if (isTcp || isUsb || repairPairing) {
                                     null
                                 } else {
                                     DiscoveredRNode(
@@ -571,8 +583,10 @@ class RNodeWizardViewModel
                     WizardStep.DEVICE_DISCOVERY -> {
                         // Stop RSSI polling when leaving device discovery to prevent memory leaks
                         stopRssiPolling()
-                        // If we have pending LoRa params from discovered interface, skip to review
-                        if (currentState.hasPendingParams) {
+                        // Repair preserves the existing radio configuration and only replaces the bond.
+                        if (currentState.isPairingRepairMode) {
+                            WizardStep.REVIEW_CONFIGURE
+                        } else if (currentState.hasPendingParams) {
                             _state.update { it.copy(skippedRegionSelection = true) }
                             WizardStep.REVIEW_CONFIGURE
                         } else {

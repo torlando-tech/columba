@@ -458,7 +458,7 @@ class RNodeWizardViewModel
                                 } else {
                                     DiscoveredRNode(
                                         name = config.targetDeviceName,
-                                        address = "",
+                                        address = config.targetDeviceAddress.orEmpty(),
                                         type = if (isBle) BluetoothType.BLE else BluetoothType.CLASSIC,
                                         rssi = null,
                                         isPaired = true,
@@ -717,7 +717,8 @@ class RNodeWizardViewModel
             if (state.currentStep != WizardStep.DEVICE_DISCOVERY || !state.isPairingRepairMode) {
                 return false
             }
-            return state.isPairingInProgress || state.selectedDevice?.isPaired != true
+            val device = state.selectedDevice
+            return state.isPairingInProgress || device?.isPaired != true || !hasCurrentAndroidBond(device)
         }
 
         private fun canProceedFromDeviceDiscovery(state: RNodeWizardState): Boolean =
@@ -1345,7 +1346,7 @@ class RNodeWizardViewModel
                             .filter { it.name == state.pairingRepairDeviceName }
                             .map { it.address.uppercase() }
                             .distinct()
-                    matchingAddresses.isEmpty() || matchingAddresses == listOf(device.address.uppercase())
+                    !state.isScanning && matchingAddresses == listOf(device.address.uppercase())
                 }
             }
         }
@@ -3710,6 +3711,18 @@ class RNodeWizardViewModel
                                 NetworkRestriction.fromValue(state.networkRestriction)
                                     ?: NetworkRestriction.ANY,
                         )
+
+                    if (state.isPairingRepairMode && !hasCurrentAndroidBond(state.selectedDevice!!)) {
+                        _state.update {
+                            it.copy(
+                                isSaving = false,
+                                selectedDevice = state.selectedDevice.copy(isPaired = false),
+                                pairingError = "Android pairing was lost. Pair the configured RNode again.",
+                                saveError = "Android pairing was lost before the repair could be saved.",
+                            )
+                        }
+                        return@launch
+                    }
 
                     if (state.editingInterfaceId != null) {
                         // Update existing interface

@@ -368,7 +368,6 @@ sealed class InterfaceConfig : Parcelable {
             parcel.writeString(name)
             parcel.writeInt(if (enabled) 1 else 0)
             parcel.writeString(targetDeviceName)
-            parcel.writeString(targetDeviceAddress)
             parcel.writeString(connectionMode)
             parcel.writeString(tcpHost)
             parcel.writeInt(tcpPort)
@@ -387,6 +386,7 @@ sealed class InterfaceConfig : Parcelable {
             parcel.writeString(passphrase)
             parcel.writeInt(if (enableFramebuffer) 1 else 0)
             parcel.writeParcelable(networkRestriction, flags)
+            parcel.writeString(targetDeviceAddress)
         }
     }
 
@@ -557,7 +557,6 @@ sealed class InterfaceConfig : Parcelable {
                             name = parcel.readString().orEmpty(),
                             enabled = parcel.readInt() != 0,
                             targetDeviceName = parcel.readString().orEmpty(),
-                            targetDeviceAddress = parcel.readString(),
                             connectionMode = parcel.readString().orEmpty(),
                             tcpHost = parcel.readString(),
                             tcpPort = parcel.readInt(),
@@ -576,6 +575,7 @@ sealed class InterfaceConfig : Parcelable {
                             passphrase = parcel.readString(),
                             enableFramebuffer = parcel.readInt() != 0,
                             networkRestriction = readNetworkRestriction(),
+                            targetDeviceAddress = if (parcel.dataAvail() > 0) parcel.readString() else null,
                         )
                     TAG_UDP ->
                         UDP(

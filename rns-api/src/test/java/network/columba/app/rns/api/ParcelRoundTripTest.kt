@@ -19,6 +19,7 @@ import network.columba.app.rns.api.model.PeerIdentityEntry
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -257,6 +258,42 @@ class ParcelRoundTripTest {
         val original: InterfaceConfig = InterfaceConfig.RNode()
         val restored = roundTrip(original, InterfaceConfig.CREATOR)
         assertEquals(original, restored)
+    }
+
+    @Test
+    fun `InterfaceConfig RNode decodes legacy parcel without device address`() {
+        val parcel = Parcel.obtain()
+        try {
+            parcel.writeInt(2)
+            parcel.writeString("Legacy RNode")
+            parcel.writeInt(1)
+            parcel.writeString("RNode 1234")
+            parcel.writeString("ble")
+            parcel.writeString(null)
+            parcel.writeInt(7633)
+            repeat(3) { parcel.writeInt(0) }
+            parcel.writeLong(915000000)
+            parcel.writeInt(125000)
+            parcel.writeInt(7)
+            parcel.writeInt(7)
+            parcel.writeInt(5)
+            repeat(2) { parcel.writeInt(0) }
+            parcel.writeString("access_point")
+            parcel.writeString(null)
+            parcel.writeString(null)
+            parcel.writeInt(1)
+            parcel.writeParcelable(NetworkRestriction.ANY, 0)
+            parcel.setDataPosition(0)
+
+            val restored = InterfaceConfig.CREATOR.createFromParcel(parcel) as InterfaceConfig.RNode
+
+            assertEquals("RNode 1234", restored.targetDeviceName)
+            assertEquals("ble", restored.connectionMode)
+            assertEquals(915000000, restored.frequency)
+            assertNull(restored.targetDeviceAddress)
+        } finally {
+            parcel.recycle()
+        }
     }
 
     @Test

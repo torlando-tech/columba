@@ -315,6 +315,11 @@ private fun BluetoothDeviceDiscovery(
     viewModel: RNodeWizardViewModel,
     state: RNodeWizardState,
 ) {
+    val repairCandidateAddresses =
+        state.discoveredDevices
+            .filter { it.name == state.pairingRepairDeviceName }
+            .map { it.address.uppercase() }
+            .distinct()
     Column {
         if (state.isPairingRepairMode && state.selectedDevice?.isPaired != true) {
             Surface(
@@ -590,8 +595,11 @@ private fun BluetoothDeviceDiscovery(
                         if (state.isPairingRepairMode) {
                             it.name == state.pairingRepairDeviceName &&
                                 (
-                                    state.pairingRepairDeviceAddress == null ||
-                                        state.pairingRepairDeviceAddress.equals(it.address, ignoreCase = true)
+                                    state.pairingRepairDeviceAddress?.equals(it.address, ignoreCase = true)
+                                        ?: (
+                                            !state.isScanning &&
+                                                repairCandidateAddresses == listOf(it.address.uppercase())
+                                        )
                                 )
                         } else {
                             // Ordinary edit mode shows the current device separately.

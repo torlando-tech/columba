@@ -1633,6 +1633,7 @@ class RNodeWizardViewModelTest {
                     enabled = true,
                     connectionMode = "classic", // classic doesn't trigger RSSI polling
                     targetDeviceName = "RNode Classic123",
+                    targetDeviceAddress = "AA:BB:CC:DD:EE:11",
                     tcpHost = null,
                     tcpPort = 7633,
                     frequency = 915000000,
@@ -1655,7 +1656,17 @@ class RNodeWizardViewModelTest {
                 assertEquals(RNodeConnectionType.BLUETOOTH, state.connectionType)
                 assertNotNull(state.selectedDevice)
                 assertEquals("RNode Classic123", state.selectedDevice?.name)
+                assertEquals("AA:BB:CC:DD:EE:11", state.selectedDevice?.address)
                 assertEquals(BluetoothType.CLASSIC, state.selectedDevice?.type)
+            }
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+            coVerify(exactly = 1) {
+                interfaceRepository.updateInterface(
+                    interfaceId,
+                    match { it is InterfaceConfig.RNode && it.targetDeviceAddress == "AA:BB:CC:DD:EE:11" },
+                )
             }
         }
 
@@ -1705,6 +1716,7 @@ class RNodeWizardViewModelTest {
                     enabled = true,
                     connectionMode = "ble",
                     targetDeviceName = "RNode E517",
+                    targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
                     tcpHost = null,
                     tcpPort = 7633,
                     frequency = 915000000,
@@ -1804,9 +1816,22 @@ class RNodeWizardViewModelTest {
                     isEditMode = true,
                     isPairingRepairMode = true,
                     pairingRepairDeviceName = configuredDevice.name,
-                    discoveredDevices = listOf(configuredDevice, otherDevice),
+                    isScanning = true,
+                    discoveredDevices = listOf(configuredDevice),
                 )
 
+            viewModel.selectDevice(configuredDevice)
+            assertNull(viewModel.state.value.selectedDevice)
+            viewModel.initiateBluetoothPairing(configuredDevice)
+            runCurrent()
+            assertNull(viewModel.state.value.pairingRepairDeviceAddress)
+
+            stateFlow.update {
+                it.copy(
+                    isScanning = false,
+                    discoveredDevices = listOf(configuredDevice, otherDevice),
+                )
+            }
             viewModel.selectDevice(configuredDevice)
             assertNull(viewModel.state.value.selectedDevice)
 
@@ -1818,7 +1843,8 @@ class RNodeWizardViewModelTest {
             assertTrue(viewModel.canProceed())
 
             currentBondState = BluetoothDevice.BOND_NONE
-            assertFalse(viewModel.canProceed())
+            viewModel.goToNextStep()
+            assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
             viewModel.saveConfiguration()
             advanceUntilIdle()
             assertNotNull(viewModel.state.value.saveError)
@@ -1826,6 +1852,19 @@ class RNodeWizardViewModelTest {
 
             val entity = InterfaceEntity(3L, "RNode LoRa", "RNode", true, "{}")
             coEvery { interfaceRepository.getInterfaceById(3L) } returns flowOf(entity)
+            val pendingNames = MutableSharedFlow<List<InterfaceConfig>>()
+            every { interfaceRepository.allInterfaces } returns pendingNames
+            currentBondState = BluetoothDevice.BOND_BONDED
+            stateFlow.update { it.copy(selectedDevice = configuredDevice, saveError = null) }
+            viewModel.saveConfiguration()
+            runCurrent()
+            currentBondState = BluetoothDevice.BOND_NONE
+            pendingNames.emit(emptyList())
+            advanceUntilIdle()
+            assertNotNull(viewModel.state.value.saveError)
+            coVerify(exactly = 0) { interfaceRepository.updateInterface(3L, any()) }
+
+            every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
             currentBondState = BluetoothDevice.BOND_BONDED
             stateFlow.update { it.copy(selectedDevice = configuredDevice, saveError = null) }
             viewModel.saveConfiguration()

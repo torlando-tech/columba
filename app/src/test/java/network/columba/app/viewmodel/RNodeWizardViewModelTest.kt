@@ -1698,9 +1698,10 @@ class RNodeWizardViewModelTest {
             assertEquals("RNode E517", state.pairingRepairDeviceName)
             assertNull(state.selectedDevice)
 
+            val stateBeforeUsbAttempt = viewModel.state.value
             viewModel.startUsbAssistedPairing()
             advanceUntilIdle()
-            assertNull(viewModel.state.value.usbPairingStatus)
+            assertEquals(stateBeforeUsbAttempt, viewModel.state.value)
 
             val originalFrequency = state.frequency
             val originalBandwidth = state.bandwidth

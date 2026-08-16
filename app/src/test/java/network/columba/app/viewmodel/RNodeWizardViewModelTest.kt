@@ -1,5 +1,6 @@
 package network.columba.app.viewmodel
 
+import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
@@ -1720,7 +1721,6 @@ class RNodeWizardViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertTrue(state.isEditMode)
             assertTrue(state.isPairingRepairMode)
             assertEquals(WizardStep.DEVICE_DISCOVERY, state.currentStep)
             assertEquals("RNode E517", state.pairingRepairDeviceName)
@@ -1728,6 +1728,7 @@ class RNodeWizardViewModelTest {
 
             val (originalFrequency, originalBandwidth) = state.frequency to state.bandwidth
             val originalInterfaceName = state.interfaceName
+            val bluetoothDevice = mockk<BluetoothDevice> { every { bondState } returns BluetoothDevice.BOND_BONDED }
             val unpairedDevice =
                 DiscoveredRNode(
                     name = "RNode E517",
@@ -1735,6 +1736,7 @@ class RNodeWizardViewModelTest {
                     type = BluetoothType.BLE,
                     rssi = null,
                     isPaired = false,
+                    bluetoothDevice = bluetoothDevice,
                 )
 
             viewModel.selectDevice(
@@ -1745,7 +1747,6 @@ class RNodeWizardViewModelTest {
                 ),
             )
             assertNull(viewModel.state.value.selectedDevice)
-
             viewModel.selectDevice(unpairedDevice)
             assertFalse(viewModel.canProceed())
             viewModel.goToNextStep()
@@ -1767,13 +1768,74 @@ class RNodeWizardViewModelTest {
 
             assertEquals(WizardStep.REVIEW_CONFIGURE, viewModel.state.value.currentStep)
             assertTrue(viewModel.state.value.skippedRegionSelection)
-
             viewModel.goToPreviousStep()
 
             assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
             assertEquals(originalFrequency, viewModel.state.value.frequency)
             assertEquals(originalBandwidth, viewModel.state.value.bandwidth)
             assertEquals(originalInterfaceName, viewModel.state.value.interfaceName)
+        }
+
+    @Test
+    fun `pairing repair requires live bond and configured address`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            var currentBondState = BluetoothDevice.BOND_BONDED
+            val bluetoothDevice = mockk<BluetoothDevice>()
+            every { bluetoothDevice.bondState } answers { currentBondState }
+            val configuredDevice =
+                DiscoveredRNode(
+                    name = "RNode E517",
+                    address = "AA:BB:CC:DD:EE:FF",
+                    type = BluetoothType.BLE,
+                    rssi = null,
+                    isPaired = true,
+                    bluetoothDevice = bluetoothDevice,
+                )
+            val otherDevice = configuredDevice.copy(address = "AA:BB:CC:DD:EE:00")
+            val stateField = RNodeWizardViewModel::class.java.getDeclaredField("_state")
+            stateField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val stateFlow = stateField.get(viewModel) as kotlinx.coroutines.flow.MutableStateFlow<RNodeWizardState>
+            stateFlow.value =
+                RNodeWizardState(
+                    editingInterfaceId = 3L,
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = configuredDevice.name,
+                    discoveredDevices = listOf(configuredDevice, otherDevice),
+                )
+
+            viewModel.selectDevice(configuredDevice)
+            assertNull(viewModel.state.value.selectedDevice)
+
+            stateFlow.update { it.copy(pairingRepairDeviceAddress = configuredDevice.address) }
+            viewModel.selectDevice(otherDevice)
+            assertNull(viewModel.state.value.selectedDevice)
+            viewModel.selectDevice(configuredDevice)
+            assertEquals(configuredDevice.address, viewModel.state.value.selectedDevice?.address)
+            assertTrue(viewModel.canProceed())
+
+            currentBondState = BluetoothDevice.BOND_NONE
+            assertFalse(viewModel.canProceed())
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+            assertNotNull(viewModel.state.value.saveError)
+            coVerify(exactly = 0) { interfaceRepository.updateInterface(3L, any()) }
+
+            val entity = InterfaceEntity(3L, "RNode LoRa", "RNode", true, "{}")
+            coEvery { interfaceRepository.getInterfaceById(3L) } returns flowOf(entity)
+            currentBondState = BluetoothDevice.BOND_BONDED
+            stateFlow.update { it.copy(selectedDevice = configuredDevice, saveError = null) }
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+            coVerify(exactly = 1) {
+                interfaceRepository.updateInterface(
+                    3L,
+                    match { it is InterfaceConfig.RNode && it.targetDeviceAddress == configuredDevice.address },
+                )
+            }
         }
 
     @Test

@@ -588,7 +588,11 @@ private fun BluetoothDeviceDiscovery(
                 items =
                     state.discoveredDevices.filter {
                         if (state.isPairingRepairMode) {
-                            it.name == state.pairingRepairDeviceName
+                            it.name == state.pairingRepairDeviceName &&
+                                (
+                                    state.pairingRepairDeviceAddress == null ||
+                                        state.pairingRepairDeviceAddress.equals(it.address, ignoreCase = true)
+                                )
                         } else {
                             // Ordinary edit mode shows the current device separately.
                             !(state.isEditMode && it.name == currentDevice?.name)

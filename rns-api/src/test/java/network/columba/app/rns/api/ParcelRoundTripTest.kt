@@ -241,6 +241,7 @@ class ParcelRoundTripTest {
     fun `InterfaceConfig RNode round-trips with all nullables populated`() {
         val original: InterfaceConfig = InterfaceConfig.RNode(
             targetDeviceName = "RNode 1234",
+            targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
             usbDeviceId = 42,
             usbVendorId = 0x1A86,
             usbProductId = 0x7523,

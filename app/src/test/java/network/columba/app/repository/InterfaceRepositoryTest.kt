@@ -1150,7 +1150,12 @@ class InterfaceRepositoryTest {
                     InterfaceConfig.TCPServer(name = "tcps"),
                     InterfaceConfig.UDP(name = "udp"),
                     InterfaceConfig.AndroidBLE(name = "ble"),
-                    InterfaceConfig.RNode(name = "rnode", targetDeviceName = "RNode 1234", connectionMode = "classic"),
+                    InterfaceConfig.RNode(
+                        name = "rnode",
+                        targetDeviceName = "RNode 1234",
+                        targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
+                        connectionMode = "classic",
+                    ),
                 )
 
             samples.forEachIndexed { idx, source ->
@@ -1205,6 +1210,12 @@ class InterfaceRepositoryTest {
                         source::class,
                         parsed.single()::class,
                     )
+                    if (source is InterfaceConfig.RNode) {
+                        assertEquals(
+                            source.targetDeviceAddress,
+                            (parsed.single() as InterfaceConfig.RNode).targetDeviceAddress,
+                        )
+                    }
                     cancelAndIgnoreRemainingEvents()
                 }
             }

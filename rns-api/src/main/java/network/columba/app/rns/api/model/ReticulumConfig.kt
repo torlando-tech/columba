@@ -340,7 +340,8 @@ sealed class InterfaceConfig : Parcelable {
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
         val targetDeviceName: String = "", // Required for Bluetooth, empty for TCP/USB
-        val targetDeviceAddress: String? = null, // App-owned repair identity; not emitted to Reticulum config
+        // App-owned repair identity; intentionally omitted from Parcelable/runtime transport.
+        val targetDeviceAddress: String? = null,
         val connectionMode: String = "classic", // "classic", "ble", "tcp", or "usb"
         val tcpHost: String? = null, // IP/hostname for TCP mode
         val tcpPort: Int = 7633, // RNode TCP port (default)
@@ -386,7 +387,6 @@ sealed class InterfaceConfig : Parcelable {
             parcel.writeString(passphrase)
             parcel.writeInt(if (enableFramebuffer) 1 else 0)
             parcel.writeParcelable(networkRestriction, flags)
-            parcel.writeString(targetDeviceAddress)
         }
     }
 
@@ -575,7 +575,6 @@ sealed class InterfaceConfig : Parcelable {
                             passphrase = parcel.readString(),
                             enableFramebuffer = parcel.readInt() != 0,
                             networkRestriction = readNetworkRestriction(),
-                            targetDeviceAddress = if (parcel.dataAvail() > 0) parcel.readString() else null,
                         )
                     TAG_UDP ->
                         UDP(

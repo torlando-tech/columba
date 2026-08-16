@@ -16,6 +16,7 @@ import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.PeerIdentityEntry
+import network.columba.app.rns.api.model.ReticulumConfig
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -239,18 +240,20 @@ class ParcelRoundTripTest {
     }
 
     @Test
-    fun `InterfaceConfig RNode round-trips with all nullables populated`() {
-        val original: InterfaceConfig = InterfaceConfig.RNode(
-            targetDeviceName = "RNode 1234",
-            targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
-            usbDeviceId = 42,
-            usbVendorId = 0x1A86,
-            usbProductId = 0x7523,
-            stAlock = 1.5,
-            ltAlock = 2.0,
-        )
+    fun `InterfaceConfig RNode omits app-only address from parcel transport`() {
+        val original =
+            InterfaceConfig.RNode(
+                targetDeviceName = "RNode 1234",
+                targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
+                usbDeviceId = 42,
+                usbVendorId = 0x1A86,
+                usbProductId = 0x7523,
+                stAlock = 1.5,
+                ltAlock = 2.0,
+            )
         val restored = roundTrip(original, InterfaceConfig.CREATOR)
-        assertEquals(original, restored)
+        assertEquals(original.copy(targetDeviceAddress = null), restored)
+        assertNull((restored as InterfaceConfig.RNode).targetDeviceAddress)
     }
 
     @Test
@@ -294,6 +297,28 @@ class ParcelRoundTripTest {
         } finally {
             parcel.recycle()
         }
+    }
+
+    @Test
+    fun `ReticulumConfig transport omits RNode address without corrupting following interface`() {
+        val original =
+            ReticulumConfig(
+                storagePath = "/tmp/rns",
+                enabledInterfaces =
+                    listOf(
+                        InterfaceConfig.RNode(
+                            targetDeviceName = "RNode 1234",
+                            targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
+                        ),
+                        InterfaceConfig.UDP(name = "Following UDP"),
+                    ),
+            )
+
+        val restored = roundTripViaFramework(original)
+
+        assertEquals(2, restored.enabledInterfaces.size)
+        assertNull((restored.enabledInterfaces[0] as InterfaceConfig.RNode).targetDeviceAddress)
+        assertEquals("Following UDP", (restored.enabledInterfaces[1] as InterfaceConfig.UDP).name)
     }
 
     @Test

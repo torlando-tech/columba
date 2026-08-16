@@ -1709,6 +1709,15 @@ class RNodeWizardViewModelTest {
                     isPaired = false,
                 )
 
+            viewModel.selectDevice(
+                unpairedDevice.copy(
+                    name = "RNode OTHER",
+                    address = "AA:BB:CC:DD:EE:00",
+                    isPaired = true,
+                ),
+            )
+            assertNull(viewModel.state.value.selectedDevice)
+
             viewModel.selectDevice(unpairedDevice)
             assertFalse(viewModel.canProceed())
             viewModel.goToNextStep()

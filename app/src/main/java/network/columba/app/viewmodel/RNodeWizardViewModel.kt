@@ -1291,6 +1291,7 @@ class RNodeWizardViewModel
         }
 
         fun selectDevice(device: DiscoveredRNode) {
+            if (!isEligibleRepairDevice(device)) return
             _state.update {
                 it.copy(
                     selectedDevice = device,
@@ -1298,6 +1299,11 @@ class RNodeWizardViewModel
                     interfaceName = it.defaultInterfaceNameFor(device),
                 )
             }
+        }
+
+        private fun isEligibleRepairDevice(device: DiscoveredRNode): Boolean {
+            val state = _state.value
+            return !state.isPairingRepairMode || device.name == state.pairingRepairDeviceName
         }
 
         /**
@@ -1357,6 +1363,7 @@ class RNodeWizardViewModel
             device: DiscoveredRNode,
             onFallback: () -> Unit,
         ) {
+            if (!isEligibleRepairDevice(device)) return
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || companionDeviceManager == null) {
                 // Fall back to direct selection on older Android
                 onFallback()
@@ -3010,6 +3017,7 @@ class RNodeWizardViewModel
         @SuppressLint("MissingPermission")
         @Suppress("LongMethod", "CyclomaticComplexMethod")
         fun initiateBluetoothPairing(device: DiscoveredRNode) {
+            if (!isEligibleRepairDevice(device)) return
             viewModelScope.launch {
                 _state.update {
                     it.copy(

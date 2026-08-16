@@ -585,12 +585,12 @@ private fun BluetoothDeviceDiscovery(
             items(
                 items =
                     state.discoveredDevices.filter {
-                        // Ordinary edit mode shows the current device separately. Repair keeps it in this list.
-                        !(
-                            state.isEditMode &&
-                                !state.isPairingRepairMode &&
-                                it.name == currentDevice?.name
-                        )
+                        if (state.isPairingRepairMode) {
+                            it.name == state.pairingRepairDeviceName
+                        } else {
+                            // Ordinary edit mode shows the current device separately.
+                            !(state.isEditMode && it.name == currentDevice?.name)
+                        }
                     },
                 key = { it.address },
             ) { device ->

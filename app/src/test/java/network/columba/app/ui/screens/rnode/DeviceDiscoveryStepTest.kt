@@ -142,6 +142,37 @@ class DeviceDiscoveryStepTest {
     }
 
     @Test
+    fun pairingRepair_showsOnlyConfiguredRNode() {
+        val configuredDevice =
+            pairedBleDevice.copy(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:51",
+            )
+        val otherDevice =
+            pairedBleDevice.copy(
+                name = "RNode OTHER",
+                address = "AA:BB:CC:DD:EE:00",
+            )
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = "RNode E517",
+                    discoveredDevices = listOf(otherDevice, configuredDevice),
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("RNode E517").assertIsDisplayed()
+        composeTestRule.onNodeWithText("RNode OTHER").assertDoesNotExist()
+    }
+
+    @Test
     fun pairingRepair_afterSuccessfulBond_hidesRecoveryInstructions() {
         val pairedDevice =
             pairedBleDevice.copy(

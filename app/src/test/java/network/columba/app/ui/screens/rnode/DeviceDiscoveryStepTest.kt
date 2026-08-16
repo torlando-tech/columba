@@ -136,7 +136,8 @@ class DeviceDiscoveryStepTest {
 
         composeTestRule.onNodeWithText("Pairing required").assertIsDisplayed()
         composeTestRule.onNodeWithText("RNode E517", substring = true).assertIsDisplayed()
-        composeTestRule.onNodeWithText("hold USR for five seconds", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hold USR for five seconds to enter pairing mode.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Heltec V3", substring = true).assertDoesNotExist()
         composeTestRule.onNodeWithText("Current Device").assertDoesNotExist()
     }
 

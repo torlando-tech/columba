@@ -338,7 +338,7 @@ private fun BluetoothDeviceDiscovery(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = stringResource(R.string.rnode_pairing_repair_heltec_v3),
+                        text = stringResource(R.string.rnode_pairing_repair_pairing_mode),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )

@@ -405,6 +405,8 @@ class RNodeWizardViewModel
                             repairPairing -> false
                             else -> !config.targetDeviceAddress.isNullOrBlank()
                         }
+                    val requiresExplicitBluetoothSelection =
+                        !isTcp && !isUsb && !repairPairing && !shouldPreselectBluetoothDevice
 
                     // Determine connection type
                     val connectionType =
@@ -444,7 +446,7 @@ class RNodeWizardViewModel
                             pairingRepairDeviceAddress = repairDeviceAddress.takeIf { repairPairing },
                             // Editing skips to review. Pairing repair must begin at device discovery.
                             currentStep =
-                                if (repairPairing) {
+                                if (repairPairing || requiresExplicitBluetoothSelection) {
                                     WizardStep.DEVICE_DISCOVERY
                                 } else {
                                     WizardStep.REVIEW_CONFIGURE
@@ -616,8 +618,8 @@ class RNodeWizardViewModel
                     WizardStep.DEVICE_DISCOVERY -> {
                         // Stop RSSI polling when leaving device discovery to prevent memory leaks
                         stopRssiPolling()
-                        // Repair preserves the existing radio configuration and only replaces the bond.
-                        if (currentState.isPairingRepairMode) {
+                        // Repair and ordinary edits preserve the loaded radio profile.
+                        if (currentState.isPairingRepairMode || currentState.isEditMode) {
                             _state.update { it.copy(skippedRegionSelection = true) }
                             WizardStep.REVIEW_CONFIGURE
                         } else if (currentState.hasPendingParams) {
@@ -710,12 +712,15 @@ class RNodeWizardViewModel
                     true // Default preset is pre-selected, user can always proceed
                 WizardStep.FREQUENCY_SLOT ->
                     true // Slot always has a valid selection
-                WizardStep.REVIEW_CONFIGURE ->
-                    if (state.transportMode) {
-                        validateConfigurationSilent()
-                    } else {
-                        state.interfaceName.isNotBlank() && validateConfigurationSilent()
-                    }
+                WizardStep.REVIEW_CONFIGURE -> {
+                    val fieldsValid =
+                        if (state.transportMode) {
+                            validateConfigurationSilent()
+                        } else {
+                            state.interfaceName.isNotBlank() && validateConfigurationSilent()
+                        }
+                    fieldsValid && hasRequiredBluetoothEditIdentity(state)
+                }
             }
         }
 
@@ -747,6 +752,11 @@ class RNodeWizardViewModel
                         state.manualDeviceNameError == null
                 )
         }
+
+        private fun hasRequiredBluetoothEditIdentity(state: RNodeWizardState): Boolean =
+            !state.isEditMode ||
+                state.connectionType != RNodeConnectionType.BLUETOOTH ||
+                !state.selectedDevice?.address.isNullOrBlank()
 
         private fun applyFrequencyRegionSettings() {
             val region = _state.value.selectedFrequencyRegion ?: return
@@ -3571,6 +3581,12 @@ class RNodeWizardViewModel
         @Suppress("CyclomaticComplexMethod", "LongMethod")
         fun saveConfiguration() {
             if (!validateConfiguration()) return
+            if (!hasRequiredBluetoothEditIdentity(_state.value)) {
+                _state.update {
+                    it.copy(saveError = "Select the original RNode before updating this interface.")
+                }
+                return
+            }
 
             viewModelScope.launch {
                 _state.update { it.copy(isSaving = true, saveError = null) }

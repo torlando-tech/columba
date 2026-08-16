@@ -1687,7 +1687,16 @@ class RNodeWizardViewModelTest {
             viewModel.loadExistingConfig(interfaceId)
             advanceUntilIdle()
 
+            assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
             assertNull(viewModel.state.value.selectedDevice)
+            viewModel.goToStep(WizardStep.REVIEW_CONFIGURE)
+            assertFalse(viewModel.canProceed())
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+            assertNotNull(viewModel.state.value.saveError)
+            coVerify(exactly = 0) { interfaceRepository.updateInterface(interfaceId, any()) }
+
+            viewModel.goToStep(WizardStep.DEVICE_DISCOVERY)
             val explicitlySelected =
                 DiscoveredRNode(
                     name = "RNode SAME",
@@ -1699,6 +1708,16 @@ class RNodeWizardViewModelTest {
             viewModel.selectDevice(explicitlySelected)
 
             assertEquals(explicitlySelected, viewModel.state.value.selectedDevice)
+            viewModel.goToNextStep()
+            assertEquals(WizardStep.REVIEW_CONFIGURE, viewModel.state.value.currentStep)
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+            coVerify(exactly = 1) {
+                interfaceRepository.updateInterface(
+                    interfaceId,
+                    match { it is InterfaceConfig.RNode && it.targetDeviceAddress == explicitlySelected.address },
+                )
+            }
         }
 
     @Test

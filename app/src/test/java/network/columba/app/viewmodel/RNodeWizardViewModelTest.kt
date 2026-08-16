@@ -25,6 +25,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
@@ -32,6 +33,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -1657,6 +1659,29 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
+    fun `pairing repair latches before config load`() =
+        runViewModelTest {
+            val entities = MutableSharedFlow<InterfaceEntity?>()
+            coEvery { interfaceRepository.getInterfaceById(3L) } returns entities
+
+            viewModel.loadExistingConfig(3L, repairPairing = true)
+            runCurrent()
+
+            val repairState = viewModel.state.value
+            assertTrue(repairState.isEditMode)
+            assertTrue(repairState.isPairingRepairMode)
+            assertEquals(WizardStep.DEVICE_DISCOVERY, repairState.currentStep)
+            assertNull(repairState.selectedDevice)
+
+            viewModel.startUsbAssistedPairing()
+            runCurrent()
+            assertEquals(repairState, viewModel.state.value)
+
+            entities.emit(null)
+            advanceUntilIdle()
+        }
+
+    @Test
     fun `loadExistingConfig for pairing repair starts discovery without claiming current device is paired`() =
         runViewModelTest {
             advanceUntilIdle()
@@ -1697,11 +1722,6 @@ class RNodeWizardViewModelTest {
             assertEquals(WizardStep.DEVICE_DISCOVERY, state.currentStep)
             assertEquals("RNode E517", state.pairingRepairDeviceName)
             assertNull(state.selectedDevice)
-
-            val stateBeforeUsbAttempt = viewModel.state.value
-            viewModel.startUsbAssistedPairing()
-            advanceUntilIdle()
-            assertEquals(stateBeforeUsbAttempt, viewModel.state.value)
 
             val (originalFrequency, originalBandwidth) = state.frequency to state.bandwidth
             val unpairedDevice =

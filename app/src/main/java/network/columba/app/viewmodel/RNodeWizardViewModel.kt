@@ -351,6 +351,18 @@ class RNodeWizardViewModel
             interfaceId: Long,
             repairPairing: Boolean = false,
         ) {
+            if (repairPairing) {
+                _state.update {
+                    it.copy(
+                        editingInterfaceId = interfaceId,
+                        isEditMode = true,
+                        isPairingRepairMode = true,
+                        currentStep = WizardStep.DEVICE_DISCOVERY,
+                        selectedDevice = null,
+                        showManualEntry = false,
+                    )
+                }
+            }
             viewModelScope.launch {
                 try {
                     val entity = interfaceRepository.getInterfaceById(interfaceId).first()

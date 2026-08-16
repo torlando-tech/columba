@@ -1340,14 +1340,7 @@ class RNodeWizardViewModel
                 !state.isPairingRepairMode -> true
                 device.name != state.pairingRepairDeviceName -> false
                 expectedAddress != null -> expectedAddress.equals(device.address, ignoreCase = true)
-                else -> {
-                    val matchingAddresses =
-                        state.discoveredDevices
-                            .filter { it.name == state.pairingRepairDeviceName }
-                            .map { it.address.uppercase() }
-                            .distinct()
-                    !state.isScanning && matchingAddresses == listOf(device.address.uppercase())
-                }
+                else -> false
             }
         }
 

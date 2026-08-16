@@ -126,6 +126,7 @@ class DeviceDiscoveryStepTest {
                     isEditMode = true,
                     isPairingRepairMode = true,
                     pairingRepairDeviceName = "RNode E517",
+                    pairingRepairDeviceAddress = "AA:BB:CC:DD:EE:51",
                     selectedDevice = null,
                 ),
             )
@@ -147,6 +148,37 @@ class DeviceDiscoveryStepTest {
     }
 
     @Test
+    fun pairingRepair_withoutSavedIdentity_failsClosed() {
+        val sameNameDevice =
+            pairedBleDevice.copy(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:99",
+            )
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = "RNode E517",
+                    discoveredDevices = listOf(sameNameDevice),
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule
+            .onNodeWithText(
+                "This interface has no saved Bluetooth identity. " +
+                    "Open Edit, select the original RNode, and save once before using Repair.",
+            ).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hold USR for five seconds to enter pairing mode.").assertDoesNotExist()
+        composeTestRule.onNodeWithText("RNode E517").assertDoesNotExist()
+    }
+
+    @Test
     fun pairingRepair_showsOnlyConfiguredRNode() {
         val configuredDevice =
             pairedBleDevice.copy(
@@ -165,6 +197,7 @@ class DeviceDiscoveryStepTest {
                     isEditMode = true,
                     isPairingRepairMode = true,
                     pairingRepairDeviceName = "RNode E517",
+                    pairingRepairDeviceAddress = configuredDevice.address,
                     discoveredDevices = listOf(otherDevice, configuredDevice),
                 ),
             )
@@ -191,6 +224,7 @@ class DeviceDiscoveryStepTest {
                     isEditMode = true,
                     isPairingRepairMode = true,
                     pairingRepairDeviceName = "RNode E517",
+                    pairingRepairDeviceAddress = pairedDevice.address,
                     discoveredDevices = listOf(pairedDevice),
                     selectedDevice = pairedDevice,
                 ),

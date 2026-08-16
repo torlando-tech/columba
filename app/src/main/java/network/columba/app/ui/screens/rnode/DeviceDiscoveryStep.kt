@@ -315,11 +315,6 @@ private fun BluetoothDeviceDiscovery(
     viewModel: RNodeWizardViewModel,
     state: RNodeWizardState,
 ) {
-    val repairCandidateAddresses =
-        state.discoveredDevices
-            .filter { it.name == state.pairingRepairDeviceName }
-            .map { it.address.uppercase() }
-            .distinct()
     Column {
         if (state.isPairingRepairMode && state.selectedDevice?.isPaired != true) {
             Surface(
@@ -344,17 +339,25 @@ private fun BluetoothDeviceDiscovery(
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.rnode_pairing_repair_pairing_mode),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.rnode_pairing_repair_select_device),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
+                    if (state.pairingRepairDeviceAddress == null) {
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_repair_identity_unavailable),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_repair_pairing_mode),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_repair_select_device),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -594,13 +597,7 @@ private fun BluetoothDeviceDiscovery(
                     state.discoveredDevices.filter {
                         if (state.isPairingRepairMode) {
                             it.name == state.pairingRepairDeviceName &&
-                                (
-                                    state.pairingRepairDeviceAddress?.equals(it.address, ignoreCase = true)
-                                        ?: (
-                                            !state.isScanning &&
-                                                repairCandidateAddresses == listOf(it.address.uppercase())
-                                        )
-                                )
+                                state.pairingRepairDeviceAddress?.equals(it.address, ignoreCase = true) == true
                         } else {
                             // Ordinary edit mode shows the current device separately.
                             !(state.isEditMode && it.name == currentDevice?.name)

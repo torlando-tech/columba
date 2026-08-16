@@ -1829,7 +1829,7 @@ class RNodeWizardViewModelTest {
             stateFlow.update {
                 it.copy(
                     isScanning = false,
-                    discoveredDevices = listOf(configuredDevice, otherDevice),
+                    discoveredDevices = listOf(configuredDevice),
                 )
             }
             viewModel.selectDevice(configuredDevice)

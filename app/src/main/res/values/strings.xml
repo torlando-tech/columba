@@ -204,6 +204,7 @@
     <string name="rnode_pairing_repair_explanation">Android’s saved pairing for %1$s is missing or was rejected by the RNode.</string>
     <string name="rnode_pairing_repair_pairing_mode">Hold USR for five seconds to enter pairing mode.</string>
     <string name="rnode_pairing_repair_select_device">Then select the RNode below and complete Android’s pairing prompt.</string>
+    <string name="rnode_pairing_repair_identity_unavailable">This interface has no saved Bluetooth identity. Open Edit, select the original RNode, and save once before using Repair.</string>
 
     <!-- Precise location permission prompt (issue #855) -->
     <string name="enable_precise_location">Enable Precise Location</string>

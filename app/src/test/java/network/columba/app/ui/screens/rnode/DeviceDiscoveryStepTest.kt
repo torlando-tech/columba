@@ -98,6 +98,26 @@ class DeviceDiscoveryStepTest {
     }
 
     @Test
+    fun pairedDevice_showsAndroidScopedBondLabel() {
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    discoveredDevices = listOf(pairedBleDevice),
+                    isPairingInProgress = false,
+                    isAssociating = false,
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Paired in Android").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Paired").assertDoesNotExist()
+    }
+
+    @Test
     fun pairedDevice_cardClick_selectsDevice() {
         // Given
         val mockViewModel = mockk<RNodeWizardViewModel>()

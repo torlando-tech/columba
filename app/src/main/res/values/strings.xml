@@ -198,6 +198,9 @@
     <string name="view_interface_details">View interface details</string>
     <string name="interface_actions">Interface actions</string>
     <string name="edit_interface">Edit interface</string>
+    <string name="rnode_pairing_required">Pairing required</string>
+    <string name="repair_rnode_pairing">Repair</string>
+    <string name="rnode_paired_in_android">Paired in Android</string>
 
     <!-- Precise location permission prompt (issue #855) -->
     <string name="enable_precise_location">Enable Precise Location</string>

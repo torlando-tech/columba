@@ -207,6 +207,31 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
+    fun `debug info exposes pairing required reason for an RNode`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            debugInfoFlow.emit(
+                """{"interfaces":[{"name":"RNode E517 BLE","type":"RNode","online":false,"status_reason":"pairing_required"}]}""",
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                "pairing_required",
+                viewModel.state.value.transportInterfaces.single().statusReason,
+            )
+        }
+
+    @Test
     fun `replayed RNode status delta updates reconnect state without clearing siblings`() =
         runTest {
             coEvery { serviceProtocol.getInterfaceStats("Test RNode") } returns

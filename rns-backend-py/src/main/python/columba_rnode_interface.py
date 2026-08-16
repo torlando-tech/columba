@@ -350,6 +350,7 @@ class ColumbaRNodeInterface(Interface):
         self._max_reconnect_attempts = 30  # Try for ~5 minutes (30 * 10s)
         self._reconnect_interval = 10.0  # Seconds between reconnection attempts
         self._long_reconnect_interval = 15 * 60  # Indefinite low-duty recovery cadence
+        self.status_reason = None
 
         # Error / status callbacks (Kotlin sets these via setOnErrorReceived /
         # setOnOnlineStatusChanged on the constructed interface — optional).
@@ -533,8 +534,23 @@ class ColumbaRNodeInterface(Interface):
 
         # Connect via Kotlin bridge with specified mode
         if not self.kotlin_bridge.connect(self.target_device_name, self.connection_mode):
-            RNS.log(f"Failed to connect to {self.target_device_name}", RNS.LOG_ERROR)
+            failure_reason = None
+            try:
+                if hasattr(self.kotlin_bridge, "getLastConnectionFailure"):
+                    failure_reason = self.kotlin_bridge.getLastConnectionFailure()
+            except Exception as e:  # noqa: BLE001
+                RNS.log(f"Could not read RNode connection failure reason: {e}", RNS.LOG_DEBUG)
+            self.status_reason = failure_reason
+            if failure_reason == "pairing_required":
+                RNS.log(
+                    f"Pairing required for {self.target_device_name}; stopping automatic reconnect until the user repairs the bond",
+                    RNS.LOG_ERROR,
+                )
+            else:
+                RNS.log(f"Failed to connect to {self.target_device_name}", RNS.LOG_ERROR)
             return False
+
+        self.status_reason = None
 
         if self._reconnect_cancelled.is_set():
             self.kotlin_bridge.disconnect()
@@ -1490,6 +1506,15 @@ class ColumbaRNodeInterface(Interface):
                     return
                 else:
                     RNS.log(f"Reconnection attempt {attempt_label} failed", RNS.LOG_WARNING)
+                    if self.status_reason == "pairing_required":
+                        with self._reconnect_lock:
+                            self._reconnecting = False
+                            self._reconnect_requested = False
+                        RNS.log(
+                            f"Automatic reconnect stopped for {self.target_device_name}: pairing required",
+                            RNS.LOG_WARNING,
+                        )
+                        return
             except Exception as e:  # noqa: BLE001
                 RNS.log(f"Reconnection attempt {attempt_label} error: {e}", RNS.LOG_ERROR)
 

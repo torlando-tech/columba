@@ -88,6 +88,7 @@ data class TransportInterfaceInfo(
     val parentName: String?,
     val rxBytes: Long = 0,
     val txBytes: Long = 0,
+    val statusReason: String? = null,
 )
 
 /**
@@ -382,6 +383,7 @@ class InterfaceManagementViewModel
                         parentName = iface.optString("parent_name").takeIf { it.isNotBlank() },
                         rxBytes = iface.optLong("rx_bytes", 0L),
                         txBytes = iface.optLong("tx_bytes", 0L),
+                        statusReason = iface.optString("status_reason").takeIf { it.isNotBlank() },
                     ),
                 )
             }
@@ -460,6 +462,7 @@ class InterfaceManagementViewModel
                                 parentName = (ifaceMap["parent_name"] as? String)?.takeIf { it.isNotEmpty() },
                                 rxBytes = (ifaceMap["rx_bytes"] as? Number)?.toLong() ?: 0L,
                                 txBytes = (ifaceMap["tx_bytes"] as? Number)?.toLong() ?: 0L,
+                                statusReason = (ifaceMap["status_reason"] as? String)?.takeIf { it.isNotBlank() },
                             ),
                         )
                     }

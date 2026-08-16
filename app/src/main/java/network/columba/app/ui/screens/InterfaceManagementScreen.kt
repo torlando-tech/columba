@@ -310,6 +310,10 @@ fun InterfaceManagementScreen(
                         ) {
                             state.interfaces.forEach { iface ->
                                 val isOnline = state.interfaceOnlineStatus[iface.name]
+                                val statusReason =
+                                    state.transportInterfaces
+                                        .firstOrNull { it.name == iface.name }
+                                        ?.statusReason
                                 // Count spawned peers for this interface
                                 val spawnedPeers =
                                     state.transportInterfaces.filter {
@@ -332,8 +336,12 @@ fun InterfaceManagementScreen(
                                             blePermissionsGranted = state.blePermissionsGranted,
                                             currentTransport = state.currentTransport,
                                             isOnline = isOnline,
+                                            statusReason = statusReason,
                                             peerCount = spawnedPeers.size,
                                             onErrorClick = { errorDialogInterface = iface },
+                                            onRepairPairing = {
+                                                onNavigateToRNodeWizard(iface.id)
+                                            },
                                             onRequestPermissions =
                                                 if (iface.isBleInterface()) {
                                                     { permissionLauncher.launch(BlePermissionManager.getRequiredPermissions().toTypedArray()) }
@@ -588,14 +596,25 @@ fun InterfaceCard(
     blePermissionsGranted: Boolean,
     currentTransport: CurrentTransport = CurrentTransport.NONE,
     isOnline: Boolean? = null,
+    statusReason: String? = null,
     peerCount: Int = 0,
     onErrorClick: (() -> Unit)? = null,
     onRequestPermissions: (() -> Unit)? = null,
+    onRepairPairing: (() -> Unit)? = null,
 ) {
     val toggleEnabled = interfaceEntity.shouldToggleBeEnabled(bluetoothState, blePermissionsGranted)
     val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted, isOnline)
     val online = isOnline == true && interfaceEntity.enabled
-    val statusColor = if (online) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val pairingRequired =
+        interfaceEntity.enabled &&
+            interfaceEntity.type == "RNode" &&
+            statusReason == "pairing_required"
+    val statusColor =
+        when {
+            online -> Color(0xFF4CAF50)
+            pairingRequired -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        }
     val restrictionView = interfaceEntity.restrictionView(currentTransport)
     // Whether the card's right-column status reads "Restricted" instead of "Offline".
     // Only applies when the runtime filter would actually drop this interface — i.e.
@@ -702,6 +721,27 @@ fun InterfaceCard(
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             ) {
                                 Text("Grant", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                } else if (pairingRequired) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_required),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        if (onRepairPairing != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = onRepairPairing) {
+                                Text(stringResource(R.string.repair_rnode_pairing))
                             }
                         }
                     }

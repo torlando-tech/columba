@@ -1,11 +1,15 @@
 package network.columba.app.rns.host.rnode
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import io.mockk.clearAllMocks
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.Runs
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
@@ -53,7 +57,34 @@ class KotlinRNodeBridgeOnlineStatusTest {
         val bridge = KotlinRNodeBridge(mockContext)
 
         assertFalse(bridge.connect("RNode 1234", "ble"))
+        assertEquals("pairing_required", bridge.getLastConnectionFailure())
 
+        verify(exactly = 0) { mockBluetoothAdapter.bluetoothLeScanner }
+    }
+
+    @Test
+    fun `runtime BLE connect rejects a bond lost during GATT setup`() {
+        val device = mockk<BluetoothDevice>()
+        val gatt = mockk<BluetoothGatt>()
+        every { device.name } returns "RNode E517"
+        every { device.address } returns "9C:13:9E:A0:80:11"
+        every { device.bondState } returnsMany
+            listOf(
+                BluetoothDevice.BOND_BONDED,
+                BluetoothDevice.BOND_NONE,
+            )
+        every { device.connectGatt(mockContext, false, any(), BluetoothDevice.TRANSPORT_LE) } returns gatt
+        every { gatt.disconnect() } just Runs
+        every { gatt.close() } just Runs
+        every { mockBluetoothAdapter.bondedDevices } returns setOf(device)
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        assertFalse(bridge.connect("RNode E517", "ble"))
+        assertEquals("pairing_required", bridge.getLastConnectionFailure())
+
+        verify(exactly = 1) {
+            device.connectGatt(mockContext, false, any(), BluetoothDevice.TRANSPORT_LE)
+        }
         verify(exactly = 0) { mockBluetoothAdapter.bluetoothLeScanner }
     }
 

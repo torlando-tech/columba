@@ -119,6 +119,7 @@ class KotlinRNodeBridge(
         private const val BLE_CONNECT_TIMEOUT_MS = 15000L
         private const val BLE_CONNECT_MAX_RETRIES = 3
         private const val BLE_RETRY_DELAY_MS = 1000L
+        private const val CONNECTION_FAILURE_PAIRING_REQUIRED = "pairing_required"
 
         /**
          * Convert GATT status code to human-readable string for debugging.
@@ -181,6 +182,12 @@ class KotlinRNodeBridge(
 
     @Volatile
     private var bleMtuCallbackReceived = false // Tracks if onMtuChanged callback fired
+
+    @Volatile
+    private var bleSetupFailed = false
+
+    @Volatile
+    private var lastConnectionFailure: String? = null
 
     @Volatile
     private var bleRssi: Int = -100 // Current RSSI (-100 = unknown)
@@ -390,6 +397,7 @@ class KotlinRNodeBridge(
         deviceName: String,
         mode: String,
     ): Boolean {
+        lastConnectionFailure = null
         val requestedMode =
             when (mode.lowercase()) {
                 "classic", "spp", "rfcomm" -> RNodeConnectionMode.CLASSIC
@@ -535,6 +543,7 @@ class KotlinRNodeBridge(
             }
 
         if (device == null) {
+            markPairingRequired(deviceName, "device is no longer bonded in Android")
             Log.e(TAG, "████ RNODE BLE FAILED ████ paired device not found: $deviceName")
             return false
         }
@@ -551,6 +560,10 @@ class KotlinRNodeBridge(
                 return true
             }
 
+            if (lastConnectionFailure == CONNECTION_FAILURE_PAIRING_REQUIRED) {
+                return false
+            }
+
             if (attempt < BLE_CONNECT_MAX_RETRIES) {
                 Log.w(TAG, "BLE connection failed, will retry...")
             }
@@ -563,15 +576,22 @@ class KotlinRNodeBridge(
     /**
      * Single attempt to connect via BLE GATT.
      */
+    @Suppress("ReturnCount")
     private fun attemptBleConnection(
         device: BluetoothDevice,
         deviceName: String,
     ): Boolean {
         return try {
+            if (device.bondState != BluetoothDevice.BOND_BONDED) {
+                markPairingRequired(deviceName, "bond was lost before GATT setup")
+                return false
+            }
+
             // Reset BLE state
             bleConnected = false
             bleServicesDiscovered = false
             bleMtuCallbackReceived = false
+            bleSetupFailed = false
             bleRxCharacteristic = null
             bleTxCharacteristic = null
 
@@ -581,12 +601,21 @@ class KotlinRNodeBridge(
 
             // Wait for connection and service discovery
             val startTime = System.currentTimeMillis()
-            while (!bleServicesDiscovered && (System.currentTimeMillis() - startTime) < BLE_CONNECT_TIMEOUT_MS) {
+            while (
+                !bleServicesDiscovered &&
+                !bleSetupFailed &&
+                (System.currentTimeMillis() - startTime) < BLE_CONNECT_TIMEOUT_MS
+            ) {
+                if (device.bondState != BluetoothDevice.BOND_BONDED) {
+                    markPairingRequired(deviceName, "bond was lost during GATT setup")
+                    cleanupBle()
+                    return false
+                }
                 Thread.sleep(100)
             }
 
             if (!bleServicesDiscovered) {
-                Log.e(TAG, "BLE connection timeout - services not discovered")
+                Log.e(TAG, "BLE setup failed or timed out before secured notifications were ready")
                 cleanupBle()
                 return false
             }
@@ -671,10 +700,15 @@ class KotlinRNodeBridge(
                 gatt.discoverServices()
             }
 
+            @Suppress("ReturnCount")
             override fun onServicesDiscovered(
                 gatt: BluetoothGatt,
                 status: Int,
             ) {
+                if (gatt !== bluetoothGatt) {
+                    Log.w(TAG, "Ignoring service discovery from a stale GATT")
+                    return
+                }
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     Log.e(TAG, "Service discovery failed: $status")
                     return
@@ -700,16 +734,53 @@ class KotlinRNodeBridge(
                     return
                 }
 
-                // Enable notifications on TX characteristic (data from RNode)
-                gatt.setCharacteristicNotification(txChar, true)
+                // The transport is not ready until the protected notification
+                // descriptor write succeeds while the device remains bonded.
+                if (!gatt.setCharacteristicNotification(txChar, true)) {
+                    Log.e(TAG, "Failed to enable local NUS notifications")
+                    bleSetupFailed = true
+                    return
+                }
                 val descriptor = txChar.getDescriptor(CCCD_UUID)
-                descriptor?.let {
-                    it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    gatt.writeDescriptor(it)
+                if (descriptor == null) {
+                    Log.e(TAG, "NUS notification descriptor not found")
+                    bleSetupFailed = true
+                    return
+                }
+                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                if (!gatt.writeDescriptor(descriptor)) {
+                    Log.e(TAG, "Failed to start NUS notification descriptor write")
+                    bleSetupFailed = true
+                }
+            }
+
+            @Deprecated("Deprecated in API 33")
+            override fun onDescriptorWrite(
+                gatt: BluetoothGatt,
+                descriptor: BluetoothGattDescriptor,
+                status: Int,
+            ) {
+                if (gatt !== bluetoothGatt) {
+                    Log.w(TAG, "Ignoring descriptor write from a stale GATT")
+                    return
+                }
+                if (descriptor.uuid != CCCD_UUID) return
+
+                if (status == BluetoothGatt.GATT_SUCCESS && gatt.device.bondState == BluetoothDevice.BOND_BONDED) {
+                    bleServicesDiscovered = true
+                    Log.i(TAG, "BLE NUS secured notifications ready")
+                    return
                 }
 
-                bleServicesDiscovered = true
-                Log.i(TAG, "BLE NUS service ready")
+                if (
+                    status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION ||
+                    status == BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION ||
+                    gatt.device.bondState != BluetoothDevice.BOND_BONDED
+                ) {
+                    markPairingRequired(gatt.device.name ?: "RNode", "secured notification setup was rejected")
+                }
+                Log.e(TAG, "NUS notification descriptor write failed: ${gattStatusToString(status)}")
+                bleSetupFailed = true
             }
 
             override fun onCharacteristicChanged(
@@ -783,7 +854,19 @@ class KotlinRNodeBridge(
         bleConnected = false
         bleServicesDiscovered = false
         bleMtuCallbackReceived = false
+        bleSetupFailed = false
     }
+
+    private fun markPairingRequired(
+        deviceName: String,
+        detail: String,
+    ) {
+        lastConnectionFailure = CONNECTION_FAILURE_PAIRING_REQUIRED
+        Log.e(TAG, "Pairing required for $deviceName: $detail")
+    }
+
+    /** Machine-readable failure from the most recent connect attempt. */
+    fun getLastConnectionFailure(): String? = lastConnectionFailure
 
     /**
      * Disconnect from the current RNode device.

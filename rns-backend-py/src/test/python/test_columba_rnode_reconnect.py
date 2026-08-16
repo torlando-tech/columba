@@ -29,9 +29,11 @@ class BaseInterface:
 class ScriptedBleBridge:
     """Mock the Kotlin BLE bridge across successive transport attempts."""
 
-    def __init__(self, interface, connect_results):
+    def __init__(self, interface, connect_results, connection_failures=None):
         self.interface = interface
         self.connect_results = iter(connect_results)
+        self.connection_failures = iter(connection_failures or [])
+        self.last_connection_failure = None
         self.connect_calls = 0
         self.disconnect_calls = 0
         self.online_notifications = []
@@ -49,11 +51,15 @@ class ScriptedBleBridge:
         self.connect_calls += 1
         self.callback_registered_at_connect.append(self.connection_callback is not None)
         self.connected = next(self.connect_results)
+        self.last_connection_failure = next(self.connection_failures, None)
         if self.connected and self.connection_callback is not None:
             # Kotlin reports GATT transport readiness before Python finishes
             # RNode detection and radio configuration.
             self.connection_callback(True, device_name)
         return self.connected
+
+    def getLastConnectionFailure(self):
+        return self.last_connection_failure
 
     def setOnConnectionStateChanged(self, callback):
         self.connection_callback = callback
@@ -118,8 +124,10 @@ class RNodeReconnectTests(unittest.TestCase):
         interface._reconnect_cancelled = threading.Event()
         interface._max_reconnect_attempts = 3
         interface._reconnect_interval = 0
+        interface._long_reconnect_interval = 15 * 60
         interface.online = False
         interface.detected = False
+        interface.status_reason = None
         interface._on_online_status_changed = None
         interface.usb_bridge = None
         return interface
@@ -177,6 +185,26 @@ class RNodeReconnectTests(unittest.TestCase):
         self.assertEqual(3, bridge.connect_calls)
         self.assertEqual([0, 0, 15 * 60], waits)
         self.assertFalse(interface.online)
+        self.assertFalse(interface._reconnecting)
+
+    def test_ble_reconnect_stops_immediately_when_pairing_is_required(self):
+        interface = self.new_interface()
+        bridge = ScriptedBleBridge(
+            interface,
+            [False, False],
+            connection_failures=["pairing_required", "pairing_required"],
+        )
+        interface.kotlin_bridge = bridge
+
+        def unexpected_wait(delay):
+            self.fail(f"pairing-required failure waited {delay}s instead of stopping")
+
+        interface._wait_for_reconnect = unexpected_wait
+
+        interface._reconnection_loop()
+
+        self.assertEqual(1, bridge.connect_calls)
+        self.assertEqual("pairing_required", interface.status_reason)
         self.assertFalse(interface._reconnecting)
 
     def test_explicit_stop_cancels_reconnect_without_joining_itself(self):

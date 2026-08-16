@@ -1693,14 +1693,14 @@ class RNodeWizardViewModelTest {
             val entity =
                 InterfaceEntity(
                     id = interfaceId,
-                    name = "RNode Interface",
+                    name = "RNode LoRa",
                     type = "RNode",
                     enabled = true,
                     configJson = """{"connection_mode":"ble","target_device_name":"RNode E517"}""",
                 )
             val rnodeConfig =
                 InterfaceConfig.RNode(
-                    name = "RNode Interface",
+                    name = "RNode LoRa",
                     enabled = true,
                     connectionMode = "ble",
                     targetDeviceName = "RNode E517",

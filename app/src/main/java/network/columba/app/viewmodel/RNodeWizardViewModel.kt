@@ -243,6 +243,9 @@ data class RNodeWizardState(
         } else {
             interfaceName
         }
+
+    fun interfaceNameAfterSelecting(device: DiscoveredRNode): String =
+        if (isPairingRepairMode) interfaceName else defaultInterfaceNameFor(device)
 }
 
 /**
@@ -1308,7 +1311,7 @@ class RNodeWizardViewModel
                 it.copy(
                     selectedDevice = device,
                     showManualEntry = false,
-                    interfaceName = it.defaultInterfaceNameFor(device),
+                    interfaceName = it.interfaceNameAfterSelecting(device),
                 )
             }
         }
@@ -1446,7 +1449,7 @@ class RNodeWizardViewModel
                                     isAssociating = false,
                                     pendingAssociationIntent = null,
                                     showManualEntry = false,
-                                    interfaceName = it.defaultInterfaceNameFor(device),
+                                    interfaceName = it.interfaceNameAfterSelecting(device),
                                 )
                             }
                             // Cache the device type since it's now confirmed
@@ -3157,7 +3160,7 @@ class RNodeWizardViewModel
                                             state.discoveredDevices.map {
                                                 if (it.address == device.address) updatedDevice else it
                                             },
-                                        interfaceName = state.defaultInterfaceNameFor(updatedDevice),
+                                        interfaceName = state.interfaceNameAfterSelecting(updatedDevice),
                                     )
                                 }
                                 Log.d(TAG, "Pairing successful for ${device.name}")

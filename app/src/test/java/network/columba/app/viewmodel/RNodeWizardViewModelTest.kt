@@ -1693,14 +1693,14 @@ class RNodeWizardViewModelTest {
             val entity =
                 InterfaceEntity(
                     id = interfaceId,
-                    name = "RNode E517 BLE",
+                    name = "RNode Interface",
                     type = "RNode",
                     enabled = true,
                     configJson = """{"connection_mode":"ble","target_device_name":"RNode E517"}""",
                 )
             val rnodeConfig =
                 InterfaceConfig.RNode(
-                    name = "RNode E517 BLE",
+                    name = "RNode Interface",
                     enabled = true,
                     connectionMode = "ble",
                     targetDeviceName = "RNode E517",
@@ -1727,6 +1727,7 @@ class RNodeWizardViewModelTest {
             assertNull(state.selectedDevice)
 
             val (originalFrequency, originalBandwidth) = state.frequency to state.bandwidth
+            val originalInterfaceName = state.interfaceName
             val unpairedDevice =
                 DiscoveredRNode(
                     name = "RNode E517",
@@ -1772,6 +1773,7 @@ class RNodeWizardViewModelTest {
             assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
             assertEquals(originalFrequency, viewModel.state.value.frequency)
             assertEquals(originalBandwidth, viewModel.state.value.bandwidth)
+            assertEquals(originalInterfaceName, viewModel.state.value.interfaceName)
         }
 
     @Test

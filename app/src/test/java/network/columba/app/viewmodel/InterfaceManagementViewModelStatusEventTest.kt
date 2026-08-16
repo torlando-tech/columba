@@ -35,6 +35,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -161,6 +162,34 @@ class InterfaceManagementViewModelStatusEventTest {
 
             assertNotNull(viewModel)
             assertNotNull(viewModel.state.value)
+        }
+
+    @Test
+    fun `refreshExternalPendingChanges surfaces wizard changes on Python backend`() =
+        runTest {
+            every { configManager.checkAndClearPendingChanges() } returnsMany listOf(false, true)
+            every { rnsBackend.capabilities } returns
+                MutableStateFlow(
+                    BackendCapabilities.UNKNOWN.copy(
+                        interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = false),
+                    ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+            assertFalse(viewModel.state.value.hasPendingChanges)
+
+            viewModel.refreshExternalPendingChanges()
+
+            assertTrue(viewModel.state.value.hasPendingChanges)
+            verify(exactly = 2) { configManager.checkAndClearPendingChanges() }
         }
 
     @Test

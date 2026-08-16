@@ -61,6 +61,12 @@ class InterfaceManagementScreenTest {
         assertTrue(repairRequested)
     }
 
+    @Test
+    fun `pending restart suppresses stale runtime pairing reason`() {
+        assertEquals(null, effectiveRuntimeStatusReason("pairing_required", hasPendingChanges = true))
+        assertEquals("pairing_required", effectiveRuntimeStatusReason("pairing_required", hasPendingChanges = false))
+    }
+
     // ========== formatAddressWithPort Tests ==========
 
     @Test

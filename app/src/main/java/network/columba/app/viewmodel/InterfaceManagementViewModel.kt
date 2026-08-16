@@ -240,7 +240,7 @@ class InterfaceManagementViewModel
             loadInterfaces()
             observeBluetoothState()
             observeTransportChanges()
-            checkExternalPendingChanges()
+            refreshExternalPendingChanges()
             observeInterfaceStatusChanges()
             loadDiscoveredInterfacesCount()
         }
@@ -265,7 +265,7 @@ class InterfaceManagementViewModel
         /**
          * Check if there are pending changes set by external sources (e.g., RNode wizard).
          */
-        private fun checkExternalPendingChanges() {
+        fun refreshExternalPendingChanges() {
             if (configManager.checkAndClearPendingChanges()) {
                 Log.d(TAG, "Found pending changes from external source — hot-reloading")
                 syncNativeInterfaces()

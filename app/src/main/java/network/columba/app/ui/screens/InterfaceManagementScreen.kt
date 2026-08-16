@@ -68,6 +68,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -83,6 +84,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
@@ -113,6 +117,18 @@ fun InterfaceManagementScreen(
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val configState by viewModel.configState.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.refreshExternalPendingChanges()
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // State for delete confirmation dialog
     var interfaceToDelete by remember { mutableStateOf<InterfaceEntity?>(null) }
@@ -312,9 +328,13 @@ fun InterfaceManagementScreen(
                             state.interfaces.forEach { iface ->
                                 val isOnline = state.interfaceOnlineStatus[iface.name]
                                 val statusReason =
-                                    state.transportInterfaces
-                                        .firstOrNull { it.name == iface.name }
-                                        ?.statusReason
+                                    effectiveRuntimeStatusReason(
+                                        statusReason =
+                                            state.transportInterfaces
+                                                .firstOrNull { it.name == iface.name }
+                                                ?.statusReason,
+                                        hasPendingChanges = state.hasPendingChanges,
+                                    )
                                 // Count spawned peers for this interface
                                 val spawnedPeers =
                                     state.transportInterfaces.filter {
@@ -583,6 +603,11 @@ fun InterfaceManagementScreen(
         )
     }
 }
+
+internal fun effectiveRuntimeStatusReason(
+    statusReason: String?,
+    hasPendingChanges: Boolean,
+): String? = statusReason.takeUnless { hasPendingChanges }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

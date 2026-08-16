@@ -142,6 +142,34 @@ class DeviceDiscoveryStepTest {
     }
 
     @Test
+    fun pairingRepair_afterSuccessfulBond_hidesRecoveryInstructions() {
+        val pairedDevice =
+            pairedBleDevice.copy(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:51",
+            )
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = "RNode E517",
+                    discoveredDevices = listOf(pairedDevice),
+                    selectedDevice = pairedDevice,
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Pairing required").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Hold USR for five seconds to enter pairing mode.").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Paired in Android").assertIsDisplayed()
+    }
+
+    @Test
     fun pairedDevice_cardClick_selectsDevice() {
         // Given
         val mockViewModel = mockk<RNodeWizardViewModel>()

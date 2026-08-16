@@ -314,7 +314,7 @@ private fun BluetoothDeviceDiscovery(
     state: RNodeWizardState,
 ) {
     Column {
-        if (state.isPairingRepairMode) {
+        if (state.isPairingRepairMode && state.selectedDevice?.isPaired != true) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer,
                 shape = MaterialTheme.shapes.medium,

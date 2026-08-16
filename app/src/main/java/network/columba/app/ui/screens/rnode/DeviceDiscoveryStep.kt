@@ -134,43 +134,45 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        // Connection type selector
-        Text(
-            "Connection Method",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = state.connectionType == RNodeConnectionType.BLUETOOTH,
-                onClick = { viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH) },
-                label = { Text("Bluetooth") },
-                leadingIcon = {
-                    Icon(Icons.Default.Bluetooth, contentDescription = null, Modifier.size(18.dp))
-                },
+        if (!state.isPairingRepairMode) {
+            // Connection type selector
+            Text(
+                "Connection Method",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FilterChip(
-                selected = state.connectionType == RNodeConnectionType.TCP_WIFI,
-                onClick = { viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI) },
-                label = { Text("WiFi / TCP") },
-                leadingIcon = {
-                    Icon(Icons.Default.Wifi, contentDescription = null, Modifier.size(18.dp))
-                },
-            )
-            FilterChip(
-                selected = state.connectionType == RNodeConnectionType.USB_SERIAL,
-                onClick = { viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL) },
-                label = { Text("USB") },
-                leadingIcon = {
-                    Icon(Icons.Default.Usb, contentDescription = null, Modifier.size(18.dp))
-                },
-            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = state.connectionType == RNodeConnectionType.BLUETOOTH,
+                    onClick = { viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH) },
+                    label = { Text("Bluetooth") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Bluetooth, contentDescription = null, Modifier.size(18.dp))
+                    },
+                )
+                FilterChip(
+                    selected = state.connectionType == RNodeConnectionType.TCP_WIFI,
+                    onClick = { viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI) },
+                    label = { Text("WiFi / TCP") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Wifi, contentDescription = null, Modifier.size(18.dp))
+                    },
+                )
+                FilterChip(
+                    selected = state.connectionType == RNodeConnectionType.USB_SERIAL,
+                    onClick = { viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL) },
+                    label = { Text("USB") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Usb, contentDescription = null, Modifier.size(18.dp))
+                    },
+                )
+            }
+            Spacer(Modifier.height(16.dp))
         }
-        Spacer(Modifier.height(16.dp))
 
         // Show content based on connection type
         when (state.connectionType) {
@@ -611,32 +613,34 @@ private fun BluetoothDeviceDiscovery(
                 )
             }
 
-            // Manual entry option
-            item {
-                OutlinedCard(
-                    onClick = { viewModel.showManualEntry() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            if (!state.isPairingRepairMode) {
+                // Manual entry option
+                item {
+                    OutlinedCard(
+                        onClick = { viewModel.showManualEntry() },
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                "Enter device manually",
-                                style = MaterialTheme.typography.titleMedium,
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Text(
-                                "If your device isn't listed",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    "Enter device manually",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "If your device isn't listed",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

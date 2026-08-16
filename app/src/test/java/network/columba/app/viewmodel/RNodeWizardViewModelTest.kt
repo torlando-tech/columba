@@ -1673,6 +1673,9 @@ class RNodeWizardViewModelTest {
             assertEquals(WizardStep.DEVICE_DISCOVERY, repairState.currentStep)
             assertNull(repairState.selectedDevice)
 
+            viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL)
+            viewModel.showManualEntry()
+            viewModel.preselectUsbDevice(1, 2, 3, "Other RNode")
             viewModel.startUsbAssistedPairing()
             runCurrent()
             assertEquals(repairState, viewModel.state.value)

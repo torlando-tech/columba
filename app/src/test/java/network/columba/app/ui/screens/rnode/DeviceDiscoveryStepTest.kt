@@ -139,8 +139,10 @@ class DeviceDiscoveryStepTest {
         composeTestRule.onNodeWithText("Hold USR for five seconds to enter pairing mode.").assertIsDisplayed()
         composeTestRule.onNodeWithText("Heltec V3", substring = true).assertDoesNotExist()
         composeTestRule.onNodeWithText("Current Device").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Connection Method").assertDoesNotExist()
         composeTestRule.onRoot().performTouchInput { swipeUp() }
         composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Enter device manually").assertDoesNotExist()
         composeTestRule.onNodeWithText("Pair via USB").assertDoesNotExist()
     }
 

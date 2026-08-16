@@ -1543,6 +1543,7 @@ class RNodeWizardViewModel
         }
 
         fun showManualEntry() {
+            if (_state.value.isPairingRepairMode) return
             _state.update {
                 it.copy(
                     showManualEntry = true,
@@ -1592,6 +1593,7 @@ class RNodeWizardViewModel
          * Clears device selection when switching modes.
          */
         fun setConnectionType(type: RNodeConnectionType) {
+            if (_state.value.isPairingRepairMode) return
             _state.update {
                 // Auto-generate interface name based on connection type if not manually customized
                 // Update if it's the default or matches an auto-generated pattern
@@ -1786,6 +1788,7 @@ class RNodeWizardViewModel
          * If permission is needed, requests it first.
          */
         fun selectUsbDevice(device: network.columba.app.data.model.DiscoveredUsbDevice) {
+            if (_state.value.isPairingRepairMode) return
             if (device.hasPermission) {
                 _state.update {
                     // Auto-generate interface name if user hasn't customized it
@@ -1860,6 +1863,7 @@ class RNodeWizardViewModel
             productId: Int,
             deviceName: String,
         ) {
+            if (_state.value.isPairingRepairMode) return
             Log.d(TAG, "Pre-selecting USB device: $deviceId ($deviceName)")
 
             // Switch to USB connection type

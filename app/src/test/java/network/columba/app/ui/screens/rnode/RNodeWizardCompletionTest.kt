@@ -36,7 +36,7 @@ class RNodeWizardCompletionTest {
     @Test
     fun repairModePendingConfig_doesNotExposeOrdinaryWizard() {
         val viewModel = mockk<RNodeWizardViewModel>(relaxed = true)
-        every { viewModel.state } returns MutableStateFlow(RNodeWizardState())
+        every { viewModel.state } returns MutableStateFlow(RNodeWizardState(isPairingRepairMode = true))
 
         composeRule.setContent {
             RNodeWizardScreen(

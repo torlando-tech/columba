@@ -75,7 +75,7 @@ fun RNodeWizardScreen(
         }
     }
 
-    if (repairPairing && !state.isPairingRepairMode) {
+    if (repairPairing && (!state.isPairingRepairMode || state.pairingRepairDeviceName.isNullOrBlank())) {
         Scaffold(
             topBar = {
                 TopAppBar(

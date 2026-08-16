@@ -1698,18 +1698,34 @@ class RNodeWizardViewModelTest {
             assertEquals("RNode E517", state.pairingRepairDeviceName)
             assertNull(state.selectedDevice)
 
-            viewModel.selectDevice(
+            val originalFrequency = state.frequency
+            val originalBandwidth = state.bandwidth
+            val unpairedDevice =
                 DiscoveredRNode(
                     name = "RNode E517",
                     address = "AA:BB:CC:DD:EE:FF",
                     type = BluetoothType.BLE,
                     rssi = null,
-                    isPaired = true,
-                ),
-            )
+                    isPaired = false,
+                )
+
+            viewModel.selectDevice(unpairedDevice)
+            assertFalse(viewModel.canProceed())
+            viewModel.goToNextStep()
+            assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
+
+            viewModel.selectDevice(unpairedDevice.copy(isPaired = true))
+            assertTrue(viewModel.canProceed())
             viewModel.goToNextStep()
 
             assertEquals(WizardStep.REVIEW_CONFIGURE, viewModel.state.value.currentStep)
+            assertTrue(viewModel.state.value.skippedRegionSelection)
+
+            viewModel.goToPreviousStep()
+
+            assertEquals(WizardStep.DEVICE_DISCOVERY, viewModel.state.value.currentStep)
+            assertEquals(originalFrequency, viewModel.state.value.frequency)
+            assertEquals(originalBandwidth, viewModel.state.value.bandwidth)
         }
 
     @Test

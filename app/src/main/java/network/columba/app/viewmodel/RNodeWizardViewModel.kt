@@ -578,6 +578,13 @@ class RNodeWizardViewModel
 
         fun goToNextStep() {
             val currentState = _state.value
+            if (
+                currentState.currentStep == WizardStep.DEVICE_DISCOVERY &&
+                currentState.isPairingRepairMode &&
+                currentState.selectedDevice?.isPaired != true
+            ) {
+                return
+            }
             val nextStep =
                 when (currentState.currentStep) {
                     WizardStep.DEVICE_DISCOVERY -> {
@@ -585,6 +592,7 @@ class RNodeWizardViewModel
                         stopRssiPolling()
                         // Repair preserves the existing radio configuration and only replaces the bond.
                         if (currentState.isPairingRepairMode) {
+                            _state.update { it.copy(skippedRegionSelection = true) }
                             WizardStep.REVIEW_CONFIGURE
                         } else if (currentState.hasPendingParams) {
                             _state.update { it.copy(skippedRegionSelection = true) }
@@ -641,7 +649,9 @@ class RNodeWizardViewModel
                     WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
                     WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
                     WizardStep.REVIEW_CONFIGURE ->
-                        if (currentState.skippedRegionSelection) {
+                        if (currentState.isPairingRepairMode) {
+                            WizardStep.DEVICE_DISCOVERY
+                        } else if (currentState.skippedRegionSelection) {
                             // Came from discovered interface params: go back to device selection
                             WizardStep.DEVICE_DISCOVERY
                         } else if (currentState.isCustomMode || currentState.selectedPreset != null) {
@@ -667,20 +677,7 @@ class RNodeWizardViewModel
         fun canProceed(): Boolean {
             val state = _state.value
             return when (state.currentStep) {
-                WizardStep.DEVICE_DISCOVERY ->
-                    when (state.connectionType) {
-                        RNodeConnectionType.TCP_WIFI ->
-                            state.tcpHost.isNotBlank()
-                        RNodeConnectionType.BLUETOOTH ->
-                            state.selectedDevice != null ||
-                                (
-                                    state.showManualEntry &&
-                                        state.manualDeviceName.isNotBlank() &&
-                                        state.manualDeviceNameError == null
-                                )
-                        RNodeConnectionType.USB_SERIAL ->
-                            state.selectedUsbDevice != null && state.selectedUsbDevice.hasPermission
-                    }
+                WizardStep.DEVICE_DISCOVERY -> canProceedFromDeviceDiscovery(state)
                 WizardStep.REGION_SELECTION ->
                     state.selectedFrequencyRegion != null || state.isCustomMode || state.selectedPreset != null
                 WizardStep.MODEM_PRESET ->
@@ -695,6 +692,26 @@ class RNodeWizardViewModel
                     }
             }
         }
+
+        private fun canProceedFromDeviceDiscovery(state: RNodeWizardState): Boolean =
+            when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> state.tcpHost.isNotBlank()
+                RNodeConnectionType.BLUETOOTH -> canProceedWithBluetooth(state)
+                RNodeConnectionType.USB_SERIAL ->
+                    state.selectedUsbDevice != null && state.selectedUsbDevice.hasPermission
+            }
+
+        private fun canProceedWithBluetooth(state: RNodeWizardState): Boolean =
+            if (state.isPairingRepairMode) {
+                state.selectedDevice?.isPaired == true
+            } else {
+                state.selectedDevice != null ||
+                    (
+                        state.showManualEntry &&
+                            state.manualDeviceName.isNotBlank() &&
+                            state.manualDeviceNameError == null
+                    )
+            }
 
         private fun applyFrequencyRegionSettings() {
             val region = _state.value.selectedFrequencyRegion ?: return

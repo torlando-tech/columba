@@ -31,6 +31,7 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.PendingInterfaceChanges
 import network.columba.app.service.manager.InterfaceTransportObserver
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -66,7 +67,7 @@ class InterfaceManagementViewModelNetworkRestrictionTest {
         every { interfaceRepository.enabledInterfaces } returns flowOf(emptyList())
 
         configManager = mockk()
-        every { configManager.checkAndClearPendingChanges() } returns false
+        every { configManager.consumePendingChanges() } returns PendingInterfaceChanges()
 
         bleStatusRepository = mockk()
         every { bleStatusRepository.getConnectedPeersFlow() } returns

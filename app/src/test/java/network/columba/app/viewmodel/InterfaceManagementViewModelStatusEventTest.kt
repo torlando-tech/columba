@@ -15,6 +15,7 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.PendingInterfaceChanges
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
@@ -111,7 +112,7 @@ class InterfaceManagementViewModelStatusEventTest {
             flowOf(BleConnectionsState.Success(emptyList()))
 
         // Mock InterfaceConfigManager
-        every { configManager.checkAndClearPendingChanges() } returns false
+        every { configManager.consumePendingChanges() } returns PendingInterfaceChanges()
 
         // Mock event flows for NativeReticulumProtocol (event-driven updates)
         interfaceStatusFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
@@ -167,7 +168,11 @@ class InterfaceManagementViewModelStatusEventTest {
     @Test
     fun `refreshExternalPendingChanges surfaces wizard changes on Python backend`() =
         runTest {
-            every { configManager.checkAndClearPendingChanges() } returnsMany listOf(false, true)
+            every { configManager.consumePendingChanges() } returnsMany
+                listOf(
+                    PendingInterfaceChanges(),
+                    PendingInterfaceChanges(hasPendingChanges = true, interfaceIds = setOf(42)),
+                )
             every { rnsBackend.capabilities } returns
                 MutableStateFlow(
                     BackendCapabilities.UNKNOWN.copy(
@@ -189,7 +194,8 @@ class InterfaceManagementViewModelStatusEventTest {
             viewModel.refreshExternalPendingChanges()
 
             assertTrue(viewModel.state.value.hasPendingChanges)
-            verify(exactly = 2) { configManager.checkAndClearPendingChanges() }
+            assertEquals(setOf(42L), viewModel.state.value.pendingInterfaceIds)
+            verify(exactly = 2) { configManager.consumePendingChanges() }
         }
 
     @Test

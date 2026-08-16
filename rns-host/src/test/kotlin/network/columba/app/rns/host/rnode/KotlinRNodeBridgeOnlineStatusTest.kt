@@ -63,6 +63,14 @@ class KotlinRNodeBridgeOnlineStatusTest {
     }
 
     @Test
+    fun `atomic connect result carries pairing required reason`() {
+        every { mockBluetoothAdapter.bondedDevices } returns emptySet()
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        assertEquals("pairing_required", bridge.connectWithResult("RNode 1234", "ble"))
+    }
+
+    @Test
     fun `runtime BLE connect rejects a bond lost during GATT setup`() {
         val device = mockk<BluetoothDevice>()
         val gatt = mockk<BluetoothGatt>()

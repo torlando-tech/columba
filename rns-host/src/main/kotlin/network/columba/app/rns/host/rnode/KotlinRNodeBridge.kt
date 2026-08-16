@@ -119,6 +119,8 @@ class KotlinRNodeBridge(
         private const val BLE_CONNECT_TIMEOUT_MS = 15000L
         private const val BLE_CONNECT_MAX_RETRIES = 3
         private const val BLE_RETRY_DELAY_MS = 1000L
+        private const val CONNECTION_RESULT_CONNECTED = "connected"
+        private const val CONNECTION_RESULT_FAILED = "failed"
         private const val CONNECTION_FAILURE_PAIRING_REQUIRED = "pairing_required"
 
         /**
@@ -392,6 +394,7 @@ class KotlinRNodeBridge(
      * @param mode Connection mode: "classic" for Bluetooth Classic, "ble" for BLE
      * @return true if connection successful, false otherwise
      */
+    @Synchronized
     @Suppress("ReturnCount")
     fun connect(
         deviceName: String,
@@ -452,6 +455,24 @@ class KotlinRNodeBridge(
             RNodeConnectionMode.BLE -> connectBle(deviceName, adapter)
         }
     }
+
+    /**
+     * Connect and return its machine-readable result as one synchronized operation.
+     *
+     * The bridge is shared by every Python RNode interface. Returning the result
+     * atomically prevents another interface from clearing or replacing the failure
+     * reason between a boolean connect result and a follow-up getter call.
+     */
+    @Synchronized
+    fun connectWithResult(
+        deviceName: String,
+        mode: String,
+    ): String =
+        if (connect(deviceName, mode)) {
+            CONNECTION_RESULT_CONNECTED
+        } else {
+            lastConnectionFailure ?: CONNECTION_RESULT_FAILED
+        }
 
     /**
      * Connect via Bluetooth Classic (SPP/RFCOMM).

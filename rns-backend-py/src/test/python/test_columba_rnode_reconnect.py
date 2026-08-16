@@ -58,6 +58,11 @@ class ScriptedBleBridge:
             self.connection_callback(True, device_name)
         return self.connected
 
+    def connectWithResult(self, device_name, mode):
+        return "connected" if self.connect(device_name, mode) else (
+            self.last_connection_failure or "failed"
+        )
+
     def getLastConnectionFailure(self):
         return self.last_connection_failure
 
@@ -206,6 +211,25 @@ class RNodeReconnectTests(unittest.TestCase):
         self.assertEqual(1, bridge.connect_calls)
         self.assertEqual("pairing_required", interface.status_reason)
         self.assertFalse(interface._reconnecting)
+
+    def test_ble_reconnect_uses_failure_returned_atomically_with_connect(self):
+        interface = self.new_interface()
+        bridge = ScriptedBleBridge(
+            interface,
+            [False],
+            connection_failures=["pairing_required"],
+        )
+        bridge.getLastConnectionFailure = mock.Mock(return_value=None)
+        interface.kotlin_bridge = bridge
+        interface._wait_for_reconnect = lambda delay: self.fail(
+            f"atomic pairing-required result waited {delay}s instead of stopping"
+        )
+
+        interface._reconnection_loop()
+
+        self.assertEqual(1, bridge.connect_calls)
+        self.assertEqual("pairing_required", interface.status_reason)
+        bridge.getLastConnectionFailure.assert_not_called()
 
     def test_explicit_stop_cancels_reconnect_without_joining_itself(self):
         interface = self.new_interface()

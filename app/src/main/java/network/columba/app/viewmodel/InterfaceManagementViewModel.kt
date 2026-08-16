@@ -51,6 +51,7 @@ data class InterfaceManagementState(
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val hasPendingChanges: Boolean = false,
+    val pendingInterfaceIds: Set<Long> = emptySet(),
     val isApplyingChanges: Boolean = false,
     val applyChangesError: String? = null,
     val showBlePermissionRequest: Boolean = false,
@@ -266,8 +267,12 @@ class InterfaceManagementViewModel
          * Check if there are pending changes set by external sources (e.g., RNode wizard).
          */
         fun refreshExternalPendingChanges() {
-            if (configManager.checkAndClearPendingChanges()) {
+            val pendingChanges = configManager.consumePendingChanges()
+            if (pendingChanges.hasPendingChanges) {
                 Log.d(TAG, "Found pending changes from external source — hot-reloading")
+                _state.update {
+                    it.copy(pendingInterfaceIds = it.pendingInterfaceIds + pendingChanges.interfaceIds)
+                }
                 syncNativeInterfaces()
             }
         }
@@ -1296,6 +1301,7 @@ class InterfaceManagementViewModel
                                     _state.value.copy(
                                         isApplyingChanges = false,
                                         hasPendingChanges = false,
+                                        pendingInterfaceIds = emptySet(),
                                         applyChangesError = null,
                                     )
                                 // Force-refresh the interface status list shortly
@@ -1322,6 +1328,7 @@ class InterfaceManagementViewModel
                         _state.value =
                             _state.value.copy(
                                 hasPendingChanges = false,
+                                pendingInterfaceIds = emptySet(),
                                 isApplyingChanges = false,
                             )
                         showSuccess("Configuration applied successfully")

@@ -22,6 +22,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -113,7 +114,7 @@ class RNodeWizardViewModelTest {
         every { interfaceRepository.allInterfaces } returns flowOf(emptyList())
 
         // Mock configManager.setPendingChanges() which is called after successful save
-        every { configManager.setPendingChanges(any()) } just Runs
+        every { configManager.setPendingChanges(any(), any()) } just Runs
     }
 
     @After
@@ -2273,6 +2274,7 @@ class RNodeWizardViewModelTest {
             advanceUntilIdle()
 
             assertTrue("updateInterface should be called in edit mode", updateCalled)
+            verify(exactly = 1) { configManager.setPendingChanges(true, interfaceId) }
             viewModel.state.test {
                 val state = awaitItem()
                 assertTrue("save should succeed", state.saveSuccess)

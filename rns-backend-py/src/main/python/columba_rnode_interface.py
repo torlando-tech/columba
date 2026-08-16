@@ -532,14 +532,30 @@ class ColumbaRNodeInterface(Interface):
         except Exception as e:  # noqa: BLE001
             RNS.log(f"ColumbaRNodeInterface: optional callback registration failed (non-fatal): {e}", RNS.LOG_DEBUG)
 
-        # Connect via Kotlin bridge with specified mode
-        if not self.kotlin_bridge.connect(self.target_device_name, self.connection_mode):
-            failure_reason = None
+        # Connect and consume its reason atomically. The Kotlin bridge is shared by
+        # every Python RNode interface, so a separate connect()/failure getter pair
+        # can be overwritten by another interface starting concurrently.
+        failure_reason = None
+        if hasattr(self.kotlin_bridge, "connectWithResult"):
+            connection_result = self.kotlin_bridge.connectWithResult(
+                self.target_device_name,
+                self.connection_mode,
+            )
+            connected = connection_result == "connected"
+            if not connected and connection_result != "failed":
+                failure_reason = connection_result
+        else:
+            connected = self.kotlin_bridge.connect(
+                self.target_device_name,
+                self.connection_mode,
+            )
             try:
-                if hasattr(self.kotlin_bridge, "getLastConnectionFailure"):
+                if not connected and hasattr(self.kotlin_bridge, "getLastConnectionFailure"):
                     failure_reason = self.kotlin_bridge.getLastConnectionFailure()
             except Exception as e:  # noqa: BLE001
                 RNS.log(f"Could not read RNode connection failure reason: {e}", RNS.LOG_DEBUG)
+
+        if not connected:
             self.status_reason = failure_reason
             if failure_reason == "pairing_required":
                 RNS.log(

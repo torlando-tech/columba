@@ -3582,8 +3582,10 @@ class RNodeWizardViewModel
                         Log.d(TAG, "Created new RNode interface")
                     }
 
-                    // Mark pending changes for InterfaceManagementScreen to show "Apply" button
-                    configManager.setPendingChanges(true)
+                    // Mark pending changes for InterfaceManagementScreen to show "Apply" button.
+                    // Preserve the edited interface ID so only its pre-update runtime
+                    // diagnostic is considered stale before Apply & Restart.
+                    configManager.setPendingChanges(true, state.editingInterfaceId)
 
                     _state.update { it.copy(saveSuccess = true, isSaving = false) }
                 } catch (e: Exception) {

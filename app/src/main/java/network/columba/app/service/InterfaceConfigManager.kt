@@ -30,6 +30,11 @@ import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class PendingInterfaceChanges(
+    val hasPendingChanges: Boolean = false,
+    val interfaceIds: Set<Long> = emptySet(),
+)
+
 /**
  * Manager for applying interface configuration changes to the running Reticulum instance.
  *
@@ -66,6 +71,9 @@ class InterfaceConfigManager
         companion object {
             private const val TAG = "InterfaceConfigManager"
             private const val APPLY_CHANGES_TIMEOUT_MS = 60_000L
+            private const val PREFS_NAME = "columba_prefs"
+            private const val KEY_HAS_PENDING_INTERFACE_CHANGES = "has_pending_interface_changes"
+            private const val KEY_PENDING_INTERFACE_IDS = "pending_interface_ids"
         }
 
         /**
@@ -461,25 +469,45 @@ class InterfaceConfigManager
          * Used when interfaces are modified outside of InterfaceManagementViewModel
          * (e.g., from RNode wizard).
          */
-        fun setPendingChanges(hasPending: Boolean) {
-            context
-                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean("has_pending_interface_changes", hasPending)
-                .apply()
+        @Synchronized
+        fun setPendingChanges(
+            hasPending: Boolean,
+            interfaceId: Long? = null,
+        ) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val editor = prefs.edit().putBoolean(KEY_HAS_PENDING_INTERFACE_CHANGES, hasPending)
+            if (!hasPending) {
+                editor.remove(KEY_PENDING_INTERFACE_IDS)
+            } else if (interfaceId != null) {
+                val pendingIds = prefs.getStringSet(KEY_PENDING_INTERFACE_IDS, emptySet()).orEmpty().toMutableSet()
+                pendingIds += interfaceId.toString()
+                editor.putStringSet(KEY_PENDING_INTERFACE_IDS, pendingIds)
+            }
+            editor.apply()
         }
 
         /**
-         * Check if there are pending interface changes and clear the flag.
-         * @return true if there were pending changes, false otherwise
+         * Consume externally written pending state, including the identities of
+         * interfaces whose pre-update runtime diagnostics are now stale.
          */
-        fun checkAndClearPendingChanges(): Boolean {
-            val prefs = context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-            val hasPending = prefs.getBoolean("has_pending_interface_changes", false)
-            if (hasPending) {
-                prefs.edit().putBoolean("has_pending_interface_changes", false).apply()
+        @Synchronized
+        fun consumePendingChanges(): PendingInterfaceChanges {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val hasPending = prefs.getBoolean(KEY_HAS_PENDING_INTERFACE_CHANGES, false)
+            val interfaceIds =
+                prefs
+                    .getStringSet(KEY_PENDING_INTERFACE_IDS, emptySet())
+                    .orEmpty()
+                    .mapNotNull(String::toLongOrNull)
+                    .toSet()
+            if (hasPending || interfaceIds.isNotEmpty()) {
+                prefs
+                    .edit()
+                    .putBoolean(KEY_HAS_PENDING_INTERFACE_CHANGES, false)
+                    .remove(KEY_PENDING_INTERFACE_IDS)
+                    .apply()
             }
-            return hasPending
+            return PendingInterfaceChanges(hasPending, interfaceIds)
         }
 
         /**

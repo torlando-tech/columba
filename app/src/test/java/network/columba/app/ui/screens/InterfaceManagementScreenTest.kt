@@ -62,9 +62,34 @@ class InterfaceManagementScreenTest {
     }
 
     @Test
-    fun `pending restart suppresses stale runtime pairing reason`() {
-        assertEquals(null, effectiveRuntimeStatusReason("pairing_required", hasPendingChanges = true))
-        assertEquals("pairing_required", effectiveRuntimeStatusReason("pairing_required", hasPendingChanges = false))
+    fun `pending restart suppresses stale runtime pairing reason only for changed interface`() {
+        assertEquals(
+            null,
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = true,
+                pendingInterfaceIds = setOf(42),
+            ),
+        )
+        assertEquals(
+            "pairing_required",
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = true,
+                pendingInterfaceIds = setOf(99),
+            ),
+        )
+        assertEquals(
+            "pairing_required",
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = false,
+                pendingInterfaceIds = setOf(42),
+            ),
+        )
     }
 
     // ========== formatAddressWithPort Tests ==========

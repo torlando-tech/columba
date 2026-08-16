@@ -333,7 +333,9 @@ fun InterfaceManagementScreen(
                                             state.transportInterfaces
                                                 .firstOrNull { it.name == iface.name }
                                                 ?.statusReason,
+                                        interfaceId = iface.id,
                                         hasPendingChanges = state.hasPendingChanges,
+                                        pendingInterfaceIds = state.pendingInterfaceIds,
                                     )
                                 // Count spawned peers for this interface
                                 val spawnedPeers =
@@ -606,8 +608,10 @@ fun InterfaceManagementScreen(
 
 internal fun effectiveRuntimeStatusReason(
     statusReason: String?,
+    interfaceId: Long,
     hasPendingChanges: Boolean,
-): String? = statusReason.takeUnless { hasPendingChanges }
+    pendingInterfaceIds: Set<Long>,
+): String? = statusReason.takeUnless { hasPendingChanges && interfaceId in pendingInterfaceIds }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

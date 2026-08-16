@@ -600,7 +600,11 @@ private fun BluetoothDeviceDiscovery(
                                 state.pairingRepairDeviceAddress?.equals(it.address, ignoreCase = true) == true
                         } else {
                             // Ordinary edit mode shows the current device separately.
-                            !(state.isEditMode && it.name == currentDevice?.name)
+                            !(
+                                state.isEditMode &&
+                                    currentDevice != null &&
+                                    it.address.equals(currentDevice.address, ignoreCase = true)
+                            )
                         }
                     },
                 key = { it.address },

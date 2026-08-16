@@ -1671,6 +1671,37 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
+    fun `ordinary edit legacy RNode requires explicit device selection`() =
+        runViewModelTest {
+            val interfaceId = 22L
+            val entity = InterfaceEntity(interfaceId, "Legacy RNode", "RNode", true, "{}")
+            val config =
+                InterfaceConfig.RNode(
+                    name = "Legacy RNode",
+                    targetDeviceName = "RNode SAME",
+                    connectionMode = "ble",
+                )
+            coEvery { interfaceRepository.getInterfaceById(interfaceId) } returns flowOf(entity)
+            coEvery { interfaceRepository.entityToConfig(entity) } returns config
+
+            viewModel.loadExistingConfig(interfaceId)
+            advanceUntilIdle()
+
+            assertNull(viewModel.state.value.selectedDevice)
+            val explicitlySelected =
+                DiscoveredRNode(
+                    name = "RNode SAME",
+                    address = "AA:BB:CC:DD:EE:22",
+                    type = BluetoothType.BLE,
+                    rssi = -50,
+                    isPaired = false,
+                )
+            viewModel.selectDevice(explicitlySelected)
+
+            assertEquals(explicitlySelected, viewModel.state.value.selectedDevice)
+        }
+
+    @Test
     fun `pairing repair latches before config load`() =
         runViewModelTest {
             val entities = MutableSharedFlow<InterfaceEntity?>()

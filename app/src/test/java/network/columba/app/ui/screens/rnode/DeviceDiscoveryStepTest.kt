@@ -851,15 +851,20 @@ class DeviceDiscoveryStepTest {
     }
 
     @Test
-    fun editMode_allowsSelectingDifferentDevice() {
+    fun editMode_allowsSelectingDifferentAddressWithSameName() {
         // Given
         val mockViewModel = mockk<RNodeWizardViewModel>()
+        val sameNameOther =
+            pairedBleDevice.copy(
+                address = "AA:BB:CC:DD:EE:99",
+                isPaired = false,
+            )
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
                 isEditMode = true,
                 selectedDevice = pairedBleDevice,
-                discoveredDevices = listOf(unpairedBleDevice, pairedBleDevice),
+                discoveredDevices = listOf(sameNameOther, pairedBleDevice),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 
@@ -868,9 +873,8 @@ class DeviceDiscoveryStepTest {
             DeviceDiscoveryStep(viewModel = mockViewModel)
         }
 
-        // Then - other devices should be visible in the list
-        composeTestRule.onNodeWithText("RNode 1234").assertIsDisplayed()
-        // The current device (RNode 5678) should not be in the list below, only in "Current Device" section
+        // Then - the current card and explicit same-name alternative are both visible.
+        composeTestRule.onAllNodesWithText("RNode 5678").assertCountEquals(2)
     }
 
     // ========== USB Bluetooth Pairing Mode Tests ==========

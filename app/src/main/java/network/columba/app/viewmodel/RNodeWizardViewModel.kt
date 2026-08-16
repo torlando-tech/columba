@@ -399,6 +399,12 @@ class RNodeWizardViewModel
                             } else {
                                 null
                             }
+                    val shouldPreselectBluetoothDevice =
+                        when {
+                            isTcp || isUsb -> false
+                            repairPairing -> false
+                            else -> !config.targetDeviceAddress.isNullOrBlank()
+                        }
 
                     // Determine connection type
                     val connectionType =
@@ -453,7 +459,7 @@ class RNodeWizardViewModel
                             selectedUsbDevice = usbDevice,
                             // Pre-populate Bluetooth device (for Bluetooth mode)
                             selectedDevice =
-                                if (isTcp || isUsb || repairPairing) {
+                                if (!shouldPreselectBluetoothDevice) {
                                     null
                                 } else {
                                     DiscoveredRNode(
@@ -486,7 +492,7 @@ class RNodeWizardViewModel
                     }
 
                     // Start RSSI polling for BLE devices (not TCP)
-                    if (isBle && !isTcp) {
+                    if (isBle && shouldPreselectBluetoothDevice) {
                         startRssiPolling()
                     }
 
@@ -1077,11 +1083,12 @@ class RNodeWizardViewModel
 
         /**
          * Update selected device from scan results.
-         * Handles edit mode where device was loaded from config without RSSI/address.
+         * Handles edit mode where an exact device address was loaded without RSSI.
          */
         private fun updateSelectedFromScan(devices: Collection<DiscoveredRNode>): DiscoveredRNode? {
             val currentSelected = _state.value.selectedDevice ?: return null
-            return devices.find { it.name == currentSelected.name }?.also { foundDevice ->
+            if (currentSelected.address.isBlank()) return currentSelected
+            return devices.find { it.address.equals(currentSelected.address, ignoreCase = true) }?.also { foundDevice ->
                 Log.d(TAG, "Updating selected device from scan: rssi=${foundDevice.rssi}")
             } ?: currentSelected
         }

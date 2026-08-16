@@ -1703,8 +1703,7 @@ class RNodeWizardViewModelTest {
             advanceUntilIdle()
             assertEquals(stateBeforeUsbAttempt, viewModel.state.value)
 
-            val originalFrequency = state.frequency
-            val originalBandwidth = state.bandwidth
+            val (originalFrequency, originalBandwidth) = state.frequency to state.bandwidth
             val unpairedDevice =
                 DiscoveredRNode(
                     name = "RNode E517",

@@ -388,6 +388,30 @@ class RNodeReconnectTests(unittest.TestCase):
         self.assertTrue(interface.online)
         self.assertFalse(interface._reconnecting)
 
+    def test_disconnect_during_failed_attempt_does_not_poison_next_success(self):
+        interface = self.new_interface()
+        interface.kotlin_bridge = ScriptedBleBridge(interface, [True])
+        attempts = 0
+
+        def start():
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                # Reproduce a GATT drop while RNode configuration is still
+                # finishing. The attempt fails, then the next attempt succeeds.
+                interface._on_connection_state_changed(False, "Test RNode")
+                return False
+            interface._set_online(True)
+            return True
+
+        interface.start = start
+        interface._reconnection_loop()
+
+        self.assertEqual(2, attempts)
+        self.assertTrue(interface.online)
+        self.assertFalse(interface._reconnecting)
+        self.assertFalse(interface._reconnect_requested)
+
     def test_start_attempts_are_single_flight(self):
         interface = self.new_interface()
         first_entered = threading.Event()

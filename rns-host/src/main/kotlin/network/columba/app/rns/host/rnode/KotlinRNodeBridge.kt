@@ -11,7 +11,10 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.util.Log
 import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
@@ -161,6 +164,35 @@ class KotlinRNodeBridge(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
+
+    private val bluetoothStateReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context?,
+                intent: Intent?,
+            ) {
+                if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+                val state =
+                    intent.getIntExtra(
+                        BluetoothAdapter.EXTRA_STATE,
+                        BluetoothAdapter.STATE_OFF,
+                    )
+                handleBluetoothAdapterStateChanged(state)
+            }
+        }
+    private var isBluetoothStateReceiverRegistered = false
+
+    init {
+        try {
+            context.registerReceiver(
+                bluetoothStateReceiver,
+                IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            )
+            isBluetoothStateReceiverRegistered = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register Bluetooth adapter state receiver", e)
+        }
+    }
 
     // Current connection mode
     private var connectionMode: RNodeConnectionMode? = null
@@ -1347,6 +1379,23 @@ class KotlinRNodeBridge(
         }
     }
 
+    internal fun handleBluetoothAdapterStateChanged(state: Int) {
+        if (state != BluetoothAdapter.STATE_TURNING_OFF && state != BluetoothAdapter.STATE_OFF) return
+
+        Log.i(TAG, "Bluetooth adapter is turning off; invalidating RNode connection")
+        if (isConnected.get()) {
+            handleDisconnect()
+        } else {
+            // Adapter state can change while connectGatt() or RFCOMM connect()
+            // is still in flight, before connectionMode/isConnected are committed.
+            // Close those provisional resources so stale callbacks cannot revive
+            // the old transport after Bluetooth is enabled again.
+            cleanupClassic()
+            cleanupBle()
+            readBuffer.clear()
+        }
+    }
+
     /**
      * Clean up Bluetooth Classic resources.
      */
@@ -1379,6 +1428,14 @@ class KotlinRNodeBridge(
      */
     fun shutdown() {
         disconnect()
+        if (isBluetoothStateReceiverRegistered) {
+            try {
+                context.unregisterReceiver(bluetoothStateReceiver)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering Bluetooth adapter state receiver", e)
+            }
+            isBluetoothStateReceiverRegistered = false
+        }
         scope.cancel()
     }
 }

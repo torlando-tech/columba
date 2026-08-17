@@ -1502,6 +1502,15 @@ class ColumbaRNodeInterface(Interface):
                 RNS.LOG_INFO,
             )
 
+            # A disconnect observed during a failed attempt is already accounted
+            # for by the retry this loop is about to perform. Do not let that
+            # request poison a later successful attempt and force an unnecessary
+            # idempotent reconnect against stale GATT state. A disconnect during
+            # this new attempt sets the flag again and is consumed below before
+            # successful ownership teardown.
+            with self._reconnect_lock:
+                self._reconnect_requested = False
+
             try:
                 if self.start():
                     with self._reconnect_lock:

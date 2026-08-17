@@ -4,7 +4,10 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.just
@@ -94,6 +97,71 @@ class KotlinRNodeBridgeOnlineStatusTest {
             device.connectGatt(mockContext, false, any(), BluetoothDevice.TRANSPORT_LE)
         }
         verify(exactly = 0) { mockBluetoothAdapter.bluetoothLeScanner }
+    }
+
+    @Test
+    fun `adapter turning off invalidates connected BLE GATT`() {
+        val receiver = io.mockk.slot<BroadcastReceiver>()
+        every {
+            mockContext.registerReceiver(capture(receiver), any<IntentFilter>())
+        } returns null
+        val gatt = mockk<BluetoothGatt>()
+        every { gatt.disconnect() } just Runs
+        every { gatt.close() } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        KotlinRNodeBridge::class.java.getDeclaredField("bluetoothGatt").apply {
+            isAccessible = true
+            set(bridge, gatt)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("bleConnected").apply {
+            isAccessible = true
+            setBoolean(bridge, true)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("connectionMode").apply {
+            isAccessible = true
+            set(bridge, RNodeConnectionMode.BLE)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("connectedDeviceName").apply {
+            isAccessible = true
+            set(bridge, "RNode E517")
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("isConnected").apply {
+            isAccessible = true
+            (get(bridge) as AtomicBoolean).set(true)
+        }
+        val adapterOffIntent = mockk<Intent>()
+        every { adapterOffIntent.action } returns BluetoothAdapter.ACTION_STATE_CHANGED
+        every {
+            adapterOffIntent.getIntExtra(
+                BluetoothAdapter.EXTRA_STATE,
+                BluetoothAdapter.STATE_OFF,
+            )
+        } returns BluetoothAdapter.STATE_TURNING_OFF
+
+        receiver.captured.onReceive(mockContext, adapterOffIntent)
+
+        assertFalse(bridge.isConnected())
+        verify(exactly = 1) { gatt.disconnect() }
+        verify(exactly = 1) { gatt.close() }
+    }
+
+    @Test
+    fun `adapter turning off closes in flight BLE GATT`() {
+        val gatt = mockk<BluetoothGatt>()
+        every { gatt.disconnect() } just Runs
+        every { gatt.close() } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+        KotlinRNodeBridge::class.java.getDeclaredField("bluetoothGatt").apply {
+            isAccessible = true
+            set(bridge, gatt)
+        }
+
+        bridge.handleBluetoothAdapterStateChanged(BluetoothAdapter.STATE_OFF)
+
+        assertFalse(bridge.isConnected())
+        verify(exactly = 1) { gatt.disconnect() }
+        verify(exactly = 1) { gatt.close() }
     }
 
     @After

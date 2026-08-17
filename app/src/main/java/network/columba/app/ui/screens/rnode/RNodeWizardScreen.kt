@@ -6,11 +6,13 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.ui.components.WizardBottomBar
 import network.columba.app.viewmodel.RNodeWizardViewModel
@@ -32,6 +35,7 @@ import network.columba.app.viewmodel.WizardStep
 @Composable
 fun RNodeWizardScreen(
     editingInterfaceId: Long? = null,
+    repairPairing: Boolean = false,
     preselectedConnectionType: String? = null,
     preselectedUsbDeviceId: Int? = null,
     preselectedUsbVendorId: Int? = null,
@@ -65,10 +69,33 @@ fun RNodeWizardScreen(
     }
 
     // Load existing config if editing
-    LaunchedEffect(editingInterfaceId) {
+    LaunchedEffect(editingInterfaceId, repairPairing) {
         if (editingInterfaceId != null && editingInterfaceId >= 0) {
-            viewModel.loadExistingConfig(editingInterfaceId)
+            viewModel.loadExistingConfig(editingInterfaceId, repairPairing)
         }
+    }
+
+    if (repairPairing && (!state.isPairingRepairMode || state.pairingRepairDeviceName.isNullOrBlank())) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Repair RNode Pairing") },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                )
+            },
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+        return
     }
 
     // Apply USB pre-selection if provided
@@ -125,6 +152,7 @@ fun RNodeWizardScreen(
                             WizardStep.DEVICE_DISCOVERY ->
                                 when {
                                     state.transportMode -> "Configure Transport"
+                                    state.isPairingRepairMode -> "Repair RNode Pairing"
                                     state.isEditMode -> "Change RNode Device"
                                     else -> "Select RNode Device"
                                 }

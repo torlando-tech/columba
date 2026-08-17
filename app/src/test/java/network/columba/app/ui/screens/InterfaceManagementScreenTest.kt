@@ -1,11 +1,15 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.bluetooth.BluetoothAdapter
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.data.database.entity.InterfaceEntity
+import network.columba.app.rns.host.manager.CurrentTransport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -25,6 +29,68 @@ class InterfaceManagementScreenTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    @Test
+    fun `RNode card exposes repair action when pairing is required`() {
+        var repairRequested = false
+        val rnode =
+            InterfaceEntity(
+                id = 42,
+                name = "RNode E517 BLE",
+                type = "RNode",
+                configJson = """{"connection_mode":"ble","target_device_name":"RNode E517"}""",
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                InterfaceCard(
+                    interfaceEntity = rnode,
+                    onToggle = {},
+                    bluetoothState = BluetoothAdapter.STATE_ON,
+                    blePermissionsGranted = true,
+                    currentTransport = CurrentTransport.WIFI_LIKE,
+                    isOnline = false,
+                    statusReason = "pairing_required",
+                    onRepairPairing = { repairRequested = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Pairing required").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Repair").performClick()
+        assertTrue(repairRequested)
+    }
+
+    @Test
+    fun `pending restart suppresses stale runtime pairing reason only for changed interface`() {
+        assertEquals(
+            null,
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = true,
+                pendingInterfaceIds = setOf(42),
+            ),
+        )
+        assertEquals(
+            "pairing_required",
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = true,
+                pendingInterfaceIds = setOf(99),
+            ),
+        )
+        assertEquals(
+            "pairing_required",
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = false,
+                pendingInterfaceIds = setOf(42),
+            ),
+        )
+    }
 
     // ========== formatAddressWithPort Tests ==========
 

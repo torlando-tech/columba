@@ -15,6 +15,7 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.PendingInterfaceChanges
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
@@ -35,6 +36,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -110,7 +112,7 @@ class InterfaceManagementViewModelStatusEventTest {
             flowOf(BleConnectionsState.Success(emptyList()))
 
         // Mock InterfaceConfigManager
-        every { configManager.checkAndClearPendingChanges() } returns false
+        every { configManager.consumePendingChanges() } returns PendingInterfaceChanges()
 
         // Mock event flows for NativeReticulumProtocol (event-driven updates)
         interfaceStatusFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
@@ -164,6 +166,39 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
+    fun `refreshExternalPendingChanges surfaces wizard changes on Python backend`() =
+        runTest {
+            every { configManager.consumePendingChanges() } returnsMany
+                listOf(
+                    PendingInterfaceChanges(),
+                    PendingInterfaceChanges(hasPendingChanges = true, interfaceIds = setOf(42)),
+                )
+            every { rnsBackend.capabilities } returns
+                MutableStateFlow(
+                    BackendCapabilities.UNKNOWN.copy(
+                        interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = false),
+                    ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+            assertFalse(viewModel.state.value.hasPendingChanges)
+
+            viewModel.refreshExternalPendingChanges()
+
+            assertTrue(viewModel.state.value.hasPendingChanges)
+            assertEquals(setOf(42L), viewModel.state.value.pendingInterfaceIds)
+            verify(exactly = 2) { configManager.consumePendingChanges() }
+        }
+
+    @Test
     fun `ViewModel observes NativeReticulumProtocol interfaceStatusFlow`() =
         runTest {
             viewModel =
@@ -204,6 +239,31 @@ class InterfaceManagementViewModelStatusEventTest {
 
             // Verify state was updated from the event
             assertEquals(false, viewModel.state.value.interfaceOnlineStatus["ble0"])
+        }
+
+    @Test
+    fun `debug info exposes pairing required reason for an RNode`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            debugInfoFlow.emit(
+                """{"interfaces":[{"name":"RNode E517 BLE","type":"RNode","online":false,"status_reason":"pairing_required"}]}""",
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                "pairing_required",
+                viewModel.state.value.transportInterfaces.single().statusReason,
+            )
         }
 
     @Test

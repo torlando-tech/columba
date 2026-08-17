@@ -260,6 +260,7 @@ class InterfaceRepository
 
                     "RNode" -> {
                         val targetDeviceName = json.optString("target_device_name", "")
+                        val targetDeviceAddress = json.optString("target_device_address", "").ifEmpty { null }
                         val connectionMode = json.optString("connection_mode", "classic")
                         var tcpHost: String? = json.optString("tcp_host", "").ifEmpty { null }
                         val tcpPort = json.optInt("tcp_port", 7633)
@@ -310,6 +311,7 @@ class InterfaceRepository
                             name = entity.name,
                             enabled = entity.enabled,
                             targetDeviceName = targetDeviceName,
+                            targetDeviceAddress = targetDeviceAddress,
                             connectionMode = connectionMode,
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,

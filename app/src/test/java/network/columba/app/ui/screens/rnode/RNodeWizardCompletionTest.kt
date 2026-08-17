@@ -4,8 +4,8 @@ import android.app.Application
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.*
+
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.RNodeWizardState
 import network.columba.app.viewmodel.RNodeWizardViewModel
@@ -32,6 +32,28 @@ class RNodeWizardCompletionTest {
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
+
+    @Test
+    fun repairModePendingConfig_doesNotExposeOrdinaryWizard() {
+        val viewModel = mockk<RNodeWizardViewModel>(relaxed = true)
+        every { viewModel.state } returns MutableStateFlow(RNodeWizardState(isPairingRepairMode = true))
+
+        composeRule.setContent {
+            RNodeWizardScreen(
+                editingInterfaceId = 3L,
+                repairPairing = true,
+                onNavigateBack = {},
+                onComplete = {},
+                viewModel = viewModel,
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Repair RNode Pairing").assertIsDisplayed()
+        composeRule.onNodeWithText("Select RNode Device").assertDoesNotExist()
+        composeRule.onNodeWithText("Pair via USB").assertDoesNotExist()
+        verify(exactly = 1) { viewModel.loadExistingConfig(3L, repairPairing = true) }
+    }
 
     @Test
     fun saveSuccess_isConsumedBeforeCompletionNavigation() {

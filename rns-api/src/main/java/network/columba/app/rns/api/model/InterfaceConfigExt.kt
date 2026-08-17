@@ -45,6 +45,7 @@ fun InterfaceConfig.toJsonString(): String =
             JSONObject()
                 .apply {
                     put("target_device_name", targetDeviceName)
+                    targetDeviceAddress?.let { put("target_device_address", it) }
                     put("connection_mode", connectionMode)
                     tcpHost?.let { put("tcp_host", it) }
                     put("tcp_port", tcpPort)

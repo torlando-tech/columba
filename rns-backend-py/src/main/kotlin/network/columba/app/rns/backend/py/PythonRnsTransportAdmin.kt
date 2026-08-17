@@ -369,8 +369,9 @@ class PythonRnsTransportAdmin(
 
     /**
      * Enumerate `RNS.Transport.interfaces` into the same per-interface shape
-     * `NativeRnsBackendImpl.getDebugInfo()` emits — `{name, type, online,
-     * parent_name, can_send, rx_bytes, tx_bytes}`. `name` is the configured
+     * `NativeRnsBackendImpl.getDebugInfo()` emits, plus the optional Python
+     * runtime status reason: `{name, type, online, parent_name, can_send,
+     * rx_bytes, tx_bytes, status_reason}`. `name` is the configured
      * interface name (`interface.name` — the RNS config `[[section]]` header),
      * matching `NativeRnsBackendImpl`'s `iface.name` and what the UI keys its
      * online-status overlay on (`InterfaceEntity.name`). Per-interface reads
@@ -409,6 +410,11 @@ class PythonRnsTransportAdmin(
                             ?.takeIf { it.toString() != "None" }
                             ?.get("name")?.toString()
                     }.getOrNull()
+                    val statusReason = runCatching {
+                        iface["status_reason"]
+                            ?.takeIf { it.toString() != "None" }
+                            ?.toString()
+                    }.getOrNull().orEmpty()
                     linkedMapOf<String, Any>(
                         "name" to uiName,
                         "type" to uiType,
@@ -417,6 +423,7 @@ class PythonRnsTransportAdmin(
                         "can_send" to (iface["OUT"]?.toJava(Boolean::class.javaObjectType) ?: false),
                         "rx_bytes" to (iface["rxb"]?.toJava(Long::class.javaObjectType) ?: 0L),
                         "tx_bytes" to (iface["txb"]?.toJava(Long::class.javaObjectType) ?: 0L),
+                        "status_reason" to statusReason,
                     )
                 }.getOrElse {
                     Log.w(TAG, "getDebugInfo: skipping an interface (attr read failed)", it)

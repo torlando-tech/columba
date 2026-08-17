@@ -51,6 +51,7 @@ data class InterfaceManagementState(
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val hasPendingChanges: Boolean = false,
+    val pendingInterfaceIds: Set<Long> = emptySet(),
     val isApplyingChanges: Boolean = false,
     val applyChangesError: String? = null,
     val showBlePermissionRequest: Boolean = false,
@@ -88,6 +89,7 @@ data class TransportInterfaceInfo(
     val parentName: String?,
     val rxBytes: Long = 0,
     val txBytes: Long = 0,
+    val statusReason: String? = null,
 )
 
 /**
@@ -239,7 +241,7 @@ class InterfaceManagementViewModel
             loadInterfaces()
             observeBluetoothState()
             observeTransportChanges()
-            checkExternalPendingChanges()
+            refreshExternalPendingChanges()
             observeInterfaceStatusChanges()
             loadDiscoveredInterfacesCount()
         }
@@ -264,9 +266,13 @@ class InterfaceManagementViewModel
         /**
          * Check if there are pending changes set by external sources (e.g., RNode wizard).
          */
-        private fun checkExternalPendingChanges() {
-            if (configManager.checkAndClearPendingChanges()) {
+        fun refreshExternalPendingChanges() {
+            val pendingChanges = configManager.consumePendingChanges()
+            if (pendingChanges.hasPendingChanges) {
                 Log.d(TAG, "Found pending changes from external source — hot-reloading")
+                _state.update {
+                    it.copy(pendingInterfaceIds = it.pendingInterfaceIds + pendingChanges.interfaceIds)
+                }
                 syncNativeInterfaces()
             }
         }
@@ -382,6 +388,7 @@ class InterfaceManagementViewModel
                         parentName = iface.optString("parent_name").takeIf { it.isNotBlank() },
                         rxBytes = iface.optLong("rx_bytes", 0L),
                         txBytes = iface.optLong("tx_bytes", 0L),
+                        statusReason = iface.optString("status_reason").takeIf { it.isNotBlank() },
                     ),
                 )
             }
@@ -460,6 +467,7 @@ class InterfaceManagementViewModel
                                 parentName = (ifaceMap["parent_name"] as? String)?.takeIf { it.isNotEmpty() },
                                 rxBytes = (ifaceMap["rx_bytes"] as? Number)?.toLong() ?: 0L,
                                 txBytes = (ifaceMap["tx_bytes"] as? Number)?.toLong() ?: 0L,
+                                statusReason = (ifaceMap["status_reason"] as? String)?.takeIf { it.isNotBlank() },
                             ),
                         )
                     }
@@ -1293,6 +1301,7 @@ class InterfaceManagementViewModel
                                     _state.value.copy(
                                         isApplyingChanges = false,
                                         hasPendingChanges = false,
+                                        pendingInterfaceIds = emptySet(),
                                         applyChangesError = null,
                                     )
                                 // Force-refresh the interface status list shortly
@@ -1319,6 +1328,7 @@ class InterfaceManagementViewModel
                         _state.value =
                             _state.value.copy(
                                 hasPendingChanges = false,
+                                pendingInterfaceIds = emptySet(),
                                 isApplyingChanges = false,
                             )
                         showSuccess("Configuration applied successfully")

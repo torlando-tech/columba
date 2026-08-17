@@ -1899,6 +1899,11 @@ fun ColumbaNavigation(
                                             navController.navigate("rnode_wizard")
                                         }
                                     },
+                                    onNavigateToRNodePairingRepair = { interfaceId ->
+                                        navController.navigate(
+                                            "rnode_wizard?interfaceId=$interfaceId&repairPairing=true",
+                                        )
+                                    },
                                     onNavigateToTcpClientWizard = { interfaceId ->
                                         if (interfaceId != null) {
                                             navController.navigate("tcp_client_wizard?interfaceId=$interfaceId")
@@ -2016,6 +2021,10 @@ fun ColumbaNavigation(
                                             type = NavType.LongType
                                             defaultValue = -1L
                                         },
+                                        navArgument("repairPairing") {
+                                            type = NavType.BoolType
+                                            defaultValue = false
+                                        },
                                         navArgument("connectionType") {
                                             type = NavType.StringType
                                             nullable = true
@@ -2061,6 +2070,7 @@ fun ColumbaNavigation(
                                     ),
                             ) { backStackEntry ->
                                 val interfaceId = backStackEntry.arguments?.getLong("interfaceId") ?: -1L
+                                val repairPairing = backStackEntry.arguments?.getBoolean("repairPairing") ?: false
                                 val connectionType = backStackEntry.arguments?.getString("connectionType")
                                 val transportMode = backStackEntry.arguments?.getBoolean("transportMode") ?: false
                                 val usbDeviceId = backStackEntry.arguments?.getInt("usbDeviceId") ?: -1
@@ -2073,6 +2083,7 @@ fun ColumbaNavigation(
                                 val loraCr = backStackEntry.arguments?.getInt("loraCr") ?: -1
                                 network.columba.app.ui.screens.rnode.RNodeWizardScreen(
                                     editingInterfaceId = if (interfaceId >= 0) interfaceId else null,
+                                    repairPairing = repairPairing,
                                     preselectedConnectionType = connectionType,
                                     preselectedUsbDeviceId = if (usbDeviceId >= 0) usbDeviceId else null,
                                     preselectedUsbVendorId = if (usbVendorId >= 0) usbVendorId else null,

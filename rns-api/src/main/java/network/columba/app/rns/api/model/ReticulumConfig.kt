@@ -319,6 +319,7 @@ sealed class InterfaceConfig : Parcelable {
      * @param name User-friendly name for this interface
      * @param enabled Whether this interface should be initialized
      * @param targetDeviceName Bluetooth device name of the paired RNode (required for Bluetooth)
+     * @param targetDeviceAddress Optional stable Android Bluetooth address used only to bind repair to the configured device
      * @param connectionMode Connection mode: "classic" (SPP/RFCOMM), "ble" (GATT), "tcp" (WiFi), or "usb" (serial)
      * @param tcpHost IP address or hostname for TCP/WiFi mode (required when connectionMode="tcp")
      * @param tcpPort TCP port for WiFi mode (default: 7633, the RNode standard port)
@@ -339,6 +340,8 @@ sealed class InterfaceConfig : Parcelable {
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
         val targetDeviceName: String = "", // Required for Bluetooth, empty for TCP/USB
+        // App-owned repair identity; intentionally omitted from Parcelable/runtime transport.
+        val targetDeviceAddress: String? = null,
         val connectionMode: String = "classic", // "classic", "ble", "tcp", or "usb"
         val tcpHost: String? = null, // IP/hostname for TCP mode
         val tcpPort: Int = 7633, // RNode TCP port (default)

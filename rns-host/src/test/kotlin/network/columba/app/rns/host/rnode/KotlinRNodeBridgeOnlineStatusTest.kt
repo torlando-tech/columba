@@ -3,7 +3,11 @@ package network.columba.app.rns.host.rnode
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -130,6 +134,11 @@ class KotlinRNodeBridgeOnlineStatusTest {
             isAccessible = true
             (get(bridge) as AtomicBoolean).set(true)
         }
+        val connectionStates = mutableListOf<Pair<Boolean, String?>>()
+        bridge.connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, deviceName ->
+                connectionStates += connected to deviceName
+            }
         val adapterOffIntent = mockk<Intent>()
         every { adapterOffIntent.action } returns BluetoothAdapter.ACTION_STATE_CHANGED
         every {
@@ -142,6 +151,7 @@ class KotlinRNodeBridgeOnlineStatusTest {
         receiver.captured.onReceive(mockContext, adapterOffIntent)
 
         assertFalse(bridge.isConnected())
+        assertEquals(listOf(false to "RNode E517"), connectionStates)
         verify(exactly = 1) { gatt.disconnect() }
         verify(exactly = 1) { gatt.close() }
     }
@@ -162,6 +172,141 @@ class KotlinRNodeBridgeOnlineStatusTest {
         assertFalse(bridge.isConnected())
         verify(exactly = 1) { gatt.disconnect() }
         verify(exactly = 1) { gatt.close() }
+    }
+
+    @Test
+    fun `stale GATT callbacks cannot disconnect fresh BLE owner`() {
+        val oldGatt = mockk<BluetoothGatt>()
+        val freshGatt = mockk<BluetoothGatt>()
+        every { oldGatt.discoverServices() } returns true
+        val bridge = KotlinRNodeBridge(mockContext)
+        KotlinRNodeBridge::class.java.getDeclaredField("bluetoothGatt").apply {
+            isAccessible = true
+            set(bridge, freshGatt)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("bleConnected").apply {
+            isAccessible = true
+            setBoolean(bridge, true)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("bleMtuCallbackReceived").apply {
+            isAccessible = true
+            setBoolean(bridge, false)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("connectionMode").apply {
+            isAccessible = true
+            set(bridge, RNodeConnectionMode.BLE)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("connectedDeviceName").apply {
+            isAccessible = true
+            set(bridge, "RNode E517")
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("isConnected").apply {
+            isAccessible = true
+            (get(bridge) as AtomicBoolean).set(true)
+        }
+        val connectionStates = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, _ -> connectionStates += connected }
+        val pendingWrite = CountDownLatch(1)
+        KotlinRNodeBridge::class.java.getDeclaredField("bleWriteLatch").apply {
+            isAccessible = true
+            set(bridge, pendingWrite)
+        }
+        val staleCharacteristic = mockk<BluetoothGattCharacteristic>()
+        val callback =
+            KotlinRNodeBridge::class.java.getDeclaredField("gattCallback").let { field ->
+                field.isAccessible = true
+                field.get(bridge) as BluetoothGattCallback
+            }
+
+        callback.onConnectionStateChange(
+            oldGatt,
+            BluetoothGatt.GATT_SUCCESS,
+            BluetoothProfile.STATE_DISCONNECTED,
+        )
+        callback.onMtuChanged(oldGatt, 247, BluetoothGatt.GATT_SUCCESS)
+        callback.onCharacteristicChanged(oldGatt, staleCharacteristic)
+        callback.onCharacteristicWrite(
+            oldGatt,
+            staleCharacteristic,
+            BluetoothGatt.GATT_SUCCESS,
+        )
+        callback.onReadRemoteRssi(oldGatt, -42, BluetoothGatt.GATT_SUCCESS)
+
+        assertTrue(bridge.isConnected())
+        assertTrue(connectionStates.isEmpty())
+        assertEquals(1L, pendingWrite.count)
+        assertEquals(0, bridge.available())
+        assertEquals(-100, bridge.getRssi())
+        KotlinRNodeBridge::class.java.getDeclaredField("bleMtuCallbackReceived").apply {
+            isAccessible = true
+            assertFalse(getBoolean(bridge))
+        }
+        verify(exactly = 0) { freshGatt.disconnect() }
+        verify(exactly = 0) { freshGatt.close() }
+        verify(exactly = 0) { oldGatt.discoverServices() }
+    }
+
+    @Test
+    fun `stale Classic reader cannot disconnect fresh socket owner`() {
+        val oldSocket = mockk<BluetoothSocket>()
+        val freshSocket = mockk<BluetoothSocket>()
+        every { freshSocket.isConnected } returns true
+        every { freshSocket.close() } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+        KotlinRNodeBridge::class.java.getDeclaredField("bluetoothSocket").apply {
+            isAccessible = true
+            set(bridge, freshSocket)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("classicReadSocket").apply {
+            isAccessible = true
+            set(bridge, freshSocket)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("connectionMode").apply {
+            isAccessible = true
+            set(bridge, RNodeConnectionMode.CLASSIC)
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("connectedDeviceName").apply {
+            isAccessible = true
+            set(bridge, "RNode Classic")
+        }
+        KotlinRNodeBridge::class.java.getDeclaredField("isConnected").apply {
+            isAccessible = true
+            (get(bridge) as AtomicBoolean).set(true)
+        }
+        val connectionStates = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, _ -> connectionStates += connected }
+
+        bridge.handleClassicReaderFinished(oldSocket)
+
+        assertTrue(bridge.isConnected())
+        assertTrue(connectionStates.isEmpty())
+        verify(exactly = 0) { freshSocket.close() }
+
+        bridge.handleClassicReaderFinished(freshSocket)
+
+        assertFalse(bridge.isConnected())
+        assertEquals(listOf(false), connectionStates)
+        verify(exactly = 1) { freshSocket.close() }
+    }
+
+    @Test
+    fun `shutdown unregisters adapter state receiver`() {
+        val receiver = io.mockk.slot<BroadcastReceiver>()
+        every {
+            mockContext.registerReceiver(capture(receiver), any<IntentFilter>())
+        } returns null
+        every { mockContext.unregisterReceiver(any()) } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        bridge.shutdown()
+
+        KotlinRNodeBridge::class.java.getDeclaredField("isBluetoothStateReceiverRegistered").apply {
+            isAccessible = true
+            assertFalse(getBoolean(bridge))
+        }
+        verify(exactly = 1) { mockContext.unregisterReceiver(receiver.captured) }
     }
 
     @After

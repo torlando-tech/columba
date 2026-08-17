@@ -82,6 +82,13 @@ interface RNodeOnlineStatusListener {
     )
 }
 
+internal fun interface RNodeConnectionStateNotifier {
+    fun notify(
+        connected: Boolean,
+        deviceName: String?,
+    )
+}
+
 /**
  * Kotlin RNode Bridge for Bluetooth communication.
  *
@@ -198,11 +205,13 @@ class KotlinRNodeBridge(
     private var connectionMode: RNodeConnectionMode? = null
 
     // Bluetooth Classic connection state
+    @Volatile
     private var bluetoothSocket: BluetoothSocket? = null
     private var inputStream: BufferedInputStream? = null
     private var outputStream: BufferedOutputStream? = null
 
     // BLE connection state
+    @Volatile
     private var bluetoothGatt: BluetoothGatt? = null
     private var bleRxCharacteristic: BluetoothGattCharacteristic? = null
     private var bleTxCharacteristic: BluetoothGattCharacteristic? = null
@@ -231,7 +240,9 @@ class KotlinRNodeBridge(
 
     // Thread-safe state flags
     private val isConnected = AtomicBoolean(false)
-    private val isReading = AtomicBoolean(false)
+
+    @Volatile
+    private var classicReadSocket: BluetoothSocket? = null
 
     // Read buffer for non-blocking reads
     private val readBuffer = ConcurrentLinkedQueue<Byte>()
@@ -251,15 +262,11 @@ class KotlinRNodeBridge(
     private val onlineStatusListeners = mutableListOf<RNodeOnlineStatusListener>()
 
     // Python-side connection-state callback. Single slot (not a list) because
-    // the consumer is ColumbaRNodeInterface._on_connection_state_changed —
-    // there's one Python interface per bridge instance at a time. PyObject
-    // (Chaquopy) instead of a Kotlin SAM because Chaquopy doesn't auto-
-    // adapt a Python bound method to a Kotlin functional interface
-    // ("Cannot convert method object to ..." at runtime). PyObject +
-    // callAttr("__call__", ...) is the working pattern used throughout
-    // KotlinBLEBridge for the same situation.
+    // the consumer is ColumbaRNodeInterface._on_connection_state_changed.
+    // Keep PyObject adaptation at this boundary while the transport lifecycle
+    // uses a testable Kotlin notifier.
     @Volatile
-    private var connectionStateListener: PyObject? = null
+    internal var connectionStateNotifier: RNodeConnectionStateNotifier? = null
 
     /**
      * Register a Kotlin listener for RNode error events.
@@ -349,7 +356,22 @@ class KotlinRNodeBridge(
      *   `def _on_connection_state_changed(self, connected: bool, device_name: str | None)`
      */
     fun setOnConnectionStateChanged(callback: PyObject) {
-        connectionStateListener = callback
+        connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, deviceName ->
+                callback.callAttr("__call__", connected, deviceName)
+            }
+    }
+
+    private fun notifyConnectionStateChanged(
+        connected: Boolean,
+        deviceName: String?,
+        transition: String,
+    ) {
+        try {
+            connectionStateNotifier?.notify(connected, deviceName)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error in connection state listener ($transition)", e)
+        }
     }
 
     /**
@@ -545,7 +567,8 @@ class KotlinRNodeBridge(
             socket.connect()
 
             // Setup streams
-            inputStream = BufferedInputStream(socket.inputStream, STREAM_BUFFER_SIZE)
+            val connectedInputStream = BufferedInputStream(socket.inputStream, STREAM_BUFFER_SIZE)
+            inputStream = connectedInputStream
             outputStream = BufferedOutputStream(socket.outputStream, STREAM_BUFFER_SIZE)
             connectedDeviceName = deviceName
             connectionMode = RNodeConnectionMode.CLASSIC
@@ -553,14 +576,10 @@ class KotlinRNodeBridge(
 
             Log.i(TAG, "Connected to $deviceName via Bluetooth Classic")
 
-            try {
-                connectionStateListener?.callAttr("__call__", true, deviceName)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error in connection state listener (classic connect)", e)
-            }
+            notifyConnectionStateChanged(true, deviceName, "classic connect")
 
-            // Start read thread
-            startClassicReadThread()
+            // Start a reader owned by this exact socket generation.
+            startClassicReadThread(socket, connectedInputStream)
 
             true
         } catch (e: IOException) {
@@ -685,11 +704,7 @@ class KotlinRNodeBridge(
 
             Log.d(TAG, "████ RNODE BLE SUCCESS ████ deviceName=$deviceName MTU=$bleMtu")
 
-            try {
-                connectionStateListener?.callAttr("__call__", true, deviceName)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error in connection state listener (BLE connect)", e)
-            }
+            notifyConnectionStateChanged(true, deviceName, "BLE connect")
 
             true
         } catch (e: Exception) {
@@ -710,6 +725,10 @@ class KotlinRNodeBridge(
                 status: Int,
                 newState: Int,
             ) {
+                if (gatt !== bluetoothGatt) {
+                    Log.w(TAG, "Ignoring connection-state callback from a stale GATT")
+                    return
+                }
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         Log.i(TAG, "BLE connected, requesting MTU...")
@@ -721,7 +740,7 @@ class KotlinRNodeBridge(
                         // proceed with service discovery anyway to prevent hang
                         scope.launch {
                             delay(2000)
-                            if (!bleMtuCallbackReceived && bleConnected) {
+                            if (gatt === bluetoothGatt && !bleMtuCallbackReceived && bleConnected) {
                                 Log.w(TAG, "MTU callback timeout, proceeding with service discovery")
                                 gatt.discoverServices()
                             }
@@ -742,6 +761,10 @@ class KotlinRNodeBridge(
                 mtu: Int,
                 status: Int,
             ) {
+                if (gatt !== bluetoothGatt) {
+                    Log.w(TAG, "Ignoring MTU callback from a stale GATT")
+                    return
+                }
                 bleMtuCallbackReceived = true
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     bleMtu = mtu
@@ -840,6 +863,10 @@ class KotlinRNodeBridge(
                 gatt: BluetoothGatt,
                 characteristic: BluetoothGattCharacteristic,
             ) {
+                if (gatt !== bluetoothGatt) {
+                    Log.w(TAG, "Ignoring characteristic change from a stale GATT")
+                    return
+                }
                 if (characteristic.uuid == NUS_TX_CHAR_UUID) {
                     val data = characteristic.value
                     if (data != null && data.isNotEmpty()) {
@@ -859,6 +886,10 @@ class KotlinRNodeBridge(
                 characteristic: BluetoothGattCharacteristic,
                 status: Int,
             ) {
+                if (gatt !== bluetoothGatt) {
+                    Log.w(TAG, "Ignoring characteristic write from a stale GATT")
+                    return
+                }
                 // Signal write completion to waiting thread
                 // Use write ID to prevent race condition where delayed callback
                 // corrupts status for a different write operation
@@ -882,6 +913,10 @@ class KotlinRNodeBridge(
                 rssi: Int,
                 status: Int,
             ) {
+                if (gatt !== bluetoothGatt) {
+                    Log.w(TAG, "Ignoring RSSI callback from a stale GATT")
+                    return
+                }
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     bleRssi = rssi
                     Log.v(TAG, "BLE RSSI: $rssi dBm")
@@ -1296,10 +1331,17 @@ class KotlinRNodeBridge(
     /**
      * Start the background read thread for Bluetooth Classic.
      */
-    private fun startClassicReadThread() {
-        if (isReading.getAndSet(true)) {
-            return // Already reading
-        }
+    private fun isCurrentClassicTransport(ownerSocket: BluetoothSocket): Boolean =
+        bluetoothSocket === ownerSocket && connectionMode == RNodeConnectionMode.CLASSIC
+
+    private fun isCurrentClassicReader(ownerSocket: BluetoothSocket): Boolean =
+        isConnected.get() && isCurrentClassicTransport(ownerSocket) && classicReadSocket === ownerSocket
+
+    private fun startClassicReadThread(
+        ownerSocket: BluetoothSocket,
+        ownerInputStream: BufferedInputStream,
+    ) {
+        classicReadSocket = ownerSocket
 
         scope.launch {
             val buffer = ByteArray(READ_BUFFER_SIZE)
@@ -1307,18 +1349,17 @@ class KotlinRNodeBridge(
             Log.d(TAG, "Classic read thread started")
 
             try {
-                while (isConnected.get() && connectionMode == RNodeConnectionMode.CLASSIC) {
-                    val stream = inputStream ?: break
-
+                while (isCurrentClassicReader(ownerSocket)) {
                     try {
                         // Check if data is available (non-blocking check)
-                        val available = stream.available()
+                        val available = ownerInputStream.available()
                         if (available > 0) {
-                            val bytesRead = stream.read(buffer, 0, minOf(available, buffer.size))
+                            val bytesRead = ownerInputStream.read(buffer, 0, minOf(available, buffer.size))
                             if (bytesRead > 0) {
+                                if (!isCurrentClassicReader(ownerSocket)) break
                                 Log.v(TAG, "Classic received $bytesRead bytes")
 
-                                // Add to buffer
+                                // Add to buffer only while this socket still owns it.
                                 for (i in 0 until bytesRead) {
                                     readBuffer.offer(buffer[i])
                                 }
@@ -1332,20 +1373,26 @@ class KotlinRNodeBridge(
                             delay(10)
                         }
                     } catch (e: IOException) {
-                        if (isConnected.get()) {
+                        if (bluetoothSocket === ownerSocket && isConnected.get()) {
                             Log.e(TAG, "Classic read error", e)
                         }
                         break
                     }
                 }
             } finally {
-                isReading.set(false)
                 Log.d(TAG, "Classic read thread stopped")
-
-                if (isConnected.get() && connectionMode == RNodeConnectionMode.CLASSIC) {
-                    handleDisconnect()
-                }
+                handleClassicReaderFinished(ownerSocket)
             }
+        }
+    }
+
+    internal fun handleClassicReaderFinished(ownerSocket: BluetoothSocket) {
+        val ownsCurrentReader = classicReadSocket === ownerSocket
+        if (ownsCurrentReader) {
+            classicReadSocket = null
+        }
+        if (ownsCurrentReader && isConnected.get() && isCurrentClassicTransport(ownerSocket)) {
+            handleDisconnect()
         }
     }
 
@@ -1371,11 +1418,7 @@ class KotlinRNodeBridge(
             // Notify python interface so it can flip self.online = False,
             // notify the kotlin notification listener (ServiceNotificationManager
             // posts the heads-up alert), and kick off the reconnection loop.
-            try {
-                connectionStateListener?.callAttr("__call__", false, deviceName)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error in connection state listener (disconnect)", e)
-            }
+            notifyConnectionStateChanged(false, deviceName, "disconnect")
         }
     }
 

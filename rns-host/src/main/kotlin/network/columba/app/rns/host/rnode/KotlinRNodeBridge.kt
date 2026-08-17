@@ -1321,24 +1321,44 @@ class KotlinRNodeBridge(
     /**
      * Write data via Bluetooth Classic.
      */
-    private suspend fun writeClassic(data: ByteArray): Int =
-        try {
+    private data class ClassicWriteOwner(
+        val socket: BluetoothSocket,
+        val stream: BufferedOutputStream,
+    )
+
+    private fun currentClassicWriteOwner(): ClassicWriteOwner? =
+        synchronized(transportOwnerLock) {
+            if (!isConnected.get() || connectionMode != RNodeConnectionMode.CLASSIC) {
+                return@synchronized null
+            }
+            val socket = bluetoothSocket
+            val stream = outputStream
+            if (socket != null && stream != null) {
+                ClassicWriteOwner(socket, stream)
+            } else {
+                null
+            }
+        }
+
+    private suspend fun writeClassic(data: ByteArray): Int {
+        val owner =
+            currentClassicWriteOwner() ?: run {
+                Log.e(TAG, "Classic write owner is unavailable")
+                return -1
+            }
+        return try {
             withContext(Dispatchers.IO) {
-                outputStream?.let { stream ->
-                    stream.write(data)
-                    stream.flush()
-                    Log.v(TAG, "Wrote ${data.size} bytes (Classic)")
-                    data.size
-                } ?: run {
-                    Log.e(TAG, "Output stream is null")
-                    -1
-                }
+                owner.stream.write(data)
+                owner.stream.flush()
+                Log.v(TAG, "Wrote ${data.size} bytes (Classic)")
+                data.size
             }
         } catch (e: IOException) {
             Log.e(TAG, "Classic write failed", e)
-            handleDisconnect()
+            handleDisconnect(expectedClassicSocket = owner.socket)
             -1
         }
+    }
 
     /**
      * Write data via BLE.
@@ -1415,24 +1435,31 @@ class KotlinRNodeBridge(
     /**
      * Synchronous write via Bluetooth Classic.
      */
-    private fun writeSyncClassic(data: ByteArray): Int =
-        synchronized(this) {
-            try {
-                outputStream?.let { stream ->
-                    stream.write(data)
-                    stream.flush()
+    private fun writeSyncClassic(data: ByteArray): Int {
+        val owner =
+            currentClassicWriteOwner() ?: run {
+                Log.e(TAG, "Classic write owner is unavailable")
+                return -1
+            }
+        var writeFailed = false
+        val result =
+            synchronized(this) {
+                try {
+                    owner.stream.write(data)
+                    owner.stream.flush()
                     Log.v(TAG, "Wrote ${data.size} bytes (Classic sync)")
                     data.size
-                } ?: run {
-                    Log.e(TAG, "Output stream is null")
+                } catch (e: IOException) {
+                    Log.e(TAG, "Classic write failed", e)
+                    writeFailed = true
                     -1
                 }
-            } catch (e: IOException) {
-                Log.e(TAG, "Classic write failed", e)
-                scope.launch { handleDisconnect() }
-                -1
             }
+        if (writeFailed) {
+            handleDisconnect(expectedClassicSocket = owner.socket)
         }
+        return result
+    }
 
     /**
      * Synchronous write via BLE.

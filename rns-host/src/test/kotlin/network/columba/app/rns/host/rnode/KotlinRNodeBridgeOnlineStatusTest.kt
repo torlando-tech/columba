@@ -20,6 +20,7 @@ import io.mockk.Runs
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,6 +29,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.BufferedOutputStream
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -393,6 +396,75 @@ class KotlinRNodeBridgeOnlineStatusTest {
         assertFalse(bridge.isConnected())
         assertEquals(listOf(false), connectionStates)
         verify(exactly = 1) { freshSocket.close() }
+    }
+
+    @Test
+    fun `stale suspend Classic write failure cannot disconnect replacement owner`() {
+        assertStaleClassicWriteFailureCannotDisconnectReplacement { bridge, data ->
+            runBlocking { bridge.write(data) }
+        }
+    }
+
+    @Test
+    fun `stale sync Classic write failure cannot disconnect replacement owner`() {
+        assertStaleClassicWriteFailureCannotDisconnectReplacement { bridge, data ->
+            bridge.writeSync(data)
+        }
+    }
+
+    private fun assertStaleClassicWriteFailureCannotDisconnectReplacement(
+        write: (KotlinRNodeBridge, ByteArray) -> Int,
+    ) {
+        val oldSocket = mockk<BluetoothSocket>()
+        val freshSocket = mockk<BluetoothSocket>()
+        val oldStream = mockk<BufferedOutputStream>()
+        val freshStream = mockk<BufferedOutputStream>()
+        every { oldSocket.close() } just Runs
+        every { freshSocket.isConnected } returns true
+        every { freshSocket.close() } just Runs
+        every { oldStream.close() } just Runs
+        every { freshStream.close() } just Runs
+        val writeStarted = CountDownLatch(1)
+        val releaseWrite = CountDownLatch(1)
+        every { oldStream.write(any<ByteArray>()) } answers {
+            writeStarted.countDown()
+            assertTrue(releaseWrite.await(1, TimeUnit.SECONDS))
+            throw IOException("old socket closed")
+        }
+        val bridge = KotlinRNodeBridge(mockContext)
+        bridge.replaceClassicSocketOwner(oldSocket)
+        setBridgeField(bridge, "outputStream", oldStream)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.CLASSIC)
+        setBridgeField(bridge, "connectedDeviceName", "Old RNode")
+        setBridgeConnected(bridge, true)
+        val states = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, _ -> states += connected }
+        val result = AtomicInteger(Int.MIN_VALUE)
+        val writer =
+            Thread {
+                result.set(write(bridge, byteArrayOf(0x2A)))
+            }
+        writer.start()
+        assertTrue(writeStarted.await(1, TimeUnit.SECONDS))
+
+        bridge.disconnect()
+        bridge.replaceClassicSocketOwner(freshSocket)
+        setBridgeField(bridge, "outputStream", freshStream)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.CLASSIC)
+        setBridgeField(bridge, "connectedDeviceName", "Fresh RNode")
+        setBridgeConnected(bridge, true)
+        releaseWrite.countDown()
+        writer.join()
+
+        assertEquals(-1, result.get())
+        assertTrue(bridge.isConnected())
+        assertTrue(nullableBridgeField(bridge, "bluetoothSocket") === freshSocket)
+        assertEquals("Fresh RNode", nullableBridgeField(bridge, "connectedDeviceName"))
+        assertTrue(states.isEmpty())
+        verify(exactly = 1) { oldSocket.close() }
+        verify(exactly = 0) { freshSocket.close() }
+        verify(exactly = 0) { freshStream.close() }
     }
 
     @Test

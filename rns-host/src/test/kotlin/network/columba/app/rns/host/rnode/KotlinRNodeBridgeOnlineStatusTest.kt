@@ -308,6 +308,71 @@ class KotlinRNodeBridgeOnlineStatusTest {
     }
 
     @Test
+    fun `disconnect before delayed connect notification suppresses stale Online`() {
+        val oldGatt = mockk<BluetoothGatt>()
+        every { oldGatt.disconnect() } just Runs
+        every { oldGatt.close() } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+        bridge.replaceBleGattOwner(oldGatt)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.BLE)
+        setBridgeField(bridge, "connectedDeviceName", "RNode E517")
+        setBridgeBoolean(bridge, "bleConnected", true)
+        setBridgeConnected(bridge, true)
+        val states = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, _ -> states += connected }
+
+        bridge.handleBluetoothAdapterStateChanged(BluetoothAdapter.STATE_OFF)
+        bridge.notifyConnectionStateChanged(
+            true,
+            "RNode E517",
+            "delayed BLE connect",
+            expectedBleGatt = oldGatt,
+        )
+
+        assertEquals(listOf(false), states)
+    }
+
+    @Test
+    fun `replacement Online precedes and suppresses delayed Offline notification`() {
+        val freshGatt = mockk<BluetoothGatt>()
+        val bridge = KotlinRNodeBridge(mockContext)
+        val states = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, _ -> states += connected }
+        val ownerLock = bridgeField(bridge, "transportOwnerLock")
+        val notificationStarted = CountDownLatch(1)
+        val notificationFinished = CountDownLatch(1)
+        val delayedOffline =
+            Thread {
+                notificationStarted.countDown()
+                bridge.notifyConnectionStateChanged(false, "Old RNode", "delayed disconnect")
+                notificationFinished.countDown()
+            }
+
+        synchronized(ownerLock) {
+            delayedOffline.start()
+            assertTrue(notificationStarted.await(1, TimeUnit.SECONDS))
+            bridge.replaceBleGattOwner(freshGatt)
+            setBridgeField(bridge, "connectionMode", RNodeConnectionMode.BLE)
+            setBridgeField(bridge, "connectedDeviceName", "RNode E517")
+            setBridgeBoolean(bridge, "bleConnected", true)
+            setBridgeConnected(bridge, true)
+            bridge.notifyConnectionStateChanged(
+                true,
+                "RNode E517",
+                "replacement BLE connect",
+                expectedBleGatt = freshGatt,
+            )
+            assertFalse(notificationFinished.await(50, TimeUnit.MILLISECONDS))
+        }
+        assertTrue(notificationFinished.await(1, TimeUnit.SECONDS))
+        delayedOffline.join()
+
+        assertEquals(listOf(true), states)
+    }
+
+    @Test
     fun `shutdown unregisters adapter state receiver`() {
         val receiver = io.mockk.slot<BroadcastReceiver>()
         every {

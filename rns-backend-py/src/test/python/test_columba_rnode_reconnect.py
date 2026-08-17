@@ -137,6 +137,36 @@ class RNodeReconnectTests(unittest.TestCase):
         interface.usb_bridge = None
         return interface
 
+    def test_stale_reader_is_joined_before_replacement_transport_connects(self):
+        interface = self.new_interface()
+        bridge = ScriptedBleBridge(interface, [False])
+        interface.kotlin_bridge = bridge
+        interface._running.set()
+        events = []
+
+        class StaleReader:
+            alive = True
+
+            def is_alive(self):
+                return self.alive
+
+            def join(self, timeout):
+                events.append(("join", timeout, interface._running.is_set()))
+                self.alive = False
+
+        interface._read_thread = StaleReader()
+        original_connect = bridge.connect
+
+        def connect_after_join(device_name, mode):
+            events.append(("connect", interface._read_thread.is_alive()))
+            return original_connect(device_name, mode)
+
+        bridge.connect = connect_after_join
+
+        self.assertFalse(interface._start_once())
+        self.assertEqual([("join", 2.0, False), ("connect", False)], events)
+        self.assertEqual(1, bridge.connect_calls)
+
     def test_ble_reconnect_survives_transport_and_configuration_failures(self):
         interface = self.new_interface()
         bridge = ScriptedBleBridge(interface, [False, True, True])

@@ -520,6 +520,25 @@ class ColumbaRNodeInterface(Interface):
         except Exception as e:  # noqa: BLE001
             RNS.log(f"Bridge contention check failed (continuing): {e}", RNS.LOG_DEBUG)
 
+        # Stop the previous generation's poller before creating a replacement
+        # transport. Otherwise it can consume and drop bytes from the fresh
+        # Kotlin bridge owner before the post-connect cleanup below runs.
+        if self._read_thread is not None and self._read_thread.is_alive():
+            RNS.log(
+                f"ColumbaRNodeInterface[{self.name}]: stopping stale BLE/Classic "
+                "read thread before reconnect transport",
+                RNS.LOG_INFO,
+            )
+            self._running.clear()
+            self._read_thread.join(timeout=2.0)
+            if self._read_thread.is_alive():
+                RNS.log(
+                    f"ColumbaRNodeInterface[{self.name}]: stale read thread did not stop "
+                    "within timeout — aborting start to prevent race",
+                    RNS.LOG_ERROR,
+                )
+                return False
+
         RNS.log(f"Connecting to RNode '{self.target_device_name}' via {mode_str}...", RNS.LOG_INFO)
 
         # Install observers before connect(). Kotlin can synchronously report
@@ -572,29 +591,6 @@ class ColumbaRNodeInterface(Interface):
             self.kotlin_bridge.disconnect()
             return False
 
-
-        # Stop any stale read thread before starting a new one.
-        # _on_connection_state_changed(False) does NOT clear _running, so an
-        # existing thread from the previous connection is still looping. Without
-        # this guard, both the old and the new thread poll the same
-        # KotlinRNodeBridge.readBuffer concurrently, stealing bytes from each
-        # other and corrupting every KISS frame. _start_usb() already applies
-        # this pattern (lines ~594-600) — mirror it here.
-        if self._read_thread is not None and self._read_thread.is_alive():
-            RNS.log(
-                f"ColumbaRNodeInterface[{self.name}]: stopping stale BLE/Classic "
-                "read thread before reconnect start",
-                RNS.LOG_INFO,
-            )
-            self._running.clear()
-            self._read_thread.join(timeout=2.0)
-            if self._read_thread.is_alive():
-                RNS.log(
-                    f"ColumbaRNodeInterface[{self.name}]: stale read thread did not stop "
-                    "within timeout — aborting start to prevent race",
-                    RNS.LOG_ERROR,
-                )
-                return False
 
         # A prior connection's protocol responses must not validate this
         # transport. Require fresh detection, firmware, and radio readback.

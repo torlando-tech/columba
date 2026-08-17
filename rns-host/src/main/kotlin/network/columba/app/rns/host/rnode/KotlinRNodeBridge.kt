@@ -363,15 +363,32 @@ class KotlinRNodeBridge(
             }
     }
 
-    private fun notifyConnectionStateChanged(
+    internal fun notifyConnectionStateChanged(
         connected: Boolean,
         deviceName: String?,
         transition: String,
+        expectedBleGatt: BluetoothGatt? = null,
+        expectedClassicSocket: BluetoothSocket? = null,
     ) {
-        try {
-            connectionStateNotifier?.notify(connected, deviceName)
-        } catch (e: Exception) {
-            Log.w(TAG, "Error in connection state listener ($transition)", e)
+        synchronized(transportOwnerLock) {
+            val ownerMatches =
+                when {
+                    expectedBleGatt != null -> bluetoothGatt === expectedBleGatt
+                    expectedClassicSocket != null -> bluetoothSocket === expectedClassicSocket
+                    else -> true
+                }
+            val stateMatches = if (connected) isConnected.get() && ownerMatches else !isConnected.get()
+            if (!stateMatches) {
+                Log.w(TAG, "Suppressing stale connection state notification ($transition, connected=$connected)")
+                return
+            }
+            try {
+                // Keep owner transitions serialized until the foreign callback returns.
+                // The current Python callback never waits for a bridge operation.
+                connectionStateNotifier?.notify(connected, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener ($transition)", e)
+            }
         }
     }
 
@@ -624,7 +641,12 @@ class KotlinRNodeBridge(
 
             // Start a reader owned by this exact socket generation before notifying Python.
             startClassicReadThread(socket, connectedInputStream)
-            notifyConnectionStateChanged(true, deviceName, "classic connect")
+            notifyConnectionStateChanged(
+                true,
+                deviceName,
+                "classic connect",
+                expectedClassicSocket = socket,
+            )
 
             true
         } catch (e: IOException) {
@@ -797,7 +819,12 @@ class KotlinRNodeBridge(
 
             Log.d(TAG, "████ RNODE BLE SUCCESS ████ deviceName=$deviceName MTU=$bleMtu")
 
-            notifyConnectionStateChanged(true, deviceName, "BLE connect")
+            notifyConnectionStateChanged(
+                true,
+                deviceName,
+                "BLE connect",
+                expectedBleGatt = attemptGatt,
+            )
 
             true
         } catch (e: Exception) {
@@ -1468,30 +1495,38 @@ class KotlinRNodeBridge(
      *
      * @return Available bytes, or empty array if no data
      */
-    fun read(): ByteArray {
-        if (readBuffer.isEmpty()) {
-            return ByteArray(0)
-        }
+    fun read(): ByteArray =
+        synchronized(transportOwnerLock) {
+            if (readBuffer.isEmpty()) {
+                return@synchronized ByteArray(0)
+            }
 
-        val data = mutableListOf<Byte>()
-        while (true) {
-            val byte = readBuffer.poll() ?: break
-            data.add(byte)
-        }
+            val data = mutableListOf<Byte>()
+            while (true) {
+                val byte = readBuffer.poll() ?: break
+                data.add(byte)
+            }
 
-        if (data.isNotEmpty()) {
-            Log.v(TAG, "Read ${data.size} bytes from buffer")
-        }
+            if (data.isNotEmpty()) {
+                Log.v(TAG, "Read ${data.size} bytes from buffer")
+            }
 
-        return data.toByteArray()
-    }
+            data.toByteArray()
+        }
 
     /**
      * Get number of bytes available in the read buffer.
      *
      * @return Number of buffered bytes
      */
-    fun available(): Int = readBuffer.size
+    fun available(): Int = synchronized(transportOwnerLock) { readBuffer.size }
+
+    private fun currentTransportOwnerLocked(): Any? =
+        when (connectionMode) {
+            RNodeConnectionMode.CLASSIC -> bluetoothSocket
+            RNodeConnectionMode.BLE -> bluetoothGatt
+            null -> null
+        }
 
     /**
      * Blocking read with timeout.
@@ -1505,7 +1540,8 @@ class KotlinRNodeBridge(
         maxBytes: Int,
         timeoutMs: Long,
     ): ByteArray {
-        if (!isConnected.get()) {
+        val owner = synchronized(transportOwnerLock) { currentTransportOwnerLocked() }
+        if (!isConnected.get() || owner == null) {
             return ByteArray(0)
         }
 
@@ -1513,7 +1549,17 @@ class KotlinRNodeBridge(
         val data = mutableListOf<Byte>()
 
         while (data.size < maxBytes && (System.currentTimeMillis() - startTime) < timeoutMs) {
-            val byte = readBuffer.poll()
+            var ownerIsCurrent = true
+            val byte =
+                synchronized(transportOwnerLock) {
+                    if (currentTransportOwnerLocked() !== owner) {
+                        ownerIsCurrent = false
+                        null
+                    } else {
+                        readBuffer.poll()
+                    }
+                }
+            if (!ownerIsCurrent) break
             if (byte != null) {
                 data.add(byte)
             } else {

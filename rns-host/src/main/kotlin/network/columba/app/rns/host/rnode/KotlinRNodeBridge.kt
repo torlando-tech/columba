@@ -168,7 +168,7 @@ class KotlinRNodeBridge(
             }
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    internal var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
 

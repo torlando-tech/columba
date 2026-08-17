@@ -1696,49 +1696,40 @@ class KotlinRNodeBridge(
         expectedBleGatt: BluetoothGatt? = null,
         expectedClassicSocket: BluetoothSocket? = null,
     ) {
-        var deviceName: String? = null
-        var mode: RNodeConnectionMode? = null
-        var bleOwner: BluetoothGatt? = null
-        var classicOwner: BluetoothSocket? = null
-        val admitted =
+        val detached =
             synchronized(transportOwnerLock) {
                 val bleMatches = expectedBleGatt == null || bluetoothGatt === expectedBleGatt
                 val classicMatches = expectedClassicSocket == null || bluetoothSocket === expectedClassicSocket
                 if (!bleMatches || !classicMatches || !isConnected.getAndSet(false)) {
-                    false
+                    null
                 } else {
-                    deviceName = connectedDeviceName
-                    mode = connectionMode
-                    bleOwner = bluetoothGatt
-                    classicOwner = bluetoothSocket
-                    true
-                }
-            }
-        if (!admitted) return
-
-        Log.w(TAG, "Connection lost to $deviceName (mode=$mode)")
-        when (mode) {
-            RNodeConnectionMode.CLASSIC -> classicOwner?.let { cleanupClassic(it) }
-            RNodeConnectionMode.BLE -> bleOwner?.let { cleanupBle(it) }
-            null -> {}
-        }
-
-        val shouldNotify =
-            synchronized(transportOwnerLock) {
-                if (!isConnected.get()) {
+                    val transports =
+                        DetachedTransports(
+                            wasOnline = true,
+                            deviceName = connectedDeviceName,
+                            classicResources = Triple(inputStream, outputStream, bluetoothSocket),
+                            gatt = bluetoothGatt,
+                        )
+                    inputStream = null
+                    outputStream = null
+                    bluetoothSocket = null
+                    classicReadSocket = null
+                    bluetoothGatt = null
                     connectionMode = null
                     connectedDeviceName = null
+                    resetBleAttemptStateLocked()
                     readBuffer.clear()
-                    true
-                } else {
-                    false
+                    transports
                 }
-            }
-        if (shouldNotify) {
-            // Notify python only if a replacement did not become online while
-            // the detached owner's resources were closing.
-            notifyConnectionStateChanged(false, deviceName, "disconnect")
-        }
+            } ?: return
+
+        Log.w(TAG, "Connection lost to ${detached.deviceName}")
+        closeClassicResources(detached.classicResources)
+        closeBleGatt(detached.gatt)
+
+        // Notify Python only if a replacement did not become online while the
+        // detached owner's resources were closing.
+        notifyConnectionStateChanged(false, detached.deviceName, "disconnect")
     }
 
     internal fun handleBluetoothAdapterStateChanged(state: Int) {

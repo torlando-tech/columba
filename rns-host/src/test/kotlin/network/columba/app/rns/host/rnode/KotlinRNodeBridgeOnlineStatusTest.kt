@@ -34,6 +34,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -531,6 +532,104 @@ class KotlinRNodeBridgeOnlineStatusTest {
     }
 
     @Test
+    fun `unexpected BLE disconnect closes detached GATT without touching replacement`() {
+        val oldGatt = mockk<BluetoothGatt>()
+        val freshGatt = mockk<BluetoothGatt>()
+        val closeStarted = CountDownLatch(1)
+        val releaseClose = CountDownLatch(1)
+        every { oldGatt.disconnect() } answers {
+            closeStarted.countDown()
+            assertTrue(releaseClose.await(1, TimeUnit.SECONDS))
+        }
+        every { oldGatt.close() } just Runs
+        every { freshGatt.disconnect() } just Runs
+        every { freshGatt.close() } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+        bridge.replaceBleGattOwner(oldGatt)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.BLE)
+        setBridgeField(bridge, "connectedDeviceName", "Old RNode")
+        setBridgeConnected(bridge, true)
+        val states = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier = RNodeConnectionStateNotifier { connected, _ -> states += connected }
+
+        val disconnect = Thread { invokeHandleDisconnect(bridge, expectedBleGatt = oldGatt) }
+        disconnect.start()
+        assertTrue(closeStarted.await(1, TimeUnit.SECONDS))
+
+        bridge.replaceBleGattOwner(freshGatt)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.BLE)
+        setBridgeField(bridge, "connectedDeviceName", "Fresh RNode")
+        setBridgeBoolean(bridge, "bleConnected", true)
+        setBridgeConnected(bridge, true)
+        releaseClose.countDown()
+        disconnect.join()
+
+        assertTrue(bridge.isConnected())
+        assertTrue(nullableBridgeField(bridge, "bluetoothGatt") === freshGatt)
+        assertEquals("Fresh RNode", nullableBridgeField(bridge, "connectedDeviceName"))
+        assertTrue(states.isEmpty())
+        verify(exactly = 1) { oldGatt.disconnect() }
+        verify(exactly = 1) { oldGatt.close() }
+        verify(exactly = 0) { freshGatt.disconnect() }
+        verify(exactly = 0) { freshGatt.close() }
+    }
+
+    @Test
+    fun `unexpected Classic disconnect closes detached resources without touching replacement`() {
+        val oldSocket = mockk<BluetoothSocket>()
+        val oldInput = mockk<BufferedInputStream>()
+        val oldOutput = mockk<BufferedOutputStream>()
+        val freshSocket = mockk<BluetoothSocket>()
+        val freshInput = mockk<BufferedInputStream>()
+        val freshOutput = mockk<BufferedOutputStream>()
+        val closeStarted = CountDownLatch(1)
+        val releaseClose = CountDownLatch(1)
+        every { oldInput.close() } answers {
+            closeStarted.countDown()
+            assertTrue(releaseClose.await(1, TimeUnit.SECONDS))
+        }
+        every { oldOutput.close() } just Runs
+        every { oldSocket.close() } just Runs
+        every { freshInput.close() } just Runs
+        every { freshOutput.close() } just Runs
+        every { freshSocket.isConnected } returns true
+        every { freshSocket.close() } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+        setBridgeField(bridge, "bluetoothSocket", oldSocket)
+        setBridgeField(bridge, "inputStream", oldInput)
+        setBridgeField(bridge, "outputStream", oldOutput)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.CLASSIC)
+        setBridgeField(bridge, "connectedDeviceName", "Old RNode")
+        setBridgeConnected(bridge, true)
+        val states = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier = RNodeConnectionStateNotifier { connected, _ -> states += connected }
+
+        val disconnect = Thread { invokeHandleDisconnect(bridge, expectedClassicSocket = oldSocket) }
+        disconnect.start()
+        assertTrue(closeStarted.await(1, TimeUnit.SECONDS))
+
+        setBridgeField(bridge, "bluetoothSocket", freshSocket)
+        setBridgeField(bridge, "inputStream", freshInput)
+        setBridgeField(bridge, "outputStream", freshOutput)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.CLASSIC)
+        setBridgeField(bridge, "connectedDeviceName", "Fresh RNode")
+        setBridgeConnected(bridge, true)
+        releaseClose.countDown()
+        disconnect.join()
+
+        assertTrue(bridge.isConnected())
+        assertTrue(nullableBridgeField(bridge, "bluetoothSocket") === freshSocket)
+        assertEquals("Fresh RNode", nullableBridgeField(bridge, "connectedDeviceName"))
+        assertTrue(states.isEmpty())
+        verify(exactly = 1) { oldInput.close() }
+        verify(exactly = 1) { oldOutput.close() }
+        verify(exactly = 1) { oldSocket.close() }
+        verify(exactly = 0) { freshInput.close() }
+        verify(exactly = 0) { freshOutput.close() }
+        verify(exactly = 0) { freshSocket.close() }
+    }
+
+    @Test
     fun `disconnect before delayed connect notification suppresses stale Online`() {
         val oldGatt = mockk<BluetoothGatt>()
         every { oldGatt.disconnect() } just Runs
@@ -616,6 +715,20 @@ class KotlinRNodeBridgeOnlineStatusTest {
     @After
     fun tearDown() {
         clearAllMocks()
+    }
+
+    private fun invokeHandleDisconnect(
+        bridge: KotlinRNodeBridge,
+        expectedBleGatt: BluetoothGatt? = null,
+        expectedClassicSocket: BluetoothSocket? = null,
+    ) {
+        KotlinRNodeBridge::class.java
+            .getDeclaredMethod(
+                "handleDisconnect",
+                BluetoothGatt::class.java,
+                BluetoothSocket::class.java,
+            ).apply { isAccessible = true }
+            .invoke(bridge, expectedBleGatt, expectedClassicSocket)
     }
 
     private fun setBridgeField(

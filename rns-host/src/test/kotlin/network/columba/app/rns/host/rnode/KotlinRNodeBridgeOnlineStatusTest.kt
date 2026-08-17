@@ -12,11 +12,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.util.Log
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import io.mockk.Runs
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -535,12 +538,15 @@ class KotlinRNodeBridgeOnlineStatusTest {
     fun `unexpected BLE disconnect closes detached GATT without touching replacement`() {
         val oldGatt = mockk<BluetoothGatt>()
         val freshGatt = mockk<BluetoothGatt>()
-        val closeStarted = CountDownLatch(1)
-        val releaseClose = CountDownLatch(1)
-        every { oldGatt.disconnect() } answers {
-            closeStarted.countDown()
-            assertTrue(releaseClose.await(1, TimeUnit.SECONDS))
+        val logStarted = CountDownLatch(1)
+        val releaseLog = CountDownLatch(1)
+        mockkStatic(Log::class)
+        every { Log.w(any<String>(), match<String> { it.startsWith("Connection lost to") }) } answers {
+            logStarted.countDown()
+            assertTrue(releaseLog.await(1, TimeUnit.SECONDS))
+            0
         }
+        every { oldGatt.disconnect() } just Runs
         every { oldGatt.close() } just Runs
         every { freshGatt.disconnect() } just Runs
         every { freshGatt.close() } just Runs
@@ -554,14 +560,14 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val disconnect = Thread { invokeHandleDisconnect(bridge, expectedBleGatt = oldGatt) }
         disconnect.start()
-        assertTrue(closeStarted.await(1, TimeUnit.SECONDS))
+        assertTrue(logStarted.await(1, TimeUnit.SECONDS))
 
         bridge.replaceBleGattOwner(freshGatt)
         setBridgeField(bridge, "connectionMode", RNodeConnectionMode.BLE)
         setBridgeField(bridge, "connectedDeviceName", "Fresh RNode")
         setBridgeBoolean(bridge, "bleConnected", true)
         setBridgeConnected(bridge, true)
-        releaseClose.countDown()
+        releaseLog.countDown()
         disconnect.join()
 
         assertTrue(bridge.isConnected())
@@ -582,12 +588,15 @@ class KotlinRNodeBridgeOnlineStatusTest {
         val freshSocket = mockk<BluetoothSocket>()
         val freshInput = mockk<BufferedInputStream>()
         val freshOutput = mockk<BufferedOutputStream>()
-        val closeStarted = CountDownLatch(1)
-        val releaseClose = CountDownLatch(1)
-        every { oldInput.close() } answers {
-            closeStarted.countDown()
-            assertTrue(releaseClose.await(1, TimeUnit.SECONDS))
+        val logStarted = CountDownLatch(1)
+        val releaseLog = CountDownLatch(1)
+        mockkStatic(Log::class)
+        every { Log.w(any<String>(), match<String> { it.startsWith("Connection lost to") }) } answers {
+            logStarted.countDown()
+            assertTrue(releaseLog.await(1, TimeUnit.SECONDS))
+            0
         }
+        every { oldInput.close() } just Runs
         every { oldOutput.close() } just Runs
         every { oldSocket.close() } just Runs
         every { freshInput.close() } just Runs
@@ -606,7 +615,7 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
         val disconnect = Thread { invokeHandleDisconnect(bridge, expectedClassicSocket = oldSocket) }
         disconnect.start()
-        assertTrue(closeStarted.await(1, TimeUnit.SECONDS))
+        assertTrue(logStarted.await(1, TimeUnit.SECONDS))
 
         setBridgeField(bridge, "bluetoothSocket", freshSocket)
         setBridgeField(bridge, "inputStream", freshInput)
@@ -614,7 +623,7 @@ class KotlinRNodeBridgeOnlineStatusTest {
         setBridgeField(bridge, "connectionMode", RNodeConnectionMode.CLASSIC)
         setBridgeField(bridge, "connectedDeviceName", "Fresh RNode")
         setBridgeConnected(bridge, true)
-        releaseClose.countDown()
+        releaseLog.countDown()
         disconnect.join()
 
         assertTrue(bridge.isConnected())
@@ -714,6 +723,7 @@ class KotlinRNodeBridgeOnlineStatusTest {
 
     @After
     fun tearDown() {
+        unmockkStatic(Log::class)
         clearAllMocks()
     }
 

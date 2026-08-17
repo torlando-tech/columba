@@ -32,6 +32,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.UUID
 
 /**
  * Unit tests for KotlinRNodeBridge online status listener functionality.
@@ -175,56 +176,52 @@ class KotlinRNodeBridgeOnlineStatusTest {
     }
 
     @Test
-    fun `stale GATT callbacks cannot disconnect fresh BLE owner`() {
+    fun `callback waiting behind owner replacement cannot mutate fresh BLE owner`() {
         val oldGatt = mockk<BluetoothGatt>()
         val freshGatt = mockk<BluetoothGatt>()
         every { oldGatt.discoverServices() } returns true
         val bridge = KotlinRNodeBridge(mockContext)
-        KotlinRNodeBridge::class.java.getDeclaredField("bluetoothGatt").apply {
-            isAccessible = true
-            set(bridge, freshGatt)
-        }
-        KotlinRNodeBridge::class.java.getDeclaredField("bleConnected").apply {
-            isAccessible = true
-            setBoolean(bridge, true)
-        }
-        KotlinRNodeBridge::class.java.getDeclaredField("bleMtuCallbackReceived").apply {
-            isAccessible = true
-            setBoolean(bridge, false)
-        }
-        KotlinRNodeBridge::class.java.getDeclaredField("connectionMode").apply {
-            isAccessible = true
-            set(bridge, RNodeConnectionMode.BLE)
-        }
-        KotlinRNodeBridge::class.java.getDeclaredField("connectedDeviceName").apply {
-            isAccessible = true
-            set(bridge, "RNode E517")
-        }
-        KotlinRNodeBridge::class.java.getDeclaredField("isConnected").apply {
-            isAccessible = true
-            (get(bridge) as AtomicBoolean).set(true)
-        }
+        bridge.replaceBleGattOwner(oldGatt)
+        setBridgeBoolean(bridge, "bleConnected", true)
+        setBridgeBoolean(bridge, "bleMtuCallbackReceived", false)
+        setBridgeField(bridge, "connectionMode", RNodeConnectionMode.BLE)
+        setBridgeField(bridge, "connectedDeviceName", "RNode E517")
+        setBridgeConnected(bridge, true)
         val connectionStates = mutableListOf<Boolean>()
         bridge.connectionStateNotifier =
             RNodeConnectionStateNotifier { connected, _ -> connectionStates += connected }
         val pendingWrite = CountDownLatch(1)
-        KotlinRNodeBridge::class.java.getDeclaredField("bleWriteLatch").apply {
-            isAccessible = true
-            set(bridge, pendingWrite)
-        }
+        setBridgeField(bridge, "bleWriteLatch", pendingWrite)
         val staleCharacteristic = mockk<BluetoothGattCharacteristic>()
-        val callback =
-            KotlinRNodeBridge::class.java.getDeclaredField("gattCallback").let { field ->
-                field.isAccessible = true
-                field.get(bridge) as BluetoothGattCallback
+        every { staleCharacteristic.uuid } returns
+            UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
+        every { staleCharacteristic.value } returns byteArrayOf(0x2A)
+        val callback = bridgeField(bridge, "gattCallback") as BluetoothGattCallback
+
+        val ownerLock = bridgeField(bridge, "transportOwnerLock")
+        val callbackStarted = CountDownLatch(1)
+        val callbackFinished = CountDownLatch(1)
+        val callbackThread =
+            Thread {
+                callbackStarted.countDown()
+                callback.onMtuChanged(oldGatt, 247, BluetoothGatt.GATT_SUCCESS)
+                callbackFinished.countDown()
             }
+        synchronized(ownerLock) {
+            callbackThread.start()
+            assertTrue(callbackStarted.await(1, TimeUnit.SECONDS))
+            bridge.replaceBleGattOwner(freshGatt)
+            setBridgeBoolean(bridge, "bleConnected", true)
+            assertFalse(callbackFinished.await(50, TimeUnit.MILLISECONDS))
+        }
+        assertTrue(callbackFinished.await(1, TimeUnit.SECONDS))
+        callbackThread.join()
 
         callback.onConnectionStateChange(
             oldGatt,
             BluetoothGatt.GATT_SUCCESS,
             BluetoothProfile.STATE_DISCONNECTED,
         )
-        callback.onMtuChanged(oldGatt, 247, BluetoothGatt.GATT_SUCCESS)
         callback.onCharacteristicChanged(oldGatt, staleCharacteristic)
         callback.onCharacteristicWrite(
             oldGatt,
@@ -238,29 +235,23 @@ class KotlinRNodeBridgeOnlineStatusTest {
         assertEquals(1L, pendingWrite.count)
         assertEquals(0, bridge.available())
         assertEquals(-100, bridge.getRssi())
-        KotlinRNodeBridge::class.java.getDeclaredField("bleMtuCallbackReceived").apply {
-            isAccessible = true
-            assertFalse(getBoolean(bridge))
-        }
+        assertFalse(bridgeField(bridge, "bleMtuCallbackReceived") as Boolean)
         verify(exactly = 0) { freshGatt.disconnect() }
         verify(exactly = 0) { freshGatt.close() }
         verify(exactly = 0) { oldGatt.discoverServices() }
     }
 
     @Test
-    fun `stale Classic reader cannot disconnect fresh socket owner`() {
+    fun `post-read publication waiting behind replacement cannot contaminate fresh Classic owner`() {
         val oldSocket = mockk<BluetoothSocket>()
         val freshSocket = mockk<BluetoothSocket>()
         every { freshSocket.isConnected } returns true
         every { freshSocket.close() } just Runs
         val bridge = KotlinRNodeBridge(mockContext)
-        KotlinRNodeBridge::class.java.getDeclaredField("bluetoothSocket").apply {
-            isAccessible = true
-            set(bridge, freshSocket)
-        }
+        bridge.replaceClassicSocketOwner(oldSocket)
         KotlinRNodeBridge::class.java.getDeclaredField("classicReadSocket").apply {
             isAccessible = true
-            set(bridge, freshSocket)
+            set(bridge, oldSocket)
         }
         KotlinRNodeBridge::class.java.getDeclaredField("connectionMode").apply {
             isAccessible = true
@@ -277,6 +268,31 @@ class KotlinRNodeBridgeOnlineStatusTest {
         val connectionStates = mutableListOf<Boolean>()
         bridge.connectionStateNotifier =
             RNodeConnectionStateNotifier { connected, _ -> connectionStates += connected }
+
+        val ownerLock = bridgeField(bridge, "transportOwnerLock")
+        val publicationStarted = CountDownLatch(1)
+        val publicationFinished = CountDownLatch(1)
+        val publicationAccepted = AtomicBoolean(true)
+        val publicationThread =
+            Thread {
+                publicationStarted.countDown()
+                publicationAccepted.set(bridge.publishClassicRead(oldSocket, byteArrayOf(0x2A)))
+                publicationFinished.countDown()
+            }
+        synchronized(ownerLock) {
+            publicationThread.start()
+            assertTrue(publicationStarted.await(1, TimeUnit.SECONDS))
+            bridge.replaceClassicSocketOwner(freshSocket)
+            assertFalse(publicationFinished.await(50, TimeUnit.MILLISECONDS))
+        }
+        assertTrue(publicationFinished.await(1, TimeUnit.SECONDS))
+        publicationThread.join()
+        assertFalse(publicationAccepted.get())
+        assertEquals(0, bridge.available())
+        KotlinRNodeBridge::class.java.getDeclaredField("classicReadSocket").apply {
+            isAccessible = true
+            set(bridge, freshSocket)
+        }
 
         bridge.handleClassicReaderFinished(oldSocket)
 
@@ -312,6 +328,44 @@ class KotlinRNodeBridgeOnlineStatusTest {
     @After
     fun tearDown() {
         clearAllMocks()
+    }
+
+    private fun setBridgeField(
+        bridge: KotlinRNodeBridge,
+        name: String,
+        value: Any?,
+    ) {
+        KotlinRNodeBridge::class.java.getDeclaredField(name).apply {
+            isAccessible = true
+            set(bridge, value)
+        }
+    }
+
+    private fun setBridgeBoolean(
+        bridge: KotlinRNodeBridge,
+        name: String,
+        value: Boolean,
+    ) {
+        KotlinRNodeBridge::class.java.getDeclaredField(name).apply {
+            isAccessible = true
+            setBoolean(bridge, value)
+        }
+    }
+
+    private fun bridgeField(
+        bridge: KotlinRNodeBridge,
+        name: String,
+    ): Any =
+        KotlinRNodeBridge::class.java.getDeclaredField(name).let { field ->
+            field.isAccessible = true
+            requireNotNull(field.get(bridge))
+        }
+
+    private fun setBridgeConnected(
+        bridge: KotlinRNodeBridge,
+        connected: Boolean,
+    ) {
+        (bridgeField(bridge, "isConnected") as AtomicBoolean).set(connected)
     }
 
     // ========== RNodeOnlineStatusListener Tests ==========

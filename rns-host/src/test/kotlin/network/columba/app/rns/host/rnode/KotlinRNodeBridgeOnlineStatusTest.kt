@@ -176,6 +176,94 @@ class KotlinRNodeBridgeOnlineStatusTest {
     }
 
     @Test
+    fun `adapter admission remains blocked until Bluetooth is on`() {
+        val device = mockk<BluetoothDevice>()
+        val gatt = mockk<BluetoothGatt>()
+        every { device.name } returns "RNode E517"
+        every { device.address } returns "9C:13:9E:A0:80:11"
+        every { device.bondState } returnsMany
+            listOf(
+                BluetoothDevice.BOND_BONDED,
+                BluetoothDevice.BOND_NONE,
+            )
+        every { device.connectGatt(mockContext, false, any(), BluetoothDevice.TRANSPORT_LE) } returns gatt
+        every { gatt.disconnect() } just Runs
+        every { gatt.close() } just Runs
+        every { mockBluetoothAdapter.bondedDevices } returns setOf(device)
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        bridge.handleBluetoothAdapterStateChanged(BluetoothAdapter.STATE_TURNING_OFF)
+        assertFalse(bridge.connect("RNode E517", "ble"))
+        verify(exactly = 0) {
+            device.connectGatt(mockContext, false, any(), BluetoothDevice.TRANSPORT_LE)
+        }
+
+        bridge.handleBluetoothAdapterStateChanged(BluetoothAdapter.STATE_ON)
+        assertFalse(bridge.connect("RNode E517", "ble"))
+        verify(exactly = 1) {
+            device.connectGatt(mockContext, false, any(), BluetoothDevice.TRANSPORT_LE)
+        }
+    }
+
+    @Test
+    fun `shutdown permanently rejects new transport admission`() {
+        val device = mockk<BluetoothDevice>()
+        every { device.name } returns "RNode E517"
+        every { mockBluetoothAdapter.bondedDevices } returns setOf(device)
+        val bridge = KotlinRNodeBridge(mockContext)
+
+        bridge.shutdown()
+
+        assertFalse(bridge.connect("RNode E517", "ble"))
+        verify(exactly = 0) {
+            device.connectGatt(mockContext, false, any(), BluetoothDevice.TRANSPORT_LE)
+        }
+    }
+
+    @Test
+    fun `adapter invalidation atomically clears connection admitted while callback waits`() {
+        val admittedGatt = mockk<BluetoothGatt>()
+        every { admittedGatt.disconnect() } just Runs
+        every { admittedGatt.close() } just Runs
+        val bridge = KotlinRNodeBridge(mockContext)
+        val states = mutableListOf<Boolean>()
+        bridge.connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, _ -> states += connected }
+        val ownerLock = bridgeField(bridge, "transportOwnerLock")
+        val invalidationStarted = CountDownLatch(1)
+        val invalidation =
+            Thread {
+                invalidationStarted.countDown()
+                bridge.handleBluetoothAdapterStateChanged(BluetoothAdapter.STATE_TURNING_OFF)
+            }
+
+        synchronized(ownerLock) {
+            invalidation.start()
+            assertTrue(invalidationStarted.await(1, TimeUnit.SECONDS))
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1)
+            while (invalidation.state != Thread.State.BLOCKED && System.nanoTime() < deadline) {
+                Thread.yield()
+            }
+            assertEquals(Thread.State.BLOCKED, invalidation.state)
+            bridge.replaceBleGattOwner(admittedGatt)
+            setBridgeField(bridge, "connectionMode", RNodeConnectionMode.BLE)
+            setBridgeField(bridge, "connectedDeviceName", "RNode E517")
+            setBridgeBoolean(bridge, "bleConnected", true)
+            setBridgeConnected(bridge, true)
+        }
+        invalidation.join()
+
+        assertFalse(bridge.isConnected())
+        assertNull(nullableBridgeField(bridge, "bluetoothGatt"))
+        assertNull(nullableBridgeField(bridge, "connectionMode"))
+        assertNull(nullableBridgeField(bridge, "connectedDeviceName"))
+        assertFalse(bridgeBoolean(bridge, "bleConnected"))
+        assertEquals(listOf(false), states)
+        verify(exactly = 1) { admittedGatt.disconnect() }
+        verify(exactly = 1) { admittedGatt.close() }
+    }
+
+    @Test
     fun `callback waiting behind owner replacement cannot mutate fresh BLE owner`() {
         val oldGatt = mockk<BluetoothGatt>()
         val freshGatt = mockk<BluetoothGatt>()
@@ -424,6 +512,24 @@ class KotlinRNodeBridgeOnlineStatusTest {
         KotlinRNodeBridge::class.java.getDeclaredField(name).let { field ->
             field.isAccessible = true
             requireNotNull(field.get(bridge))
+        }
+
+    private fun nullableBridgeField(
+        bridge: KotlinRNodeBridge,
+        name: String,
+    ): Any? =
+        KotlinRNodeBridge::class.java.getDeclaredField(name).let { field ->
+            field.isAccessible = true
+            field.get(bridge)
+        }
+
+    private fun bridgeBoolean(
+        bridge: KotlinRNodeBridge,
+        name: String,
+    ): Boolean =
+        KotlinRNodeBridge::class.java.getDeclaredField(name).let { field ->
+            field.isAccessible = true
+            field.getBoolean(bridge)
         }
 
     private fun setBridgeConnected(

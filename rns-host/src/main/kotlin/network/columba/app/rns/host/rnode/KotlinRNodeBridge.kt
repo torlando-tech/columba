@@ -203,6 +203,9 @@ class KotlinRNodeBridge(
 
     // Current connection mode and transport generation ownership.
     private val transportOwnerLock = Any()
+    private var transportAdmissionEpoch = 0L
+    private var adapterAdmissionBlocked = false
+    private var bridgeShutdown = false
     private var connectionMode: RNodeConnectionMode? = null
 
     // Bluetooth Classic connection state
@@ -522,9 +525,21 @@ class KotlinRNodeBridge(
             return false
         }
 
+        val admissionEpoch =
+            synchronized(transportOwnerLock) {
+                if (adapterAdmissionBlocked || bridgeShutdown) {
+                    null
+                } else {
+                    transportAdmissionEpoch
+                }
+            } ?: run {
+                Log.e(TAG, "Bluetooth transport admission is unavailable")
+                return false
+            }
+
         return when (requestedMode) {
-            RNodeConnectionMode.CLASSIC -> connectClassic(deviceName, adapter)
-            RNodeConnectionMode.BLE -> connectBle(deviceName, adapter)
+            RNodeConnectionMode.CLASSIC -> connectClassic(deviceName, adapter, admissionEpoch)
+            RNodeConnectionMode.BLE -> connectBle(deviceName, adapter, admissionEpoch)
         }
     }
 
@@ -549,6 +564,9 @@ class KotlinRNodeBridge(
     /**
      * Connect via Bluetooth Classic (SPP/RFCOMM).
      */
+    private fun isTransportAdmissionCurrentLocked(epoch: Long): Boolean =
+        epoch == transportAdmissionEpoch && !adapterAdmissionBlocked && !bridgeShutdown
+
     internal fun replaceClassicSocketOwner(socket: BluetoothSocket) {
         synchronized(transportOwnerLock) {
             bluetoothSocket = socket
@@ -572,9 +590,11 @@ class KotlinRNodeBridge(
             }
         }
 
+    @Suppress("ReturnCount")
     private fun connectClassic(
         deviceName: String,
         adapter: BluetoothAdapter,
+        admissionEpoch: Long,
     ): Boolean {
         var ownedSocket: BluetoothSocket? = null
         // Find the device by name in bonded devices
@@ -597,6 +617,9 @@ class KotlinRNodeBridge(
             // Create and publish RFCOMM socket atomically against adapter invalidation.
             val socket =
                 synchronized(transportOwnerLock) {
+                    if (!isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                        return false
+                    }
                     device.createRfcommSocketToServiceRecord(SPP_UUID).also {
                         replaceClassicSocketOwner(it)
                     }
@@ -618,7 +641,7 @@ class KotlinRNodeBridge(
             val connectedOutputStream = BufferedOutputStream(socket.outputStream, STREAM_BUFFER_SIZE)
             val admitted =
                 synchronized(transportOwnerLock) {
-                    if (bluetoothSocket !== socket) {
+                    if (bluetoothSocket !== socket || !isTransportAdmissionCurrentLocked(admissionEpoch)) {
                         false
                     } else {
                         inputStream = connectedInputStream
@@ -668,6 +691,7 @@ class KotlinRNodeBridge(
     private fun connectBle(
         deviceName: String,
         adapter: BluetoothAdapter,
+        admissionEpoch: Long,
     ): Boolean {
         Log.d(TAG, "████ RNODE BLE CONNECT ████ deviceName=$deviceName")
 
@@ -694,7 +718,7 @@ class KotlinRNodeBridge(
                 Thread.sleep(BLE_RETRY_DELAY_MS)
             }
 
-            val success = attemptBleConnection(device, deviceName)
+            val success = attemptBleConnection(device, deviceName, admissionEpoch)
             if (success) {
                 return true
             }
@@ -734,8 +758,14 @@ class KotlinRNodeBridge(
         }
     }
 
-    private fun createBleGatt(device: BluetoothDevice): BluetoothGatt =
+    private fun createBleGatt(
+        device: BluetoothDevice,
+        admissionEpoch: Long,
+    ): BluetoothGatt? =
         synchronized(transportOwnerLock) {
+            if (!isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                return@synchronized null
+            }
             device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE).also {
                 replaceBleGattOwner(it)
             }
@@ -766,6 +796,7 @@ class KotlinRNodeBridge(
     private fun attemptBleConnection(
         device: BluetoothDevice,
         deviceName: String,
+        admissionEpoch: Long,
     ): Boolean {
         var ownedGatt: BluetoothGatt? = null
         return try {
@@ -776,7 +807,7 @@ class KotlinRNodeBridge(
 
             // Connect GATT and publish the new owner atomically with attempt-state reset.
             Log.d(TAG, "Connecting GATT to ${device.address}...")
-            val attemptGatt = createBleGatt(device)
+            val attemptGatt = createBleGatt(device, admissionEpoch) ?: return false
             ownedGatt = attemptGatt
 
             // Wait for connection and service discovery
@@ -807,13 +838,18 @@ class KotlinRNodeBridge(
                 return false
             }
 
-            if (
-                !mutateCurrentGatt(attemptGatt) {
-                    connectedDeviceName = deviceName
-                    connectionMode = RNodeConnectionMode.BLE
-                    isConnected.set(true)
+            val admitted =
+                synchronized(transportOwnerLock) {
+                    if (bluetoothGatt !== attemptGatt || !isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                        false
+                    } else {
+                        connectedDeviceName = deviceName
+                        connectionMode = RNodeConnectionMode.BLE
+                        isConnected.set(true)
+                        true
+                    }
                 }
-            ) {
+            if (!admitted) {
                 return false
             }
 
@@ -1122,9 +1158,24 @@ class KotlinRNodeBridge(
         }
     }
 
-    private fun cleanupAllTransports() {
+    private data class DetachedTransports(
+        val wasOnline: Boolean,
+        val deviceName: String?,
+        val classicResources: Triple<BufferedInputStream?, BufferedOutputStream?, BluetoothSocket?>,
+        val gatt: BluetoothGatt?,
+    )
+
+    private fun invalidateAllTransports(
+        blockAdapterAdmission: Boolean = false,
+        shutdownBridge: Boolean = false,
+    ): DetachedTransports {
         val detached =
             synchronized(transportOwnerLock) {
+                transportAdmissionEpoch++
+                if (blockAdapterAdmission) adapterAdmissionBlocked = true
+                if (shutdownBridge) bridgeShutdown = true
+                val wasOnline = isConnected.getAndSet(false)
+                val deviceName = connectedDeviceName
                 val classicResources = Triple(inputStream, outputStream, bluetoothSocket)
                 val gatt = bluetoothGatt
                 inputStream = null
@@ -1132,11 +1183,15 @@ class KotlinRNodeBridge(
                 bluetoothSocket = null
                 classicReadSocket = null
                 bluetoothGatt = null
+                connectionMode = null
+                connectedDeviceName = null
                 resetBleAttemptStateLocked()
-                classicResources to gatt
+                readBuffer.clear()
+                DetachedTransports(wasOnline, deviceName, classicResources, gatt)
             }
-        closeClassicResources(detached.first)
-        closeBleGatt(detached.second)
+        closeClassicResources(detached.classicResources)
+        closeBleGatt(detached.gatt)
+        return detached
     }
 
     private fun cleanupBle(expectedGatt: BluetoothGatt? = null) {
@@ -1169,46 +1224,12 @@ class KotlinRNodeBridge(
      * Disconnect from the current RNode device.
      */
     fun disconnect() {
-        var deviceName: String? = null
-        var mode: RNodeConnectionMode? = null
-        var bleOwner: BluetoothGatt? = null
-        var classicOwner: BluetoothSocket? = null
-        val wasOnline =
-            synchronized(transportOwnerLock) {
-                if (!isConnected.getAndSet(false)) {
-                    false
-                } else {
-                    deviceName = connectedDeviceName
-                    mode = connectionMode
-                    bleOwner = bluetoothGatt
-                    classicOwner = bluetoothSocket
-                    true
-                }
-            }
-        if (!wasOnline) {
-            Log.d(TAG, "Not online; cleaning any provisional Bluetooth transports")
-            cleanupAllTransports()
-            return
+        val detached = invalidateAllTransports()
+        if (detached.wasOnline) {
+            Log.i(TAG, "Disconnected from ${detached.deviceName}")
+        } else {
+            Log.d(TAG, "Cleaned provisional Bluetooth transports")
         }
-
-        Log.i(TAG, "Disconnecting from $deviceName (mode=$mode)...")
-        when (mode) {
-            RNodeConnectionMode.CLASSIC -> classicOwner?.let { cleanupClassic(it) }
-            RNodeConnectionMode.BLE -> bleOwner?.let { cleanupBle(it) }
-            null -> {
-                cleanupAllTransports()
-            }
-        }
-
-        synchronized(transportOwnerLock) {
-            if (!isConnected.get() && bluetoothGatt == null && bluetoothSocket == null) {
-                connectionMode = null
-                connectedDeviceName = null
-                readBuffer.clear()
-            }
-        }
-
-        Log.i(TAG, "Disconnected from $deviceName")
     }
 
     /**
@@ -1694,17 +1715,18 @@ class KotlinRNodeBridge(
     }
 
     internal fun handleBluetoothAdapterStateChanged(state: Int) {
+        if (state == BluetoothAdapter.STATE_ON) {
+            synchronized(transportOwnerLock) {
+                if (!bridgeShutdown) adapterAdmissionBlocked = false
+            }
+            return
+        }
         if (state != BluetoothAdapter.STATE_TURNING_OFF && state != BluetoothAdapter.STATE_OFF) return
 
         Log.i(TAG, "Bluetooth adapter is turning off; invalidating RNode connection")
-        if (isConnected.get()) {
-            handleDisconnect()
-        } else {
-            // Adapter state can change while connectGatt() or RFCOMM connect()
-            // is still in flight, before connectionMode/isConnected are committed.
-            // Close those provisional resources so stale callbacks cannot revive
-            // the old transport after Bluetooth is enabled again.
-            cleanupAllTransports()
+        val detached = invalidateAllTransports(blockAdapterAdmission = true)
+        if (detached.wasOnline) {
+            notifyConnectionStateChanged(false, detached.deviceName, "adapter shutdown")
         }
     }
 
@@ -1732,7 +1754,7 @@ class KotlinRNodeBridge(
      * Shutdown the bridge and release resources.
      */
     fun shutdown() {
-        disconnect()
+        invalidateAllTransports(shutdownBridge = true)
         if (isBluetoothStateReceiverRegistered) {
             try {
                 context.unregisterReceiver(bluetoothStateReceiver)

@@ -137,6 +137,36 @@ class RNodeReconnectTests(unittest.TestCase):
         interface.usb_bridge = None
         return interface
 
+    def test_stale_reader_is_joined_before_replacement_transport_connects(self):
+        interface = self.new_interface()
+        bridge = ScriptedBleBridge(interface, [False])
+        interface.kotlin_bridge = bridge
+        interface._running.set()
+        events = []
+
+        class StaleReader:
+            alive = True
+
+            def is_alive(self):
+                return self.alive
+
+            def join(self, timeout):
+                events.append(("join", timeout, interface._running.is_set()))
+                self.alive = False
+
+        interface._read_thread = StaleReader()
+        original_connect = bridge.connect
+
+        def connect_after_join(device_name, mode):
+            events.append(("connect", interface._read_thread.is_alive()))
+            return original_connect(device_name, mode)
+
+        bridge.connect = connect_after_join
+
+        self.assertFalse(interface._start_once())
+        self.assertEqual([("join", 2.0, False), ("connect", False)], events)
+        self.assertEqual(1, bridge.connect_calls)
+
     def test_ble_reconnect_survives_transport_and_configuration_failures(self):
         interface = self.new_interface()
         bridge = ScriptedBleBridge(interface, [False, True, True])
@@ -387,6 +417,30 @@ class RNodeReconnectTests(unittest.TestCase):
         self.assertEqual(2, attempts)
         self.assertTrue(interface.online)
         self.assertFalse(interface._reconnecting)
+
+    def test_disconnect_during_failed_attempt_does_not_poison_next_success(self):
+        interface = self.new_interface()
+        interface.kotlin_bridge = ScriptedBleBridge(interface, [True])
+        attempts = 0
+
+        def start():
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                # Reproduce a GATT drop while RNode configuration is still
+                # finishing. The attempt fails, then the next attempt succeeds.
+                interface._on_connection_state_changed(False, "Test RNode")
+                return False
+            interface._set_online(True)
+            return True
+
+        interface.start = start
+        interface._reconnection_loop()
+
+        self.assertEqual(2, attempts)
+        self.assertTrue(interface.online)
+        self.assertFalse(interface._reconnecting)
+        self.assertFalse(interface._reconnect_requested)
 
     def test_start_attempts_are_single_flight(self):
         interface = self.new_interface()

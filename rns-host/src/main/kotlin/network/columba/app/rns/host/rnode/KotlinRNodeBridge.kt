@@ -11,7 +11,10 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.util.Log
 import com.chaquo.python.PyObject
 import kotlinx.coroutines.CoroutineScope
@@ -76,6 +79,13 @@ interface RNodeOnlineStatusListener {
     fun onRNodeOnlineStatusChanged(
         isOnline: Boolean,
         interfaceName: String,
+    )
+}
+
+internal fun interface RNodeConnectionStateNotifier {
+    fun notify(
+        connected: Boolean,
+        deviceName: String?,
     )
 }
 
@@ -158,19 +168,54 @@ class KotlinRNodeBridge(
             }
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    internal var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
 
-    // Current connection mode
+    private val bluetoothStateReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context?,
+                intent: Intent?,
+            ) {
+                if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+                val state =
+                    intent.getIntExtra(
+                        BluetoothAdapter.EXTRA_STATE,
+                        BluetoothAdapter.STATE_OFF,
+                    )
+                handleBluetoothAdapterStateChanged(state)
+            }
+        }
+    private var isBluetoothStateReceiverRegistered = false
+
+    init {
+        try {
+            context.registerReceiver(
+                bluetoothStateReceiver,
+                IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            )
+            isBluetoothStateReceiverRegistered = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register Bluetooth adapter state receiver", e)
+        }
+    }
+
+    // Current connection mode and transport generation ownership.
+    private val transportOwnerLock = Any()
+    private var transportAdmissionEpoch = 0L
+    private var adapterAdmissionBlocked = false
+    private var bridgeShutdown = false
     private var connectionMode: RNodeConnectionMode? = null
 
     // Bluetooth Classic connection state
+    @Volatile
     private var bluetoothSocket: BluetoothSocket? = null
     private var inputStream: BufferedInputStream? = null
     private var outputStream: BufferedOutputStream? = null
 
     // BLE connection state
+    @Volatile
     private var bluetoothGatt: BluetoothGatt? = null
     private var bleRxCharacteristic: BluetoothGattCharacteristic? = null
     private var bleTxCharacteristic: BluetoothGattCharacteristic? = null
@@ -199,7 +244,9 @@ class KotlinRNodeBridge(
 
     // Thread-safe state flags
     private val isConnected = AtomicBoolean(false)
-    private val isReading = AtomicBoolean(false)
+
+    @Volatile
+    private var classicReadSocket: BluetoothSocket? = null
 
     // Read buffer for non-blocking reads
     private val readBuffer = ConcurrentLinkedQueue<Byte>()
@@ -219,15 +266,11 @@ class KotlinRNodeBridge(
     private val onlineStatusListeners = mutableListOf<RNodeOnlineStatusListener>()
 
     // Python-side connection-state callback. Single slot (not a list) because
-    // the consumer is ColumbaRNodeInterface._on_connection_state_changed —
-    // there's one Python interface per bridge instance at a time. PyObject
-    // (Chaquopy) instead of a Kotlin SAM because Chaquopy doesn't auto-
-    // adapt a Python bound method to a Kotlin functional interface
-    // ("Cannot convert method object to ..." at runtime). PyObject +
-    // callAttr("__call__", ...) is the working pattern used throughout
-    // KotlinBLEBridge for the same situation.
+    // the consumer is ColumbaRNodeInterface._on_connection_state_changed.
+    // Keep PyObject adaptation at this boundary while the transport lifecycle
+    // uses a testable Kotlin notifier.
     @Volatile
-    private var connectionStateListener: PyObject? = null
+    internal var connectionStateNotifier: RNodeConnectionStateNotifier? = null
 
     /**
      * Register a Kotlin listener for RNode error events.
@@ -317,7 +360,39 @@ class KotlinRNodeBridge(
      *   `def _on_connection_state_changed(self, connected: bool, device_name: str | None)`
      */
     fun setOnConnectionStateChanged(callback: PyObject) {
-        connectionStateListener = callback
+        connectionStateNotifier =
+            RNodeConnectionStateNotifier { connected, deviceName ->
+                callback.callAttr("__call__", connected, deviceName)
+            }
+    }
+
+    internal fun notifyConnectionStateChanged(
+        connected: Boolean,
+        deviceName: String?,
+        transition: String,
+        expectedBleGatt: BluetoothGatt? = null,
+        expectedClassicSocket: BluetoothSocket? = null,
+    ) {
+        synchronized(transportOwnerLock) {
+            val ownerMatches =
+                when {
+                    expectedBleGatt != null -> bluetoothGatt === expectedBleGatt
+                    expectedClassicSocket != null -> bluetoothSocket === expectedClassicSocket
+                    else -> true
+                }
+            val stateMatches = if (connected) isConnected.get() && ownerMatches else !isConnected.get()
+            if (!stateMatches) {
+                Log.w(TAG, "Suppressing stale connection state notification ($transition, connected=$connected)")
+                return
+            }
+            try {
+                // Keep owner transitions serialized until the foreign callback returns.
+                // The current Python callback never waits for a bridge operation.
+                connectionStateNotifier?.notify(connected, deviceName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error in connection state listener ($transition)", e)
+            }
+        }
     }
 
     /**
@@ -450,9 +525,21 @@ class KotlinRNodeBridge(
             return false
         }
 
+        val admissionEpoch =
+            synchronized(transportOwnerLock) {
+                if (adapterAdmissionBlocked || bridgeShutdown) {
+                    null
+                } else {
+                    transportAdmissionEpoch
+                }
+            } ?: run {
+                Log.e(TAG, "Bluetooth transport admission is unavailable")
+                return false
+            }
+
         return when (requestedMode) {
-            RNodeConnectionMode.CLASSIC -> connectClassic(deviceName, adapter)
-            RNodeConnectionMode.BLE -> connectBle(deviceName, adapter)
+            RNodeConnectionMode.CLASSIC -> connectClassic(deviceName, adapter, admissionEpoch)
+            RNodeConnectionMode.BLE -> connectBle(deviceName, adapter, admissionEpoch)
         }
     }
 
@@ -477,10 +564,39 @@ class KotlinRNodeBridge(
     /**
      * Connect via Bluetooth Classic (SPP/RFCOMM).
      */
+    private fun isTransportAdmissionCurrentLocked(epoch: Long): Boolean =
+        epoch == transportAdmissionEpoch && !adapterAdmissionBlocked && !bridgeShutdown
+
+    internal fun replaceClassicSocketOwner(socket: BluetoothSocket) {
+        synchronized(transportOwnerLock) {
+            bluetoothSocket = socket
+            classicReadSocket = null
+            readBuffer.clear()
+        }
+    }
+
+    internal fun publishClassicRead(
+        ownerSocket: BluetoothSocket,
+        data: ByteArray,
+    ): Boolean =
+        synchronized(transportOwnerLock) {
+            if (!isCurrentClassicReader(ownerSocket)) {
+                false
+            } else {
+                for (byte in data) {
+                    readBuffer.offer(byte)
+                }
+                true
+            }
+        }
+
+    @Suppress("ReturnCount")
     private fun connectClassic(
         deviceName: String,
         adapter: BluetoothAdapter,
+        admissionEpoch: Long,
     ): Boolean {
+        var ownedSocket: BluetoothSocket? = null
         // Find the device by name in bonded devices
         val device: BluetoothDevice? =
             try {
@@ -498,9 +614,17 @@ class KotlinRNodeBridge(
         return try {
             Log.i(TAG, "Connecting to $deviceName (${device.address}) via Bluetooth Classic...")
 
-            // Create RFCOMM socket
-            val socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-            bluetoothSocket = socket
+            // Create and publish RFCOMM socket atomically against adapter invalidation.
+            val socket =
+                synchronized(transportOwnerLock) {
+                    if (!isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                        return false
+                    }
+                    device.createRfcommSocketToServiceRecord(SPP_UUID).also {
+                        replaceClassicSocketOwner(it)
+                    }
+                }
+            ownedSocket = socket
 
             // Cancel discovery to speed up connection
             try {
@@ -512,32 +636,49 @@ class KotlinRNodeBridge(
             // Connect (blocking call)
             socket.connect()
 
-            // Setup streams
-            inputStream = BufferedInputStream(socket.inputStream, STREAM_BUFFER_SIZE)
-            outputStream = BufferedOutputStream(socket.outputStream, STREAM_BUFFER_SIZE)
-            connectedDeviceName = deviceName
-            connectionMode = RNodeConnectionMode.CLASSIC
-            isConnected.set(true)
+            // Setup streams, then publish readiness only if this socket still owns the attempt.
+            val connectedInputStream = BufferedInputStream(socket.inputStream, STREAM_BUFFER_SIZE)
+            val connectedOutputStream = BufferedOutputStream(socket.outputStream, STREAM_BUFFER_SIZE)
+            val admitted =
+                synchronized(transportOwnerLock) {
+                    if (bluetoothSocket !== socket || !isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                        false
+                    } else {
+                        inputStream = connectedInputStream
+                        outputStream = connectedOutputStream
+                        connectedDeviceName = deviceName
+                        connectionMode = RNodeConnectionMode.CLASSIC
+                        isConnected.set(true)
+                        classicReadSocket = socket
+                        true
+                    }
+                }
+            if (!admitted) {
+                connectedInputStream.close()
+                connectedOutputStream.close()
+                socket.close()
+                return false
+            }
 
             Log.i(TAG, "Connected to $deviceName via Bluetooth Classic")
 
-            try {
-                connectionStateListener?.callAttr("__call__", true, deviceName)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error in connection state listener (classic connect)", e)
-            }
-
-            // Start read thread
-            startClassicReadThread()
+            // Start a reader owned by this exact socket generation before notifying Python.
+            startClassicReadThread(socket, connectedInputStream)
+            notifyConnectionStateChanged(
+                true,
+                deviceName,
+                "classic connect",
+                expectedClassicSocket = socket,
+            )
 
             true
         } catch (e: IOException) {
             Log.e(TAG, "Failed to connect to $deviceName via Classic", e)
-            cleanupClassic()
+            ownedSocket?.let { cleanupClassic(it) }
             false
         } catch (e: SecurityException) {
             Log.e(TAG, "Missing Bluetooth permission", e)
-            cleanupClassic()
+            ownedSocket?.let { cleanupClassic(it) }
             false
         }
     }
@@ -550,6 +691,7 @@ class KotlinRNodeBridge(
     private fun connectBle(
         deviceName: String,
         adapter: BluetoothAdapter,
+        admissionEpoch: Long,
     ): Boolean {
         Log.d(TAG, "████ RNODE BLE CONNECT ████ deviceName=$deviceName")
 
@@ -576,7 +718,7 @@ class KotlinRNodeBridge(
                 Thread.sleep(BLE_RETRY_DELAY_MS)
             }
 
-            val success = attemptBleConnection(device, deviceName)
+            val success = attemptBleConnection(device, deviceName, admissionEpoch)
             if (success) {
                 return true
             }
@@ -597,72 +739,133 @@ class KotlinRNodeBridge(
     /**
      * Single attempt to connect via BLE GATT.
      */
+    private fun resetBleAttemptStateLocked() {
+        bleConnected = false
+        bleServicesDiscovered = false
+        bleMtuCallbackReceived = false
+        bleSetupFailed = false
+        bleRxCharacteristic = null
+        bleTxCharacteristic = null
+        bleMtu = 20
+        bleRssi = -100
+        readBuffer.clear()
+    }
+
+    internal fun replaceBleGattOwner(gatt: BluetoothGatt) {
+        synchronized(transportOwnerLock) {
+            resetBleAttemptStateLocked()
+            bluetoothGatt = gatt
+        }
+    }
+
+    private fun createBleGatt(
+        device: BluetoothDevice,
+        admissionEpoch: Long,
+    ): BluetoothGatt? =
+        synchronized(transportOwnerLock) {
+            if (!isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                return@synchronized null
+            }
+            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE).also {
+                replaceBleGattOwner(it)
+            }
+        }
+
+    private fun isCurrentGatt(gatt: BluetoothGatt): Boolean =
+        synchronized(transportOwnerLock) { gatt === bluetoothGatt }
+
+    private fun isBleAttemptActive(gatt: BluetoothGatt): Boolean =
+        synchronized(transportOwnerLock) {
+            gatt === bluetoothGatt && !bleServicesDiscovered && !bleSetupFailed
+        }
+
+    private fun mutateCurrentGatt(
+        gatt: BluetoothGatt,
+        mutation: () -> Unit,
+    ): Boolean =
+        synchronized(transportOwnerLock) {
+            if (gatt !== bluetoothGatt) {
+                false
+            } else {
+                mutation()
+                true
+            }
+        }
+
     @Suppress("ReturnCount")
     private fun attemptBleConnection(
         device: BluetoothDevice,
         deviceName: String,
+        admissionEpoch: Long,
     ): Boolean {
+        var ownedGatt: BluetoothGatt? = null
         return try {
             if (device.bondState != BluetoothDevice.BOND_BONDED) {
                 markPairingRequired(deviceName, "bond was lost before GATT setup")
                 return false
             }
 
-            // Reset BLE state
-            bleConnected = false
-            bleServicesDiscovered = false
-            bleMtuCallbackReceived = false
-            bleSetupFailed = false
-            bleRxCharacteristic = null
-            bleTxCharacteristic = null
-
-            // Connect GATT
+            // Connect GATT and publish the new owner atomically with attempt-state reset.
             Log.d(TAG, "Connecting GATT to ${device.address}...")
-            bluetoothGatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            val attemptGatt = createBleGatt(device, admissionEpoch) ?: return false
+            ownedGatt = attemptGatt
 
             // Wait for connection and service discovery
             val startTime = System.currentTimeMillis()
             while (
-                !bleServicesDiscovered &&
-                !bleSetupFailed &&
+                isBleAttemptActive(attemptGatt) &&
                 (System.currentTimeMillis() - startTime) < BLE_CONNECT_TIMEOUT_MS
             ) {
                 if (device.bondState != BluetoothDevice.BOND_BONDED) {
-                    markPairingRequired(deviceName, "bond was lost during GATT setup")
-                    cleanupBle()
+                    mutateCurrentGatt(attemptGatt) {
+                        markPairingRequired(deviceName, "bond was lost during GATT setup")
+                    }
+                    cleanupBle(attemptGatt)
                     return false
                 }
                 Thread.sleep(100)
             }
 
-            if (!bleServicesDiscovered) {
+            if (!isCurrentGatt(attemptGatt) || !bleServicesDiscovered) {
                 Log.e(TAG, "BLE setup failed or timed out before secured notifications were ready")
-                cleanupBle()
+                cleanupBle(attemptGatt)
                 return false
             }
 
             if (bleRxCharacteristic == null || bleTxCharacteristic == null) {
                 Log.e(TAG, "Nordic UART Service characteristics not found")
-                cleanupBle()
+                cleanupBle(attemptGatt)
                 return false
             }
 
-            connectedDeviceName = deviceName
-            connectionMode = RNodeConnectionMode.BLE
-            isConnected.set(true)
+            val admitted =
+                synchronized(transportOwnerLock) {
+                    if (bluetoothGatt !== attemptGatt || !isTransportAdmissionCurrentLocked(admissionEpoch)) {
+                        false
+                    } else {
+                        connectedDeviceName = deviceName
+                        connectionMode = RNodeConnectionMode.BLE
+                        isConnected.set(true)
+                        true
+                    }
+                }
+            if (!admitted) {
+                return false
+            }
 
             Log.d(TAG, "████ RNODE BLE SUCCESS ████ deviceName=$deviceName MTU=$bleMtu")
 
-            try {
-                connectionStateListener?.callAttr("__call__", true, deviceName)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error in connection state listener (BLE connect)", e)
-            }
+            notifyConnectionStateChanged(
+                true,
+                deviceName,
+                "BLE connect",
+                expectedBleGatt = attemptGatt,
+            )
 
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to connect to $deviceName via BLE", e)
-            cleanupBle()
+            ownedGatt?.let { cleanupBle(it) }
             false
         }
     }
@@ -680,26 +883,46 @@ class KotlinRNodeBridge(
             ) {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
+                        val admitted =
+                            mutateCurrentGatt(gatt) {
+                                bleConnected = true
+                                bleMtuCallbackReceived = false
+                            }
+                        if (!admitted) {
+                            Log.w(TAG, "Ignoring connection-state callback from a stale GATT")
+                            return
+                        }
                         Log.i(TAG, "BLE connected, requesting MTU...")
-                        bleConnected = true
-                        bleMtuCallbackReceived = false
                         // Request higher MTU for better throughput
                         gatt.requestMtu(512)
                         // Timeout: if onMtuChanged doesn't fire within 2 seconds,
                         // proceed with service discovery anyway to prevent hang
                         scope.launch {
                             delay(2000)
-                            if (!bleMtuCallbackReceived && bleConnected) {
+                            var shouldDiscover = false
+                            mutateCurrentGatt(gatt) {
+                                shouldDiscover = !bleMtuCallbackReceived && bleConnected
+                            }
+                            if (shouldDiscover) {
                                 Log.w(TAG, "MTU callback timeout, proceeding with service discovery")
                                 gatt.discoverServices()
                             }
                         }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
+                        var shouldDisconnect = false
+                        val admitted =
+                            mutateCurrentGatt(gatt) {
+                                bleConnected = false
+                                shouldDisconnect = isConnected.get() && connectionMode == RNodeConnectionMode.BLE
+                            }
+                        if (!admitted) {
+                            Log.w(TAG, "Ignoring connection-state callback from a stale GATT")
+                            return
+                        }
                         Log.i(TAG, "BLE disconnected (status=${gattStatusToString(status)})")
-                        bleConnected = false
-                        if (isConnected.get() && connectionMode == RNodeConnectionMode.BLE) {
-                            handleDisconnect()
+                        if (shouldDisconnect) {
+                            handleDisconnect(expectedBleGatt = gatt)
                         }
                     }
                 }
@@ -710,14 +933,24 @@ class KotlinRNodeBridge(
                 mtu: Int,
                 status: Int,
             ) {
-                bleMtuCallbackReceived = true
+                val admitted =
+                    mutateCurrentGatt(gatt) {
+                        bleMtuCallbackReceived = true
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            bleMtu = mtu
+                        }
+                    }
+                if (!admitted) {
+                    Log.w(TAG, "Ignoring MTU callback from a stale GATT")
+                    return
+                }
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    bleMtu = mtu
                     Log.d(TAG, "BLE MTU changed to $mtu")
                 } else {
                     Log.w(TAG, "MTU change failed with status $status, using default MTU")
                 }
-                // Discover services after MTU negotiation
+                // Discover services after MTU negotiation. If ownership changed
+                // after admission, any resulting callback is rejected.
                 gatt.discoverServices()
             }
 
@@ -726,7 +959,7 @@ class KotlinRNodeBridge(
                 gatt: BluetoothGatt,
                 status: Int,
             ) {
-                if (gatt !== bluetoothGatt) {
+                if (!isCurrentGatt(gatt)) {
                     Log.w(TAG, "Ignoring service discovery from a stale GATT")
                     return
                 }
@@ -744,14 +977,21 @@ class KotlinRNodeBridge(
                     return
                 }
 
-                // Get characteristics
+                // Get characteristics, then publish them only if this GATT still owns the attempt.
                 val rxChar = nusService.getCharacteristic(NUS_RX_CHAR_UUID)
                 val txChar = nusService.getCharacteristic(NUS_TX_CHAR_UUID)
-                bleRxCharacteristic = rxChar
-                bleTxCharacteristic = txChar
 
                 if (rxChar == null || txChar == null) {
                     Log.e(TAG, "NUS characteristics not found")
+                    return
+                }
+                if (
+                    !mutateCurrentGatt(gatt) {
+                        bleRxCharacteristic = rxChar
+                        bleTxCharacteristic = txChar
+                    }
+                ) {
+                    Log.w(TAG, "Ignoring service discovery completed by a stale GATT")
                     return
                 }
 
@@ -759,19 +999,19 @@ class KotlinRNodeBridge(
                 // descriptor write succeeds while the device remains bonded.
                 if (!gatt.setCharacteristicNotification(txChar, true)) {
                     Log.e(TAG, "Failed to enable local NUS notifications")
-                    bleSetupFailed = true
+                    mutateCurrentGatt(gatt) { bleSetupFailed = true }
                     return
                 }
                 val descriptor = txChar.getDescriptor(CCCD_UUID)
                 if (descriptor == null) {
                     Log.e(TAG, "NUS notification descriptor not found")
-                    bleSetupFailed = true
+                    mutateCurrentGatt(gatt) { bleSetupFailed = true }
                     return
                 }
                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 if (!gatt.writeDescriptor(descriptor)) {
                     Log.e(TAG, "Failed to start NUS notification descriptor write")
-                    bleSetupFailed = true
+                    mutateCurrentGatt(gatt) { bleSetupFailed = true }
                 }
             }
 
@@ -781,44 +1021,58 @@ class KotlinRNodeBridge(
                 descriptor: BluetoothGattDescriptor,
                 status: Int,
             ) {
-                if (gatt !== bluetoothGatt) {
+                if (descriptor.uuid != CCCD_UUID) return
+
+                val bonded = gatt.device.bondState == BluetoothDevice.BOND_BONDED
+                if (status == BluetoothGatt.GATT_SUCCESS && bonded) {
+                    if (mutateCurrentGatt(gatt) { bleServicesDiscovered = true }) {
+                        Log.i(TAG, "BLE NUS secured notifications ready")
+                    } else {
+                        Log.w(TAG, "Ignoring descriptor write completed by a stale GATT")
+                    }
+                    return
+                }
+
+                val pairingRequired =
+                    status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION ||
+                        status == BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION ||
+                        !bonded
+                val admitted =
+                    mutateCurrentGatt(gatt) {
+                        if (pairingRequired) {
+                            markPairingRequired(
+                                gatt.device.name ?: "RNode",
+                                "secured notification setup was rejected",
+                            )
+                        }
+                        bleSetupFailed = true
+                    }
+                if (!admitted) {
                     Log.w(TAG, "Ignoring descriptor write from a stale GATT")
                     return
                 }
-                if (descriptor.uuid != CCCD_UUID) return
-
-                if (status == BluetoothGatt.GATT_SUCCESS && gatt.device.bondState == BluetoothDevice.BOND_BONDED) {
-                    bleServicesDiscovered = true
-                    Log.i(TAG, "BLE NUS secured notifications ready")
-                    return
-                }
-
-                if (
-                    status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION ||
-                    status == BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION ||
-                    gatt.device.bondState != BluetoothDevice.BOND_BONDED
-                ) {
-                    markPairingRequired(gatt.device.name ?: "RNode", "secured notification setup was rejected")
-                }
                 Log.e(TAG, "NUS notification descriptor write failed: ${gattStatusToString(status)}")
-                bleSetupFailed = true
             }
 
             override fun onCharacteristicChanged(
                 gatt: BluetoothGatt,
                 characteristic: BluetoothGattCharacteristic,
             ) {
-                if (characteristic.uuid == NUS_TX_CHAR_UUID) {
-                    val data = characteristic.value
-                    if (data != null && data.isNotEmpty()) {
-                        Log.v(TAG, "BLE received ${data.size} bytes")
+                if (characteristic.uuid != NUS_TX_CHAR_UUID) return
+                val data = characteristic.value
+                if (data == null || data.isEmpty()) return
 
-                        // Add to read buffer
+                if (
+                    !mutateCurrentGatt(gatt) {
                         for (byte in data) {
                             readBuffer.offer(byte)
                         }
                     }
+                ) {
+                    Log.w(TAG, "Ignoring characteristic change from a stale GATT")
+                    return
                 }
+                Log.v(TAG, "BLE received ${data.size} bytes")
             }
 
             @Deprecated("Deprecated in API 33")
@@ -827,18 +1081,22 @@ class KotlinRNodeBridge(
                 characteristic: BluetoothGattCharacteristic,
                 status: Int,
             ) {
-                // Signal write completion to waiting thread
-                // Use write ID to prevent race condition where delayed callback
-                // corrupts status for a different write operation
-                synchronized(bleWriteLock) {
-                    val currentLatch = bleWriteLatch
-                    if (currentLatch != null) {
-                        bleWriteStatus.set(status)
-                        currentLatch.countDown()
-                    } else {
-                        // Stale callback - latch was already cleared (write timed out or completed)
-                        Log.w(TAG, "Ignoring stale BLE write callback (no latch)")
+                val admitted =
+                    mutateCurrentGatt(gatt) {
+                        // Signal write completion to the exact current GATT write.
+                        synchronized(bleWriteLock) {
+                            val currentLatch = bleWriteLatch
+                            if (currentLatch != null) {
+                                bleWriteStatus.set(status)
+                                currentLatch.countDown()
+                            } else {
+                                Log.w(TAG, "Ignoring stale BLE write callback (no latch)")
+                            }
+                        }
                     }
+                if (!admitted) {
+                    Log.w(TAG, "Ignoring characteristic write from a stale GATT")
+                    return
                 }
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     Log.e(TAG, "BLE write failed: $status")
@@ -850,8 +1108,17 @@ class KotlinRNodeBridge(
                 rssi: Int,
                 status: Int,
             ) {
+                val admitted =
+                    mutateCurrentGatt(gatt) {
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            bleRssi = rssi
+                        }
+                    }
+                if (!admitted) {
+                    Log.w(TAG, "Ignoring RSSI callback from a stale GATT")
+                    return
+                }
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    bleRssi = rssi
                     Log.v(TAG, "BLE RSSI: $rssi dBm")
                 } else {
                     Log.w(TAG, "Failed to read RSSI: status=$status")
@@ -862,20 +1129,84 @@ class KotlinRNodeBridge(
     /**
      * Clean up BLE resources.
      */
-    private fun cleanupBle() {
+    private fun closeBleGatt(gatt: BluetoothGatt?) {
         try {
-            bluetoothGatt?.disconnect()
-            bluetoothGatt?.close()
+            gatt?.disconnect()
+            gatt?.close()
         } catch (e: Exception) {
             Log.w(TAG, "Error closing BLE GATT", e)
         }
-        bluetoothGatt = null
-        bleRxCharacteristic = null
-        bleTxCharacteristic = null
-        bleConnected = false
-        bleServicesDiscovered = false
-        bleMtuCallbackReceived = false
-        bleSetupFailed = false
+    }
+
+    private fun closeClassicResources(
+        resources: Triple<BufferedInputStream?, BufferedOutputStream?, BluetoothSocket?>,
+    ) {
+        try {
+            resources.first?.close()
+        } catch (e: IOException) {
+            Log.w(TAG, "Error closing input stream", e)
+        }
+        try {
+            resources.second?.close()
+        } catch (e: IOException) {
+            Log.w(TAG, "Error closing output stream", e)
+        }
+        try {
+            resources.third?.close()
+        } catch (e: IOException) {
+            Log.w(TAG, "Error closing socket", e)
+        }
+    }
+
+    private data class DetachedTransports(
+        val wasOnline: Boolean,
+        val deviceName: String?,
+        val classicResources: Triple<BufferedInputStream?, BufferedOutputStream?, BluetoothSocket?>,
+        val gatt: BluetoothGatt?,
+    )
+
+    private fun invalidateAllTransports(
+        blockAdapterAdmission: Boolean = false,
+        shutdownBridge: Boolean = false,
+    ): DetachedTransports {
+        val detached =
+            synchronized(transportOwnerLock) {
+                transportAdmissionEpoch++
+                if (blockAdapterAdmission) adapterAdmissionBlocked = true
+                if (shutdownBridge) bridgeShutdown = true
+                val wasOnline = isConnected.getAndSet(false)
+                val deviceName = connectedDeviceName
+                val classicResources = Triple(inputStream, outputStream, bluetoothSocket)
+                val gatt = bluetoothGatt
+                inputStream = null
+                outputStream = null
+                bluetoothSocket = null
+                classicReadSocket = null
+                bluetoothGatt = null
+                connectionMode = null
+                connectedDeviceName = null
+                resetBleAttemptStateLocked()
+                readBuffer.clear()
+                DetachedTransports(wasOnline, deviceName, classicResources, gatt)
+            }
+        closeClassicResources(detached.classicResources)
+        closeBleGatt(detached.gatt)
+        return detached
+    }
+
+    private fun cleanupBle(expectedGatt: BluetoothGatt? = null) {
+        val gattToClose =
+            synchronized(transportOwnerLock) {
+                if (expectedGatt != null && bluetoothGatt !== expectedGatt) {
+                    return
+                }
+                val currentGatt = bluetoothGatt
+                bluetoothGatt = null
+                resetBleAttemptStateLocked()
+                readBuffer.clear()
+                currentGatt
+            }
+        closeBleGatt(gattToClose)
     }
 
     private fun markPairingRequired(
@@ -893,31 +1224,12 @@ class KotlinRNodeBridge(
      * Disconnect from the current RNode device.
      */
     fun disconnect() {
-        if (!isConnected.get()) {
-            Log.d(TAG, "Not connected")
-            return
+        val detached = invalidateAllTransports()
+        if (detached.wasOnline) {
+            Log.i(TAG, "Disconnected from ${detached.deviceName}")
+        } else {
+            Log.d(TAG, "Cleaned provisional Bluetooth transports")
         }
-
-        val deviceName = connectedDeviceName
-        val mode = connectionMode
-        Log.i(TAG, "Disconnecting from $deviceName (mode=$mode)...")
-
-        isConnected.set(false)
-
-        when (mode) {
-            RNodeConnectionMode.CLASSIC -> cleanupClassic()
-            RNodeConnectionMode.BLE -> cleanupBle()
-            null -> {
-                cleanupClassic()
-                cleanupBle()
-            }
-        }
-
-        connectionMode = null
-        connectedDeviceName = null
-        readBuffer.clear()
-
-        Log.i(TAG, "Disconnected from $deviceName")
     }
 
     /**
@@ -1009,24 +1321,44 @@ class KotlinRNodeBridge(
     /**
      * Write data via Bluetooth Classic.
      */
-    private suspend fun writeClassic(data: ByteArray): Int =
-        try {
+    private data class ClassicWriteOwner(
+        val socket: BluetoothSocket,
+        val stream: BufferedOutputStream,
+    )
+
+    private fun currentClassicWriteOwner(): ClassicWriteOwner? =
+        synchronized(transportOwnerLock) {
+            if (!isConnected.get() || connectionMode != RNodeConnectionMode.CLASSIC) {
+                return@synchronized null
+            }
+            val socket = bluetoothSocket
+            val stream = outputStream
+            if (socket != null && stream != null) {
+                ClassicWriteOwner(socket, stream)
+            } else {
+                null
+            }
+        }
+
+    private suspend fun writeClassic(data: ByteArray): Int {
+        val owner =
+            currentClassicWriteOwner() ?: run {
+                Log.e(TAG, "Classic write owner is unavailable")
+                return -1
+            }
+        return try {
             withContext(Dispatchers.IO) {
-                outputStream?.let { stream ->
-                    stream.write(data)
-                    stream.flush()
-                    Log.v(TAG, "Wrote ${data.size} bytes (Classic)")
-                    data.size
-                } ?: run {
-                    Log.e(TAG, "Output stream is null")
-                    -1
-                }
+                owner.stream.write(data)
+                owner.stream.flush()
+                Log.v(TAG, "Wrote ${data.size} bytes (Classic)")
+                data.size
             }
         } catch (e: IOException) {
             Log.e(TAG, "Classic write failed", e)
-            handleDisconnect()
+            handleDisconnect(expectedClassicSocket = owner.socket)
             -1
         }
+    }
 
     /**
      * Write data via BLE.
@@ -1103,24 +1435,31 @@ class KotlinRNodeBridge(
     /**
      * Synchronous write via Bluetooth Classic.
      */
-    private fun writeSyncClassic(data: ByteArray): Int =
-        synchronized(this) {
-            try {
-                outputStream?.let { stream ->
-                    stream.write(data)
-                    stream.flush()
+    private fun writeSyncClassic(data: ByteArray): Int {
+        val owner =
+            currentClassicWriteOwner() ?: run {
+                Log.e(TAG, "Classic write owner is unavailable")
+                return -1
+            }
+        var writeFailed = false
+        val result =
+            synchronized(this) {
+                try {
+                    owner.stream.write(data)
+                    owner.stream.flush()
                     Log.v(TAG, "Wrote ${data.size} bytes (Classic sync)")
                     data.size
-                } ?: run {
-                    Log.e(TAG, "Output stream is null")
+                } catch (e: IOException) {
+                    Log.e(TAG, "Classic write failed", e)
+                    writeFailed = true
                     -1
                 }
-            } catch (e: IOException) {
-                Log.e(TAG, "Classic write failed", e)
-                scope.launch { handleDisconnect() }
-                -1
             }
+        if (writeFailed) {
+            handleDisconnect(expectedClassicSocket = owner.socket)
         }
+        return result
+    }
 
     /**
      * Synchronous write via BLE.
@@ -1204,30 +1543,38 @@ class KotlinRNodeBridge(
      *
      * @return Available bytes, or empty array if no data
      */
-    fun read(): ByteArray {
-        if (readBuffer.isEmpty()) {
-            return ByteArray(0)
-        }
+    fun read(): ByteArray =
+        synchronized(transportOwnerLock) {
+            if (readBuffer.isEmpty()) {
+                return@synchronized ByteArray(0)
+            }
 
-        val data = mutableListOf<Byte>()
-        while (true) {
-            val byte = readBuffer.poll() ?: break
-            data.add(byte)
-        }
+            val data = mutableListOf<Byte>()
+            while (true) {
+                val byte = readBuffer.poll() ?: break
+                data.add(byte)
+            }
 
-        if (data.isNotEmpty()) {
-            Log.v(TAG, "Read ${data.size} bytes from buffer")
-        }
+            if (data.isNotEmpty()) {
+                Log.v(TAG, "Read ${data.size} bytes from buffer")
+            }
 
-        return data.toByteArray()
-    }
+            data.toByteArray()
+        }
 
     /**
      * Get number of bytes available in the read buffer.
      *
      * @return Number of buffered bytes
      */
-    fun available(): Int = readBuffer.size
+    fun available(): Int = synchronized(transportOwnerLock) { readBuffer.size }
+
+    private fun currentTransportOwnerLocked(): Any? =
+        when (connectionMode) {
+            RNodeConnectionMode.CLASSIC -> bluetoothSocket
+            RNodeConnectionMode.BLE -> bluetoothGatt
+            null -> null
+        }
 
     /**
      * Blocking read with timeout.
@@ -1241,7 +1588,8 @@ class KotlinRNodeBridge(
         maxBytes: Int,
         timeoutMs: Long,
     ): ByteArray {
-        if (!isConnected.get()) {
+        val owner = synchronized(transportOwnerLock) { currentTransportOwnerLocked() }
+        if (!isConnected.get() || owner == null) {
             return ByteArray(0)
         }
 
@@ -1249,7 +1597,17 @@ class KotlinRNodeBridge(
         val data = mutableListOf<Byte>()
 
         while (data.size < maxBytes && (System.currentTimeMillis() - startTime) < timeoutMs) {
-            val byte = readBuffer.poll()
+            var ownerIsCurrent = true
+            val byte =
+                synchronized(transportOwnerLock) {
+                    if (currentTransportOwnerLocked() !== owner) {
+                        ownerIsCurrent = false
+                        null
+                    } else {
+                        readBuffer.poll()
+                    }
+                }
+            if (!ownerIsCurrent) break
             if (byte != null) {
                 data.add(byte)
             } else {
@@ -1264,10 +1622,19 @@ class KotlinRNodeBridge(
     /**
      * Start the background read thread for Bluetooth Classic.
      */
-    private fun startClassicReadThread() {
-        if (isReading.getAndSet(true)) {
-            return // Already reading
+    private fun isCurrentClassicReader(ownerSocket: BluetoothSocket): Boolean =
+        synchronized(transportOwnerLock) {
+            isConnected.get() &&
+                bluetoothSocket === ownerSocket &&
+                connectionMode == RNodeConnectionMode.CLASSIC &&
+                classicReadSocket === ownerSocket
         }
+
+    private fun startClassicReadThread(
+        ownerSocket: BluetoothSocket,
+        ownerInputStream: BufferedInputStream,
+    ) {
+        if (!isCurrentClassicReader(ownerSocket)) return
 
         scope.launch {
             val buffer = ByteArray(READ_BUFFER_SIZE)
@@ -1275,21 +1642,15 @@ class KotlinRNodeBridge(
             Log.d(TAG, "Classic read thread started")
 
             try {
-                while (isConnected.get() && connectionMode == RNodeConnectionMode.CLASSIC) {
-                    val stream = inputStream ?: break
-
+                while (isCurrentClassicReader(ownerSocket)) {
                     try {
                         // Check if data is available (non-blocking check)
-                        val available = stream.available()
+                        val available = ownerInputStream.available()
                         if (available > 0) {
-                            val bytesRead = stream.read(buffer, 0, minOf(available, buffer.size))
+                            val bytesRead = ownerInputStream.read(buffer, 0, minOf(available, buffer.size))
                             if (bytesRead > 0) {
+                                if (!publishClassicRead(ownerSocket, buffer.copyOf(bytesRead))) break
                                 Log.v(TAG, "Classic received $bytesRead bytes")
-
-                                // Add to buffer
-                                for (i in 0 until bytesRead) {
-                                    readBuffer.offer(buffer[i])
-                                }
                             } else if (bytesRead == -1) {
                                 // End of stream - connection closed
                                 Log.i(TAG, "End of stream - connection closed by remote")
@@ -1300,85 +1661,126 @@ class KotlinRNodeBridge(
                             delay(10)
                         }
                     } catch (e: IOException) {
-                        if (isConnected.get()) {
+                        if (bluetoothSocket === ownerSocket && isConnected.get()) {
                             Log.e(TAG, "Classic read error", e)
                         }
                         break
                     }
                 }
             } finally {
-                isReading.set(false)
                 Log.d(TAG, "Classic read thread stopped")
-
-                if (isConnected.get() && connectionMode == RNodeConnectionMode.CLASSIC) {
-                    handleDisconnect()
-                }
+                handleClassicReaderFinished(ownerSocket)
             }
         }
     }
 
+    internal fun handleClassicReaderFinished(ownerSocket: BluetoothSocket) {
+        val ownsCurrentReader =
+            synchronized(transportOwnerLock) {
+                if (classicReadSocket !== ownerSocket) {
+                    false
+                } else {
+                    classicReadSocket = null
+                    true
+                }
+            }
+        if (ownsCurrentReader) {
+            handleDisconnect(expectedClassicSocket = ownerSocket)
+        }
+    }
+
     /**
-     * Handle unexpected disconnection.
+     * Handle unexpected disconnection from an optional exact transport owner.
      */
-    private fun handleDisconnect() {
-        if (isConnected.getAndSet(false)) {
-            val deviceName = connectedDeviceName
-            val mode = connectionMode
-            Log.w(TAG, "Connection lost to $deviceName (mode=$mode)")
+    private fun handleDisconnect(
+        expectedBleGatt: BluetoothGatt? = null,
+        expectedClassicSocket: BluetoothSocket? = null,
+    ) {
+        val detached =
+            synchronized(transportOwnerLock) {
+                val bleMatches = expectedBleGatt == null || bluetoothGatt === expectedBleGatt
+                val classicMatches = expectedClassicSocket == null || bluetoothSocket === expectedClassicSocket
+                if (!bleMatches || !classicMatches || !isConnected.getAndSet(false)) {
+                    null
+                } else {
+                    val transports =
+                        DetachedTransports(
+                            wasOnline = true,
+                            deviceName = connectedDeviceName,
+                            classicResources = Triple(inputStream, outputStream, bluetoothSocket),
+                            gatt = bluetoothGatt,
+                        )
+                    inputStream = null
+                    outputStream = null
+                    bluetoothSocket = null
+                    classicReadSocket = null
+                    bluetoothGatt = null
+                    connectionMode = null
+                    connectedDeviceName = null
+                    resetBleAttemptStateLocked()
+                    readBuffer.clear()
+                    transports
+                }
+            } ?: return
 
-            when (mode) {
-                RNodeConnectionMode.CLASSIC -> cleanupClassic()
-                RNodeConnectionMode.BLE -> cleanupBle()
-                null -> {}
+        Log.w(TAG, "Connection lost to ${detached.deviceName}")
+        closeClassicResources(detached.classicResources)
+        closeBleGatt(detached.gatt)
+
+        // Notify Python only if a replacement did not become online while the
+        // detached owner's resources were closing.
+        notifyConnectionStateChanged(false, detached.deviceName, "disconnect")
+    }
+
+    internal fun handleBluetoothAdapterStateChanged(state: Int) {
+        if (state == BluetoothAdapter.STATE_ON) {
+            synchronized(transportOwnerLock) {
+                if (!bridgeShutdown) adapterAdmissionBlocked = false
             }
+            return
+        }
+        if (state != BluetoothAdapter.STATE_TURNING_OFF && state != BluetoothAdapter.STATE_OFF) return
 
-            connectionMode = null
-            connectedDeviceName = null
-            readBuffer.clear()
-
-            // Notify python interface so it can flip self.online = False,
-            // notify the kotlin notification listener (ServiceNotificationManager
-            // posts the heads-up alert), and kick off the reconnection loop.
-            try {
-                connectionStateListener?.callAttr("__call__", false, deviceName)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error in connection state listener (disconnect)", e)
-            }
+        Log.i(TAG, "Bluetooth adapter is turning off; invalidating RNode connection")
+        val detached = invalidateAllTransports(blockAdapterAdmission = true)
+        if (detached.wasOnline) {
+            notifyConnectionStateChanged(false, detached.deviceName, "adapter shutdown")
         }
     }
 
     /**
      * Clean up Bluetooth Classic resources.
      */
-    private fun cleanupClassic() {
-        try {
-            inputStream?.close()
-        } catch (e: IOException) {
-            Log.w(TAG, "Error closing input stream", e)
-        }
-
-        try {
-            outputStream?.close()
-        } catch (e: IOException) {
-            Log.w(TAG, "Error closing output stream", e)
-        }
-
-        try {
-            bluetoothSocket?.close()
-        } catch (e: IOException) {
-            Log.w(TAG, "Error closing socket", e)
-        }
-
-        inputStream = null
-        outputStream = null
-        bluetoothSocket = null
+    private fun cleanupClassic(expectedSocket: BluetoothSocket? = null) {
+        val resources =
+            synchronized(transportOwnerLock) {
+                if (expectedSocket != null && bluetoothSocket !== expectedSocket) {
+                    return
+                }
+                val detached = Triple(inputStream, outputStream, bluetoothSocket)
+                inputStream = null
+                outputStream = null
+                bluetoothSocket = null
+                classicReadSocket = null
+                readBuffer.clear()
+                detached
+            }
+        closeClassicResources(resources)
     }
 
     /**
      * Shutdown the bridge and release resources.
      */
     fun shutdown() {
-        disconnect()
+        invalidateAllTransports(shutdownBridge = true)
+        if (isBluetoothStateReceiverRegistered) {
+            try {
+                context.unregisterReceiver(bluetoothStateReceiver)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering Bluetooth adapter state receiver", e)
+            }
+            isBluetoothStateReceiverRegistered = false
+        }
         scope.cancel()
     }
 }

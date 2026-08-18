@@ -4,13 +4,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-/** Backend-parity stream retaining the last bounded lifecycle events for late subscribers. */
-class DeliveryStatusEventStream(
-    replay: Int = DEFAULT_REPLAY,
-) {
+/**
+ * Advisory lifecycle invalidations for currently connected observers.
+ * Durable Room state is authoritative; reconnecting consumers reload it instead of replaying IPC deltas.
+ */
+class DeliveryStatusEventStream {
     private val mutableEvents =
         MutableSharedFlow<DeliveryStatusUpdate>(
-            replay = replay,
+            replay = 0,
             extraBufferCapacity = EXTRA_BUFFER_CAPACITY,
         )
 
@@ -19,7 +20,6 @@ class DeliveryStatusEventStream(
     fun publish(update: DeliveryStatusUpdate): Boolean = mutableEvents.tryEmit(update)
 
     companion object {
-        const val DEFAULT_REPLAY = 8
         private const val EXTRA_BUFFER_CAPACITY = 64
     }
 }

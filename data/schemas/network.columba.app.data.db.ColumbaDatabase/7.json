@@ -1,0 +1,1990 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "2b7e26fe95a88702bc1bb85a8b325b03",
+    "entities": [
+      {
+        "tableName": "conversations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`peerHash` TEXT NOT NULL, `identityHash` TEXT NOT NULL, `peerName` TEXT NOT NULL, `peerPublicKey` BLOB, `lastMessage` TEXT NOT NULL, `lastMessageTimestamp` INTEGER NOT NULL, `unreadCount` INTEGER NOT NULL, `lastSeenTimestamp` INTEGER NOT NULL, PRIMARY KEY(`peerHash`, `identityHash`), FOREIGN KEY(`identityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "peerHash",
+            "columnName": "peerHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "identityHash",
+            "columnName": "identityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerName",
+            "columnName": "peerName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerPublicKey",
+            "columnName": "peerPublicKey",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "lastMessage",
+            "columnName": "lastMessage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastMessageTimestamp",
+            "columnName": "lastMessageTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unreadCount",
+            "columnName": "unreadCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSeenTimestamp",
+            "columnName": "lastSeenTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "peerHash",
+            "identityHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_conversations_identityHash",
+            "unique": false,
+            "columnNames": [
+              "identityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conversations_identityHash` ON `${TABLE_NAME}` (`identityHash`)"
+          },
+          {
+            "name": "index_conversations_identityHash_lastMessageTimestamp",
+            "unique": false,
+            "columnNames": [
+              "identityHash",
+              "lastMessageTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conversations_identityHash_lastMessageTimestamp` ON `${TABLE_NAME}` (`identityHash`, `lastMessageTimestamp`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "local_identities",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "identityHash"
+            ],
+            "referencedColumns": [
+              "identityHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `conversationHash` TEXT NOT NULL, `identityHash` TEXT NOT NULL, `content` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `isFromMe` INTEGER NOT NULL, `status` TEXT NOT NULL, `isRead` INTEGER NOT NULL, `fieldsJson` TEXT, `reactionsJson` TEXT, `deliveryMethod` TEXT, `errorMessage` TEXT, `replyToMessageId` TEXT, `receivedHopCount` INTEGER, `receivedInterface` TEXT, `receivedRssi` INTEGER, `receivedSnr` REAL, `receivedAt` INTEGER, `sentInterface` TEXT, PRIMARY KEY(`id`, `identityHash`), FOREIGN KEY(`conversationHash`, `identityHash`) REFERENCES `conversations`(`peerHash`, `identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`identityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conversationHash",
+            "columnName": "conversationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "identityHash",
+            "columnName": "identityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isFromMe",
+            "columnName": "isFromMe",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRead",
+            "columnName": "isRead",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fieldsJson",
+            "columnName": "fieldsJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "reactionsJson",
+            "columnName": "reactionsJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deliveryMethod",
+            "columnName": "deliveryMethod",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "errorMessage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyToMessageId",
+            "columnName": "replyToMessageId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "receivedHopCount",
+            "columnName": "receivedHopCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "receivedInterface",
+            "columnName": "receivedInterface",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "receivedRssi",
+            "columnName": "receivedRssi",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "receivedSnr",
+            "columnName": "receivedSnr",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "receivedAt",
+            "columnName": "receivedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sentInterface",
+            "columnName": "sentInterface",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id",
+            "identityHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_messages_conversationHash_identityHash",
+            "unique": false,
+            "columnNames": [
+              "conversationHash",
+              "identityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_conversationHash_identityHash` ON `${TABLE_NAME}` (`conversationHash`, `identityHash`)"
+          },
+          {
+            "name": "index_messages_identityHash",
+            "unique": false,
+            "columnNames": [
+              "identityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_identityHash` ON `${TABLE_NAME}` (`identityHash`)"
+          },
+          {
+            "name": "index_messages_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          },
+          {
+            "name": "index_messages_conversationHash_identityHash_timestamp",
+            "unique": false,
+            "columnNames": [
+              "conversationHash",
+              "identityHash",
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_conversationHash_identityHash_timestamp` ON `${TABLE_NAME}` (`conversationHash`, `identityHash`, `timestamp`)"
+          },
+          {
+            "name": "index_messages_conversationHash_identityHash_isFromMe_isRead",
+            "unique": false,
+            "columnNames": [
+              "conversationHash",
+              "identityHash",
+              "isFromMe",
+              "isRead"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_conversationHash_identityHash_isFromMe_isRead` ON `${TABLE_NAME}` (`conversationHash`, `identityHash`, `isFromMe`, `isRead`)"
+          },
+          {
+            "name": "index_messages_replyToMessageId",
+            "unique": false,
+            "columnNames": [
+              "replyToMessageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_replyToMessageId` ON `${TABLE_NAME}` (`replyToMessageId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "conversations",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "conversationHash",
+              "identityHash"
+            ],
+            "referencedColumns": [
+              "peerHash",
+              "identityHash"
+            ]
+          },
+          {
+            "table": "local_identities",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "identityHash"
+            ],
+            "referencedColumns": [
+              "identityHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "announces",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationHash` TEXT NOT NULL, `peerName` TEXT NOT NULL, `publicKey` BLOB NOT NULL, `appData` BLOB, `hops` INTEGER NOT NULL, `lastSeenTimestamp` INTEGER NOT NULL, `nodeType` TEXT NOT NULL, `receivingInterface` TEXT, `receivingInterfaceType` TEXT, `aspect` TEXT, `isFavorite` INTEGER NOT NULL, `favoritedTimestamp` INTEGER, `stampCost` INTEGER, `stampCostFlexibility` INTEGER, `peeringCost` INTEGER, `propagationTransferLimitKb` INTEGER, `computedIdentityHash` TEXT, PRIMARY KEY(`destinationHash`))",
+        "fields": [
+          {
+            "fieldPath": "destinationHash",
+            "columnName": "destinationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerName",
+            "columnName": "peerName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publicKey",
+            "columnName": "publicKey",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appData",
+            "columnName": "appData",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "hops",
+            "columnName": "hops",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSeenTimestamp",
+            "columnName": "lastSeenTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nodeType",
+            "columnName": "nodeType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receivingInterface",
+            "columnName": "receivingInterface",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "receivingInterfaceType",
+            "columnName": "receivingInterfaceType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "aspect",
+            "columnName": "aspect",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isFavorite",
+            "columnName": "isFavorite",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "favoritedTimestamp",
+            "columnName": "favoritedTimestamp",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stampCost",
+            "columnName": "stampCost",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stampCostFlexibility",
+            "columnName": "stampCostFlexibility",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "peeringCost",
+            "columnName": "peeringCost",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "propagationTransferLimitKb",
+            "columnName": "propagationTransferLimitKb",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "computedIdentityHash",
+            "columnName": "computedIdentityHash",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_announces_lastSeenTimestamp",
+            "unique": false,
+            "columnNames": [
+              "lastSeenTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announces_lastSeenTimestamp` ON `${TABLE_NAME}` (`lastSeenTimestamp`)"
+          },
+          {
+            "name": "index_announces_isFavorite_favoritedTimestamp",
+            "unique": false,
+            "columnNames": [
+              "isFavorite",
+              "favoritedTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announces_isFavorite_favoritedTimestamp` ON `${TABLE_NAME}` (`isFavorite`, `favoritedTimestamp`)"
+          },
+          {
+            "name": "index_announces_nodeType_lastSeenTimestamp",
+            "unique": false,
+            "columnNames": [
+              "nodeType",
+              "lastSeenTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announces_nodeType_lastSeenTimestamp` ON `${TABLE_NAME}` (`nodeType`, `lastSeenTimestamp`)"
+          },
+          {
+            "name": "index_announces_computedIdentityHash",
+            "unique": false,
+            "columnNames": [
+              "computedIdentityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announces_computedIdentityHash` ON `${TABLE_NAME}` (`computedIdentityHash`)"
+          }
+        ]
+      },
+      {
+        "tableName": "announce_interface_sightings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationHash` TEXT NOT NULL, `interfaceType` TEXT NOT NULL, `receivingInterface` TEXT, `lastSeenTimestamp` INTEGER NOT NULL, `hops` INTEGER NOT NULL, PRIMARY KEY(`destinationHash`, `interfaceType`), FOREIGN KEY(`destinationHash`) REFERENCES `announces`(`destinationHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "destinationHash",
+            "columnName": "destinationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "interfaceType",
+            "columnName": "interfaceType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receivingInterface",
+            "columnName": "receivingInterface",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastSeenTimestamp",
+            "columnName": "lastSeenTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hops",
+            "columnName": "hops",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationHash",
+            "interfaceType"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_announce_interface_sightings_destinationHash",
+            "unique": false,
+            "columnNames": [
+              "destinationHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announce_interface_sightings_destinationHash` ON `${TABLE_NAME}` (`destinationHash`)"
+          },
+          {
+            "name": "index_announce_interface_sightings_interfaceType_lastSeenTimestamp",
+            "unique": false,
+            "columnNames": [
+              "interfaceType",
+              "lastSeenTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announce_interface_sightings_interfaceType_lastSeenTimestamp` ON `${TABLE_NAME}` (`interfaceType`, `lastSeenTimestamp`)"
+          },
+          {
+            "name": "index_announce_interface_sightings_lastSeenTimestamp",
+            "unique": false,
+            "columnNames": [
+              "lastSeenTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announce_interface_sightings_lastSeenTimestamp` ON `${TABLE_NAME}` (`lastSeenTimestamp`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "announces",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "destinationHash"
+            ],
+            "referencedColumns": [
+              "destinationHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "peer_identities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`peerHash` TEXT NOT NULL, `publicKey` BLOB NOT NULL, `lastSeenTimestamp` INTEGER NOT NULL, PRIMARY KEY(`peerHash`))",
+        "fields": [
+          {
+            "fieldPath": "peerHash",
+            "columnName": "peerHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publicKey",
+            "columnName": "publicKey",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSeenTimestamp",
+            "columnName": "lastSeenTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "peerHash"
+          ]
+        }
+      },
+      {
+        "tableName": "peer_icons",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationHash` TEXT NOT NULL, `iconName` TEXT NOT NULL, `foregroundColor` TEXT NOT NULL, `backgroundColor` TEXT NOT NULL, `updatedTimestamp` INTEGER NOT NULL, PRIMARY KEY(`destinationHash`))",
+        "fields": [
+          {
+            "fieldPath": "destinationHash",
+            "columnName": "destinationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iconName",
+            "columnName": "iconName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foregroundColor",
+            "columnName": "foregroundColor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backgroundColor",
+            "columnName": "backgroundColor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedTimestamp",
+            "columnName": "updatedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationHash"
+          ]
+        }
+      },
+      {
+        "tableName": "contacts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationHash` TEXT NOT NULL, `identityHash` TEXT NOT NULL, `publicKey` BLOB, `customNickname` TEXT, `notes` TEXT, `tags` TEXT, `addedTimestamp` INTEGER NOT NULL, `addedVia` TEXT NOT NULL, `lastInteractionTimestamp` INTEGER NOT NULL, `isPinned` INTEGER NOT NULL, `status` TEXT NOT NULL, `isMyRelay` INTEGER NOT NULL, PRIMARY KEY(`destinationHash`, `identityHash`), FOREIGN KEY(`identityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "destinationHash",
+            "columnName": "destinationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "identityHash",
+            "columnName": "identityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publicKey",
+            "columnName": "publicKey",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "customNickname",
+            "columnName": "customNickname",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addedTimestamp",
+            "columnName": "addedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addedVia",
+            "columnName": "addedVia",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastInteractionTimestamp",
+            "columnName": "lastInteractionTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isPinned",
+            "columnName": "isPinned",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isMyRelay",
+            "columnName": "isMyRelay",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationHash",
+            "identityHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_contacts_identityHash",
+            "unique": false,
+            "columnNames": [
+              "identityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_contacts_identityHash` ON `${TABLE_NAME}` (`identityHash`)"
+          },
+          {
+            "name": "index_contacts_identityHash_isPinned",
+            "unique": false,
+            "columnNames": [
+              "identityHash",
+              "isPinned"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_contacts_identityHash_isPinned` ON `${TABLE_NAME}` (`identityHash`, `isPinned`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "local_identities",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "identityHash"
+            ],
+            "referencedColumns": [
+              "identityHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "custom_themes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `createdTimestamp` INTEGER NOT NULL, `modifiedTimestamp` INTEGER NOT NULL, `baseTheme` TEXT, `seedPrimary` INTEGER NOT NULL, `seedSecondary` INTEGER NOT NULL, `seedTertiary` INTEGER NOT NULL, `lightPrimary` INTEGER NOT NULL, `lightOnPrimary` INTEGER NOT NULL, `lightPrimaryContainer` INTEGER NOT NULL, `lightOnPrimaryContainer` INTEGER NOT NULL, `lightSecondary` INTEGER NOT NULL, `lightOnSecondary` INTEGER NOT NULL, `lightSecondaryContainer` INTEGER NOT NULL, `lightOnSecondaryContainer` INTEGER NOT NULL, `lightTertiary` INTEGER NOT NULL, `lightOnTertiary` INTEGER NOT NULL, `lightTertiaryContainer` INTEGER NOT NULL, `lightOnTertiaryContainer` INTEGER NOT NULL, `lightError` INTEGER NOT NULL, `lightOnError` INTEGER NOT NULL, `lightErrorContainer` INTEGER NOT NULL, `lightOnErrorContainer` INTEGER NOT NULL, `lightBackground` INTEGER NOT NULL, `lightOnBackground` INTEGER NOT NULL, `lightSurface` INTEGER NOT NULL, `lightOnSurface` INTEGER NOT NULL, `lightSurfaceVariant` INTEGER NOT NULL, `lightOnSurfaceVariant` INTEGER NOT NULL, `lightOutline` INTEGER NOT NULL, `lightOutlineVariant` INTEGER NOT NULL, `darkPrimary` INTEGER NOT NULL, `darkOnPrimary` INTEGER NOT NULL, `darkPrimaryContainer` INTEGER NOT NULL, `darkOnPrimaryContainer` INTEGER NOT NULL, `darkSecondary` INTEGER NOT NULL, `darkOnSecondary` INTEGER NOT NULL, `darkSecondaryContainer` INTEGER NOT NULL, `darkOnSecondaryContainer` INTEGER NOT NULL, `darkTertiary` INTEGER NOT NULL, `darkOnTertiary` INTEGER NOT NULL, `darkTertiaryContainer` INTEGER NOT NULL, `darkOnTertiaryContainer` INTEGER NOT NULL, `darkError` INTEGER NOT NULL, `darkOnError` INTEGER NOT NULL, `darkErrorContainer` INTEGER NOT NULL, `darkOnErrorContainer` INTEGER NOT NULL, `darkBackground` INTEGER NOT NULL, `darkOnBackground` INTEGER NOT NULL, `darkSurface` INTEGER NOT NULL, `darkOnSurface` INTEGER NOT NULL, `darkSurfaceVariant` INTEGER NOT NULL, `darkOnSurfaceVariant` INTEGER NOT NULL, `darkOutline` INTEGER NOT NULL, `darkOutlineVariant` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdTimestamp",
+            "columnName": "createdTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedTimestamp",
+            "columnName": "modifiedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseTheme",
+            "columnName": "baseTheme",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seedPrimary",
+            "columnName": "seedPrimary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seedSecondary",
+            "columnName": "seedSecondary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seedTertiary",
+            "columnName": "seedTertiary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightPrimary",
+            "columnName": "lightPrimary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnPrimary",
+            "columnName": "lightOnPrimary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightPrimaryContainer",
+            "columnName": "lightPrimaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnPrimaryContainer",
+            "columnName": "lightOnPrimaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightSecondary",
+            "columnName": "lightSecondary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnSecondary",
+            "columnName": "lightOnSecondary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightSecondaryContainer",
+            "columnName": "lightSecondaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnSecondaryContainer",
+            "columnName": "lightOnSecondaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightTertiary",
+            "columnName": "lightTertiary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnTertiary",
+            "columnName": "lightOnTertiary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightTertiaryContainer",
+            "columnName": "lightTertiaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnTertiaryContainer",
+            "columnName": "lightOnTertiaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightError",
+            "columnName": "lightError",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnError",
+            "columnName": "lightOnError",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightErrorContainer",
+            "columnName": "lightErrorContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnErrorContainer",
+            "columnName": "lightOnErrorContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightBackground",
+            "columnName": "lightBackground",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnBackground",
+            "columnName": "lightOnBackground",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightSurface",
+            "columnName": "lightSurface",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnSurface",
+            "columnName": "lightOnSurface",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightSurfaceVariant",
+            "columnName": "lightSurfaceVariant",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOnSurfaceVariant",
+            "columnName": "lightOnSurfaceVariant",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOutline",
+            "columnName": "lightOutline",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lightOutlineVariant",
+            "columnName": "lightOutlineVariant",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkPrimary",
+            "columnName": "darkPrimary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnPrimary",
+            "columnName": "darkOnPrimary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkPrimaryContainer",
+            "columnName": "darkPrimaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnPrimaryContainer",
+            "columnName": "darkOnPrimaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkSecondary",
+            "columnName": "darkSecondary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnSecondary",
+            "columnName": "darkOnSecondary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkSecondaryContainer",
+            "columnName": "darkSecondaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnSecondaryContainer",
+            "columnName": "darkOnSecondaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkTertiary",
+            "columnName": "darkTertiary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnTertiary",
+            "columnName": "darkOnTertiary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkTertiaryContainer",
+            "columnName": "darkTertiaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnTertiaryContainer",
+            "columnName": "darkOnTertiaryContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkError",
+            "columnName": "darkError",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnError",
+            "columnName": "darkOnError",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkErrorContainer",
+            "columnName": "darkErrorContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnErrorContainer",
+            "columnName": "darkOnErrorContainer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkBackground",
+            "columnName": "darkBackground",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnBackground",
+            "columnName": "darkOnBackground",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkSurface",
+            "columnName": "darkSurface",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnSurface",
+            "columnName": "darkOnSurface",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkSurfaceVariant",
+            "columnName": "darkSurfaceVariant",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOnSurfaceVariant",
+            "columnName": "darkOnSurfaceVariant",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOutline",
+            "columnName": "darkOutline",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "darkOutlineVariant",
+            "columnName": "darkOutlineVariant",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_custom_themes_createdTimestamp",
+            "unique": false,
+            "columnNames": [
+              "createdTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_custom_themes_createdTimestamp` ON `${TABLE_NAME}` (`createdTimestamp`)"
+          }
+        ]
+      },
+      {
+        "tableName": "local_identities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`identityHash` TEXT NOT NULL, `displayName` TEXT NOT NULL, `destinationHash` TEXT NOT NULL, `filePath` TEXT NOT NULL, `keyData` BLOB, `encryptedKeyData` BLOB, `keyEncryptionVersion` INTEGER NOT NULL, `passwordSalt` BLOB, `passwordVerificationHash` BLOB, `createdTimestamp` INTEGER NOT NULL, `lastUsedTimestamp` INTEGER NOT NULL, `isActive` INTEGER NOT NULL, `iconName` TEXT, `iconForegroundColor` TEXT, `iconBackgroundColor` TEXT, PRIMARY KEY(`identityHash`))",
+        "fields": [
+          {
+            "fieldPath": "identityHash",
+            "columnName": "identityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "destinationHash",
+            "columnName": "destinationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filePath",
+            "columnName": "filePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyData",
+            "columnName": "keyData",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "encryptedKeyData",
+            "columnName": "encryptedKeyData",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "keyEncryptionVersion",
+            "columnName": "keyEncryptionVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "passwordSalt",
+            "columnName": "passwordSalt",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "passwordVerificationHash",
+            "columnName": "passwordVerificationHash",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "createdTimestamp",
+            "columnName": "createdTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUsedTimestamp",
+            "columnName": "lastUsedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iconName",
+            "columnName": "iconName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "iconForegroundColor",
+            "columnName": "iconForegroundColor",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "iconBackgroundColor",
+            "columnName": "iconBackgroundColor",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "identityHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_identities_lastUsedTimestamp",
+            "unique": false,
+            "columnNames": [
+              "lastUsedTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_identities_lastUsedTimestamp` ON `${TABLE_NAME}` (`lastUsedTimestamp`)"
+          },
+          {
+            "name": "index_local_identities_isActive",
+            "unique": false,
+            "columnNames": [
+              "isActive"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_identities_isActive` ON `${TABLE_NAME}` (`isActive`)"
+          }
+        ]
+      },
+      {
+        "tableName": "received_locations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `senderHash` TEXT NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, `accuracy` REAL NOT NULL, `timestamp` INTEGER NOT NULL, `expiresAt` INTEGER, `receivedAt` INTEGER NOT NULL, `approximateRadius` INTEGER NOT NULL, `appearanceJson` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderHash",
+            "columnName": "senderHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accuracy",
+            "columnName": "accuracy",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiresAt",
+            "columnName": "expiresAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "receivedAt",
+            "columnName": "receivedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "approximateRadius",
+            "columnName": "approximateRadius",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appearanceJson",
+            "columnName": "appearanceJson",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_received_locations_senderHash",
+            "unique": false,
+            "columnNames": [
+              "senderHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_received_locations_senderHash` ON `${TABLE_NAME}` (`senderHash`)"
+          },
+          {
+            "name": "index_received_locations_senderHash_timestamp",
+            "unique": false,
+            "columnNames": [
+              "senderHash",
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_received_locations_senderHash_timestamp` ON `${TABLE_NAME}` (`senderHash`, `timestamp`)"
+          },
+          {
+            "name": "index_received_locations_expiresAt",
+            "unique": false,
+            "columnNames": [
+              "expiresAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_received_locations_expiresAt` ON `${TABLE_NAME}` (`expiresAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "offline_map_regions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `centerLatitude` REAL NOT NULL, `centerLongitude` REAL NOT NULL, `radiusKm` INTEGER NOT NULL, `minZoom` INTEGER NOT NULL, `maxZoom` INTEGER NOT NULL, `status` TEXT NOT NULL, `mbtilesPath` TEXT, `tileCount` INTEGER NOT NULL, `sizeBytes` INTEGER NOT NULL, `downloadProgress` REAL NOT NULL, `errorMessage` TEXT, `createdAt` INTEGER NOT NULL, `completedAt` INTEGER, `source` TEXT NOT NULL, `tileVersion` TEXT, `maplibreRegionId` INTEGER, `localStylePath` TEXT, `isDefault` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "centerLatitude",
+            "columnName": "centerLatitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "centerLongitude",
+            "columnName": "centerLongitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "radiusKm",
+            "columnName": "radiusKm",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minZoom",
+            "columnName": "minZoom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxZoom",
+            "columnName": "maxZoom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mbtilesPath",
+            "columnName": "mbtilesPath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tileCount",
+            "columnName": "tileCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "downloadProgress",
+            "columnName": "downloadProgress",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "errorMessage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tileVersion",
+            "columnName": "tileVersion",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "maplibreRegionId",
+            "columnName": "maplibreRegionId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "localStylePath",
+            "columnName": "localStylePath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_offline_map_regions_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_map_regions_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          },
+          {
+            "name": "index_offline_map_regions_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_offline_map_regions_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ]
+      },
+      {
+        "tableName": "rmsp_servers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationHash` TEXT NOT NULL, `serverName` TEXT NOT NULL, `publicKey` BLOB NOT NULL, `coverageGeohashes` TEXT NOT NULL, `minZoom` INTEGER NOT NULL, `maxZoom` INTEGER NOT NULL, `formats` TEXT NOT NULL, `layers` TEXT NOT NULL, `dataUpdatedTimestamp` INTEGER NOT NULL, `dataSize` INTEGER, `version` TEXT NOT NULL, `lastSeenTimestamp` INTEGER NOT NULL, `hops` INTEGER NOT NULL, PRIMARY KEY(`destinationHash`))",
+        "fields": [
+          {
+            "fieldPath": "destinationHash",
+            "columnName": "destinationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverName",
+            "columnName": "serverName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publicKey",
+            "columnName": "publicKey",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coverageGeohashes",
+            "columnName": "coverageGeohashes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minZoom",
+            "columnName": "minZoom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxZoom",
+            "columnName": "maxZoom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "formats",
+            "columnName": "formats",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "layers",
+            "columnName": "layers",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataUpdatedTimestamp",
+            "columnName": "dataUpdatedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataSize",
+            "columnName": "dataSize",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSeenTimestamp",
+            "columnName": "lastSeenTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hops",
+            "columnName": "hops",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_rmsp_servers_lastSeenTimestamp",
+            "unique": false,
+            "columnNames": [
+              "lastSeenTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_rmsp_servers_lastSeenTimestamp` ON `${TABLE_NAME}` (`lastSeenTimestamp`)"
+          },
+          {
+            "name": "index_rmsp_servers_hops",
+            "unique": false,
+            "columnNames": [
+              "hops"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_rmsp_servers_hops` ON `${TABLE_NAME}` (`hops`)"
+          }
+        ]
+      },
+      {
+        "tableName": "call_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`callAttemptId` TEXT NOT NULL, `localIdentityHash` TEXT NOT NULL, `remoteIdentityHash` TEXT NOT NULL, `direction` TEXT NOT NULL, `peerDisplayNameSnapshot` TEXT, `codecProfileCode` INTEGER, `attemptedAt` INTEGER NOT NULL, `ringingAt` INTEGER, `connectedAt` INTEGER, `endedAt` INTEGER, `outcome` TEXT, `inferredEnding` INTEGER NOT NULL, `failureReason` TEXT, `serviceInstanceId` TEXT NOT NULL, PRIMARY KEY(`callAttemptId`), FOREIGN KEY(`localIdentityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "callAttemptId",
+            "columnName": "callAttemptId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localIdentityHash",
+            "columnName": "localIdentityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteIdentityHash",
+            "columnName": "remoteIdentityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerDisplayNameSnapshot",
+            "columnName": "peerDisplayNameSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "codecProfileCode",
+            "columnName": "codecProfileCode",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "attemptedAt",
+            "columnName": "attemptedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ringingAt",
+            "columnName": "ringingAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "connectedAt",
+            "columnName": "connectedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "outcome",
+            "columnName": "outcome",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "inferredEnding",
+            "columnName": "inferredEnding",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "failureReason",
+            "columnName": "failureReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "serviceInstanceId",
+            "columnName": "serviceInstanceId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "callAttemptId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_call_history_localIdentityHash_attemptedAt",
+            "unique": false,
+            "columnNames": [
+              "localIdentityHash",
+              "attemptedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_call_history_localIdentityHash_attemptedAt` ON `${TABLE_NAME}` (`localIdentityHash`, `attemptedAt`)"
+          },
+          {
+            "name": "index_call_history_remoteIdentityHash",
+            "unique": false,
+            "columnNames": [
+              "remoteIdentityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_call_history_remoteIdentityHash` ON `${TABLE_NAME}` (`remoteIdentityHash`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "local_identities",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "localIdentityHash"
+            ],
+            "referencedColumns": [
+              "identityHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "call_history_deletions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`callAttemptId` TEXT NOT NULL, `localIdentityHash` TEXT NOT NULL, `deletedAt` INTEGER NOT NULL, PRIMARY KEY(`callAttemptId`), FOREIGN KEY(`localIdentityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "callAttemptId",
+            "columnName": "callAttemptId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localIdentityHash",
+            "columnName": "localIdentityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "callAttemptId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_call_history_deletions_localIdentityHash",
+            "unique": false,
+            "columnNames": [
+              "localIdentityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_call_history_deletions_localIdentityHash` ON `${TABLE_NAME}` (`localIdentityHash`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "local_identities",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "localIdentityHash"
+            ],
+            "referencedColumns": [
+              "identityHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "drafts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`conversationHash` TEXT NOT NULL, `identityHash` TEXT NOT NULL, `content` TEXT NOT NULL, `updatedTimestamp` INTEGER NOT NULL, PRIMARY KEY(`conversationHash`, `identityHash`), FOREIGN KEY(`conversationHash`, `identityHash`) REFERENCES `conversations`(`peerHash`, `identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`identityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "conversationHash",
+            "columnName": "conversationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "identityHash",
+            "columnName": "identityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedTimestamp",
+            "columnName": "updatedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "conversationHash",
+            "identityHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drafts_identityHash",
+            "unique": false,
+            "columnNames": [
+              "identityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drafts_identityHash` ON `${TABLE_NAME}` (`identityHash`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "conversations",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "conversationHash",
+              "identityHash"
+            ],
+            "referencedColumns": [
+              "peerHash",
+              "identityHash"
+            ]
+          },
+          {
+            "table": "local_identities",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "identityHash"
+            ],
+            "referencedColumns": [
+              "identityHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "blocked_peers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`peerHash` TEXT NOT NULL, `identityHash` TEXT NOT NULL, `peerIdentityHash` TEXT, `displayName` TEXT, `blockedTimestamp` INTEGER NOT NULL, `isBlackholeEnabled` INTEGER NOT NULL, `routingAspect` TEXT, PRIMARY KEY(`peerHash`, `identityHash`), FOREIGN KEY(`identityHash`) REFERENCES `local_identities`(`identityHash`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "peerHash",
+            "columnName": "peerHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "identityHash",
+            "columnName": "identityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerIdentityHash",
+            "columnName": "peerIdentityHash",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "blockedTimestamp",
+            "columnName": "blockedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isBlackholeEnabled",
+            "columnName": "isBlackholeEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "routingAspect",
+            "columnName": "routingAspect",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "peerHash",
+            "identityHash"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_blocked_peers_identityHash",
+            "unique": false,
+            "columnNames": [
+              "identityHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_blocked_peers_identityHash` ON `${TABLE_NAME}` (`identityHash`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "local_identities",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "identityHash"
+            ],
+            "referencedColumns": [
+              "identityHash"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "interface_first_seen",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`interfaceId` TEXT NOT NULL, `firstSeenTimestamp` INTEGER NOT NULL, PRIMARY KEY(`interfaceId`))",
+        "fields": [
+          {
+            "fieldPath": "interfaceId",
+            "columnName": "interfaceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstSeenTimestamp",
+            "columnName": "firstSeenTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "interfaceId"
+          ]
+        }
+      },
+      {
+        "tableName": "peer_activity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`destinationHash` TEXT NOT NULL, `lastReceivedAt` INTEGER NOT NULL, `activityType` TEXT NOT NULL, PRIMARY KEY(`destinationHash`))",
+        "fields": [
+          {
+            "fieldPath": "destinationHash",
+            "columnName": "destinationHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastReceivedAt",
+            "columnName": "lastReceivedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activityType",
+            "columnName": "activityType",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "destinationHash"
+          ]
+        }
+      },
+      {
+        "tableName": "peer_activity_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventId` TEXT NOT NULL, PRIMARY KEY(`eventId`))",
+        "fields": [
+          {
+            "fieldPath": "eventId",
+            "columnName": "eventId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "eventId"
+          ]
+        }
+      },
+      {
+        "tableName": "pending_delivery_status",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageHash`))",
+        "fields": [
+          {
+            "fieldPath": "messageHash",
+            "columnName": "messageHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "messageHash"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2b7e26fe95a88702bc1bb85a8b325b03')"
+    ]
+  }
+}

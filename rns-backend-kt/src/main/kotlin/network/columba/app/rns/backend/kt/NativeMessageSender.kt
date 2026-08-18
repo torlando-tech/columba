@@ -188,7 +188,8 @@ internal class NativeMessageSender(
             DeliveryMethod.PROPAGATED -> NativeDeliveryMethod.PROPAGATED
         }
 
-    private fun installDeliveryCallbacks(
+    @androidx.annotation.VisibleForTesting
+    internal fun installDeliveryCallbacks(
         message: LXMessage,
         router: LXMRouter,
         tryPropagationOnFail: Boolean,
@@ -214,11 +215,10 @@ internal class NativeMessageSender(
                 }
             Log.i(
                 TAG,
-                "Delivery callback for $hash -> $status (state=${msg.state}, method=${msg.method}, desired=${msg.desiredMethod})",
+                "Delivery callback for ${hash.take(16)} -> $status " +
+                    "(state=${msg.state}, method=${msg.method}, desired=${msg.desiredMethod})",
             )
-            deliveryStatusEvents.publish(
-                DeliveryStatusUpdate(hash, status, System.currentTimeMillis()),
-            )
+            publishStatus(hash, status)
         }
         message.failedCallback = failedCallback@{ msg ->
             val hash = msg.hash?.toHex() ?: return@failedCallback
@@ -228,22 +228,31 @@ internal class NativeMessageSender(
                 currentMethod != NativeDeliveryMethod.PROPAGATED &&
                 router.getActivePropagationNode() != null
             ) {
-                Log.i(TAG, "${currentMethod ?: lxmfMethod} delivery failed for $hash, falling back to PROPAGATED")
+                Log.i(
+                    TAG,
+                    "${currentMethod ?: lxmfMethod} delivery failed for ${hash.take(16)}, falling back to PROPAGATED",
+                )
                 msg.desiredMethod = NativeDeliveryMethod.PROPAGATED
                 msg.state = network.reticulum.lxmf.MessageState.OUTBOUND
                 msg.deliveryAttempts = 0
-                deliveryStatusEvents.publish(
-                    DeliveryStatusUpdate(hash, DeliveryStatus.RETRYING_PROPAGATED, System.currentTimeMillis()),
-                )
+                publishStatus(hash, DeliveryStatus.RETRYING_PROPAGATED)
                 scopeProvider().launch(Dispatchers.IO) {
-                    router.handleOutbound(msg)
+                    runCatching { router.handleOutbound(msg) }
+                        .onFailure {
+                            Log.w(TAG, "Propagation fallback submission failed for ${hash.take(16)}")
+                            publishStatus(hash, DeliveryStatus.FAILED)
+                        }
                 }
                 return@failedCallback
             }
 
-            deliveryStatusEvents.publish(
-                DeliveryStatusUpdate(hash, DeliveryStatus.FAILED, System.currentTimeMillis()),
-            )
+            publishStatus(hash, DeliveryStatus.FAILED)
+        }
+    }
+
+    private fun publishStatus(hash: String, status: DeliveryStatus) {
+        if (!deliveryStatusEvents.publish(DeliveryStatusUpdate(hash, status, System.currentTimeMillis()))) {
+            Log.w(TAG, "Advisory delivery update dropped for ${hash.take(16)}")
         }
     }
 }

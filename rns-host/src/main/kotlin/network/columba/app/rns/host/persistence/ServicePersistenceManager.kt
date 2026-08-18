@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
@@ -35,10 +36,14 @@ class ServicePersistenceManager(
     private val context: Context,
     private val scope: CoroutineScope,
     private val settingsAccessor: ServiceSettingsAccessor,
+    startDeliveryReconciliation: Boolean = true,
 ) {
     companion object {
         private const val TAG = "ServicePersistenceManager"
         private const val ANNOUNCE_TTL_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
+        private const val PENDING_DELIVERY_TTL_MS = 7L * 24 * 60 * 60 * 1000
+        private const val MAX_PENDING_DELIVERY_EVENTS = 512
+        private const val RECONCILIATION_BATCH_SIZE = 128
     }
 
     /**
@@ -80,6 +85,18 @@ class ServicePersistenceManager(
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
     private val peerActivityDao by lazy { database.peerActivityDao() }
+    private val pendingDeliveryStatusDao by lazy { database.pendingDeliveryStatusDao() }
+
+    init {
+        if (startDeliveryReconciliation) {
+            scope.launch {
+                reconcilePendingDeliveryStatusesWithRetry()
+                messageDao.observeOutgoingMessageCount().collect {
+                    reconcilePendingDeliveryStatusesWithRetry()
+                }
+            }
+        }
+    }
 
     /**
      * Check if a peer is explicitly blocked.
@@ -481,22 +498,55 @@ class ServicePersistenceManager(
         messageHash: String,
         status: DeliveryStatus,
     ): Boolean {
-        val retryDelays = listOf(50L, 100L, 200L)
-        repeat(retryDelays.size + 1) { attempt ->
-            try {
-                val message = messageDao.getOutgoingMessageByIdAcrossIdentities(messageHash)
-                if (message != null) {
-                    return messageDao.applyDeliveryStatus(messageHash, message.identityHash, status.wireValue) > 0
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error persisting delivery status for $messageHash", e)
-                return false
-            }
-            if (attempt < retryDelays.size) delay(retryDelays[attempt])
+        val safeHash = messageHash.take(16)
+        val now = System.currentTimeMillis()
+        try {
+            pendingDeliveryStatusDao.reduce(messageHash, status.wireValue, now)
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not durably enqueue delivery status for $safeHash", e)
+            return false
         }
-        Log.w(TAG, "Delivery status arrived before outgoing message was durable: $messageHash")
-        return false
+        runCatching {
+            pendingDeliveryStatusDao.deleteOlderThan(now - PENDING_DELIVERY_TTL_MS)
+            pendingDeliveryStatusDao.trimToNewest(MAX_PENDING_DELIVERY_EVENTS)
+        }.onFailure {
+            Log.w(TAG, "Delivery inbox cleanup deferred for $safeHash")
+        }
+        reconcilePendingDeliveryStatusesWithRetry()
+        return true
     }
+
+    private suspend fun reconcilePendingDeliveryStatusesWithRetry() {
+        val delays = listOf(100L, 500L, 2_000L)
+        repeat(delays.size + 1) { attempt ->
+            if (reconcilePendingDeliveryStatuses()) return
+            if (attempt < delays.size) delay(delays[attempt])
+        }
+    }
+
+    /** Reconcile the durable inbox after startup, Room invalidation, or a new event. */
+    @androidx.annotation.VisibleForTesting
+    internal suspend fun reconcilePendingDeliveryStatuses(): Boolean =
+        try {
+            pendingDeliveryStatusDao.oldest(RECONCILIATION_BATCH_SIZE).forEach { pending ->
+                database.withTransaction {
+                    val message = messageDao.getOutgoingMessageByIdAcrossIdentities(pending.messageHash)
+                    if (message != null) {
+                        // A zero-row update means the event was stale and was atomically rejected.
+                        messageDao.applyDeliveryStatus(
+                            pending.messageHash,
+                            message.identityHash,
+                            pending.status,
+                        )
+                        pendingDeliveryStatusDao.delete(pending.messageHash)
+                    }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Delivery inbox reconciliation deferred: ${e.javaClass.simpleName}")
+            false
+        }
 
     /**
      * Persist direct telemetry reception. Collector-stream entries are

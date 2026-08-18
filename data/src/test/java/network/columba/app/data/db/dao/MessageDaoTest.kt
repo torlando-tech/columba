@@ -189,6 +189,42 @@ class MessageDaoTest {
         }
 
     @Test
+    fun applyDeliveryStatus_rejectedRetryDoesNotMutateDeliveredMetadata() =
+        runTest {
+            val message =
+                createTestMessage(id = "delivered-stale-retry", status = "delivered").copy(
+                    deliveryMethod = "direct",
+                    errorMessage = null,
+                )
+            messageDao.insertMessage(message)
+
+            messageDao.applyDeliveryStatus(message.id, IDENTITY_HASH, "retrying_propagated")
+
+            val reduced = requireNotNull(messageDao.getMessageById(message.id, IDENTITY_HASH))
+            assertEquals("delivered", reduced.status)
+            assertEquals("direct", reduced.deliveryMethod)
+            assertNull(reduced.errorMessage)
+        }
+
+    @Test
+    fun applyDeliveryStatus_rejectedRetryDoesNotMutateFailedMetadata() =
+        runTest {
+            val message =
+                createTestMessage(id = "failed-stale-retry", status = "failed").copy(
+                    deliveryMethod = "direct",
+                    errorMessage = "submission failed",
+                )
+            messageDao.insertMessage(message)
+
+            messageDao.applyDeliveryStatus(message.id, IDENTITY_HASH, "retrying_propagated")
+
+            val reduced = requireNotNull(messageDao.getMessageById(message.id, IDENTITY_HASH))
+            assertEquals("failed", reduced.status)
+            assertEquals("direct", reduced.deliveryMethod)
+            assertEquals("submission failed", reduced.errorMessage)
+        }
+
+    @Test
     fun updateMessageDeliveryDetails_setsDeliveryMethod() =
         runTest {
             messageDao.insertMessage(createTestMessage(id = "msg1"))

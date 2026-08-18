@@ -317,6 +317,21 @@ class ConversationLinkManagerTest {
     }
 
     @Test
+    fun `recordPeerActivity never moves last activity backward`() {
+        val manager =
+            ConversationLinkManager(
+                io.mockk.mockk(relaxed = true),
+                io.mockk.mockk(relaxed = true),
+            )
+        val peer = "00112233445566778899aabbccddeeff"
+
+        manager.recordPeerActivity(peer, 2_000L)
+        manager.recordPeerActivity(peer, 1_000L)
+
+        assertEquals(2_000L, manager.getLinkState(peer)?.lastActivityTimestamp)
+    }
+
+    @Test
     fun `LinkState with activity timestamp preserves other fields`() {
         val state =
             ConversationLinkManager.LinkState(

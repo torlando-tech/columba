@@ -94,9 +94,8 @@ class PythonEventBridge {
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
-    // `replay = 8` holds the last few lifecycle events so the service-side
-    // durable collector and IPC subscribers can attach after backend startup
-    // without losing a bounded burst. The Room reducer is idempotent.
+    // Delivery events are live notifications. The service-local collector starts
+    // undispatched and writes them to Room; IPC/UI consumers reload canonical Room state.
     private val deliveryStatusEvents = DeliveryStatusEventStream()
     private val _locationTelemetry = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceived = MutableSharedFlow<String>(extraBufferCapacity = 64)

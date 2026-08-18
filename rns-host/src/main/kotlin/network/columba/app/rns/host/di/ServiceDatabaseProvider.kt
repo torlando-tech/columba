@@ -35,6 +35,7 @@ object ServiceDatabaseProvider {
                 ColumbaDatabase.MIGRATION_3_4,
                 ColumbaDatabase.MIGRATION_4_5,
                 ColumbaDatabase.MIGRATION_5_6,
+                ColumbaDatabase.MIGRATION_6_7,
             )
             .enableMultiInstanceInvalidation()
             .addCallback(DatabaseModule.DURABILITY_CALLBACK)

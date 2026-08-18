@@ -99,6 +99,10 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
     fun observeMessageById(messageId: String): Flow<MessageEntity?>
 
+    /** Invalidates when an outgoing row is inserted, including from another process. */
+    @Query("SELECT COUNT(*) FROM messages WHERE isFromMe = 1")
+    fun observeOutgoingMessageCount(): Flow<Int>
+
     @Query("UPDATE messages SET status = :status WHERE id = :messageId AND identityHash = :identityHash")
     suspend fun updateMessageStatus(
         messageId: String,
@@ -133,6 +137,16 @@ interface MessageDao {
                 ELSE errorMessage
             END
         WHERE id = :messageId AND identityHash = :identityHash AND isFromMe = 1
+          AND (
+            (:status = 'delivered' AND status IN
+                ('pending', 'sent', 'retrying_propagated', 'propagated', 'failed', 'delivered')) OR
+            (:status = 'propagated' AND status IN
+                ('pending', 'sent', 'retrying_propagated', 'failed', 'propagated')) OR
+            (:status = 'failed' AND status IN
+                ('pending', 'sent', 'retrying_propagated', 'failed')) OR
+            (:status = 'retrying_propagated' AND status IN
+                ('pending', 'sent', 'retrying_propagated'))
+          )
         """,
     )
     suspend fun applyDeliveryStatus(

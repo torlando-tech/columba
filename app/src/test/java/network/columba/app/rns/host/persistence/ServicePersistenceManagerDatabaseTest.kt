@@ -4,6 +4,7 @@ import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.test.DatabaseTest
 import io.mockk.clearAllMocks
@@ -11,12 +12,15 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -61,7 +65,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
         mockkObject(ServiceDatabaseProvider)
         every { ServiceDatabaseProvider.getDatabase(any()) } returns database
 
-        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor)
+        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor, false)
     }
 
     @After
@@ -985,6 +989,52 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
             assertFalse(persistenceManager.persistDeliveryProof("unknown-message", 1_000L))
             assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+        }
+
+    @Test
+    fun `pre-row lifecycle survives service manager restart and later canonical Room load`() =
+        testScope.runTest {
+            assertTrue(persistenceManager.persistDeliveryStatus("late-outgoing", DeliveryStatus.DELIVERED))
+            assertEquals(
+                "delivered",
+                database.pendingDeliveryStatusDao().get("late-outgoing")?.status,
+            )
+
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "pending",
+                    lastMessageTimestamp = 999L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "late-outgoing",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 999L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                    deliveryMethod = "direct",
+                ),
+            )
+
+            ServicePersistenceManager(context, backgroundScope, settingsAccessor, true)
+
+            // A later UI subscriber/rebind reads canonical Room state; no IPC replay is required.
+            val canonical =
+                withContext(Dispatchers.Default) {
+                    withTimeout(5_000L) {
+                        messageDao.observeMessageById("late-outgoing").first { it?.status == "delivered" }
+                    }
+                }
+            assertEquals("delivered", canonical?.status)
+            assertNull(database.pendingDeliveryStatusDao().get("late-outgoing"))
         }
 
     @Test

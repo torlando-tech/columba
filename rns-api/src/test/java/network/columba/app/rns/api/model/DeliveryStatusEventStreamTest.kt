@@ -1,19 +1,24 @@
 package network.columba.app.rns.api.model
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DeliveryStatusEventStreamTest {
     @Test
-    fun `late subscriber receives the bounded replay window in publication order`() = runTest {
-        val stream = DeliveryStatusEventStream(replay = 2)
+    fun `late subscriber does not treat advisory IPC deltas as canonical replay state`() = runTest {
+        val stream = DeliveryStatusEventStream()
         stream.publish(DeliveryStatusUpdate("one", DeliveryStatus.PENDING, 1L))
-        stream.publish(DeliveryStatusUpdate("two", DeliveryStatus.RETRYING_PROPAGATED, 2L))
-        stream.publish(DeliveryStatusUpdate("three", DeliveryStatus.PROPAGATED, 3L))
+        assertEquals(emptyList<DeliveryStatusUpdate>(), stream.events.replayCache)
 
-        assertEquals(listOf("two", "three"), stream.events.replayCache.map { it.messageHash })
-        assertEquals("two", stream.events.first().messageHash)
+        val next = async { stream.events.first() }
+        runCurrent()
+        stream.publish(DeliveryStatusUpdate("two", DeliveryStatus.DELIVERED, 2L))
+        assertEquals("two", next.await().messageHash)
     }
 }

@@ -1385,8 +1385,8 @@ def attach_lxmessage_callbacks(
             msg.defer_propagation_stamp = True
             msg.desired_method = LXMF.LXMessage.PROPAGATED
             try:
-                _lxmf_router.handle_outbound(msg)
                 _emit(on_retrying_propagated, {"hash": _hex(getattr(msg, "hash", None))})
+                _lxmf_router.handle_outbound(msg)
                 RNS.log(
                     "event_bridge: DIRECT delivery failed, retrying via propagation node",
                     RNS.LOG_DEBUG,

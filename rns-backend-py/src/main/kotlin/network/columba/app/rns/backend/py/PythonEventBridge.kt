@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import network.columba.app.rns.api.annotation.ReflectivelyKept
 import network.columba.app.rns.api.model.AnnounceEvent
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusEventStream
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
@@ -92,21 +94,10 @@ class PythonEventBridge {
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
-    // `replay = 8` holds the last few delivery proofs so an IPC subscriber
-    // that finishes attaching slightly after a delivery event fires (the
-    // post-cold-start window where LXMF may flush queued-message acks
-    // before MessagingViewModel re-subscribes through the AIDL pipe) still
-    // sees the event. Observed once today: a stamped message sat
-    // "pending" in the UI because the proof arrived during the
-    // subscribe-gap; the next fresh send hit a fully-subscribed pipe and
-    // updated correctly. A small replay window catches that race without
-    // adding noise — IPC clients drain it once on attach and ignore
-    // already-applied ids via the existing `isTerminalSuccessStatus`
-    // guard in `handleDeliveryStatusUpdate`.
-    private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(
-        replay = 8,
-        extraBufferCapacity = 64,
-    )
+    // `replay = 8` holds the last few lifecycle events so the service-side
+    // durable collector and IPC subscribers can attach after backend startup
+    // without losing a bounded burst. The Room reducer is idempotent.
+    private val deliveryStatusEvents = DeliveryStatusEventStream()
     private val _locationTelemetry = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceived = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 16)
@@ -114,7 +105,7 @@ class PythonEventBridge {
 
     val announces: SharedFlow<AnnounceEvent> = _announces.asSharedFlow()
     val messages: SharedFlow<ReceivedMessage> = _messages.asSharedFlow()
-    val deliveryStatus: SharedFlow<DeliveryStatusUpdate> = _deliveryStatus.asSharedFlow()
+    val deliveryStatus: SharedFlow<DeliveryStatusUpdate> = deliveryStatusEvents.events
     val locationTelemetry: SharedFlow<LocationTelemetry> = _locationTelemetry.asSharedFlow()
     val reactionReceived: SharedFlow<String> = _reactionReceived.asSharedFlow()
     val packets: SharedFlow<ReceivedPacket> = _packets.asSharedFlow()
@@ -441,10 +432,10 @@ class PythonEventBridge {
 
     private fun handleLxmfFailure(payload: PyObject) {
         runCatching {
-            _deliveryStatus.tryEmit(
+            deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "failed",
+                    status = DeliveryStatus.FAILED,
                     timestamp = System.currentTimeMillis(),
                 ),
             )
@@ -464,11 +455,11 @@ class PythonEventBridge {
             val desired = payload.dictInt("desired_method") ?: -1
             val status =
                 if (method == LXMF_METHOD_PROPAGATED || desired == LXMF_METHOD_PROPAGATED) {
-                    "propagated"
+                    DeliveryStatus.PROPAGATED
                 } else {
-                    "delivered"
+                    DeliveryStatus.DELIVERED
                 }
-            _deliveryStatus.tryEmit(
+            deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
                     status = status,
@@ -483,10 +474,10 @@ class PythonEventBridge {
             // Mirrors NativeMessageSender.installDeliveryCallbacks — same
             // `retrying_propagated` status string the kotlin backend emits
             // when a DIRECT send fails and falls back to PROPAGATED.
-            _deliveryStatus.tryEmit(
+            deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "retrying_propagated",
+                    status = DeliveryStatus.RETRYING_PROPAGATED,
                     timestamp = System.currentTimeMillis(),
                 ),
             )

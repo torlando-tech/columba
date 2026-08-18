@@ -17,6 +17,7 @@ import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.util.HashUtils
+import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -126,6 +127,28 @@ class ServicePersistenceManagerTest {
     }
 
     // ========== persistAnnounce() Tests ==========
+
+    @Test
+    fun `persistDeliveryStatus retries pre-row event and updates owning identity`() =
+        runTest {
+            val message = mockk<MessageEntity>()
+            every { message.identityHash } returns "owning-identity"
+            var lookupCount = 0
+            coEvery { messageDao.getOutgoingMessageByIdAcrossIdentities("message-hash") } coAnswers {
+                lookupCount++
+                if (lookupCount < 3) null else message
+            }
+            coEvery {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered")
+            } returns 1
+
+            assertTrue(persistenceManager.persistDeliveryStatus("message-hash", DeliveryStatus.DELIVERED))
+
+            coVerify(exactly = 3) { messageDao.getOutgoingMessageByIdAcrossIdentities("message-hash") }
+            coVerify(exactly = 1) {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered")
+            }
+        }
 
     @Test
     fun `persistAnnounce saves new announce to database`() =

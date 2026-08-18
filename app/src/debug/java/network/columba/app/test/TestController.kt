@@ -123,7 +123,7 @@ object TestController {
                 // DeliveryStatusUpdate.messageHash is already a hex string;
                 // status is one of "delivered" | "failed" | "retrying_propagated"
                 val idHex = upd.messageHash
-                val stateName = upd.status.uppercase()
+                val stateName = upd.status.wireValue.uppercase()
                 synchronized(deliveryLock) { deliveryStates[idHex] = stateName }
                 Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$stateName")
             }

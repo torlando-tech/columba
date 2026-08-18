@@ -168,6 +168,27 @@ class MessageDaoTest {
         }
 
     @Test
+    fun applyDeliveryStatus_enforcesClosedMonotonicLifecycle() =
+        runTest {
+            suspend fun reduce(current: String, incoming: String): String {
+                val id = "$current-$incoming"
+                messageDao.insertMessage(createTestMessage(id = id, status = current))
+                messageDao.applyDeliveryStatus(id, IDENTITY_HASH, incoming)
+                return requireNotNull(messageDao.getMessageById(id, IDENTITY_HASH)).status
+            }
+
+            assertEquals("retrying_propagated", reduce("pending", "retrying_propagated"))
+            assertEquals("propagated", reduce("retrying_propagated", "propagated"))
+            assertEquals("delivered", reduce("propagated", "delivered"))
+            assertEquals("failed", reduce("pending", "failed"))
+            assertEquals("failed", reduce("sent", "failed"))
+            assertEquals("delivered", reduce("failed", "delivered"))
+            assertEquals("propagated", reduce("propagated", "failed"))
+            assertEquals("delivered", reduce("delivered", "failed"))
+            assertEquals("pending", reduce("pending", "unknown"))
+        }
+
+    @Test
     fun updateMessageDeliveryDetails_setsDeliveryMethod() =
         runTest {
             messageDao.insertMessage(createTestMessage(id = "msg1"))

@@ -564,6 +564,14 @@ class ConversationRepository
             android.util.Log.d("ConversationRepository", "Updated message $messageId status to $status")
         }
 
+        suspend fun applyDeliveryStatus(
+            messageId: String,
+            status: String,
+        ): Boolean {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            return messageDao.applyDeliveryStatus(messageId, activeIdentity.identityHash, status) > 0
+        }
+
         private fun ConversationEntity.toConversation() =
             Conversation(
                 peerHash = peerHash,

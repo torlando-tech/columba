@@ -3,6 +3,9 @@ package network.columba.app.rns.host.persistence
 import android.content.Context
 import android.util.Log
 import androidx.room.withTransaction
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
@@ -13,10 +16,9 @@ import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -473,6 +475,28 @@ class ServicePersistenceManager(
             Log.e(TAG, "Error persisting delivery-proof activity for $messageHash", e)
             false
         }
+
+    /** Persist protocol lifecycle state in the service process, independent of UI ownership. */
+    suspend fun persistDeliveryStatus(
+        messageHash: String,
+        status: DeliveryStatus,
+    ): Boolean {
+        val retryDelays = listOf(50L, 100L, 200L)
+        repeat(retryDelays.size + 1) { attempt ->
+            try {
+                val message = messageDao.getOutgoingMessageByIdAcrossIdentities(messageHash)
+                if (message != null) {
+                    return messageDao.applyDeliveryStatus(messageHash, message.identityHash, status.wireValue) > 0
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error persisting delivery status for $messageHash", e)
+                return false
+            }
+            if (attempt < retryDelays.size) delay(retryDelays[attempt])
+        }
+        Log.w(TAG, "Delivery status arrived before outgoing message was durable: $messageHash")
+        return false
+    }
 
     /**
      * Persist direct telemetry reception. Collector-stream entries are

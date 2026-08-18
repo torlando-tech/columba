@@ -15,8 +15,9 @@ import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelephony
@@ -982,44 +983,13 @@ class MessagingViewModel
                 }
 
                 if (message != null) {
-                    // Guard: 'delivered' is terminal — never regress to any other state.
-                    // LXMF may fire spurious failure/sent callbacks after delivery confirmation,
-                    // which can trigger propagation retries that overwrite 'delivered' with 'propagated'.
-                    if (message.status == "delivered" && update.status != "delivered") {
-                        Log.w(
-                            TAG,
-                            "Blocking status regression from 'delivered' to '${update.status}' " +
-                                "for message ${update.messageHash.take(16)}...",
-                        )
-                        return
-                    }
-
-                    // Guard: Don't degrade from terminal success states to failed (Issue #257 fix)
-                    // This provides defense-in-depth in case Python layer misses the spurious callback
-                    if (update.status == "failed" && isTerminalSuccessStatus(message.status)) {
-                        Log.w(
-                            TAG,
-                            "Blocking status degradation from '${message.status}' to 'failed' " +
-                                "for message ${update.messageHash.take(16)}...",
-                        )
-                        return
-                    }
-
-                    // Update status
-                    conversationRepository.updateMessageStatus(update.messageHash, update.status)
-
-                    // When retrying via propagation, also update the delivery method
-                    if (update.status == "retrying_propagated") {
-                        conversationRepository.updateMessageDeliveryDetails(
-                            update.messageHash,
-                            deliveryMethod = "propagated",
-                            errorMessage = null,
-                        )
-                    }
+                    // The repository owns the closed monotonic reduction. The service process
+                    // applies the same event durably; this UI-side call is an idempotent fallback.
+                    conversationRepository.applyDeliveryStatus(update.messageHash, update.status.wireValue)
 
                     // Record peer activity when delivery proof is received
                     // This proves the peer was recently online and received our message
-                    if (update.status == "delivered") {
+                    if (update.status == DeliveryStatus.DELIVERED) {
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
@@ -1029,11 +999,11 @@ class MessagingViewModel
                     // PROPAGATED on "propagated" (the propagation-node-accepted
                     // analogue). Failed / retrying paths carry too much routing
                     // ambiguity to produce accurate interface data.
-                    if (update.status == "delivered" || update.status == "propagated") {
+                    if (update.status == DeliveryStatus.DELIVERED || update.status == DeliveryStatus.PROPAGATED) {
                         enrichSentInterfaceOnDelivery(message, update.messageHash)
                     }
 
-                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
+                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status.wireValue}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
@@ -1124,15 +1094,6 @@ class MessagingViewModel
                 Log.e(TAG, "Error handling incoming reaction: ${e.message}", e)
             }
         }
-
-        /**
-         * Check if a message status represents a terminal success state.
-         * Terminal success states should never degrade to "failed" (Issue #257 fix).
-         *
-         * @param status The current message status
-         * @return true if this is a terminal success status that shouldn't be degraded
-         */
-        private fun isTerminalSuccessStatus(status: String): Boolean = status in setOf("sent", "propagated", "delivered")
 
         private suspend fun saveMessageToDatabase(
             peerHash: String,

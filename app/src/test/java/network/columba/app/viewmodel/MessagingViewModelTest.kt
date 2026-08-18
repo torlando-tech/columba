@@ -22,10 +22,11 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.data.repository.ReplyPreview
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.rns.api.model.Identity
-import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.rns.api.model.TransferPhase
@@ -1483,7 +1484,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "retrying_propagated",
+                            status = DeliveryStatus.RETRYING_PROPAGATED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1495,16 +1496,12 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with retrying_propagated
             coVerify {
-                conversationRepository.updateMessageStatus(testMessageHash, "retrying_propagated")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated")
             }
 
-            // Verify: updateMessageDeliveryDetails was called to change deliveryMethod to "propagated"
-            coVerify {
-                conversationRepository.updateMessageDeliveryDetails(
-                    messageId = testMessageHash,
-                    deliveryMethod = "propagated",
-                    errorMessage = null,
-                )
+            // Delivery method changes atomically inside the repository reducer.
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageDeliveryDetails(any(), any(), any())
             }
         }
 
@@ -1559,7 +1556,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "delivered",
+                            status = DeliveryStatus.DELIVERED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1571,7 +1568,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with delivered
             coVerify {
-                conversationRepository.updateMessageStatus(testMessageHash, "delivered")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered")
             }
 
             // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
@@ -1633,7 +1630,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1645,7 +1642,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with failed
             coVerify {
-                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
             }
 
             // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
@@ -1695,7 +1692,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = unknownMessageHash,
-                            status = "delivered",
+                            status = DeliveryStatus.DELIVERED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1712,14 +1709,14 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was NOT called (message not found)
             coVerify(exactly = 0) {
-                conversationRepository.updateMessageStatus(unknownMessageHash, any())
+                conversationRepository.applyDeliveryStatus(unknownMessageHash, any())
             }
         }
 
     // ========== STATUS DEGRADATION PROTECTION TESTS (Issue #257) ==========
 
     @Test
-    fun `failed status is blocked when message is already propagated`() =
+    fun `failed status is delegated to reducer when message is already propagated`() =
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
@@ -1771,7 +1768,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1782,13 +1779,13 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
-            coVerify(exactly = 0) {
-                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            coVerify(exactly = 1) {
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
             }
         }
 
     @Test
-    fun `failed status is blocked when message is already sent`() =
+    fun `failed status is delegated to reducer when message is already sent`() =
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
@@ -1840,7 +1837,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1851,13 +1848,13 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
-            coVerify(exactly = 0) {
-                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            coVerify(exactly = 1) {
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
             }
         }
 
     @Test
-    fun `failed status is blocked when message is already delivered`() =
+    fun `failed status is delegated to reducer when message is already delivered`() =
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
@@ -1909,7 +1906,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1920,8 +1917,8 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
-            coVerify(exactly = 0) {
-                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+            coVerify(exactly = 1) {
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
             }
         }
 
@@ -1978,7 +1975,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "failed",
+                            status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -1990,7 +1987,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus WAS called (legitimate failure)
             coVerify(exactly = 1) {
-                conversationRepository.updateMessageStatus(testMessageHash, "failed")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
             }
         }
 
@@ -2047,7 +2044,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "delivered",
+                            status = DeliveryStatus.DELIVERED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -2059,14 +2056,14 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus WAS called (status upgrade allowed)
             coVerify(exactly = 1) {
-                conversationRepository.updateMessageStatus(testMessageHash, "delivered")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered")
             }
         }
 
     // ========== DELIVERED TERMINAL STATE TESTS ==========
 
     @Test
-    fun `propagated status is blocked when message is already delivered`() =
+    fun `propagated status is delegated to reducer when message is already delivered`() =
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
@@ -2114,7 +2111,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "propagated",
+                            status = DeliveryStatus.PROPAGATED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -2123,13 +2120,13 @@ class MessagingViewModelTest {
 
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
-            coVerify(exactly = 0) {
-                conversationRepository.updateMessageStatus(testMessageHash, "propagated")
+            coVerify(exactly = 1) {
+                conversationRepository.applyDeliveryStatus(testMessageHash, "propagated")
             }
         }
 
     @Test
-    fun `retrying_propagated status is blocked when message is already delivered`() =
+    fun `retrying_propagated status is delegated to reducer when message is already delivered`() =
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
@@ -2177,7 +2174,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "retrying_propagated",
+                            status = DeliveryStatus.RETRYING_PROPAGATED,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -2186,13 +2183,13 @@ class MessagingViewModelTest {
 
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
-            coVerify(exactly = 0) {
-                conversationRepository.updateMessageStatus(testMessageHash, "retrying_propagated")
+            coVerify(exactly = 1) {
+                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated")
             }
         }
 
     @Test
-    fun `sent status is blocked when message is already delivered`() =
+    fun `pending status is delegated to reducer when message is already delivered`() =
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
@@ -2240,7 +2237,7 @@ class MessagingViewModelTest {
                     deliveryStatusFlow.emit(
                         DeliveryStatusUpdate(
                             messageHash = testMessageHash,
-                            status = "sent",
+                            status = DeliveryStatus.PENDING,
                             timestamp = System.currentTimeMillis(),
                         ),
                     )
@@ -2249,8 +2246,8 @@ class MessagingViewModelTest {
 
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
-            coVerify(exactly = 0) {
-                conversationRepository.updateMessageStatus(testMessageHash, "sent")
+            coVerify(exactly = 1) {
+                conversationRepository.applyDeliveryStatus(testMessageHash, "pending")
             }
         }
 

@@ -106,6 +106,41 @@ interface MessageDao {
         status: String,
     )
 
+    /**
+     * Applies a protocol delivery event as a closed, monotonic lifecycle.
+     * `sent` is accepted only as a legacy/local precursor; it is not a protocol event.
+     */
+    @Query(
+        """
+        UPDATE messages
+        SET status = CASE
+                WHEN :status = 'delivered' AND status IN
+                    ('pending', 'sent', 'retrying_propagated', 'propagated', 'failed') THEN 'delivered'
+                WHEN :status = 'propagated' AND status IN
+                    ('pending', 'sent', 'retrying_propagated', 'failed') THEN 'propagated'
+                WHEN :status = 'failed' AND status IN
+                    ('pending', 'sent', 'retrying_propagated') THEN 'failed'
+                WHEN :status = 'retrying_propagated' AND status IN
+                    ('pending', 'sent') THEN 'retrying_propagated'
+                ELSE status
+            END,
+            deliveryMethod = CASE
+                WHEN :status IN ('retrying_propagated', 'propagated') THEN 'propagated'
+                ELSE deliveryMethod
+            END,
+            errorMessage = CASE
+                WHEN :status IN ('retrying_propagated', 'propagated', 'delivered') THEN NULL
+                ELSE errorMessage
+            END
+        WHERE id = :messageId AND identityHash = :identityHash AND isFromMe = 1
+        """,
+    )
+    suspend fun applyDeliveryStatus(
+        messageId: String,
+        identityHash: String,
+        status: String,
+    ): Int
+
     @Query(
         """
         UPDATE messages

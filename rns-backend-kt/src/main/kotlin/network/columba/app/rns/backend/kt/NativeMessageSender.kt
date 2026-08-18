@@ -2,6 +2,8 @@ package network.columba.app.rns.backend.kt
 
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusEventStream
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.model.FailedInterface
@@ -13,12 +15,11 @@ import network.columba.app.rns.api.model.VoiceCallState
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import network.reticulum.common.DestinationDirection
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
+import network.reticulum.common.DestinationDirection
 import network.reticulum.lxmf.LXMRouter
 import network.reticulum.lxmf.LXMessage
 import network.reticulum.transport.Transport
@@ -27,7 +28,7 @@ internal class NativeMessageSender(
     private val routerProvider: () -> LXMRouter?,
     private val deliveryIdentityProvider: () -> NativeIdentity?,
     private val deliveryDestinationProvider: () -> NativeDestination?,
-    private val deliveryStatusFlow: MutableSharedFlow<DeliveryStatusUpdate>,
+    private val deliveryStatusEvents: DeliveryStatusEventStream,
     private val scopeProvider: () -> kotlinx.coroutines.CoroutineScope,
 ) {
     companion object {
@@ -207,15 +208,15 @@ internal class NativeMessageSender(
                 if (msg.method == NativeDeliveryMethod.PROPAGATED ||
                     msg.desiredMethod == NativeDeliveryMethod.PROPAGATED
                 ) {
-                    "propagated"
+                    DeliveryStatus.PROPAGATED
                 } else {
-                    "delivered"
+                    DeliveryStatus.DELIVERED
                 }
             Log.i(
                 TAG,
                 "Delivery callback for $hash -> $status (state=${msg.state}, method=${msg.method}, desired=${msg.desiredMethod})",
             )
-            deliveryStatusFlow.tryEmit(
+            deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(hash, status, System.currentTimeMillis()),
             )
         }
@@ -228,20 +229,20 @@ internal class NativeMessageSender(
                 router.getActivePropagationNode() != null
             ) {
                 Log.i(TAG, "${currentMethod ?: lxmfMethod} delivery failed for $hash, falling back to PROPAGATED")
-                deliveryStatusFlow.tryEmit(
-                    DeliveryStatusUpdate(hash, "retrying_propagated", System.currentTimeMillis()),
-                )
                 msg.desiredMethod = NativeDeliveryMethod.PROPAGATED
                 msg.state = network.reticulum.lxmf.MessageState.OUTBOUND
                 msg.deliveryAttempts = 0
+                deliveryStatusEvents.publish(
+                    DeliveryStatusUpdate(hash, DeliveryStatus.RETRYING_PROPAGATED, System.currentTimeMillis()),
+                )
                 scopeProvider().launch(Dispatchers.IO) {
                     router.handleOutbound(msg)
                 }
                 return@failedCallback
             }
 
-            deliveryStatusFlow.tryEmit(
-                DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()),
+            deliveryStatusEvents.publish(
+                DeliveryStatusUpdate(hash, DeliveryStatus.FAILED, System.currentTimeMillis()),
             )
         }
     }

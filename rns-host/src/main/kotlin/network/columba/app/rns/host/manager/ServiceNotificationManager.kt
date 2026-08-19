@@ -300,7 +300,14 @@ class ServiceNotificationManager(
      */
     fun updateRNodeBattery(percent: Int) {
         mainHandler.post {
-            val newBattery = if (percent in 0..100) percent else null
+            // Reject a stale positive value if any RNode interface is
+            // disconnected: the poller may have captured the reading just
+            // before a disconnect, and the disconnect event may reach the
+            // main handler before this update. Without this guard the
+            // notification would show "(RNode disconnected)" and
+            // "(RNode battery N%)" at the same time.
+            val newBattery =
+                if (disconnectedRNodeInterfaces.isEmpty() && percent in 0..100) percent else null
             rnodeBatteryPercent = newBattery
             // Skip the repost during active sync (matches updateRNodeStatus) and
             // when nothing changed.

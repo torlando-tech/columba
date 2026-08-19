@@ -1630,8 +1630,17 @@ class ColumbaRNodeInterface(Interface):
             return self.r_stat_snr
 
     def get_battery(self):
-        """Get last reported battery level (0-100 percent), or None if not yet received."""
+        """Get last reported battery level (0-100 percent), or None if not yet
+        received or the interface is offline.
+
+        The cached value is only meaningful while connected: on a transient
+        drop the interface stays registered but the last 0x27 frame is stale,
+        so callers must treat an offline interface as "no reading" (the AIDL
+        layer maps this to the -1 absent sentinel).
+        """
         with self._read_lock:
+            if not self.online:
+                return None
             return self.r_stat_bat
 
     def enter_bluetooth_pairing_mode(self):

@@ -155,6 +155,46 @@ class ServiceNotificationManagerRNodeTest {
         )
     }
 
+    @Test
+    fun `foreground notification includes battery when present`() {
+        serviceNotificationManager.updateRNodeBattery(82)
+        drainMainLooper()
+
+        val notification = serviceNotificationManager.createNotification("READY")
+        val bigText = notification.extras.getString("android.bigText") ?: ""
+        assertTrue(
+            "bigText should include 'RNode battery 82%'",
+            bigText.contains("RNode battery 82%"),
+        )
+    }
+
+    @Test
+    fun `foreground notification omits battery when absent`() {
+        serviceNotificationManager.updateRNodeBattery(-1)
+        drainMainLooper()
+
+        val notification = serviceNotificationManager.createNotification("READY")
+        val bigText = notification.extras.getString("android.bigText") ?: ""
+        assertTrue(
+            "bigText should NOT include 'RNode battery'",
+            !bigText.contains("RNode battery"),
+        )
+    }
+
+    @Test
+    fun `battery is cleared when RNode disconnects`() {
+        serviceNotificationManager.updateRNodeBattery(82)
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
+        drainMainLooper()
+
+        val notification = serviceNotificationManager.createNotification("READY")
+        val bigText = notification.extras.getString("android.bigText") ?: ""
+        assertTrue(
+            "bigText should NOT include battery while RNode is down",
+            !bigText.contains("RNode battery"),
+        )
+    }
+
     // ========== Debounce ==========
 
     @Test

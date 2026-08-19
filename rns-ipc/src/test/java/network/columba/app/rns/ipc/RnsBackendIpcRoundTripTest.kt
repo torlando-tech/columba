@@ -119,6 +119,24 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `rnodeBattery round-trips a live value through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        fake.transportAdminFake.batteryResult = 82
+
+        assertEquals(82, client.transportAdmin.getRNodeBattery())
+    }
+
+    @Test
+    fun `rnodeBattery round-trips the absent sentinel through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        fake.transportAdminFake.batteryResult = -1
+
+        assertEquals(-1, client.transportAdmin.getRNodeBattery())
+    }
+
+    @Test
     fun `identity import success map round-trips through the stub`() = runTest {
         val (client, _) = buildClientAndServer()
         val keyData = ByteArray(64) { it.toByte() }

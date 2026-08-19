@@ -340,6 +340,44 @@ class InterfaceStatsViewModelTest {
         }
 
     @Test
+    fun `rnode battery is stored when positive`() =
+        runTest {
+            coEvery { interfaceRepository.getInterfaceByIdOnce(1L) } returns testRNodeEntity
+            coEvery { reticulumProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf(
+                    "online" to true,
+                    "rxb" to 0L,
+                    "txb" to 0L,
+                )
+            coEvery { reticulumProtocol.getRNodeBattery() } returns 82
+
+            val viewModel = createViewModel(1L)
+            advanceTimeBy(1100) // Allow loadInterface to complete
+            viewModel.refreshStats()
+
+            assertEquals(82, viewModel.state.value.rnodeBattery)
+        }
+
+    @Test
+    fun `rnode battery is null for absent sentinel`() =
+        runTest {
+            coEvery { interfaceRepository.getInterfaceByIdOnce(1L) } returns testRNodeEntity
+            coEvery { reticulumProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf(
+                    "online" to true,
+                    "rxb" to 0L,
+                    "txb" to 0L,
+                )
+            coEvery { reticulumProtocol.getRNodeBattery() } returns -1
+
+            val viewModel = createViewModel(1L)
+            advanceTimeBy(1100) // Allow loadInterface to complete
+            viewModel.refreshStats()
+
+            assertNull(viewModel.state.value.rnodeBattery)
+        }
+
+    @Test
     fun `refreshStats does not set RSSI if value is too low`() =
         runTest {
             coEvery { interfaceRepository.getInterfaceByIdOnce(1L) } returns testRNodeEntity

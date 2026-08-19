@@ -62,6 +62,9 @@ class RNodeBatteryParseTests(unittest.TestCase):
         iface.r_stat_bat = None
         iface.r_stat_rssi = None
         iface.r_stat_snr = None
+        # A battery frame can only be parsed while connected, so a frame-driven
+        # interface is online.
+        iface.online = True
         return iface
 
     def test_kiss_stat_bat_command_is_0x27(self):
@@ -77,6 +80,17 @@ class RNodeBatteryParseTests(unittest.TestCase):
 
     def test_get_battery_defaults_to_none(self):
         iface = self._make_iface()
+        self.assertIsNone(iface.get_battery())
+
+    def test_get_battery_returns_none_when_offline(self):
+        # Regression: on a transient BLE/USB drop the interface stays registered
+        # but goes offline. A cached battery frame must NOT keep being reported -
+        # get_battery() has to return None so the AIDL layer maps it to the -1
+        # absent sentinel (and the notification poller stops re-posting the stale
+        # percentage on a dead RNode).
+        iface = self._make_iface()
+        iface.r_stat_bat = 82
+        iface.online = False
         self.assertIsNone(iface.get_battery())
 
 

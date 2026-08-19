@@ -55,6 +55,11 @@ class ServiceNotificationManager(
     private var currentSyncProgress: Float = 0f
     private var lastNetworkStatus: String = "READY"
 
+    // Last RNode battery percent (0-100). null when absent / offline. Mutated
+    // only on the main thread (via mainHandler) like the other notification state.
+    private var rnodeBatteryPercent: Int? = null
+    private var lastNotifiedBattery: Int? = null
+
     // Track per-interface RNode disconnect state. Thread-safe because startForeground()
     // (which reads this via getStatusTexts()) can be called from any thread, while mutations
     // are posted to mainHandler.
@@ -228,6 +233,9 @@ class ServiceNotificationManager(
             }
 
             if (disconnectedRNodeInterfaces.isNotEmpty()) {
+                // Battery reading is stale once the RNode is down; hide it.
+                rnodeBatteryPercent = null
+                lastNotifiedBattery = null
                 val pendingIntent = createContentIntent()
                 val names = disconnectedRNodeInterfaces.joinToString(", ")
                 val alert =
@@ -282,6 +290,35 @@ class ServiceNotificationManager(
             ) {
                 repostNotification(createNotification(lastNetworkStatus))
             }
+        }
+    }
+
+    /**
+     * Update the RNode battery shown in the persistent foreground notification.
+     * [percent] is 0-100, or < 0 (absent) to hide it. Only reposts when the value
+     * actually changed, to avoid needless startForeground churn.
+     */
+    fun updateRNodeBattery(percent: Int) {
+        mainHandler.post {
+            // Reject a stale positive value if any RNode interface is
+            // disconnected: the poller may have captured the reading just
+            // before a disconnect, and the disconnect event may reach the
+            // main handler before this update. Without this guard the
+            // notification would show "(RNode disconnected)" and
+            // "(RNode battery N%)" at the same time.
+            val newBattery =
+                if (disconnectedRNodeInterfaces.isEmpty() && percent in 0..100) percent else null
+            rnodeBatteryPercent = newBattery
+            // Skip the repost during active sync (matches updateRNodeStatus) and
+            // when nothing changed.
+            if (newBattery == lastNotifiedBattery) return@post
+            if (currentSyncState in
+                PropagationState.STATE_PATH_REQUESTED..PropagationState.STATE_RESPONSE_RECEIVED
+            ) {
+                return@post
+            }
+            lastNotifiedBattery = newBattery
+            repostNotification(createNotification(lastNetworkStatus))
         }
     }
 
@@ -462,6 +499,12 @@ class ServiceNotificationManager(
         // Append RNode status when network is otherwise healthy
         if (networkStatus == "READY" && disconnectedRNodeInterfaces.isNotEmpty()) {
             detailText += " (RNode disconnected)"
+        }
+
+        // Append RNode battery when we have a live reading and the network is healthy.
+        val battery = rnodeBatteryPercent
+        if (networkStatus == "READY" && battery != null) {
+            detailText += " (RNode battery ${battery}%)"
         }
 
         return Pair(statusText, detailText)

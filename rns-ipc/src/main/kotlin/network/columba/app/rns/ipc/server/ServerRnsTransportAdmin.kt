@@ -102,6 +102,12 @@ internal class ServerRnsTransportAdmin(
         impl.getRNodeRssi()
     }
 
+    // Live fetch: `impl.getRNodeBattery()` is `suspend` and re-reads on every
+    // call, so the dispatch block runs the current backend value.
+    override fun getRNodeBattery(cb: IRnsIntCallback) = dispatchNullableInt(cb, scope) {
+        impl.getRNodeBattery()
+    }
+
     override fun getBleConnectionDetails(cb: IRnsStringCallback) = dispatchNullableString(cb, scope) {
         impl.getBleConnectionDetails()
     }

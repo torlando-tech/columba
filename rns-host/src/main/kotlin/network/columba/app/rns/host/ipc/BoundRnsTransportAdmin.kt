@@ -88,6 +88,9 @@ internal class BoundRnsTransportAdmin(
 
     override fun getRNodeRssi(): Int = backendFlow.value?.transportAdmin?.getRNodeRssi() ?: -100
 
+    override suspend fun getRNodeBattery(): Int =
+        awaitBound().transportAdmin.getRNodeBattery()
+
     override fun getBleConnectionDetails(): String =
         backendFlow.value?.transportAdmin?.getBleConnectionDetails() ?: "[]"
 

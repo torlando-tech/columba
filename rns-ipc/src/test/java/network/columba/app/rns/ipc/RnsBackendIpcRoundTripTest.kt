@@ -702,6 +702,8 @@ private class FakeRnsNomadnet : RnsNomadnet {
 
 private class FakeRnsTransportAdmin : RnsTransportAdmin {
     var sharedInstanceAccessConfig: String? = null
+    var batteryResult: Int = -1
+
     private val interfaceStatuses = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 8)
 
     fun emitInterfaceStatus(payload: String) {
@@ -724,6 +726,7 @@ private class FakeRnsTransportAdmin : RnsTransportAdmin {
     override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? = null
     override suspend fun reconnectRNodeInterface() {}
     override fun getRNodeRssi(): Int = -100
+    override suspend fun getRNodeBattery(): Int = batteryResult
     override fun getBleConnectionDetails(): String = "[]"
     override val interfaceStatusChanged: SharedFlow<Unit> = MutableSharedFlow()
     override val bleConnectionsFlow: SharedFlow<String> = MutableSharedFlow()

@@ -195,6 +195,25 @@ class ServiceNotificationManagerRNodeTest {
         )
     }
 
+    @Test
+    fun `late battery update after disconnect does not restore stale value`() {
+        // The poller captured 82 while the RNode was still online, but the
+        // disconnect event reaches the main handler before the captured
+        // battery update. The stale value must not be restored, or the
+        // notification would show "(RNode disconnected)" and
+        // "(RNode battery 82%)" at the same time.
+        serviceNotificationManager.updateRNodeStatus(false, "RNodeInterface[BLE]")
+        serviceNotificationManager.updateRNodeBattery(82)
+        drainMainLooper()
+
+        val notification = serviceNotificationManager.createNotification("READY")
+        val bigText = notification.extras.getString("android.bigText") ?: ""
+        assertTrue(
+            "bigText should NOT include battery while RNode is down, even if a pre-disconnect reading arrives late",
+            !bigText.contains("RNode battery"),
+        )
+    }
+
     // ========== Debounce ==========
 
     @Test

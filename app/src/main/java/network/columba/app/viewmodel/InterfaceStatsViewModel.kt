@@ -252,16 +252,7 @@ class InterfaceStatsViewModel
 
                 // For RNode interfaces, also fetch the live battery (0-100, -1 absent).
                 // Live fetch per poll (not a cached value); binder call off Main.
-                var rnodeBattery: Int? = null
-                if (entity.type == "RNode") {
-                    val battery =
-                        withContext(Dispatchers.IO) {
-                            transportAdmin.getRNodeBattery()
-                        }
-                    if (battery > -1) {
-                        rnodeBattery = battery
-                    }
-                }
+                val rnodeBattery = readRNodeBattery(entity.type)
 
                 // Check USB permission for USB-mode RNode interfaces that are offline
                 val needsUsbPermission =
@@ -291,6 +282,15 @@ class InterfaceStatsViewModel
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing stats", e)
             }
+        }
+
+        private suspend fun readRNodeBattery(interfaceType: String): Int? {
+            if (interfaceType != "RNode") return null
+            val battery =
+                withContext(Dispatchers.IO) {
+                    transportAdmin.getRNodeBattery()
+                }
+            return if (battery > -1) battery else null
         }
 
         private fun recordTrafficSample(

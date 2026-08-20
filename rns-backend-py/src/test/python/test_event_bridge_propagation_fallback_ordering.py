@@ -18,11 +18,21 @@ class Callback:
         self.events.append((self.name, payload["hash"]))
 
 
+class PayloadCallback:
+    def __init__(self, events, name):
+        self.events = events
+        self.name = name
+
+    def onEvent(self, payload):
+        self.events.append((self.name, payload.copy()))
+
+
 class Message:
     def __init__(self):
         self.hash = b"message-hash"
         self.method = 2
         self.desired_method = 2
+        self.state = 1
         self.try_propagation_on_fail = False
         self.delivery_attempts = 4
         self.packed = b"packed"
@@ -54,6 +64,10 @@ class PinnedLockRouter:
 
     def handle_outbound(self, message):
         with self.outbound_processing_lock:
+            # Pinned LXMF repacks the same shared object for the fallback and
+            # makes the effective method PROPAGATED before relay acceptance.
+            message.method = message.desired_method
+            message.state = 4
             self.events.append(("submit", message.desired_method))
             self.submitted.set()
 
@@ -69,7 +83,11 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
 
         lxmf = types.ModuleType("LXMF")
         setattr(lxmf, "LXStamper", type("LXStamper", (), {}))
-        setattr(lxmf, "LXMessage", type("LXMessage", (), {"PROPAGATED": 3}))
+        setattr(
+            lxmf,
+            "LXMessage",
+            type("LXMessage", (), {"PROPAGATED": 3, "SENT": 4, "DELIVERED": 8}),
+        )
         sys.modules["LXMF"] = lxmf
 
         spec = importlib.util.spec_from_file_location("event_bridge_fallback_test", EVENT_BRIDGE_PATH)
@@ -121,6 +139,63 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
         message.failed_callback(message)
         self.assertTrue(router.submitted.wait(timeout=1))
         self.assertEqual(1, [event[0] for event in events].count("submit"))
+
+    def test_delayed_primary_proof_overrides_propagated_repack_and_acceptance(self):
+        events = []
+        message = Message()
+        router = PinnedLockRouter(events)
+        setattr(self.module, "_lxmf_router", router)
+        self.module.attach_lxmessage_callbacks(
+            message,
+            PayloadCallback(events, "delivered"),
+            PayloadCallback(events, "failed"),
+            PayloadCallback(events, "retrying"),
+            try_propagation_on_fail=True,
+        )
+
+        self.assertTrue(callable(message.failed_callback))
+        message.failed_callback(message)
+        self.assertTrue(router.submitted.wait(timeout=1))
+        self.assertTrue(callable(message.delivery_callback))
+        message.delivery_callback(message)
+        message.state = 8
+        message.delivery_callback(message)
+
+        deliveries = [payload for name, payload in events if name == "delivered"]
+        self.assertEqual([4, 8], [payload["state"] for payload in deliveries])
+        self.assertEqual([3, 3], [payload["method"] for payload in deliveries])
+        self.assertEqual([3, 3], [payload["desired_method"] for payload in deliveries])
+
+    def test_failed_fallback_can_be_promoted_by_delayed_primary_proof(self):
+        events = []
+        message = Message()
+        router = PinnedLockRouter(events)
+        setattr(self.module, "_lxmf_router", router)
+        self.module.attach_lxmessage_callbacks(
+            message,
+            PayloadCallback(events, "delivered"),
+            PayloadCallback(events, "failed"),
+            PayloadCallback(events, "retrying"),
+            try_propagation_on_fail=True,
+        )
+
+        self.assertTrue(callable(message.failed_callback))
+        message.failed_callback(message)
+        self.assertTrue(router.submitted.wait(timeout=1))
+        self.assertTrue(callable(message.failed_callback))
+        message.failed_callback(message)
+        message.state = 8
+        self.assertTrue(callable(message.delivery_callback))
+        message.delivery_callback(message)
+
+        self.assertEqual(
+            ["retrying", "failed", "delivered"],
+            [name for name, _ in events if name in ("retrying", "failed", "delivered")],
+        )
+        delivered = next(payload for name, payload in events if name == "delivered")
+        self.assertEqual(8, delivered["state"])
+        self.assertEqual(3, delivered["method"])
+        self.assertEqual(3, delivered["desired_method"])
 
 
 if __name__ == "__main__":

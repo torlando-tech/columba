@@ -1351,7 +1351,9 @@ def attach_lxmessage_callbacks(
     message it sends — without it the Kotlin side never learns a sent message
     was delivered or failed, so the delivery-status flow stays silent (no
     delivery proofs surface in the UI). Success vs failure is implied by which
-    Kotlin `PyEventCallback` fires; the payload is a flat `{hash}` dict.
+    Kotlin `PyEventCallback` fires; delivery payloads include the message hash,
+    LXMF state, effective method, and desired method so recipient proof remains
+    authoritative after fallback repacks the shared message object.
 
     **try_propagation_on_fail (Sideband pattern)** — when set, the LXMessage
     is tagged so the failed-callback rebuilds it as PROPAGATED and re-routes
@@ -1370,16 +1372,20 @@ def attach_lxmessage_callbacks(
 
     def _delivered(msg):
         msg_hash_hex = _hex(getattr(msg, "hash", None))
+        state = getattr(msg, "state", None)
         method = getattr(msg, "method", None)
         desired = getattr(msg, "desired_method", None)
         payload = {
             "hash": msg_hash_hex,
+            "state": state if state is not None else -1,
             "method": method if method is not None else -1,
             "desired_method": desired if desired is not None else -1,
         }
         with attempt_lock:
-            is_propagated = method == LXMF.LXMessage.PROPAGATED or (
-                method is None and desired == LXMF.LXMessage.PROPAGATED
+            is_delivered = state == LXMF.LXMessage.DELIVERED
+            is_propagated = not is_delivered and (
+                method == LXMF.LXMessage.PROPAGATED
+                or (method is None and desired == LXMF.LXMessage.PROPAGATED)
             )
             if attempt_state["value"] == "delivered" or (
                 is_propagated and attempt_state["value"] == "propagated"
@@ -1388,7 +1394,7 @@ def attach_lxmessage_callbacks(
             attempt_state["value"] = "propagated" if is_propagated else "delivered"
             RNS.log(
                 f"event_bridge: _delivered fired for {msg_hash_hex} "
-                f"(method={method}, desired={desired})",
+                f"(state={state}, method={method}, desired={desired})",
                 RNS.LOG_DEBUG,
             )
             _emit(on_delivered, payload)

@@ -82,6 +82,19 @@ class PendingDeliveryStatusDaoTest {
     }
 
     @Test
+    fun `delayed primary proof wins after propagated acceptance and failure`() = runTest {
+        dao.reduce("message", "retrying_propagated", "propagated", 10L)
+        dao.reduce("message", "propagated", "propagated", 20L)
+        dao.reduce("message", "failed", null, 30L)
+        dao.reduce("message", "delivered", null, 40L)
+
+        val pending = requireNotNull(dao.get("message"))
+        assertEquals("delivered", pending.status)
+        assertEquals("propagated", pending.deliveryMethod)
+        assertEquals(40L, pending.updatedAt)
+    }
+
+    @Test
     fun `cleanup is age and count bounded`() = runTest {
         dao.reduce("old", "failed", null, 1L)
         dao.reduce("middle", "failed", null, 2L)

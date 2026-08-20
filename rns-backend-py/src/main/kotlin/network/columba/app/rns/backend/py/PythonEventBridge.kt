@@ -49,8 +49,11 @@ import org.json.JSONObject
  */
 @ReflectivelyKept // Python (event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class PythonEventBridge {
-    private companion object {
+    internal companion object {
         const val TAG = "PythonEventBridge"
+
+        /** Upstream `LXMF.LXMessage.DELIVERED` = 0x08. */
+        const val LXMF_STATE_DELIVERED = 0x08
 
         /**
          * Upstream `LXMF.LXMessage.PROPAGATED` = 0x03. Inlined (rather than
@@ -80,6 +83,22 @@ class PythonEventBridge {
                 LXMF_METHOD_PROPAGATED -> "propagated"
                 LXMF_METHOD_PAPER -> "paper"
                 else -> null
+            }
+
+        /** Recipient delivery proof outranks a fallback-mutated transport method. */
+        fun lxmfDeliveryStatus(
+            state: Int?,
+            method: Int?,
+            desired: Int?,
+        ): DeliveryStatus =
+            if (state == LXMF_STATE_DELIVERED) {
+                DeliveryStatus.DELIVERED
+            } else if (method == LXMF_METHOD_PROPAGATED ||
+                ((method == null || method < 0) && desired == LXMF_METHOD_PROPAGATED)
+            ) {
+                DeliveryStatus.PROPAGATED
+            } else {
+                DeliveryStatus.DELIVERED
             }
 
         // event_bridge.py emits the field map as `json.dumps({str(k): ...})`,
@@ -443,23 +462,15 @@ class PythonEventBridge {
 
     private fun handleLxmfDelivered(payload: PyObject) {
         runCatching {
-            // Mirrors `NativeMessageSender.installDeliveryCallbacks`: same
-            // upstream-LXMF callback fires for both PROPAGATED (success ==
-            // "stored on the relay node") and DIRECT/OPPORTUNISTIC (success
-            // == "ack from recipient"). The split is by `method`, not state.
-            // Without this distinction the UI would render ✓✓ ("delivered")
-            // for every PROPAGATED send the moment it lands on the relay,
-            // misrepresenting the actual delivery promise.
-            val method = payload.dictInt("method") ?: -1
-            val desired = payload.dictInt("desired_method") ?: -1
-            val status =
-                if (method == LXMF_METHOD_PROPAGATED ||
-                    (method < 0 && desired == LXMF_METHOD_PROPAGATED)
-                ) {
-                    DeliveryStatus.PROPAGATED
-                } else {
-                    DeliveryStatus.DELIVERED
-                }
+            // Mirrors `NativeMessageSender.installDeliveryCallbacks`: a
+            // PROPAGATED callback in SENT state means relay acceptance, while
+            // DELIVERED is authoritative recipient proof. Fallback repacking
+            // mutates the shared LXMessage's method fields to PROPAGATED, so
+            // state must win when the original direct receipt arrives later.
+            val state = payload.dictInt("state")
+            val method = payload.dictInt("method")
+            val desired = payload.dictInt("desired_method")
+            val status = lxmfDeliveryStatus(state, method, desired)
             deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),

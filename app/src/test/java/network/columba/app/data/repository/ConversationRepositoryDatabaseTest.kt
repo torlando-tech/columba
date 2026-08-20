@@ -435,6 +435,7 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
             val peerA = "peer-a"
             val peerB = "peer-b"
             insertTestIdentity(identityHash = identityB, displayName = "Identity B", isActive = false)
+            var originalB: MessageEntity? = null
             listOf(identityA to peerA, identityB to peerB).forEachIndexed { index, (identity, peer) ->
                 conversationDao.insertConversation(
                     ConversationEntity(
@@ -445,7 +446,7 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
                         lastMessageTimestamp = index.toLong(),
                     ),
                 )
-                messageDao.insertMessage(
+                val message =
                     MessageEntity(
                         id = duplicateHash,
                         conversationHash = peer,
@@ -454,19 +455,33 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
                         timestamp = index.toLong(),
                         isFromMe = true,
                         status = "pending",
-                        isRead = true,
-                    ),
-                )
+                        isRead = identity == identityA,
+                        fieldsJson = if (identity == identityB) "{\"b\":true}" else null,
+                        reactionsJson = if (identity == identityB) "{\"👍\":[\"b\"]}" else null,
+                        deliveryMethod = if (identity == identityB) "propagated" else "direct",
+                        errorMessage = if (identity == identityB) "identity-b-error" else null,
+                        replyToMessageId = if (identity == identityB) "identity-b-reply" else null,
+                        receivedHopCount = if (identity == identityB) 7 else null,
+                        receivedInterface = if (identity == identityB) "B Receive" else null,
+                        receivedRssi = if (identity == identityB) -71 else null,
+                        receivedSnr = if (identity == identityB) 3.5f else null,
+                        receivedAt = if (identity == identityB) 99L else null,
+                        sentInterface = if (identity == identityB) "B Original" else null,
+                    )
+                messageDao.insertMessage(message)
+                if (identity == identityB) originalB = message
             }
 
-            // Callback A has already been received; force A -> B before the mutation boundary.
+            // Callback A has already been received; force A -> B before both mutation boundaries.
             localIdentityDao.setActive(identityB)
             val reduced = repository.applyDeliveryStatus(duplicateHash, "delivered", identityA)
+            repository.updateMessageSentInterface(duplicateHash, "A Route", requireNotNull(reduced).identityHash)
 
-            assertEquals(identityA, reduced?.identityHash)
-            assertEquals(peerA, reduced?.conversationHash)
+            assertEquals(identityA, reduced.identityHash)
+            assertEquals(peerA, reduced.conversationHash)
             assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
-            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertEquals("A Route", messageDao.getMessageById(duplicateHash, identityA)?.sentInterface)
+            assertEquals(originalB, messageDao.getMessageById(duplicateHash, identityB))
             assertEquals(identityA, repository.getMessageById(duplicateHash, identityA)?.identityHash)
             assertNull(repository.getMessageById(duplicateHash, " "))
         }

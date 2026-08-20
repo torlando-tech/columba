@@ -652,6 +652,18 @@ class ConversationRepository
         }
 
         /**
+         * Update the sent interface for an advisory event's immutable originating identity.
+         */
+        suspend fun updateMessageSentInterface(
+            messageId: String,
+            sentInterface: String?,
+            originatingIdentityHash: String,
+        ) {
+            if (originatingIdentityHash.isBlank()) return
+            messageDao.updateSentInterface(messageId, originatingIdentityHash, sentInterface)
+        }
+
+        /**
          * Update message delivery details (method and error) for the active identity
          */
         suspend fun updateMessageDeliveryDetails(

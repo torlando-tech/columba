@@ -1584,6 +1584,113 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `delivery enrichment keeps callback identity after active identity switch with duplicate hash`() =
+        runViewModelTest {
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+            val identityA = "identity-a"
+            val identityB = "identity-b"
+            val duplicateHash = "duplicate-delivery-hash"
+            val originalA =
+                MessageEntity(
+                    id = duplicateHash,
+                    conversationHash = testPeerHash,
+                    identityHash = identityA,
+                    content = "A content",
+                    timestamp = 1L,
+                    isFromMe = true,
+                    status = "sent",
+                    deliveryMethod = "direct",
+                )
+            val originalB =
+                MessageEntity(
+                    id = duplicateHash,
+                    conversationHash = "00112233445566778899aabbccddeeff",
+                    identityHash = identityB,
+                    content = "B content",
+                    timestamp = 2L,
+                    isFromMe = true,
+                    status = "failed",
+                    isRead = true,
+                    fieldsJson = "{\"b\":true}",
+                    reactionsJson = "{\"👍\":[\"b\"]}",
+                    deliveryMethod = "propagated",
+                    errorMessage = "B error",
+                    replyToMessageId = "B reply",
+                    receivedHopCount = 8,
+                    receivedInterface = "B Receive",
+                    receivedRssi = -72,
+                    receivedSnr = 4.5f,
+                    receivedAt = 22L,
+                    sentInterface = "B Original",
+                )
+            val rows = mutableMapOf(identityA to originalA, identityB to originalB)
+            var activeIdentity = identityA
+            coEvery {
+                conversationRepository.applyDeliveryStatus(duplicateHash, "delivered", identityA)
+            } answers {
+                rows[identityA] = requireNotNull(rows[identityA]).copy(status = "delivered")
+                rows[identityA]
+            }
+            coEvery {
+                conversationRepository.updateMessageSentInterface(duplicateHash, "A Route", identityA)
+            } answers {
+                rows[identityA] = requireNotNull(rows[identityA]).copy(sentInterface = "A Route")
+            }
+            // Model the legacy active-identity overload so this fails if production reuses it.
+            coEvery {
+                conversationRepository.updateMessageSentInterface(duplicateHash, "A Route")
+            } answers {
+                rows[activeIdentity] = requireNotNull(rows[activeIdentity]).copy(sentInterface = "A Route")
+            }
+            coEvery { rnsCore.getNextHopInterfaceName(any()) } returns "A Route"
+            every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
+
+            MessagingViewModel(
+                applicationContext,
+                rnsCore,
+                rnsLxmf,
+                rnsTransportAdmin,
+                conversationRepository,
+                announceRepository,
+                contactRepository,
+                activeConversationManager,
+                settingsRepository,
+                propagationNodeManager,
+                locationSharingManager,
+                identityRepository,
+                conversationLinkManager,
+                receivedLocationRepository,
+                blockedPeerRepository,
+                identityResolutionManager,
+                notificationHelper,
+                rnsTelephony,
+            )
+            advanceUntilIdle()
+
+            activeIdentity = identityB
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = duplicateHash,
+                    status = DeliveryStatus.DELIVERED,
+                    timestamp = 3L,
+                    originatingIdentityHash = identityA,
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("delivered", rows[identityA]?.status)
+            assertEquals("A Route", rows[identityA]?.sentInterface)
+            assertEquals(originalB, rows[identityB])
+            coVerify(exactly = 1) {
+                conversationRepository.updateMessageSentInterface(duplicateHash, "A Route", identityA)
+            }
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageSentInterface(duplicateHash, "A Route")
+            }
+        }
+
+    @Test
     fun `failed status updates message status`() =
         runViewModelTest {
             // Setup: Create a flow that emits a failed status update

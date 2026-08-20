@@ -1011,7 +1011,7 @@ class MessagingViewModel
                     // analogue). Failed / retrying paths carry too much routing
                     // ambiguity to produce accurate interface data.
                     if (update.status == DeliveryStatus.DELIVERED || update.status == DeliveryStatus.PROPAGATED) {
-                        enrichSentInterfaceOnDelivery(message, update.messageHash)
+                        enrichSentInterfaceOnDelivery(message)
                     }
 
                     Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status.wireValue}")
@@ -1033,7 +1033,6 @@ class MessagingViewModel
          */
         private suspend fun enrichSentInterfaceOnDelivery(
             message: network.columba.app.data.db.entity.MessageEntity,
-            messageHash: String,
         ) {
             if (!message.isFromMe || message.sentInterface != null) return
             try {
@@ -1053,7 +1052,11 @@ class MessagingViewModel
                     }
                 val sentInterface = rnsCore.getNextHopInterfaceName(lookupHash)
                 if (sentInterface != null) {
-                    conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
+                    conversationRepository.updateMessageSentInterface(
+                        message.id,
+                        sentInterface,
+                        message.identityHash,
+                    )
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to enrich sent interface on delivery: ${e.message}")

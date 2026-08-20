@@ -94,12 +94,14 @@ class PythonEventBridge {
             if (state == LXMF_STATE_DELIVERED) {
                 DeliveryStatus.DELIVERED
             } else if (method == LXMF_METHOD_PROPAGATED ||
-                ((method == null || method < 0) && desired == LXMF_METHOD_PROPAGATED)
+                (method.isUnknownLxmfMethod() && desired == LXMF_METHOD_PROPAGATED)
             ) {
                 DeliveryStatus.PROPAGATED
             } else {
                 DeliveryStatus.DELIVERED
             }
+
+        private fun Int?.isUnknownLxmfMethod(): Boolean = this == null || this < 0
 
         // event_bridge.py emits the field map as `json.dumps({str(k): ...})`,
         // so JSON-keyed lookups need the stringified form of every LXMF field

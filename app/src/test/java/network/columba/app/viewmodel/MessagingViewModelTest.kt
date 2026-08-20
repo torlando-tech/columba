@@ -410,6 +410,24 @@ class MessagingViewModelTest {
             microphoneArbiter,
         )
 
+    private fun outgoingDeliveryMessage(
+        id: String,
+        identityHash: String,
+        conversationHash: String,
+        content: String,
+        timestamp: Long,
+        status: String,
+    ) = MessageEntity(
+        id = id,
+        conversationHash = conversationHash,
+        identityHash = identityHash,
+        content = content,
+        timestamp = timestamp,
+        isFromMe = true,
+        status = status,
+        deliveryMethod = "direct",
+    )
+
     @Test
     fun `initial state has empty messages`() =
         runViewModelTest {
@@ -1591,17 +1609,7 @@ class MessagingViewModelTest {
             val identityA = "identity-a"
             val identityB = "identity-b"
             val duplicateHash = "duplicate-delivery-hash"
-            val originalA =
-                MessageEntity(
-                    id = duplicateHash,
-                    conversationHash = testPeerHash,
-                    identityHash = identityA,
-                    content = "A content",
-                    timestamp = 1L,
-                    isFromMe = true,
-                    status = "sent",
-                    deliveryMethod = "direct",
-                )
+            val originalA = outgoingDeliveryMessage(duplicateHash, identityA, testPeerHash, "A content", 1L, "sent")
             val originalB =
                 MessageEntity(
                     id = duplicateHash,
@@ -1646,26 +1654,7 @@ class MessagingViewModelTest {
             coEvery { rnsCore.getNextHopInterfaceName(any()) } returns "A Route"
             every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
 
-            MessagingViewModel(
-                applicationContext,
-                rnsCore,
-                rnsLxmf,
-                rnsTransportAdmin,
-                conversationRepository,
-                announceRepository,
-                contactRepository,
-                activeConversationManager,
-                settingsRepository,
-                propagationNodeManager,
-                locationSharingManager,
-                identityRepository,
-                conversationLinkManager,
-                receivedLocationRepository,
-                blockedPeerRepository,
-                identityResolutionManager,
-                notificationHelper,
-                rnsTelephony,
-            )
+            viewModel = createTestViewModel()
             advanceUntilIdle()
 
             activeIdentity = identityB

@@ -318,11 +318,9 @@ class ConversationLinkManagerTest {
 
     @Test
     fun `recordPeerActivity never moves last activity backward`() {
-        val manager =
-            ConversationLinkManager(
-                io.mockk.mockk(relaxed = true),
-                io.mockk.mockk(relaxed = true),
-            )
+        val rnsCore = io.mockk.mockk<network.columba.app.rns.api.RnsCore>()
+        val peerActivityRepository = io.mockk.mockk<network.columba.app.data.repository.PeerActivityRepository>()
+        val manager = ConversationLinkManager(rnsCore, peerActivityRepository)
         val peer = "00112233445566778899aabbccddeeff"
 
         manager.recordPeerActivity(peer, 2_000L)

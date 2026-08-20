@@ -1171,27 +1171,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             insertTestIdentity(identityHash = identityA, isActive = true)
             insertTestIdentity(identityHash = identityB, displayName = "Other", isActive = false)
             listOf(identityA to peerA, identityB to peerB).forEachIndexed { index, (identity, peer) ->
-                conversationDao.insertConversation(
-                    ConversationEntity(
-                        peerHash = peer,
-                        identityHash = identity,
-                        peerName = peer,
-                        lastMessage = "pending",
-                        lastMessageTimestamp = index.toLong(),
-                    ),
-                )
-                messageDao.insertMessage(
-                    MessageEntity(
-                        id = duplicateHash,
-                        conversationHash = peer,
-                        identityHash = identity,
-                        content = identity,
-                        timestamp = index.toLong(),
-                        isFromMe = true,
-                        status = "pending",
-                        isRead = true,
-                    ),
-                )
+                insertCollectorOutgoing(duplicateHash, identity, peer, index.toLong())
             }
             messageDao.insertMessage(
                 MessageEntity(
@@ -1255,6 +1235,35 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
 
             collectorJob.cancel()
         }
+
+    private suspend fun insertCollectorOutgoing(
+        messageHash: String,
+        identityHash: String,
+        peerHash: String,
+        timestamp: Long,
+    ) {
+        conversationDao.insertConversation(
+            ConversationEntity(
+                peerHash = peerHash,
+                identityHash = identityHash,
+                peerName = peerHash,
+                lastMessage = "pending",
+                lastMessageTimestamp = timestamp,
+            ),
+        )
+        messageDao.insertMessage(
+            MessageEntity(
+                id = messageHash,
+                conversationHash = peerHash,
+                identityHash = identityHash,
+                content = identityHash,
+                timestamp = timestamp,
+                isFromMe = true,
+                status = "pending",
+                isRead = true,
+            ),
+        )
+    }
 
     private suspend fun awaitMessageStatus(
         messageHash: String,

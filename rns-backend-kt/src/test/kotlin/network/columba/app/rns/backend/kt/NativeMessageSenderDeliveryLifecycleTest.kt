@@ -132,16 +132,21 @@ class NativeMessageSenderDeliveryLifecycleTest {
                 scopeProvider = { scope },
                 fallbackDispatcher = fallbackDispatcher,
             )
-        val message = mockk<LXMessage>(relaxed = true)
+        val message = mockk<LXMessage>()
         val router = mockk<LXMRouter>()
         val failedCallback = slot<(LXMessage) -> Unit>()
         val deliveryCallback = slot<(LXMessage) -> Unit>()
+        var desiredMethod = NativeDeliveryMethod.DIRECT
+        var messageState = network.reticulum.lxmf.MessageState.DELIVERED
         every { message.failedCallback = capture(failedCallback) } just Runs
         every { message.deliveryCallback = capture(deliveryCallback) } just Runs
         every { message.hash } returns ByteArray(32) { it.toByte() }
-        every { message.desiredMethod } returns NativeDeliveryMethod.DIRECT
+        every { message.desiredMethod } answers { desiredMethod }
+        every { message.desiredMethod = any() } answers { desiredMethod = firstArg() }
         every { message.method } returns NativeDeliveryMethod.DIRECT
-        every { message.state } returns network.reticulum.lxmf.MessageState.DELIVERED
+        every { message.state } answers { messageState }
+        every { message.state = any() } answers { messageState = firstArg() }
+        every { message.deliveryAttempts = any() } just Runs
         every { router.getActivePropagationNode() } returns if (propagationAvailable) mockk() else null
         coEvery { router.handleOutbound(message) } just Runs
 

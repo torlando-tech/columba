@@ -339,7 +339,7 @@ abstract class ColumbaDatabase : RoomDatabase() {
                     db.execSQL(
                         "CREATE TABLE IF NOT EXISTS `pending_delivery_status` (" +
                             "`messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, " +
-                            "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageHash`))",
+                            "`deliveryMethod` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageHash`))",
                     )
                 }
             }

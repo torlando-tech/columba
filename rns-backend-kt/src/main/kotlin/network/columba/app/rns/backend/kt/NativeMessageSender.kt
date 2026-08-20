@@ -14,6 +14,7 @@ import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.VoiceCallState
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.util.LxmfFields
@@ -30,7 +31,18 @@ internal class NativeMessageSender(
     private val deliveryDestinationProvider: () -> NativeDestination?,
     private val deliveryStatusEvents: DeliveryStatusEventStream,
     private val scopeProvider: () -> kotlinx.coroutines.CoroutineScope,
+    private val fallbackDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
+    private enum class DeliveryAttemptState {
+        PRIMARY,
+        FALLBACK_SCHEDULED,
+        FALLBACK_ADMITTED,
+        FALLBACK_SUBMITTED,
+        PROPAGATED,
+        FAILED,
+        DELIVERED,
+    }
+
     companion object {
         private const val TAG = "NativeReticulumProtocol"
     }
@@ -195,18 +207,27 @@ internal class NativeMessageSender(
         tryPropagationOnFail: Boolean,
         lxmfMethod: NativeDeliveryMethod,
     ) {
+        val attemptLock = Any()
+        var attemptState = DeliveryAttemptState.PRIMARY
+        val fallbackFailedCallback: (LXMessage) -> Unit = { failedMessage ->
+            val hash = failedMessage.hash?.toHex()
+            if (hash != null) {
+                synchronized(attemptLock) {
+                    if (attemptState != DeliveryAttemptState.DELIVERED &&
+                        attemptState != DeliveryAttemptState.FAILED
+                    ) {
+                        attemptState = DeliveryAttemptState.FAILED
+                        publishStatus(hash, DeliveryStatus.FAILED)
+                    }
+                }
+            }
+        }
         message.deliveryCallback = deliveryCallback@{ msg ->
             val hash = msg.hash?.toHex() ?: return@deliveryCallback
-            // In lxmf-kt, deliveryCallback fires with state == SENT only for
-            // PROPAGATED messages (where SENT is the final state, set when the
-            // resource completes uploading to the propagation node) and with
-            // state == DELIVERED for DIRECT/OPPORTUNISTIC (where the receipt's
-            // delivery confirmation transitions state to DELIVERED before the
-            // callback runs). Distinguish by method, not state — checking state
-            // alone risks misclassifying a future direct path that briefly
-            // transitions through SENT before DELIVERED.
             val status =
-                if (msg.method == NativeDeliveryMethod.PROPAGATED ||
+                if (msg.state == network.reticulum.lxmf.MessageState.DELIVERED) {
+                    DeliveryStatus.DELIVERED
+                } else if (msg.method == NativeDeliveryMethod.PROPAGATED ||
                     msg.desiredMethod == NativeDeliveryMethod.PROPAGATED
                 ) {
                     DeliveryStatus.PROPAGATED
@@ -218,35 +239,93 @@ internal class NativeMessageSender(
                 "Delivery callback for ${hash.take(16)} -> $status " +
                     "(state=${msg.state}, method=${msg.method}, desired=${msg.desiredMethod})",
             )
-            publishStatus(hash, status)
+            synchronized(attemptLock) {
+                if (status == DeliveryStatus.DELIVERED) {
+                    if (attemptState != DeliveryAttemptState.DELIVERED) {
+                        attemptState = DeliveryAttemptState.DELIVERED
+                        publishStatus(hash, status)
+                    }
+                } else if (attemptState != DeliveryAttemptState.DELIVERED &&
+                    attemptState != DeliveryAttemptState.PROPAGATED
+                ) {
+                    attemptState = DeliveryAttemptState.PROPAGATED
+                    publishStatus(hash, status)
+                }
+            }
         }
         message.failedCallback = failedCallback@{ msg ->
             val hash = msg.hash?.toHex() ?: return@failedCallback
             val currentMethod = msg.desiredMethod
+            var scheduleFallback = false
+            synchronized(attemptLock) {
+                when (attemptState) {
+                    DeliveryAttemptState.DELIVERED,
+                    DeliveryAttemptState.FAILED,
+                    DeliveryAttemptState.FALLBACK_SCHEDULED,
+                    DeliveryAttemptState.FALLBACK_ADMITTED,
+                    -> return@failedCallback
 
-            if (tryPropagationOnFail &&
-                currentMethod != NativeDeliveryMethod.PROPAGATED &&
-                router.getActivePropagationNode() != null
-            ) {
-                Log.i(
-                    TAG,
-                    "${currentMethod ?: lxmfMethod} delivery failed for ${hash.take(16)}, falling back to PROPAGATED",
-                )
-                msg.desiredMethod = NativeDeliveryMethod.PROPAGATED
-                msg.state = network.reticulum.lxmf.MessageState.OUTBOUND
-                msg.deliveryAttempts = 0
-                publishStatus(hash, DeliveryStatus.RETRYING_PROPAGATED)
-                scopeProvider().launch(Dispatchers.IO) {
-                    runCatching { router.handleOutbound(msg) }
-                        .onFailure {
-                            Log.w(TAG, "Propagation fallback submission failed for ${hash.take(16)}")
+                    DeliveryAttemptState.FALLBACK_SUBMITTED -> {
+                        attemptState = DeliveryAttemptState.FAILED
+                        publishStatus(hash, DeliveryStatus.FAILED)
+                        return@failedCallback
+                    }
+
+                    DeliveryAttemptState.PROPAGATED -> {
+                        attemptState = DeliveryAttemptState.FAILED
+                        publishStatus(hash, DeliveryStatus.FAILED)
+                        return@failedCallback
+                    }
+
+                    DeliveryAttemptState.PRIMARY -> {
+                        if (tryPropagationOnFail &&
+                            currentMethod != NativeDeliveryMethod.PROPAGATED &&
+                            router.getActivePropagationNode() != null
+                        ) {
+                            attemptState = DeliveryAttemptState.FALLBACK_SCHEDULED
+                            scheduleFallback = true
+                        } else {
+                            attemptState = DeliveryAttemptState.FAILED
                             publishStatus(hash, DeliveryStatus.FAILED)
                         }
+                    }
                 }
-                return@failedCallback
             }
+            if (!scheduleFallback) return@failedCallback
 
-            publishStatus(hash, DeliveryStatus.FAILED)
+            Log.i(
+                TAG,
+                "${currentMethod ?: lxmfMethod} delivery failed for ${hash.take(16)}, falling back to PROPAGATED",
+            )
+            scopeProvider().launch(fallbackDispatcher) {
+                val admitted =
+                    synchronized(attemptLock) {
+                        if (attemptState != DeliveryAttemptState.FALLBACK_SCHEDULED) {
+                            false
+                        } else {
+                            msg.desiredMethod = NativeDeliveryMethod.PROPAGATED
+                            msg.state = network.reticulum.lxmf.MessageState.OUTBOUND
+                            msg.deliveryAttempts = 0
+                            msg.failedCallback = fallbackFailedCallback
+                            attemptState = DeliveryAttemptState.FALLBACK_ADMITTED
+                            publishStatus(hash, DeliveryStatus.RETRYING_PROPAGATED)
+                            true
+                        }
+                    }
+                if (!admitted) return@launch
+
+                runCatching { router.handleOutbound(msg) }
+                    .onSuccess {
+                        synchronized(attemptLock) {
+                            if (attemptState == DeliveryAttemptState.FALLBACK_ADMITTED) {
+                                attemptState = DeliveryAttemptState.FALLBACK_SUBMITTED
+                            }
+                        }
+                    }.onFailure {
+                        Log.w(TAG, "Propagation fallback submission failed for ${hash.take(16)}")
+                        fallbackFailedCallback(msg)
+                    }
+            }
         }
     }
 

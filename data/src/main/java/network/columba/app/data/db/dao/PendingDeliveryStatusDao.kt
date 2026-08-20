@@ -1,31 +1,58 @@
 package network.columba.app.data.db.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 
 @Dao
 interface PendingDeliveryStatusDao {
     /** Reduce competing lifecycle evidence before the canonical message row exists. */
+    @Transaction
+    suspend fun reduce(
+        messageHash: String,
+        status: String,
+        deliveryMethod: String?,
+        updatedAt: Long,
+    ) {
+        val inserted =
+            insertIfMissing(
+                PendingDeliveryStatusEntity(messageHash, status, deliveryMethod, updatedAt),
+            )
+        if (inserted == -1L) {
+            advance(messageHash, status, deliveryMethod, updatedAt)
+        }
+    }
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfMissing(pending: PendingDeliveryStatusEntity): Long
+
     @Query(
         """
-        INSERT INTO pending_delivery_status(messageHash, status, updatedAt)
-        VALUES (:messageHash, :status, :updatedAt)
-        ON CONFLICT(messageHash) DO UPDATE SET
-            status = excluded.status,
-            updatedAt = excluded.updatedAt
-        WHERE
-            (excluded.status = 'delivered') OR
-            (excluded.status = 'propagated' AND pending_delivery_status.status IN
+        UPDATE pending_delivery_status
+        SET status = :status,
+            deliveryMethod = COALESCE(:deliveryMethod, deliveryMethod),
+            updatedAt = :updatedAt
+        WHERE messageHash = :messageHash AND (
+            (:status = 'delivered') OR
+            (:status = 'propagated' AND status IN
                 ('pending', 'sent', 'retrying_propagated', 'failed')) OR
-            (excluded.status = 'failed' AND pending_delivery_status.status IN
-                ('pending', 'sent', 'retrying_propagated')) OR
-            (excluded.status = 'retrying_propagated' AND pending_delivery_status.status IN
+            (:status = 'failed' AND status IN
+                ('pending', 'sent', 'retrying_propagated', 'propagated')) OR
+            (:status = 'retrying_propagated' AND status IN
                 ('pending', 'sent')) OR
-            (excluded.status = pending_delivery_status.status)
+            (:status = status)
+        )
         """,
     )
-    suspend fun reduce(messageHash: String, status: String, updatedAt: Long)
+    suspend fun advance(
+        messageHash: String,
+        status: String,
+        deliveryMethod: String?,
+        updatedAt: Long,
+    ): Int
 
     @Query("SELECT * FROM pending_delivery_status ORDER BY updatedAt ASC LIMIT :limit")
     suspend fun oldest(limit: Int): List<PendingDeliveryStatusEntity>

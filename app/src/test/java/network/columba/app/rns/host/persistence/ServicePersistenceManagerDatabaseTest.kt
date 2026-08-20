@@ -1038,6 +1038,48 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
         }
 
     @Test
+    fun `pre-row propagated retry then delivered reloads delivered with propagated method`() =
+        testScope.runTest {
+            assertTrue(persistenceManager.persistDeliveryStatus("late-fallback", DeliveryStatus.RETRYING_PROPAGATED))
+            assertTrue(persistenceManager.persistDeliveryStatus("late-fallback", DeliveryStatus.DELIVERED))
+
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "pending",
+                    lastMessageTimestamp = 999L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "late-fallback",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 999L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                    deliveryMethod = "direct",
+                ),
+            )
+
+            ServicePersistenceManager(context, backgroundScope, settingsAccessor, true)
+            val canonical =
+                withContext(Dispatchers.Default) {
+                    withTimeout(5_000L) {
+                        messageDao.observeMessageById("late-fallback").first { it?.status == "delivered" }
+                    }
+                }
+            assertEquals("delivered", canonical?.status)
+            assertEquals("propagated", canonical?.deliveryMethod)
+            assertNull(database.pendingDeliveryStatusDao().get("late-fallback"))
+        }
+
+    @Test
     fun `incoming activity admission rejects replay blocked unknown and propagated messages`() =
         testScope.runTest {
             insertTestIdentity()

@@ -139,8 +139,8 @@ class ServicePersistenceManagerTest {
             val message = mockk<MessageEntity>()
             every { message.identityHash } returns "owning-identity"
             var pending: PendingDeliveryStatusEntity? = null
-            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any()) } coAnswers {
-                pending = PendingDeliveryStatusEntity(firstArg(), secondArg(), thirdArg())
+            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any(), any()) } coAnswers {
+                pending = PendingDeliveryStatusEntity(firstArg(), secondArg(), thirdArg(), arg(3))
             }
             coEvery { pendingDeliveryStatusDao.oldest(any()) } coAnswers { listOfNotNull(pending) }
             coEvery { pendingDeliveryStatusDao.delete(any()) } coAnswers { pending = null }
@@ -148,7 +148,7 @@ class ServicePersistenceManagerTest {
             coEvery { pendingDeliveryStatusDao.trimToNewest(any()) } returns 0
             coEvery { messageDao.getOutgoingMessageByIdAcrossIdentities("message-hash") } returns null
             coEvery {
-                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered")
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered", null)
             } returns 1
 
             assertTrue(persistenceManager.persistDeliveryStatus("message-hash", DeliveryStatus.DELIVERED))
@@ -159,7 +159,7 @@ class ServicePersistenceManagerTest {
             assertTrue(restarted.reconcilePendingDeliveryStatuses())
 
             coVerify(exactly = 1) {
-                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered")
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered", null)
             }
             assertTrue(pending == null)
             coVerify { pendingDeliveryStatusDao.deleteOlderThan(any()) }
@@ -171,20 +171,20 @@ class ServicePersistenceManagerTest {
         runTest {
             val message = mockk<MessageEntity>()
             every { message.identityHash } returns "owning-identity"
-            val pending = PendingDeliveryStatusEntity("message-hash", "failed", 1L)
-            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any()) } just Runs
+            val pending = PendingDeliveryStatusEntity("message-hash", "failed", null, 1L)
+            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any(), any()) } just Runs
             coEvery { pendingDeliveryStatusDao.deleteOlderThan(any()) } returns 0
             coEvery { pendingDeliveryStatusDao.trimToNewest(any()) } returns 0
             coEvery { pendingDeliveryStatusDao.oldest(any()) } returns listOf(pending) andThen listOf(pending)
             coEvery { messageDao.getOutgoingMessageByIdAcrossIdentities("message-hash") } returns message
-            coEvery { messageDao.applyDeliveryStatus(any(), any(), any()) } throws
+            coEvery { messageDao.applyDeliveryStatus(any(), any(), any(), any()) } throws
                 IllegalStateException("busy") andThen 1
             coEvery { pendingDeliveryStatusDao.delete("message-hash") } just Runs
 
             assertTrue(persistenceManager.persistDeliveryStatus("message-hash", DeliveryStatus.FAILED))
 
             coVerify(exactly = 2) {
-                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "failed")
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "failed", null)
             }
             coVerify(exactly = 1) { pendingDeliveryStatusDao.delete("message-hash") }
         }

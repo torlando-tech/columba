@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 7,
-    "identityHash": "2b7e26fe95a88702bc1bb85a8b325b03",
+    "identityHash": "0decd2965fe4b6485e4464c310a97259",
     "entities": [
       {
         "tableName": "conversations",
@@ -1953,7 +1953,7 @@
       },
       {
         "tableName": "pending_delivery_status",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageHash`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, `deliveryMethod` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageHash`))",
         "fields": [
           {
             "fieldPath": "messageHash",
@@ -1966,6 +1966,11 @@
             "columnName": "status",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "deliveryMethod",
+            "columnName": "deliveryMethod",
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "updatedAt",
@@ -1984,7 +1989,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2b7e26fe95a88702bc1bb85a8b325b03')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0decd2965fe4b6485e4464c310a97259')"
     ]
   }
 }

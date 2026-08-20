@@ -8,5 +8,6 @@ import androidx.room.PrimaryKey
 data class PendingDeliveryStatusEntity(
     @PrimaryKey val messageHash: String,
     val status: String,
+    val deliveryMethod: String?,
     val updatedAt: Long,
 )

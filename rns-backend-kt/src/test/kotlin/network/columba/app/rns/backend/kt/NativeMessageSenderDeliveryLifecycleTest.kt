@@ -2,14 +2,19 @@ package network.columba.app.rns.backend.kt
 
 import io.mockk.Runs
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -25,9 +30,99 @@ import org.junit.Test
 
 class NativeMessageSenderDeliveryLifecycleTest {
     @Test
-    fun `native fallback publishes retry before submission throw failure`() = runBlocking {
-        val stream = DeliveryStatusEventStream()
+    fun `recipient proof before fallback admission prevents enqueue`() = runBlocking {
+        val executor = Executors.newSingleThreadExecutor()
+        val releaseWorker = CountDownLatch(1)
+        val workerStarted = CountDownLatch(1)
+        executor.submit {
+            workerStarted.countDown()
+            releaseWorker.await()
+        }
+        check(workerStarted.await(5, TimeUnit.SECONDS))
+        val dispatcher = executor.asCoroutineDispatcher()
+        val scope = CoroutineScope(SupervisorJob() + dispatcher)
+        try {
+            val fixture = fixture(scope, fallbackDispatcher = dispatcher)
+            val updates = collect(fixture.stream, 1)
+
+            fixture.failed(fixture.message)
+            fixture.delivered(fixture.message)
+            releaseWorker.countDown()
+            withTimeout(5_000L) { updates.job.join() }
+
+            assertEquals(listOf(DeliveryStatus.DELIVERED), updates.values)
+            coVerify(exactly = 0) { fixture.router.handleOutbound(any()) }
+        } finally {
+            releaseWorker.countDown()
+            scope.cancel()
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `failed evidence can be promoted by delayed recipient proof`() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val fixture = fixture(scope, propagationAvailable = false)
+            val updates = collect(fixture.stream, 2)
+
+            fixture.failed(fixture.message)
+            fixture.delivered(fixture.message)
+            withTimeout(5_000L) { updates.job.join() }
+
+            assertEquals(listOf(DeliveryStatus.FAILED, DeliveryStatus.DELIVERED), updates.values)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `duplicate primary failure callbacks own one fallback enqueue`() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val submitted = CountDownLatch(1)
+        try {
+            val fixture = fixture(scope)
+            coEvery { fixture.router.handleOutbound(fixture.message) } coAnswers {
+                submitted.countDown()
+            }
+            val updates = collect(fixture.stream, 1)
+
+            fixture.failed(fixture.message)
+            fixture.failed(fixture.message)
+            check(submitted.await(5, TimeUnit.SECONDS))
+            withTimeout(5_000L) { updates.job.join() }
+
+            assertEquals(listOf(DeliveryStatus.RETRYING_PROPAGATED), updates.values)
+            coVerify(exactly = 1) { fixture.router.handleOutbound(fixture.message) }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `native fallback publishes retry before submission throw failure`() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val fixture = fixture(scope)
+            coEvery { fixture.router.handleOutbound(fixture.message) } throws
+                IllegalStateException("submission failed")
+            val updates = collect(fixture.stream, 2)
+
+            fixture.failed(fixture.message)
+            withTimeout(5_000L) { updates.job.join() }
+
+            assertEquals(listOf(DeliveryStatus.RETRYING_PROPAGATED, DeliveryStatus.FAILED), updates.values)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    private fun fixture(
+        scope: CoroutineScope,
+        propagationAvailable: Boolean = true,
+        fallbackDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Default,
+    ): Fixture {
+        val stream = DeliveryStatusEventStream()
         val sender =
             NativeMessageSender(
                 routerProvider = { null },
@@ -35,16 +130,20 @@ class NativeMessageSenderDeliveryLifecycleTest {
                 deliveryDestinationProvider = { null },
                 deliveryStatusEvents = stream,
                 scopeProvider = { scope },
+                fallbackDispatcher = fallbackDispatcher,
             )
         val message = mockk<LXMessage>(relaxed = true)
         val router = mockk<LXMRouter>()
         val failedCallback = slot<(LXMessage) -> Unit>()
+        val deliveryCallback = slot<(LXMessage) -> Unit>()
         every { message.failedCallback = capture(failedCallback) } just Runs
-        every { message.deliveryCallback = any() } just Runs
+        every { message.deliveryCallback = capture(deliveryCallback) } just Runs
         every { message.hash } returns ByteArray(32) { it.toByte() }
         every { message.desiredMethod } returns NativeDeliveryMethod.DIRECT
-        every { router.getActivePropagationNode() } returns mockk()
-        coEvery { router.handleOutbound(message) } throws IllegalStateException("submission failed")
+        every { message.method } returns NativeDeliveryMethod.DIRECT
+        every { message.state } returns network.reticulum.lxmf.MessageState.DELIVERED
+        every { router.getActivePropagationNode() } returns if (propagationAvailable) mockk() else null
+        coEvery { router.handleOutbound(message) } just Runs
 
         sender.installDeliveryCallbacks(
             message,
@@ -52,16 +151,34 @@ class NativeMessageSenderDeliveryLifecycleTest {
             tryPropagationOnFail = true,
             lxmfMethod = NativeDeliveryMethod.DIRECT,
         )
-        val updates = mutableListOf<DeliveryStatus>()
-        val collector =
-            launch(start = CoroutineStart.UNDISPATCHED) {
-                stream.events.take(2).toList().mapTo(updates) { it.status }
-            }
-
-        failedCallback.captured(message)
-        withTimeout(5_000L) { collector.join() }
-
-        assertEquals(listOf(DeliveryStatus.RETRYING_PROPAGATED, DeliveryStatus.FAILED), updates)
-        scope.cancel()
+        return Fixture(
+            message = message,
+            router = router,
+            stream = stream,
+            failed = failedCallback.captured,
+            delivered = deliveryCallback.captured,
+        )
     }
+
+    private fun CoroutineScope.collect(stream: DeliveryStatusEventStream, count: Int): Updates {
+        val values = mutableListOf<DeliveryStatus>()
+        val job =
+            launch(start = CoroutineStart.UNDISPATCHED) {
+                stream.events.take(count).toList().mapTo(values) { it.status }
+            }
+        return Updates(values, job)
+    }
+
+    private data class Fixture(
+        val message: LXMessage,
+        val router: LXMRouter,
+        val stream: DeliveryStatusEventStream,
+        val failed: (LXMessage) -> Unit,
+        val delivered: (LXMessage) -> Unit,
+    )
+
+    private data class Updates(
+        val values: List<DeliveryStatus>,
+        val job: kotlinx.coroutines.Job,
+    )
 }

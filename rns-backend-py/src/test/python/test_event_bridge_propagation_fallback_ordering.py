@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+import threading
 import types
 import unittest
 from pathlib import Path
@@ -20,6 +21,7 @@ class Callback:
 class Message:
     def __init__(self):
         self.hash = b"message-hash"
+        self.method = 2
         self.desired_method = 2
         self.try_propagation_on_fail = False
         self.delivery_attempts = 4
@@ -37,14 +39,23 @@ class Message:
         self.failed_callback = callback
 
 
-class Router:
+class PinnedLockRouter:
     outbound_propagation_node = b"relay"
 
     def __init__(self, events):
         self.events = events
+        self.outbound_processing_lock = threading.Lock()
+        self.submitted = threading.Event()
+
+    def process_failure(self, message):
+        with self.outbound_processing_lock:
+            message.failed_callback(message)
+            self.events.append(("callback_returned", message.desired_method))
 
     def handle_outbound(self, message):
-        self.events.append(("submit", message.desired_method))
+        with self.outbound_processing_lock:
+            self.events.append(("submit", message.desired_method))
+            self.submitted.set()
 
 
 class PropagationFallbackOrderingTest(unittest.TestCase):
@@ -66,10 +77,10 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
         cls.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.module)
 
-    def test_retry_event_follows_method_selection_and_precedes_submission(self):
+    def test_pinned_non_reentrant_router_lock_does_not_deadlock_or_reenter(self):
         events = []
         message = Message()
-        router = Router(events)
+        router = PinnedLockRouter(events)
         setattr(self.module, "_lxmf_router", router)
         self.module.attach_lxmessage_callbacks(
             message,
@@ -79,14 +90,37 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
             try_propagation_on_fail=True,
         )
 
-        assert message.failed_callback is not None
-        message.failed_callback(message)
+        callback_thread = threading.Thread(target=router.process_failure, args=(message,))
+        callback_thread.start()
+        callback_thread.join(timeout=1)
+        self.assertFalse(callback_thread.is_alive(), "failure callback deadlocked under pinned router lock")
+        self.assertTrue(router.submitted.wait(timeout=1), "deferred fallback was not submitted")
 
+        names = [event[0] for event in events]
+        self.assertLess(names.index("callback_returned"), names.index("submit"))
+        self.assertLess(names.index("retrying"), names.index("submit"))
         self.assertEqual(3, message.desired_method)
-        self.assertEqual(["retrying", "submit"], [event[0] for event in events])
         self.assertEqual(0, message.delivery_attempts)
         self.assertIsNone(message.packed)
         self.assertIsNone(message.propagation_packed)
+
+    def test_duplicate_primary_failure_owns_one_enqueue(self):
+        events = []
+        message = Message()
+        router = PinnedLockRouter(events)
+        setattr(self.module, "_lxmf_router", router)
+        self.module.attach_lxmessage_callbacks(
+            message,
+            Callback(events, "delivered"),
+            Callback(events, "failed"),
+            Callback(events, "retrying"),
+            try_propagation_on_fail=True,
+        )
+
+        message.failed_callback(message)
+        message.failed_callback(message)
+        self.assertTrue(router.submitted.wait(timeout=1))
+        self.assertEqual(1, [event[0] for event in events].count("submit"))
 
 
 if __name__ == "__main__":

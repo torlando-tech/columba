@@ -183,7 +183,7 @@ class MessageDaoTest {
             assertEquals("failed", reduce("pending", "failed"))
             assertEquals("failed", reduce("sent", "failed"))
             assertEquals("delivered", reduce("failed", "delivered"))
-            assertEquals("propagated", reduce("propagated", "failed"))
+            assertEquals("failed", reduce("propagated", "failed"))
             assertEquals("delivered", reduce("delivered", "failed"))
             assertEquals("pending", reduce("pending", "unknown"))
         }

@@ -453,7 +453,9 @@ class PythonEventBridge {
             val method = payload.dictInt("method") ?: -1
             val desired = payload.dictInt("desired_method") ?: -1
             val status =
-                if (method == LXMF_METHOD_PROPAGATED || desired == LXMF_METHOD_PROPAGATED) {
+                if (method == LXMF_METHOD_PROPAGATED ||
+                    (method < 0 && desired == LXMF_METHOD_PROPAGATED)
+                ) {
                     DeliveryStatus.PROPAGATED
                 } else {
                     DeliveryStatus.DELIVERED

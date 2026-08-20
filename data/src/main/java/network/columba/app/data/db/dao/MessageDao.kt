@@ -123,12 +123,13 @@ interface MessageDao {
                 WHEN :status = 'propagated' AND status IN
                     ('pending', 'sent', 'retrying_propagated', 'failed') THEN 'propagated'
                 WHEN :status = 'failed' AND status IN
-                    ('pending', 'sent', 'retrying_propagated') THEN 'failed'
+                    ('pending', 'sent', 'retrying_propagated', 'propagated') THEN 'failed'
                 WHEN :status = 'retrying_propagated' AND status IN
                     ('pending', 'sent') THEN 'retrying_propagated'
                 ELSE status
             END,
             deliveryMethod = CASE
+                WHEN :deliveryMethod IS NOT NULL THEN :deliveryMethod
                 WHEN :status IN ('retrying_propagated', 'propagated') THEN 'propagated'
                 ELSE deliveryMethod
             END,
@@ -143,7 +144,7 @@ interface MessageDao {
             (:status = 'propagated' AND status IN
                 ('pending', 'sent', 'retrying_propagated', 'failed', 'propagated')) OR
             (:status = 'failed' AND status IN
-                ('pending', 'sent', 'retrying_propagated', 'failed')) OR
+                ('pending', 'sent', 'retrying_propagated', 'propagated', 'failed')) OR
             (:status = 'retrying_propagated' AND status IN
                 ('pending', 'sent', 'retrying_propagated'))
           )
@@ -153,6 +154,7 @@ interface MessageDao {
         messageId: String,
         identityHash: String,
         status: String,
+        deliveryMethod: String? = null,
     ): Int
 
     @Query(

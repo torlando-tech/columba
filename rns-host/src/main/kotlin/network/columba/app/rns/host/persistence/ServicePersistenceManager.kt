@@ -501,7 +501,13 @@ class ServicePersistenceManager(
         val safeHash = messageHash.take(16)
         val now = System.currentTimeMillis()
         try {
-            pendingDeliveryStatusDao.reduce(messageHash, status.wireValue, now)
+            val effectiveMethod =
+                if (status == DeliveryStatus.RETRYING_PROPAGATED || status == DeliveryStatus.PROPAGATED) {
+                    "propagated"
+                } else {
+                    null
+                }
+            pendingDeliveryStatusDao.reduce(messageHash, status.wireValue, effectiveMethod, now)
         } catch (e: Exception) {
             Log.e(TAG, "Could not durably enqueue delivery status for $safeHash", e)
             return false
@@ -537,6 +543,7 @@ class ServicePersistenceManager(
                             pending.messageHash,
                             message.identityHash,
                             pending.status,
+                            pending.deliveryMethod,
                         )
                         pendingDeliveryStatusDao.delete(pending.messageHash)
                     }

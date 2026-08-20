@@ -18,6 +18,7 @@ import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.PendingInterfaceChanges
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -38,7 +39,6 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -81,10 +81,6 @@ class InterfaceManagementViewModelStatusEventTest {
         bleStatusRepository = mockk()
         serviceProtocol = mockk()
         transportObserver = mockk()
-        // Battery polling is on by default in production; these tests predate it and
-        // don't stub getRNodeBattery(), so keep the shared status-poll loop from
-        // firing the unstubbed mock. The dedicated battery tests enable it.
-        InterfaceManagementViewModel.enableBatteryPolling = false
         every { transportObserver.snapshotTransport() } returns
             network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
         // Default StateFlow seeded with WIFI_LIKE so most tests don't observe a
@@ -148,8 +144,6 @@ class InterfaceManagementViewModelStatusEventTest {
         Dispatchers.resetMain()
         // Reset IO dispatcher to default
         InterfaceManagementViewModel.ioDispatcher = Dispatchers.IO
-        // Reset the battery poll flag so tests don't leak it into one another.
-        InterfaceManagementViewModel.enableBatteryPolling = false
         clearAllMocks()
     }
 
@@ -1447,10 +1441,17 @@ class InterfaceManagementViewModelStatusEventTest {
     // region RNode battery on interface cards (follow-up to PR 1103)
 
     @Test
-    fun `rnodeBattery is stored when the backend reports a live value`() =
+    fun `RNode batteries are associated with their configured interface names`() =
         runTest {
-            InterfaceManagementViewModel.enableBatteryPolling = true
-            coEvery { serviceProtocol.getRNodeBattery() } returns 82
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "RNode Alpha", "type" to "RNode", "online" to true, "battery" to 82),
+                            mapOf("name" to "RNode Beta", "type" to "RNode", "online" to true, "battery" to 47),
+                            mapOf("name" to "TCP RNode", "type" to "RNode", "online" to true),
+                        ),
+                )
             viewModel =
                 InterfaceManagementViewModel(
                     interfaceRepository,
@@ -1462,14 +1463,25 @@ class InterfaceManagementViewModelStatusEventTest {
                 )
             advanceUntilIdle()
 
-            assertEquals(82, viewModel.state.value.rnodeBattery)
+            assertEquals(
+                mapOf("RNode Alpha" to 82, "RNode Beta" to 47),
+                viewModel.state.value.rnodeBatteryByInterface,
+            )
+            coVerify(exactly = 0) { serviceProtocol.getRNodeBattery() }
         }
 
     @Test
-    fun `rnodeBattery is null for the absent sentinel`() =
+    fun `absent and invalid per-interface battery readings are omitted`() =
         runTest {
-            InterfaceManagementViewModel.enableBatteryPolling = true
-            coEvery { serviceProtocol.getRNodeBattery() } returns -1
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "No Frame", "type" to "RNode", "online" to true),
+                            mapOf("name" to "Invalid Low", "type" to "RNode", "online" to true, "battery" to -1),
+                            mapOf("name" to "Invalid High", "type" to "RNode", "online" to true, "battery" to 101),
+                        ),
+                )
             viewModel =
                 InterfaceManagementViewModel(
                     interfaceRepository,
@@ -1481,28 +1493,7 @@ class InterfaceManagementViewModelStatusEventTest {
                 )
             advanceUntilIdle()
 
-            assertNull(viewModel.state.value.rnodeBattery)
-        }
-
-    @Test
-    fun `rnodeBattery is null when battery polling is disabled`() =
-        runTest {
-            // Battery polling is enabled by default (production behavior). Explicitly
-            // disable it here: no stub for getRNodeBattery() is provided, so if the
-            // poll loop tried to call it, mockk would throw and the test would fail.
-            InterfaceManagementViewModel.enableBatteryPolling = false
-            viewModel =
-                InterfaceManagementViewModel(
-                    interfaceRepository,
-                    configManager,
-                    bleStatusRepository,
-                    serviceProtocol,
-                    transportObserver,
-                    rnsBackend,
-                )
-            advanceUntilIdle()
-
-            assertNull(viewModel.state.value.rnodeBattery)
+            assertTrue(viewModel.state.value.rnodeBatteryByInterface.isEmpty())
         }
 
     // endregion

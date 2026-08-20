@@ -361,7 +361,7 @@ fun InterfaceManagementScreen(
                                             blePermissionsGranted = state.blePermissionsGranted,
                                             currentTransport = state.currentTransport,
                                             isOnline = isOnline,
-                                            rnodeBattery = state.rnodeBattery,
+                                            rnodeBattery = state.rnodeBatteryByInterface[iface.name],
                                             statusReason = statusReason,
                                             peerCount = spawnedPeers.size,
                                             onErrorClick = { errorDialogInterface = iface },

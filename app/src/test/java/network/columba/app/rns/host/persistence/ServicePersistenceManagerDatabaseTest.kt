@@ -5,6 +5,7 @@ import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.test.DatabaseTest
 import io.mockk.clearAllMocks
@@ -995,7 +996,11 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
     fun `pre-row lifecycle survives service manager restart and later canonical Room load`() =
         testScope.runTest {
             insertTestIdentity()
-            assertTrue(persistenceManager.persistDeliveryStatus("late-outgoing", DeliveryStatus.DELIVERED))
+            assertTrue(
+                persistenceManager.persistDeliveryStatus(
+                    DeliveryStatusUpdate("late-outgoing", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH),
+                ),
+            )
             assertEquals(
                 "delivered",
                 database.pendingDeliveryStatusDao().get(TEST_IDENTITY_HASH, "late-outgoing")?.status,
@@ -1041,8 +1046,21 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
     fun `pre-row propagated retry then delivered reloads delivered with propagated method`() =
         testScope.runTest {
             insertTestIdentity()
-            assertTrue(persistenceManager.persistDeliveryStatus("late-fallback", DeliveryStatus.RETRYING_PROPAGATED))
-            assertTrue(persistenceManager.persistDeliveryStatus("late-fallback", DeliveryStatus.DELIVERED))
+            assertTrue(
+                persistenceManager.persistDeliveryStatus(
+                    DeliveryStatusUpdate(
+                        "late-fallback",
+                        DeliveryStatus.RETRYING_PROPAGATED,
+                        1L,
+                        TEST_IDENTITY_HASH,
+                    ),
+                ),
+            )
+            assertTrue(
+                persistenceManager.persistDeliveryStatus(
+                    DeliveryStatusUpdate("late-fallback", DeliveryStatus.DELIVERED, 2L, TEST_IDENTITY_HASH),
+                ),
+            )
 
             conversationDao.insertConversation(
                 ConversationEntity(
@@ -1080,73 +1098,53 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
         }
 
     @Test
-    fun `pre-row event stays with admitted identity across switch and duplicate hash insertion`() =
+    fun `delayed callback uses attempt identity after switch with duplicate hashes`() =
         testScope.runTest {
             val identityA = TEST_IDENTITY_HASH
             val identityB = "other-identity"
             val duplicateHash = "duplicate-outgoing"
             insertTestIdentity(identityHash = identityA, isActive = true)
             insertTestIdentity(identityHash = identityB, displayName = "Other", isActive = false)
+            listOf(identityA to "Peer A", identityB to "Peer B").forEachIndexed { index, (identity, name) ->
+                conversationDao.insertConversation(
+                    ConversationEntity(
+                        peerHash = TEST_PEER_HASH,
+                        identityHash = identity,
+                        peerName = name,
+                        lastMessage = "pending",
+                        lastMessageTimestamp = 1_000L + index,
+                    ),
+                )
+                messageDao.insertMessage(
+                    MessageEntity(
+                        id = duplicateHash,
+                        conversationHash = TEST_PEER_HASH,
+                        identityHash = identity,
+                        content = "from $name",
+                        timestamp = 1_000L + index,
+                        isFromMe = true,
+                        status = "pending",
+                        isRead = true,
+                    ),
+                )
+            }
 
-            assertTrue(persistenceManager.persistDeliveryStatus(duplicateHash, DeliveryStatus.DELIVERED))
-            assertEquals(
-                "delivered",
-                database.pendingDeliveryStatusDao().get(identityA, duplicateHash)?.status,
-            )
-
+            // Attempt A already owns its immutable event provenance when B becomes active.
             localIdentityDao.setActive(identityB)
-            conversationDao.insertConversation(
-                ConversationEntity(
-                    peerHash = TEST_PEER_HASH,
-                    identityHash = identityB,
-                    peerName = "Peer B",
-                    lastMessage = "pending",
-                    lastMessageTimestamp = 2_000L,
-                ),
-            )
-            messageDao.insertMessage(
-                MessageEntity(
-                    id = duplicateHash,
-                    conversationHash = TEST_PEER_HASH,
-                    identityHash = identityB,
-                    content = "from B",
-                    timestamp = 2_000L,
-                    isFromMe = true,
-                    status = "pending",
-                    isRead = true,
-                ),
-            )
+            val delayedFromA =
+                DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 2_000L, identityA)
+            assertTrue(persistenceManager.persistDeliveryStatus(delayedFromA))
 
-            assertTrue(persistenceManager.persistDeliveryStatus("reconcile-trigger-b", DeliveryStatus.FAILED))
-            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
-            assertNotNull(database.pendingDeliveryStatusDao().get(identityA, duplicateHash))
-
-            conversationDao.insertConversation(
-                ConversationEntity(
-                    peerHash = TEST_PEER_HASH,
-                    identityHash = identityA,
-                    peerName = "Peer A",
-                    lastMessage = "pending",
-                    lastMessageTimestamp = 1_000L,
-                ),
-            )
-            messageDao.insertMessage(
-                MessageEntity(
-                    id = duplicateHash,
-                    conversationHash = TEST_PEER_HASH,
-                    identityHash = identityA,
-                    content = "from A",
-                    timestamp = 1_000L,
-                    isFromMe = true,
-                    status = "pending",
-                    isRead = true,
-                ),
-            )
-
-            assertTrue(persistenceManager.persistDeliveryStatus("reconcile-trigger-b", DeliveryStatus.DELIVERED))
             assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
             assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
             assertNull(database.pendingDeliveryStatusDao().get(identityA, duplicateHash))
+
+            // A legacy/untrusted callback cannot borrow mutable active identity B.
+            val missingOrigin = DeliveryStatusUpdate(duplicateHash, DeliveryStatus.FAILED, 3_000L)
+            assertFalse(persistenceManager.persistDeliveryStatus(missingOrigin))
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertNull(database.pendingDeliveryStatusDao().get(identityB, duplicateHash))
         }
 
     @Test

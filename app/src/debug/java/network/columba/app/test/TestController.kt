@@ -83,6 +83,7 @@ object TestController {
     private val rxQueue = mutableListOf<ReceivedMessage>()
     private val rxLock = Any()
     private val deliveryStates = mutableMapOf<String, String>() // msgHashHex -> stateName
+    private val deliveryOrigins = mutableMapOf<String, String>() // msgHashHex -> immutable attempt owner
     private val deliveryLock = Any()
     private var initialized = false
     private var receiveJob: Job? = null
@@ -124,8 +125,14 @@ object TestController {
                 // status is one of "delivered" | "failed" | "retrying_propagated"
                 val idHex = upd.messageHash
                 val stateName = upd.status.wireValue.uppercase()
-                synchronized(deliveryLock) { deliveryStates[idHex] = stateName }
-                Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$stateName")
+                synchronized(deliveryLock) {
+                    deliveryStates[idHex] = stateName
+                    upd.originatingIdentityHash?.let { deliveryOrigins[idHex] = it }
+                }
+                Log.i(
+                    LOGCAT_TAG,
+                    "msg_state id=$idHex state=$stateName origin=${upd.originatingIdentityHash ?: "missing"}",
+                )
             }
         }
         // Surface FIELD_TELEMETRY entries on received LXMF messages.
@@ -511,7 +518,8 @@ object TestController {
     fun handleGetMsgState(context: Context, idHex: String) {
         ensureInit(context)
         val state = synchronized(deliveryLock) { deliveryStates[idHex] } ?: "UNKNOWN"
-        Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$state")
+        val origin = synchronized(deliveryLock) { deliveryOrigins[idHex] } ?: "UNKNOWN"
+        Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$state origin=$origin")
     }
 
     fun handleGetRx(context: Context) {

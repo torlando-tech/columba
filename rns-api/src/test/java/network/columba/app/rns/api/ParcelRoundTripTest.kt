@@ -79,7 +79,7 @@ class ParcelRoundTripTest {
 
     @Test
     fun `DeliveryStatusUpdate round-trips typed lifecycle over Parcel`() {
-        val original = DeliveryStatusUpdate("message", DeliveryStatus.PROPAGATED, 123L)
+        val original = DeliveryStatusUpdate("message", DeliveryStatus.PROPAGATED, 123L, "identity-a")
 
         assertEquals(original, roundTripViaFramework(original))
     }

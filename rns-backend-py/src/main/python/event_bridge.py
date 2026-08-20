@@ -1338,6 +1338,7 @@ def attach_lxmessage_callbacks(
     on_failed,
     on_retrying_propagated=None,
     try_propagation_on_fail=False,
+    originating_identity_hash=None,
 ):
     """Wire per-LXMessage delivery + failure callbacks for an outbound message.
 
@@ -1370,17 +1371,24 @@ def attach_lxmessage_callbacks(
     attempt_lock = threading.RLock()
     attempt_state = {"value": "primary"}
 
+    def _attempt_payload(msg, **values):
+        return {
+            "hash": _hex(getattr(msg, "hash", None)),
+            "originating_identity_hash": originating_identity_hash,
+            **values,
+        }
+
     def _delivered(msg):
         msg_hash_hex = _hex(getattr(msg, "hash", None))
         state = getattr(msg, "state", None)
         method = getattr(msg, "method", None)
         desired = getattr(msg, "desired_method", None)
-        payload = {
-            "hash": msg_hash_hex,
-            "state": state if state is not None else -1,
-            "method": method if method is not None else -1,
-            "desired_method": desired if desired is not None else -1,
-        }
+        payload = _attempt_payload(
+            msg,
+            state=state if state is not None else -1,
+            method=method if method is not None else -1,
+            desired_method=desired if desired is not None else -1,
+        )
         with attempt_lock:
             is_delivered = state == LXMF.LXMessage.DELIVERED
             is_propagated = not is_delivered and (
@@ -1403,7 +1411,7 @@ def attach_lxmessage_callbacks(
         with attempt_lock:
             if attempt_state["value"] not in ("delivered", "failed"):
                 attempt_state["value"] = "failed"
-                _emit(on_failed, {"hash": _hex(getattr(msg, "hash", None))})
+                _emit(on_failed, _attempt_payload(msg))
 
     def _failed(msg):
         captured_router = _lxmf_router
@@ -1413,7 +1421,7 @@ def attach_lxmessage_callbacks(
                 return
             if state in ("submitted", "propagated"):
                 attempt_state["value"] = "failed"
-                _emit(on_failed, {"hash": _hex(getattr(msg, "hash", None))})
+                _emit(on_failed, _attempt_payload(msg))
                 return
             if not (
                 getattr(msg, "try_propagation_on_fail", False)
@@ -1422,7 +1430,7 @@ def attach_lxmessage_callbacks(
                 and getattr(msg, "desired_method", None) != LXMF.LXMessage.PROPAGATED
             ):
                 attempt_state["value"] = "failed"
-                _emit(on_failed, {"hash": _hex(getattr(msg, "hash", None))})
+                _emit(on_failed, _attempt_payload(msg))
                 return
             attempt_state["value"] = "scheduled"
 
@@ -1440,7 +1448,7 @@ def attach_lxmessage_callbacks(
                 msg.desired_method = LXMF.LXMessage.PROPAGATED
                 msg.register_failed_callback(_fallback_failed)
                 attempt_state["value"] = "admitted"
-                _emit(on_retrying_propagated, {"hash": _hex(getattr(msg, "hash", None))})
+                _emit(on_retrying_propagated, _attempt_payload(msg))
 
             try:
                 captured_router.handle_outbound(msg)
@@ -1464,7 +1472,7 @@ def attach_lxmessage_callbacks(
             with attempt_lock:
                 if attempt_state["value"] == "scheduled":
                     attempt_state["value"] = "failed"
-                    _emit(on_failed, {"hash": _hex(getattr(msg, "hash", None))})
+                    _emit(on_failed, _attempt_payload(msg))
 
     # Tag the LXMessage so the failed callback can see the intent. Upstream
     # Sideband uses this same attribute; LXMF does not read it itself, so the

@@ -62,12 +62,14 @@ internal class NativeMessageSender(
         destinationHash: ByteArray,
         content: String,
         deliveryMethod: DeliveryMethod,
+        originatingIdentityHash: String,
         options: MessageOptions = MessageOptions(),
     ): Result<MessageReceipt> =
         sendMessage(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = deliveryMethod,
+            originatingIdentityHash = originatingIdentityHash,
             options = options,
         )
 
@@ -75,6 +77,7 @@ internal class NativeMessageSender(
         destinationHash: ByteArray,
         content: String,
         deliveryMethod: DeliveryMethod,
+        originatingIdentityHash: String,
         options: MessageOptions = MessageOptions(),
     ): Result<MessageReceipt> =
         kotlinx.coroutines.withContext(Dispatchers.IO) {
@@ -107,7 +110,13 @@ internal class NativeMessageSender(
                         desiredMethod = lxmfMethod,
                     )
 
-                installDeliveryCallbacks(message, router, options.tryPropagationOnFail, lxmfMethod)
+                installDeliveryCallbacks(
+                    message,
+                    router,
+                    options.tryPropagationOnFail,
+                    lxmfMethod,
+                    originatingIdentityHash,
+                )
                 router.handleOutbound(message)
 
                 MessageReceipt(
@@ -206,6 +215,7 @@ internal class NativeMessageSender(
         router: LXMRouter,
         tryPropagationOnFail: Boolean,
         lxmfMethod: NativeDeliveryMethod,
+        originatingIdentityHash: String,
     ) {
         val attemptLock = Any()
         var attemptState = DeliveryAttemptState.PRIMARY
@@ -217,7 +227,7 @@ internal class NativeMessageSender(
                         attemptState != DeliveryAttemptState.FAILED
                     ) {
                         attemptState = DeliveryAttemptState.FAILED
-                        publishStatus(hash, DeliveryStatus.FAILED)
+                        publishStatus(hash, DeliveryStatus.FAILED, originatingIdentityHash)
                     }
                 }
             }
@@ -243,13 +253,13 @@ internal class NativeMessageSender(
                 if (status == DeliveryStatus.DELIVERED) {
                     if (attemptState != DeliveryAttemptState.DELIVERED) {
                         attemptState = DeliveryAttemptState.DELIVERED
-                        publishStatus(hash, status)
+                        publishStatus(hash, status, originatingIdentityHash)
                     }
                 } else if (attemptState != DeliveryAttemptState.DELIVERED &&
                     attemptState != DeliveryAttemptState.PROPAGATED
                 ) {
                     attemptState = DeliveryAttemptState.PROPAGATED
-                    publishStatus(hash, status)
+                    publishStatus(hash, status, originatingIdentityHash)
                 }
             }
         }
@@ -267,13 +277,13 @@ internal class NativeMessageSender(
 
                     DeliveryAttemptState.FALLBACK_SUBMITTED -> {
                         attemptState = DeliveryAttemptState.FAILED
-                        publishStatus(hash, DeliveryStatus.FAILED)
+                        publishStatus(hash, DeliveryStatus.FAILED, originatingIdentityHash)
                         return@failedCallback
                     }
 
                     DeliveryAttemptState.PROPAGATED -> {
                         attemptState = DeliveryAttemptState.FAILED
-                        publishStatus(hash, DeliveryStatus.FAILED)
+                        publishStatus(hash, DeliveryStatus.FAILED, originatingIdentityHash)
                         return@failedCallback
                     }
 
@@ -286,7 +296,7 @@ internal class NativeMessageSender(
                             scheduleFallback = true
                         } else {
                             attemptState = DeliveryAttemptState.FAILED
-                            publishStatus(hash, DeliveryStatus.FAILED)
+                            publishStatus(hash, DeliveryStatus.FAILED, originatingIdentityHash)
                         }
                     }
                 }
@@ -308,7 +318,7 @@ internal class NativeMessageSender(
                             msg.deliveryAttempts = 0
                             msg.failedCallback = fallbackFailedCallback
                             attemptState = DeliveryAttemptState.FALLBACK_ADMITTED
-                            publishStatus(hash, DeliveryStatus.RETRYING_PROPAGATED)
+                            publishStatus(hash, DeliveryStatus.RETRYING_PROPAGATED, originatingIdentityHash)
                             true
                         }
                     }
@@ -329,8 +339,13 @@ internal class NativeMessageSender(
         }
     }
 
-    private fun publishStatus(hash: String, status: DeliveryStatus) {
-        if (!deliveryStatusEvents.publish(DeliveryStatusUpdate(hash, status, System.currentTimeMillis()))) {
+    private fun publishStatus(
+        hash: String,
+        status: DeliveryStatus,
+        originatingIdentityHash: String,
+    ) {
+        val update = DeliveryStatusUpdate(hash, status, System.currentTimeMillis(), originatingIdentityHash)
+        if (!deliveryStatusEvents.publish(update)) {
             Log.w(TAG, "Advisory delivery update dropped for ${hash.take(16)}")
         }
     }

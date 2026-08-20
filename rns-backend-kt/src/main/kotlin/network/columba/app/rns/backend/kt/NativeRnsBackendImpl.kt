@@ -369,6 +369,8 @@ class NativeRnsBackendImpl(
                     destinationHash = destHash,
                     content = content,
                     deliveryMethod = method,
+                    originatingIdentityHash =
+                        requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
                     options = NativeMessageSender.MessageOptions(extraFields = extraFields),
                 )
             },
@@ -1235,6 +1237,8 @@ class NativeRnsBackendImpl(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = DeliveryMethod.DIRECT,
+            originatingIdentityHash =
+                requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
             options =
                 NativeMessageSender.MessageOptions(
                     imageData = imageData,
@@ -1261,6 +1265,8 @@ class NativeRnsBackendImpl(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = deliveryMethod,
+            originatingIdentityHash =
+                requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
             options =
                 NativeMessageSender.MessageOptions(
                     tryPropagationOnFail = tryPropagationOnFail,

@@ -962,6 +962,11 @@ class MessagingViewModel
 
         private suspend fun handleDeliveryStatusUpdate(update: network.columba.app.rns.api.model.DeliveryStatusUpdate) {
             try {
+                val originatingIdentityHash = update.originatingIdentityHash?.takeIf { it.isNotBlank() }
+                if (originatingIdentityHash == null) {
+                    Log.w(TAG, "Ignoring delivery status without trustworthy attempt identity")
+                    return
+                }
                 // Retry mechanism to handle race condition where delivery proof arrives
                 // before database transaction completes
                 val maxRetries = 3
@@ -983,6 +988,14 @@ class MessagingViewModel
                 }
 
                 if (message != null) {
+                    if (message.identityHash != originatingIdentityHash) {
+                        Log.w(
+                            TAG,
+                            "Ignoring delivery status for ${update.messageHash.take(16)}: " +
+                                "attempt owner does not match the active message row",
+                        )
+                        return
+                    }
                     // The repository owns the closed monotonic reduction. The service process
                     // applies the same event durably; this UI-side call is an idempotent fallback.
                     conversationRepository.applyDeliveryStatus(update.messageHash, update.status.wireValue)

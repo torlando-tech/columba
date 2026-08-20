@@ -455,6 +455,7 @@ class PythonEventBridge {
                     messageHash = payload.dictStr("hash").orEmpty(),
                     status = DeliveryStatus.FAILED,
                     timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = payload.dictStr("originating_identity_hash"),
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf failure translation failed", it) }
@@ -476,6 +477,7 @@ class PythonEventBridge {
                     messageHash = payload.dictStr("hash").orEmpty(),
                     status = status,
                     timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = payload.dictStr("originating_identity_hash"),
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf delivered translation failed", it) }
@@ -491,6 +493,7 @@ class PythonEventBridge {
                     messageHash = payload.dictStr("hash").orEmpty(),
                     status = DeliveryStatus.RETRYING_PROPAGATED,
                     timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = payload.dictStr("originating_identity_hash"),
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf retrying-propagated translation failed", it) }

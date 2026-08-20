@@ -47,7 +47,7 @@ internal class PeerActivityCollector(
                 }
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     backend.lxmf.observeDeliveryStatus().collect { update ->
-                        persistence.persistDeliveryStatus(update.messageHash, update.status)
+                        persistence.persistDeliveryStatus(update)
                         if (PeerActivityPolicy.isVerifiedDeliveryProof(update.status)) {
                             persistence.persistDeliveryProof(update.messageHash, now())
                         }

@@ -150,6 +150,7 @@ class NativeMessageSenderDeliveryLifecycleTest {
             router,
             tryPropagationOnFail = true,
             lxmfMethod = NativeDeliveryMethod.DIRECT,
+            originatingIdentityHash = "identity-a",
         )
         return Fixture(
             message = message,
@@ -164,7 +165,10 @@ class NativeMessageSenderDeliveryLifecycleTest {
         val values = mutableListOf<DeliveryStatus>()
         val job =
             launch(start = CoroutineStart.UNDISPATCHED) {
-                stream.events.take(count).toList().mapTo(values) { it.status }
+                stream.events.take(count).toList().mapTo(values) {
+                    assertEquals("identity-a", it.originatingIdentityHash)
+                    it.status
+                }
             }
         return Updates(values, job)
     }

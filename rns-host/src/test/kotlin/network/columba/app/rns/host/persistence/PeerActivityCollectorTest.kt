@@ -59,7 +59,7 @@ class PeerActivityCollectorTest {
         coEvery { persistence.persistIncomingMessageActivity(any(), any(), any(), any()) } returns true
         coEvery { persistence.persistReactionActivity(any(), any(), any()) } returns true
         coEvery { persistence.persistDeliveryProof(any(), any()) } returns true
-        coEvery { persistence.persistDeliveryStatus(any(), any()) } returns true
+        coEvery { persistence.persistDeliveryStatus(any()) } returns true
         coEvery { persistence.persistTelemetryActivity(any(), any(), any(), any()) } returns true
         coEvery {
             persistence.persistAnnounce(
@@ -79,9 +79,10 @@ class PeerActivityCollectorTest {
         val announceIdentityHash = ByteArray(16) { (it + 32).toByte() }
         announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, announcePublicKey))
         announces.emit(lxmfDeliveryAnnounce(source, announceIdentityHash, byteArrayOf()))
-        statuses.emit(DeliveryStatusUpdate("delivered", DeliveryStatus.DELIVERED, Long.MAX_VALUE))
-        statuses.emit(DeliveryStatusUpdate("failed", DeliveryStatus.FAILED, Long.MAX_VALUE))
-        statuses.emit(DeliveryStatusUpdate("propagated", DeliveryStatus.PROPAGATED, Long.MAX_VALUE))
+        val identityHash = "originating-identity"
+        statuses.emit(DeliveryStatusUpdate("delivered", DeliveryStatus.DELIVERED, Long.MAX_VALUE, identityHash))
+        statuses.emit(DeliveryStatusUpdate("failed", DeliveryStatus.FAILED, Long.MAX_VALUE, identityHash))
+        statuses.emit(DeliveryStatusUpdate("propagated", DeliveryStatus.PROPAGATED, Long.MAX_VALUE, identityHash))
         telemetry.emit(LocationTelemetry(lat = 1.0, lng = 2.0, acc = 3f, ts = Long.MAX_VALUE, sourceHash = "direct", isDirect = true))
         telemetry.emit(LocationTelemetry(lat = 1.0, lng = 2.0, acc = 3f, ts = Long.MAX_VALUE, sourceHash = "relayed", isDirect = false))
         reactions.emit(
@@ -164,9 +165,21 @@ class PeerActivityCollectorTest {
         coVerify(exactly = 1) { persistence.persistDeliveryProof("delivered", 500L) }
         coVerify(exactly = 0) { persistence.persistDeliveryProof("failed", any()) }
         coVerify(exactly = 0) { persistence.persistDeliveryProof("propagated", any()) }
-        coVerify(exactly = 1) { persistence.persistDeliveryStatus("delivered", DeliveryStatus.DELIVERED) }
-        coVerify(exactly = 1) { persistence.persistDeliveryStatus("failed", DeliveryStatus.FAILED) }
-        coVerify(exactly = 1) { persistence.persistDeliveryStatus("propagated", DeliveryStatus.PROPAGATED) }
+        coVerify(exactly = 1) {
+            persistence.persistDeliveryStatus(
+                DeliveryStatusUpdate("delivered", DeliveryStatus.DELIVERED, Long.MAX_VALUE, "originating-identity"),
+            )
+        }
+        coVerify(exactly = 1) {
+            persistence.persistDeliveryStatus(
+                DeliveryStatusUpdate("failed", DeliveryStatus.FAILED, Long.MAX_VALUE, "originating-identity"),
+            )
+        }
+        coVerify(exactly = 1) {
+            persistence.persistDeliveryStatus(
+                DeliveryStatusUpdate("propagated", DeliveryStatus.PROPAGATED, Long.MAX_VALUE, "originating-identity"),
+            )
+        }
         coVerify(exactly = 1) {
             persistence.persistTelemetryActivity(
                 "direct",

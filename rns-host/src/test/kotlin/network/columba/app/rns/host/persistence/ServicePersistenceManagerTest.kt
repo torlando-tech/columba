@@ -20,6 +20,7 @@ import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -154,7 +155,8 @@ class ServicePersistenceManagerTest {
                 messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered", null)
             } returns 1
 
-            assertTrue(persistenceManager.persistDeliveryStatus("message-hash", DeliveryStatus.DELIVERED))
+            val update = DeliveryStatusUpdate("message-hash", DeliveryStatus.DELIVERED, 1L, "owning-identity")
+            assertTrue(persistenceManager.persistDeliveryStatus(update))
             assertTrue(pending != null)
 
             coEvery { messageDao.getMessageById("message-hash", "owning-identity") } returns message
@@ -187,7 +189,8 @@ class ServicePersistenceManagerTest {
                 IllegalStateException("busy") andThen 1
             coEvery { pendingDeliveryStatusDao.delete("owning-identity", "message-hash") } just Runs
 
-            assertTrue(persistenceManager.persistDeliveryStatus("message-hash", DeliveryStatus.FAILED))
+            val update = DeliveryStatusUpdate("message-hash", DeliveryStatus.FAILED, 1L, "owning-identity")
+            assertTrue(persistenceManager.persistDeliveryStatus(update))
 
             coVerify(exactly = 2) {
                 messageDao.applyDeliveryStatus("message-hash", "owning-identity", "failed", null)

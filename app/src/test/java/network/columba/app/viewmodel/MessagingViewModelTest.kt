@@ -1486,6 +1486,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.RETRYING_PROPAGATED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -1558,6 +1559,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.DELIVERED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -1632,6 +1634,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -1694,6 +1697,7 @@ class MessagingViewModelTest {
                             messageHash = unknownMessageHash,
                             status = DeliveryStatus.DELIVERED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -1770,6 +1774,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -1839,6 +1844,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -1908,6 +1914,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -1977,6 +1984,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.FAILED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -2046,6 +2054,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.DELIVERED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -2113,6 +2122,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.PROPAGATED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -2176,6 +2186,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.RETRYING_PROPAGATED,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }
@@ -2239,6 +2250,7 @@ class MessagingViewModelTest {
                             messageHash = testMessageHash,
                             status = DeliveryStatus.PENDING,
                             timestamp = System.currentTimeMillis(),
+                            originatingIdentityHash = "test_identity_hash",
                         ),
                     )
                 }

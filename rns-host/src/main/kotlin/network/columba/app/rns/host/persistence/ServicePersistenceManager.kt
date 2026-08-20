@@ -18,6 +18,7 @@ import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
 import network.columba.app.data.model.InterfaceType
 import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
 import org.json.JSONObject
@@ -494,18 +495,17 @@ class ServicePersistenceManager(
         }
 
     /** Persist protocol lifecycle state in the service process, independent of UI ownership. */
-    suspend fun persistDeliveryStatus(
-        messageHash: String,
-        status: DeliveryStatus,
-    ): Boolean {
+    suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean {
+        val messageHash = update.messageHash
+        val status = update.status
         val safeHash = messageHash.take(16)
         val now = System.currentTimeMillis()
         try {
-            // Capture identity authority at event admission. Reconciliation may run after
-            // the user switches identities, so it must never consult the later active row.
-            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+            // Attempt ownership is captured before callbacks can race an identity switch.
+            // Never substitute mutable active Room state when provenance is absent.
+            val identityHash = update.originatingIdentityHash?.takeIf { it.isNotBlank() }
             if (identityHash == null) {
-                Log.w(TAG, "No active identity - cannot persist delivery status for $safeHash")
+                Log.w(TAG, "Missing originating identity - rejecting delivery status for $safeHash")
                 return false
             }
             val effectiveMethod =

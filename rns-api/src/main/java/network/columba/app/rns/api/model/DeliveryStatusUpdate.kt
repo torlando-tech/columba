@@ -23,4 +23,6 @@ data class DeliveryStatusUpdate(
     val messageHash: String,
     val status: DeliveryStatus,
     val timestamp: Long,
+    /** Immutable owner captured by the backend when the send attempt is created. */
+    val originatingIdentityHash: String? = null,
 ) : Parcelable

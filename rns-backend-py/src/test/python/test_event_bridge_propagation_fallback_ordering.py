@@ -151,6 +151,7 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
             PayloadCallback(events, "failed"),
             PayloadCallback(events, "retrying"),
             try_propagation_on_fail=True,
+            originating_identity_hash="identity-a",
         )
 
         self.assertTrue(callable(message.failed_callback))
@@ -165,6 +166,10 @@ class PropagationFallbackOrderingTest(unittest.TestCase):
         self.assertEqual([4, 8], [payload["state"] for payload in deliveries])
         self.assertEqual([3, 3], [payload["method"] for payload in deliveries])
         self.assertEqual([3, 3], [payload["desired_method"] for payload in deliveries])
+        self.assertEqual(
+            ["identity-a", "identity-a"],
+            [payload["originating_identity_hash"] for payload in deliveries],
+        )
 
     def test_failed_fallback_can_be_promoted_by_delayed_primary_proof(self):
         events = []

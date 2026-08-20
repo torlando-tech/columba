@@ -12,6 +12,7 @@ interface PendingDeliveryStatusDao {
     /** Reduce competing lifecycle evidence before the canonical message row exists. */
     @Transaction
     suspend fun reduce(
+        identityHash: String,
         messageHash: String,
         status: String,
         deliveryMethod: String?,
@@ -19,10 +20,10 @@ interface PendingDeliveryStatusDao {
     ) {
         val inserted =
             insertIfMissing(
-                PendingDeliveryStatusEntity(messageHash, status, deliveryMethod, updatedAt),
+                PendingDeliveryStatusEntity(identityHash, messageHash, status, deliveryMethod, updatedAt),
             )
         if (inserted == -1L) {
-            advance(messageHash, status, deliveryMethod, updatedAt)
+            advance(identityHash, messageHash, status, deliveryMethod, updatedAt)
         }
     }
 
@@ -35,7 +36,7 @@ interface PendingDeliveryStatusDao {
         SET status = :status,
             deliveryMethod = COALESCE(:deliveryMethod, deliveryMethod),
             updatedAt = :updatedAt
-        WHERE messageHash = :messageHash AND (
+        WHERE identityHash = :identityHash AND messageHash = :messageHash AND (
             (:status = 'delivered') OR
             (:status = 'propagated' AND status IN
                 ('pending', 'sent', 'retrying_propagated', 'failed')) OR
@@ -48,6 +49,7 @@ interface PendingDeliveryStatusDao {
         """,
     )
     suspend fun advance(
+        identityHash: String,
         messageHash: String,
         status: String,
         deliveryMethod: String?,
@@ -57,11 +59,17 @@ interface PendingDeliveryStatusDao {
     @Query("SELECT * FROM pending_delivery_status ORDER BY updatedAt ASC LIMIT :limit")
     suspend fun oldest(limit: Int): List<PendingDeliveryStatusEntity>
 
-    @Query("SELECT * FROM pending_delivery_status WHERE messageHash = :messageHash")
-    suspend fun get(messageHash: String): PendingDeliveryStatusEntity?
+    @Query("SELECT * FROM pending_delivery_status WHERE identityHash = :identityHash AND messageHash = :messageHash")
+    suspend fun get(
+        identityHash: String,
+        messageHash: String,
+    ): PendingDeliveryStatusEntity?
 
-    @Query("DELETE FROM pending_delivery_status WHERE messageHash = :messageHash")
-    suspend fun delete(messageHash: String)
+    @Query("DELETE FROM pending_delivery_status WHERE identityHash = :identityHash AND messageHash = :messageHash")
+    suspend fun delete(
+        identityHash: String,
+        messageHash: String,
+    )
 
     @Query("DELETE FROM pending_delivery_status WHERE updatedAt < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long): Int
@@ -69,8 +77,8 @@ interface PendingDeliveryStatusDao {
     @Query(
         """
         DELETE FROM pending_delivery_status
-        WHERE messageHash NOT IN (
-            SELECT messageHash FROM pending_delivery_status ORDER BY updatedAt DESC LIMIT :keep
+        WHERE rowid NOT IN (
+            SELECT rowid FROM pending_delivery_status ORDER BY updatedAt DESC LIMIT :keep
         )
         """,
     )

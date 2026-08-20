@@ -18,6 +18,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [24], application = Application::class)
 class PendingDeliveryStatusDaoTest {
+    private companion object {
+        const val IDENTITY = "identity-a"
+    }
+
     private lateinit var database: ColumbaDatabase
     private lateinit var dao: PendingDeliveryStatusDao
 
@@ -33,30 +37,30 @@ class PendingDeliveryStatusDaoTest {
 
     @Test
     fun `pending reducer rejects stale retry metadata as one decision`() = runTest {
-        dao.reduce("message", "failed", null, 20L)
-        dao.reduce("message", "retrying_propagated", "propagated", 30L)
+        dao.reduce(IDENTITY, "message", "failed", null, 20L)
+        dao.reduce(IDENTITY, "message", "retrying_propagated", "propagated", 30L)
 
-        val pending = requireNotNull(dao.get("message"))
+        val pending = requireNotNull(dao.get(IDENTITY, "message"))
         assertEquals("failed", pending.status)
         assertEquals(20L, pending.updatedAt)
     }
 
     @Test
     fun `pending reducer accepts inverse higher authority delivered evidence`() = runTest {
-        dao.reduce("message", "failed", null, 20L)
-        dao.reduce("message", "delivered", null, 30L)
+        dao.reduce(IDENTITY, "message", "failed", null, 20L)
+        dao.reduce(IDENTITY, "message", "delivered", null, 30L)
 
-        val pending = requireNotNull(dao.get("message"))
+        val pending = requireNotNull(dao.get(IDENTITY, "message"))
         assertEquals("delivered", pending.status)
         assertEquals(30L, pending.updatedAt)
     }
 
     @Test
     fun `delivered proof preserves propagated provenance on api 24`() = runTest {
-        dao.reduce("message", "retrying_propagated", "propagated", 20L)
-        dao.reduce("message", "delivered", null, 30L)
+        dao.reduce(IDENTITY, "message", "retrying_propagated", "propagated", 20L)
+        dao.reduce(IDENTITY, "message", "delivered", null, 30L)
 
-        val pending = requireNotNull(dao.get("message"))
+        val pending = requireNotNull(dao.get(IDENTITY, "message"))
         assertEquals("delivered", pending.status)
         assertEquals("propagated", pending.deliveryMethod)
         assertEquals(30L, pending.updatedAt)
@@ -64,31 +68,31 @@ class PendingDeliveryStatusDaoTest {
 
     @Test
     fun `direct delivered proof does not invent propagated provenance on api 24`() = runTest {
-        dao.reduce("message", "delivered", null, 30L)
+        dao.reduce(IDENTITY, "message", "delivered", null, 30L)
 
-        val pending = requireNotNull(dao.get("message"))
+        val pending = requireNotNull(dao.get(IDENTITY, "message"))
         assertEquals("delivered", pending.status)
         assertNull(pending.deliveryMethod)
     }
 
     @Test
     fun `propagated may transition to failed while preserving provenance`() = runTest {
-        dao.reduce("message", "propagated", "propagated", 20L)
-        dao.reduce("message", "failed", null, 30L)
+        dao.reduce(IDENTITY, "message", "propagated", "propagated", 20L)
+        dao.reduce(IDENTITY, "message", "failed", null, 30L)
 
-        val pending = requireNotNull(dao.get("message"))
+        val pending = requireNotNull(dao.get(IDENTITY, "message"))
         assertEquals("failed", pending.status)
         assertEquals("propagated", pending.deliveryMethod)
     }
 
     @Test
     fun `delayed primary proof wins after propagated acceptance and failure`() = runTest {
-        dao.reduce("message", "retrying_propagated", "propagated", 10L)
-        dao.reduce("message", "propagated", "propagated", 20L)
-        dao.reduce("message", "failed", null, 30L)
-        dao.reduce("message", "delivered", null, 40L)
+        dao.reduce(IDENTITY, "message", "retrying_propagated", "propagated", 10L)
+        dao.reduce(IDENTITY, "message", "propagated", "propagated", 20L)
+        dao.reduce(IDENTITY, "message", "failed", null, 30L)
+        dao.reduce(IDENTITY, "message", "delivered", null, 40L)
 
-        val pending = requireNotNull(dao.get("message"))
+        val pending = requireNotNull(dao.get(IDENTITY, "message"))
         assertEquals("delivered", pending.status)
         assertEquals("propagated", pending.deliveryMethod)
         assertEquals(40L, pending.updatedAt)
@@ -96,15 +100,31 @@ class PendingDeliveryStatusDaoTest {
 
     @Test
     fun `cleanup is age and count bounded`() = runTest {
-        dao.reduce("old", "failed", null, 1L)
-        dao.reduce("middle", "failed", null, 2L)
-        dao.reduce("new", "delivered", null, 3L)
+        dao.reduce(IDENTITY, "old", "failed", null, 1L)
+        dao.reduce(IDENTITY, "middle", "failed", null, 2L)
+        dao.reduce(IDENTITY, "new", "delivered", null, 3L)
 
         dao.deleteOlderThan(2L)
         dao.trimToNewest(1)
 
-        assertNull(dao.get("old"))
-        assertNull(dao.get("middle"))
-        assertEquals("delivered", dao.get("new")?.status)
+        assertNull(dao.get(IDENTITY, "old"))
+        assertNull(dao.get(IDENTITY, "middle"))
+        assertEquals("delivered", dao.get(IDENTITY, "new")?.status)
+    }
+
+    @Test
+    fun `same message hash reduces independently for each identity on api 24`() = runTest {
+        dao.reduce("identity-a", "duplicate", "failed", null, 10L)
+        dao.reduce("identity-b", "duplicate", "delivered", null, 20L)
+        dao.reduce("identity-a", "duplicate", "delivered", null, 30L)
+
+        assertEquals("delivered", dao.get("identity-a", "duplicate")?.status)
+        assertEquals(30L, dao.get("identity-a", "duplicate")?.updatedAt)
+        assertEquals("delivered", dao.get("identity-b", "duplicate")?.status)
+        assertEquals(20L, dao.get("identity-b", "duplicate")?.updatedAt)
+
+        dao.delete("identity-a", "duplicate")
+        assertNull(dao.get("identity-a", "duplicate"))
+        assertEquals("delivered", dao.get("identity-b", "duplicate")?.status)
     }
 }

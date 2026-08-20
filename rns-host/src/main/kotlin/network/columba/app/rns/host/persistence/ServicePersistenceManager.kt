@@ -501,13 +501,20 @@ class ServicePersistenceManager(
         val safeHash = messageHash.take(16)
         val now = System.currentTimeMillis()
         try {
+            // Capture identity authority at event admission. Reconciliation may run after
+            // the user switches identities, so it must never consult the later active row.
+            val identityHash = localIdentityDao.getActiveIdentitySync()?.identityHash
+            if (identityHash == null) {
+                Log.w(TAG, "No active identity - cannot persist delivery status for $safeHash")
+                return false
+            }
             val effectiveMethod =
                 if (status == DeliveryStatus.RETRYING_PROPAGATED || status == DeliveryStatus.PROPAGATED) {
                     "propagated"
                 } else {
                     null
                 }
-            pendingDeliveryStatusDao.reduce(messageHash, status.wireValue, effectiveMethod, now)
+            pendingDeliveryStatusDao.reduce(identityHash, messageHash, status.wireValue, effectiveMethod, now)
         } catch (e: Exception) {
             Log.e(TAG, "Could not durably enqueue delivery status for $safeHash", e)
             return false
@@ -536,16 +543,16 @@ class ServicePersistenceManager(
         try {
             pendingDeliveryStatusDao.oldest(RECONCILIATION_BATCH_SIZE).forEach { pending ->
                 database.withTransaction {
-                    val message = messageDao.getOutgoingMessageByIdAcrossIdentities(pending.messageHash)
-                    if (message != null) {
+                    val message = messageDao.getMessageById(pending.messageHash, pending.identityHash)
+                    if (message?.isFromMe == true) {
                         // A zero-row update means the event was stale and was atomically rejected.
                         messageDao.applyDeliveryStatus(
                             pending.messageHash,
-                            message.identityHash,
+                            pending.identityHash,
                             pending.status,
                             pending.deliveryMethod,
                         )
-                        pendingDeliveryStatusDao.delete(pending.messageHash)
+                        pendingDeliveryStatusDao.delete(pending.identityHash, pending.messageHash)
                     }
                 }
             }

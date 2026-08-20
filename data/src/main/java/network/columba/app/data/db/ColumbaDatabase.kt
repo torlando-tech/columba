@@ -338,8 +338,9 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL(
                         "CREATE TABLE IF NOT EXISTS `pending_delivery_status` (" +
-                            "`messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, " +
-                            "`deliveryMethod` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageHash`))",
+                            "`identityHash` TEXT NOT NULL, `messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, " +
+                            "`deliveryMethod` TEXT, `updatedAt` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`identityHash`, `messageHash`))",
                     )
                 }
             }

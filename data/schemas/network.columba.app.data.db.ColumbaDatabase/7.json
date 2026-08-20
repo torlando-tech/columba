@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 7,
-    "identityHash": "0decd2965fe4b6485e4464c310a97259",
+    "identityHash": "17dfcbe391c85b2ae17027edf5d6e7cb",
     "entities": [
       {
         "tableName": "conversations",
@@ -1953,8 +1953,14 @@
       },
       {
         "tableName": "pending_delivery_status",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, `deliveryMethod` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageHash`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`identityHash` TEXT NOT NULL, `messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, `deliveryMethod` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`identityHash`, `messageHash`))",
         "fields": [
+          {
+            "fieldPath": "identityHash",
+            "columnName": "identityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
           {
             "fieldPath": "messageHash",
             "columnName": "messageHash",
@@ -1982,6 +1988,7 @@
         "primaryKey": {
           "autoGenerate": false,
           "columnNames": [
+            "identityHash",
             "messageHash"
           ]
         }
@@ -1989,7 +1996,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0decd2965fe4b6485e4464c310a97259')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '17dfcbe391c85b2ae17027edf5d6e7cb')"
     ]
   }
 }

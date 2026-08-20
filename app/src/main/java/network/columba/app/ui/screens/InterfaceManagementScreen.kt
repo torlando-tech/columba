@@ -83,6 +83,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -97,6 +98,7 @@ import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
 import network.columba.app.ui.components.LocalCapabilities
+import network.columba.app.ui.components.RNodeBatteryIndicator
 import network.columba.app.ui.components.interfaceTypeIconData
 import network.columba.app.viewmodel.InterfaceManagementViewModel
 
@@ -359,6 +361,7 @@ fun InterfaceManagementScreen(
                                             blePermissionsGranted = state.blePermissionsGranted,
                                             currentTransport = state.currentTransport,
                                             isOnline = isOnline,
+                                            rnodeBattery = state.rnodeBattery,
                                             statusReason = statusReason,
                                             peerCount = spawnedPeers.size,
                                             onErrorClick = { errorDialogInterface = iface },
@@ -626,6 +629,7 @@ fun InterfaceCard(
     blePermissionsGranted: Boolean,
     currentTransport: CurrentTransport = CurrentTransport.NONE,
     isOnline: Boolean? = null,
+    rnodeBattery: Int? = null,
     statusReason: String? = null,
     peerCount: Int = 0,
     onErrorClick: (() -> Unit)? = null,
@@ -654,6 +658,10 @@ fun InterfaceCard(
             restrictionView is InterfaceRestrictionView.Blocked ||
                 restrictionView is InterfaceRestrictionView.NoNetwork
         )
+    // RNode battery is only shown when we have a live reading on a connected RNode.
+    // The backend reports null when the RNode is offline / has no frame yet, so this
+    // flag doubles as the "is the reading trustworthy" gate (matches the notification).
+    val battery = if (online && interfaceEntity.type == "RNode") rnodeBattery else null
 
     Card(
         modifier =
@@ -805,6 +813,14 @@ fun InterfaceCard(
                             else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         },
                 )
+                battery?.let { percent ->
+                    Spacer(modifier = Modifier.height(2.dp))
+                    RNodeBatteryIndicator(
+                        percent = percent,
+                        fontSize = 12.sp,
+                        textStyle = MaterialTheme.typography.labelSmall,
+                    )
+                }
                 if (peerCount > 0) {
                     Text(
                         text = "$peerCount peer${if (peerCount != 1) "s" else ""}",

@@ -63,6 +63,10 @@ data class InterfaceManagementState(
     val infoMessage: String? = null,
     // Interface online status from Python/RNS (interface name -> online status)
     val interfaceOnlineStatus: Map<String, Boolean> = emptyMap(),
+    // Live RNode battery percent (0-100), or null when absent. RNode battery is a
+    // single device-level scalar (one 0x27 KISS frame per connected RNode), so this
+    // is the value shown on every online RNode card on this screen.
+    val rnodeBattery: Int? = null,
     // Transport-reported interfaces (includes spawned sub-interfaces from AutoInterface/BLE)
     val transportInterfaces: List<TransportInterfaceInfo> = emptyList(),
     // RNS 1.1.x Interface Discovery
@@ -224,6 +228,14 @@ class InterfaceManagementViewModel
              * @suppress VisibleForTesting
              */
             internal var enableStatusPolling = true
+
+            /**
+             * Controls whether the status poll loop also fetches the RNode battery.
+             * Disabled in unit tests so `getRNodeBattery()` never fires on the mock
+             * during `advanceUntilIdle()`; the dedicated battery tests enable it.
+             * @suppress VisibleForTesting
+             */
+            internal var enableBatteryPolling = false
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -476,11 +488,29 @@ class InterfaceManagementViewModel
                         _state.value.copy(
                             interfaceOnlineStatus = statusMap,
                             transportInterfaces = transportList,
+                            rnodeBattery = fetchRNodeBattery(),
                         )
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to fetch interface status", e)
                 }
             }
+        }
+
+        /**
+         * Fetch the live RNode battery for the interface-list cards.
+         *
+         * RNode battery is a single device-level scalar (one 0x27 KISS frame per
+         * connected RNode), so a single read covers every RNode card on this screen.
+         * Returns null on the -1 "absent" sentinel (no RNode, offline, or no frame yet)
+         * and on any read failure, so callers render nothing. The read is a local IPC
+         * call with no network traffic; battery changes slowly, so riding the 5s status
+         * poll cadence is fine. Disabled in unit tests via [enableBatteryPolling].
+         */
+        private suspend fun fetchRNodeBattery(): Int? {
+            if (!enableBatteryPolling) return null
+            return runCatching {
+                transportAdmin.getRNodeBattery()
+            }.getOrNull()?.takeIf { it in 0..100 }
         }
 
         /**

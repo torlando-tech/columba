@@ -793,6 +793,20 @@ fun InterfaceCard(
                 }
             }
 
+            // RNode battery in its own column, between the name/type block and the
+            // status/toggle column. The row is center-vertical, so this adds no
+            // vertical height. Rendered only when there's a live reading on a
+            // connected RNode (see `battery`).
+            battery?.let { percent ->
+                Spacer(modifier = Modifier.width(16.dp))
+                RNodeBatteryIndicator(
+                    percent = percent,
+                    fontSize = 14.sp,
+                    textStyle = MaterialTheme.typography.labelMedium,
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+            }
+
             // Right column: status + peer count + toggle
             Column(horizontalAlignment = Alignment.End) {
                 Text(
@@ -808,19 +822,11 @@ fun InterfaceCard(
                         when {
                             !interfaceEntity.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
                             online -> Color(0xFF4CAF50)
-                            // "Restricted" is informational, not error — the user configured this. Keep
+                            // "Restricted" is informational, not error - the user configured this. Keep
                             // the muted tone instead of error-red so the card doesn't read as malfunctioning.
                             else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         },
                 )
-                battery?.let { percent ->
-                    Spacer(modifier = Modifier.height(2.dp))
-                    RNodeBatteryIndicator(
-                        percent = percent,
-                        fontSize = 12.sp,
-                        textStyle = MaterialTheme.typography.labelSmall,
-                    )
-                }
                 if (peerCount > 0) {
                     Text(
                         text = "$peerCount peer${if (peerCount != 1) "s" else ""}",

@@ -81,6 +81,10 @@ class InterfaceManagementViewModelStatusEventTest {
         bleStatusRepository = mockk()
         serviceProtocol = mockk()
         transportObserver = mockk()
+        // Battery polling is on by default in production; these tests predate it and
+        // don't stub getRNodeBattery(), so keep the shared status-poll loop from
+        // firing the unstubbed mock. The dedicated battery tests enable it.
+        InterfaceManagementViewModel.enableBatteryPolling = false
         every { transportObserver.snapshotTransport() } returns
             network.columba.app.rns.host.manager.CurrentTransport.WIFI_LIKE
         // Default StateFlow seeded with WIFI_LIKE so most tests don't observe a
@@ -1481,11 +1485,12 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
-    fun `rnodeBattery is null when battery polling is disabled by default`() =
+    fun `rnodeBattery is null when battery polling is disabled`() =
         runTest {
-            // enableBatteryPolling is false by default and in the @Before setup.
-            // No stub for getRNodeBattery() is provided: if the poll loop tried to
-            // call it, mockk would throw and the test would fail.
+            // Battery polling is enabled by default (production behavior). Explicitly
+            // disable it here: no stub for getRNodeBattery() is provided, so if the
+            // poll loop tried to call it, mockk would throw and the test would fail.
+            InterfaceManagementViewModel.enableBatteryPolling = false
             viewModel =
                 InterfaceManagementViewModel(
                     interfaceRepository,

@@ -231,11 +231,12 @@ class InterfaceManagementViewModel
 
             /**
              * Controls whether the status poll loop also fetches the RNode battery.
-             * Disabled in unit tests so `getRNodeBattery()` never fires on the mock
-             * during `advanceUntilIdle()`; the dedicated battery tests enable it.
+             * Set to false in unit tests so `getRNodeBattery()` never fires on the
+             * mock during `advanceUntilIdle()`; the dedicated battery tests enable it
+             * explicitly.
              * @suppress VisibleForTesting
              */
-            internal var enableBatteryPolling = false
+            internal var enableBatteryPolling = true
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())

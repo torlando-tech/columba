@@ -51,6 +51,9 @@ class PythonRnsTransportAdmin(
         /** Noise-floor sentinel the contract documents for "no RNode connected". */
         const val RNODE_RSSI_ABSENT = -100
 
+        /** Absent-sentinel for "no RNode battery reading yet / no RNode connected". */
+        const val RNODE_BATTERY_ABSENT = -1
+
         /** Empty JSON array — the contract's documented "no BLE peers" value. */
         const val EMPTY_JSON_ARRAY = "[]"
     }
@@ -344,6 +347,33 @@ class PythonRnsTransportAdmin(
         // No python RNode interface in this cut — return the documented
         // noise-floor sentinel so the signal-strength UI needs no "absent" branch.
         return RNODE_RSSI_ABSENT
+    }
+
+    override suspend fun getRNodeBattery(): Int {
+        // RNode battery is a KISS data-channel scalar (CMD_STAT_BAT 0x27) read
+        // into ColumbaRNodeInterface.r_stat_bat by its read loop. Find the live
+        // interface on the RNS Transport and read it. Returns RNODE_BATTERY_ABSENT
+        // (-1) when there is no RNode interface or no frame received yet - same
+        // "sentinel, no UI branch" contract as getRNodeRssi.
+        //
+        // NOTE: this is a LIVE fetch (deliberately NOT the getRNodeRssi stub,
+        // which returns the sentinel unconditionally). Battery changes slowly,
+        // so callers poll on a slow cadence.
+        return pyCall {
+            val interfaces = transport()["interfaces"] ?: return@pyCall RNODE_BATTERY_ABSENT
+            val rnodeIfaces = runtime.python.builtins.callAttr("list", interfaces).asList()
+            val rnode = rnodeIfaces.firstOrNull { iface ->
+                runCatching {
+                    runtime.python.builtins.callAttr("type", iface)["__name__"]?.toString()
+                }.getOrNull() == "ColumbaRNodeInterface"
+            } ?: return@pyCall RNODE_BATTERY_ABSENT
+            // get_battery() returns Python None until the first 0x27 frame. Chaquopy
+            // wraps None as a NON-NULL PyObject, so toJava(Int) on it would throw -
+            // guard with takeIfNotNone() (PythonExt.kt) to fold None into null.
+            runCatching {
+                rnode.callAttr("get_battery").takeIfNotNone()?.toJava(Int::class.javaObjectType)
+            }.getOrNull() ?: RNODE_BATTERY_ABSENT
+        }
     }
 
     // ==================== BLE ====================

@@ -46,6 +46,7 @@ data class InterfaceStatsState(
     // RNode-specific stats (from live connection)
     val rssi: Int? = null,
     val snr: Float? = null,
+    val rnodeBattery: Int? = null,
     // Traffic stats (from Python/RNS)
     val rxBytes: Long = 0,
     val txBytes: Long = 0,
@@ -249,6 +250,10 @@ class InterfaceStatsViewModel
                     }
                 }
 
+                // For RNode interfaces, also fetch the live battery (0-100, -1 absent).
+                // Live fetch per poll (not a cached value); binder call off Main.
+                val rnodeBattery = readRNodeBattery(entity.type)
+
                 // Check USB permission for USB-mode RNode interfaces that are offline
                 val needsUsbPermission =
                     if (!isOnline && _state.value.connectionMode == "usb") {
@@ -270,12 +275,22 @@ class InterfaceStatsViewModel
                         txBytes = txBytes,
                         trafficHistory = history,
                         rssi = rssi,
+                        rnodeBattery = rnodeBattery,
                         needsUsbPermission = needsUsbPermission,
                     )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing stats", e)
             }
+        }
+
+        private suspend fun readRNodeBattery(interfaceType: String): Int? {
+            if (interfaceType != "RNode") return null
+            val battery =
+                withContext(Dispatchers.IO) {
+                    transportAdmin.getRNodeBattery()
+                }
+            return if (battery > -1) battery else null
         }
 
         private fun recordTrafficSample(

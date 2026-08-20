@@ -333,6 +333,7 @@ class ColumbaRNodeInterface(Interface):
         self.r_state = None
         self.r_stat_rssi = None
         self.r_stat_snr = None
+        self.r_stat_bat = None
 
         # Read thread
         self._read_thread = None
@@ -1168,6 +1169,11 @@ class ColumbaRNodeInterface(Interface):
                         elif command == KISS.CMD_STAT_SNR:
                             with self._read_lock:
                                 self.r_stat_snr = int.from_bytes([byte], "big", signed=True) / 4.0
+                        elif command == KISS.CMD_STAT_BAT:
+                            # RNode battery level. Convention: 0-100 percent.
+                            # (Confirm scale on-device - see plan OPEN ITEM.)
+                            with self._read_lock:
+                                self.r_stat_bat = byte
                         elif command == KISS.CMD_FW_VERSION:
                             if len(data_buffer) < 2:
                                 data_buffer += bytes([byte])
@@ -1297,6 +1303,11 @@ class ColumbaRNodeInterface(Interface):
                         elif command == KISS.CMD_STAT_SNR:
                             with self._read_lock:
                                 self.r_stat_snr = int.from_bytes([byte], "big", signed=True) / 4.0
+                        elif command == KISS.CMD_STAT_BAT:
+                            # RNode battery level. Convention: 0-100 percent.
+                            # (Confirm scale on-device - see plan OPEN ITEM.)
+                            with self._read_lock:
+                                self.r_stat_bat = byte
                         elif command == KISS.CMD_FW_VERSION:
                             if len(data_buffer) < 2:
                                 data_buffer += bytes([byte])
@@ -1617,6 +1628,20 @@ class ColumbaRNodeInterface(Interface):
         """Get last received signal-to-noise ratio."""
         with self._read_lock:
             return self.r_stat_snr
+
+    def get_battery(self):
+        """Get last reported battery level (0-100 percent), or None if not yet
+        received or the interface is offline.
+
+        The cached value is only meaningful while connected: on a transient
+        drop the interface stays registered but the last 0x27 frame is stale,
+        so callers must treat an offline interface as "no reading" (the AIDL
+        layer maps this to the -1 absent sentinel).
+        """
+        with self._read_lock:
+            if not self.online:
+                return None
+            return self.r_stat_bat
 
     def enter_bluetooth_pairing_mode(self):
         """

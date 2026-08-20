@@ -41,9 +41,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
+import network.columba.app.ui.theme.MaterialDesignIcons
 import network.columba.app.util.InterfaceFormattingUtils
 import network.columba.app.viewmodel.InterfaceStatsViewModel
 import tech.torlando.rns.stats.ui.TrafficSpeedChart
@@ -170,6 +175,7 @@ private fun StatsContent(
             isOnline = state.isOnline,
             isConnecting = state.isConnecting,
             needsUsbPermission = state.needsUsbPermission,
+            rnodeBattery = state.rnodeBattery,
             onToggleEnabled = onToggleEnabled,
             onRequestUsbPermission = onRequestUsbPermission,
         )
@@ -226,12 +232,26 @@ private fun StatsContent(
     }
 }
 
+private val MdiFont = FontFamily(Font(R.font.materialdesignicons))
+
+/**
+ * Pick a Material Design Icons battery glyph for a 0-100 percent level:
+ * alert at <=15%, full at >=95%, otherwise the nearest 10% step (rounded up).
+ */
+private fun batteryIconName(percent: Int): String =
+    when {
+        percent <= 15 -> "battery-alert"
+        percent >= 95 -> "battery"
+        else -> "battery-${(percent / 10 + if (percent % 10 >= 5) 1 else 0).coerceIn(1, 10) * 10}"
+    }
+
 @Composable
 private fun StatusCard(
     isEnabled: Boolean,
     isOnline: Boolean,
     isConnecting: Boolean,
     needsUsbPermission: Boolean,
+    rnodeBattery: Int?,
     onToggleEnabled: () -> Unit,
     onRequestUsbPermission: () -> Unit,
 ) {
@@ -293,6 +313,31 @@ private fun StatusCard(
                     checked = isEnabled,
                     onCheckedChange = { onToggleEnabled() },
                 )
+            }
+
+            // RNode battery (only present for RNode interfaces with a live reading)
+            rnodeBattery?.let { percent ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val codepoint = MaterialDesignIcons.getCodepointOrNull(batteryIconName(percent))
+                    if (codepoint != null) {
+                        Text(
+                            text = codepoint,
+                            fontFamily = MdiFont,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "$percent%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             // USB Permission message and button

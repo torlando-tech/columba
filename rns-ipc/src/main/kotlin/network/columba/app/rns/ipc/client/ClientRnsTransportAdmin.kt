@@ -102,6 +102,14 @@ internal class ClientRnsTransportAdmin(
 
     override fun getRNodeRssi(): Int = lastRssi
 
+    // Battery is a LIVE value: fresh AIDL round-trip per call. The stats screen
+    // polls at 1s and the notification poller at ~15s, so a bind-time cache
+    // (the getRNodeRssi pattern) would be wrong. -1 when absent / on error.
+    override suspend fun getRNodeBattery(): Int =
+        runCatching {
+            awaitNullableInt { cb -> remote.getRNodeBattery(cb) } ?: -1
+        }.getOrDefault(-1)
+
     // getBleConnectionDetails is also non-suspend on the Kotlin side. Same
     // observer-cache trick — the BLE connections SharedFlow emits the same
     // JSON snapshot whenever peers connect/disconnect, so caching covers the

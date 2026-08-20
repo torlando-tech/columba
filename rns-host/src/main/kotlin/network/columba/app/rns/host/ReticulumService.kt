@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import network.columba.app.rns.api.RnsBackend
@@ -53,6 +55,11 @@ class ReticulumService : Service() {
         // (the time between :reticulum dying and Android auto-restarting the FGS),
         // so 5s is plenty of headroom while still failing fast for genuine STOPs.
         private const val STALE_STOP_GRACE_MS = 5_000L
+
+        // Cadence for the RNode battery poll that feeds the persistent
+        // notification. Battery changes slowly; a local IPC read, not a
+        // network op, so 15s is plenty responsive without churn.
+        private const val BATTERY_POLL_INTERVAL_MS = 15_000L
     }
 
     /**
@@ -194,6 +201,10 @@ class ReticulumService : Service() {
                 }
             },
         )
+        // Poll the RNode battery for the persistent notification. This reads the
+        // live value off the in-process Python backend (no network traffic), so a
+        // slow cadence is fine - battery changes gradually. < 0 = absent (hidden).
+        startRNodeBatteryPoller()
         val usbBridge = KotlinUSBBridge.getInstance(this)
         // Seed hasActiveUsbRNode from devices already attached when the
         // service starts. Without this, an RNode plugged in BEFORE the
@@ -288,6 +299,23 @@ class ReticulumService : Service() {
         } else {
             serviceScope.launch {
                 backendInitializer.initializeFromSnapshot(rnsBackend)
+            }
+        }
+    }
+
+    /**
+     * Poll the RNode battery for the persistent notification. Reads the live
+     * value off the in-process Python backend (a local IPC read, no network
+     * traffic), so a slow cadence is fine - battery changes gradually.
+     * Values < 0 mean "absent" and are hidden by the manager.
+     */
+    private fun startRNodeBatteryPoller() {
+        serviceScope.launch {
+            while (isActive) {
+                val battery =
+                    runCatching { rnsBackend.transportAdmin.getRNodeBattery() }.getOrNull() ?: -1
+                managers.notificationManager.updateRNodeBattery(battery)
+                delay(BATTERY_POLL_INTERVAL_MS)
             }
         }
     }

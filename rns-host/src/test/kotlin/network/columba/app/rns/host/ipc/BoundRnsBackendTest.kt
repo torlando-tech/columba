@@ -365,6 +365,7 @@ class BoundRnsBackendTest {
         override suspend fun getInterfaceStats(interfaceName: String) = null
         override suspend fun reconnectRNodeInterface() {}
         override fun getRNodeRssi(): Int = rssi
+        override suspend fun getRNodeBattery(): Int = -1
         override fun getBleConnectionDetails(): String = bleConnections
         fun emitInterfaceStatus(payload: String) {
             check(interfaceStatusEmitter.tryEmit(payload))

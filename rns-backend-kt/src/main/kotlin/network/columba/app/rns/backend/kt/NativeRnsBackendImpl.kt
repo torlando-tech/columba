@@ -2305,6 +2305,12 @@ class NativeRnsBackendImpl(
     override fun getRNodeRssi(): Int = -100
 
     /**
+     * No RNode battery read in the Kotlin backend (deferred). Returns the
+     * absent sentinel so the shared UI needs no "unsupported backend" branch.
+     */
+    override suspend fun getRNodeBattery(): Int = -1
+
+    /**
      * JSON snapshot of BLE peers. Empty array when no peers are connected.
      * Detailed connection details are surfaced via the dedicated KotlinBLEBridge
      * metrics surface in `:rns-host`; this method preserves the legacy interface.

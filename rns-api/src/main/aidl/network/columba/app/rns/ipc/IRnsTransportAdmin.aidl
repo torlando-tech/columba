@@ -61,6 +61,11 @@ oneway interface IRnsTransportAdmin {
     // the value via an observer or wraps with suspendCancellableCoroutine.
     void getRNodeRssi(in IRnsIntCallback cb);
 
+    // getRNodeBattery: live battery percent (0-100), -1 when absent.
+    // Oneway + callback, same shape as getRNodeRssi. The Kotlin contract
+    // method is `suspend` (live fetch per call), not a cached getter.
+    void getRNodeBattery(in IRnsIntCallback cb);
+
     // ==================== BLE ====================
 
     // getBleConnectionDetails: synchronous getter on Kotlin (returns String,

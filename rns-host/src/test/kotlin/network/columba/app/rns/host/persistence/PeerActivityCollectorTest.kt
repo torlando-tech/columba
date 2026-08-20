@@ -162,9 +162,18 @@ class PeerActivityCollectorTest {
         coVerify(exactly = 0) {
             persistence.recordPeerActivity(sourceHex, PeerActivityType.ANNOUNCE, any())
         }
-        coVerify(exactly = 1) { persistence.persistDeliveryProof("delivered", 500L) }
-        coVerify(exactly = 0) { persistence.persistDeliveryProof("failed", any()) }
-        coVerify(exactly = 0) { persistence.persistDeliveryProof("propagated", any()) }
+        coVerify(exactly = 1) {
+            persistence.persistDeliveryProof(
+                DeliveryStatusUpdate("delivered", DeliveryStatus.DELIVERED, Long.MAX_VALUE, "originating-identity"),
+                500L,
+            )
+        }
+        coVerify(exactly = 0) {
+            persistence.persistDeliveryProof(match { it.messageHash == "failed" }, any())
+        }
+        coVerify(exactly = 0) {
+            persistence.persistDeliveryProof(match { it.messageHash == "propagated" }, any())
+        }
         coVerify(exactly = 1) {
             persistence.persistDeliveryStatus(
                 DeliveryStatusUpdate("delivered", DeliveryStatus.DELIVERED, Long.MAX_VALUE, "originating-identity"),

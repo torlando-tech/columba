@@ -478,19 +478,22 @@ class ServicePersistenceManager(
 
     /** Persist a verified delivery proof received for one of our outgoing messages. */
     suspend fun persistDeliveryProof(
-        messageHash: String,
+        update: DeliveryStatusUpdate,
         receivedAt: Long = System.currentTimeMillis(),
     ): Boolean =
         try {
-            val message = messageDao.getOutgoingMessageByIdAcrossIdentities(messageHash) ?: return false
+            val messageHash = update.messageHash
+            val identityHash = update.originatingIdentityHash?.takeIf { it.isNotBlank() } ?: return false
+            if (!PeerActivityPolicy.isVerifiedDeliveryProof(update.status)) return false
+            val message = messageDao.getOutgoingMessageById(messageHash, identityHash) ?: return false
             peerActivityDao.recordActivityOnce(
-                eventId = "proof:$messageHash",
+                eventId = "proof:$identityHash:$messageHash",
                 destinationHash = message.conversationHash,
                 receivedAt = receivedAt,
                 activityType = PeerActivityType.PROOF,
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error persisting delivery-proof activity for $messageHash", e)
+            Log.e(TAG, "Error persisting delivery-proof activity for ${update.messageHash}", e)
             false
         }
 

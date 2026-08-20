@@ -6,6 +6,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import network.columba.app.data.db.entity.MessageEntity
 import kotlinx.coroutines.flow.Flow
@@ -87,10 +88,13 @@ interface MessageDao {
     ): MessageEntity?
 
     @Query(
-        "SELECT * FROM messages WHERE id = :messageId AND isFromMe = 1 " +
-            "ORDER BY timestamp DESC, identityHash ASC LIMIT 1",
+        "SELECT * FROM messages " +
+            "WHERE id = :messageId AND identityHash = :identityHash AND isFromMe = 1 LIMIT 1",
     )
-    suspend fun getOutgoingMessageByIdAcrossIdentities(messageId: String): MessageEntity?
+    suspend fun getOutgoingMessageById(
+        messageId: String,
+        identityHash: String,
+    ): MessageEntity?
 
     /**
      * Observe a message by ID for real-time updates (e.g., status changes).
@@ -156,6 +160,22 @@ interface MessageDao {
         status: String,
         deliveryMethod: String? = null,
     ): Int
+
+    /**
+     * Atomically reduces an identity-owned outgoing row and returns its resulting snapshot.
+     * The immutable callback identity is the authority; active-identity state is never read.
+     */
+    @Transaction
+    suspend fun applyDeliveryStatusAndGet(
+        messageId: String,
+        identityHash: String,
+        status: String,
+        deliveryMethod: String? = null,
+    ): MessageEntity? {
+        if (identityHash.isBlank()) return null
+        applyDeliveryStatus(messageId, identityHash, status, deliveryMethod)
+        return getOutgoingMessageById(messageId, identityHash)
+    }
 
     @Query(
         """

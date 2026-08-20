@@ -2,6 +2,7 @@ package network.columba.app.data.repository
 
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.ConversationEntity
+import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.test.DatabaseTest
 import io.mockk.every
@@ -423,6 +424,51 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
             // Then: Status should be updated
             val updated = messageDao.getMessageById("msg_status_test", TEST_IDENTITY_HASH)
             assertEquals("delivered", updated?.status)
+        }
+
+    @Test
+    fun `identity-scoped advisory reduction ignores active identity switch with duplicate hash`() =
+        runTest {
+            val identityA = TEST_IDENTITY_HASH
+            val identityB = "identity-b"
+            val duplicateHash = "duplicate-advisory-hash"
+            val peerA = "peer-a"
+            val peerB = "peer-b"
+            insertTestIdentity(identityHash = identityB, displayName = "Identity B", isActive = false)
+            listOf(identityA to peerA, identityB to peerB).forEachIndexed { index, (identity, peer) ->
+                conversationDao.insertConversation(
+                    ConversationEntity(
+                        peerHash = peer,
+                        identityHash = identity,
+                        peerName = peer,
+                        lastMessage = "pending",
+                        lastMessageTimestamp = index.toLong(),
+                    ),
+                )
+                messageDao.insertMessage(
+                    MessageEntity(
+                        id = duplicateHash,
+                        conversationHash = peer,
+                        identityHash = identity,
+                        content = identity,
+                        timestamp = index.toLong(),
+                        isFromMe = true,
+                        status = "pending",
+                        isRead = true,
+                    ),
+                )
+            }
+
+            // Callback A has already been received; force A -> B before the mutation boundary.
+            localIdentityDao.setActive(identityB)
+            val reduced = repository.applyDeliveryStatus(duplicateHash, "delivered", identityA)
+
+            assertEquals(identityA, reduced?.identityHash)
+            assertEquals(peerA, reduced?.conversationHash)
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertEquals(identityA, repository.getMessageById(duplicateHash, identityA)?.identityHash)
+            assertNull(repository.getMessageById(duplicateHash, " "))
         }
 
     // ========== Delete Conversation Tests ==========

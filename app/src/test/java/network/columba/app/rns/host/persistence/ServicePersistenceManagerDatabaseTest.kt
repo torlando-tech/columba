@@ -6,6 +6,11 @@ import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelemetry
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.test.DatabaseTest
 import io.mockk.clearAllMocks
@@ -16,10 +21,13 @@ import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -988,7 +996,12 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             )
 
             assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
-            assertFalse(persistenceManager.persistDeliveryProof("unknown-message", 1_000L))
+            assertFalse(
+                persistenceManager.persistDeliveryProof(
+                    DeliveryStatusUpdate("unknown-message", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH),
+                    1_000L,
+                ),
+            )
             assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
         }
 
@@ -1148,6 +1161,123 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
         }
 
     @Test
+    fun `collector scopes duplicate-hash delivery proof to originating identity peer`() =
+        testScope.runTest {
+            val identityA = TEST_IDENTITY_HASH
+            val identityB = "collector-identity-b"
+            val duplicateHash = "collector-duplicate-outgoing"
+            val peerA = "collector-peer-a"
+            val peerB = "collector-peer-b"
+            insertTestIdentity(identityHash = identityA, isActive = true)
+            insertTestIdentity(identityHash = identityB, displayName = "Other", isActive = false)
+            listOf(identityA to peerA, identityB to peerB).forEachIndexed { index, (identity, peer) ->
+                conversationDao.insertConversation(
+                    ConversationEntity(
+                        peerHash = peer,
+                        identityHash = identity,
+                        peerName = peer,
+                        lastMessage = "pending",
+                        lastMessageTimestamp = index.toLong(),
+                    ),
+                )
+                messageDao.insertMessage(
+                    MessageEntity(
+                        id = duplicateHash,
+                        conversationHash = peer,
+                        identityHash = identity,
+                        content = identity,
+                        timestamp = index.toLong(),
+                        isFromMe = true,
+                        status = "pending",
+                        isRead = true,
+                    ),
+                )
+            }
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "collector-barrier",
+                    conversationHash = peerA,
+                    identityHash = identityA,
+                    content = "barrier",
+                    timestamp = 10L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                ),
+            )
+            localIdentityDao.setActive(identityB)
+
+            val statuses = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 4)
+            val telemetryEvents = MutableSharedFlow<network.columba.app.rns.api.model.LocationTelemetry>()
+            val reactions = MutableSharedFlow<String>()
+            val backend = mockk<RnsBackend>()
+            val core = mockk<RnsCore>()
+            val lxmf = mockk<RnsLxmf>()
+            val telemetry = mockk<RnsTelemetry>()
+            val transportAdmin = mockk<RnsTransportAdmin>()
+            every { backend.core } returns core
+            every { backend.lxmf } returns lxmf
+            every { backend.telemetry } returns telemetry
+            every { backend.transportAdmin } returns transportAdmin
+            every { lxmf.observeMessages() } returns emptyFlow()
+            every { lxmf.observeDeliveryStatus() } returns statuses
+            every { core.observeAnnounces() } returns emptyFlow()
+            every { core.observeLinks() } returns emptyFlow()
+            every { telemetry.locationTelemetryFlow } returns telemetryEvents
+            every { transportAdmin.reactionReceivedFlow } returns reactions
+            val collector = PeerActivityCollector(backend, persistenceManager) { 2_000L }
+            val collectorJob = collector.start(this)
+            runCurrent()
+
+            // Delayed A callback arrives while B is active. Both rows share the hash.
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 1L, identityA))
+            awaitMessageStatus(duplicateHash, identityA, "delivered")
+            awaitPeerActivity(peerA)
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertEquals(2_000L, database.peerActivityDao().getActivity(peerA)?.lastReceivedAt)
+            assertNull(database.peerActivityDao().getActivity(peerB))
+
+            // Missing or blank provenance fails closed for both lifecycle and peer activity.
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 2L, null))
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 2L, "   "))
+            statuses.emit(DeliveryStatusUpdate("collector-barrier", DeliveryStatus.DELIVERED, 2L, identityA))
+            awaitMessageStatus("collector-barrier", identityA, "delivered")
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertNull(database.peerActivityDao().getActivity(peerB))
+
+            // The same hash under B remains a distinct proof event, not a dedup collision with A.
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 3L, identityB))
+            awaitMessageStatus(duplicateHash, identityB, "delivered")
+            awaitPeerActivity(peerB)
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertEquals(2_000L, database.peerActivityDao().getActivity(peerB)?.lastReceivedAt)
+
+            collectorJob.cancel()
+        }
+
+    private suspend fun awaitMessageStatus(
+        messageHash: String,
+        identityHash: String,
+        expectedStatus: String,
+    ) = withContext(Dispatchers.Default) {
+        withTimeout(5_000L) {
+            while (messageDao.getMessageById(messageHash, identityHash)?.status != expectedStatus) {
+                kotlinx.coroutines.delay(10L)
+            }
+        }
+    }
+
+    private suspend fun awaitPeerActivity(peerHash: String) =
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000L) {
+                while (database.peerActivityDao().getActivity(peerHash) == null) {
+                    kotlinx.coroutines.delay(10L)
+                }
+            }
+        }
+
+    @Test
     fun `incoming activity admission rejects replay blocked unknown and propagated messages`() =
         testScope.runTest {
             insertTestIdentity()
@@ -1211,8 +1341,10 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 ),
             )
 
-            assertTrue(persistenceManager.persistDeliveryProof("outgoing-delivered", 500L))
-            assertFalse(persistenceManager.persistDeliveryProof("outgoing-delivered", 900L))
+            val proof =
+                DeliveryStatusUpdate("outgoing-delivered", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH)
+            assertTrue(persistenceManager.persistDeliveryProof(proof, 500L))
+            assertFalse(persistenceManager.persistDeliveryProof(proof, 900L))
             val activity = database.peerActivityDao().getActivity(TEST_PEER_HASH)
             assertEquals(500L, activity?.lastReceivedAt)
             assertEquals("PROOF", activity?.activityType)
@@ -1234,7 +1366,17 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             )
             val original = database.peerActivityDao().getActivity(TEST_PEER_HASH)
 
-            assertFalse(persistenceManager.persistDeliveryProof("incoming-proof-candidate", original!!.lastReceivedAt + 100L))
+            assertFalse(
+                persistenceManager.persistDeliveryProof(
+                    DeliveryStatusUpdate(
+                        "incoming-proof-candidate",
+                        DeliveryStatus.DELIVERED,
+                        1L,
+                        TEST_IDENTITY_HASH,
+                    ),
+                    original!!.lastReceivedAt + 100L,
+                ),
+            )
             assertEquals(original, database.peerActivityDao().getActivity(TEST_PEER_HASH))
         }
 
@@ -1276,7 +1418,12 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             )
             database.localIdentityDao().setActive("other-identity")
 
-            assertTrue(persistenceManager.persistDeliveryProof("proof-after-switch", 700L))
+            assertTrue(
+                persistenceManager.persistDeliveryProof(
+                    DeliveryStatusUpdate("proof-after-switch", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH),
+                    700L,
+                ),
+            )
             assertEquals(700L, database.peerActivityDao().getActivity(TEST_PEER_HASH)?.lastReceivedAt)
         }
 

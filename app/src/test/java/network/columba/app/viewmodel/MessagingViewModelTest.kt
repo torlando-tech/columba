@@ -1452,7 +1452,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "sent",
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1497,7 +1499,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with retrying_propagated
             coVerify {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated", "test_identity_hash")
             }
 
             // Delivery method changes atomically inside the repository reducer.
@@ -1525,7 +1527,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "sent",
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1570,7 +1574,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with delivered
             coVerify {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered", "test_identity_hash")
             }
 
             // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
@@ -1600,7 +1604,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "pending",
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1645,7 +1651,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was called with failed
             coVerify {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
             }
 
             // Verify: updateMessageDeliveryDetails was NOT called (only called for retrying_propagated)
@@ -1663,7 +1669,9 @@ class MessagingViewModelTest {
 
             // Mock the message does NOT exist in database (returns null after retries)
             val unknownMessageHash = "unknown_message_hash"
-            coEvery { conversationRepository.getMessageById(unknownMessageHash) } returns null
+            coEvery {
+                conversationRepository.applyDeliveryStatus(unknownMessageHash, any(), "test_identity_hash")
+            } returns null
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1706,12 +1714,12 @@ class MessagingViewModelTest {
             // Assert: Emission completed successfully
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
-            // Verify: getMessageById was called (with retries)
+            // Verify: the identity-scoped atomic reducer was called with retries
             coVerify(atLeast = 1) {
-                conversationRepository.getMessageById(unknownMessageHash)
+                conversationRepository.applyDeliveryStatus(unknownMessageHash, "delivered", "test_identity_hash")
             }
 
-            // Verify: updateMessageStatus was NOT called (message not found)
+            // The active-identity advisory API must never be used.
             coVerify(exactly = 0) {
                 conversationRepository.applyDeliveryStatus(unknownMessageHash, any())
             }
@@ -1738,7 +1746,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "propagated", // Already in terminal success state
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1785,7 +1795,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
             }
         }
 
@@ -1808,7 +1818,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "sent", // Already in terminal success state
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1855,7 +1867,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
             }
         }
 
@@ -1878,7 +1890,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "delivered", // Already in terminal success state
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1925,7 +1939,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus was NOT called (status degradation blocked)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
             }
         }
 
@@ -1948,7 +1962,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "pending", // NOT a terminal success state
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -1995,7 +2011,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus WAS called (legitimate failure)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "failed")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "failed", "test_identity_hash")
             }
         }
 
@@ -2018,7 +2034,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "sent", // Will be upgraded to delivered
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             // Create a new ViewModel to pick up the mocked flow
@@ -2065,7 +2083,7 @@ class MessagingViewModelTest {
 
             // Verify: updateMessageStatus WAS called (status upgrade allowed)
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "delivered", "test_identity_hash")
             }
         }
 
@@ -2088,7 +2106,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "delivered",
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             @Suppress("UnusedPrivateProperty")
@@ -2131,7 +2151,7 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "propagated")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "propagated", "test_identity_hash")
             }
         }
 
@@ -2152,7 +2172,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "delivered",
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             @Suppress("UnusedPrivateProperty")
@@ -2195,7 +2217,7 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "retrying_propagated", "test_identity_hash")
             }
         }
 
@@ -2216,7 +2238,9 @@ class MessagingViewModelTest {
                     isFromMe = true,
                     status = "delivered",
                 )
-            coEvery { conversationRepository.getMessageById(testMessageHash) } returns existingMessage
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
             coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
 
             @Suppress("UnusedPrivateProperty")
@@ -2259,7 +2283,7 @@ class MessagingViewModelTest {
             assertTrue("Status update emission should complete without error", emitResult.isSuccess)
 
             coVerify(exactly = 1) {
-                conversationRepository.applyDeliveryStatus(testMessageHash, "pending")
+                conversationRepository.applyDeliveryStatus(testMessageHash, "pending", "test_identity_hash")
             }
         }
 

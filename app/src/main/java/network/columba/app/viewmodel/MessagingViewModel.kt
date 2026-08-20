@@ -972,7 +972,12 @@ class MessagingViewModel
                 val maxRetries = 3
                 val retryDelays = listOf(50L, 100L, 200L) // ms
 
-                var message = conversationRepository.getMessageById(update.messageHash)
+                var message =
+                    conversationRepository.applyDeliveryStatus(
+                        update.messageHash,
+                        update.status.wireValue,
+                        originatingIdentityHash,
+                    )
                 var attempt = 0
 
                 while (message == null && attempt < maxRetries) {
@@ -983,23 +988,16 @@ class MessagingViewModel
                         )}... not found, retrying in ${retryDelays[attempt]}ms (attempt ${attempt + 1}/$maxRetries)",
                     )
                     kotlinx.coroutines.delay(retryDelays[attempt])
-                    message = conversationRepository.getMessageById(update.messageHash)
+                    message =
+                        conversationRepository.applyDeliveryStatus(
+                            update.messageHash,
+                            update.status.wireValue,
+                            originatingIdentityHash,
+                        )
                     attempt++
                 }
 
                 if (message != null) {
-                    if (message.identityHash != originatingIdentityHash) {
-                        Log.w(
-                            TAG,
-                            "Ignoring delivery status for ${update.messageHash.take(16)}: " +
-                                "attempt owner does not match the active message row",
-                        )
-                        return
-                    }
-                    // The repository owns the closed monotonic reduction. The service process
-                    // applies the same event durably; this UI-side call is an idempotent fallback.
-                    conversationRepository.applyDeliveryStatus(update.messageHash, update.status.wireValue)
-
                     // Record peer activity when delivery proof is received
                     // This proves the peer was recently online and received our message
                     if (update.status == DeliveryStatus.DELIVERED) {

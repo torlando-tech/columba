@@ -538,6 +538,15 @@ class ConversationRepository
             return messageDao.getMessageById(messageId, activeIdentity.identityHash)
         }
 
+        /** Resolve a message under immutable local-identity provenance. */
+        suspend fun getMessageById(
+            messageId: String,
+            originatingIdentityHash: String,
+        ): MessageEntity? {
+            if (originatingIdentityHash.isBlank()) return null
+            return messageDao.getMessageById(messageId, originatingIdentityHash)
+        }
+
         /**
          * Get IDs of recent received messages for the active identity.
          * Used to pre-seed the notification dedup cache at startup so that
@@ -571,6 +580,21 @@ class ConversationRepository
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
             return messageDao.applyDeliveryStatus(messageId, activeIdentity.identityHash, status) > 0
         }
+
+        /**
+         * Atomically applies an advisory callback to its immutable originating identity and
+         * returns the exact resulting outgoing row for identity-scoped UI side effects.
+         */
+        suspend fun applyDeliveryStatus(
+            messageId: String,
+            status: String,
+            originatingIdentityHash: String,
+        ): MessageEntity? =
+            messageDao.applyDeliveryStatusAndGet(
+                messageId = messageId,
+                identityHash = originatingIdentityHash,
+                status = status,
+            )
 
         private fun ConversationEntity.toConversation() =
             Conversation(

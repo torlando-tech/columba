@@ -19,7 +19,7 @@ import org.json.JSONObject
  * It consumes the local backend before IPC, so presence remains correct while
  * the UI process is absent.
  */
-internal class PeerActivityCollector(
+class PeerActivityCollector(
     private val backend: RnsBackend,
     private val persistence: ServicePersistenceManager,
     private val now: () -> Long = System::currentTimeMillis,
@@ -49,7 +49,7 @@ internal class PeerActivityCollector(
                     backend.lxmf.observeDeliveryStatus().collect { update ->
                         persistence.persistDeliveryStatus(update)
                         if (PeerActivityPolicy.isVerifiedDeliveryProof(update.status)) {
-                            persistence.persistDeliveryProof(update.messageHash, now())
+                            persistence.persistDeliveryProof(update, now())
                         }
                     }
                 }

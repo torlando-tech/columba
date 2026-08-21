@@ -241,7 +241,7 @@ interface MessageDao {
         """
         SELECT * FROM messages
         WHERE conversationHash = :peerHash AND identityHash = :identityHash
-        ORDER BY COALESCE(receivedAt, timestamp) DESC
+        ORDER BY COALESCE(receivedAt, timestamp) DESC, rowid DESC
         """,
     )
     fun getMessagesForConversationPaged(
@@ -256,7 +256,7 @@ interface MessageDao {
         """
         SELECT * FROM messages
         WHERE conversationHash = :peerHash AND identityHash = :identityHash
-        ORDER BY timestamp DESC
+        ORDER BY timestamp DESC, rowid DESC
         """,
     )
     fun getMessagesForConversationPagedBySentTime(

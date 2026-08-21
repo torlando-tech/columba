@@ -3,6 +3,8 @@ package network.columba.app.rns.host.persistence
 import android.content.Context
 import android.util.Log
 import androidx.room.withTransaction
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
@@ -13,10 +15,9 @@ import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
 import network.columba.app.data.model.InterfaceType
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -33,6 +34,7 @@ class ServicePersistenceManager(
     private val context: Context,
     private val scope: CoroutineScope,
     private val settingsAccessor: ServiceSettingsAccessor,
+    startDeliveryReconciliation: Boolean = true,
 ) {
     companion object {
         private const val TAG = "ServicePersistenceManager"
@@ -78,6 +80,13 @@ class ServicePersistenceManager(
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
     private val peerActivityDao by lazy { database.peerActivityDao() }
+    private val pendingDeliveryPersistence by lazy { PendingDeliveryPersistence(database) }
+
+    init {
+        if (startDeliveryReconciliation) {
+            pendingDeliveryPersistence.startReconciliation(scope)
+        }
+    }
 
     /**
      * Check if a peer is explicitly blocked.
@@ -458,21 +467,18 @@ class ServicePersistenceManager(
 
     /** Persist a verified delivery proof received for one of our outgoing messages. */
     suspend fun persistDeliveryProof(
-        messageHash: String,
+        update: DeliveryStatusUpdate,
         receivedAt: Long = System.currentTimeMillis(),
-    ): Boolean =
-        try {
-            val message = messageDao.getOutgoingMessageByIdAcrossIdentities(messageHash) ?: return false
-            peerActivityDao.recordActivityOnce(
-                eventId = "proof:$messageHash",
-                destinationHash = message.conversationHash,
-                receivedAt = receivedAt,
-                activityType = PeerActivityType.PROOF,
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error persisting delivery-proof activity for $messageHash", e)
-            false
-        }
+    ): Boolean = pendingDeliveryPersistence.persistProof(update, receivedAt)
+
+    /** Persist protocol lifecycle state in the service process, independent of UI ownership. */
+    suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean =
+        pendingDeliveryPersistence.persistStatus(update)
+
+    /** Reconcile the durable inbox after startup, Room invalidation, or a new event. */
+    @androidx.annotation.VisibleForTesting
+    internal suspend fun reconcilePendingDeliveryStatuses(): Boolean =
+        pendingDeliveryPersistence.reconcile()
 
     /**
      * Persist direct telemetry reception. Collector-stream entries are
@@ -643,7 +649,7 @@ class ServicePersistenceManager(
             // Destination hash lookup failed — try as identity hash.
             // This path is used by LXST incoming calls which provide identity hashes.
             Log.d(TAG, "Trying identity hash lookup...")
-            val announceByIdentity = findAnnounceByIdentityHash(peerHash)
+            val announceByIdentity = announceDao.getAnnounceByIdentityHash(peerHash.lowercase())
             if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
                 Log.d(TAG, "Found by identity hash")
                 return announceByIdentity.peerName
@@ -656,18 +662,6 @@ class ServicePersistenceManager(
             null
         }
     }
-
-    /**
-     * Find an announce by identity hash using indexed column lookup.
-     * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
-     */
-    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? =
-        try {
-            announceDao.getAnnounceByIdentityHash(identityHash.lowercase())
-        } catch (e: Exception) {
-            Log.e(TAG, "Error finding announce by identity hash", e)
-            null
-        }
 
     /**
      * Delete announces older than 30 days, preserving favorites and contacts.

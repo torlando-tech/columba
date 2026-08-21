@@ -18,6 +18,7 @@ import network.columba.app.data.db.dao.OfflineMapRegionDao
 import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
+import network.columba.app.data.db.dao.PendingDeliveryStatusDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
 import network.columba.app.data.db.dao.CallHistoryDao
@@ -39,6 +40,7 @@ import network.columba.app.data.db.entity.PeerActivityEntity
 import network.columba.app.data.db.entity.PeerActivityEventEntity
 import network.columba.app.data.db.entity.PeerIconEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
+import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.db.entity.RmspServerEntity
 
@@ -63,8 +65,9 @@ import network.columba.app.data.db.entity.RmspServerEntity
         InterfaceFirstSeenEntity::class,
         PeerActivityEntity::class,
         PeerActivityEventEntity::class,
+        PendingDeliveryStatusEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -329,6 +332,19 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
+        /** Add the service-owned durable inbox for pre-row delivery lifecycle events. */
+        val MIGRATION_6_7: Migration =
+            object : Migration(6, 7) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `pending_delivery_status` (" +
+                            "`identityHash` TEXT NOT NULL, `messageHash` TEXT NOT NULL, `status` TEXT NOT NULL, " +
+                            "`deliveryMethod` TEXT, `updatedAt` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`identityHash`, `messageHash`))",
+                    )
+                }
+            }
+
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =
             try {
@@ -380,4 +396,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun callHistoryDao(): CallHistoryDao
 
     abstract fun callHistoryDeletionDao(): CallHistoryDeletionDao
+
+    abstract fun pendingDeliveryStatusDao(): PendingDeliveryStatusDao
 }

@@ -260,6 +260,9 @@ class PythonRnsLxmf(
         val recipientDest = resolveRecipientDestination(destinationHash)
         val sourceDest = runtime.localDestination
             ?: throw RnsException(RnsError.BackendNotReady)
+        val originatingIdentityHash =
+            runtime.localIdentity?.toModelIdentity()?.hash?.toHex()
+                ?: throw RnsException(RnsError.BackendNotReady)
 
         // LXMF.LXMessage(destination, source, content, title, fields, desired_method)
         val lxmessage = runtime.lxmfModule.callAttr(
@@ -293,6 +296,7 @@ class PythonRnsLxmf(
             events.onLxmfFailure,
             events.onLxmfRetryingPropagated,
             tryPropagation,
+            originatingIdentityHash,
         )
 
         router.callAttr("handle_outbound", lxmessage)

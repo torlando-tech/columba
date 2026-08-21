@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import network.columba.app.rns.api.annotation.ReflectivelyKept
 import network.columba.app.rns.api.model.AnnounceEvent
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusEventStream
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.IconAppearance
 import network.columba.app.rns.api.model.Identity
@@ -47,8 +49,11 @@ import org.json.JSONObject
  */
 @ReflectivelyKept // Python (event_bridge.py) calls this via Chaquopy reflection — R8 must not strip/rename it
 class PythonEventBridge {
-    private companion object {
+    internal companion object {
         const val TAG = "PythonEventBridge"
+
+        /** Upstream `LXMF.LXMessage.DELIVERED` = 0x08. */
+        const val LXMF_STATE_DELIVERED = 0x08
 
         /**
          * Upstream `LXMF.LXMessage.PROPAGATED` = 0x03. Inlined (rather than
@@ -80,6 +85,24 @@ class PythonEventBridge {
                 else -> null
             }
 
+        /** Recipient delivery proof outranks a fallback-mutated transport method. */
+        fun lxmfDeliveryStatus(
+            state: Int?,
+            method: Int?,
+            desired: Int?,
+        ): DeliveryStatus =
+            if (state == LXMF_STATE_DELIVERED) {
+                DeliveryStatus.DELIVERED
+            } else if (method == LXMF_METHOD_PROPAGATED ||
+                (method.isUnknownLxmfMethod() && desired == LXMF_METHOD_PROPAGATED)
+            ) {
+                DeliveryStatus.PROPAGATED
+            } else {
+                DeliveryStatus.DELIVERED
+            }
+
+        private fun Int?.isUnknownLxmfMethod(): Boolean = this == null || this < 0
+
         // event_bridge.py emits the field map as `json.dumps({str(k): ...})`,
         // so JSON-keyed lookups need the stringified form of every LXMF field
         // ID. Derived from `LxmfFields` so the source-of-truth values live in
@@ -92,21 +115,9 @@ class PythonEventBridge {
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
-    // `replay = 8` holds the last few delivery proofs so an IPC subscriber
-    // that finishes attaching slightly after a delivery event fires (the
-    // post-cold-start window where LXMF may flush queued-message acks
-    // before MessagingViewModel re-subscribes through the AIDL pipe) still
-    // sees the event. Observed once today: a stamped message sat
-    // "pending" in the UI because the proof arrived during the
-    // subscribe-gap; the next fresh send hit a fully-subscribed pipe and
-    // updated correctly. A small replay window catches that race without
-    // adding noise — IPC clients drain it once on attach and ignore
-    // already-applied ids via the existing `isTerminalSuccessStatus`
-    // guard in `handleDeliveryStatusUpdate`.
-    private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(
-        replay = 8,
-        extraBufferCapacity = 64,
-    )
+    // Delivery events are live notifications. The service-local collector starts
+    // undispatched and writes them to Room; IPC/UI consumers reload canonical Room state.
+    private val deliveryStatusEvents = DeliveryStatusEventStream()
     private val _locationTelemetry = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceived = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 16)
@@ -114,7 +125,7 @@ class PythonEventBridge {
 
     val announces: SharedFlow<AnnounceEvent> = _announces.asSharedFlow()
     val messages: SharedFlow<ReceivedMessage> = _messages.asSharedFlow()
-    val deliveryStatus: SharedFlow<DeliveryStatusUpdate> = _deliveryStatus.asSharedFlow()
+    val deliveryStatus: SharedFlow<DeliveryStatusUpdate> = deliveryStatusEvents.events
     val locationTelemetry: SharedFlow<LocationTelemetry> = _locationTelemetry.asSharedFlow()
     val reactionReceived: SharedFlow<String> = _reactionReceived.asSharedFlow()
     val packets: SharedFlow<ReceivedPacket> = _packets.asSharedFlow()
@@ -441,11 +452,12 @@ class PythonEventBridge {
 
     private fun handleLxmfFailure(payload: PyObject) {
         runCatching {
-            _deliveryStatus.tryEmit(
+            deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "failed",
+                    status = DeliveryStatus.FAILED,
                     timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = payload.dictStr("originating_identity_hash"),
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf failure translation failed", it) }
@@ -453,26 +465,21 @@ class PythonEventBridge {
 
     private fun handleLxmfDelivered(payload: PyObject) {
         runCatching {
-            // Mirrors `NativeMessageSender.installDeliveryCallbacks`: same
-            // upstream-LXMF callback fires for both PROPAGATED (success ==
-            // "stored on the relay node") and DIRECT/OPPORTUNISTIC (success
-            // == "ack from recipient"). The split is by `method`, not state.
-            // Without this distinction the UI would render ✓✓ ("delivered")
-            // for every PROPAGATED send the moment it lands on the relay,
-            // misrepresenting the actual delivery promise.
-            val method = payload.dictInt("method") ?: -1
-            val desired = payload.dictInt("desired_method") ?: -1
-            val status =
-                if (method == LXMF_METHOD_PROPAGATED || desired == LXMF_METHOD_PROPAGATED) {
-                    "propagated"
-                } else {
-                    "delivered"
-                }
-            _deliveryStatus.tryEmit(
+            // Mirrors `NativeMessageSender.installDeliveryCallbacks`: a
+            // PROPAGATED callback in SENT state means relay acceptance, while
+            // DELIVERED is authoritative recipient proof. Fallback repacking
+            // mutates the shared LXMessage's method fields to PROPAGATED, so
+            // state must win when the original direct receipt arrives later.
+            val state = payload.dictInt("state")
+            val method = payload.dictInt("method")
+            val desired = payload.dictInt("desired_method")
+            val status = lxmfDeliveryStatus(state, method, desired)
+            deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
                     status = status,
                     timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = payload.dictStr("originating_identity_hash"),
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf delivered translation failed", it) }
@@ -483,11 +490,12 @@ class PythonEventBridge {
             // Mirrors NativeMessageSender.installDeliveryCallbacks — same
             // `retrying_propagated` status string the kotlin backend emits
             // when a DIRECT send fails and falls back to PROPAGATED.
-            _deliveryStatus.tryEmit(
+            deliveryStatusEvents.publish(
                 DeliveryStatusUpdate(
                     messageHash = payload.dictStr("hash").orEmpty(),
-                    status = "retrying_propagated",
+                    status = DeliveryStatus.RETRYING_PROPAGATED,
                     timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = payload.dictStr("originating_identity_hash"),
                 ),
             )
         }.onFailure { Log.e(TAG, "lxmf retrying-propagated translation failed", it) }

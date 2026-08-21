@@ -6,6 +6,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import network.columba.app.data.db.entity.MessageEntity
 import kotlinx.coroutines.flow.Flow
@@ -87,10 +88,13 @@ interface MessageDao {
     ): MessageEntity?
 
     @Query(
-        "SELECT * FROM messages WHERE id = :messageId AND isFromMe = 1 " +
-            "ORDER BY timestamp DESC, identityHash ASC LIMIT 1",
+        "SELECT * FROM messages " +
+            "WHERE id = :messageId AND identityHash = :identityHash AND isFromMe = 1 LIMIT 1",
     )
-    suspend fun getOutgoingMessageByIdAcrossIdentities(messageId: String): MessageEntity?
+    suspend fun getOutgoingMessageById(
+        messageId: String,
+        identityHash: String,
+    ): MessageEntity?
 
     /**
      * Observe a message by ID for real-time updates (e.g., status changes).
@@ -99,12 +103,79 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
     fun observeMessageById(messageId: String): Flow<MessageEntity?>
 
+    /** Invalidates when an outgoing row is inserted, including from another process. */
+    @Query("SELECT COUNT(*) FROM messages WHERE isFromMe = 1")
+    fun observeOutgoingMessageCount(): Flow<Int>
+
     @Query("UPDATE messages SET status = :status WHERE id = :messageId AND identityHash = :identityHash")
     suspend fun updateMessageStatus(
         messageId: String,
         identityHash: String,
         status: String,
     )
+
+    /**
+     * Applies a protocol delivery event as a closed, monotonic lifecycle.
+     * `sent` is accepted only as a legacy/local precursor; it is not a protocol event.
+     */
+    @Query(
+        """
+        UPDATE messages
+        SET status = CASE
+                WHEN :status = 'delivered' AND status IN
+                    ('pending', 'sent', 'retrying_propagated', 'propagated', 'failed') THEN 'delivered'
+                WHEN :status = 'propagated' AND status IN
+                    ('pending', 'sent', 'retrying_propagated', 'failed') THEN 'propagated'
+                WHEN :status = 'failed' AND status IN
+                    ('pending', 'sent', 'retrying_propagated', 'propagated') THEN 'failed'
+                WHEN :status = 'retrying_propagated' AND status IN
+                    ('pending', 'sent') THEN 'retrying_propagated'
+                ELSE status
+            END,
+            deliveryMethod = CASE
+                WHEN :deliveryMethod IS NOT NULL THEN :deliveryMethod
+                WHEN :status IN ('retrying_propagated', 'propagated') THEN 'propagated'
+                ELSE deliveryMethod
+            END,
+            errorMessage = CASE
+                WHEN :status IN ('retrying_propagated', 'propagated', 'delivered') THEN NULL
+                ELSE errorMessage
+            END
+        WHERE id = :messageId AND identityHash = :identityHash AND isFromMe = 1
+          AND (
+            (:status = 'delivered' AND status IN
+                ('pending', 'sent', 'retrying_propagated', 'propagated', 'failed', 'delivered')) OR
+            (:status = 'propagated' AND status IN
+                ('pending', 'sent', 'retrying_propagated', 'failed', 'propagated')) OR
+            (:status = 'failed' AND status IN
+                ('pending', 'sent', 'retrying_propagated', 'propagated', 'failed')) OR
+            (:status = 'retrying_propagated' AND status IN
+                ('pending', 'sent', 'retrying_propagated'))
+          )
+        """,
+    )
+    suspend fun applyDeliveryStatus(
+        messageId: String,
+        identityHash: String,
+        status: String,
+        deliveryMethod: String? = null,
+    ): Int
+
+    /**
+     * Atomically reduces an identity-owned outgoing row and returns its resulting snapshot.
+     * The immutable callback identity is the authority; active-identity state is never read.
+     */
+    @Transaction
+    suspend fun applyDeliveryStatusAndGet(
+        messageId: String,
+        identityHash: String,
+        status: String,
+        deliveryMethod: String? = null,
+    ): MessageEntity? {
+        if (identityHash.isBlank()) return null
+        applyDeliveryStatus(messageId, identityHash, status, deliveryMethod)
+        return getOutgoingMessageById(messageId, identityHash)
+    }
 
     @Query(
         """

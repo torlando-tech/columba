@@ -5,6 +5,8 @@ import android.os.Parcelable
 import network.columba.app.rns.api.model.AnnounceRestoreEntry
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.FileAttachment
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.Identity
@@ -74,6 +76,13 @@ class ParcelRoundTripTest {
     }
 
     // ==================== RnsError ====================
+
+    @Test
+    fun `DeliveryStatusUpdate round-trips typed lifecycle over Parcel`() {
+        val original = DeliveryStatusUpdate("message", DeliveryStatus.PROPAGATED, 123L, "identity-a")
+
+        assertEquals(original, roundTripViaFramework(original))
+    }
 
     @Test
     fun `RnsError Generic round-trips`() {

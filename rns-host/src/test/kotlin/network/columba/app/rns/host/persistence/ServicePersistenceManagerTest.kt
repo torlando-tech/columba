@@ -12,11 +12,15 @@ import network.columba.app.data.db.dao.MessageDao
 import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
+import network.columba.app.data.db.dao.PendingDeliveryStatusDao
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
 import network.columba.app.data.util.HashUtils
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -60,6 +64,7 @@ class ServicePersistenceManagerTest {
     private lateinit var peerIdentityDao: PeerIdentityDao
     private lateinit var peerActivityDao: PeerActivityDao
     private lateinit var peerIconDao: PeerIconDao
+    private lateinit var pendingDeliveryStatusDao: PendingDeliveryStatusDao
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
 
@@ -83,6 +88,7 @@ class ServicePersistenceManagerTest {
         peerIdentityDao = mockk()
         peerActivityDao = mockk()
         peerIconDao = mockk()
+        pendingDeliveryStatusDao = mockk()
         settingsAccessor = mockk()
 
         // Mock database DAOs
@@ -95,6 +101,7 @@ class ServicePersistenceManagerTest {
         every { database.peerIdentityDao() } returns peerIdentityDao
         every { database.peerActivityDao() } returns peerActivityDao
         every { database.peerIconDao() } returns peerIconDao
+        every { database.pendingDeliveryStatusDao() } returns pendingDeliveryStatusDao
         coEvery { peerActivityDao.recordActivity(any(), any(), any()) } just Runs
         coEvery { peerActivityDao.recordActivityOnce(any(), any(), any(), any()) } returns false
         coEvery { announceDao.upsertAnnounce(any()) } just Runs
@@ -115,7 +122,7 @@ class ServicePersistenceManagerTest {
         // Default: don't block unknown senders
         every { settingsAccessor.getBlockUnknownSenders() } returns false
 
-        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor)
+        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor, false)
     }
 
     @After
@@ -126,6 +133,70 @@ class ServicePersistenceManagerTest {
     }
 
     // ========== persistAnnounce() Tests ==========
+
+    @Test
+    fun `persistDeliveryStatus durably queues until row appears and survives manager restart`() =
+        runTest {
+            val message = mockk<MessageEntity>()
+            every { message.isFromMe } returns true
+            val identity = mockk<LocalIdentityEntity>()
+            every { identity.identityHash } returns "owning-identity"
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns identity
+            var pending: PendingDeliveryStatusEntity? = null
+            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any(), any(), any()) } coAnswers {
+                pending = PendingDeliveryStatusEntity(firstArg(), secondArg(), thirdArg(), arg(3), arg(4))
+            }
+            coEvery { pendingDeliveryStatusDao.oldest(any()) } coAnswers { listOfNotNull(pending) }
+            coEvery { pendingDeliveryStatusDao.delete(any(), any()) } coAnswers { pending = null }
+            coEvery { pendingDeliveryStatusDao.deleteOlderThan(any()) } returns 0
+            coEvery { pendingDeliveryStatusDao.trimToNewest(any()) } returns 0
+            coEvery { messageDao.getMessageById("message-hash", "owning-identity") } returns null
+            coEvery {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered", null)
+            } returns 1
+
+            val update = DeliveryStatusUpdate("message-hash", DeliveryStatus.DELIVERED, 1L, "owning-identity")
+            assertTrue(persistenceManager.persistDeliveryStatus(update))
+            assertTrue(pending != null)
+
+            coEvery { messageDao.getMessageById("message-hash", "owning-identity") } returns message
+            val restarted = ServicePersistenceManager(context, testScope, settingsAccessor, false)
+            assertTrue(restarted.reconcilePendingDeliveryStatuses())
+
+            coVerify(exactly = 1) {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered", null)
+            }
+            assertTrue(pending == null)
+            coVerify { pendingDeliveryStatusDao.deleteOlderThan(any()) }
+            coVerify { pendingDeliveryStatusDao.trimToNewest(512) }
+        }
+
+    @Test
+    fun `persistDeliveryStatus retries transient DAO failure without losing durable event`() =
+        runTest {
+            val message = mockk<MessageEntity>()
+            every { message.isFromMe } returns true
+            val identity = mockk<LocalIdentityEntity>()
+            every { identity.identityHash } returns "owning-identity"
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns identity
+            val pending = PendingDeliveryStatusEntity("owning-identity", "message-hash", "failed", null, 1L)
+            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any(), any(), any()) } just Runs
+            coEvery { pendingDeliveryStatusDao.deleteOlderThan(any()) } returns 0
+            coEvery { pendingDeliveryStatusDao.trimToNewest(any()) } returns 0
+            coEvery { pendingDeliveryStatusDao.oldest(any()) } returns listOf(pending) andThen listOf(pending)
+            coEvery { messageDao.getMessageById("message-hash", "owning-identity") } returns message
+            coEvery { messageDao.applyDeliveryStatus(any(), any(), any(), any()) } throws
+                IllegalStateException("busy") andThen 1
+            coEvery { pendingDeliveryStatusDao.delete("owning-identity", "message-hash") } just Runs
+
+            val update = DeliveryStatusUpdate("message-hash", DeliveryStatus.FAILED, 1L, "owning-identity")
+            assertTrue(persistenceManager.persistDeliveryStatus(update))
+
+            coVerify(exactly = 2) {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "failed", null)
+            }
+            coVerify(exactly = 1) { pendingDeliveryStatusDao.delete("owning-identity", "message-hash") }
+        }
 
     @Test
     fun `persistAnnounce saves new announce to database`() =

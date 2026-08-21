@@ -15,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -366,18 +367,12 @@ class ConversationLinkManager
             destHashHex: String,
             timestamp: Long = System.currentTimeMillis(),
         ) {
-            val current = _linkStates.value[destHashHex]
-            if (current != null) {
-                updateLinkState(destHashHex, current.copy(lastActivityTimestamp = timestamp))
-            } else {
-                // Create minimal entry for peers we haven't linked to yet
-                updateLinkState(
-                    destHashHex,
-                    LinkState(
-                        isActive = false,
-                        lastActivityTimestamp = timestamp,
-                    ),
-                )
+            _linkStates.update { states ->
+                val current = states[destHashHex]
+                val updated =
+                    current?.copy(lastActivityTimestamp = maxOf(current.lastActivityTimestamp, timestamp))
+                        ?: LinkState(isActive = false, lastActivityTimestamp = timestamp)
+                states + (destHashHex to updated)
             }
             Log.d(TAG, "Recorded peer activity for ${destHashHex.take(16)}")
         }

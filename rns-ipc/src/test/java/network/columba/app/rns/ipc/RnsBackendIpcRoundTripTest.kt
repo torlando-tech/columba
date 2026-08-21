@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
@@ -27,6 +28,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.Destination
 import network.columba.app.rns.api.model.DestinationType
@@ -134,6 +136,21 @@ class RnsBackendIpcRoundTripTest {
         fake.transportAdminFake.batteryResult = -1
 
         assertEquals(-1, client.transportAdmin.getRNodeBattery())
+    }
+
+    @Test
+    fun `delivery attempt identity round-trips through advisory IPC`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        val expected = DeliveryStatusUpdate("message", DeliveryStatus.DELIVERED, 123L, "identity-a")
+
+        client.lxmf.observeDeliveryStatus().test {
+            runCurrent()
+            fake.lxmf.deliveryStatus.emit(expected)
+            runCurrent()
+            assertEquals(expected, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -528,7 +545,7 @@ private class FakeRnsTelephony : RnsTelephony {
 
 private class FakeRnsLxmf : RnsLxmf {
     val incomingMessages: MutableSharedFlow<ReceivedMessage> = MutableSharedFlow(extraBufferCapacity = 8)
-    private val deliveryStatus: MutableSharedFlow<DeliveryStatusUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
+    val deliveryStatus: MutableSharedFlow<DeliveryStatusUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
     val transferProgress: MutableSharedFlow<TransferProgressUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
     private val propagation: MutableSharedFlow<PropagationState> = MutableSharedFlow(extraBufferCapacity = 8)
 

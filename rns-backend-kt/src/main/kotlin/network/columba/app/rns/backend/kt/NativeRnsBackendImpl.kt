@@ -22,6 +22,7 @@ import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatusEventStream
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DestinationType
 import network.columba.app.rns.api.model.Direction
@@ -279,7 +280,7 @@ class NativeRnsBackendImpl(
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
-    private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 64)
+    private val deliveryStatusEvents = DeliveryStatusEventStream()
     private val _locationTelemetryFlow = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceivedFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 16)
@@ -353,7 +354,7 @@ class NativeRnsBackendImpl(
             routerProvider = { router },
             deliveryIdentityProvider = { deliveryIdentity },
             deliveryDestinationProvider = { deliveryDestination },
-            deliveryStatusFlow = _deliveryStatus,
+            deliveryStatusEvents = deliveryStatusEvents,
             scopeProvider = { scope },
         )
     }
@@ -368,6 +369,8 @@ class NativeRnsBackendImpl(
                     destinationHash = destHash,
                     content = content,
                     deliveryMethod = method,
+                    originatingIdentityHash =
+                        requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
                     options = NativeMessageSender.MessageOptions(extraFields = extraFields),
                 )
             },
@@ -436,11 +439,6 @@ class NativeRnsBackendImpl(
 
         router!!.registerDeliveryCallback { message ->
             handleIncomingMessage(message)
-        }
-
-        router!!.registerFailedDeliveryCallback { message ->
-            val hash = message.hash?.toHex() ?: return@registerFailedDeliveryCallback
-            _deliveryStatus.tryEmit(DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()))
         }
 
         return identity
@@ -1069,7 +1067,7 @@ class NativeRnsBackendImpl(
 
     override fun observeMessages(): Flow<ReceivedMessage> = _messages.asSharedFlow()
 
-    override fun observeDeliveryStatus(): Flow<DeliveryStatusUpdate> = _deliveryStatus.asSharedFlow()
+    override fun observeDeliveryStatus(): Flow<DeliveryStatusUpdate> = deliveryStatusEvents.events
 
     // ==================== Phase 1: Path & Transport Queries ====================
 
@@ -1239,6 +1237,8 @@ class NativeRnsBackendImpl(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = DeliveryMethod.DIRECT,
+            originatingIdentityHash =
+                requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
             options =
                 NativeMessageSender.MessageOptions(
                     imageData = imageData,
@@ -1265,6 +1265,8 @@ class NativeRnsBackendImpl(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = deliveryMethod,
+            originatingIdentityHash =
+                requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
             options =
                 NativeMessageSender.MessageOptions(
                     tryPropagationOnFail = tryPropagationOnFail,

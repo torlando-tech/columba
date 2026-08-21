@@ -15,8 +15,9 @@ import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelephony
@@ -961,12 +962,22 @@ class MessagingViewModel
 
         private suspend fun handleDeliveryStatusUpdate(update: network.columba.app.rns.api.model.DeliveryStatusUpdate) {
             try {
+                val originatingIdentityHash = update.originatingIdentityHash?.takeIf { it.isNotBlank() }
+                if (originatingIdentityHash == null) {
+                    Log.w(TAG, "Ignoring delivery status without trustworthy attempt identity")
+                    return
+                }
                 // Retry mechanism to handle race condition where delivery proof arrives
                 // before database transaction completes
                 val maxRetries = 3
                 val retryDelays = listOf(50L, 100L, 200L) // ms
 
-                var message = conversationRepository.getMessageById(update.messageHash)
+                var message =
+                    conversationRepository.applyDeliveryStatus(
+                        update.messageHash,
+                        update.status.wireValue,
+                        originatingIdentityHash,
+                    )
                 var attempt = 0
 
                 while (message == null && attempt < maxRetries) {
@@ -977,49 +988,19 @@ class MessagingViewModel
                         )}... not found, retrying in ${retryDelays[attempt]}ms (attempt ${attempt + 1}/$maxRetries)",
                     )
                     kotlinx.coroutines.delay(retryDelays[attempt])
-                    message = conversationRepository.getMessageById(update.messageHash)
+                    message =
+                        conversationRepository.applyDeliveryStatus(
+                            update.messageHash,
+                            update.status.wireValue,
+                            originatingIdentityHash,
+                        )
                     attempt++
                 }
 
                 if (message != null) {
-                    // Guard: 'delivered' is terminal — never regress to any other state.
-                    // LXMF may fire spurious failure/sent callbacks after delivery confirmation,
-                    // which can trigger propagation retries that overwrite 'delivered' with 'propagated'.
-                    if (message.status == "delivered" && update.status != "delivered") {
-                        Log.w(
-                            TAG,
-                            "Blocking status regression from 'delivered' to '${update.status}' " +
-                                "for message ${update.messageHash.take(16)}...",
-                        )
-                        return
-                    }
-
-                    // Guard: Don't degrade from terminal success states to failed (Issue #257 fix)
-                    // This provides defense-in-depth in case Python layer misses the spurious callback
-                    if (update.status == "failed" && isTerminalSuccessStatus(message.status)) {
-                        Log.w(
-                            TAG,
-                            "Blocking status degradation from '${message.status}' to 'failed' " +
-                                "for message ${update.messageHash.take(16)}...",
-                        )
-                        return
-                    }
-
-                    // Update status
-                    conversationRepository.updateMessageStatus(update.messageHash, update.status)
-
-                    // When retrying via propagation, also update the delivery method
-                    if (update.status == "retrying_propagated") {
-                        conversationRepository.updateMessageDeliveryDetails(
-                            update.messageHash,
-                            deliveryMethod = "propagated",
-                            errorMessage = null,
-                        )
-                    }
-
                     // Record peer activity when delivery proof is received
                     // This proves the peer was recently online and received our message
-                    if (update.status == "delivered") {
+                    if (update.status == DeliveryStatus.DELIVERED) {
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
@@ -1029,11 +1010,11 @@ class MessagingViewModel
                     // PROPAGATED on "propagated" (the propagation-node-accepted
                     // analogue). Failed / retrying paths carry too much routing
                     // ambiguity to produce accurate interface data.
-                    if (update.status == "delivered" || update.status == "propagated") {
-                        enrichSentInterfaceOnDelivery(message, update.messageHash)
+                    if (update.status == DeliveryStatus.DELIVERED || update.status == DeliveryStatus.PROPAGATED) {
+                        enrichSentInterfaceOnDelivery(message)
                     }
 
-                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
+                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status.wireValue}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
@@ -1052,7 +1033,6 @@ class MessagingViewModel
          */
         private suspend fun enrichSentInterfaceOnDelivery(
             message: network.columba.app.data.db.entity.MessageEntity,
-            messageHash: String,
         ) {
             if (!message.isFromMe || message.sentInterface != null) return
             try {
@@ -1072,7 +1052,11 @@ class MessagingViewModel
                     }
                 val sentInterface = rnsCore.getNextHopInterfaceName(lookupHash)
                 if (sentInterface != null) {
-                    conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
+                    conversationRepository.updateMessageSentInterface(
+                        message.id,
+                        sentInterface,
+                        message.identityHash,
+                    )
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to enrich sent interface on delivery: ${e.message}")
@@ -1124,15 +1108,6 @@ class MessagingViewModel
                 Log.e(TAG, "Error handling incoming reaction: ${e.message}", e)
             }
         }
-
-        /**
-         * Check if a message status represents a terminal success state.
-         * Terminal success states should never degrade to "failed" (Issue #257 fix).
-         *
-         * @param status The current message status
-         * @return true if this is a terminal success status that shouldn't be degraded
-         */
-        private fun isTerminalSuccessStatus(status: String): Boolean = status in setOf("sent", "propagated", "delivered")
 
         private suspend fun saveMessageToDatabase(
             peerHash: String,

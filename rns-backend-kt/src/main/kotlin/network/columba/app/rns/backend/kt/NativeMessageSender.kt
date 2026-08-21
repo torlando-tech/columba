@@ -2,6 +2,8 @@ package network.columba.app.rns.backend.kt
 
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusEventStream
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.model.FailedInterface
@@ -12,13 +14,12 @@ import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.VoiceCallState
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.launch
-import network.reticulum.common.DestinationDirection
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
+import network.reticulum.common.DestinationDirection
 import network.reticulum.lxmf.LXMRouter
 import network.reticulum.lxmf.LXMessage
 import network.reticulum.transport.Transport
@@ -27,9 +28,11 @@ internal class NativeMessageSender(
     private val routerProvider: () -> LXMRouter?,
     private val deliveryIdentityProvider: () -> NativeIdentity?,
     private val deliveryDestinationProvider: () -> NativeDestination?,
-    private val deliveryStatusFlow: MutableSharedFlow<DeliveryStatusUpdate>,
+    private val deliveryStatusEvents: DeliveryStatusEventStream,
     private val scopeProvider: () -> kotlinx.coroutines.CoroutineScope,
+    private val fallbackDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
+
     companion object {
         private const val TAG = "NativeReticulumProtocol"
     }
@@ -49,12 +52,14 @@ internal class NativeMessageSender(
         destinationHash: ByteArray,
         content: String,
         deliveryMethod: DeliveryMethod,
+        originatingIdentityHash: String,
         options: MessageOptions = MessageOptions(),
     ): Result<MessageReceipt> =
         sendMessage(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = deliveryMethod,
+            originatingIdentityHash = originatingIdentityHash,
             options = options,
         )
 
@@ -62,6 +67,7 @@ internal class NativeMessageSender(
         destinationHash: ByteArray,
         content: String,
         deliveryMethod: DeliveryMethod,
+        originatingIdentityHash: String,
         options: MessageOptions = MessageOptions(),
     ): Result<MessageReceipt> =
         kotlinx.coroutines.withContext(Dispatchers.IO) {
@@ -94,7 +100,13 @@ internal class NativeMessageSender(
                         desiredMethod = lxmfMethod,
                     )
 
-                installDeliveryCallbacks(message, router, options.tryPropagationOnFail, lxmfMethod)
+                installDeliveryCallbacks(
+                    message,
+                    router,
+                    options.tryPropagationOnFail,
+                    lxmfMethod,
+                    originatingIdentityHash,
+                )
                 router.handleOutbound(message)
 
                 MessageReceipt(
@@ -187,62 +199,33 @@ internal class NativeMessageSender(
             DeliveryMethod.PROPAGATED -> NativeDeliveryMethod.PROPAGATED
         }
 
-    private fun installDeliveryCallbacks(
+    @androidx.annotation.VisibleForTesting
+    internal fun installDeliveryCallbacks(
         message: LXMessage,
         router: LXMRouter,
         tryPropagationOnFail: Boolean,
         lxmfMethod: NativeDeliveryMethod,
+        originatingIdentityHash: String,
     ) {
-        message.deliveryCallback = deliveryCallback@{ msg ->
-            val hash = msg.hash?.toHex() ?: return@deliveryCallback
-            // In lxmf-kt, deliveryCallback fires with state == SENT only for
-            // PROPAGATED messages (where SENT is the final state, set when the
-            // resource completes uploading to the propagation node) and with
-            // state == DELIVERED for DIRECT/OPPORTUNISTIC (where the receipt's
-            // delivery confirmation transitions state to DELIVERED before the
-            // callback runs). Distinguish by method, not state — checking state
-            // alone risks misclassifying a future direct path that briefly
-            // transitions through SENT before DELIVERED.
-            val status =
-                if (msg.method == NativeDeliveryMethod.PROPAGATED ||
-                    msg.desiredMethod == NativeDeliveryMethod.PROPAGATED
-                ) {
-                    "propagated"
-                } else {
-                    "delivered"
-                }
-            Log.i(
-                TAG,
-                "Delivery callback for $hash -> $status (state=${msg.state}, method=${msg.method}, desired=${msg.desiredMethod})",
-            )
-            deliveryStatusFlow.tryEmit(
-                DeliveryStatusUpdate(hash, status, System.currentTimeMillis()),
-            )
-        }
-        message.failedCallback = failedCallback@{ msg ->
-            val hash = msg.hash?.toHex() ?: return@failedCallback
-            val currentMethod = msg.desiredMethod
+        NativeDeliveryAttemptLifecycle(
+            router = router,
+            tryPropagationOnFail = tryPropagationOnFail,
+            initialMethod = lxmfMethod,
+            originatingIdentityHash = originatingIdentityHash,
+            scopeProvider = scopeProvider,
+            fallbackDispatcher = fallbackDispatcher,
+            publishStatus = ::publishStatus,
+        ).install(message)
+    }
 
-            if (tryPropagationOnFail &&
-                currentMethod != NativeDeliveryMethod.PROPAGATED &&
-                router.getActivePropagationNode() != null
-            ) {
-                Log.i(TAG, "${currentMethod ?: lxmfMethod} delivery failed for $hash, falling back to PROPAGATED")
-                deliveryStatusFlow.tryEmit(
-                    DeliveryStatusUpdate(hash, "retrying_propagated", System.currentTimeMillis()),
-                )
-                msg.desiredMethod = NativeDeliveryMethod.PROPAGATED
-                msg.state = network.reticulum.lxmf.MessageState.OUTBOUND
-                msg.deliveryAttempts = 0
-                scopeProvider().launch(Dispatchers.IO) {
-                    router.handleOutbound(msg)
-                }
-                return@failedCallback
-            }
-
-            deliveryStatusFlow.tryEmit(
-                DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()),
-            )
+    private fun publishStatus(
+        hash: String,
+        status: DeliveryStatus,
+        originatingIdentityHash: String,
+    ) {
+        val update = DeliveryStatusUpdate(hash, status, System.currentTimeMillis(), originatingIdentityHash)
+        if (!deliveryStatusEvents.publish(update)) {
+            Log.w(TAG, "Advisory delivery update dropped for ${hash.take(16)}")
         }
     }
 }

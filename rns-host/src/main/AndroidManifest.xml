@@ -7,8 +7,19 @@
         into :app at assembly time; :app's own manifest no longer declares
         the service.
 
-        foregroundServiceType=connectedDevice|microphone covers BLE / USB
-        peripherals (connectedDevice) and LXST voice calls (microphone).
+        foregroundServiceType=connectedDevice covers BLE / USB peripherals.
+        The microphone type (for LXST voice calls) was intentionally removed:
+        it was added in API 30 (Android 11) and is unknown on Android 10.
+        When Android 10 encounters an unknown foregroundServiceType token it
+        zeros out the entire type mask, causing the 3-arg startForeground()
+        to throw IllegalArgumentException (declared mask 0 does not contain
+        the requested FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE = 16). The
+        service never successfully promotes to foreground and Android kills
+        the process with RemoteServiceException after 5 seconds.
+
+        When microphone capture is wired into ReticulumService, add it back
+        only for API 30+ via a product-flavor or build-type manifest overlay
+        that the Gradle manifest merger will apply on top of this base.
     -->
     <application>
         <service
@@ -16,6 +27,6 @@
             android:enabled="true"
             android:exported="false"
             android:process=":reticulum"
-            android:foregroundServiceType="connectedDevice|microphone" />
+            android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>

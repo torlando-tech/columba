@@ -402,12 +402,22 @@ class ServiceNotificationManager(
         try {
             val notification = createNotification(state.networkStatus.get())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10+ requires explicit foreground service type
-                service.startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                )
+                // Android 10+ requires explicit foreground service type.
+                // Wrap in a catch: on Android 10 devices where the manifest's
+                // foregroundServiceType mask is mismatched the OS throws
+                // IllegalArgumentException, preventing foreground promotion and
+                // causing a fatal RemoteServiceException after 5 seconds. Fall
+                // back to the 2-arg form so startForeground always succeeds.
+                try {
+                    service.startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                    )
+                } catch (e: IllegalArgumentException) {
+                    Log.w(TAG, "3-arg startForeground rejected (type mismatch), falling back to 2-arg: ${e.message}")
+                    service.startForeground(NOTIFICATION_ID, notification)
+                }
             } else {
                 // Android 9 and below
                 service.startForeground(NOTIFICATION_ID, notification)
@@ -443,11 +453,17 @@ class ServiceNotificationManager(
         if (svc != null) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    svc.startForeground(
-                        NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                    )
+                    // Same IAE fallback as startForeground() — see comment there.
+                    try {
+                        svc.startForeground(
+                            NOTIFICATION_ID,
+                            notification,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        Log.w(TAG, "3-arg startForeground rejected in repost (type mismatch), falling back to 2-arg: ${e.message}")
+                        svc.startForeground(NOTIFICATION_ID, notification)
+                    }
                 } else {
                     svc.startForeground(NOTIFICATION_ID, notification)
                 }

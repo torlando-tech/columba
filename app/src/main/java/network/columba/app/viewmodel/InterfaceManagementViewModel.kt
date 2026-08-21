@@ -63,6 +63,9 @@ data class InterfaceManagementState(
     val infoMessage: String? = null,
     // Interface online status from Python/RNS (interface name -> online status)
     val interfaceOnlineStatus: Map<String, Boolean> = emptyMap(),
+    // Live RNode battery percent by configured interface name. Entries are present
+    // only for online ColumbaRNodeInterface instances with a valid 0x27 KISS reading.
+    val rnodeBatteryByInterface: Map<String, Int> = emptyMap(),
     // Transport-reported interfaces (includes spawned sub-interfaces from AutoInterface/BLE)
     val transportInterfaces: List<TransportInterfaceInfo> = emptyList(),
     // RNS 1.1.x Interface Discovery
@@ -224,6 +227,7 @@ class InterfaceManagementViewModel
              * @suppress VisibleForTesting
              */
             internal var enableStatusPolling = true
+
         }
 
         private val _state = MutableStateFlow(InterfaceManagementState())
@@ -373,12 +377,16 @@ class InterfaceManagementViewModel
             val interfacesArray = json.optJSONArray("interfaces") ?: return
 
             val statusMap = mutableMapOf<String, Boolean>()
+            val batteryMap = mutableMapOf<String, Int>()
             val transportList = mutableListOf<TransportInterfaceInfo>()
             for (i in 0 until interfacesArray.length()) {
                 val iface = interfacesArray.optJSONObject(i)
                 val name = iface?.optString("name")?.takeIf { it.isNotBlank() } ?: continue
                 val online = iface.optBoolean("online", false)
                 statusMap[name] = online
+                if (iface.has("battery")) {
+                    iface.optInt("battery", -1).takeIf { it in 0..100 }?.let { batteryMap[name] = it }
+                }
                 transportList.add(
                     TransportInterfaceInfo(
                         name = name,
@@ -396,6 +404,7 @@ class InterfaceManagementViewModel
             _state.update {
                 it.copy(
                     interfaceOnlineStatus = statusMap,
+                    rnodeBatteryByInterface = batteryMap,
                     transportInterfaces = transportList,
                 )
             }
@@ -453,11 +462,15 @@ class InterfaceManagementViewModel
                     val interfacesData = debugInfo["interfaces"] as? List<Map<String, Any>> ?: return@withLock
 
                     val statusMap = mutableMapOf<String, Boolean>()
+                    val batteryMap = mutableMapOf<String, Int>()
                     val transportList = mutableListOf<TransportInterfaceInfo>()
                     for (ifaceMap in interfacesData) {
                         val name = ifaceMap["name"] as? String ?: continue
                         val online = ifaceMap["online"] as? Boolean ?: false
                         statusMap[name] = online
+                        (ifaceMap["battery"] as? Number)?.toInt()?.takeIf { it in 0..100 }?.let {
+                            batteryMap[name] = it
+                        }
                         transportList.add(
                             TransportInterfaceInfo(
                                 name = name,
@@ -475,6 +488,7 @@ class InterfaceManagementViewModel
                     _state.value =
                         _state.value.copy(
                             interfaceOnlineStatus = statusMap,
+                            rnodeBatteryByInterface = batteryMap,
                             transportInterfaces = transportList,
                         )
                 } catch (e: Exception) {

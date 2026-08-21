@@ -400,12 +400,14 @@ class PythonRnsTransportAdmin(
     /**
      * Enumerate `RNS.Transport.interfaces` into the same per-interface shape
      * `NativeRnsBackendImpl.getDebugInfo()` emits, plus the optional Python
-     * runtime status reason: `{name, type, online, parent_name, can_send,
-     * rx_bytes, tx_bytes, status_reason}`. `name` is the configured
-     * interface name (`interface.name` — the RNS config `[[section]]` header),
-     * matching `NativeRnsBackendImpl`'s `iface.name` and what the UI keys its
-     * online-status overlay on (`InterfaceEntity.name`). Per-interface reads
-     * are wrapped so one malformed interface can't blank the whole list.
+     * runtime status reason and live RNode battery: `{name, type, online,
+     * parent_name, can_send, rx_bytes, tx_bytes, status_reason, battery?}`.
+     * `battery` is present only on a live `ColumbaRNodeInterface` with a valid
+     * 0-100 reading. `name` is the configured interface name (`interface.name` -
+     * the RNS config `[[section]]` header), matching `NativeRnsBackendImpl`'s
+     * `iface.name` and what the UI keys its online-status and battery overlays on
+     * (`InterfaceEntity.name`). Per-interface reads are wrapped so one malformed
+     * interface can't blank the whole list.
      */
     private fun collectInterfaces(): List<Map<String, Any>> =
         runCatching {
@@ -454,7 +456,18 @@ class PythonRnsTransportAdmin(
                         "rx_bytes" to (iface["rxb"]?.toJava(Long::class.javaObjectType) ?: 0L),
                         "tx_bytes" to (iface["txb"]?.toJava(Long::class.javaObjectType) ?: 0L),
                         "status_reason" to statusReason,
-                    )
+                    ).apply {
+                        // Battery belongs to a specific live ColumbaRNodeInterface.
+                        // Keep it on that interface's existing debug-info row so UI
+                        // cards cannot accidentally reuse the first RNode's reading.
+                        if (pyClassName == "ColumbaRNodeInterface") {
+                            runCatching {
+                                iface.callAttr("get_battery")
+                                    .takeIfNotNone()
+                                    ?.toJava(Int::class.javaObjectType)
+                            }.getOrNull()?.takeIf { it in 0..100 }?.let { put("battery", it) }
+                        }
+                    }
                 }.getOrElse {
                     Log.w(TAG, "getDebugInfo: skipping an interface (attr read failed)", it)
                     null

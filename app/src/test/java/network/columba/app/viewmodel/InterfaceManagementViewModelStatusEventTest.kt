@@ -18,6 +18,7 @@ import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.PendingInterfaceChanges
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -1433,6 +1434,66 @@ class InterfaceManagementViewModelStatusEventTest {
             assertEquals(before.interfaces, after.interfaces)
             assertEquals(before.interfaceOnlineStatus, after.interfaceOnlineStatus)
             assertEquals(before.transportInterfaces, after.transportInterfaces)
+        }
+
+    // endregion
+
+    // region RNode battery on interface cards (follow-up to PR 1103)
+
+    @Test
+    fun `RNode batteries are associated with their configured interface names`() =
+        runTest {
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "RNode Alpha", "type" to "RNode", "online" to true, "battery" to 82),
+                            mapOf("name" to "RNode Beta", "type" to "RNode", "online" to true, "battery" to 47),
+                            mapOf("name" to "TCP RNode", "type" to "RNode", "online" to true),
+                        ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            assertEquals(
+                mapOf("RNode Alpha" to 82, "RNode Beta" to 47),
+                viewModel.state.value.rnodeBatteryByInterface,
+            )
+            coVerify(exactly = 0) { serviceProtocol.getRNodeBattery() }
+        }
+
+    @Test
+    fun `absent and invalid per-interface battery readings are omitted`() =
+        runTest {
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "No Frame", "type" to "RNode", "online" to true),
+                            mapOf("name" to "Invalid Low", "type" to "RNode", "online" to true, "battery" to -1),
+                            mapOf("name" to "Invalid High", "type" to "RNode", "online" to true, "battery" to 101),
+                        ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.rnodeBatteryByInterface.isEmpty())
         }
 
     // endregion

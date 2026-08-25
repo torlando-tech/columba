@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,7 +57,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -812,6 +812,12 @@ fun ReactionModeOverlay(
     messageY: Float = 0f,
     messageWidth: Int = 0,
     messageHeight: Int = 0,
+    /**
+     * The message's text content, used as a never-blank fallback when the
+     * snapshot bitmap is missing or invalid (COLUMBA-20). When null or blank
+     * the fallback is omitted and only the bars render.
+     */
+    messageContent: String? = null,
     onReactionSelected: (String) -> Unit,
     onShowFullPicker: () -> Unit,
     onReply: () -> Unit,
@@ -830,53 +836,20 @@ fun ReactionModeOverlay(
     var isDismissing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
+
+    // Fallback height for the (rare) case where the overlay is measured in an
+    // unbounded/zero-height parent: use the full window height.
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val fallbackHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    // Calculate screen dimensions and UI element sizes in pixels
-    val layoutDimensions =
-        OverlayLayoutDimensions(
-            screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
-            emojiBarHeight = with(density) { 56.dp.toPx() },
-            emojiBarGap = with(density) { 76.dp.toPx() },
-            actionButtonsHeight = with(density) { 56.dp.toPx() },
-            actionButtonsGap = with(density) { 12.dp.toPx() },
-            topPadding = with(density) { 48.dp.toPx() },
-            bottomPadding = with(density) { 48.dp.toPx() },
-        )
-
-    // Calculate scale factor for large messages to ensure they fit on screen
-    val messageScale =
-        calculateMessageScaleForOverlay(
-            messageHeight = messageHeight,
-            dimensions = layoutDimensions,
-        )
-
-    // Scaled message dimensions
-    val scaledMessageHeight = (messageHeight * messageScale).toInt()
-    val scaledMessageWidth = (messageWidth * messageScale).toInt()
-
-    // Calculate target position (center of screen vertically) using scaled height
-    val targetY = (layoutDimensions.screenHeight / 2) - (scaledMessageHeight / 2)
-
-    // Signal-style positioning: align based on message side, not message position
-    // Left-aligned messages (received): UI elements at left margin
-    // Right-aligned messages (sent): UI elements at right margin
-
-    // Animated offset for message position
+    // Animated offset for message position (animates from its in-chat position to
+    // the resolved layout position, and back on dismiss)
     val animatedOffsetY = remember { Animatable(messageY) }
 
-    // Trigger animations on mount
+    // Become visible on mount. The position animation is driven from inside the
+    // BoxWithConstraints below, where the resolved layout is known.
     LaunchedEffect(Unit) {
         visible = true
-        // Animate message to center
-        animatedOffsetY.animateTo(
-            targetValue = targetY,
-            animationSpec =
-                spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow,
-                ),
-        )
     }
 
     // Function to handle dismiss with reverse animation
@@ -970,7 +943,7 @@ fun ReactionModeOverlay(
                 animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing),
             ),
     ) {
-        Box(
+        BoxWithConstraints(
             modifier =
                 modifier
                     .fillMaxSize()
@@ -980,6 +953,43 @@ fun ReactionModeOverlay(
                         onClick = handleDismiss,
                     ),
         ) {
+            // Resolve the on-screen layout against the *measured* container size.
+            // That can be smaller than the window height (system bar insets,
+            // non-full-screen embedding, tests); laying out against it is what
+            // keeps the context menu on screen in every case. Small messages are
+            // centered with the bars adjacent; very long messages pin the bars to
+            // the top/bottom safe areas and cap + scroll the message.
+            val measuredHeightPx = constraints.maxHeight.toFloat()
+            val screenHeightPx =
+                if (measuredHeightPx.isFinite() && measuredHeightPx > 0f) measuredHeightPx
+                else fallbackHeightPx
+            val layout =
+                calculateOverlayLayout(
+                    messageHeight = messageHeight,
+                    dimensions =
+                        OverlayLayoutDimensions(
+                            screenHeight = screenHeightPx,
+                            emojiBarHeight = with(density) { 56.dp.toPx() },
+                            emojiBarGap = with(density) { 76.dp.toPx() },
+                            actionButtonsHeight = with(density) { 56.dp.toPx() },
+                            actionButtonsGap = with(density) { 12.dp.toPx() },
+                            topPadding = with(density) { 48.dp.toPx() },
+                            bottomPadding = with(density) { 48.dp.toPx() },
+                        ),
+                )
+
+            // Animate the message from its in-chat position to the resolved one.
+            LaunchedEffect(layout.messageFinalY) {
+                animatedOffsetY.animateTo(
+                    targetValue = layout.messageFinalY,
+                    animationSpec =
+                        spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow,
+                        ),
+                )
+            }
+
             // Dimmed scrim background
             Box(
                 modifier =
@@ -988,8 +998,53 @@ fun ReactionModeOverlay(
                         .background(Color.Black.copy(alpha = 0.5f)),
             )
 
-            // Message snapshot with animation
-            // Guard against recycled/invalid underlying bitmap (COLUMBA-20)
+            // The emoji bar and action buttons are positioned at the resolved
+            // on-screen layout coordinates. They render unconditionally (even when
+            // the message snapshot is missing or recycled, COLUMBA-20) so the
+            // context menu is never lost, and calculateOverlayLayout guarantees
+            // they are fully on screen. For messages that fit, the bars sit
+            // adjacent to the message (which springs into place); for very long
+            // messages the bars are pinned to the top/bottom safe areas.
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(0, layout.emojiBarY.toInt()) },
+            ) {
+                InlineReactionBar(
+                    onReactionSelected = wrappedOnReactionSelected,
+                    onShowFullPicker = wrappedOnShowFullPicker,
+                    modifier =
+                        Modifier
+                            .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
+                            .padding(horizontal = 16.dp),
+                )
+            }
+
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(0, layout.actionButtonsY.toInt()) },
+            ) {
+                MessageActionButtons(
+                    onReply = wrappedOnReply,
+                    onCopy = wrappedOnCopy,
+                    onSelectText = wrappedOnSelectText,
+                    onViewDetails = wrappedOnViewDetails,
+                    onRetry = wrappedOnRetry,
+                    onDelete = wrappedOnDelete,
+                    modifier =
+                        Modifier
+                            .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
+                            .padding(horizontal = 16.dp),
+                )
+            }
+
+            // Message preview with animation.
+            // Guard against recycled/invalid underlying bitmap (COLUMBA-20): when
+            // the snapshot is missing we fall back to the message's text so the
+            // preview area is never blank between the bars.
             val validBitmap =
                 messageBitmap?.let { bitmap ->
                     try {
@@ -999,87 +1054,73 @@ fun ReactionModeOverlay(
                         null
                     }
                 }
-            validBitmap?.let { bitmap ->
-                // Use scaled dimensions for large messages
-                val displayWidthDp = with(density) { scaledMessageWidth.toDp() }
-                val displayHeightDp = with(density) { scaledMessageHeight.toDp() }
-
-                // Calculate X offset to keep message aligned (adjust for width change due to scaling)
-                val scaledMessageX =
-                    if (isFromMe) {
-                        // For sent messages (right-aligned), adjust X to keep right edge aligned
-                        messageX + (messageWidth - scaledMessageWidth)
-                    } else {
-                        // For received messages (left-aligned), keep X the same
-                        messageX
-                    }
-
-                // Message snapshot - keep at full opacity during animation
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = "Selected message",
-                    modifier =
-                        Modifier
-                            .size(width = displayWidthDp, height = displayHeightDp)
-                            .offset {
-                                IntOffset(scaledMessageX.toInt(), animatedOffsetY.value.toInt())
-                            }.alpha(1f) // Don't fade out with AnimatedVisibility
-                            .clip(
-                                RoundedCornerShape(
-                                    topStart = 20.dp,
-                                    topEnd = 20.dp,
-                                    bottomStart = if (isFromMe) 20.dp else 4.dp,
-                                    bottomEnd = if (isFromMe) 4.dp else 20.dp,
-                                ),
-                            ),
+            val displayWidthDp = with(density) { messageWidth.toDp() }
+            val containerHeightDp = with(density) { layout.messageContainerHeight.toDp() }
+            // The snapshot is scaled so the whole preview fits the space between
+            // the bars (down to the minimum legible scale). The scaled size is
+            // computed from the *bitmap* dimensions times the layout scale so
+            // the preview keeps the bubble's aspect ratio.
+            val previewWidthDp = displayWidthDp * layout.previewScale
+            val previewHeightDp =
+                with(density) { (layout.bitmapHeight * layout.previewScale).toDp() }
+            val bubbleShape =
+                RoundedCornerShape(
+                    topStart = 20.dp,
+                    topEnd = 20.dp,
+                    bottomStart = if (isFromMe) 20.dp else 4.dp,
+                    bottomEnd = if (isFromMe) 4.dp else 20.dp,
                 )
-
-                // Emoji bar above message
-                Box(
-                    modifier =
+            val viewportModifier =
+                Modifier
+                    .offset {
+                        IntOffset(messageX.toInt(), animatedOffsetY.value.toInt())
+                    }
+                    .width(displayWidthDp)
+                    .height(containerHeightDp)
+                    .clip(bubbleShape)
+            if (validBitmap != null) {
+                val bitmap = validBitmap
+                // The preview keeps full opacity during the enter/exit
+                // animation. When it is scrollable (scaled preview still
+                // taller than the viewport) the scroll modifier is
+                // outermost so the scroll range equals the overflow; the
+                // surrounding viewport clips the corners. When the preview
+                // fits, no scroll is attached.
+                val previewModifier =
+                    if (layout.messageScrollable) {
                         Modifier
-                            .fillMaxWidth()
-                            .offset {
-                                IntOffset(
-                                    x = 0,
-                                    y = (animatedOffsetY.value - with(density) { 76.dp.toPx() }).toInt(),
-                                )
-                            },
-                ) {
-                    InlineReactionBar(
-                        onReactionSelected = wrappedOnReactionSelected,
-                        onShowFullPicker = wrappedOnShowFullPicker,
-                        modifier =
-                            Modifier
-                                .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
-                                .padding(horizontal = 16.dp),
+                            .verticalScroll(rememberScrollState())
+                            .width(previewWidthDp)
+                            .height(previewHeightDp)
+                            .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
+                    } else {
+                        Modifier
+                            .width(previewWidthDp)
+                            .height(previewHeightDp)
+                            .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
+                    }
+                Box(viewportModifier) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = "Selected message",
+                        modifier = previewModifier,
                     )
                 }
-
-                // Action buttons below message (using scaled height)
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .offset {
-                                IntOffset(
-                                    x = 0,
-                                    y = (animatedOffsetY.value + scaledMessageHeight + with(density) { 12.dp.toPx() }).toInt(),
-                                )
-                            },
-                ) {
-                    MessageActionButtons(
-                        onReply = wrappedOnReply,
-                        onCopy = wrappedOnCopy,
-                        onSelectText = wrappedOnSelectText,
-                        onViewDetails = wrappedOnViewDetails,
-                        onRetry = wrappedOnRetry,
-                        onDelete = wrappedOnDelete,
-                        modifier =
-                            Modifier
-                                .align(if (isFromMe) Alignment.TopEnd else Alignment.TopStart)
-                                .padding(horizontal = 16.dp),
-                    )
+            } else {
+                // Never-blank fallback: render the message text itself,
+                // scrollable within the same viewport, so a failed or
+                // missing snapshot never leaves a blank area.
+                val fallbackText = messageContent?.takeIf { it.isNotBlank() }
+                if (fallbackText != null) {
+                    Box(viewportModifier) {
+                        SelectableMessageText(
+                            text = fallbackText,
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                        )
+                    }
                 }
             }
         }

@@ -175,6 +175,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
@@ -187,6 +188,7 @@ import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.ui.components.AttachmentPanel
+import network.columba.app.ui.components.OVERLAY_MAX_CAPTURE_HEIGHT_PX
 import network.columba.app.ui.components.VoiceMessageBubble
 import network.columba.app.ui.components.VoiceDraftPreview
 import network.columba.app.ui.components.VoiceRecordingControls
@@ -1703,6 +1705,7 @@ fun MessagingScreen(
                     messageY = state.messageY,
                     messageWidth = state.messageWidth,
                     messageHeight = state.messageHeight,
+                    messageContent = selectableMessageContent,
                     onReactionSelected = { emoji ->
                         viewModel.sendReaction(state.messageId, emoji)
                     },
@@ -2166,12 +2169,19 @@ fun MessageBubble(
                         .widthIn(max = 280.dp)
                         .drawWithCache {
                             val width = this.size.width.toInt()
-                            val height = this.size.height.toInt()
+                            // Cap the recorded snapshot at the GPU-safe height (see the
+                            // text bubble path). A full-height capture of a very tall
+                            // bubble can exceed the hardware texture limit and fail.
+                            val captureHeight =
+                                min(
+                                    this.size.height.toInt(),
+                                    OVERLAY_MAX_CAPTURE_HEIGHT_PX,
+                                )
                             onDrawWithContent {
                                 graphicsLayer.record(
                                     size =
                                         androidx.compose.ui.unit
-                                            .IntSize(width, height),
+                                            .IntSize(width, captureHeight),
                                 ) {
                                     this@onDrawWithContent.drawContent()
                                 }
@@ -2189,7 +2199,9 @@ fun MessageBubble(
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 scope.launch {
                                     val bitmap = graphicsLayer.toImageBitmap()
-                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                    val capturedHeight =
+                                        min(bubbleHeight, OVERLAY_MAX_CAPTURE_HEIGHT_PX)
+                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, capturedHeight)
                                 }
                             },
                             indication = null,
@@ -2284,12 +2296,19 @@ fun MessageBubble(
                             .widthIn(max = 300.dp)
                             .drawWithCache {
                                 val width = this.size.width.toInt()
-                                val height = this.size.height.toInt()
+                                // Cap the recorded snapshot at the GPU-safe height. A full-height
+                                // capture of a very tall bubble can exceed the hardware texture
+                                // limit and fail silently, leaving the reaction overlay blank.
+                                val captureHeight =
+                                    min(
+                                        this.size.height.toInt(),
+                                        OVERLAY_MAX_CAPTURE_HEIGHT_PX,
+                                    )
                                 onDrawWithContent {
                                     graphicsLayer.record(
                                         size =
                                             androidx.compose.ui.unit
-                                                .IntSize(width, height),
+                                                .IntSize(width, captureHeight),
                                     ) {
                                         this@onDrawWithContent.drawContent()
                                     }
@@ -2307,7 +2326,9 @@ fun MessageBubble(
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     scope.launch {
                                         val bitmap = graphicsLayer.toImageBitmap()
-                                        onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                        val capturedHeight =
+                                            min(bubbleHeight, OVERLAY_MAX_CAPTURE_HEIGHT_PX)
+                                        onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, capturedHeight)
                                     }
                                 },
                                 // Disable ripple - we use scale animation instead

@@ -717,6 +717,65 @@ class ReactionComponentsTest {
         assertTrue(negative.fitsOnScreen(phoneDimensions))
     }
 
+    @Test
+    fun `overlay layout keeps a positive preview in a compact window`() {
+        // Greptile regression: at 232dp (696px @3x) the fixed paddings, bars, and
+        // gaps consume all the vertical space, collapsing the pinned preview
+        // viewport to zero. The compact branch must re-pin the bars to the raw
+        // screen edges and leave the message a positive, scrollable viewport so
+        // the preview is never blank.
+        val compact =
+            OverlayLayoutDimensions(
+                screenHeight = 696f, // 232dp
+                emojiBarHeight = 168f, // 56dp
+                emojiBarGap = 228f, // 76dp
+                actionButtonsHeight = 168f, // 56dp
+                actionButtonsGap = 36f, // 12dp
+                topPadding = 144f, // 48dp
+                bottomPadding = 144f, // 48dp
+            )
+
+        val layout = calculateOverlayLayout(2000, compact)
+
+        assertTrue("Compact window should use the overflow layout", layout.isOverflow)
+        assertTrue("Bars must stay fully on screen in a compact window", layout.fitsOnScreen(compact))
+        // Bars re-pinned to the raw screen edges (safe-area paddings compressed).
+        assertEquals(0f, layout.emojiBarY, 0.5f)
+        assertEquals(696f - 168f, layout.actionButtonsY, 0.5f)
+        // Positive preview viewport between the bars, and it scrolls.
+        assertTrue("Compact window must leave a positive preview viewport", layout.messageContainerHeight > 0f)
+        assertTrue(layout.messageScrollable)
+        assertEquals(2000f * layout.previewScale, layout.scaledPreviewHeight, 0.5f)
+    }
+
+    @Test
+    fun `overlay layout keeps a non-blank preview when the window is shorter than both bars`() {
+        // Degenerate: 300px is shorter than the two 168px bars stacked, so no
+        // real viewport exists even after compressing the paddings. The preview
+        // must still be non-blank (full space between bars, scrollable) and the
+        // bars must remain as on-screen as physically possible.
+        val tiny =
+            OverlayLayoutDimensions(
+                screenHeight = 300f,
+                emojiBarHeight = 168f,
+                emojiBarGap = 228f,
+                actionButtonsHeight = 168f,
+                actionButtonsGap = 36f,
+                topPadding = 144f,
+                bottomPadding = 144f,
+            )
+
+        val layout = calculateOverlayLayout(2000, tiny)
+
+        assertTrue("Degenerate window should use the overflow layout", layout.isOverflow)
+        assertTrue("Preview must never be blank", layout.messageContainerHeight > 0f)
+        assertTrue(layout.messageScrollable)
+        assertTrue("Emoji bar must start at or below the top edge", layout.emojiBarY >= 0f)
+        assertTrue("Emoji bar must end at or above the bottom edge", layout.emojiBarY + 168f <= 300f)
+        assertTrue("Action buttons must start at or below the top edge", layout.actionButtonsY >= 0f)
+        assertTrue("Action buttons must end at or above the bottom edge", layout.actionButtonsY + 168f <= 300f)
+    }
+
     // ========== ReactionModeOverlay on-screen context menu TESTS ==========
 
     // A message taller than the test screen: long-pressing it must still show the

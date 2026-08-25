@@ -151,14 +151,47 @@ fun calculateOverlayLayout(
 
     // Pinned overflow layout: bars fixed to the safe-area edges, the preview
     // shrunk to fit the space between them (down to the minimum legible scale).
-    val emojiY = dimensions.topPadding
-    val buttonsY = dimensions.screenHeight - dimensions.bottomPadding - dimensions.actionButtonsHeight
-    val messageTop = emojiY + dimensions.emojiBarHeight + dimensions.actionButtonsGap
-    val messageBottom = buttonsY - dimensions.actionButtonsGap
-    val viewportHeight = max(0f, messageBottom - messageTop)
-    val fitScale =
-        if (viewportHeight > 0f) min(1f, viewportHeight / messageHeight.toFloat())
-        else OVERLAY_MIN_PREVIEW_SCALE
+    var emojiY = dimensions.topPadding
+    var buttonsY = dimensions.screenHeight - dimensions.bottomPadding - dimensions.actionButtonsHeight
+    var gap = dimensions.actionButtonsGap
+    var messageTop = emojiY + dimensions.emojiBarHeight + gap
+    var messageBottom = buttonsY - gap
+    var viewportHeight = max(0f, messageBottom - messageTop)
+
+    if (viewportHeight <= 0f) {
+        // Compact window: the fixed safe-area paddings and gaps consume all the
+        // vertical space, which would collapse the preview to zero height (blank)
+        // and eventually make the two bars overlap. Compress the paddings and the
+        // inter-bar gap to zero and re-pin the bars to the raw screen edges so the
+        // preview is left a positive viewport whenever the window is tall enough
+        // to hold both bars at all.
+        emojiY = 0f
+        buttonsY = dimensions.screenHeight - dimensions.actionButtonsHeight
+        gap = 0f
+        messageTop = emojiY + dimensions.emojiBarHeight
+        messageBottom = buttonsY
+        viewportHeight = max(0f, messageBottom - messageTop)
+    }
+
+    if (viewportHeight <= 0f) {
+        // Truly degenerate: the window is shorter than both bars stacked, so no
+        // real preview viewport exists. Give the message the full space between
+        // the bars (it scrolls internally) so the preview is never blank, and pin
+        // the bars to the top and bottom edges as on-screen as physically possible.
+        val fullHeight = max(1f, dimensions.screenHeight - dimensions.emojiBarHeight - dimensions.actionButtonsHeight)
+        return OverlayLayout(
+            messageFinalY = 0f,
+            messageContainerHeight = fullHeight,
+            bitmapHeight = messageHeight.toFloat(),
+            emojiBarY = 0f,
+            actionButtonsY = max(0f, dimensions.screenHeight - dimensions.actionButtonsHeight),
+            isOverflow = true,
+            messageScrollable = true,
+            previewScale = OVERLAY_MIN_PREVIEW_SCALE,
+        )
+    }
+
+    val fitScale = min(1f, viewportHeight / messageHeight.toFloat())
     val scale = max(OVERLAY_MIN_PREVIEW_SCALE, fitScale)
     val scaledHeight = messageHeight.toFloat() * scale
     return OverlayLayout(

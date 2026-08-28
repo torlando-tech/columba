@@ -25,9 +25,11 @@ const val OVERLAY_MIN_PREVIEW_SCALE = 0.35f
  * Contains all the measurements needed to calculate proper positioning.
  *
  * @property screenHeight The total screen height in pixels
- * @property emojiBarHeight Height of the emoji bar in pixels (typically ~56dp)
+ * @property emojiBarHeight Height of the emoji bar in pixels (64dp for
+ * InlineReactionBar: 48dp buttons + 8dp vertical padding)
  * @property emojiBarGap Gap between emoji bar and message in pixels (typically ~76dp)
- * @property actionButtonsHeight Height of the action buttons in pixels (typically ~56dp)
+ * @property actionButtonsHeight Height of the action buttons in pixels (56dp for
+ * MessageActionButtons: 48dp icon buttons + 4dp vertical padding)
  * @property actionButtonsGap Gap between message and action buttons in pixels (typically ~12dp)
  * @property topPadding Padding for status bar etc. in pixels (typically ~48dp)
  * @property bottomPadding Padding for navigation bar etc. in pixels (typically ~48dp)

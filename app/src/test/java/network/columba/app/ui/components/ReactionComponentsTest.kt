@@ -774,6 +774,21 @@ class ReactionComponentsTest {
         assertTrue("Emoji bar must end at or above the bottom edge", layout.emojiBarY + 168f <= 300f)
         assertTrue("Action buttons must start at or below the top edge", layout.actionButtonsY >= 0f)
         assertTrue("Action buttons must end at or above the bottom edge", layout.actionButtonsY + 168f <= 300f)
+
+        // Both bars are pinned fully on screen (emoji to the top edge, action to
+        // the bottom edge). In a window shorter than the two 168px bars stacked,
+        // the bars MUST overlap: keeping both fully on screen requires emojiY in
+        // [0, h - 336], which only exists when h >= 336px. The overlap is therefore
+        // forced to exactly (336 - h)px here (336 - 300 = 36px) - no position keeps
+        // both fixed-height bars on screen without intersecting. The composable
+        // draws the action buttons last, so the primary actions win that overlap.
+        // Pin the exact positions and the forced overlap so this stays an
+        // intentional contract rather than an accidental collision.
+        assertEquals(0f, layout.emojiBarY, 0.5f)
+        assertEquals(300f - 168f, layout.actionButtonsY, 0.5f)
+        val forcedOverlap = (layout.emojiBarY + 168f) - layout.actionButtonsY
+        assertEquals("Overlap is forced to exactly 336 - h px", 336f - 300f, forcedOverlap, 0.5f)
+        assertTrue("Action buttons must be drawn on top in the overlap", layout.actionButtonsY < layout.emojiBarY + 168f)
     }
 
     // ========== ReactionModeOverlay on-screen context menu TESTS ==========

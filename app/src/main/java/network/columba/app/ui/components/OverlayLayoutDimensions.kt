@@ -176,10 +176,19 @@ fun calculateOverlayLayout(
     var messageFinalY = messageTop
     var messageContainerHeight = viewportHeight
     if (viewportHeight <= 0f) {
-        // Truly degenerate: the window is shorter than both bars stacked, so no
-        // real preview viewport exists. Give the message the full space between
-        // the bars (it scrolls internally) so the preview is never blank, and pin
-        // the bars to the top and bottom edges as on-screen as physically possible.
+        // Truly degenerate: the window is shorter than both bars stacked
+        // (screenHeight < emojiBarHeight + actionButtonsHeight), so no positive
+        // preview viewport can exist between them. This function only positions
+        // the bars (their heights are fixed by the composables), and the guarantee
+        // is that both stay fully on screen. Keeping both 56dp bars fully on screen
+        // requires emojiY >= 0 and emojiY <= screenHeight - 336, which only
+        // coexists when the window is at least 336px (112dp) tall. Below that the
+        // two bars are forced to overlap by exactly (336 - screenHeight)px - no
+        // position keeps both fixed-height bars on screen without intersecting.
+        // The composable draws the action buttons after the emoji bar, so the
+        // primary actions (reply/copy/delete) deliberately win the overlap instead
+        // of the quick reactions. The preview still gets the full (clamped) space
+        // and scrolls internally, so it is never blank.
         messageFinalY = 0f
         messageContainerHeight =
             max(1f, dimensions.screenHeight - dimensions.emojiBarHeight - dimensions.actionButtonsHeight)

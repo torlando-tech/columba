@@ -55,11 +55,18 @@ fun NavController.navigateToEntity(
  * leaving stale call screens in history.
  */
 fun NavController.navigateToIncomingCall(route: String) {
-    if (currentDestination?.route == AppDestination.VOICE_CALL.routePattern) {
+    // Cold-start race (COLUMBA-8Y): LaunchedEffect(callState) can observe an
+    // already-Incoming call before the NavHost attaches its navigation graph.
+    // A null currentDestination means the start destination is not committed
+    // yet, and NavController.navigate would throw "Navigation graph has not
+    // been set for NavController". Skip the navigation; the callState effect
+    // re-fires on the next state change once the graph is live.
+    val current = currentDestination ?: return
+    if (current.route == AppDestination.VOICE_CALL.routePattern) {
         return
     }
     navigate(route) {
-        launchSingleTop = currentDestination?.route == AppDestination.INCOMING_CALL.routePattern
+        launchSingleTop = current.route == AppDestination.INCOMING_CALL.routePattern
     }
 }
 

@@ -166,42 +166,36 @@ fun calculateOverlayLayout(
         // preview is left a positive viewport whenever the window is tall enough
         // to hold both bars at all.
         emojiY = 0f
-        buttonsY = dimensions.screenHeight - dimensions.actionButtonsHeight
+        buttonsY = max(0f, dimensions.screenHeight - dimensions.actionButtonsHeight)
         gap = 0f
         messageTop = emojiY + dimensions.emojiBarHeight
         messageBottom = buttonsY
         viewportHeight = max(0f, messageBottom - messageTop)
     }
 
+    var messageFinalY = messageTop
+    var messageContainerHeight = viewportHeight
     if (viewportHeight <= 0f) {
         // Truly degenerate: the window is shorter than both bars stacked, so no
         // real preview viewport exists. Give the message the full space between
         // the bars (it scrolls internally) so the preview is never blank, and pin
         // the bars to the top and bottom edges as on-screen as physically possible.
-        val fullHeight = max(1f, dimensions.screenHeight - dimensions.emojiBarHeight - dimensions.actionButtonsHeight)
-        return OverlayLayout(
-            messageFinalY = 0f,
-            messageContainerHeight = fullHeight,
-            bitmapHeight = messageHeight.toFloat(),
-            emojiBarY = 0f,
-            actionButtonsY = max(0f, dimensions.screenHeight - dimensions.actionButtonsHeight),
-            isOverflow = true,
-            messageScrollable = true,
-            previewScale = OVERLAY_MIN_PREVIEW_SCALE,
-        )
+        messageFinalY = 0f
+        messageContainerHeight =
+            max(1f, dimensions.screenHeight - dimensions.emojiBarHeight - dimensions.actionButtonsHeight)
     }
 
     val fitScale = min(1f, viewportHeight / messageHeight.toFloat())
     val scale = max(OVERLAY_MIN_PREVIEW_SCALE, fitScale)
     val scaledHeight = messageHeight.toFloat() * scale
     return OverlayLayout(
-        messageFinalY = messageTop,
-        messageContainerHeight = viewportHeight,
+        messageFinalY = messageFinalY,
+        messageContainerHeight = messageContainerHeight,
         bitmapHeight = messageHeight.toFloat(),
         emojiBarY = emojiY,
         actionButtonsY = buttonsY,
         isOverflow = true,
-        messageScrollable = scaledHeight > viewportHeight,
+        messageScrollable = scaledHeight > messageContainerHeight,
         previewScale = scale,
     )
 }

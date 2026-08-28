@@ -89,6 +89,7 @@ import network.columba.app.navigation.completeCurrentFlow
 import network.columba.app.navigation.navigateToAnsweredCall
 import network.columba.app.navigation.navigateToEntity
 import network.columba.app.navigation.navigateToIncomingCall
+import network.columba.app.navigation.shouldPresentIncomingCall
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -1174,17 +1175,13 @@ fun ColumbaNavigation(
                 val identityHash = state.identityHash
                 Log.i("MainActivity", "📞 Incoming call detected, currentRoute=$currentRoute, isAnsweringCall=$isAnsweringCall")
                 val encodedHash = Uri.encode(identityHash)
-                // Only navigate if not already on a call screen and not answering from notification
-                val isOnCallScreen =
-                    currentRoute?.startsWith("incoming_call/") == true ||
-                        currentRoute?.startsWith("voice_call/") == true
-                if (!isOnCallScreen && !isAnsweringCall) {
+                if (shouldPresentIncomingCall(state, currentRoute, isAnsweringCall)) {
                     Log.i("MainActivity", "📞 Navigating to IncomingCallScreen: $identityHash")
                     // Dismiss the notification — the user is now looking at the call screen
                     CallNotificationHelper(context).cancelIncomingCallNotification()
                     navController.navigateToIncomingCall("incoming_call/$encodedHash")
                 } else {
-                    Log.i("MainActivity", "📞 Skipping navigation (onCallScreen=$isOnCallScreen, isAnsweringCall=$isAnsweringCall)")
+                    Log.i("MainActivity", "📞 Skipping navigation (isAnsweringCall=$isAnsweringCall)")
                 }
             }
             else -> {
@@ -1193,6 +1190,31 @@ fun ColumbaNavigation(
                     isAnsweringCall = false
                 }
             }
+        }
+    }
+
+    // Cold-start race (COLUMBA-8Y): LaunchedEffect(callState) can observe an
+    // already-Incoming call before the NavHost attaches its navigation graph. In that
+    // window navigateToIncomingCall no-ops (its no-throw contract), and because the
+    // Incoming StateFlow value does not change, the callState effect does NOT re-fire
+    // once the graph is live — so the incoming call would continue without ever showing
+    // the incoming-call screen. Latch graph readiness and retrigger the incoming-call
+    // navigation exactly once the start destination commits.
+    var graphReady by remember { mutableStateOf(false) }
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != null) {
+            graphReady = true
+        }
+    }
+    LaunchedEffect(graphReady) {
+        if (!graphReady) return@LaunchedEffect
+        val state = telephony.callState.value
+        if (state is CallState.Incoming && shouldPresentIncomingCall(state, currentRoute, isAnsweringCall)) {
+            val identityHash = state.identityHash
+            val encodedHash = Uri.encode(identityHash)
+            Log.i("MainActivity", "📞 Retriggering incoming-call navigation after graph attach: $identityHash")
+            CallNotificationHelper(context).cancelIncomingCallNotification()
+            navController.navigateToIncomingCall("incoming_call/$encodedHash")
         }
     }
 

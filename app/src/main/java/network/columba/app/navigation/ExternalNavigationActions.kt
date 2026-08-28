@@ -1,6 +1,7 @@
 package network.columba.app.navigation
 
 import androidx.navigation.NavController
+import network.columba.app.rns.api.model.CallState
 
 /**
  * Navigates to an externally requested entity without stacking the same logical
@@ -53,15 +54,45 @@ fun NavController.navigateToEntity(
  * Presents the one active incoming-call destination. Competing notification and
  * call-state producers replace the current incoming-call entry rather than
  * leaving stale call screens in history.
+ *
+ * Cold-start race (COLUMBA-8Y): the caller's `LaunchedEffect(callState)`
+ * can observe an already-Incoming call before the NavHost attaches its navigation
+ * graph. A null currentDestination means the start destination is not committed
+ * yet, and NavController.navigate would throw "Navigation graph has not been
+ * set for NavController". We skip the navigation here (never throw); the caller
+ * retriggers the request once the graph becomes live, so the Incoming call is
+ * not silently discarded.
  */
 fun NavController.navigateToIncomingCall(route: String) {
-    if (currentDestination?.route == AppDestination.VOICE_CALL.routePattern) {
+    val current = currentDestination ?: return
+    if (current.route == AppDestination.VOICE_CALL.routePattern) {
         return
     }
     navigate(route) {
-        launchSingleTop = currentDestination?.route == AppDestination.INCOMING_CALL.routePattern
+        launchSingleTop = current.route == AppDestination.INCOMING_CALL.routePattern
     }
 }
+
+/**
+ * Decides whether the incoming-call screen should be (re)presented for the given
+ * call state and current route: the call is Incoming and we are not already on a
+ * call screen nor mid-answer.
+ *
+ * Shared by the live `LaunchedEffect(callState)` observer and the graph-ready
+ * retrigger in ColumbaNavigation so the cold-start retrigger (COLUMBA-8Y) uses
+ * exactly the same predicate as the steady-state observer.
+ */
+internal fun shouldPresentIncomingCall(
+    callState: CallState,
+    currentRoute: String?,
+    isAnsweringCall: Boolean,
+): Boolean =
+    callState is CallState.Incoming &&
+        !(
+            currentRoute?.startsWith("incoming_call/") == true ||
+                currentRoute?.startsWith("voice_call/") == true
+        ) &&
+        !isAnsweringCall
 
 /**
  * Replaces the incoming-call flow with the active voice call.

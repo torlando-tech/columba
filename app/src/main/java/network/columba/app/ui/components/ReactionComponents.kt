@@ -969,7 +969,13 @@ fun ReactionModeOverlay(
                     dimensions =
                         OverlayLayoutDimensions(
                             screenHeight = screenHeightPx,
-                            emojiBarHeight = with(density) { 56.dp.toPx() },
+                            // InlineReactionBar renders at 64dp (48dp emoji buttons +
+                            // 8dp top + 8dp bottom Row padding); MessageActionButtons
+                            // renders at 56dp (48dp icon buttons + 4dp top + 4dp bottom).
+                            // The reservations must match the true rendered heights or
+                            // the pinned layout under-reserves the reaction bar and the
+                            // message preview / action bar overlap its lower 8dp.
+                            emojiBarHeight = with(density) { 64.dp.toPx() },
                             emojiBarGap = with(density) { 76.dp.toPx() },
                             actionButtonsHeight = with(density) { 56.dp.toPx() },
                             actionButtonsGap = with(density) { 12.dp.toPx() },

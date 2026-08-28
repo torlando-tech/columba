@@ -180,15 +180,16 @@ fun calculateOverlayLayout(
         // (screenHeight < emojiBarHeight + actionButtonsHeight), so no positive
         // preview viewport can exist between them. This function only positions
         // the bars (their heights are fixed by the composables), and the guarantee
-        // is that both stay fully on screen. Keeping both 56dp bars fully on screen
-        // requires emojiY >= 0 and emojiY <= screenHeight - 336, which only
-        // coexists when the window is at least 336px (112dp) tall. Below that the
-        // two bars are forced to overlap by exactly (336 - screenHeight)px - no
-        // position keeps both fixed-height bars on screen without intersecting.
-        // The composable draws the action buttons after the emoji bar, so the
-        // primary actions (reply/copy/delete) deliberately win the overlap instead
-        // of the quick reactions. The preview still gets the full (clamped) space
-        // and scrolls internally, so it is never blank.
+        // is that both stay fully on screen. For the real bars (64dp reaction +
+        // 56dp action = 360px at 3x) keeping both fully on screen requires
+        // emojiY >= 0 and emojiY <= screenHeight - 360, which only coexists when
+        // the window is at least 360px (120dp) tall. Below that the two bars are
+        // forced to overlap by exactly (360 - screenHeight)px - no position keeps
+        // both fixed-height bars on screen without intersecting. The composable
+        // draws the action buttons after the emoji bar, so the primary actions
+        // (reply/copy/delete) deliberately win the overlap instead of the quick
+        // reactions. The preview still gets the full (clamped) space and scrolls
+        // internally, so it is never blank.
         messageFinalY = 0f
         messageContainerHeight =
             max(1f, dimensions.screenHeight - dimensions.emojiBarHeight - dimensions.actionButtonsHeight)

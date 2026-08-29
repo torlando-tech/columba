@@ -25,16 +25,25 @@ object FileUtils {
     private const val TAG = "FileUtils"
 
     /**
-     * Maximum total size for all file attachments combined.
-     * No practical limit - large files will be delivered via propagation node.
+     * Maximum size for a single file attachment, in bytes (512KB).
+     *
+     * Bounds the in-memory read performed by [readFileFromUri] /
+     * [readFileFromUriWithResult]: an unbounded readBytes() of a user-picked
+     * file OOMed a device on a ~181MB pick (COLUMBA-4A). Files above this cap
+     * are rejected as FileTooLarge instead of being read into memory.
+     * Legitimate large attachments on the send side keep working via the
+     * file-based transfer path (see [FILE_TRANSFER_THRESHOLD]).
      */
-    const val MAX_TOTAL_ATTACHMENT_SIZE = Int.MAX_VALUE
+    const val MAX_SINGLE_FILE_SIZE = 512 * 1024 // 512KB
 
     /**
-     * Maximum size for a single file attachment.
-     * No practical limit - large files will be delivered via propagation node.
+     * Maximum total size for all file attachments combined, in bytes (32MB).
+     *
+     * Used by [wouldExceedSizeLimit] to bound the combined in-memory working
+     * set for the message composer. Must stay below Int.MAX_VALUE — that value
+     * disabled the guard (COLUMBA-4A regression).
      */
-    const val MAX_SINGLE_FILE_SIZE = Int.MAX_VALUE
+    const val MAX_TOTAL_ATTACHMENT_SIZE = 512 * 1024 * 64 // 32MB
 
     /**
      * Result of attempting to read a file attachment.
@@ -122,14 +131,16 @@ object FileUtils {
     /**
      * Read file data from a content URI.
      *
-     * File attachments have no size limit - they are sent uncompressed.
-     * For large files, users should be aware that transmission over mesh
-     * networks may be slow or unreliable.
+     * The single-file size cap ([MAX_SINGLE_FILE_SIZE]) is enforced BEFORE any
+     * bytes are read: oversized files return null instead of being pulled
+     * into memory via readBytes(), which would OOM the process (COLUMBA-4A).
+     * Legitimate large attachments on the send side are preserved by the
+     * file-based transfer path (see [FILE_TRANSFER_THRESHOLD]).
      *
      * @param context Android context for ContentResolver access
      * @param uri The content URI of the file to read
      * @return FileAttachment containing the file data and metadata, or null if the file
-     *         couldn't be read
+     *         couldn't be read (including when it exceeds [MAX_SINGLE_FILE_SIZE])
      */
     fun readFileFromUri(
         context: Context,
@@ -137,6 +148,15 @@ object FileUtils {
     ): FileAttachment? =
         try {
             val contentResolver = context.contentResolver
+
+            // Check file size first without reading the entire file. Without
+            // this guard an oversized pick is read fully into a ByteArray and
+            // can crash the process (COLUMBA-4A).
+            val fileSize = getFileSize(context, uri)
+            if (fileSize > MAX_SINGLE_FILE_SIZE) {
+                Log.w(TAG, "File exceeds ${MAX_SINGLE_FILE_SIZE} bytes, refusing to read: $uri")
+                return null
+            }
 
             // Get filename
             val filename = getFilename(context, uri) ?: "unknown"

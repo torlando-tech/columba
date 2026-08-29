@@ -1,15 +1,35 @@
 package network.columba.app.ui.components
 
 import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Maximum height (in physical pixels) of the message snapshot captured for the
+ * reaction mode overlay. GPUs on supported devices cap hardware textures well
+ * below this, so capturing a full-height bitmap of a very tall bubble can
+ * silently fail (blank snapshot). Recording at most this many pixels keeps the
+ * capture within the safe texture size on every supported device.
+ */
+const val OVERLAY_MAX_CAPTURE_HEIGHT_PX = 4096
+
+/**
+ * Minimum scale applied to the message preview in the pinned (overflow) layout.
+ * The preview is shrunk to fit the space between the bars until shrinking it
+ * further would make the text illegible; below this floor the preview is capped
+ * and scrolls internally instead.
+ */
+const val OVERLAY_MIN_PREVIEW_SCALE = 0.35f
 
 /**
  * Layout dimensions for the reaction mode overlay.
- * Contains all the measurements needed to calculate proper scaling and positioning.
+ * Contains all the measurements needed to calculate proper positioning.
  *
  * @property screenHeight The total screen height in pixels
- * @property emojiBarHeight Height of the emoji bar in pixels (typically ~56dp)
+ * @property emojiBarHeight Height of the emoji bar in pixels (64dp for
+ * InlineReactionBar: 48dp buttons + 8dp vertical padding)
  * @property emojiBarGap Gap between emoji bar and message in pixels (typically ~76dp)
- * @property actionButtonsHeight Height of action buttons in pixels (typically ~56dp)
+ * @property actionButtonsHeight Height of the action buttons in pixels (56dp for
+ * MessageActionButtons: 48dp icon buttons + 4dp vertical padding)
  * @property actionButtonsGap Gap between message and action buttons in pixels (typically ~12dp)
  * @property topPadding Padding for status bar etc. in pixels (typically ~48dp)
  * @property bottomPadding Padding for navigation bar etc. in pixels (typically ~48dp)
@@ -25,34 +45,169 @@ data class OverlayLayoutDimensions(
 )
 
 /**
- * Calculates the scale factor for a message in the reaction mode overlay.
+ * Resolved on-screen layout for the reaction mode overlay.
  *
- * When a message is very large (e.g., a long text or large image), the context menu
- * (emoji bar above and action buttons below) may be pushed off screen. This function
- * calculates how much to scale down the message so that everything fits on screen.
+ * All values are in physical pixels. [messageFinalY] is the top of the message's
+ * visible area, [messageContainerHeight] is the height of that area, and
+ * [bitmapHeight] is the height of the message snapshot bitmap as captured.
+ * [previewScale] scales the snapshot so the whole preview is visible: it is 1f
+ * for messages that fit, and for the pinned (overflow) layout it shrinks the
+ * preview to the space between the bars down to [OVERLAY_MIN_PREVIEW_SCALE].
+ * When [messageScrollable] is true the scaled preview still exceeds the
+ * viewport, which then scrolls to reveal the rest.
  *
- * @param messageHeight The original height of the message in pixels
- * @param dimensions Layout dimensions for the overlay
- * @param minScale Minimum scale factor (default 0.3 to keep content readable)
- * @return Scale factor between minScale and 1.0
+ * The layout guarantees the emoji bar and the action buttons are always fully
+ * on screen, and the message preview is never blank or pushed off screen.
+ *
+ * @property messageFinalY Top (Y) of the message's visible area
+ * @property messageContainerHeight Visible height of the message area
+ * @property bitmapHeight Height of the message snapshot bitmap as captured
+ * @property emojiBarY Top (Y) of the emoji bar
+ * @property actionButtonsY Top (Y) of the action buttons
+ * @property isOverflow True when the pinned (top/bottom) layout is in use
+ * @property messageScrollable True when the scaled preview is taller than the viewport
+ * @property previewScale Scale factor applied to the snapshot preview (1f = full size)
  */
-fun calculateMessageScaleForOverlay(
+data class OverlayLayout(
+    val messageFinalY: Float,
+    val messageContainerHeight: Float,
+    val bitmapHeight: Float,
+    val emojiBarY: Float,
+    val actionButtonsY: Float,
+    val isOverflow: Boolean,
+    val messageScrollable: Boolean,
+    val previewScale: Float = 1f,
+) {
+    /** Height of the message preview after [previewScale] is applied. */
+    val scaledPreviewHeight: Float
+        get() = bitmapHeight * previewScale
+
+    /**
+     * True when the message, the emoji bar, and the action buttons are all
+     * within the screen bounds.
+     */
+    fun fitsOnScreen(dimensions: OverlayLayoutDimensions): Boolean {
+        return emojiBarY >= 0f &&
+            emojiBarY + dimensions.emojiBarHeight <= dimensions.screenHeight &&
+            actionButtonsY >= 0f &&
+            actionButtonsY + dimensions.actionButtonsHeight <= dimensions.screenHeight &&
+            messageFinalY >= 0f &&
+            messageFinalY + messageContainerHeight <= dimensions.screenHeight
+    }
+}
+
+/**
+ * Resolves the on-screen layout for the reaction mode overlay.
+ *
+ * Messages that fit are centered at full size, with the emoji bar above and the
+ * action buttons below. A message that does not fit pins the bars to the top
+ * and bottom safe areas and shrinks the preview to the space between them, down
+ * to [OVERLAY_MIN_PREVIEW_SCALE]. Only when the preview at that floor is still
+ * taller than the space between the bars does it get capped and scroll
+ * internally. The preview is therefore always visible and at a legible size for
+ * the range of messages realistic on a phone (the capture is separately capped
+ * at [OVERLAY_MAX_CAPTURE_HEIGHT_PX]).
+ *
+ * @param messageHeight The height of the message snapshot bitmap in pixels
+ * @param dimensions Layout dimensions for the overlay
+ */
+fun calculateOverlayLayout(
     messageHeight: Int,
     dimensions: OverlayLayoutDimensions,
-    minScale: Float = 0.3f,
-): Float {
-    if (messageHeight <= 0) return 1f
-
-    val availableHeight = dimensions.screenHeight - dimensions.topPadding - dimensions.bottomPadding
-    val uiElementsHeight =
-        dimensions.emojiBarHeight + dimensions.emojiBarGap +
-            dimensions.actionButtonsGap + dimensions.actionButtonsHeight
-    val totalHeightNeeded = uiElementsHeight + messageHeight
-
-    return if (totalHeightNeeded > availableHeight) {
-        val maxMessageHeight = max(0f, availableHeight - uiElementsHeight)
-        (maxMessageHeight / messageHeight).coerceIn(minScale, 1f)
-    } else {
-        1f
+): OverlayLayout {
+    if (messageHeight <= 0) {
+        // Degenerate zero-size snapshot: keep the centered layout; nothing to cap.
+        val y = dimensions.screenHeight / 2f
+        return OverlayLayout(
+            messageFinalY = y,
+            messageContainerHeight = 0f,
+            bitmapHeight = 0f,
+            emojiBarY = (y - dimensions.emojiBarGap).coerceAtLeast(0f),
+            actionButtonsY = (y + dimensions.actionButtonsGap).coerceAtMost(dimensions.screenHeight),
+            isOverflow = false,
+            messageScrollable = false,
+            previewScale = 1f,
+        )
     }
+
+    // Centered placement: message in the middle, bars adjacent.
+    val centerY = dimensions.screenHeight / 2f - messageHeight / 2f
+    val centeredEmojiY = centerY - dimensions.emojiBarGap
+    val centeredButtonsY = centerY + messageHeight + dimensions.actionButtonsGap
+    val fitsCentered =
+        centeredEmojiY >= dimensions.topPadding &&
+            centeredButtonsY + dimensions.actionButtonsHeight <=
+                dimensions.screenHeight - dimensions.bottomPadding
+    if (fitsCentered) {
+        return OverlayLayout(
+            messageFinalY = centerY,
+            messageContainerHeight = messageHeight.toFloat(),
+            bitmapHeight = messageHeight.toFloat(),
+            emojiBarY = centeredEmojiY,
+            actionButtonsY = centeredButtonsY,
+            isOverflow = false,
+            messageScrollable = false,
+            previewScale = 1f,
+        )
+    }
+
+    // Pinned overflow layout: bars fixed to the safe-area edges, the preview
+    // shrunk to fit the space between them (down to the minimum legible scale).
+    var emojiY = dimensions.topPadding
+    var buttonsY = dimensions.screenHeight - dimensions.bottomPadding - dimensions.actionButtonsHeight
+    var gap = dimensions.actionButtonsGap
+    var messageTop = emojiY + dimensions.emojiBarHeight + gap
+    var messageBottom = buttonsY - gap
+    var viewportHeight = max(0f, messageBottom - messageTop)
+
+    if (viewportHeight <= 0f) {
+        // Compact window: the fixed safe-area paddings and gaps consume all the
+        // vertical space, which would collapse the preview to zero height (blank)
+        // and eventually make the two bars overlap. Compress the paddings and the
+        // inter-bar gap to zero and re-pin the bars to the raw screen edges so the
+        // preview is left a positive viewport whenever the window is tall enough
+        // to hold both bars at all.
+        emojiY = 0f
+        buttonsY = max(0f, dimensions.screenHeight - dimensions.actionButtonsHeight)
+        gap = 0f
+        messageTop = emojiY + dimensions.emojiBarHeight
+        messageBottom = buttonsY
+        viewportHeight = max(0f, messageBottom - messageTop)
+    }
+
+    var messageFinalY = messageTop
+    var messageContainerHeight = viewportHeight
+    if (viewportHeight <= 0f) {
+        // Truly degenerate: the window is shorter than both bars stacked
+        // (screenHeight < emojiBarHeight + actionButtonsHeight), so no positive
+        // preview viewport can exist between them. This function only positions
+        // the bars (their heights are fixed by the composables), and the guarantee
+        // is that both stay fully on screen. For the real bars (64dp reaction +
+        // 56dp action = 360px at 3x) keeping both fully on screen requires
+        // emojiY >= 0 and emojiY <= screenHeight - 360, which only coexists when
+        // the window is at least 360px (120dp) tall. Below that the two bars are
+        // forced to overlap by exactly (360 - screenHeight)px - no position keeps
+        // both fixed-height bars on screen without intersecting. The composable
+        // draws the action buttons after the emoji bar, so the primary actions
+        // (reply/copy/delete) deliberately win the overlap instead of the quick
+        // reactions. The preview still gets the full (clamped) space and scrolls
+        // internally, so it is never blank.
+        messageFinalY = 0f
+        messageContainerHeight =
+            max(1f, dimensions.screenHeight - dimensions.emojiBarHeight - dimensions.actionButtonsHeight)
+    }
+
+    val fitScale = min(1f, viewportHeight / messageHeight.toFloat())
+    val scale = max(OVERLAY_MIN_PREVIEW_SCALE, fitScale)
+    val scaledHeight = messageHeight.toFloat() * scale
+    return OverlayLayout(
+        messageFinalY = messageFinalY,
+        messageContainerHeight = messageContainerHeight,
+        bitmapHeight = messageHeight.toFloat(),
+        emojiBarY = emojiY,
+        actionButtonsY = buttonsY,
+        isOverflow = true,
+        messageScrollable = scaledHeight > messageContainerHeight,
+        previewScale = scale,
+    )
 }

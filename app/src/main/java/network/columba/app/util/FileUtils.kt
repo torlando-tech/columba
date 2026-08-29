@@ -33,8 +33,10 @@ object FileUtils {
      * [readFileFromUriWithResult]: an unbounded readBytes() of a user-picked
      * file OOMed a device on a ~181MB pick (COLUMBA-4A). Files above this cap
      * are rejected as FileTooLarge instead of being read into memory.
-     * Legitimate large attachments on the send side keep working via the
-     * file-based transfer path (see [FILE_TRANSFER_THRESHOLD]).
+     * Composer SEND picks use the larger send-path bound (32MB, the same
+     * ceiling MessagingViewModel enforces before handing bytes to Reticulum)
+     * via [readFileForSendWithResult]; both bounds are enforced by a bounded
+     * stream read, never an unbounded one.
      */
     const val MAX_SINGLE_FILE_SIZE = 512 * 1024 // 512KB
 
@@ -86,6 +88,11 @@ object FileUtils {
     /**
      * Read file data from a content URI with detailed result.
      *
+     * Bounds the read to [MAX_SINGLE_FILE_SIZE] (512KB). Callers selecting a
+     * composer *send* attachment must use [readFileForSendWithResult] instead:
+     * the send path accepts up to [MAX_TOTAL_ATTACHMENT_SIZE] per file, and
+     * capping composer picks at 512KB regressed the canonical E2E 1MB pick.
+     *
      * @param context Android context for ContentResolver access
      * @param uri The content URI of the file to read
      * @return FileReadResult indicating success, file too large, or error
@@ -93,44 +100,7 @@ object FileUtils {
     fun readFileFromUriWithResult(
         context: Context,
         uri: Uri,
-    ): FileReadResult {
-        return try {
-            val contentResolver = context.contentResolver
-
-            // Check file size first without reading the entire file
-            val fileSize = getFileSize(context, uri)
-            if (fileSize > MAX_SINGLE_FILE_SIZE) {
-                return FileReadResult.FileTooLarge(fileSize, MAX_SINGLE_FILE_SIZE)
-            }
-
-            // Get filename
-            val filename = getFilename(context, uri) ?: "unknown"
-
-            // Get MIME type
-            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-
-            // Read data with a hard bound on the allocation itself: unknown
-            // (-1) or understated provider metadata passes the pre-check, so
-            // readBytes() must never be trusted to stay small (Greptile P1).
-            contentResolver.openInputStream(uri)?.use { inputStream ->
-                val data =
-                    readBounded(inputStream, MAX_SINGLE_FILE_SIZE)
-                        ?: return FileReadResult.FileTooLarge(-1L, MAX_SINGLE_FILE_SIZE)
-
-                FileReadResult.Success(
-                    FileAttachment(
-                        filename = filename,
-                        data = data,
-                        mimeType = mimeType,
-                        sizeBytes = data.size,
-                    ),
-                )
-            } ?: FileReadResult.Error("Could not open file")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to read file from URI: $uri", e)
-            FileReadResult.Error(e.message ?: "Unknown error")
-        }
-    }
+    ): FileReadResult = readFileWithResultBounded(context, uri, MAX_SINGLE_FILE_SIZE)
 
     /**
      * Read file data from a content URI.
@@ -138,8 +108,8 @@ object FileUtils {
      * The single-file size cap ([MAX_SINGLE_FILE_SIZE]) is enforced BEFORE any
      * bytes are read: oversized files return null instead of being pulled
      * into memory via readBytes(), which would OOM the process (COLUMBA-4A).
-     * Legitimate large attachments on the send side are preserved by the
-     * file-based transfer path (see [FILE_TRANSFER_THRESHOLD]).
+     * Composer SEND picks use the larger send-path bound via
+     * [readFileForSendWithResult] instead.
      *
      * @param context Android context for ContentResolver access
      * @param uri The content URI of the file to read
@@ -534,6 +504,77 @@ object FileUtils {
 
 /** Copy buffer used by [readBounded]; also the max slack past the cap a bounded read may consume. */
 private const val FILE_READ_BUFFER_SIZE = 64 * 1024
+
+/**
+ * Read a composer *send* attachment from a content URI with detailed result.
+ *
+ * Same contract as [FileUtils.readFileFromUriWithResult] but bounded to
+ * [FileUtils.MAX_TOTAL_ATTACHMENT_SIZE] (32MB) — the per-file ceiling the
+ * send path itself enforces before handing bytes to Reticulum
+ * (MessagingViewModel rejects a larger payload), so the composer picker must
+ * not reject files the send side would accept. A 1MB composer pick (the
+ * canonical Real LXMF Resource Progress E2E case) attaches with full bytes.
+ *
+ * The COLUMBA-4A OOM guard is identical and NOT relaxed by the larger cap:
+ * the metadata pre-check plus the bounded stream read still refuse a ~181MB
+ * pick before (or mid-) any allocation, even with missing or understated
+ * provider metadata.
+ */
+fun FileUtils.readFileForSendWithResult(
+    context: Context,
+    uri: Uri,
+): FileUtils.FileReadResult = readFileWithResultBounded(context, uri, MAX_TOTAL_ATTACHMENT_SIZE)
+
+/**
+ * Shared implementation behind [FileUtils.readFileFromUriWithResult] and
+ * [FileUtils.readFileForSendWithResult]: metadata pre-check first, then a
+ * hard bound on the allocation itself via [readBounded] — unknown (-1) or
+ * understated provider metadata passes the pre-check, so readBytes() must
+ * never be trusted to stay small (COLUMBA-4A Greptile P1).
+ */
+private fun FileUtils.readFileWithResultBounded(
+    context: Context,
+    uri: Uri,
+    maxFileSize: Int,
+): FileUtils.FileReadResult {
+    val tag = "FileUtils"
+    return try {
+        val contentResolver = context.contentResolver
+
+        // Check file size first without reading the entire file
+        val fileSize = getFileSize(context, uri)
+        if (fileSize > maxFileSize) {
+            return FileUtils.FileReadResult.FileTooLarge(fileSize, maxFileSize)
+        }
+
+        // Get filename
+        val filename = getFilename(context, uri) ?: "unknown"
+
+        // Get MIME type
+        val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+
+        // Read data with a hard bound on the allocation itself: unknown
+        // (-1) or understated provider metadata passes the pre-check, so
+        // readBytes() must never be trusted to stay small (Greptile P1).
+        contentResolver.openInputStream(uri)?.use { inputStream ->
+            val data =
+                readBounded(inputStream, maxFileSize)
+                    ?: return FileUtils.FileReadResult.FileTooLarge(-1L, maxFileSize)
+
+            FileUtils.FileReadResult.Success(
+                FileAttachment(
+                    filename = filename,
+                    data = data,
+                    mimeType = mimeType,
+                    sizeBytes = data.size,
+                ),
+            )
+        } ?: FileUtils.FileReadResult.Error("Could not open file")
+    } catch (e: Exception) {
+        Log.e(tag, "Failed to read file from URI: $uri", e)
+        FileUtils.FileReadResult.Error(e.message ?: "Unknown error")
+    }
+}
 
 /**
  * Read [input] into memory but NEVER beyond [maxBytes]: aborts as soon as

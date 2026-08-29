@@ -231,6 +231,7 @@ import network.columba.app.ui.util.rememberLifecycleTickerMillis
 import network.columba.app.util.AnimatedImageLoader
 import network.columba.app.util.FileAttachment
 import network.columba.app.util.FileUtils
+import network.columba.app.util.readFileForSendWithResult
 import network.columba.app.util.ImageUtils
 import network.columba.app.util.LocationPermissionManager
 import network.columba.app.util.MediaPermissionManager
@@ -609,7 +610,10 @@ fun MessagingScreen(
             uris.forEach { uri ->
                 viewModel.setProcessingFile(true)
                 scope.launch(Dispatchers.IO) {
-                    val result = FileUtils.readFileFromUriWithResult(context, uri)
+                    // Send-path cap (32MB), not the 512KB generic read cap:
+                    // the send side accepts files up to MAX_ATTACHMENT_TOTAL_BYTES,
+                    // so a 1MB composer pick must attach (canonical E2E).
+                    val result = FileUtils.readFileForSendWithResult(context, uri)
                     withContext(Dispatchers.Main) {
                         when (result) {
                             is FileUtils.FileReadResult.Success -> {

@@ -4,10 +4,12 @@ import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
+import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,6 +22,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.InputStream
 
 /**
  * Unit tests for FileUtils Android-specific functions using MockK.
@@ -200,6 +203,56 @@ class FileUtilsRobolectricTest {
         assertNull(result)
     }
 
+    // ========== readFileFromUriWithResult Tests ==========
+
+    @Test
+    fun `readFileFromUriWithResult returns FileTooLarge for oversized file before reading bytes`() {
+        // Sentry COLUMBA-4A: picking a ~181MB file made readFileFromUriWithResult
+        // allocate the ENTIRE file in memory via readBytes() because both size
+        // guards were disabled at Int.MAX_VALUE (regression 30075665). The
+        // pre-check (getFileSize via openFileDescriptor().statSize) must
+        // short-circuit BEFORE any bytes are read.
+        //
+        // Honesty: a literal Android heap OOM cannot be deterministically forced
+        // in a JVM unit test. This deterministic seam reproduces the Sentry
+        // SYMPTOM — the guard trips before the unbounded allocation — not the
+        // literal OOM.
+        val oversize = 181_374_640L // mirrors the Sentry allocation size
+        val testUri = mockk<Uri>(relaxed = true)
+        val mockPfd = mockk<ParcelFileDescriptor>(relaxed = true)
+        every { mockPfd.statSize } returns oversize
+        every { mockContentResolver.openFileDescriptor(testUri, "r") } returns mockPfd
+        // Deterministic mirror of the Sentry event: the mocked resolver hands
+        // over the full 181MB file as a LAZY stream — zero allocation until a
+        // read() actually happens. On the buggy base (guard disabled at
+        // Int.MAX_VALUE) readFileFromUriWithResult reads all of it via
+        // readBytes() and returns Success with 181MB of data — the unbounded
+        // allocation that OOMed the device. The fix must return FileTooLarge
+        // BEFORE this stream is touched at all (lazy stream stays unallocated,
+        // proving no unbounded read happened).
+        every { mockContentResolver.openInputStream(testUri) } returns
+            lazyOversizeStream(oversize.toInt())
+
+        val result = FileUtils.readFileFromUriWithResult(mockContext, testUri)
+
+        // Bounded message: on the buggy base `result` is a Success whose
+        // toString() embeds the full 181MB payload — printing it would blow
+        // the test JVM / report writer. Only the class name is needed as
+        // failure evidence.
+        assertTrue(
+            "Expected FileTooLarge for ${oversize}B file, got: " +
+                result::class.java.simpleName,
+            result is FileUtils.FileReadResult.FileTooLarge,
+        )
+        result as FileUtils.FileReadResult.FileTooLarge
+        assertEquals(oversize, result.actualSize)
+        assertEquals(FileUtils.MAX_SINGLE_FILE_SIZE, result.maxSize)
+        // The guard must short-circuit before readBytes(): the full-byte read
+        // (and even filename lookup) must never start.
+        verify(exactly = 0) { mockContentResolver.openInputStream(testUri) }
+        verify(exactly = 0) { mockContentResolver.query(testUri, null, null, null, null) }
+    }
+
     // ========== getFilename Tests ==========
 
     @Test
@@ -301,4 +354,32 @@ class FileUtilsRobolectricTest {
 
         assertEquals("exception_fallback.txt", result)
     }
+
+    // ========== Test helpers ==========
+
+    /**
+     * Build an InputStream that serves [size] bytes with zero upfront
+     * allocation — memory is only consumed as read() is actually called.
+     * Used to model an oversized picked file: a correct size-cap guard
+     * returns before any read() call (nothing allocated); the unbounded base
+     * code triggers the full read and returns the entire 181MB payload —
+     * making the failure evidence "read 181MB into memory" instead of a JVM OOM.
+     */
+    private fun lazyOversizeStream(size: Int): InputStream =
+        object : InputStream() {
+            private var remaining = size
+            override fun read(): Int {
+                if (remaining <= 0) return -1
+                remaining--
+                return 0
+            }
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (remaining <= 0) return -1
+                val toRead = minOf(len, remaining)
+                b.fill(0, off, off + toRead)
+                remaining -= toRead
+                return toRead
+            }
+        }
 }

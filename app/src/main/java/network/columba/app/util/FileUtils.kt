@@ -12,7 +12,9 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.ui.graphics.vector.ImageVector
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 import java.util.Locale
 
 /**
@@ -54,6 +56,8 @@ object FileUtils {
         ) : FileReadResult()
 
         data class FileTooLarge(
+            /** Actual size in bytes, or -1 when the provider never revealed a
+             *  size and the bounded stream read tripped the cap mid-stream. */
             val actualSize: Long,
             val maxSize: Int,
         ) : FileReadResult()
@@ -105,13 +109,13 @@ object FileUtils {
             // Get MIME type
             val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
 
-            // Read data
+            // Read data with a hard bound on the allocation itself: unknown
+            // (-1) or understated provider metadata passes the pre-check, so
+            // readBytes() must never be trusted to stay small (Greptile P1).
             contentResolver.openInputStream(uri)?.use { inputStream ->
-                val data = inputStream.readBytes()
-
-                if (data.size > MAX_SINGLE_FILE_SIZE) {
-                    return FileReadResult.FileTooLarge(data.size.toLong(), MAX_SINGLE_FILE_SIZE)
-                }
+                val data =
+                    readBounded(inputStream, MAX_SINGLE_FILE_SIZE)
+                        ?: return FileReadResult.FileTooLarge(-1L, MAX_SINGLE_FILE_SIZE)
 
                 FileReadResult.Success(
                     FileAttachment(
@@ -164,9 +168,16 @@ object FileUtils {
             // Get MIME type
             val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
 
-            // Read data
+            // Read data with a hard bound on the allocation itself (sibling
+            // parity with readFileFromUriWithResult): metadata alone cannot be
+            // trusted, so the read aborts at the cap (Greptile P1).
             contentResolver.openInputStream(uri)?.use { inputStream ->
-                val data = inputStream.readBytes()
+                val data =
+                    readBounded(inputStream, MAX_SINGLE_FILE_SIZE)
+                        ?: run {
+                            Log.w(TAG, "Stream exceeded ${MAX_SINGLE_FILE_SIZE} bytes, aborting read: $uri")
+                            return null
+                        }
 
                 FileAttachment(
                     filename = filename,
@@ -519,6 +530,44 @@ object FileUtils {
                 }
             } ?: 0
     }
+}
+
+/** Copy buffer used by [readBounded]; also the max slack past the cap a bounded read may consume. */
+private const val FILE_READ_BUFFER_SIZE = 64 * 1024
+
+/**
+ * Read [input] into memory but NEVER beyond [maxBytes]: aborts as soon as
+ * the stream yields more than the cap (at most one read buffer past it),
+ * returning null instead of allocating the whole stream.
+ *
+ * This is the enforcement point for [FileUtils.MAX_SINGLE_FILE_SIZE]. The
+ * metadata pre-check via [FileUtils.getFileSize] is only a fast path —
+ * providers may report statSize as -1 or understate the stream size, and
+ * [InputStream.readBytes] would then allocate the entire (potentially huge)
+ * stream before any check could fire (COLUMBA-4A Greptile P1).
+ *
+ * @return the bytes read (size <= [maxBytes]), or null if the stream exceeded
+ *         [maxBytes] and the read was aborted.
+ */
+private fun readBounded(
+    input: InputStream,
+    maxBytes: Int,
+): ByteArray? {
+    val buffer = ByteArray(FILE_READ_BUFFER_SIZE)
+    val out = ByteArrayOutputStream(minOf(maxBytes, FILE_READ_BUFFER_SIZE))
+    var total = 0
+    while (true) {
+        val n = input.read(buffer, 0, buffer.size)
+        if (n < 0) break
+        total += n
+        if (total > maxBytes) {
+            // Abort before accumulating the overflow — the dangerous
+            // unbounded allocation never happens.
+            return null
+        }
+        out.write(buffer, 0, n)
+    }
+    return out.toByteArray()
 }
 
 private val HEX_CHARS = "0123456789abcdef".toCharArray()

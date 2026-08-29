@@ -174,8 +174,9 @@ class FileUtilsTest {
     }
 
     // ========== wouldExceedSizeLimit Tests ==========
-    // Note: With MAX_TOTAL_ATTACHMENT_SIZE = Int.MAX_VALUE, the limit is effectively unlimited.
-    // Testing "exceeding" would require integer overflow, so we only test normal use cases.
+    // Regression COLUMBA-4A: the total attachment limit must be bounded.
+    // Regression commit 30075665 set MAX_TOTAL_ATTACHMENT_SIZE = Int.MAX_VALUE,
+    // disabling the guard and allowing unbounded in-memory file reads.
 
     @Test
     fun `wouldExceedSizeLimit returns false when within limit`() {
@@ -185,17 +186,20 @@ class FileUtilsTest {
     }
 
     @Test
-    fun `wouldExceedSizeLimit returns false for large file sizes`() {
-        // With Int.MAX_VALUE limit, realistic file sizes never exceed
-        assertFalse(FileUtils.wouldExceedSizeLimit(0, 100 * 1024 * 1024)) // 100MB
-        assertFalse(FileUtils.wouldExceedSizeLimit(500 * 1024 * 1024, 500 * 1024 * 1024)) // 1GB total
+    fun `wouldExceedSizeLimit returns true for large file sizes`() {
+        // Bounded limit: a 100MB single file and a 1GB combined total must both
+        // exceed MAX_TOTAL_ATTACHMENT_SIZE (regression: limit was Int.MAX_VALUE).
+        assertTrue(FileUtils.wouldExceedSizeLimit(0, 100 * 1024 * 1024)) // 100MB
+        assertTrue(FileUtils.wouldExceedSizeLimit(500 * 1024 * 1024, 500 * 1024 * 1024)) // 1GB total
     }
 
     // ========== Constants Tests ==========
 
     @Test
-    fun `MAX_TOTAL_ATTACHMENT_SIZE is Int MAX_VALUE`() {
-        assertEquals(Int.MAX_VALUE, FileUtils.MAX_TOTAL_ATTACHMENT_SIZE)
+    fun `MAX_TOTAL_ATTACHMENT_SIZE is bounded below Int MAX_VALUE`() {
+        // A disabled (Int.MAX_VALUE) limit allowed unbounded file reads
+        // (Sentry COLUMBA-4A fatal OutOfMemoryError).
+        assertTrue(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE < Int.MAX_VALUE)
     }
 
     // ========== Additional getMimeTypeFromFilename Tests ==========
@@ -330,8 +334,18 @@ class FileUtilsTest {
     }
 
     @Test
-    fun `MAX_SINGLE_FILE_SIZE is Int MAX_VALUE`() {
-        assertEquals(Int.MAX_VALUE, FileUtils.MAX_SINGLE_FILE_SIZE)
+    fun `MAX_SINGLE_FILE_SIZE is bounded below Int MAX_VALUE`() {
+        // A disabled (Int.MAX_VALUE) single-file limit let readFileFromUriWithResult
+        // read the entire selected file into memory via readBytes() — the unbounded
+        // allocation behind Sentry COLUMBA-4A (fatal OutOfMemoryError, ~181MB file).
+        assertTrue(FileUtils.MAX_SINGLE_FILE_SIZE < Int.MAX_VALUE)
+    }
+
+    @Test
+    fun `wouldExceedSizeLimit returns true one byte over restored MAX_TOTAL_ATTACHMENT_SIZE`() {
+        // With a bounded total limit, adding a single byte past the cap must trip
+        // the guard (regression: Int.MAX_VALUE limit never tripped).
+        assertTrue(FileUtils.wouldExceedSizeLimit(FileUtils.MAX_TOTAL_ATTACHMENT_SIZE, 1))
     }
 
     // ========== Additional getFileIconForMimeType Edge Case Tests ==========

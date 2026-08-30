@@ -607,37 +607,103 @@ fun MessagingScreen(
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenMultipleDocuments(),
         ) { uris ->
-            uris.forEach { uri ->
+            if (uris.isNotEmpty()) {
+                // Group-budget accounting for this pick batch (COLUMBA-4A
+                // Greptile P1 "Send reads still spike heap"): attachments
+                // are read ONE AT A TIME and each pick is only retained when
+                // the combined group still fits
+                // FileUtils.MAX_TOTAL_ATTACHMENT_SIZE, so a multi-file
+                // selection can no longer retain N individually-valid arrays
+                // past the aggregate ceiling while waiting for the send-time
+                // check. groupBudgetBase counts attachments already in the
+                // composer (source of truth: the view model list);
+                // groupBudgetUsed counts this batch's accepted bytes.
+                // Sequential processing keeps at most one bounded read
+                // in-flight, and the post-read exact-bytes check provably
+                // bounds the retained working set at the group cap.
+                val groupBudgetBase =
+                    viewModel.selectedFileAttachments.value.sumOf { it.sizeBytes }
+                var groupBudgetUsed = 0
                 viewModel.setProcessingFile(true)
                 scope.launch(Dispatchers.IO) {
-                    // Send-path cap (32MB), not the 512KB generic read cap:
-                    // the send side accepts files up to MAX_ATTACHMENT_TOTAL_BYTES,
-                    // so a 1MB composer pick must attach (canonical E2E).
-                    val result = FileUtils.readFileForSendWithResult(context, uri)
-                    withContext(Dispatchers.Main) {
-                        when (result) {
-                            is FileUtils.FileReadResult.Success -> {
-                                viewModel.addFileAttachment(result.attachment)
-                            }
-                            is FileUtils.FileReadResult.FileTooLarge -> {
-                                val maxSizeKb = result.maxSize / 1024
-                                val actualSizeKb = result.actualSize / 1024
+                    for (uri in uris) {
+                        // Aggregate pre-check BEFORE opening the stream when
+                        // provider metadata is known: a pick that cannot fit
+                        // the remaining group budget is skipped without any
+                        // allocation at all. Unknown sizes (-1) fall through
+                        // to the bounded read, whose allocation is hard-
+                        // capped per file; the post-read check below is what
+                        // bounds the retained set exactly.
+                        val knownSize = FileUtils.getFileSize(context, uri)
+                        val remainingGroup =
+                            FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - (groupBudgetBase + groupBudgetUsed)
+                        if (knownSize in 1..FileUtils.MAX_TOTAL_ATTACHMENT_SIZE.toLong() &&
+                            knownSize > remainingGroup
+                        ) {
+                            withContext(Dispatchers.Main) {
                                 Toast
                                     .makeText(
                                         context,
-                                        "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
+                                        "Attachment group exceeds the total limit " +
+                                            "(${FileUtils.MAX_TOTAL_ATTACHMENT_SIZE / 1024}KB): skipped $uri.",
                                         Toast.LENGTH_LONG,
                                     ).show()
                             }
-                            is FileUtils.FileReadResult.Error -> {
-                                Toast
-                                    .makeText(
-                                        context,
-                                        "Failed to attach file: ${result.message}",
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
+                            continue
+                        }
+                        // Send-path cap (32MB), not the 512KB generic read cap:
+                        // the send side accepts files up to MAX_ATTACHMENT_TOTAL_BYTES,
+                        // so a 1MB composer pick must attach (canonical E2E).
+                        val result = FileUtils.readFileForSendWithResult(context, uri)
+                        withContext(Dispatchers.Main) {
+                            when (result) {
+                                is FileUtils.FileReadResult.Success -> {
+                                    // Exact retained-bytes accounting: only
+                                    // add when the ACTUAL bytes read fit the
+                                    // remaining group budget (metadata can
+                                    // understate), so the retained working
+                                    // set never exceeds the group cap.
+                                    val attachment = result.attachment
+                                    if (FileUtils.wouldExceedSizeLimit(
+                                            groupBudgetBase + groupBudgetUsed,
+                                            attachment.sizeBytes,
+                                        )
+                                    ) {
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                "Attachment group exceeds the total limit " +
+                                                    "(${FileUtils.MAX_TOTAL_ATTACHMENT_SIZE / 1024}KB): " +
+                                                    "skipped ${attachment.filename}.",
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                    } else {
+                                        groupBudgetUsed += attachment.sizeBytes
+                                        viewModel.addFileAttachment(attachment)
+                                    }
+                                }
+                                is FileUtils.FileReadResult.FileTooLarge -> {
+                                    val maxSizeKb = result.maxSize / 1024
+                                    val actualSizeKb = result.actualSize / 1024
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            "File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB.",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                }
+                                is FileUtils.FileReadResult.Error -> {
+                                    Toast
+                                        .makeText(
+                                            context,
+                                            "Failed to attach file: ${result.message}",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                }
                             }
                         }
+                    }
+                    withContext(Dispatchers.Main) {
                         viewModel.setProcessingFile(false)
                     }
                 }

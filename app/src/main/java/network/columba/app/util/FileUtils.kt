@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.ui.graphics.vector.ImageVector
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.util.Locale
@@ -556,9 +555,18 @@ private fun FileUtils.readFileWithResultBounded(
         // Read data with a hard bound on the allocation itself: unknown
         // (-1) or understated provider metadata passes the pre-check, so
         // readBytes() must never be trusted to stay small (Greptile P1).
+        // When the provider DID report a plausible size, seed the
+        // accumulator with it so the read is a single exact allocation
+        // (no doubling churn, no second copy — the heap-spike correction).
+        val initialCapacity =
+            if (fileSize in 1..maxFileSize.toLong()) {
+                fileSize.toInt()
+            } else {
+                FILE_READ_BUFFER_SIZE
+            }
         contentResolver.openInputStream(uri)?.use { inputStream ->
             val data =
-                readBounded(inputStream, maxFileSize)
+                readBounded(inputStream, maxFileSize, initialCapacity)
                     ?: return FileUtils.FileReadResult.FileTooLarge(-1L, maxFileSize)
 
             FileUtils.FileReadResult.Success(
@@ -581,6 +589,15 @@ private fun FileUtils.readFileWithResultBounded(
  * the stream yields more than the cap (at most one read buffer past it),
  * returning null instead of allocating the whole stream.
  *
+ * Heap shape (COLUMBA-4A Greptile P1 "Send reads still spike heap"):
+ * the accumulator grows into a single array capped at [maxBytes]; when its
+ * capacity is exact (the known-size seed, or an exact growth landing) the
+ * array is returned WITHOUT any second copy — the old ByteArrayOutputStream
+ * + toByteArray() held ~2x the file bytes at once (a near-32MB send read
+ * briefly needed ~64MB, on top of retained attachments). A trimmed result
+ * only happens after an overshooting doubling, and the retained array never
+ * exceeds maxBytes.
+ *
  * This is the enforcement point for [FileUtils.MAX_SINGLE_FILE_SIZE]. The
  * metadata pre-check via [FileUtils.getFileSize] is only a fast path —
  * providers may report statSize as -1 or understate the stream size, and
@@ -593,9 +610,10 @@ private fun FileUtils.readFileWithResultBounded(
 private fun readBounded(
     input: InputStream,
     maxBytes: Int,
+    initialCapacity: Int = FILE_READ_BUFFER_SIZE,
 ): ByteArray? {
     val buffer = ByteArray(FILE_READ_BUFFER_SIZE)
-    val out = ByteArrayOutputStream(minOf(maxBytes, FILE_READ_BUFFER_SIZE))
+    var data = ByteArray(minOf(maxBytes, maxOf(initialCapacity, FILE_READ_BUFFER_SIZE)))
     var total = 0
     while (true) {
         val n = input.read(buffer, 0, buffer.size)
@@ -606,9 +624,21 @@ private fun readBounded(
             // unbounded allocation never happens.
             return null
         }
-        out.write(buffer, 0, n)
+        if (total > data.size) {
+            // Grow, capped hard at maxBytes: the accumulator can NEVER
+            // exceed the cap, so an oversized/unknown stream is refused
+            // before any allocation past it.
+            val doubled = if (data.size > maxBytes / 2) maxBytes else data.size * 2
+            val newCapacity = minOf(maxBytes, maxOf(total, doubled))
+            data = data.copyOf(newCapacity)
+        }
+        buffer.copyInto(data, total - n, 0, n)
     }
-    return out.toByteArray()
+    // Hand back the accumulator itself when its capacity is exact — no
+    // second full copy (the known-size seed makes this the common case).
+    // Only when growth overshoots the read is a single trim copy needed to
+    // keep the returned array exactly sizeBytes long.
+    return if (data.size == total) data else data.copyOf(total)
 }
 
 private val HEX_CHARS = "0123456789abcdef".toCharArray()

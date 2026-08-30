@@ -179,6 +179,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import network.columba.app.R
 import network.columba.app.service.SyncProgress
@@ -603,6 +605,24 @@ fun MessagingScreen(
         }
 
     // File picker launcher
+    //
+    // Group-budget lock (COLUMBA-4A Greptile P1 "Picker budgets race"):
+    // the retained composer working set (viewModel.selectedFileAttachments)
+    // must stay bounded at FileUtils.MAX_TOTAL_ATTACHMENT_SIZE even when
+    // two picker callbacks OVERLAP. The per-callback groupBudgetBase
+    // snapshot this replaces was stale by construction: each overlapping
+    // batch validated against its own entry snapshot plus a callback-local
+    // counter, so two batches could each accept up to the full remaining
+    // budget and jointly retain >32MB until the send-time aggregate check.
+    // With this mutex, the "sum the CURRENT retained set -> check -> add"
+    // sequence is one critical section on the Main dispatcher shared by
+    // every batch, and the sum is re-read fresh at add time (never
+    // snapshotted at callback entry), so the combined retained bytes are
+    // provably bounded at the group cap regardless of interleaving.
+    // remember: the lock must be ONE instance shared by every batch for the
+    // whole screen lifetime, not a fresh mutex per recomposition.
+    val groupBudgetMutex = remember { Mutex() }
+
     val filePickerLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenMultipleDocuments(),
@@ -615,15 +635,10 @@ fun MessagingScreen(
                 // FileUtils.MAX_TOTAL_ATTACHMENT_SIZE, so a multi-file
                 // selection can no longer retain N individually-valid arrays
                 // past the aggregate ceiling while waiting for the send-time
-                // check. groupBudgetBase counts attachments already in the
-                // composer (source of truth: the view model list);
-                // groupBudgetUsed counts this batch's accepted bytes.
-                // Sequential processing keeps at most one bounded read
-                // in-flight, and the post-read exact-bytes check provably
-                // bounds the retained working set at the group cap.
-                val groupBudgetBase =
-                    viewModel.selectedFileAttachments.value.sumOf { it.sizeBytes }
-                var groupBudgetUsed = 0
+                // check. All add-time accounting goes through
+                // [tryReserveGroupBudgetLocked] under groupBudgetMutex so
+                // overlapping batches share ONE live budget (source of
+                // truth: the view model list, re-read per add).
                 viewModel.setProcessingFile(true)
                 scope.launch(Dispatchers.IO) {
                     for (uri in uris) {
@@ -635,8 +650,10 @@ fun MessagingScreen(
                         // capped per file; the post-read check below is what
                         // bounds the retained set exactly.
                         val knownSize = FileUtils.getFileSize(context, uri)
+                        val currentRetained =
+                            viewModel.selectedFileAttachments.value.sumOf { it.sizeBytes }
                         val remainingGroup =
-                            FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - (groupBudgetBase + groupBudgetUsed)
+                            FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - currentRetained
                         if (knownSize in 1..FileUtils.MAX_TOTAL_ATTACHMENT_SIZE.toLong() &&
                             knownSize > remainingGroup
                         ) {
@@ -658,17 +675,27 @@ fun MessagingScreen(
                         withContext(Dispatchers.Main) {
                             when (result) {
                                 is FileUtils.FileReadResult.Success -> {
-                                    // Exact retained-bytes accounting: only
-                                    // add when the ACTUAL bytes read fit the
-                                    // remaining group budget (metadata can
-                                    // understate), so the retained working
-                                    // set never exceeds the group cap.
+                                    // Exact retained-bytes accounting under
+                                    // the shared budget lock: only add when
+                                    // the ACTUAL bytes read fit the
+                                    // remaining group budget AGAINST THE
+                                    // LIVE composer set (metadata can
+                                    // understate, and an overlapping picker
+                                    // batch may have added since this read
+                                    // started), so the retained working set
+                                    // never exceeds the group cap.
                                     val attachment = result.attachment
-                                    if (FileUtils.wouldExceedSizeLimit(
-                                            groupBudgetBase + groupBudgetUsed,
-                                            attachment.sizeBytes,
-                                        )
-                                    ) {
+                                    val accepted =
+                                        tryReserveGroupBudgetLocked(
+                                            mutex = groupBudgetMutex,
+                                            currentTotalBytes = {
+                                                viewModel.selectedFileAttachments.value.sumOf { it.sizeBytes }
+                                            },
+                                            newAttachmentBytes = attachment.sizeBytes,
+                                        ) {
+                                            viewModel.addFileAttachment(attachment)
+                                        }
+                                    if (!accepted) {
                                         Toast
                                             .makeText(
                                                 context,
@@ -677,9 +704,6 @@ fun MessagingScreen(
                                                     "skipped ${attachment.filename}.",
                                                 Toast.LENGTH_LONG,
                                             ).show()
-                                    } else {
-                                        groupBudgetUsed += attachment.sizeBytes
-                                        viewModel.addFileAttachment(attachment)
                                     }
                                 }
                                 is FileUtils.FileReadResult.FileTooLarge -> {
@@ -3454,3 +3478,39 @@ private fun TextSizeDialog(
         },
     )
 }
+
+/**
+ * Atomic composer group-budget reservation (COLUMBA-4A Greptile P1
+ * "Picker budgets race").
+ *
+ * Runs the whole "read the CURRENT retained total -> check against
+ * [FileUtils.MAX_TOTAL_ATTACHMENT_SIZE] -> commit the add" sequence under
+ * [mutex], so overlapping file-picker batches share ONE live budget instead
+ * of each validating against a stale per-callback snapshot. Two batches
+ * that each fit their own view of the budget can no longer jointly retain
+ * more than the group cap: the second batch's check sees the first batch's
+ * committed add.
+ *
+ * @param mutex shared lock held by every picker batch in this screen.
+ * @param currentTotalBytes reads the live retained bytes (the view model's
+ *        selectedFileAttachments sum) — MUST be re-read inside the lock,
+ *        never snapshotted before it.
+ * @param newAttachmentBytes exact retained size of the candidate attachment.
+ * @param commit adds the attachment to the composer; called only when the
+ *        reservation succeeds, inside the same critical section.
+ * @return true when the attachment was committed within the group cap.
+ */
+internal suspend fun tryReserveGroupBudgetLocked(
+    mutex: Mutex,
+    currentTotalBytes: () -> Int,
+    newAttachmentBytes: Int,
+    commit: () -> Unit,
+): Boolean =
+    mutex.withLock {
+        if (FileUtils.wouldExceedSizeLimit(currentTotalBytes(), newAttachmentBytes)) {
+            false
+        } else {
+            commit()
+            true
+        }
+    }

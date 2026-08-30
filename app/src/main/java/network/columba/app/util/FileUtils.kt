@@ -142,7 +142,11 @@ object FileUtils {
             // trusted, so the read aborts at the cap (Greptile P1).
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 val data =
-                    readBounded(inputStream, MAX_SINGLE_FILE_SIZE)
+                    readBounded(
+                        inputStream,
+                        MAX_SINGLE_FILE_SIZE,
+                        reopen = { contentResolver.openInputStream(uri) },
+                    )
                         ?: run {
                             Log.w(TAG, "Stream exceeded ${MAX_SINGLE_FILE_SIZE} bytes, aborting read: $uri")
                             return null
@@ -566,7 +570,12 @@ private fun FileUtils.readFileWithResultBounded(
             }
         contentResolver.openInputStream(uri)?.use { inputStream ->
             val data =
-                readBounded(inputStream, maxFileSize, initialCapacity)
+                readBounded(
+                    inputStream,
+                    maxFileSize,
+                    initialCapacity,
+                    reopen = { contentResolver.openInputStream(uri) },
+                )
                     ?: return FileUtils.FileReadResult.FileTooLarge(-1L, maxFileSize)
 
             FileUtils.FileReadResult.Success(
@@ -589,14 +598,30 @@ private fun FileUtils.readFileWithResultBounded(
  * the stream yields more than the cap (at most one read buffer past it),
  * returning null instead of allocating the whole stream.
  *
- * Heap shape (COLUMBA-4A Greptile P1 "Send reads still spike heap"):
- * the accumulator grows into a single array capped at [maxBytes]; when its
- * capacity is exact (the known-size seed, or an exact growth landing) the
- * array is returned WITHOUT any second copy — the old ByteArrayOutputStream
- * + toByteArray() held ~2x the file bytes at once (a near-32MB send read
- * briefly needed ~64MB, on top of retained attachments). A trimmed result
- * only happens after an overshooting doubling, and the retained array never
- * exceeds maxBytes.
+ * Heap shape (COLUMBA-4A Greptile P1 "Trim copy doubles heap"): a
+ * near-cap successful read must NEVER transiently hold two near-full
+ * arrays. The single-accumulator growth path ended in `copyOf(total)`,
+ * which held the full accumulator AND a near-file-sized trimmed result at
+ * once (~64MB peak on the 32MB send path). The fix:
+ *
+ *  - While the read is under [TRIM_FREE_RETAIN_THRESHOLD] the single
+ *    hard-capped accumulator is kept and any final trim is bounded to a
+ *    few MB (capacity < 2x threshold), so the transient can never be a
+ *    near-cap spike. The exact-seed known-size case remains copy-free
+ *    (capacity == total returns the accumulator itself).
+ *  - A near-threshold-or-larger read that finished with an overshooting
+ *    capacity does NOT trim. It REWINDS: [reopen] re-opens the stream,
+ *    the fresh stream is verified byte-for-byte against the first
+ *    [REWIND_VERIFY_BYTES] of the accumulator (a provider that regenerates
+ *    content per open fails verification and falls back to the trim),
+ *    the full length is counted with zero accumulation (aborting past the
+ *    cap), the accumulator reference is DROPPED, and exactly ONE array of
+ *    the true size is allocated and filled. The live set at the exact
+ *    allocation is one array plus small buffers.
+ *
+ * The abort path stays strictly single-pass — an over-cap stream never
+ * triggers a rewind (EOF is never reached), so bytes consumed stay within
+ * maxBytes + one buffer exactly as pinned by the OOM-guard tests.
  *
  * This is the enforcement point for [FileUtils.MAX_SINGLE_FILE_SIZE]. The
  * metadata pre-check via [FileUtils.getFileSize] is only a fast path —
@@ -604,16 +629,58 @@ private fun FileUtils.readFileWithResultBounded(
  * [InputStream.readBytes] would then allocate the entire (potentially huge)
  * stream before any check could fire (COLUMBA-4A Greptile P1).
  *
+ * @param reopen re-opens the underlying stream from the beginning for the
+ *        rewind path; when null, rewinding is unavailable and the trim
+ *        fallback is used for overshooting capacities.
+ * @param heapObserver test seam: receives every accumulator allocation and
+ *        release so the live-bytes bound can be asserted deterministically.
  * @return the bytes read (size <= [maxBytes]), or null if the stream exceeded
  *         [maxBytes] and the read was aborted.
  */
-private fun readBounded(
+internal fun readBounded(
     input: InputStream,
     maxBytes: Int,
     initialCapacity: Int = FILE_READ_BUFFER_SIZE,
+    reopen: (() -> InputStream?)? = null,
+    heapObserver: ReadBoundedHeapObserver? = null,
 ): ByteArray? {
+    val pass = accumulateFirstPass(input, maxBytes, initialCapacity, heapObserver)
+        ?: return null
+    if (pass.data.size == pass.total) {
+        // Hand back the accumulator itself when its capacity is exact — no
+        // second full copy (the known-size seed makes this the common case).
+        return pass.data
+    }
+    return finishOversizedRead(pass, reopen, maxBytes, heapObserver)
+}
+
+/** First-pass accumulation state handed to the finalization step. */
+private class FirstPass(
+    val data: ByteArray,
+    val total: Int,
+    val rewindArmed: Boolean,
+)
+
+/**
+ * Single bounded pass over [input] into a hard-capped accumulator.
+ * Returns null iff the stream exceeded [maxBytes] (abort — the dangerous
+ * unbounded allocation never happens).
+ */
+private fun accumulateFirstPass(
+    input: InputStream,
+    maxBytes: Int,
+    initialCapacity: Int,
+    heapObserver: ReadBoundedHeapObserver?,
+): FirstPass? {
     val buffer = ByteArray(FILE_READ_BUFFER_SIZE)
-    var data = ByteArray(minOf(maxBytes, maxOf(initialCapacity, FILE_READ_BUFFER_SIZE)))
+    heapObserver?.onHeapEvent(released = false, FILE_READ_BUFFER_SIZE)
+    val seedCapacity = minOf(maxBytes, maxOf(initialCapacity, FILE_READ_BUFFER_SIZE))
+    heapObserver?.onHeapEvent(released = false, seedCapacity)
+    var data = ByteArray(seedCapacity)
+    // A large seed capacity can already sit above the trim-free threshold;
+    // any later trim of it would double the heap, so arm the rewind from
+    // the start in that case.
+    var rewindArmed = seedCapacity > TRIM_FREE_RETAIN_THRESHOLD
     var total = 0
     while (true) {
         val n = input.read(buffer, 0, buffer.size)
@@ -630,15 +697,155 @@ private fun readBounded(
             // before any allocation past it.
             val doubled = if (data.size > maxBytes / 2) maxBytes else data.size * 2
             val newCapacity = minOf(maxBytes, maxOf(total, doubled))
-            data = data.copyOf(newCapacity)
+            heapObserver?.onHeapEvent(released = false, newCapacity)
+            val grown = data.copyOf(newCapacity)
+            heapObserver?.onHeapEvent(released = true, data.size)
+            data = grown
+            // Once the accumulator is big, its final trim (if any) is a
+            // near-cap second copy: arm the rewind double-read instead.
+            if (newCapacity > TRIM_FREE_RETAIN_THRESHOLD) rewindArmed = true
         }
         buffer.copyInto(data, total - n, 0, n)
     }
-    // Hand back the accumulator itself when its capacity is exact — no
-    // second full copy (the known-size seed makes this the common case).
-    // Only when growth overshoots the read is a single trim copy needed to
-    // keep the returned array exactly sizeBytes long.
-    return if (data.size == total) data else data.copyOf(total)
+    return FirstPass(data, total, rewindArmed)
+}
+
+/**
+ * Produce the final array for an EOF'd pass whose accumulator capacity
+ * overshot the read size ([pass].data.size > [pass].total).
+ *
+ * When the accumulator is big ([pass].rewindArmed) and the stream is
+ * re-openable, trim-copying would hold TWO near-full arrays at once:
+ * instead verify the provider restarts from the beginning, count the true
+ * length with zero accumulation, record the accumulator release BEFORE the
+ * single exact allocation, and fill it from a fresh open. A
+ * non-restartable provider falls back to the trim (correctness over the
+ * fast path); a stream whose true length passes the cap aborts.
+ */
+private fun finishOversizedRead(
+    pass: FirstPass,
+    reopen: (() -> InputStream?)?,
+    maxBytes: Int,
+    heapObserver: ReadBoundedHeapObserver?,
+): ByteArray? {
+    if (pass.rewindArmed && reopen != null) {
+        val verified = verifyRewindableLength(reopen, pass.data, pass.total, maxBytes)
+        if (verified == REWIND_EXCEEDS_CAP) return null // true length past the cap
+        if (verified >= 0) {
+            heapObserver?.onHeapEvent(released = true, pass.data.size)
+            heapObserver?.onHeapEvent(released = false, verified)
+            return fillExactFromReopen(reopen, verified)
+        }
+        // REWIND_NOT_RESTARTABLE: fall through to the trim below rather
+        // than fail the read; the result is still hard-bounded at maxBytes.
+    }
+    // Small/medium reads (transient bounded by ~2x threshold, never a
+    // near-cap spike) or the non-rewindable fallback: a single trim copy
+    // keeps the returned array exactly sizeBytes long.
+    heapObserver?.onHeapEvent(released = false, pass.total)
+    val trimmed = pass.data.copyOf(pass.total)
+    heapObserver?.onHeapEvent(released = true, pass.data.size)
+    return trimmed
+}
+
+/**
+ * Allocate exactly [verified] bytes and fill them from a fresh open of
+ * [reopen]. Returns null only if the provider cannot serve the verified
+ * length on this open (content shrank mid-fill — refuse rather than
+ * return corrupt bytes).
+ */
+private fun fillExactFromReopen(
+    reopen: () -> InputStream?,
+    verified: Int,
+): ByteArray? {
+    val filler = reopen() ?: return null
+    val exact = ByteArray(verified)
+    filler.use { s ->
+        var pos = 0
+        while (pos < verified) {
+            val n = s.read(exact, pos, verified - pos)
+            if (n < 0) return null
+            pos += n
+        }
+    }
+    return exact
+}
+
+/**
+ * Test seam for [readBounded]'s heap accounting: every accumulator
+ * allocation and every drop of a no-longer-referenced accumulator array is
+ * reported so tests can sum live bytes and assert the transient peak.
+ */
+internal fun interface ReadBoundedHeapObserver {
+    fun onHeapEvent(
+        released: Boolean,
+        sizeBytes: Int,
+    )
+}
+
+/** Prefix bytes compared to prove a re-opened stream restarts identically. */
+private const val REWIND_VERIFY_BYTES = 64 * 1024
+
+/** [verifyRewindableLength] result: provider does not restart from the beginning. */
+private const val REWIND_NOT_RESTARTABLE = -1
+
+/** [verifyRewindableLength] result: the stream's true length exceeds the cap. */
+private const val REWIND_EXCEEDS_CAP = -2
+
+/**
+ * Reads larger than this must not pay a trim copy of a big accumulator
+ * (transient 2x-arrays peak): [readBounded] rewinds and re-reads into one
+ * exact-sized array instead. Below it the accumulator trim is bounded by
+ * roughly one doubling step and stays a few MB at most.
+ */
+private const val TRIM_FREE_RETAIN_THRESHOLD = 4 * 1024 * 1024
+
+/**
+ * Verify — with zero big-array allocation — that a stream re-opened via
+ * [reopen] restarts byte-for-byte identically to the first
+ * [REWIND_VERIFY_BYTES] of [accumulator], and count its full length,
+ * aborting past [maxBytes].
+ *
+ * A pipe/streamed provider (fresh open yields different/continued content)
+ * or one whose stream shrank below what was already consumed fails
+ * verification, and the caller must fall back to trimming the accumulator.
+ *
+ * @param accumulator first-pass bytes (only the first [total] are valid).
+ * @return the verified total length (>= 0), [REWIND_NOT_RESTARTABLE], or
+ *         [REWIND_EXCEEDS_CAP].
+ */
+private fun verifyRewindableLength(
+    reopen: () -> InputStream?,
+    accumulator: ByteArray,
+    total: Int,
+    maxBytes: Int,
+): Int {
+    val verifyLen = minOf(total, REWIND_VERIFY_BYTES)
+    val verifyBuffer = ByteArray(minOf(verifyLen, FILE_READ_BUFFER_SIZE))
+    val counterBuffer = ByteArray(FILE_READ_BUFFER_SIZE)
+    val stream = reopen() ?: return REWIND_NOT_RESTARTABLE
+    return stream.use { s ->
+        var pos = 0
+        while (pos < verifyLen) {
+            val want = minOf(verifyBuffer.size, verifyLen - pos)
+            val n = s.read(verifyBuffer, 0, want)
+            // Fresh stream shorter than what we already consumed: not a
+            // restart from the beginning.
+            if (n < 0) return@use REWIND_NOT_RESTARTABLE
+            for (i in 0 until n) {
+                if (verifyBuffer[i] != accumulator[pos + i]) return@use REWIND_NOT_RESTARTABLE
+            }
+            pos += n
+        }
+        var counted = pos
+        while (true) {
+            val n = s.read(counterBuffer, 0, counterBuffer.size)
+            if (n < 0) break
+            counted += n
+            if (counted > maxBytes) return@use REWIND_EXCEEDS_CAP
+        }
+        counted
+    }
 }
 
 private val HEX_CHARS = "0123456789abcdef".toCharArray()

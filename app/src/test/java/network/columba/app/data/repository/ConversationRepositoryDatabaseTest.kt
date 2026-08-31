@@ -553,6 +553,128 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
             assertEquals(audioPayload, storedAudio.getString(1))
         }
 
+    // ========== File attachment extraction tests ==========
+
+    @Test
+    fun `saveMessage extracts Sideband-style positional file attachment to disk`() =
+        runTest {
+            // Wire format from Sideband and other LXMF apps:
+            // "5": [["filename.mp4", "hexdata..."]]
+            val hexData = "ab".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/positional_file.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_positional_file", "5_0", hexData)
+            } returns storedPath
+            val fields =
+                JSONObject()
+                    .put(
+                        "5",
+                        JSONArray()
+                            .put(JSONArray().put("G4 Doorbell Pro.mp4").put(hexData)),
+                    )
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_positional_file",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_positional_file", TEST_IDENTITY_HASH)
+            val stored = JSONObject(saved!!.fieldsJson!!).getJSONArray("5").getJSONObject(0)
+            assertEquals("G4 Doorbell Pro.mp4", stored.getString("filename"))
+            assertEquals(hexData.length / 2, stored.getInt("size"))
+            assertEquals(storedPath, stored.getString("_data_ref"))
+            verify(exactly = 1) {
+                mockAttachmentStorage.saveAttachment("msg_positional_file", "5_0", hexData)
+            }
+        }
+
+    @Test
+    fun `saveMessage decodes hex-encoded filename in positional file attachment`() =
+        runTest {
+            // Columba backends hex-encode ByteArray filename fields
+            val filename = "doc.pdf"
+            val hexFilename = filename.toByteArray().joinToString("") { "%02x".format(it) }
+            val hexData = "cd".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/hex_name_file.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_hex_name", "5_0", hexData)
+            } returns storedPath
+            val fields =
+                JSONObject()
+                    .put("5", JSONArray().put(JSONArray().put(hexFilename).put(hexData)))
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_hex_name",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_hex_name", TEST_IDENTITY_HASH)
+            val stored = JSONObject(saved!!.fieldsJson!!).getJSONArray("5").getJSONObject(0)
+            assertEquals(filename, stored.getString("filename"))
+            assertEquals(storedPath, stored.getString("_data_ref"))
+        }
+
+    @Test
+    fun `saveMessage extracts object-format file attachment data to disk`() =
+        runTest {
+            // Columba's own format: "5": [{"filename", "size", "data"}]
+            val hexData = "ef".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/object_file.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_object_file", "5_0", hexData)
+            } returns storedPath
+            val fields =
+                JSONObject()
+                    .put(
+                        "5",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("filename", "doc.pdf")
+                                    .put("size", hexData.length / 2)
+                                    .put("data", hexData),
+                            ),
+                    )
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_object_file",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_object_file", TEST_IDENTITY_HASH)
+            val stored = JSONObject(saved!!.fieldsJson!!).getJSONArray("5").getJSONObject(0)
+            assertEquals("doc.pdf", stored.getString("filename"))
+            assertEquals(hexData.length / 2, stored.getInt("size"))
+            assertEquals(storedPath, stored.getString("_data_ref"))
+        }
+
     @Test
     fun `deleteConversation removes conversation and messages`() =
         runTest {

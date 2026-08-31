@@ -1,0 +1,115 @@
+package network.columba.app.service
+
+import android.util.Log
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import network.columba.app.data.repository.AnnounceRepository
+import network.columba.app.data.repository.ContactRepository
+import network.columba.app.notifications.IncomingCallNotifier
+import network.columba.app.rns.api.RnsTelephony
+import network.columba.app.rns.api.model.CallState
+import network.columba.app.rns.host.util.PeerNameResolver
+
+/**
+ * Process-lifetime presenter for background incoming-call presentation in the main
+ * app process.
+ *
+ * Since the dual-backend architecture, the call observable surface lives on
+ * [RnsTelephony] (rns-api); each backend (Python or native Kotlin) republishes
+ * [CallState] into the UI process across the AIDL seam. The ringing itself is owned
+ * by the :reticulum service process, so this presenter is the app-process consumer
+ * that owns presentation when no app UI is visible: on [CallState.Incoming] it posts
+ * the high-importance category-call notification with a full-screen intent (see
+ * [IncomingCallNotifier.showIncomingCallNotification]), which brings
+ * [network.columba.app.IncomingCallActivity] over the lock screen or over whatever
+ * app is in the foreground.
+ *
+ * Foreground presentation (the in-app incoming call screen) remains MainActivity's
+ * concern; it cancels this notification as soon as it takes over, so the two paths
+ * never double up.
+ */
+@Singleton
+class IncomingCallPresenter internal constructor(
+    private val rnsTelephony: RnsTelephony,
+    private val announceRepository: AnnounceRepository,
+    private val contactRepository: ContactRepository,
+    private val incomingCallNotifier: IncomingCallNotifier,
+    dispatcher: CoroutineDispatcher,
+) {
+    companion object {
+        private const val TAG = "IncomingCallPresenter"
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    @Volatile
+    private var isStarted = false
+
+    @Inject
+    constructor(
+        rnsTelephony: RnsTelephony,
+        announceRepository: AnnounceRepository,
+        contactRepository: ContactRepository,
+        incomingCallNotifier: IncomingCallNotifier,
+    ) : this(
+        rnsTelephony = rnsTelephony,
+        announceRepository = announceRepository,
+        contactRepository = contactRepository,
+        incomingCallNotifier = incomingCallNotifier,
+        dispatcher = Dispatchers.IO,
+    )
+
+    /**
+     * Start the call-state collector. Safe to call multiple times; the collector
+     * runs for the life of the process (no stop: Hilt singletons have no destroy
+     * hook and the process dies with the collector).
+     */
+    fun start() {
+        if (isStarted) {
+            Log.w(TAG, "start() called twice; ignoring")
+            return
+        }
+        isStarted = true
+        scope.launch {
+            rnsTelephony.callState.collect { state ->
+                when (state) {
+                    is CallState.Incoming -> presentIncomingCall(state.identityHash)
+                    else -> incomingCallNotifier.cancelIncomingCallNotification()
+                }
+            }
+        }
+    }
+
+    private suspend fun presentIncomingCall(identityHash: String) {
+        Log.i(TAG, "Presenting background incoming-call UI for ${identityHash.take(16)}...")
+        val callerName = resolveCallerName(identityHash)
+        incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
+    }
+
+    /**
+     * Resolve the caller's display name from the identity hash carried by
+     * [CallState.Incoming]:
+     * 1. Contact custom nickname (via the announce's destination hash)
+     * 2. Announce peer name
+     * 3. null - the notification helper falls back to a formatted hash
+     */
+    internal suspend fun resolveCallerName(identityHash: String): String? =
+        runCatching {
+            val announce =
+                announceRepository.findByIdentityHash(identityHash) ?: return@runCatching null
+            val nickname =
+                contactRepository.getContact(announce.destinationHash)?.customNickname
+            when {
+                PeerNameResolver.isValidPeerName(nickname) -> nickname
+                PeerNameResolver.isValidPeerName(announce.peerName) -> announce.peerName
+                else -> null
+            }
+        }
+            .onFailure { Log.w(TAG, "Caller name lookup failed: ${it.message}") }
+            .getOrNull()
+}

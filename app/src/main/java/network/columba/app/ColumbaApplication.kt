@@ -74,6 +74,9 @@ class ColumbaApplication : Application() {
     lateinit var messageCollector: MessageCollector
 
     @Inject
+    lateinit var incomingCallPresenter: network.columba.app.service.IncomingCallPresenter
+
+    @Inject
     lateinit var conversationRepository: ConversationRepository
 
     @Inject
@@ -166,6 +169,13 @@ class ColumbaApplication : Application() {
         }
 
         android.util.Log.d("ColumbaApplication", "Main app process detected ($processName) - proceeding with auto-initialization")
+
+        // Present incoming calls even when the app is backgrounded or the device is
+        // locked: the presenter posts the full-screen-intent notification on
+        // CallState.Incoming (issue #1079). Started before backend init because the
+        // bound callState flow is safe to observe before the service is ready - it
+        // just stays Idle until the service connection syncs state.
+        incomingCallPresenter.start()
 
         // Preload theme preference into DataStore's in-memory cache
         // This eliminates theme flash on app startup by ensuring the theme is cached

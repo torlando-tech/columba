@@ -8,7 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.ConcurrentHashMap
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.notifications.IncomingCallNotifier
@@ -30,6 +30,16 @@ import network.columba.app.rns.host.util.PeerNameResolver
  * [network.columba.app.IncomingCallActivity] over the lock screen or over whatever
  * app is in the foreground.
  *
+ * The notification is posted immediately on the incoming state (with the last
+ * resolved name for the identity, or the formatted-hash fallback) and the name is
+ * corrected once the caller-name lookup completes. The lookup is the only
+ * suspending step, and the post must not wait for it: answering should not be
+ * delayed by a repository read. Because the display name is a function of the
+ * identity hash, updating the post while the same identity is incoming is correct
+ * even if the currently ringing call is a second call from that identity: the
+ * update path is what re-presents a same-identity re-call that [StateFlow]
+ * conflation would otherwise hide from the collector.
+ *
  * Foreground presentation (the in-app incoming call screen) remains MainActivity's
  * concern; it cancels this notification as soon as it takes over, so the two paths
  * never double up.
@@ -49,13 +59,11 @@ class IncomingCallPresenter internal constructor(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     /**
-     * Counts every observed call-state transition. A suspended caller-name lookup
-     * snapshots this before and after the lookup: if it advanced, the call moved
-     * on while the lookup was in flight - including a consecutive call from the
-     * same identity, whose equal [CallState.Incoming] value StateFlow would
-     * conflate with the original one.
+     * Last resolved display name per identity. Lets a re-call from a known peer
+     * show its name on the immediate post instead of the formatted-hash fallback
+     * while the lookup runs.
      */
-    private val stateSequence = AtomicLong(0)
+    private val resolvedNames = ConcurrentHashMap<String, String>()
 
     @Volatile
     private var isStarted = false
@@ -85,12 +93,6 @@ class IncomingCallPresenter internal constructor(
             return
         }
         isStarted = true
-        // Fast transition counter: its collection body is O(1), so it observes
-        // every state change, including the ones that happen while a suspended
-        // lookup spans them.
-        scope.launch {
-            rnsTelephony.callState.collect { stateSequence.incrementAndGet() }
-        }
         scope.launch {
             rnsTelephony.callState.collect { state ->
                 when (state) {
@@ -101,47 +103,29 @@ class IncomingCallPresenter internal constructor(
         }
     }
 
-    private suspend fun presentIncomingCall(initialHash: String) {
-        Log.i(TAG, "Presenting background incoming-call UI for ${initialHash.take(16)}...")
-        var identityHash = initialHash
-        while (true) {
-            val sequenceAtLookupStart = stateSequence.get()
+    private suspend fun presentIncomingCall(identityHash: String) {
+        Log.i(TAG, "Presenting background incoming-call UI for ${identityHash.take(16)}...")
+        // Post immediately - do not delay the full-screen takeover by the
+        // caller-name lookup. The name is the cached one or null (the notifier
+        // falls back to a formatted hash) and is corrected below once the lookup
+        // completes.
+        incomingCallNotifier.showIncomingCallNotification(identityHash, resolvedNames[identityHash])
+        scope.launch {
             val callerName = resolveCallerName(identityHash)
-            // The caller-name lookup suspends, so the call may have changed state
-            // while it was in flight. Re-check the current state (read directly,
-            // so the check sees the latest value) and the transition counter
-            // before posting an obsolete lookup result.
+            if (callerName != null) {
+                resolvedNames[identityHash] = callerName
+            }
+            // The lookup suspended, so the call may have changed state while it
+            // was in flight. Update the post only while the same incoming call is
+            // still ringing; any other state is handled by the collector (the
+            // cancel, or the new call's own presentation). A same-identity re-call
+            // conflates with this Incoming value in the StateFlow, so the
+            // collector never re-delivers it - this update is what presents the
+            // current call, and the display name is a function of the identity,
+            // so it is the right name for it.
             val current = rnsTelephony.callState.value
-            when {
-                current !is CallState.Incoming -> {
-                    // Answered or ended: the next state event performs the normal
-                    // cancel.
-                    Log.i(
-                        TAG,
-                        "Incoming call ended before post (now ${current::class.simpleName}); skipping stale presentation",
-                    )
-                    return
-                }
-                current.identityHash != identityHash -> {
-                    // A different caller is now ringing: the collector presents
-                    // that call from its own state event.
-                    Log.i(TAG, "Caller changed before post; the new call is presented from its own state")
-                    return
-                }
-                stateSequence.get() == sequenceAtLookupStart -> {
-                    // No transition since the lookup started: still the same call.
-                    incomingCallNotifier.showIncomingCallNotification(current.identityHash, callerName)
-                    return
-                }
-                else -> {
-                    // Transitions happened during the lookup and the state is back
-                    // to an incoming call: a consecutive call from the same
-                    // identity. StateFlow conflates the two equal Incoming values,
-                    // so the collector will not deliver the second one as a new
-                    // event - present the current call with a fresh lookup instead.
-                    Log.i(TAG, "Consecutive call from the same identity; re-resolving caller name")
-                    identityHash = current.identityHash
-                }
+            if (current is CallState.Incoming && current.identityHash == identityHash) {
+                incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
             }
         }
     }

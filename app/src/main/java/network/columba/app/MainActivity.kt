@@ -175,6 +175,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var transportAdmin: RnsTransportAdmin
 
+    @Inject
+    lateinit var mainActivityVisibility: MainActivityVisibility
+
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
@@ -278,6 +281,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+    override fun onStart() {
+        super.onStart()
+        // Issue #1079: while the main UI is visible it owns incoming-call
+        // presentation (in-app call screen); the background presenter stays
+        // quiet so it can never duplicate or resurrect the notification.
+        mainActivityVisibility.setVisible(true)
+    }
+
+    override fun onStop() {
+        mainActivityVisibility.setVisible(false)
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen before super.onCreate()

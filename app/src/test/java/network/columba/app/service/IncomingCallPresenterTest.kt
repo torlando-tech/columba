@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runCurrent
+import network.columba.app.MainActivityVisibility
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
@@ -52,6 +53,7 @@ class IncomingCallPresenterTest {
     }
 
     private val scheduler = TestCoroutineScheduler()
+    private val mainActivityVisibility = MainActivityVisibility()
     private val rnsTelephony: RnsTelephony = mockk()
     private val announceRepository: AnnounceRepository = mockk()
     private val contactRepository: ContactRepository = mockk()
@@ -72,6 +74,7 @@ class IncomingCallPresenterTest {
                 announceRepository = announceRepository,
                 contactRepository = contactRepository,
                 incomingCallNotifier = notifier,
+                mainActivityVisibility = mainActivityVisibility,
                 dispatcher = StandardTestDispatcher(scheduler),
             )
     }
@@ -295,6 +298,70 @@ class IncomingCallPresenterTest {
         assertEquals(identityHash to "Alice", notifier.shownCalls.last())
         // Initial Idle, Active, and Idle cancels.
         assertEquals(3, notifier.cancelCount.get())
+    }
+
+    @Test
+    fun `incoming call is not posted while MainActivity is visible`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        // The app is in the foreground: MainActivity shows the in-app call
+        // screen, so the background presenter must stay silent.
+        mainActivityVisibility.setVisible(true)
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+
+        assertEquals(0, notifier.shownCalls.size)
+    }
+
+    @Test
+    fun `name update does not resurrect the notification after MainActivity took over`() {
+        // The call arrives while backgrounded (immediate post goes out). The
+        // user then opens the app while the lookup is in flight: MainActivity
+        // takes ownership and cancels the notification. The lookup's update
+        // must not post it back.
+        val lookupGate = CompletableDeferred<Unit>()
+        coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
+            lookupGate.await()
+            announce("Alice")
+        }
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        // The user opens the app: MainActivity becomes visible (its in-app
+        // effect cancels the notification).
+        mainActivityVisibility.setVisible(true)
+        lookupGate.complete(Unit)
+        scheduler.runCurrent()
+
+        // Only the immediate post happened; the update was suppressed.
+        assertEquals(1, notifier.shownCalls.size)
+        assertEquals(identityHash to null, notifier.shownCalls[0])
+    }
+
+    @Test
+    fun `name update is posted for the FSI activity flow`() {
+        // The full-screen intent launches IncomingCallActivity, which does not
+        // make MainActivity visible: the name update must still land so the
+        // call UI shows the resolved name, not the hash fallback.
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+
+        assertEquals(2, notifier.shownCalls.size)
+        assertEquals(identityHash to null, notifier.shownCalls[0])
+        assertEquals(identityHash to "Alice", notifier.shownCalls[1])
     }
 
     @Test

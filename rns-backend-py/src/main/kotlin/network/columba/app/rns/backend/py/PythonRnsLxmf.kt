@@ -347,14 +347,14 @@ class PythonRnsLxmf(
         lxmessage: PyObject,
         state: Int,
     ): TransferProgressUpdate {
-        val resource = lxmessage["resource_representation"]?.takeUnless { it.toString() == "None" }
+        val resource = lxmessage["resource_representation"]?.takeUnless { it.isPythonNone() }
         val phase = when (state) {
             LXMF_STATE_SENT, LXMF_STATE_DELIVERED -> TransferPhase.COMPLETE
             LXMF_STATE_REJECTED, LXMF_STATE_CANCELLED, LXMF_STATE_FAILED -> TransferPhase.FAILED
             else -> outgoingTransferPhase(state)
         }
         val resourceProgress = if (phase == TransferPhase.TRANSFERRING) {
-            resource?.pyDoubleCall("get_progress") ?: 0.0
+            outgoingResourceProgress(resource)
         } else {
             0.0
         }
@@ -373,6 +373,43 @@ class PythonRnsLxmf(
             maxAttempts = runtime.lxmRouter?.pyInt("MAX_DELIVERY_ATTEMPTS"),
         )
     }
+
+    /**
+     * Overall progress of an outgoing (possibly split) RNS resource.
+     *
+     * Resources larger than RNS's MAX_EFFICIENT_SIZE transfer one segment at a
+     * time over a CHAIN of Resource objects linked by `next_segment`. The
+     * LXMessage's `resource_representation` stays pinned to the first segment
+     * object, whose `get_progress()` freezes at 1/total_segments once segment
+     * 1 concludes (e.g. a 6-segment file reports a stuck 16.7% for the whole
+     * rest of the transfer). Walk the chain to the current tip and read its
+     * progress, which already accounts for the previously completed segments.
+     */
+    private fun outgoingResourceProgress(resource: PyObject?): Double {
+        var chain = resource ?: return 0.0
+        var hops = 0
+        while (hops < 128) {
+            val next = runCatching { chain["next_segment"] }
+                .getOrNull()
+                ?.takeUnless { it.isPythonNone() } ?: break
+            chain = next
+            hops++
+        }
+        return runCatching { chain.pyDoubleCall("get_progress") }.getOrNull() ?: 0.0
+    }
+
+    /**
+     * None-check that never invokes the object's `__str__`/`__repr__`.
+     *
+     * Chaquopy's `PyObject.toString()` calls Python's `str()`, and
+     * `RNS.Resource.__str__` dereferences `self.link.link_id` - which throws
+     * `AttributeError` once the segment's link is gone. That crash used to
+     * kill the whole outgoing progress update (see the stuck progress bar),
+     * so None checks on Resource objects must go through `repr()`, which is
+     * the type default and never throws here.
+     */
+    private fun PyObject.isPythonNone(): Boolean =
+        runCatching { repr() == "None" }.getOrDefault(false)
 
     private fun incomingTransferProgress(): Flow<TransferProgressUpdate> = flow {
         val previous = LinkedHashMap<String, TransferProgressUpdate>()

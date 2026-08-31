@@ -368,6 +368,16 @@ class MessagingViewModel
         val transferProgress: StateFlow<Map<String, network.columba.app.rns.api.model.TransferProgressUpdate>> =
             _transferProgress.asStateFlow()
 
+        // Message hashes whose transfer was settled by an authoritative
+        // terminal delivery status. Progress cleanup is monotonic through
+        // this set: once a transfer is terminal, a delayed non-terminal
+        // progress event for the same message cannot resurrect its bar
+        // (the delivery-status and progress collectors run independently,
+        // so that out-of-order delivery is possible). Insertion-ordered
+        // and capped so long-lived processes don't accumulate state;
+        // accessed only from Main-dispatcher coroutines.
+        private val terminalTransferHashes = LinkedHashSet<String>()
+
         // Track which images have been decoded - used to trigger recomposition
         // when images become available. The UI observes this to know when to re-check the cache.
         private val _loadedImageIds = MutableStateFlow<Set<String>>(emptySet())
@@ -893,6 +903,11 @@ class MessagingViewModel
                 try {
                     rnsLxmf.observeTransferProgress().collect { update ->
                         val key = (update.messageHash ?: update.transferId).lowercase()
+                        // Monotonic cleanup: skip delayed non-terminal
+                        // updates for transfers already settled by a
+                        // terminal delivery status, so the bar can't
+                        // reappear after delivery finished.
+                        if (!update.isTerminal && key in terminalTransferHashes) return@collect
                         _transferProgress.value = if (update.isTerminal) {
                             _transferProgress.value - key
                         } else {
@@ -967,6 +982,26 @@ class MessagingViewModel
                     Log.w(TAG, "Ignoring delivery status without trustworthy attempt identity")
                     return
                 }
+
+                // The terminal transfer-progress update is a one-shot emission;
+                // if it was missed (app in background, IPC gap, service
+                // restart), the in-memory progress entry would linger and the
+                // progress bar would never go away even though the delivery
+                // status already shows the final state. The delivery status is
+                // the authoritative terminal event for the same transfer, so
+                // reconcile the progress map on any terminal status - before
+                // the DB bookkeeping, so a failure there can't strand the bar.
+                if (update.status == DeliveryStatus.DELIVERED
+                    || update.status == DeliveryStatus.PROPAGATED
+                    || update.status == DeliveryStatus.FAILED
+                ) {
+                    val progressKey = update.messageHash.lowercase()
+                    _transferProgress.value = _transferProgress.value - progressKey
+                    terminalTransferHashes.add(progressKey)
+                    while (terminalTransferHashes.size > 256) {
+                        terminalTransferHashes.remove(terminalTransferHashes.first())
+                    }
+                }
                 // Retry mechanism to handle race condition where delivery proof arrives
                 // before database transaction completes
                 val maxRetries = 3
@@ -1018,6 +1053,7 @@ class MessagingViewModel
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
             }

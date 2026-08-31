@@ -88,6 +88,19 @@ class IncomingCallPresenter internal constructor(
     private suspend fun presentIncomingCall(identityHash: String) {
         Log.i(TAG, "Presenting background incoming-call UI for ${identityHash.take(16)}...")
         val callerName = resolveCallerName(identityHash)
+        // The caller-name lookup suspends, so the call may have been answered or
+        // ended while it was in flight. Re-check the current state before posting:
+        // a superseded Incoming state must not launch the call UI for a call that
+        // is no longer incoming. The following state emission then performs the
+        // normal cancel (or posts the new call if the caller changed).
+        val current = rnsTelephony.callState.value
+        if (current !is CallState.Incoming || current.identityHash != identityHash) {
+            Log.i(
+                TAG,
+                "Incoming state superseded before post (now ${current::class.simpleName}); skipping stale presentation",
+            )
+            return
+        }
         incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
     }
 

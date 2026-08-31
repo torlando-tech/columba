@@ -177,6 +177,27 @@ class IncomingCallPresenterTest {
         }
 
     @Test
+    fun `incoming state superseded during the name lookup is not posted`() =
+        runTest {
+            // The call is answered while the caller-name lookup is still in
+            // flight: the stale Incoming state must not post the full-screen
+            // notification after the call is over.
+            coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
+                callState.value = CallState.Active(identityHash)
+                announce("Alice")
+            }
+            coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+            presenter.start()
+            callState.value = CallState.Incoming(identityHash)
+
+            assertEquals(0, notifier.shownCalls.size)
+            // Canceled once for the initial Idle on start, once for the Active
+            // transition that superseded the lookup.
+            assertEquals(2, notifier.cancelCount.get())
+        }
+
+    @Test
     fun `start is idempotent`() =
         runTest {
             coEvery { announceRepository.findByIdentityHash(identityHash) } returns

@@ -399,6 +399,7 @@ class ColumbaApplication : Application() {
                         identityResolutionManager.start(applicationScope)
                         propagationNodeManager.start()
                         telemetryCollectorManager.start()
+                        applySavedIncomingMessageSizeLimit()
                         android.util.Log.d(
                             "ColumbaApplication",
                             "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
@@ -504,6 +505,12 @@ class ColumbaApplication : Application() {
                     .initialize(config)
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
+
+                        // Apply the saved incoming-message size limit now that the
+                        // protocol stack is up, so the first delivery of this session
+                        // already honours the user's setting instead of LXMF's
+                        // built-in ~1 MB gate (columba#1106).
+                        applySavedIncomingMessageSizeLimit()
 
                         // A.10 follow-up: persist a sanitized snapshot so :reticulum can
                         // self-init after OOM/force-stop restart when UI isn't around to
@@ -614,6 +621,29 @@ class ColumbaApplication : Application() {
                 android.util.Log.e("ColumbaApplication", "Error shutting down Reticulum", e)
             }
             // unbindService() was a legacy no-op on the kotlin backend
+        }
+    }
+
+    /**
+     * Push the persisted incoming-message size limit to the protocol stack.
+     *
+     * The limit only reaches LXMF when the user changes it in Settings, so a
+     * backend (re)start would otherwise run with the default until the next
+     * change. Called on both backend-ready paths: fresh init and reconnect to
+     * an already-running backend.
+     */
+    private fun applySavedIncomingMessageSizeLimit() {
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching {
+                val limitKb = settingsRepository.getIncomingMessageSizeLimitKb()
+                rnsLxmf.setIncomingMessageSizeLimit(limitKb)
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "Applied saved incoming message size limit: ${limitKb}KB",
+                )
+            }.onFailure { e ->
+                android.util.Log.w("ColumbaApplication", "Failed to apply saved incoming message size limit", e)
+            }
         }
     }
 

@@ -60,6 +60,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -1167,7 +1168,16 @@ fun ColumbaNavigation(
             .fromApplication(context.applicationContext, RnsTelephonyEntryPoint::class.java)
             .telephony()
     }
-    val callState by telephony.callState.collectAsState()
+    // Lifecycle-gated collection (issue #1079): a plain collectAsState() keeps
+    // updating while the activity is STOPPED, so the effect below would fire
+    // for a backgrounded app, navigate to the (invisible) IncomingCallScreen,
+    // and cancel the presenter's full-screen-intent notification before the
+    // system can show it. With collectAsStateWithLifecycle the observation
+    // pauses while the activity is not visible, leaving background
+    // presentation to IncomingCallPresenter; when the app is brought to the
+    // front mid-call, collection resumes on the current state and this effect
+    // takes over normally.
+    val callState by telephony.callState.collectAsStateWithLifecycle()
 
     LaunchedEffect(callState) {
         when (val state = callState) {

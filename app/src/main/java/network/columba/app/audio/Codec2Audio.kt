@@ -266,10 +266,14 @@ internal class Codec2VoiceRecorderBackend(
         var filled = 0
         while (running.get() && filled < frame.size) {
             val read = activeCapture.read(frame, filled, frame.size - filled)
-            if (!running.get()) return false
             check(read >= 0) { "AudioRecord read failed: $read" }
             filled += read
+            if (!running.get()) break
         }
+        // A frame that was fully read before stop() was requested must still be
+        // encoded and written: discarding it would lose up to one frame of the
+        // recording tail (and made the recorder's output nondeterministic when
+        // stop raced the capture). Only a partially filled frame is dropped.
         return filled == frame.size
     }
 

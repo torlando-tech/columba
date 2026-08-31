@@ -39,6 +39,7 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.RelayInfo
@@ -2079,6 +2080,14 @@ class SettingsViewModel
 
                 // Apply the change at runtime via the protocol
                 rnsLxmf.setIncomingMessageSizeLimit(limitKb)
+
+                // Keep the on-disk restart snapshot in sync: a :reticulum-only
+                // recovery (UI process dead) reads it, so without this it would
+                // resurrect the previous delivery gate (columba#1106)
+                ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(
+                    context,
+                    limitKb.toLong(),
+                )
             }
         }
 

@@ -67,4 +67,31 @@ class ReticulumConfigSnapshotTest {
         ReticulumConfigSnapshot.clear(context)
         assertNull(ReticulumConfigSnapshot.read(context))
     }
+
+    @Test
+    fun `updateIncomingMessageSizeLimitKb rewrites only the limit, preserving the rest`() {
+        ReticulumConfigSnapshot.clear(context)
+        val config = sampleConfig().copy(incomingMessageSizeLimitKb = 131072L)
+
+        ReticulumConfigSnapshot.write(context, config, identityHashHex = "deadbeefcafe")
+        ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(context, 512L)
+        val snap = ReticulumConfigSnapshot.read(context)
+
+        assertNotNull(snap)
+        assertEquals(512L, snap!!.configWithoutKey.incomingMessageSizeLimitKb)
+        assertEquals("deadbeefcafe", snap.identityHashHex)
+        assertEquals(
+            "all other config fields must survive the read-modify-write",
+            config.copy(deliveryIdentityKey = null, incomingMessageSizeLimitKb = 512L),
+            snap.configWithoutKey,
+        )
+        assertNull(snap.configWithoutKey.deliveryIdentityKey)
+    }
+
+    @Test
+    fun `updateIncomingMessageSizeLimitKb is a no-op without a snapshot`() {
+        ReticulumConfigSnapshot.clear(context)
+        ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(context, 512L)
+        assertNull(ReticulumConfigSnapshot.read(context))
+    }
 }

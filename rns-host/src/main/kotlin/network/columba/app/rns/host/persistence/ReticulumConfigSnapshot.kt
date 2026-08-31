@@ -149,6 +149,35 @@ object ReticulumConfigSnapshot {
         }
     }
 
+    /**
+     * Update only [ReticulumConfig.incomingMessageSizeLimitKb] on the
+     * existing snapshot, without re-initializing the backend.
+     *
+     * The user can change the incoming-message size limit at runtime; the
+     * settings path then updates DataStore and the live router, but the
+     * on-disk restart snapshot would otherwise keep the initialization-time
+     * value. A `:reticulum`-only recovery (UI process dead) reads this
+     * snapshot, so it would resurrect a stale delivery gate - DIRECT
+     * transfers incorrectly accepted or rejected until the UI re-applies
+     * the setting (columba#1106).
+     *
+     * No-op (debug-logged) when no snapshot exists yet; the next full
+     * initialization writes a fresh one with the current value.
+     */
+    fun updateIncomingMessageSizeLimitKb(context: Context, limitKb: Long?) {
+        val snapshot = read(context)
+        if (snapshot == null) {
+            Log.d(TAG, "No snapshot to update for incoming limit ($limitKb KB)")
+            return
+        }
+        write(
+            context = context,
+            config = snapshot.configWithoutKey.copy(incomingMessageSizeLimitKb = limitKb),
+            identityHashHex = snapshot.identityHashHex,
+        )
+        Log.d(TAG, "Snapshot incoming limit updated: $limitKb KB")
+    }
+
     /** Delete the snapshot — used after `shutdown()` to force fresh wiring on next start. */
     fun clear(context: Context) {
         snapshotFile(context).delete()

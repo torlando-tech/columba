@@ -276,6 +276,26 @@ class TestReceiver : BroadcastReceiver() {
                 }
             }
 
+            "network.columba.test.SHOW_INCOMING_CALL_TEST" -> {
+                // Debug-only: post the real incoming-call FSI notification on demand
+                // (issue #1079 diagnostics) so the full-screen takeover can be
+                // reproduced without placing a real call. Optional extras:
+                //   hash - identity hash to carry (default: a test hash)
+                //   name - caller display name (default: "E2E Test Caller")
+                val hash = intent.getStringExtra("hash") ?: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                val name = intent.getStringExtra("name") ?: "E2E Test Caller"
+                try {
+                    val helper = network.columba.app.notifications.CallNotificationHelper(app)
+                    helper.showIncomingCallNotification(hash, name)
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "fsi_test_posted hash=${hash.take(8)} name=$name",
+                    )
+                } catch (e: Exception) {
+                    Log.e(TestController.LOGCAT_TAG, "fsi_test_err ${e.message}")
+                }
+            }
+
             else ->
                 Log.i(TestController.LOGCAT_TAG, "rx_broadcast_unknown action=$action")
         }

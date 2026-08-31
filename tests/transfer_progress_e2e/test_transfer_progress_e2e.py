@@ -22,7 +22,12 @@ PKG = "network.columba.app.debug"
 ACTIVITY = f"{PKG}/network.columba.app.MainActivity"
 RECEIVER = f"{PKG}/network.columba.app.test.TestReceiver"
 FILE_NAME = "columba-progress-e2e.bin"
-FILE_SIZE = 1024 * 1024
+# 3 MiB packs into 4 RNS resource segments (MAX_EFFICIENT_SIZE is 1 MiB - 1),
+# so the sender-side transfer crosses multiple `next_segment` objects. A
+# progress reader pinned to the first segment freezes at 1/total_segments
+# (25% here) for the rest of the transfer - the multi-segment size is the
+# point of this E2E.
+FILE_SIZE = 3 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -250,26 +255,41 @@ def outgoing_resource_percentage(snapshot: UiSnapshot) -> int | None:
     return snapshot.semantic_percentage("Transferring Resource")
 
 
-def capture_verified_progress(driver: AdbUiDriver, timeout: float = 45) -> int:
-    """Capture a screenshot bracketed by matching intermediate UI semantics."""
+def sample_outgoing_progress(
+    driver: AdbUiDriver,
+    timeout: float = 120,
+) -> tuple[list[int], bool]:
+    """Sample the outgoing progress bar across the whole transfer.
+
+    Returns (percentages observed over time, whether the bar went away).
+    The bar is considered gone once it has been visible a few times and the
+    "Transferring Resource" semantic stops appearing.
+    """
+    percentages: list[int] = []
+    verified_screenshot = False
+    none_streak = 0
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            before = outgoing_resource_percentage(driver.snapshot())
-            if before is None:
-                time.sleep(0.2)
-                continue
-            screenshot = driver.screenshot("outgoing-resource-progress.png")
-            after = outgoing_resource_percentage(driver.snapshot())
-            if after is not None and screenshot.stat().st_size > 10_000:
-                return after
-        except (OSError, subprocess.SubprocessError, ET.ParseError):
-            pass
-        time.sleep(0.2)
-    raise TimeoutError("Could not capture verified outgoing Resource progress")
+            percentage = outgoing_resource_percentage(driver.snapshot())
+        except (subprocess.CalledProcessError, ET.ParseError):
+            percentage = None
+        if percentage is not None:
+            none_streak = 0
+            percentages.append(percentage)
+            if not verified_screenshot and percentage > 60:
+                screenshot = driver.screenshot("outgoing-resource-progress.png")
+                if screenshot.stat().st_size > 10_000:
+                    verified_screenshot = True
+        else:
+            none_streak += 1
+            if len(percentages) >= 3 and none_streak >= 3:
+                return percentages, True
+        time.sleep(0.4)
+    return percentages, False
 
 
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(420)
 def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
     apk = Path(os.environ["COLUMBA_E2E_APK"]).resolve()
     serial = os.environ.get("COLUMBA_EMULATOR_SERIAL", "emulator-5554")
@@ -354,15 +374,32 @@ def test_real_resource_progress_reaches_outgoing_bubble(tmp_path: Path) -> None:
         driver.wait_text(FILE_NAME, timeout=30)
         driver.click_description("Send message")
 
-        percentage = capture_verified_progress(driver)
-        assert 0 < percentage < 100
+        percentages, bar_disappeared = sample_outgoing_progress(driver, timeout=120)
+        assert percentages, "outgoing progress bar never appeared"
+        # Progress must track the whole multi-segment transfer, not stall
+        # after the first segment (which would cap it at 25% for this file).
+        assert max(percentages) > 60, (
+            f"progress stalled after early segments: max={max(percentages)} "
+            f"samples={percentages[:20]}...{percentages[-5:]}"
+        )
 
-        wait_file(peer.result_file, 90)
+        wait_file(peer.result_file, 120)
         received = json.loads(peer.result_file.read_text(encoding="utf-8"))
         assert received["filename"] == FILE_NAME
         assert received["size"] == FILE_SIZE
         assert received["sha256"] == expected_sha
         assert re.fullmatch(r"[0-9a-f]{64}", received["message_hash"])
+
+        if not bar_disappeared:
+            # The terminal update lands with the receiver-side conclusion;
+            # give it a moment before failing on the lingering bar.
+            grace = time.monotonic() + 30
+            while time.monotonic() < grace:
+                time.sleep(1)
+                if outgoing_resource_percentage(driver.snapshot()) is None:
+                    bar_disappeared = True
+                    break
+        assert bar_disappeared, "progress bar did not go away after the transfer completed"
     finally:
         try:
             driver.screenshot("final-screen.png")

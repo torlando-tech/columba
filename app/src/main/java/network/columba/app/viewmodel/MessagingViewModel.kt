@@ -967,6 +967,21 @@ class MessagingViewModel
                     Log.w(TAG, "Ignoring delivery status without trustworthy attempt identity")
                     return
                 }
+
+                // The terminal transfer-progress update is a one-shot emission;
+                // if it was missed (app in background, IPC gap, service
+                // restart), the in-memory progress entry would linger and the
+                // progress bar would never go away even though the delivery
+                // status already shows the final state. The delivery status is
+                // the authoritative terminal event for the same transfer, so
+                // reconcile the progress map on any terminal status - before
+                // the DB bookkeeping, so a failure there can't strand the bar.
+                if (update.status == DeliveryStatus.DELIVERED
+                    || update.status == DeliveryStatus.PROPAGATED
+                    || update.status == DeliveryStatus.FAILED
+                ) {
+                    _transferProgress.value = _transferProgress.value - update.messageHash.lowercase()
+                }
                 // Retry mechanism to handle race condition where delivery proof arrives
                 // before database transaction completes
                 val maxRetries = 3
@@ -1018,6 +1033,7 @@ class MessagingViewModel
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
             }

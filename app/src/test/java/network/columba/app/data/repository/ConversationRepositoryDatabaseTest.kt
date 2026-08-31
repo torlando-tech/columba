@@ -595,6 +595,15 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
             verify(exactly = 1) {
                 mockAttachmentStorage.saveAttachment("msg_positional_file", "5_0", hexData)
             }
+
+            // The stored row must stay far below the SQLite CursorWindow
+            // limit (~2 MB). If the hex is kept inline, the conversation
+            // query fails and the whole chat renders empty - the original
+            // bug this test guards against.
+            assertTrue(
+                "stored fieldsJson must not keep the file data inline, got ${saved.fieldsJson?.length} chars",
+                saved.fieldsJson!!.length < AttachmentStorageManager.SIZE_THRESHOLD,
+            )
         }
 
     @Test

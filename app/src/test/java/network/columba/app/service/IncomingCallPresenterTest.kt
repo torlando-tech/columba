@@ -6,8 +6,10 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.runCurrent
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
@@ -26,6 +28,13 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Unit tests for [IncomingCallPresenter]: the app-process component that presents
  * incoming calls (full-screen-intent notification) while the app is backgrounded
  * (issue #1079).
+ *
+ * The presenter runs on a [StandardTestDispatcher] backed by a shared
+ * [TestCoroutineScheduler], so each test drives it deterministically: a state
+ * change is only processed when [runCurrent] advances the scheduler. Grouping
+ * several state changes before a [runCurrent] models the production case where
+ * the whole churn collapses into the collector's suspension and the StateFlow
+ * conflates the intermediate values.
  */
 class IncomingCallPresenterTest {
     /** Records notifier interactions so tests assert on real state, not mock calls. */
@@ -42,6 +51,7 @@ class IncomingCallPresenterTest {
         }
     }
 
+    private val scheduler = TestCoroutineScheduler()
     private val rnsTelephony: RnsTelephony = mockk()
     private val announceRepository: AnnounceRepository = mockk()
     private val contactRepository: ContactRepository = mockk()
@@ -62,7 +72,7 @@ class IncomingCallPresenterTest {
                 announceRepository = announceRepository,
                 contactRepository = contactRepository,
                 incomingCallNotifier = notifier,
-                dispatcher = UnconfinedTestDispatcher(),
+                dispatcher = StandardTestDispatcher(scheduler),
             )
     }
 
@@ -92,171 +102,222 @@ class IncomingCallPresenterTest {
             addedVia = "MANUAL",
         )
 
-    @Test
-    fun `incoming call posts notification with contact nickname`() =
-        runTest {
-            coEvery { announceRepository.findByIdentityHash(identityHash) } returns
-                announce("Alice")
-            coEvery { contactRepository.getContact(destinationHash) } returns contact("Boss")
-
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
-
-            assertEquals(1, notifier.shownCalls.size)
-            assertEquals(identityHash, notifier.shownCalls[0].first)
-            assertEquals("Boss", notifier.shownCalls[0].second)
-        }
+    /** Processes the collector and any in-flight lookup work for the current state. */
+    private fun settle() {
+        scheduler.runCurrent()
+        scheduler.runCurrent()
+    }
 
     @Test
-    fun `incoming call falls back to announce peer name when no nickname`() =
-        runTest {
-            coEvery { announceRepository.findByIdentityHash(identityHash) } returns
-                announce("Alice")
-            coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+    fun `incoming call posts immediately and corrects the name after the lookup`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact("Boss")
 
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
 
-            assertEquals(1, notifier.shownCalls.size)
-            assertEquals(identityHash, notifier.shownCalls[0].first)
-            assertEquals("Alice", notifier.shownCalls[0].second)
-        }
-
-    @Test
-    fun `incoming call posts notification with null name for unknown caller`() =
-        runTest {
-            coEvery { announceRepository.findByIdentityHash(identityHash) } returns null
-
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
-
-            assertEquals(1, notifier.shownCalls.size)
-            assertEquals(identityHash, notifier.shownCalls[0].first)
-            assertNull(notifier.shownCalls[0].second)
-        }
+        // First post carries no name yet (fresh process, empty cache); the
+        // lookup update post carries the resolved nickname.
+        assertEquals(2, notifier.shownCalls.size)
+        assertEquals(identityHash to null, notifier.shownCalls[0])
+        assertEquals(identityHash to "Boss", notifier.shownCalls[1])
+    }
 
     @Test
-    fun `lookup failure fails open to null name`() =
-        runTest {
-            coEvery { announceRepository.findByIdentityHash(identityHash) } throws
-                RuntimeException("db exploded")
+    fun `incoming call falls back to announce peer name when no nickname`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
 
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
 
-            assertEquals(1, notifier.shownCalls.size)
-            assertEquals(identityHash, notifier.shownCalls[0].first)
-            assertNull(notifier.shownCalls[0].second)
-        }
-
-    @Test
-    fun `transition to Active cancels the incoming notification`() =
-        runTest {
-            coEvery { announceRepository.findByIdentityHash(identityHash) } returns
-                announce("Alice")
-            coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
-
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
-            callState.value = CallState.Active(identityHash)
-
-            // Posted once for the incoming call, cancelled once for the Active
-            // transition (plus one cancel for the initial Idle on start).
-            assertEquals(1, notifier.shownCalls.size)
-            assertEquals("Alice", notifier.shownCalls[0].second)
-            assertEquals(2, notifier.cancelCount.get())
-        }
+        assertEquals(identityHash to "Alice", notifier.shownCalls.last())
+    }
 
     @Test
-    fun `outgoing states never post an incoming notification`() =
-        runTest {
-            presenter.start()
-            callState.value = CallState.Connecting(identityHash)
-            callState.value = CallState.Ringing(identityHash)
+    fun `incoming call keeps null name for unknown caller`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns null
 
-            assertEquals(0, notifier.shownCalls.size)
-        }
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
 
-    @Test
-    fun `incoming state superseded during the name lookup is not posted`() =
-        runTest {
-            // The call is answered while the caller-name lookup is still in
-            // flight: the stale Incoming state must not post the full-screen
-            // notification after the call is over.
-            val lookupGate = CompletableDeferred<Unit>()
-            coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
-                lookupGate.await()
-                announce("Alice")
-            }
-            coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
-
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
-            // The presenter is now suspended in lookup 1; the call is answered
-            // before that lookup completes.
-            callState.value = CallState.Active(identityHash)
-            lookupGate.complete(Unit)
-
-            assertEquals(0, notifier.shownCalls.size)
-            // Canceled once for the initial Idle on start, once for the Active
-            // transition that superseded the lookup.
-            assertEquals(2, notifier.cancelCount.get())
-        }
+        assertEquals(identityHash, notifier.shownCalls.last().first)
+        assertNull(notifier.shownCalls.last().second)
+    }
 
     @Test
-    fun `consecutive same-identity calls present the current call, not the stale lookup`() =
-        runTest {
-            // Call 1 arrives and its name lookup is in flight when the call is
-            // answered and a second call from the SAME identity comes in. The
-            // stale lookup's result must not be posted; the presentation must
-            // come from the second call's own lookup (which sees the changed
-            // peer name here).
-            val lookupGate = CompletableDeferred<Unit>()
-            val lookups = java.util.concurrent.atomic.AtomicInteger(0)
-            coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
-                if (lookups.incrementAndGet() == 1) {
-                    lookupGate.await()
-                    announce("Alice")
-                } else {
-                    announce("Bob")
-                }
-            }
-            coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+    fun `lookup failure fails open to null name`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } throws
+            RuntimeException("db exploded")
 
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
-            // Lookup 1 is in flight; call 1 is answered and a second call from
-            // the same identity arrives before it completes.
-            callState.value = CallState.Active(identityHash)
-            callState.value = CallState.Idle
-            callState.value = CallState.Incoming(identityHash)
-            lookupGate.complete(Unit)
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
 
-            assertEquals(1, notifier.shownCalls.size)
-            assertEquals(identityHash, notifier.shownCalls[0].first)
-            assertEquals("Bob", notifier.shownCalls[0].second)
-        }
+        assertEquals(identityHash, notifier.shownCalls.last().first)
+        assertNull(notifier.shownCalls.last().second)
+    }
 
     @Test
-    fun `start is idempotent`() =
-        runTest {
-            coEvery { announceRepository.findByIdentityHash(identityHash) } returns
-                announce("Alice")
-            coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+    fun `transition to Active cancels the incoming notification`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
 
-            presenter.start()
-            presenter.start()
-            callState.value = CallState.Incoming(identityHash)
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        callState.value = CallState.Active(identityHash)
+        scheduler.runCurrent()
 
-            assertEquals(1, notifier.shownCalls.size)
-            assertEquals("Alice", notifier.shownCalls[0].second)
-        }
+        // Posted immediately, name corrected by the lookup, then cancelled for
+        // the Active transition (plus one cancel for the initial Idle on start).
+        assertEquals(identityHash to "Alice", notifier.shownCalls.last())
+        assertEquals(2, notifier.cancelCount.get())
+    }
 
     @Test
-    fun `resolveCallerName returns null when no announce exists`() =
-        runTest {
-            coEvery { announceRepository.findByIdentityHash(identityHash) } returns null
+    fun `outgoing states never post an incoming notification`() {
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Connecting(identityHash)
+        scheduler.runCurrent()
+        callState.value = CallState.Ringing(identityHash)
+        scheduler.runCurrent()
 
-            assertNull(presenter.resolveCallerName(identityHash))
+        assertEquals(0, notifier.shownCalls.size)
+    }
+
+    @Test
+    fun `superseded lookup does not post after the call ended`() {
+        // The call is answered while the caller-name lookup is still in flight:
+        // the stale lookup result must not update or resurrect the notification
+        // after the call is over.
+        val lookupGate = CompletableDeferred<Unit>()
+        coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
+            lookupGate.await()
+            announce("Alice")
         }
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        // The immediate post is up; the lookup coroutine is parked at the gate.
+        callState.value = CallState.Active(identityHash)
+        scheduler.runCurrent()
+        lookupGate.complete(Unit)
+        scheduler.runCurrent()
+
+        assertEquals(1, notifier.shownCalls.size)
+        assertEquals(identityHash to null, notifier.shownCalls[0])
+        // Canceled once for the initial Idle on start, once for the Active
+        // transition that superseded the lookup.
+        assertEquals(2, notifier.cancelCount.get())
+    }
+
+    @Test
+    fun `consecutive same-identity call hidden by state conflation is still presented`() {
+        // Call 1 arrives and its lookup is in flight. Call 1 is then answered and
+        // a second call from the SAME identity comes in before the collector can
+        // process the intermediate states: the whole round trip collapses into
+        // the collector's suspension, and the second Incoming equals the one it
+        // already delivered, so the StateFlow conflates it away and the collector
+        // never sees the new call (verified: a collector suspended across a
+        // V -> X -> V round trip observes nothing). Only the first lookup's
+        // update post can present the second call - and it must, with the
+        // resolved name for that identity.
+        val lookupGate = CompletableDeferred<Unit>()
+        coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
+            lookupGate.await()
+            announce("Alice")
+        }
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        // The churn happens while the collector is suspended; no scheduler
+        // advance in between, so the collector only ever sees the final value.
+        callState.value = CallState.Active(identityHash)
+        callState.value = CallState.Idle
+        callState.value = CallState.Incoming(identityHash)
+
+        lookupGate.complete(Unit)
+        scheduler.runCurrent()
+
+        // The immediate post plus the update post that presents the second call.
+        assertEquals(2, notifier.shownCalls.size)
+        assertEquals(identityHash to null, notifier.shownCalls[0])
+        assertEquals(identityHash to "Alice", notifier.shownCalls[1])
+        // The collector never saw the intermediate states (conflated away): only
+        // the initial Idle on start produced a cancel.
+        assertEquals(1, notifier.cancelCount.get())
+    }
+
+    @Test
+    fun `consecutive same-identity call with visible transitions is re-presented`() {
+        // Same scenario with the collector keeping up: it sees every state and
+        // delivers the second Incoming as its own event. Both the collector's
+        // immediate post and the lookup update posts must land for the new call.
+        val lookupGate = CompletableDeferred<Unit>()
+        coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
+            lookupGate.await()
+            announce("Alice")
+        }
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        callState.value = CallState.Active(identityHash)
+        scheduler.runCurrent()
+        callState.value = CallState.Idle
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        scheduler.runCurrent()
+        lookupGate.complete(Unit)
+        scheduler.runCurrent()
+
+        assertEquals(identityHash to "Alice", notifier.shownCalls.last())
+        // Initial Idle, Active, and Idle cancels.
+        assertEquals(3, notifier.cancelCount.get())
+    }
+
+    @Test
+    fun `start is idempotent`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+
+        // One collector: exactly the immediate post and the lookup update post.
+        assertEquals(2, notifier.shownCalls.size)
+        assertEquals(identityHash to "Alice", notifier.shownCalls[1])
+    }
+
+    @Test
+    fun `resolveCallerName returns null when no announce exists`() {
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns null
+
+        assertNull(runBlocking { presenter.resolveCallerName(identityHash) })
+    }
 }

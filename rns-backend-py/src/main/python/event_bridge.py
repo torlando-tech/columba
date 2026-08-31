@@ -735,6 +735,54 @@ _incoming_message_size_limit_configured = False
 _UNLIMITED_DELIVERY_LIMIT_KB = 1024 * 1024 * 1024
 
 
+def _delivery_limit_decimal_kb(limit_kb):
+    """Convert the app's binary-KB cap to LXMF's decimal-KB gate value.
+
+    0 (unlimited) maps to the large finite sentinel (see
+    _UNLIMITED_DELIVERY_LIMIT_KB); positive values are converted with a
+    ceiling so the pre-transfer gate never rejects a message the cap
+    allows.
+    """
+    if limit_kb <= 0:
+        return _UNLIMITED_DELIVERY_LIMIT_KB
+    return -(-(limit_kb * 1024) // 1000)
+
+
+def prime_incoming_message_size_limit(router, limit_kb):
+    """Store the cap and apply it to a freshly constructed router.
+
+    Called by the backend runtime right after LXMRouter construction -
+    before register_callbacks() has wired the module-level router and
+    before the delivery destination can receive traffic - so the first
+    DIRECT resource advertisement is already evaluated against the
+    user's configured gate instead of LXMF's built-in 1000 KB default
+    (columba#1106 startup window). 0 = unlimited (sentinel).
+    """
+    global _incoming_message_size_limit_kb, _incoming_message_size_limit_configured
+    _incoming_message_size_limit_kb = max(0, int(limit_kb))
+    _incoming_message_size_limit_configured = True
+    if router is not None:
+        try:
+            router.delivery_per_transfer_limit = _delivery_limit_decimal_kb(
+                _incoming_message_size_limit_kb,
+            )
+            RNS.log(
+                "event_bridge: LXMF delivery_per_transfer_limit primed to "
+                f"{router.delivery_per_transfer_limit} KB (decimal)",
+                RNS.LOG_DEBUG,
+            )
+        except Exception as e:  # noqa: BLE001 - never fatal; host push re-applies later
+            RNS.log(
+                f"event_bridge: failed to prime incoming limit: {e}",
+                RNS.LOG_WARNING,
+            )
+    RNS.log(
+        "event_bridge: incoming message size limit primed to "
+        f"{_incoming_message_size_limit_kb or 'unlimited'} KB",
+        RNS.LOG_DEBUG,
+    )
+
+
 def _apply_incoming_limit_to_router():
     """Mirror _incoming_message_size_limit_kb onto LXMF's pre-transfer gate.
 
@@ -763,11 +811,9 @@ def _apply_incoming_limit_to_router():
     if not _incoming_message_size_limit_configured:
         return
     try:
-        if _incoming_message_size_limit_kb <= 0:
-            _lxmf_router.delivery_per_transfer_limit = _UNLIMITED_DELIVERY_LIMIT_KB
-        else:
-            limit_bytes = _incoming_message_size_limit_kb * 1024
-            _lxmf_router.delivery_per_transfer_limit = -(-limit_bytes // 1000)
+        _lxmf_router.delivery_per_transfer_limit = _delivery_limit_decimal_kb(
+            _incoming_message_size_limit_kb,
+        )
         RNS.log(
             "event_bridge: LXMF delivery_per_transfer_limit set to "
             f"{_lxmf_router.delivery_per_transfer_limit} KB (decimal)",

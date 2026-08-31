@@ -120,6 +120,26 @@ class IncomingMessageSizeLimitBridgeTests(unittest.TestCase):
         self.assertGreaterEqual(gate_bytes, 1024 * 1024)
         self.assertLess(gate_bytes, 2 * 1024 * 1024)
 
+    def test_prime_applies_cap_to_fresh_router_before_register_callbacks(self):
+        # Startup path: the backend runtime primes the router right after
+        # construction, before register_callbacks wires the module-level
+        # router. The cap must apply immediately and must survive
+        # register_callbacks (which re-applies the stored value).
+        router = FakeRouter()
+        self.module.prime_incoming_message_size_limit(router, 131072)
+        self.assertEqual(134218, router.delivery_per_transfer_limit)
+        self.assertEqual(131072, self.module._incoming_message_size_limit_kb)
+
+        self.module.register_callbacks(
+            object(), router, _noop, _noop, _noop, _noop, _noop
+        )
+        self.assertEqual(134218, router.delivery_per_transfer_limit)
+
+    def test_prime_unlimited_maps_to_sentinel(self):
+        router = FakeRouter()
+        self.module.prime_incoming_message_size_limit(router, 0)
+        self.assertGreater(router.delivery_per_transfer_limit, 1_000_000_000)
+
     def test_fresh_process_keeps_conservative_gate_until_host_pushes_cap(self):
         # The host pushes the persisted cap asynchronously after backend
         # init (ColumbaApplication, IO coroutine). Until that push lands,

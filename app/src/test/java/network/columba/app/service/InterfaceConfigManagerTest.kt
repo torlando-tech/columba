@@ -130,6 +130,7 @@ class InterfaceConfigManagerTest {
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
         coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
+        coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 1024
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
 
         // Setup identity repository mock
@@ -462,6 +463,27 @@ class InterfaceConfigManagerTest {
                 rnsCore.initialize(
                     match { config ->
                         config.enableTransport == false
+                    },
+                )
+            }
+        }
+
+    @Test
+    fun `applyInterfaceChanges - passes incoming message size limit to config`() =
+        runTest {
+            // Given: persisted limit from Settings (binary KB)
+            coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 131072
+
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: backend receives the limit so it can prime the delivery
+            // gate before the first delivery (columba#1106)
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+            coVerify {
+                rnsCore.initialize(
+                    match { config ->
+                        config.incomingMessageSizeLimitKb == 131072L
                     },
                 )
             }

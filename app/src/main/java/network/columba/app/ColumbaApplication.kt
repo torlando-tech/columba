@@ -499,6 +499,11 @@ class ColumbaApplication : Application() {
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
+                        // Prime the backend's delivery gate with the persisted
+                        // limit at startup, before any delivery is possible
+                        // (columba#1106 startup window)
+                        incomingMessageSizeLimitKb =
+                            settingsRepository.getIncomingMessageSizeLimitKb().toLong(),
                     )
 
                 rnsCore
@@ -506,10 +511,10 @@ class ColumbaApplication : Application() {
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
 
-                        // Apply the saved incoming-message size limit now that the
-                        // protocol stack is up, so the first delivery of this session
-                        // already honours the user's setting instead of LXMF's
-                        // built-in ~1 MB gate (columba#1106).
+                        // Belt-and-braces: the config already primed the backend's
+                        // delivery gate at startup (columba#1106); re-pushing the
+                        // persisted value covers the reconnect-to-running-backend
+                        // path where the backend outlived a settings change.
                         applySavedIncomingMessageSizeLimit()
 
                         // A.10 follow-up: persist a sanitized snapshot so :reticulum can
@@ -627,10 +632,11 @@ class ColumbaApplication : Application() {
     /**
      * Push the persisted incoming-message size limit to the protocol stack.
      *
-     * The limit only reaches LXMF when the user changes it in Settings, so a
-     * backend (re)start would otherwise run with the default until the next
-     * change. Called on both backend-ready paths: fresh init and reconnect to
-     * an already-running backend.
+     * Primary startup coverage comes from [ReticulumConfig.incomingMessageSizeLimitKb]
+     * (primed by the backend before its delivery destination becomes reachable);
+     * this push covers the reconnect-to-running-backend path and any drift
+     * between the backend's startup value and the current persisted setting.
+     * Called on both backend-ready paths: fresh init and reconnect.
      */
     private fun applySavedIncomingMessageSizeLimit() {
         applicationScope.launch(Dispatchers.IO) {

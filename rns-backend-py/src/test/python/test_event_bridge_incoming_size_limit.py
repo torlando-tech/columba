@@ -66,6 +66,7 @@ class IncomingMessageSizeLimitBridgeTests(unittest.TestCase):
     def setUp(self):
         self.module._lxmf_router = None
         self.module._incoming_message_size_limit_kb = 0
+        self.module._incoming_message_size_limit_configured = False
 
     def test_set_without_router_does_not_crash_and_stores_cap(self):
         self.module.set_incoming_message_size_limit(25600)
@@ -118,6 +119,24 @@ class IncomingMessageSizeLimitBridgeTests(unittest.TestCase):
         gate_bytes = router.delivery_per_transfer_limit * 1000
         self.assertGreaterEqual(gate_bytes, 1024 * 1024)
         self.assertLess(gate_bytes, 2 * 1024 * 1024)
+
+    def test_fresh_process_keeps_conservative_gate_until_host_pushes_cap(self):
+        # The host pushes the persisted cap asynchronously after backend
+        # init (ColumbaApplication, IO coroutine). Until that push lands,
+        # the pre-transfer gate must keep LXMF's built-in conservative
+        # default (1000 decimal KB) - not the "unlimited" sentinel - so an
+        # oversized direct delivery arriving in the init window is refused
+        # at advertisement time instead of transferred and dropped after
+        # reassembly.
+        router = FakeRouter()
+        self.module.register_callbacks(
+            object(), router, _noop, _noop, _noop, _noop, _noop
+        )
+        self.assertEqual(1000, router.delivery_per_transfer_limit)
+
+        # Once the host pushes the persisted cap, the gate follows it.
+        self.module.set_incoming_message_size_limit(131072)
+        self.assertEqual(134218, router.delivery_per_transfer_limit)
 
 
 if __name__ == "__main__":

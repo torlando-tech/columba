@@ -713,11 +713,19 @@ class _AnnounceHandler:
 #      `LXMRouter.delivery_per_transfer_limit` (see _apply_incoming_limit_to_router()).
 #      Without it, LXMF's built-in default (LXMRouter.DELIVERY_LIMIT = 1000,
 #      i.e. 1,000,000 bytes) rejects every inbound direct-delivery resource
-#      above ~1 MB at resource-advertisement time — before a single byte is
-#      transferred — no matter what the user configured (columba#1106).
+#      above ~1 MB at resource-advertisement time (before a single byte is
+#      transferred) no matter what the user configured (columba#1106).
 #   2. Post-reassembly, for all delivery methods (incl. opportunistic, which
 #      has no pre-transfer hook): the drop in _lxmf_delivery_callback().
+#
+# `_incoming_message_size_limit_configured` tracks whether the host has pushed
+# a cap in this process. Until it has, the pre-transfer gate keeps LXMF's
+# built-in conservative default (1000 decimal KB) instead of the "unlimited"
+# sentinel: the host pushes the persisted cap asynchronously after backend
+# init, and in that window an oversized direct delivery must be refused at
+# advertisement time, not transferred and dropped after reassembly.
 _incoming_message_size_limit_kb = 0
+_incoming_message_size_limit_configured = False
 
 # Sentinel for "unlimited" on LXMF's delivery_per_transfer_limit (decimal KB,
 # ~= 1 TB). Upstream LXMF's delivery_resource_advertised() multiplies the
@@ -741,11 +749,18 @@ def _apply_incoming_limit_to_router():
 
     Unit note: Columba's setting is binary KB (the post-reassembly drop
     compares against `limit_kb * 1024`), while LXMF compares against
-    `limit_kb * 1000` — convert with a ceiling so the pre-transfer gate
+    `limit_kb * 1000` - convert with a ceiling so the pre-transfer gate
     never rejects a message the user's cap would allow; the post-reassembly
     drop remains the strict gate.
+
+    While the host has not pushed a cap yet (fresh process, pre-init window),
+    this is a no-op on purpose: the router keeps LXMF's built-in conservative
+    1000 decimal KB default instead of being widened to the "unlimited"
+    sentinel (see _incoming_message_size_limit_configured).
     """
     if _lxmf_router is None:
+        return
+    if not _incoming_message_size_limit_configured:
         return
     try:
         if _incoming_message_size_limit_kb <= 0:
@@ -768,10 +783,11 @@ def set_incoming_message_size_limit(limit_kb):
     The lxmf-kt port (kotlin backend) has a real `incomingMessageSizeLimitKb`;
     this is the Python-backend equivalent, enforced both pre-transfer
     (delivery_per_transfer_limit, link-based delivery) and post-reassembly
-    (all methods — see _lxmf_delivery_callback()).
+    (all methods - see _lxmf_delivery_callback()).
     """
-    global _incoming_message_size_limit_kb
+    global _incoming_message_size_limit_kb, _incoming_message_size_limit_configured
     _incoming_message_size_limit_kb = max(0, int(limit_kb))
+    _incoming_message_size_limit_configured = True
     _apply_incoming_limit_to_router()
     RNS.log(
         "event_bridge: incoming message size limit set to "
@@ -1243,10 +1259,11 @@ def register_callbacks(
 
     if lxmf_router is not None:
         lxmf_router.register_delivery_callback(_lxmf_delivery_callback)
-        # A fresh router starts with LXMF's built-in delivery limit (1000 KB
-        # decimal) regardless of what the user configured — re-apply the
-        # stored cap so a backend restart doesn't silently revert it
-        # (columba#1106).
+        # If the host already pushed a cap in this process (in-process
+        # backend restart / reconnect), re-apply it to the fresh router so
+        # the built-in 1000 KB default doesn't silently return (columba#1106).
+        # In a fresh process this is a no-op: the router keeps LXMF's
+        # conservative default until the host pushes the persisted cap.
         _apply_incoming_limit_to_router()
 
     RNS.log("event_bridge: callbacks registered", RNS.LOG_DEBUG)

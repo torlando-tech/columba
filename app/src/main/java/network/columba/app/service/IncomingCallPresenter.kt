@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import network.columba.app.MainActivityVisibility
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.notifications.IncomingCallNotifier
@@ -40,9 +41,11 @@ import network.columba.app.rns.host.util.PeerNameResolver
  * update path is what re-presents a same-identity re-call that [StateFlow]
  * conflation would otherwise hide from the collector.
  *
- * Foreground presentation (the in-app incoming call screen) remains MainActivity's
- * concern; it cancels this notification as soon as it takes over, so the two paths
- * never double up.
+ * Foreground presentation (the in-app incoming call screen) is MainActivity's
+ * concern. The presenter gates both posts on [MainActivityVisibility]: while
+ * MainActivity is visible it owns the presentation, so the presenter neither
+ * posts (no duplicate of the in-app screen) nor updates (no resurrection of the
+ * notification MainActivity cancelled when it took over).
  */
 @Singleton
 class IncomingCallPresenter internal constructor(
@@ -50,6 +53,7 @@ class IncomingCallPresenter internal constructor(
     private val announceRepository: AnnounceRepository,
     private val contactRepository: ContactRepository,
     private val incomingCallNotifier: IncomingCallNotifier,
+    private val mainActivityVisibility: MainActivityVisibility,
     dispatcher: CoroutineDispatcher,
 ) {
     companion object {
@@ -74,11 +78,13 @@ class IncomingCallPresenter internal constructor(
         announceRepository: AnnounceRepository,
         contactRepository: ContactRepository,
         incomingCallNotifier: IncomingCallNotifier,
+        mainActivityVisibility: MainActivityVisibility,
     ) : this(
         rnsTelephony = rnsTelephony,
         announceRepository = announceRepository,
         contactRepository = contactRepository,
         incomingCallNotifier = incomingCallNotifier,
+        mainActivityVisibility = mainActivityVisibility,
         dispatcher = Dispatchers.IO,
     )
 
@@ -104,6 +110,13 @@ class IncomingCallPresenter internal constructor(
     }
 
     private suspend fun presentIncomingCall(identityHash: String) {
+        // While MainActivity is visible it owns the presentation (the in-app
+        // call screen): posting now would duplicate it, and the name update
+        // below could resurrect the notification MainActivity just cancelled.
+        if (mainActivityVisibility.visible.value) {
+            Log.i(TAG, "MainActivity is presenting the call; skipping background presentation")
+            return
+        }
         Log.i(TAG, "Presenting background incoming-call UI for ${identityHash.take(16)}...")
         // Post immediately - do not delay the full-screen takeover by the
         // caller-name lookup. The name is the cached one or null (the notifier
@@ -124,7 +137,13 @@ class IncomingCallPresenter internal constructor(
             // current call, and the display name is a function of the identity,
             // so it is the right name for it.
             val current = rnsTelephony.callState.value
-            if (current is CallState.Incoming && current.identityHash == identityHash) {
+            if (
+                current is CallState.Incoming &&
+                current.identityHash == identityHash &&
+                // MainActivity may have taken ownership while the lookup was in
+                // flight; its cancel must not be undone by the name update.
+                !mainActivityVisibility.visible.value
+            ) {
                 incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
             }
         }

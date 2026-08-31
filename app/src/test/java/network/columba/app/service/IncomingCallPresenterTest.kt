@@ -4,6 +4,7 @@ import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -182,19 +183,58 @@ class IncomingCallPresenterTest {
             // The call is answered while the caller-name lookup is still in
             // flight: the stale Incoming state must not post the full-screen
             // notification after the call is over.
+            val lookupGate = CompletableDeferred<Unit>()
             coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
-                callState.value = CallState.Active(identityHash)
+                lookupGate.await()
                 announce("Alice")
             }
             coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
 
             presenter.start()
             callState.value = CallState.Incoming(identityHash)
+            // The presenter is now suspended in lookup 1; the call is answered
+            // before that lookup completes.
+            callState.value = CallState.Active(identityHash)
+            lookupGate.complete(Unit)
 
             assertEquals(0, notifier.shownCalls.size)
             // Canceled once for the initial Idle on start, once for the Active
             // transition that superseded the lookup.
             assertEquals(2, notifier.cancelCount.get())
+        }
+
+    @Test
+    fun `consecutive same-identity calls present the current call, not the stale lookup`() =
+        runTest {
+            // Call 1 arrives and its name lookup is in flight when the call is
+            // answered and a second call from the SAME identity comes in. The
+            // stale lookup's result must not be posted; the presentation must
+            // come from the second call's own lookup (which sees the changed
+            // peer name here).
+            val lookupGate = CompletableDeferred<Unit>()
+            val lookups = java.util.concurrent.atomic.AtomicInteger(0)
+            coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
+                if (lookups.incrementAndGet() == 1) {
+                    lookupGate.await()
+                    announce("Alice")
+                } else {
+                    announce("Bob")
+                }
+            }
+            coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+            presenter.start()
+            callState.value = CallState.Incoming(identityHash)
+            // Lookup 1 is in flight; call 1 is answered and a second call from
+            // the same identity arrives before it completes.
+            callState.value = CallState.Active(identityHash)
+            callState.value = CallState.Idle
+            callState.value = CallState.Incoming(identityHash)
+            lookupGate.complete(Unit)
+
+            assertEquals(1, notifier.shownCalls.size)
+            assertEquals(identityHash, notifier.shownCalls[0].first)
+            assertEquals("Bob", notifier.shownCalls[0].second)
         }
 
     @Test

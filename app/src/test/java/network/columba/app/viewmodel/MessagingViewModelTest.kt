@@ -1685,6 +1685,97 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `delayed non-terminal progress event cannot reappear bar after terminal status`() =
+        runViewModelTest {
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            val transferProgressFlow = MutableSharedFlow<TransferProgressUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+            every { rnsLxmf.observeTransferProgress() } returns transferProgressFlow
+
+            val testMessageHash = "delayed_progress_hash"
+            val existingMessage =
+                MessageEntity(
+                    id = testMessageHash,
+                    conversationHash = testPeerHash,
+                    identityHash = "test_identity_hash",
+                    content = "Test message",
+                    timestamp = 1000L,
+                    isFromMe = true,
+                    status = "sent",
+                )
+            coEvery {
+                conversationRepository.applyDeliveryStatus(testMessageHash, any(), "test_identity_hash")
+            } returns existingMessage
+            coEvery { conversationRepository.updateMessageDeliveryDetails(any(), any(), any()) } just Runs
+            every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
+
+            val viewModel =
+                MessagingViewModel(
+                    applicationContext,
+                    rnsCore,
+                    rnsLxmf,
+                    rnsTransportAdmin,
+                    conversationRepository,
+                    announceRepository,
+                    contactRepository,
+                    activeConversationManager,
+                    settingsRepository,
+                    propagationNodeManager,
+                    locationSharingManager,
+                    identityRepository,
+                    conversationLinkManager,
+                    receivedLocationRepository,
+                    blockedPeerRepository,
+                    identityResolutionManager,
+                    notificationHelper,
+                    rnsTelephony,
+                )
+            advanceUntilIdle()
+
+            // Transfer in progress
+            transferProgressFlow.emit(
+                TransferProgressUpdate(
+                    transferId = testMessageHash,
+                    messageHash = testMessageHash,
+                    direction = Direction.OUT,
+                    progress = 0.5f,
+                    phase = TransferPhase.TRANSFERRING,
+                ),
+            )
+            advanceUntilIdle()
+            assertEquals(1, viewModel.transferProgress.value.size)
+
+            // Terminal delivery status settles the transfer and clears the bar
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = testMessageHash,
+                    status = DeliveryStatus.DELIVERED,
+                    timestamp = System.currentTimeMillis(),
+                    originatingIdentityHash = "test_identity_hash",
+                ),
+            )
+            advanceUntilIdle()
+            assertTrue(viewModel.transferProgress.value.isEmpty())
+
+            // A non-terminal event queued before the terminal status lands
+            // after it: it must not resurrect the bar
+            transferProgressFlow.emit(
+                TransferProgressUpdate(
+                    transferId = testMessageHash,
+                    messageHash = testMessageHash,
+                    direction = Direction.OUT,
+                    progress = 0.5f,
+                    phase = TransferPhase.TRANSFERRING,
+                ),
+            )
+            advanceUntilIdle()
+            assertTrue(
+                "delayed non-terminal progress must not resurrect the bar after terminal status",
+                viewModel.transferProgress.value.isEmpty(),
+            )
+        }
+
+    @Test
     fun `delivery enrichment keeps callback identity after active identity switch with duplicate hash`() =
         runViewModelTest {
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()

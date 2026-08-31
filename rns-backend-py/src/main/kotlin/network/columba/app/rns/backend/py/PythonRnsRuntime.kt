@@ -305,6 +305,24 @@ class PythonRnsRuntime(
         val lxmfStorage = File(config.storagePath, "lxmf").apply { mkdirs() }
         val router = lxmfModule.callAttr("LXMRouter", identity, lxmfStorage.absolutePath)
         lxmRouter = router
+
+        // Apply the persisted incoming-message size limit to the fresh router
+        // BEFORE the delivery destination is registered, so the first DIRECT
+        // resource advertisement is evaluated against the user's configured
+        // gate rather than LXMF's built-in 1000 KB default (columba#1106
+        // startup window). null = host did not supply a limit (keep default).
+        config.incomingMessageSizeLimitKb?.let { limitKb ->
+            runCatching {
+                eventBridge.callAttr("prime_incoming_message_size_limit", router, limitKb)
+            }.onFailure {
+                Log.w(
+                    TAG,
+                    "Failed to prime incoming message size limit: ${it.message}",
+                    it,
+                )
+            }
+        }
+
         localDestination = router.callAttr(
             "register_delivery_identity",
             identity,

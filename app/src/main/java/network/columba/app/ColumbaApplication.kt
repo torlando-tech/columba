@@ -399,6 +399,7 @@ class ColumbaApplication : Application() {
                         identityResolutionManager.start(applicationScope)
                         propagationNodeManager.start()
                         telemetryCollectorManager.start()
+                        applySavedIncomingMessageSizeLimit()
                         android.util.Log.d(
                             "ColumbaApplication",
                             "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
@@ -498,12 +499,23 @@ class ColumbaApplication : Application() {
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
+                        // Prime the backend's delivery gate with the persisted
+                        // limit at startup, before any delivery is possible
+                        // (columba#1106 startup window)
+                        incomingMessageSizeLimitKb =
+                            settingsRepository.getIncomingMessageSizeLimitKb().toLong(),
                     )
 
                 rnsCore
                     .initialize(config)
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
+
+                        // Belt-and-braces: the config already primed the backend's
+                        // delivery gate at startup (columba#1106); re-pushing the
+                        // persisted value covers the reconnect-to-running-backend
+                        // path where the backend outlived a settings change.
+                        applySavedIncomingMessageSizeLimit()
 
                         // A.10 follow-up: persist a sanitized snapshot so :reticulum can
                         // self-init after OOM/force-stop restart when UI isn't around to
@@ -614,6 +626,30 @@ class ColumbaApplication : Application() {
                 android.util.Log.e("ColumbaApplication", "Error shutting down Reticulum", e)
             }
             // unbindService() was a legacy no-op on the kotlin backend
+        }
+    }
+
+    /**
+     * Push the persisted incoming-message size limit to the protocol stack.
+     *
+     * Primary startup coverage comes from [ReticulumConfig.incomingMessageSizeLimitKb]
+     * (primed by the backend before its delivery destination becomes reachable);
+     * this push covers the reconnect-to-running-backend path and any drift
+     * between the backend's startup value and the current persisted setting.
+     * Called on both backend-ready paths: fresh init and reconnect.
+     */
+    private fun applySavedIncomingMessageSizeLimit() {
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching {
+                val limitKb = settingsRepository.getIncomingMessageSizeLimitKb()
+                rnsLxmf.setIncomingMessageSizeLimit(limitKb)
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "Applied saved incoming message size limit: ${limitKb}KB",
+                )
+            }.onFailure { e ->
+                android.util.Log.w("ColumbaApplication", "Failed to apply saved incoming message size limit", e)
+            }
         }
     }
 

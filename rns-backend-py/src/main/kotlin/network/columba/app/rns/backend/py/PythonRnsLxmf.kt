@@ -780,16 +780,18 @@ class PythonRnsLxmf(
     }
 
     override fun setIncomingMessageSizeLimit(limitKb: Int) {
-        // Upstream LXMF has no inbound message-size cap of its own — its
-        // `message_storage_limit` bounds a propagation *node's* served store,
-        // not inbound delivery, so calling it here would be wrong. The lxmf-kt
-        // port (kotlin backend) enforces a real `incomingMessageSizeLimitKb`;
-        // the Python equivalent is a post-reassembly drop in event_bridge.py.
-        // Known degradation vs the kotlin backend: LXMF fully reassembles a
-        // message before its delivery callback fires, so oversized messages are
-        // rejected before reaching the UI / storage, but the bandwidth + CPU of
-        // receiving them cannot be saved (upstream LXMF exposes no earlier
-        // hook). Recorded in the RNS dual-build handoff.
+        // event_bridge.py applies the cap in two places:
+        //  - pre-transfer, on link-based (DIRECT) delivery: it mirrors the cap
+        //    onto LXMF's own gate (LXMRouter.delivery_per_transfer_limit), so
+        //    oversized resources are refused at advertisement time, before any
+        //    bytes transfer (columba#1106 — previously this gate stayed at
+        //    LXMF's built-in 1000 KB default and rejected every direct
+        //    delivery over ~1 MB no matter what the user configured);
+        //  - post-reassembly, for all methods (incl. opportunistic, which has
+        //    no pre-transfer hook): a drop in the delivery callback, so
+        //    oversized messages never reach the UI / storage.
+        // `message_storage_limit` is NOT the right knob here — it bounds a
+        // propagation *node's* served store, not inbound delivery.
         runCatching {
             runtime.eventBridge.callAttr("set_incoming_message_size_limit", limitKb)
         }.onFailure { Log.w(TAG, "setIncomingMessageSizeLimit($limitKb) failed", it) }

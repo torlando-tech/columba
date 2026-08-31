@@ -338,6 +338,11 @@ class InterfaceConfigManager
                     val batteryProfile = settingsRepository.getBatteryProfile()
                     Log.d(TAG, "Battery profile: $batteryProfile")
 
+                    // Load the incoming-message size limit so the restarting backend
+                    // primes the user's gate before the first delivery (columba#1106)
+                    val incomingMessageSizeLimitKb =
+                        settingsRepository.getIncomingMessageSizeLimitKb().toLong()
+
                     // Load discovery settings
                     val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
                     val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
@@ -368,6 +373,7 @@ class InterfaceConfigManager
                             discoverInterfaces = discoverInterfaces,
                             autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                             autoconnectIfacOnly = autoconnectIfacOnly,
+                            incomingMessageSizeLimitKb = incomingMessageSizeLimitKb,
                         )
 
                     rnsCore

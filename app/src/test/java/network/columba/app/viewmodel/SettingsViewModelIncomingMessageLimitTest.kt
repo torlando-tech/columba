@@ -13,6 +13,7 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.LocationSharingManager
@@ -27,6 +28,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -140,6 +143,9 @@ class SettingsViewModelIncomingMessageLimitTest {
                     }
                 every { getSharedPreferences(any(), any()) } returns mockPrefs
                 every { startForegroundService(any()) } returns null
+                // Real snapshot read-modify-write lands here (no file -> no-op)
+                every { filesDir } returns
+                    kotlin.io.path.createTempDirectory("columba-snapshot-test").toFile()
             }
 
         // Mock ContactRepository flow
@@ -323,6 +329,28 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             verify { rnsLxmf.setIncomingMessageSizeLimit(25600) }
+        }
+
+    @Test
+    fun `setIncomingMessageSizeLimit refreshes restart snapshot for service-only recovery`() =
+        runTest {
+            // Given
+            mockkObject(ReticulumConfigSnapshot)
+            every { ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(any(), any()) } just Runs
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            val result = runCatching { viewModel.setIncomingMessageSizeLimit(6144) } // 6MB
+
+            advanceUntilIdle()
+
+            // Then: the on-disk restart snapshot must track the change so a
+            // :reticulum-only recovery (UI process dead) doesn't resurrect the
+            // previous delivery gate (columba#1106)
+            assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
+            verify { ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(context, 6144L) }
+            unmockkObject(ReticulumConfigSnapshot)
         }
 
     @Test

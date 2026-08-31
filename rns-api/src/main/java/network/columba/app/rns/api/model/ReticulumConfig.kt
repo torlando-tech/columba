@@ -98,6 +98,17 @@ data class ReticulumConfig(
      * providing spam prevention. Range: 8-20, default: 14.
      */
     val requiredDiscoveryValue: Int = 14,
+    /**
+     * User-configured incoming-message size cap (binary KB), applied by the
+     * backend to the LXMF delivery gate at startup - before the delivery
+     * destination becomes reachable - so the first DIRECT resource
+     * advertisement is evaluated against the user's gate, not the backend's
+     * built-in default (columba#1106 startup window).
+     *
+     * null = not set (backend keeps its built-in default);
+     * 0 = unlimited (explicit user choice).
+     */
+    val incomingMessageSizeLimitKb: Long? = null,
 ) : Parcelable {
     // Data-class-generated equals/hashCode use reference equality for ByteArray, so
     // two configs with identical key bytes would otherwise never compare equal. Override
@@ -123,7 +134,8 @@ data class ReticulumConfig(
             autoconnectDiscoveredInterfaces == other.autoconnectDiscoveredInterfaces &&
             autoconnectIfacOnly == other.autoconnectIfacOnly &&
             interfaceDiscoverySources == other.interfaceDiscoverySources &&
-            requiredDiscoveryValue == other.requiredDiscoveryValue
+            requiredDiscoveryValue == other.requiredDiscoveryValue &&
+            incomingMessageSizeLimitKb == other.incomingMessageSizeLimitKb
     }
 
     override fun hashCode(): Int {
@@ -144,6 +156,7 @@ data class ReticulumConfig(
         result = 31 * result + autoconnectIfacOnly.hashCode()
         result = 31 * result + (interfaceDiscoverySources?.hashCode() ?: 0)
         result = 31 * result + requiredDiscoveryValue
+        result = 31 * result + (incomingMessageSizeLimitKb?.hashCode() ?: 0)
         return result
     }
 
@@ -175,7 +188,8 @@ data class ReticulumConfig(
             "autoconnectDiscoveredInterfaces=$autoconnectDiscoveredInterfaces, " +
             "autoconnectIfacOnly=$autoconnectIfacOnly, " +
             "interfaceDiscoverySources=$interfaceDiscoverySources, " +
-            "requiredDiscoveryValue=$requiredDiscoveryValue" +
+            "requiredDiscoveryValue=$requiredDiscoveryValue, " +
+            "incomingMessageSizeLimitKb=$incomingMessageSizeLimitKb" +
             ")"
 }
 

@@ -431,6 +431,19 @@ class NativeRnsBackendImpl(
                 storagePath = config.storagePath,
             )
 
+        // Apply the persisted incoming-message size limit to the fresh router
+        // BEFORE the delivery destination is registered, so the first DIRECT
+        // resource advertisement is evaluated against the user's configured
+        // gate rather than the router's built-in default (columba#1106
+        // startup window). null = host did not supply a limit (keep default).
+        config.incomingMessageSizeLimitKb?.let { limitKb ->
+            runCatching {
+                router!!.incomingMessageSizeLimitKb = if (limitKb > 0) limitKb.toInt() else null
+            }.onFailure {
+                Log.w(TAG, "Failed to prime incoming message size limit: ${it.message}", it)
+            }
+        }
+
         deliveryDestination =
             router!!.registerDeliveryIdentity(
                 identity = identity,

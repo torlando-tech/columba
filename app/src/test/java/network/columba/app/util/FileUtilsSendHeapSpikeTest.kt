@@ -18,6 +18,7 @@ import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.InputStream
+import java.lang.ref.WeakReference
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -341,6 +342,75 @@ class FileUtilsSendHeapSpikeTest {
                 "(events: $events)",
             FILE_READ_BUF,
             liveBeforeFinalAlloc,
+        )
+    }
+
+    // Greptile P1 "Accumulator remains live during rewind" at a69311dd:
+    // the release ABOVE is a synthetic event — the accumulator array stayed
+    // REACHABLE through the `pass` local across the fillExactFromReopen
+    // allocation, so the ~2x near-cap heap peak the PR exists to eliminate
+    // survived. The corrected rewind DRAINS the accumulator holder before
+    // allocating. Pin that with real GC evidence, not observer events: hold
+    // only a WeakReference to the accumulator (captured at the seam while
+    // live), and at the point immediately before the exact allocation force
+    // a GC and require the accumulator to be unreachable — while a control
+    // garbage array in the same frame proves the GC actually ran.
+    @Test
+    fun `near-cap rewind accumulator is garbage at the point of the exact allocation`() {
+        val size = FileUtils.MAX_TOTAL_ATTACHMENT_SIZE - 512 * 1024
+        val payload = ByteArray(size) { ((it * 7 + 13) % 251).toByte() }
+
+        var accumulatorRef: WeakReference<ByteArray>? = null
+        var accumulatorCollectedAtAllocPoint: Boolean? = null
+        var controlCollectedAtAllocPoint: Boolean? = null
+
+        val probe =
+            object : RewindReachabilityProbe {
+                override fun onAccumulatorReady(accumulator: ByteArray) {
+                    // Weak handle ONLY — the test must never keep the
+                    // accumulator strongly reachable itself.
+                    accumulatorRef = WeakReference(accumulator)
+                }
+
+                override fun onBeforeExactAllocation() {
+                    var control: ByteArray? = ByteArray(8 * 1024)
+                    val controlRef = WeakReference(control)
+                    control = null
+                    // Force real collections, then observe reachability at
+                    // the exact point the result array is about to be
+                    // allocated (the allocation happens inside this very
+                    // call stack, right after this method returns).
+                    repeat(4) {
+                        System.gc()
+                        Thread.sleep(20)
+                    }
+                    controlCollectedAtAllocPoint = controlRef.get() == null
+                    accumulatorCollectedAtAllocPoint = accumulatorRef?.get() == null
+                }
+            }
+
+        val result =
+            readBounded(
+                ByteArrayInputStream(payload),
+                FileUtils.MAX_TOTAL_ATTACHMENT_SIZE,
+                reopen = { ByteArrayInputStream(payload) },
+                rewindProbe = probe,
+            )
+
+        assertNotNull(result)
+        assertEquals(size, result!!.size)
+        assertTrue(payload.contentEquals(result))
+        // The seams must have fired on the rewind path at all.
+        assertNotNull(accumulatorRef)
+        assertEquals(true, accumulatorCollectedAtAllocPoint)
+        // GC-collaboration guard: if the control array survived, no
+        // collection happened and the reachability assertion above is
+        // meaningless — fail loudly instead of passing vacuously.
+        assertEquals(
+            "Explicit GC did not collect control garbage — the reachability " +
+                "evidence below would be vacuous on this JVM configuration",
+            true,
+            controlCollectedAtAllocPoint,
         )
     }
 

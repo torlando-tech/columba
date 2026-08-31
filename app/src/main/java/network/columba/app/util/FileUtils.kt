@@ -615,9 +615,11 @@ private fun FileUtils.readFileWithResultBounded(
  *    [REWIND_VERIFY_BYTES] of the accumulator (a provider that regenerates
  *    content per open fails verification and falls back to the trim),
  *    the full length is counted with zero accumulation (aborting past the
- *    cap), the accumulator reference is DROPPED, and exactly ONE array of
- *    the true size is allocated and filled. The live set at the exact
- *    allocation is one array plus small buffers.
+ *    cap), the accumulator is DROPPED — its holder field is drained so the
+ *    array becomes GARBAGE (unreachable from every frame), not merely
+ *    reported released to an observer — and exactly ONE array of the true
+ *    size is allocated and filled. The live set at the exact allocation is
+ *    one array plus small buffers.
  *
  * The abort path stays strictly single-pass — an over-cap stream never
  * triggers a rewind (EOF is never reached), so bytes consumed stay within
@@ -634,6 +636,11 @@ private fun FileUtils.readFileWithResultBounded(
  *        fallback is used for overshooting capacities.
  * @param heapObserver test seam: receives every accumulator allocation and
  *        release so the live-bytes bound can be asserted deterministically.
+ * @param rewindProbe test seam: observes the accumulator array itself and
+ *        the exact point (post-drain) immediately before the single exact
+ *        allocation on the rewind path, so a test can prove the
+ *        accumulator is actually GARBAGE there — not merely reported
+ *        released — via WeakReference + explicit GC.
  * @return the bytes read (size <= [maxBytes]), or null if the stream exceeded
  *         [maxBytes] and the read was aborted.
  */
@@ -643,23 +650,39 @@ internal fun readBounded(
     initialCapacity: Int = FILE_READ_BUFFER_SIZE,
     reopen: (() -> InputStream?)? = null,
     heapObserver: ReadBoundedHeapObserver? = null,
+    rewindProbe: RewindReachabilityProbe? = null,
 ): ByteArray? {
-    val pass = accumulateFirstPass(input, maxBytes, initialCapacity, heapObserver)
+    val pass = accumulateFirstPass(input, maxBytes, initialCapacity, heapObserver, rewindProbe)
         ?: return null
     if (pass.data.size == pass.total) {
         // Hand back the accumulator itself when its capacity is exact — no
         // second full copy (the known-size seed makes this the common case).
         return pass.data
     }
-    return finishOversizedRead(pass, reopen, maxBytes, heapObserver)
+    return finishOversizedRead(pass, reopen, maxBytes, heapObserver, rewindProbe)
 }
 
 /** First-pass accumulation state handed to the finalization step. */
 private class FirstPass(
-    val data: ByteArray,
+    var data: ByteArray,
     val total: Int,
     val rewindArmed: Boolean,
-)
+) {
+    /**
+     * Drops this pass's accumulated array so it becomes garbage —
+     * unreachable from any live frame — before the rewind allocates the
+     * single exact-sized result. Clearing the holder field is what makes
+     * the release REAL: a bare local reference plus an observer callback
+     * leaves the old array reachable across the next allocation and keeps
+     * the ~2x near-cap heap peak alive (Greptile P1 "Accumulator remains
+     * live during rewind"). Must only be called on the rewind path, after
+     * the re-opened stream has been verified and the trim fallback is no
+     * longer reachable.
+     */
+    fun drain() {
+        data = ByteArray(0)
+    }
+}
 
 /**
  * Single bounded pass over [input] into a hard-capped accumulator.
@@ -671,6 +694,7 @@ private fun accumulateFirstPass(
     maxBytes: Int,
     initialCapacity: Int,
     heapObserver: ReadBoundedHeapObserver?,
+    rewindProbe: RewindReachabilityProbe?,
 ): FirstPass? {
     val buffer = ByteArray(FILE_READ_BUFFER_SIZE)
     heapObserver?.onHeapEvent(released = false, FILE_READ_BUFFER_SIZE)
@@ -707,6 +731,10 @@ private fun accumulateFirstPass(
         }
         buffer.copyInto(data, total - n, 0, n)
     }
+    // Hand the accumulator array to the reachability probe BEFORE wrapping
+    // it, so the probe's only strong handle is its (transient) parameter —
+    // exactly the state the rewind must recreate after draining.
+    rewindProbe?.onAccumulatorReady(data)
     return FirstPass(data, total, rewindArmed)
 }
 
@@ -717,24 +745,26 @@ private fun accumulateFirstPass(
  * When the accumulator is big ([pass].rewindArmed) and the stream is
  * re-openable, trim-copying would hold TWO near-full arrays at once:
  * instead verify the provider restarts from the beginning, count the true
- * length with zero accumulation, record the accumulator release BEFORE the
- * single exact allocation, and fill it from a fresh open. A
- * non-restartable provider falls back to the trim (correctness over the
- * fast path); a stream whose true length passes the cap aborts.
+ * length with zero accumulation, then hand the fill to
+ * [rewindToExactArray], which DRAINS the accumulator (the array becomes
+ * garbage, not merely reported released) before the single exact
+ * allocation. A non-restartable provider falls back to the trim
+ * (correctness over the fast path); a stream whose true length passes the
+ * cap aborts.
  */
 private fun finishOversizedRead(
     pass: FirstPass,
     reopen: (() -> InputStream?)?,
     maxBytes: Int,
     heapObserver: ReadBoundedHeapObserver?,
+    rewindProbe: RewindReachabilityProbe?,
 ): ByteArray? {
     if (pass.rewindArmed && reopen != null) {
         val verified = verifyRewindableLength(reopen, pass.data, pass.total, maxBytes)
         if (verified == REWIND_EXCEEDS_CAP) return null // true length past the cap
         if (verified >= 0) {
             heapObserver?.onHeapEvent(released = true, pass.data.size)
-            heapObserver?.onHeapEvent(released = false, verified)
-            return fillExactFromReopen(reopen, verified)
+            return rewindToExactArray(pass, reopen, verified, heapObserver, rewindProbe)
         }
         // REWIND_NOT_RESTARTABLE: fall through to the trim below rather
         // than fail the read; the result is still hard-bounded at maxBytes.
@@ -746,6 +776,40 @@ private fun finishOversizedRead(
     val trimmed = pass.data.copyOf(pass.total)
     heapObserver?.onHeapEvent(released = true, pass.data.size)
     return trimmed
+}
+
+/**
+ * Rewind finalization: allocate exactly ONE array of [verified] bytes and
+ * fill it from a fresh open of [reopen].
+ *
+ * The accumulator in [pass] is DRAINED first — its holder field is cleared
+ * and no live frame keeps another handle to the old array — so the array
+ * is genuinely garbage before the exact allocation executes. Reporting a
+ * release to an observer without dropping the reference left both
+ * near-cap arrays reachable at once (Greptile P1 "Accumulator remains
+ * live during rewind"). Callers must invoke this only after
+ * [verifyRewindableLength] succeeded; the trim fallback is unreachable
+ * from here on.
+ *
+ * Returns null only if the provider cannot serve the verified length on
+ * this open (content shrank mid-fill — refuse rather than return corrupt
+ * bytes).
+ */
+private fun rewindToExactArray(
+    pass: FirstPass,
+    reopen: () -> InputStream?,
+    verified: Int,
+    heapObserver: ReadBoundedHeapObserver?,
+    rewindProbe: RewindReachabilityProbe?,
+): ByteArray? {
+    // Drain, then probe, at a point where NO enclosing frame still holds
+    // the accumulator (this helper does not take it beyond pass.data), so
+    // the probe observes exactly the reachability state of the allocation
+    // about to happen inside fillExactFromReopen.
+    pass.drain()
+    rewindProbe?.onBeforeExactAllocation()
+    heapObserver?.onHeapEvent(released = false, verified)
+    return fillExactFromReopen(reopen, verified)
 }
 
 /**
@@ -781,6 +845,32 @@ internal fun interface ReadBoundedHeapObserver {
         released: Boolean,
         sizeBytes: Int,
     )
+}
+
+/**
+ * Test seam for [readBounded]'s rewind REACHABILITY contract (Greptile P1
+ * "Accumulator remains live during rewind"): unlike
+ * [ReadBoundedHeapObserver], which only reports the code's INTENT to
+ * release, this probe is invoked with the accumulator array itself while
+ * it is live, and again at the point immediately before the single exact
+ * allocation on the rewind path — after the accumulator has been drained.
+ * A test holds only a WeakReference to the array between the two calls and
+ * asserts it is collected at the second one, proving the old array is
+ * actually unreachable (not merely reported released) when the result
+ * array is allocated.
+ */
+internal interface RewindReachabilityProbe {
+    /** Called once with the first-pass accumulator array while still live. */
+    fun onAccumulatorReady(
+        accumulator: ByteArray,
+    )
+
+    /**
+     * Called on the rewind path AFTER the accumulator has been drained and
+     * immediately before [readBounded] allocates the exact-sized result.
+     * No live production frame holds the accumulator array at this point.
+     */
+    fun onBeforeExactAllocation()
 }
 
 /** Prefix bytes compared to prove a re-opened stream restarts identically. */

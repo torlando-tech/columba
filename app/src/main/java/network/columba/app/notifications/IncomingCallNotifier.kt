@@ -21,4 +21,14 @@ interface IncomingCallNotifier {
 
     /** Cancel the incoming-call notification (no-op if not showing). */
     fun cancelIncomingCallNotification()
+
+    /**
+     * Monotonic cancel counter, bumped by every
+     * [cancelIncomingCallNotification] from any caller (the presenter's
+     * collector, MainActivity, the notification actions, the call screen).
+     * A caller that queues a post can capture this before enqueuing and drop
+     * the post if the tick moved by execution time: a cancel the caller never
+     * observed still suppresses a post that would resurrect it.
+     */
+    val cancelTick: Long
 }

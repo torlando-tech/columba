@@ -367,8 +367,19 @@ class CallNotificationHelper
          * Cancel incoming call notification.
          */
         override fun cancelIncomingCallNotification() {
+            cancelTickCount.incrementAndGet()
             notificationManager.cancel(NOTIFICATION_ID_INCOMING_CALL)
         }
+
+        override val cancelTick: Long get() = cancelTickCount.get()
+
+        /**
+         * Backing counter for [IncomingCallNotifier.cancelTick]. Lives on the
+         * companion because cancel sites construct this helper directly
+         * (MainActivity, CallActionReceiver, IncomingCallActivity) rather than
+         * through DI; the tick must count every cancel process-wide.
+         */
+        private val cancelTickCount = java.util.concurrent.atomic.AtomicLong(0)
 
         /**
          * Cancel ongoing call notification.

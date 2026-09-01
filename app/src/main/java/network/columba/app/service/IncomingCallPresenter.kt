@@ -166,12 +166,21 @@ class IncomingCallPresenter internal constructor(
         // Atomic against MainActivity's claim: skipped if the foreground took
         // over during the lookup, removed by the claim's cancel if it takes
         // over in the same instant as this post. The post enqueues onto the
-        // main thread, so the call may have ended between the check above and
-        // the runnable running (and the collector's cancel may have landed
-        // first) - re-check the call state inside the block before posting.
+        // main thread, so between the check above and the runnable running
+        // the call may have ended, or the user may have tapped answer/decline
+        // on the notification (whose cancel runs before the asynchronous
+        // state change lands). Capture the call state and the cancel tick at
+        // enqueue time; drop the post if either moved by execution time, so
+        // a cancel the collector has not yet processed still suppresses a
+        // post that would resurrect it.
+        val tickAtEnqueue = incomingCallNotifier.cancelTick
         mainActivityVisibility.postWhileBackground {
             val stateAtPost = rnsTelephony.callState.value
-            if (stateAtPost is CallState.Incoming && stateAtPost.identityHash == identityHash) {
+            if (
+                stateAtPost is CallState.Incoming &&
+                stateAtPost.identityHash == identityHash &&
+                incomingCallNotifier.cancelTick == tickAtEnqueue
+            ) {
                 incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
             }
         }

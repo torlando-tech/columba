@@ -52,6 +52,8 @@ class IncomingCallPresenterTest {
         override fun cancelIncomingCallNotification() {
             cancelCount.incrementAndGet()
         }
+
+        override val cancelTick: Long get() = cancelCount.get().toLong()
     }
 
     private val scheduler = TestCoroutineScheduler()
@@ -478,6 +480,40 @@ class IncomingCallPresenterTest {
 
         // Now the main thread drains its queue: the re-check inside the post
         // sees the call is no longer Incoming and drops it.
+        while (true) {
+            val runnable = queue.poll() ?: break
+            runnable.run()
+        }
+        assertEquals(0, notifier.shownCalls.size)
+    }
+
+    @Test
+    fun `queued post is dropped when the notification was declined during the enqueue window`() {
+        // The user taps Decline on the notification while the presenter's post
+        // is enqueued: CallActionReceiver cancels immediately, but its
+        // asynchronous hangup has not changed callState yet, so a state-only
+        // re-check would pass and repost the declined call's UI. The cancel
+        // tick moved between enqueue and execution, so the post must drop.
+        val queue = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        AppMainThread.post = { runnable -> queue.add(runnable) }
+
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+
+        // Post enqueued, call still Incoming (the hangup is in flight).
+        assertEquals(1, queue.size)
+        callState.value = CallState.Incoming(identityHash) // unchanged semantics
+
+        // Decline tap: cancel lands, state has not transitioned yet.
+        notifier.cancelIncomingCallNotification()
+
+        // Drain the main-thread queue: the tick guard suppresses the repost.
         while (true) {
             val runnable = queue.poll() ?: break
             runnable.run()

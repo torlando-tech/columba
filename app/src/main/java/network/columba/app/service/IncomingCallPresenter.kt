@@ -43,15 +43,32 @@ import network.columba.app.rns.host.util.PeerNameResolver
  * call in-app, so the presenter checks [MainActivityVisibility] before the lookup
  * (skip work the main UI will do) and posts through
  * [MainActivityVisibility.postWhileBackground] after it: the flag check and the
- * post are one locked section, atomic against MainActivity's claim (flag flip plus
- * its cancel, also one locked section). Either the claim wins (this post is
- * skipped) or the post wins (the claim's cancel removes it); no interleaving
- * leaves a background post outliving the foreground takeover.
+ * post execute as one main-thread sequence (single-thread confinement, no
+ * locking), atomic against MainActivity's claim (flag flip plus its cancel).
+ * Either the claim wins (this post is skipped) or the post wins (the claim's
+ * cancel removes it); no interleaving leaves a background post outliving the
+ * foreground takeover.
+ *
+ * Releasing: when MainActivity stops being visible while a call is still
+ * [CallState.Incoming] - the user backgrounded the app mid-ring (home gesture,
+ * recents, notification shade takeover), so no new [CallState] emission will
+ * ever arrive - the presenter takes presentation back and posts the background
+ * notification. Without this, the in-app path that skipped the post leaves the
+ * ringing call with no answer/decline UI until the app is reopened. A
+ * same-instant reopen (release then immediate claim) races against the lookup
+ * and the atomic post, so the presenter loses cleanly to the foreground.
+ * Configuration-change stops (rotation) never release ownership
+ * ([MainActivityVisibility.releaseForeground]), so this recovery cannot flash
+ * the notification mid-rotation.
  *
  * Known, accepted residual: if the call is answered and the same peer calls again
  * while the name lookup is still in flight, the post carries that lookup's result
  * for the new call. The display name is a function of the identity hash (the same
  * database rows), so the presented name is the right name for the ringing call.
+ * A second accepted residual: a foreground release and a fresh [CallState.Incoming]
+ * emission can both drive a presentation for the same call; the notification
+ * helper re-`notify`s the same notification id, so the platform collapses the
+ * duplicate into one update.
  */
 @Singleton
 class IncomingCallPresenter internal constructor(
@@ -103,6 +120,25 @@ class IncomingCallPresenter internal constructor(
                 when (state) {
                     is CallState.Incoming -> presentIncomingCall(state.identityHash)
                     else -> incomingCallNotifier.cancelIncomingCallNotification()
+                }
+            }
+        }
+        // Mid-ring backgrounding recovery: MainActivity presented the call
+        // in-app and skipped this presenter; when it stops without the call
+        // changing state, no callState emission will ever arrive to trigger the
+        // background presentation, so react to the ownership release directly.
+        // The initial collection value (false, at process start) is inert: the
+        // presentation below re-checks the call state and only posts while a
+        // call is actually Incoming.
+        scope.launch {
+            mainActivityVisibility.visible.collect { visible ->
+                if (visible) {
+                    return@collect
+                }
+                val current = rnsTelephony.callState.value
+                if (current is CallState.Incoming) {
+                    Log.i(TAG, "Foreground released during incoming call; taking over presentation")
+                    presentIncomingCall(current.identityHash)
                 }
             }
         }

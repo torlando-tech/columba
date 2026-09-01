@@ -7,6 +7,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestCoroutineScheduler
+import network.columba.app.AppMainThread
 import network.columba.app.MainActivityVisibility
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.repository.Announce
@@ -18,6 +19,7 @@ import network.columba.app.rns.api.model.CallState
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
@@ -67,6 +69,12 @@ class IncomingCallPresenterTest {
 
     @Before
     fun setup() {
+        // Fake the main-thread confinement seam: the test thread plays the main
+        // thread, and posts run inline. Inline execution models the production
+        // atomicity exactly - a claim can neither interleave inside a
+        // postWhileBackground sequence nor be missed by it; each runs whole.
+        AppMainThread.post = { runnable -> runnable.run() }
+        AppMainThread.isMainThread = { true }
         every { rnsTelephony.callState } returns callState
         presenter =
             IncomingCallPresenter(
@@ -81,6 +89,8 @@ class IncomingCallPresenterTest {
 
     @After
     fun tearDown() {
+        AppMainThread.post = { runnable -> runnable.run() }
+        AppMainThread.isMainThread = { true }
         clearMocks(rnsTelephony, announceRepository, contactRepository)
     }
 
@@ -342,6 +352,100 @@ class IncomingCallPresenterTest {
 
         assertEquals(cancelsBeforeClaim + 1, notifier.cancelCount.get())
         assertEquals(1, notifier.shownCalls.size)
+    }
+
+    @Test
+    fun `backgrounding mid-ring hands presentation back to the presenter`() {
+        // The call arrives while the app is visible: MainActivity presents it
+        // in-app and the presenter stays quiet. The user then presses home
+        // while the call is still ringing - no new callState emission will
+        // ever arrive - so releasing foreground ownership must make the
+        // presenter post the full-screen-intent notification.
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        mainActivityVisibility.claimForeground { }
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        assertEquals(0, notifier.shownCalls.size)
+
+        // Home gesture: onStop without a configuration change.
+        mainActivityVisibility.releaseForeground()
+        settle()
+
+        assertSinglePost(identityHash, "Alice")
+    }
+
+    @Test
+    fun `rotation mid-ring does not post the background notification`() {
+        // A configuration change never releases ownership (MainActivity passes
+        // isChangingConfigurations), so the STOP/START churn of a rotation
+        // cannot flash the background notification mid-call.
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        mainActivityVisibility.claimForeground { }
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        assertEquals(0, notifier.shownCalls.size)
+
+        // Rotation: onStop with isChangingConfigurations = true.
+        mainActivityVisibility.releaseForeground(changingConfigurations = true)
+        settle()
+        assertEquals(0, notifier.shownCalls.size)
+        // The claim survives the rotation.
+        assertTrue(mainActivityVisibility.visible.value)
+    }
+
+    @Test
+    fun `backgrounding mid-ring with the app reopened before the lookup does not post`() {
+        // Same as the recovery case, but the user reopens the app while the
+        // recovery's name lookup is still in flight: the claim wins and the
+        // presenter's post must not land over the in-app screen.
+        val lookupGate = CompletableDeferred<Unit>()
+        coEvery { announceRepository.findByIdentityHash(identityHash) } coAnswers {
+            lookupGate.await()
+            announce("Alice")
+        }
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        mainActivityVisibility.claimForeground { }
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+
+        // Home: recovery starts the lookup...
+        mainActivityVisibility.releaseForeground()
+        settle()
+        assertEquals(0, notifier.shownCalls.size)
+
+        // ...and the app is back in the foreground before it completes.
+        mainActivityVisibility.claimForeground { notifier.cancelIncomingCallNotification() }
+        lookupGate.complete(Unit)
+        settle()
+
+        assertEquals(0, notifier.shownCalls.size)
+    }
+
+    @Test
+    fun `backgrounding while idle posts nothing`() {
+        // Release with no ringing call must not post: recovery only acts on
+        // CallState.Incoming.
+        mainActivityVisibility.claimForeground { }
+        presenter.start()
+        settle()
+
+        mainActivityVisibility.releaseForeground()
+        settle()
+
+        assertEquals(0, notifier.shownCalls.size)
     }
 
     @Test

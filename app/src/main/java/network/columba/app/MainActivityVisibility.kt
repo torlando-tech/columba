@@ -14,8 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * inside MainActivity (foreground). While MainActivity is visible it owns the
  * presentation: the presenter must neither post nor update the background
  * notification. A post that lands while the main UI is visible would duplicate
- * the in-app call screen, and a name update that lands after MainActivity took
- * over would resurrect the notification it just cancelled.
+ * the in-app call screen, or undo the cancel MainActivity made when it took
+ * over presentation.
  */
 @Singleton
 class MainActivityVisibility @Inject constructor() {

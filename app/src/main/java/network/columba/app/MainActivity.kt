@@ -286,12 +286,16 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // Issue #1079: while the main UI is visible it owns incoming-call
         // presentation (in-app call screen); the background presenter stays
-        // quiet so it can never duplicate or resurrect the notification.
-        mainActivityVisibility.setVisible(true)
+        // quiet so it can never duplicate or resurrect the notification. The
+        // flag flip and this cancel are one locked section (atomic claim), so
+        // a background post can never land after this cancel and survive it.
+        mainActivityVisibility.claimForeground {
+            CallNotificationHelper(this).cancelIncomingCallNotification()
+        }
     }
 
     override fun onStop() {
-        mainActivityVisibility.setVisible(false)
+        mainActivityVisibility.releaseForeground()
         super.onStop()
     }
 

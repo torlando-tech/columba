@@ -60,6 +60,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -174,6 +175,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var transportAdmin: RnsTransportAdmin
 
+    @Inject
+    lateinit var mainActivityVisibility: MainActivityVisibility
+
     // State to hold pending navigation from intent
     private val pendingNavigation = mutableStateOf<PendingNavigation?>(null)
 
@@ -277,6 +281,28 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+    override fun onStart() {
+        super.onStart()
+        // Issue #1079: while the main UI is visible it owns incoming-call
+        // presentation (in-app call screen); the background presenter stays
+        // quiet so it can never duplicate or resurrect the notification. The
+        // flag flip and this cancel run as one main-thread sequence (atomic
+        // claim), so a background post can never land after this cancel and
+        // survive it.
+        mainActivityVisibility.claimForeground {
+            CallNotificationHelper(this).cancelIncomingCallNotification()
+        }
+    }
+
+    override fun onStop() {
+        // Rotation keeps the foreground claim (isChangingConfigurations) so the
+        // background presenter never gets a post window mid-rotation; a real
+        // backgrounding releases ownership, which lets the presenter take the
+        // call back if it is still ringing (see IncomingCallPresenter).
+        mainActivityVisibility.releaseForeground(isChangingConfigurations)
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen before super.onCreate()
@@ -1167,7 +1193,16 @@ fun ColumbaNavigation(
             .fromApplication(context.applicationContext, RnsTelephonyEntryPoint::class.java)
             .telephony()
     }
-    val callState by telephony.callState.collectAsState()
+    // Lifecycle-gated collection (issue #1079): a plain collectAsState() keeps
+    // updating while the activity is STOPPED, so the effect below would fire
+    // for a backgrounded app, navigate to the (invisible) IncomingCallScreen,
+    // and cancel the presenter's full-screen-intent notification before the
+    // system can show it. With collectAsStateWithLifecycle the observation
+    // pauses while the activity is not visible, leaving background
+    // presentation to IncomingCallPresenter; when the app is brought to the
+    // front mid-call, collection resumes on the current state and this effect
+    // takes over normally.
+    val callState by telephony.callState.collectAsStateWithLifecycle()
 
     LaunchedEffect(callState) {
         when (val state = callState) {

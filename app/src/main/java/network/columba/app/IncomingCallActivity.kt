@@ -2,10 +2,7 @@ package network.columba.app
 
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
 import android.media.AudioManager
-import android.media.Ringtone
-import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -33,10 +30,7 @@ import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.ui.screens.IncomingCallActivityScreen
 import network.columba.app.ui.theme.ThemeMode
-import kotlinx.coroutines.Job
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.rns.api.RnsTelephony
@@ -53,7 +47,7 @@ import network.columba.app.rns.api.model.CallState
  * - Shows over lock screen (showWhenLocked / FLAG_SHOW_WHEN_LOCKED)
  * - Turns screen on (turnScreenOn / FLAG_TURN_SCREEN_ON)
  * - Dismisses keyguard when answering
- * - Plays default ringtone and vibrates in a call pattern
+ * - Vibrates in a call pattern (the ringtone is owned by the :reticulum service process)
  * - Retrieves the singleton [RnsTelephony] via Hilt's
  *   [RnsTelephonyEntryPoint] (the Activity itself is kept Hilt-free so
  *   cold start stays under the lock-screen ringing latency budget — see
@@ -75,8 +69,6 @@ class IncomingCallActivity : ComponentActivity() {
             .fromApplication(applicationContext, RnsTelephonyEntryPoint::class.java)
             .settingsRepository()
     }
-    private var ringtone: Ringtone? = null
-    private var ringtoneLoopJob: Job? = null
     private var vibrator: Vibrator? = null
 
     // Compose-observable state so UI updates when onNewIntent delivers a new call
@@ -100,8 +92,11 @@ class IncomingCallActivity : ComponentActivity() {
         // Show over lock screen and turn screen on
         configureWindowForIncomingCall()
 
-        // Start ringtone and vibration
-        startRingtoneAndVibration()
+        // Vibrate in a phone-call pattern. The ringtone itself is played by the
+        // :reticulum service process (LXST Telephone) which owns the call
+        // lifecycle; playing a second ringtone here would double-ring while the
+        // call screen is up.
+        startVibration()
 
         enableEdgeToEdge()
 
@@ -160,7 +155,7 @@ class IncomingCallActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        stopRingtoneAndVibration()
+        stopVibration()
         super.onDestroy()
     }
 
@@ -173,9 +168,9 @@ class IncomingCallActivity : ComponentActivity() {
         if (newHash != null) {
             currentIdentityHash.value = newHash
             currentCallerName.value = newName
-            // Restart ringtone/vibration for the new call
-            stopRingtoneAndVibration()
-            startRingtoneAndVibration()
+            // Restart vibration for the new call
+            stopVibration()
+            startVibration()
         }
     }
 
@@ -204,46 +199,14 @@ class IncomingCallActivity : ComponentActivity() {
     }
 
     /**
-     * Start playing the default ringtone and vibrating in a phone-call pattern.
-     * Respects the device's ringer mode (silent/vibrate/normal).
+     * Vibrate in a phone-call pattern. Respects the device's ringer mode (no
+     * vibration in silent mode). The ringtone itself is played by the
+     * :reticulum service process (LXST Telephone), which owns the call
+     * lifecycle and stops it on answer/hangup.
      */
-    private fun startRingtoneAndVibration() {
+    private fun startVibration() {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val ringerMode = audioManager.ringerMode
-
-        // Play ringtone (only if not in silent/vibrate mode)
-        if (ringerMode == AudioManager.RINGER_MODE_NORMAL) {
-            try {
-                val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-                ringtone =
-                    RingtoneManager.getRingtone(this, ringtoneUri)?.apply {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            isLooping = true
-                        }
-                        audioAttributes =
-                            AudioAttributes
-                                .Builder()
-                                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                                .build()
-                        play()
-                    }
-                // On pre-P devices, isLooping is not available; manually restart
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P && ringtone != null) {
-                    ringtoneLoopJob =
-                        lifecycleScope.launch {
-                            val rt = ringtone ?: return@launch
-                            while (isActive) {
-                                delay(1000)
-                                if (!rt.isPlaying) rt.play()
-                            }
-                        }
-                }
-                Log.d(TAG, "Ringtone started")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error starting ringtone", e)
-            }
-        }
 
         // Vibrate (in normal or vibrate mode, not silent)
         if (ringerMode != AudioManager.RINGER_MODE_SILENT) {
@@ -275,18 +238,9 @@ class IncomingCallActivity : ComponentActivity() {
     }
 
     /**
-     * Stop ringtone and vibration.
+     * Stop vibration.
      */
-    private fun stopRingtoneAndVibration() {
-        ringtoneLoopJob?.cancel()
-        ringtoneLoopJob = null
-        try {
-            ringtone?.stop()
-            ringtone = null
-            Log.d(TAG, "Ringtone stopped")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping ringtone", e)
-        }
+    private fun stopVibration() {
         try {
             vibrator?.cancel()
             vibrator = null
@@ -306,7 +260,7 @@ class IncomingCallActivity : ComponentActivity() {
      */
     private fun answerCall() {
         Log.i(TAG, "Answering call")
-        stopRingtoneAndVibration()
+        stopVibration()
         dismissKeyguardAndAnswer()
     }
 
@@ -358,7 +312,7 @@ class IncomingCallActivity : ComponentActivity() {
      */
     private fun declineCall() {
         Log.i(TAG, "Declining call")
-        stopRingtoneAndVibration()
+        stopVibration()
         lifecycleScope.launch {
             try {
                 telephony.declineCall()

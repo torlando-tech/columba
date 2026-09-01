@@ -209,7 +209,7 @@ class IncomingCallPresenterTest {
 
         // The app is in the foreground: MainActivity shows the in-app call
         // screen, so the background presenter must stay silent.
-        mainActivityVisibility.setVisible(true)
+        mainActivityVisibility.claimForeground { }
         presenter.start()
         scheduler.runCurrent()
         callState.value = CallState.Incoming(identityHash)
@@ -239,13 +239,13 @@ class IncomingCallPresenterTest {
         settle()
         assertEquals(0, notifier.shownCalls.size)
 
-        mainActivityVisibility.setVisible(true)
+        mainActivityVisibility.claimForeground { }
         settle()
 
         lookupGate.complete(Unit)
         settle()
 
-        // No post: the re-check after the lookup saw the visible flag.
+        // No post: the atomic check-then-post saw the claimed foreground.
         assertEquals(0, notifier.shownCalls.size)
     }
 
@@ -319,6 +319,29 @@ class IncomingCallPresenterTest {
         // The collector never saw the intermediate states (conflated away): only
         // the initial Idle on start produced a cancel.
         assertEquals(1, notifier.cancelCount.get())
+    }
+
+    @Test
+    fun `foreground claim after the post cancels it in the same atomic section`() {
+        // The normal hand-off: the presenter posts while backgrounded, then the
+        // user opens the app. MainActivity's claim (flag flip + cancel in one
+        // locked section) removes the post, and the presenter can never post
+        // again for this call (one post per call), so the UI is single-owned.
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+        assertSinglePost(identityHash, "Alice")
+        val cancelsBeforeClaim = notifier.cancelCount.get()
+
+        mainActivityVisibility.claimForeground { notifier.cancelIncomingCallNotification() }
+
+        assertEquals(cancelsBeforeClaim + 1, notifier.cancelCount.get())
+        assertEquals(1, notifier.shownCalls.size)
     }
 
     @Test

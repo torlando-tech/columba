@@ -41,13 +41,12 @@ import network.columba.app.rns.host.util.PeerNameResolver
  *
  * Ownership with the foreground UI: while MainActivity is visible it presents the
  * call in-app, so the presenter checks [MainActivityVisibility] before the lookup
- * (skip work the main UI will do) and again after it (do not post over the in-app
- * screen, or undo the cancel MainActivity made when it took over). The
- * check-then-post is not locked: if the main UI becomes visible in the microsecond
- * between the check and the post, the post lands for a moment and is removed by
- * MainActivity's own cancel, which runs whenever it becomes visible. The
- * worst case is a sub-frame visual flash while opening the app at the exact
- * moment a call arrives, never a stuck duplicate.
+ * (skip work the main UI will do) and posts through
+ * [MainActivityVisibility.postWhileBackground] after it: the flag check and the
+ * post are one locked section, atomic against MainActivity's claim (flag flip plus
+ * its cancel, also one locked section). Either the claim wins (this post is
+ * skipped) or the post wins (the claim's cancel removes it); no interleaving
+ * leaves a background post outliving the foreground takeover.
  *
  * Known, accepted residual: if the call is answered and the same peer calls again
  * while the name lookup is still in flight, the post carries that lookup's result
@@ -120,18 +119,20 @@ class IncomingCallPresenter internal constructor(
         val callerName = resolveCallerName(identityHash)
         // The lookup suspended, so the call may have changed state (answered,
         // ended, or a different caller) or the main UI may have taken over
-        // (posting now would undo its cancel). Re-read the state directly and
-        // the visibility flag before the single post.
+        // (posting now would undo its cancel). Re-read the state directly
+        // before the single post; the visibility check happens inside the
+        // atomic post below.
         val current = rnsTelephony.callState.value
-        if (
-            current !is CallState.Incoming ||
-            current.identityHash != identityHash ||
-            mainActivityVisibility.visible.value
-        ) {
+        if (current !is CallState.Incoming || current.identityHash != identityHash) {
             Log.i(TAG, "Call state changed during caller lookup; skipping stale presentation")
             return
         }
-        incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
+        // Atomic against MainActivity's claim: skipped if the foreground took
+        // over during the lookup, removed by the claim's cancel if it takes
+        // over in the same instant as this post.
+        mainActivityVisibility.postWhileBackground {
+            incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
+        }
     }
 
     /**

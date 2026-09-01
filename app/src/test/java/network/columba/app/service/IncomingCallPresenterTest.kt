@@ -449,6 +449,43 @@ class IncomingCallPresenterTest {
     }
 
     @Test
+    fun `queued post is dropped when the call ends before the main-thread runnable runs`() {
+        // The post enqueues onto the main thread, so the call can end (and the
+        // collector's cancel run) between the presenter's state check and the
+        // runnable executing. The runnable re-checks the call state and must
+        // not resurrect the cancelled notification.
+        val queue = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        AppMainThread.post = { runnable -> queue.add(runnable) }
+
+        coEvery { announceRepository.findByIdentityHash(identityHash) } returns
+            announce("Alice")
+        coEvery { contactRepository.getContact(destinationHash) } returns contact(null)
+
+        presenter.start()
+        scheduler.runCurrent()
+        callState.value = CallState.Incoming(identityHash)
+        settle()
+
+        // The lookup completed and the post is enqueued, not yet run.
+        assertEquals(1, queue.size)
+        assertEquals(0, notifier.shownCalls.size)
+
+        // The call is answered and the collector processes the transition
+        // (cancel) before the queued post runs.
+        callState.value = CallState.Active(identityHash)
+        scheduler.runCurrent()
+        assertEquals(0, notifier.shownCalls.size)
+
+        // Now the main thread drains its queue: the re-check inside the post
+        // sees the call is no longer Incoming and drops it.
+        while (true) {
+            val runnable = queue.poll() ?: break
+            runnable.run()
+        }
+        assertEquals(0, notifier.shownCalls.size)
+    }
+
+    @Test
     fun `start is idempotent`() {
         coEvery { announceRepository.findByIdentityHash(identityHash) } returns
             announce("Alice")

@@ -165,9 +165,15 @@ class IncomingCallPresenter internal constructor(
         }
         // Atomic against MainActivity's claim: skipped if the foreground took
         // over during the lookup, removed by the claim's cancel if it takes
-        // over in the same instant as this post.
+        // over in the same instant as this post. The post enqueues onto the
+        // main thread, so the call may have ended between the check above and
+        // the runnable running (and the collector's cancel may have landed
+        // first) - re-check the call state inside the block before posting.
         mainActivityVisibility.postWhileBackground {
-            incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
+            val stateAtPost = rnsTelephony.callState.value
+            if (stateAtPost is CallState.Incoming && stateAtPost.identityHash == identityHash) {
+                incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
+            }
         }
     }
 

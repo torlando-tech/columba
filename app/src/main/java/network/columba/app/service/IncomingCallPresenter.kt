@@ -8,7 +8,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
 import network.columba.app.MainActivityVisibility
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
@@ -25,27 +24,35 @@ import network.columba.app.rns.host.util.PeerNameResolver
  * [RnsTelephony] (rns-api); each backend (Python or native Kotlin) republishes
  * [CallState] into the UI process across the AIDL seam. The ringing itself is owned
  * by the :reticulum service process, so this presenter is the app-process consumer
- * that owns presentation when no app UI is visible: on [CallState.Incoming] it posts
- * the high-importance category-call notification with a full-screen intent (see
+ * that owns presentation when no app UI is visible: on [CallState.Incoming] it
+ * resolves the caller display name and posts the high-importance category-call
+ * notification with a full-screen intent (see
  * [IncomingCallNotifier.showIncomingCallNotification]), which brings
  * [network.columba.app.IncomingCallActivity] over the lock screen or over whatever
- * app is in the foreground.
+ * app is in the foreground. Any other state cancels the notification.
  *
- * The notification is posted immediately on the incoming state (with the last
- * resolved name for the identity, or the formatted-hash fallback) and the name is
- * corrected once the caller-name lookup completes. The lookup is the only
- * suspending step, and the post must not wait for it: answering should not be
- * delayed by a repository read. Because the display name is a function of the
- * identity hash, updating the post while the same identity is incoming is correct
- * even if the currently ringing call is a second call from that identity: the
- * update path is what re-presents a same-identity re-call that [StateFlow]
- * conflation would otherwise hide from the collector.
+ * The presenter is the single writer of the incoming-call notification: one post
+ * per incoming call, made after the caller-name lookup (a repository read of a few
+ * milliseconds, which keeps the full-screen UI's name accurate without delaying
+ * takeover by more than a lookup). There is deliberately no asynchronous
+ * "name correction" post: a second, out-of-band writer would have to coordinate
+ * with every component that cancels the notification (MainActivity, the call
+ * screen, user actions) and could resurrect a dismissed notification.
  *
- * Foreground presentation (the in-app incoming call screen) is MainActivity's
- * concern. The presenter gates both posts on [MainActivityVisibility]: while
- * MainActivity is visible it owns the presentation, so the presenter neither
- * posts (no duplicate of the in-app screen) nor updates (no resurrection of the
- * notification MainActivity cancelled when it took over).
+ * Ownership with the foreground UI: while MainActivity is visible it presents the
+ * call in-app, so the presenter checks [MainActivityVisibility] before the lookup
+ * (skip work the main UI will do) and again after it (do not post over the in-app
+ * screen, or undo the cancel MainActivity made when it took over). The
+ * check-then-post is not locked: if the main UI becomes visible in the microsecond
+ * between the check and the post, the post lands for a moment and is removed by
+ * MainActivity's own cancel, which runs whenever it becomes visible. The
+ * worst case is a sub-frame visual flash while opening the app at the exact
+ * moment a call arrives, never a stuck duplicate.
+ *
+ * Known, accepted residual: if the call is answered and the same peer calls again
+ * while the name lookup is still in flight, the post carries that lookup's result
+ * for the new call. The display name is a function of the identity hash (the same
+ * database rows), so the presented name is the right name for the ringing call.
  */
 @Singleton
 class IncomingCallPresenter internal constructor(
@@ -61,13 +68,6 @@ class IncomingCallPresenter internal constructor(
     }
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
-
-    /**
-     * Last resolved display name per identity. Lets a re-call from a known peer
-     * show its name on the immediate post instead of the formatted-hash fallback
-     * while the lookup runs.
-     */
-    private val resolvedNames = ConcurrentHashMap<String, String>()
 
     @Volatile
     private var isStarted = false
@@ -110,43 +110,28 @@ class IncomingCallPresenter internal constructor(
     }
 
     private suspend fun presentIncomingCall(identityHash: String) {
-        // While MainActivity is visible it owns the presentation (the in-app
-        // call screen): posting now would duplicate it, and the name update
-        // below could resurrect the notification MainActivity just cancelled.
+        // While the main UI is visible it presents the call in-app; skip the
+        // lookup the main UI will do for the user.
         if (mainActivityVisibility.visible.value) {
             Log.i(TAG, "MainActivity is presenting the call; skipping background presentation")
             return
         }
         Log.i(TAG, "Presenting background incoming-call UI for ${identityHash.take(16)}...")
-        // Post immediately - do not delay the full-screen takeover by the
-        // caller-name lookup. The name is the cached one or null (the notifier
-        // falls back to a formatted hash) and is corrected below once the lookup
-        // completes.
-        incomingCallNotifier.showIncomingCallNotification(identityHash, resolvedNames[identityHash])
-        scope.launch {
-            val callerName = resolveCallerName(identityHash)
-            if (callerName != null) {
-                resolvedNames[identityHash] = callerName
-            }
-            // The lookup suspended, so the call may have changed state while it
-            // was in flight. Update the post only while the same incoming call is
-            // still ringing; any other state is handled by the collector (the
-            // cancel, or the new call's own presentation). A same-identity re-call
-            // conflates with this Incoming value in the StateFlow, so the
-            // collector never re-delivers it - this update is what presents the
-            // current call, and the display name is a function of the identity,
-            // so it is the right name for it.
-            val current = rnsTelephony.callState.value
-            if (
-                current is CallState.Incoming &&
-                current.identityHash == identityHash &&
-                // MainActivity may have taken ownership while the lookup was in
-                // flight; its cancel must not be undone by the name update.
-                !mainActivityVisibility.visible.value
-            ) {
-                incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
-            }
+        val callerName = resolveCallerName(identityHash)
+        // The lookup suspended, so the call may have changed state (answered,
+        // ended, or a different caller) or the main UI may have taken over
+        // (posting now would undo its cancel). Re-read the state directly and
+        // the visibility flag before the single post.
+        val current = rnsTelephony.callState.value
+        if (
+            current !is CallState.Incoming ||
+            current.identityHash != identityHash ||
+            mainActivityVisibility.visible.value
+        ) {
+            Log.i(TAG, "Call state changed during caller lookup; skipping stale presentation")
+            return
         }
+        incomingCallNotifier.showIncomingCallNotification(identityHash, callerName)
     }
 
     /**

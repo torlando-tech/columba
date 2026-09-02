@@ -596,6 +596,10 @@ class SettingsViewModel
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
                             sortMessagesBySentTime = _state.value.sortMessagesBySentTime,
+                            // Preserve bottom nav tabs + last-browsed NomadNet node
+                            // from loadBottomNavTabs()
+                            bottomNavTabs = _state.value.bottomNavTabs,
+                            nomadNetLastNodeHash = _state.value.nomadNetLastNodeHash,
                             // Preserve protocol versions from fetchProtocolVersions()
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,

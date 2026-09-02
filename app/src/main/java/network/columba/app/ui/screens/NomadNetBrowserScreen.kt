@@ -66,7 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -263,7 +263,12 @@ fun NomadNetBrowserScreen(
                                 Modifier
                                     .fillMaxWidth()
                                     .focusRequester(urlFocusRequester)
-                                    .onFocusChanged { focusState ->
+                                    // onFocusEvent (not onFocusChanged): fires only on real
+                                    // focus transitions. onFocusChanged also re-fires the
+                                    // initial unfocused state when this field composes,
+                                    // which used to immediately cancel edit mode the moment
+                                    // the "Enter address" prompt turned it on.
+                                    .onFocusEvent { focusState ->
                                         if (focusState.isFocused && !isEditingUrl) {
                                             isEditingUrl = true
                                             val text = currentUrl ?: ""

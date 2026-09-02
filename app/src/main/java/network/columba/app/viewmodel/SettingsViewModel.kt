@@ -30,6 +30,7 @@ import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
+import network.columba.app.navigation.NavTab
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
@@ -64,6 +65,7 @@ enum class SettingsCardId {
     MAP_SOURCES,
     MESSAGE_DELIVERY,
     IMAGE_COMPRESSION,
+    BOTTOM_NAVIGATION,
     THEME,
     BATTERY,
     DATA_MIGRATION,
@@ -208,6 +210,11 @@ data class SettingsState(
     val includePrereleaseUpdates: Boolean = false,
     // Message sort order: false = received time (default), true = sent time
     val sortMessagesBySentTime: Boolean = false,
+    // User-configured bottom navigation tabs (normalized: Settings pinned last,
+    // max NavTab.MAX_TABS entries). Matches the persisted value via sanitize().
+    val bottomNavTabs: List<network.columba.app.navigation.NavTab> = network.columba.app.navigation.NavTab.DEFAULT,
+    // Destination hash of the last-browsed NomadNet node, or null when none.
+    val nomadNetLastNodeHash: String? = null,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -286,6 +293,8 @@ class SettingsViewModel
             loadMapSourceSettings()
             // Load notifications enabled setting
             loadNotificationsSettings()
+            // Load user-configured bottom navigation tabs
+            loadBottomNavTabs()
             // Load privacy settings
             loadPrivacySettings()
             // Load protocol versions for About screen
@@ -1720,6 +1729,44 @@ class SettingsViewModel
                 settingsRepository.notificationsEnabledFlow.collect { enabled ->
                     _state.update { it.copy(notificationsEnabled = enabled) }
                 }
+            }
+        }
+
+        /**
+         * Load the user-configured bottom navigation tabs. Subscribes to the
+         * persisted value so the bar updates live when the settings card changes.
+         * Values pass through [NavTab.sanitize] so a corrupt or stale layout can
+         * never render an empty or over-full bar.
+         */
+        private fun loadBottomNavTabs() {
+            viewModelScope.launch {
+                settingsRepository.bottomNavTabsFlow.collect { csv ->
+                    val tabs = NavTab.sanitize(csv)
+                    _state.update { current ->
+                        if (current.bottomNavTabs == tabs) current else current.copy(bottomNavTabs = tabs)
+                    }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.nomadNetLastNodeHashFlow.collect { hash ->
+                    _state.update { current ->
+                        if (current.nomadNetLastNodeHash == hash) current else current.copy(nomadNetLastNodeHash = hash)
+                    }
+                }
+            }
+        }
+
+        /**
+         * Persist a new bottom navigation tab layout. The list is sanitized before
+         * saving (Settings pinned last, capped at [NavTab.MAX_TABS]), so callers
+         * cannot store an invalid layout.
+         */
+        fun setBottomNavTabs(tabs: List<NavTab>) {
+            val sanitized = NavTab.sanitize(tabs.joinToString(",") { it.id })
+            viewModelScope.launch {
+                settingsRepository.saveBottomNavTabs(sanitized.joinToString(",") { it.id })
+                _state.update { it.copy(bottomNavTabs = sanitized) }
+                Log.d(TAG, "Bottom navigation tabs updated: ${sanitized.map { it.id }}")
             }
         }
 

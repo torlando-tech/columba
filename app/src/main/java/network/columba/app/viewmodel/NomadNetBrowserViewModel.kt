@@ -603,6 +603,9 @@ class NomadNetBrowserViewModel
                     path = path,
                     nodeHash = nodeHash,
                 )
+            // Remember where the user is so the bottom-nav NomadNet tab can
+            // reopen the last-browsed node instead of a cold default.
+            viewModelScope.launch { settingsRepository.saveNomadNetLastNodeHash(nodeHash) }
             partialManager.detectAndLoad(document)
         }
 

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -92,12 +93,14 @@ import network.columba.app.viewmodel.NomadNetBrowserViewModel.RenderingMode
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NomadNetBrowserScreen(
     destinationHash: String,
     initialPath: String = "/page/index.mu",
+    showHomeEntry: Boolean = false,
     onBackClick: () -> Unit,
     onOpenConversation: (String) -> Unit = {},
     viewModel: NomadNetBrowserViewModel = hiltViewModel(),
@@ -131,8 +134,18 @@ fun NomadNetBrowserScreen(
 
     // Load initial page
     LaunchedEffect(destinationHash, initialPath) {
-        if (browserState is BrowserState.Initial) {
+        if (browserState is BrowserState.Initial && destinationHash.isNotEmpty()) {
             viewModel.loadPage(destinationHash, initialPath)
+        }
+    }
+
+    // Focus the address bar when editing starts (e.g. from the home entry
+    // prompt). The TextField only composes while editing, so give it a frame
+    // before requesting focus; swallow the case where editing already ended.
+    LaunchedEffect(isEditingUrl) {
+        if (isEditingUrl) {
+            delay(100)
+            runCatching { urlFocusRequester.requestFocus() }
         }
     }
 
@@ -401,6 +414,41 @@ fun NomadNetBrowserScreen(
     ) { paddingValues ->
         when (val state = browserState) {
             is BrowserState.Initial -> {
+                if (showHomeEntry) {
+                    // Bottom-nav entry with no node yet: prompt for an address.
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                                .padding(horizontal = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            modifier = Modifier.size(56.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "NomadNet Browser",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Enter a node address to start browsing.\nFormat: <hash>:/page/index.mu",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        TextButton(onClick = { isEditingUrl = true }) {
+                            Text("Enter address")
+                        }
+                    }
+                }
                 // Nothing to show yet
             }
 
@@ -445,10 +493,13 @@ fun NomadNetBrowserScreen(
                     // imePadding required because MainActivity uses enableEdgeToEdge(),
                     // which makes the manifest's adjustResize a no-op — without it the
                     // soft keyboard slides up on top of focused micron form fields.
+                    // 88.dp bottom clears the always-visible bottom nav bar
+                    // (matches ContactsScreen's content padding convention).
                     modifier =
                         Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
+                            .padding(bottom = 88.dp)
                             .imePadding(),
                 ) {
                     if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {

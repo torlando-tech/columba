@@ -170,6 +170,8 @@ class SettingsViewModelTest {
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
+        every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetLastNodeHashFlow } returns flowOf(null)
         every { settingsRepository.shareInstanceHostingEnabledFlow } returns shareInstanceHostingEnabledFlow
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
         coEvery { settingsRepository.saveShareInstanceHostingEnabled(any()) } returns Unit

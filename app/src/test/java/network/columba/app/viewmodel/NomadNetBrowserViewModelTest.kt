@@ -67,6 +67,7 @@ class NomadNetBrowserViewModelTest {
         // No persisted rendering mode by default; individual tests can override.
         every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
         coEvery { settingsRepository.saveNomadNetRenderingMode(any()) } just Runs
+        coEvery { settingsRepository.saveNomadNetLastNodeHash(any()) } just Runs
         viewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
     }
 
@@ -94,6 +95,9 @@ class NomadNetBrowserViewModelTest {
             val loaded = state as NomadNetBrowserViewModel.BrowserState.PageLoaded
             assertEquals(nodeHash, loaded.nodeHash)
             assertEquals("/page/index.mu", loaded.path)
+            // The bottom-nav NomadNet tab reopens the last-browsed node, so
+            // every successful page load must persist its node hash.
+            coVerify { settingsRepository.saveNomadNetLastNodeHash(nodeHash) }
         }
 
     @Test

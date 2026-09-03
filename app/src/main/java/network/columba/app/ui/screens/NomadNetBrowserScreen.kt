@@ -420,7 +420,24 @@ fun NomadNetBrowserScreen(
         when (val state = browserState) {
             is BrowserState.Initial -> {
                 if (showHomeEntry) {
-                    // Bottom-nav entry with no node yet: prompt for an address.
+                    // Bottom-nav entry with no node yet: a dedicated address
+                    // field owned by this page. Deliberately NOT the top-bar
+                    // isEditingUrl flow — toggling that state from here raced
+                    // with the field's focus handler and made the editor flash
+                    // for a frame. This field is always present and submits
+                    // directly, so there is no shared edit-state to clobber.
+                    var homeUrlValue by remember { mutableStateOf(TextFieldValue("")) }
+                    val homeFocusRequester = remember { FocusRequester() }
+                    LaunchedEffect(Unit) {
+                        // One frame so the field is attached before focus.
+                        delay(100)
+                        runCatching { homeFocusRequester.requestFocus() }
+                    }
+                    val submitHomeUrl: () -> Unit = {
+                        if (homeUrlValue.text.isNotBlank()) {
+                            viewModel.navigateToUrl(homeUrlValue.text)
+                        }
+                    }
                     Column(
                         modifier =
                             Modifier
@@ -449,8 +466,49 @@ fun NomadNetBrowserScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        TextButton(onClick = { isEditingUrl = true }) {
-                            Text("Enter address")
+                        BasicTextField(
+                            value = homeUrlValue,
+                            onValueChange = { homeUrlValue = it },
+                            singleLine = true,
+                            textStyle =
+                                TextStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { submitHomeUrl() }),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(homeFocusRequester),
+                            decorationBox = { innerTextField ->
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .background(
+                                                MaterialTheme.colorScheme.surface,
+                                                RoundedCornerShape(12.dp),
+                                            ).padding(horizontal = 16.dp, vertical = 12.dp),
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    if (homeUrlValue.text.isEmpty()) {
+                                        Text(
+                                            text = "<hash>:/page/index.mu",
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(onClick = submitHomeUrl) {
+                            Text("Go")
                         }
                     }
                 }

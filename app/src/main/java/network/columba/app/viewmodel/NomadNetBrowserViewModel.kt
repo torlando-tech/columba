@@ -623,8 +623,16 @@ class NomadNetBrowserViewModel
                     nodeHash = nodeHash,
                 )
             // Remember where the user is so the bottom-nav NomadNet tab can
-            // reopen the last-browsed node instead of a cold default.
-            viewModelScope.launch { settingsRepository.saveNomadNetLastNodeHash(nodeHash) }
+            // reopen the last-browsed node instead of a cold default. Guarded:
+            // if the user hit Close Site while this page was in flight, state
+            // is no longer this page and the save must not resurrect the
+            // closed binding behind closeSite's clear.
+            viewModelScope.launch {
+                val current = _browserState.value
+                if (current is BrowserState.PageLoaded && current.nodeHash == nodeHash) {
+                    settingsRepository.saveNomadNetLastNodeHash(nodeHash)
+                }
+            }
             partialManager.detectAndLoad(document)
         }
 

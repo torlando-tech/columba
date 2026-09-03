@@ -90,6 +90,7 @@ import network.columba.app.navigation.navigateToAnsweredCall
 import network.columba.app.navigation.navigateToEntity
 import network.columba.app.navigation.navigateToIncomingCall
 import network.columba.app.navigation.shouldPresentIncomingCall
+import network.columba.app.navigation.NavTab
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -1328,6 +1329,25 @@ fun ColumbaNavigation(
                                     label = { Text(tab.label) },
                                     selected = tab.matchesRoute(currentRoute),
                                     onClick = {
+                                        if (currentRoute?.startsWith("nomadnet") == true) {
+                                            if (tab == NavTab.NOMADNET) {
+                                                // Already browsing; the site session ends via
+                                                // Close Site or Back, not by re-tapping the tab.
+                                                return@NavigationBarItem
+                                            }
+                                            // Browsing is modal over the tab tree: collapse
+                                            // the NomadNet stack first, then switch tabs
+                                            // normally. Popping (rather than saving state)
+                                            // guarantees a single browser view, so tab taps
+                                            // can never stack duplicates or fight over
+                                            // scroll position.
+                                            while (
+                                                navController.currentDestination?.route
+                                                    ?.startsWith("nomadnet") == true
+                                            ) {
+                                                if (!navController.popBackStack()) break
+                                            }
+                                        }
                                         navController.navigate(tab.tabRoute) {
                                             popUpTo(navController.graph.startDestinationId) {
                                                 saveState = true
@@ -2441,6 +2461,9 @@ fun ColumbaNavigation(
                                     destinationHash = destHash,
                                     initialPath = path,
                                     onBackClick = { navController.popBackStack() },
+                                    // Standalone browser: after closing the site,
+                                    // pop back the way Back does.
+                                    onCloseSite = { navController.popBackStack() },
                                     onOpenConversation = { conversationHash ->
                                         val encodedHash = Uri.encode(conversationHash)
                                         val encodedName = Uri.encode(conversationHash.take(12))
@@ -2458,6 +2481,11 @@ fun ColumbaNavigation(
                                     destinationHash = lastNodeHash.orEmpty(),
                                     showHomeEntry = lastNodeHash.isNullOrEmpty(),
                                     onBackClick = { navController.popBackStack() },
+                                    // Close Site on the tab home: closeSite() drops the
+                                    // persisted last-node hash, the state flow flips
+                                    // showHomeEntry, and the screen swaps to the address
+                                    // prompt in place - no navigation needed.
+                                    onCloseSite = {},
                                     onOpenConversation = { conversationHash ->
                                         val encodedHash = Uri.encode(conversationHash)
                                         val encodedName = Uri.encode(conversationHash.take(12))

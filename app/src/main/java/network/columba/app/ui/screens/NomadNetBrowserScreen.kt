@@ -102,6 +102,7 @@ fun NomadNetBrowserScreen(
     initialPath: String = "/page/index.mu",
     showHomeEntry: Boolean = false,
     onBackClick: () -> Unit,
+    onCloseSite: (() -> Unit)? = null,
     onOpenConversation: (String) -> Unit = {},
     viewModel: NomadNetBrowserViewModel = hiltViewModel(),
 ) {
@@ -401,7 +402,13 @@ fun NomadNetBrowserScreen(
                             BrowserCloseSiteMenuItem(
                                 onCloseSite = {
                                     showMenu = false
-                                    onBackClick()
+                                    // Close Site is more than Back: it clears the
+                                    // session and forgets the persisted last-node
+                                    // binding. The caller decides navigation: the
+                                    // standalone browser pops, the tab home stays
+                                    // put and swaps to the address prompt.
+                                    viewModel.closeSite()
+                                    if (onCloseSite != null) onCloseSite() else onBackClick()
                                 },
                             )
                         }

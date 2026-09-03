@@ -1249,7 +1249,9 @@ fun ColumbaNavigation(
         listOf(
             "offline_map_download",
             "messaging/",
-            "announce_detail/",
+            // announce_detail (Node Details) intentionally keeps the nav bar:
+            // it sits one tap from the tabs, and hiding the bar made returning
+            // from NomadNet flows feel jarring.
             "message_detail/",
             "theme_editor",
             "rnode_wizard",

@@ -469,6 +469,25 @@ class NomadNetBrowserViewModel
             return true
         }
 
+        /**
+         * Close the browsed site: forget the persisted last-node hash (so the
+         * bottom-nav NomadNet tab reopens at the address-entry prompt instead
+         * of this site), drop in-memory history, and reset the view state.
+         */
+        fun closeSite() {
+            // Invalidate any in-flight request so its result doesn't repopulate
+            // the view after we reset to Initial.
+            fetchEpoch++
+            stopStatusCollection()
+            stopProgressCollection()
+            partialManager.clear()
+            history.clear()
+            _canGoBack.value = false
+            _formFields.value = emptyMap()
+            _browserState.value = BrowserState.Initial
+            viewModelScope.launch { settingsRepository.clearNomadNetLastNodeHash() }
+        }
+
         fun refresh() {
             val currentState = _browserState.value
             if (currentState is BrowserState.PageLoaded) {

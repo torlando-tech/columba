@@ -1503,6 +1503,17 @@ class SettingsRepository
         }
 
         /**
+         * Forget the last-browsed NomadNet page (Close Site). The bottom-nav
+         * NomadNet tab then reopens at the address-entry prompt instead of the
+         * closed site.
+         */
+        suspend fun clearNomadNetLastNodeHash() {
+            context.dataStore.edit { preferences ->
+                preferences.remove(PreferencesKeys.NOMADNET_LAST_NODE)
+            }
+        }
+
+        /**
          * Flow of the user-configured bottom navigation tabs, stored as a
          * comma-separated list of [network.columba.app.navigation.NavTab] ids.
          * Emits null before first configuration; consumers map through

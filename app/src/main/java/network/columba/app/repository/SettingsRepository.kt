@@ -1494,11 +1494,21 @@ class SettingsRepository
 
         /**
          * Remember the destination hash of the most recently loaded NomadNet page.
+         * [whileActive] is evaluated inside the DataStore transaction (under the
+         * edit mutex), so callers can guard against a concurrent
+         * [clearNomadNetLastNodeHash] resurrecting a just-closed site: either the
+         * predicate fails and nothing is written, or the write lands before any
+         * later clear and is properly erased by it.
          */
-        suspend fun saveNomadNetLastNodeHash(nodeHash: String) {
+        suspend fun saveNomadNetLastNodeHash(
+            nodeHash: String,
+            whileActive: () -> Boolean = { true },
+        ) {
             if (nodeHash.isBlank()) return
             context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.NOMADNET_LAST_NODE] = nodeHash
+                if (whileActive()) {
+                    preferences[PreferencesKeys.NOMADNET_LAST_NODE] = nodeHash
+                }
             }
         }
 

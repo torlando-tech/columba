@@ -779,8 +779,10 @@ class ContactsViewModelTest {
 
             // Then: Should call resetContactForRetry and log success
             assertTrue("retryIdentityResolution should complete without exception", result.isSuccess)
-            coVerify { contactRepository.resetContactForRetry(testDestHash) }
-            verify { Log.d(any(), match { it.contains("Reset contact for retry") }) }
+            // retryIdentityResolution launches on Dispatchers.IO; verify with a
+            // timeout instead of racing the IO thread (same as the sibling tests).
+            coVerify(timeout = 1000) { contactRepository.resetContactForRetry(testDestHash) }
+            verify(timeout = 1000) { Log.d(any(), match { it.contains("Reset contact for retry") }) }
         }
 
     @Test

@@ -49,7 +49,7 @@ fun BottomNavigationCard(
         onExpandedChange = onExpandedChange,
     ) {
         Text(
-            text = "Choose which shortcuts appear in the bottom bar (max ${NavTab.MAX_TABS}) and drag them into order. Settings is always pinned to the end.",
+            text = "Choose which shortcuts appear in the bottom bar (max ${NavTab.MAX_TABS}) and use the arrows to arrange them. Settings is always pinned to the end.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

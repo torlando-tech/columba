@@ -257,27 +257,6 @@ interface AnnounceDao {
     suspend fun announceExists(destinationHash: String): Boolean
 
     /**
-     * Get all favorite announces, sorted by most recently favorited (descending).
-     * Returns a Flow that emits updated lists whenever the database changes.
-     */
-    @Query("SELECT * FROM announces WHERE isFavorite = 1 ORDER BY favoritedTimestamp DESC")
-    fun getFavoriteAnnounces(): Flow<List<AnnounceEntity>>
-
-    /**
-     * Search favorite announces by peer name or destination hash.
-     * Returns a Flow that emits updated lists whenever the database changes.
-     */
-    @Query(
-        """
-        SELECT * FROM announces
-        WHERE isFavorite = 1
-        AND (peerName LIKE '%' || :query || '%' OR destinationHash LIKE '%' || :query || '%')
-        ORDER BY favoritedTimestamp DESC
-        """,
-    )
-    fun searchFavoriteAnnounces(query: String): Flow<List<AnnounceEntity>>
-
-    /**
      * Toggle favorite status for an announce.
      * If favoriting, sets current timestamp. If unfavoriting, clears timestamp.
      */
@@ -287,12 +266,6 @@ interface AnnounceDao {
         isFavorite: Boolean,
         timestamp: Long?,
     )
-
-    /**
-     * Get count of favorite announces
-     */
-    @Query("SELECT COUNT(*) FROM announces WHERE isFavorite = 1")
-    fun getFavoriteCount(): Flow<Int>
 
     /**
      * Get a specific announce as Flow (for observing favorite status changes)
@@ -557,85 +530,6 @@ interface AnnounceDao {
         """,
     )
     fun getEnrichedAnnouncesByTypes(nodeTypes: List<String>): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Get all favorite announces with icon data, sorted by most recently favorited.
-     */
-    @Query(
-        """
-        SELECT
-            a.destinationHash,
-            a.peerName,
-            a.publicKey,
-            a.appData,
-            a.hops,
-            a.lastSeenTimestamp,
-            a.nodeType,
-            a.receivingInterface,
-            a.receivingInterfaceType,
-            a.aspect,
-            a.isFavorite,
-            a.favoritedTimestamp,
-            a.stampCost,
-            a.stampCostFlexibility,
-            a.peeringCost,
-            a.propagationTransferLimitKb,
-            (
-                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
-                FROM announce_interface_sightings s
-                WHERE s.destinationHash = a.destinationHash
-                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
-            ) AS recentInterfaceTypes,
-            pi.iconName as iconName,
-            pi.foregroundColor as iconForegroundColor,
-            pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.isFavorite = 1
-        ORDER BY a.favoritedTimestamp DESC
-        """,
-    )
-    fun getEnrichedFavoriteAnnounces(): Flow<List<EnrichedAnnounce>>
-
-    /**
-     * Search favorite announces with icon data by peer name or destination hash.
-     */
-    @Query(
-        """
-        SELECT
-            a.destinationHash,
-            a.peerName,
-            a.publicKey,
-            a.appData,
-            a.hops,
-            a.lastSeenTimestamp,
-            a.nodeType,
-            a.receivingInterface,
-            a.receivingInterfaceType,
-            a.aspect,
-            a.isFavorite,
-            a.favoritedTimestamp,
-            a.stampCost,
-            a.stampCostFlexibility,
-            a.peeringCost,
-            a.propagationTransferLimitKb,
-            (
-                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
-                FROM announce_interface_sightings s
-                WHERE s.destinationHash = a.destinationHash
-                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
-            ) AS recentInterfaceTypes,
-            pi.iconName as iconName,
-            pi.foregroundColor as iconForegroundColor,
-            pi.backgroundColor as iconBackgroundColor
-        FROM announces a
-        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
-        WHERE a.isFavorite = 1
-        AND (a.peerName LIKE '%' || :query || '%' OR a.destinationHash LIKE '%' || :query || '%')
-        ORDER BY a.favoritedTimestamp DESC
-        """,
-    )
-    fun searchEnrichedFavoriteAnnounces(query: String): Flow<List<EnrichedAnnounce>>
 
     /**
      * Get a specific announce with icon data as Flow.

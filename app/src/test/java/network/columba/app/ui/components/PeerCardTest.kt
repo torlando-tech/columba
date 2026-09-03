@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
 
 /**
  * UI tests for PeerCard composable.
- * Tests the peer card component used on announces and saved peers screens.
+ * Tests the peer card component used on the Announce Stream screen.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -86,7 +86,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = {},
-                showFavoriteToggle = true,
             )
         }
 
@@ -105,30 +104,10 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = {},
-                showFavoriteToggle = true,
             )
         }
 
         // Then
-        composeTestRule.onNodeWithContentDescription("Remove from contacts").assertIsDisplayed()
-    }
-
-    @Test
-    fun peerCard_starButton_showsRemoveFromContacts_whenShowFavoriteToggleFalse() {
-        // Given - on SavedPeersScreen, showFavoriteToggle is false and all items show as starred
-        val announce = TestFactories.createAnnounce(isFavorite = false)
-
-        // When
-        composeTestRule.setContent {
-            PeerCard(
-                announce = announce,
-                onClick = {},
-                onFavoriteClick = {},
-                showFavoriteToggle = false,
-            )
-        }
-
-        // Then - should show as starred even when isFavorite is false
         composeTestRule.onNodeWithContentDescription("Remove from contacts").assertIsDisplayed()
     }
 
@@ -143,7 +122,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = { favoriteClicked = true },
-                showFavoriteToggle = true,
             )
         }
 
@@ -165,7 +143,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = { favoriteClicked = true },
-                showFavoriteToggle = true,
             )
         }
 
@@ -210,7 +187,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = { clickCount++ },
-                showFavoriteToggle = true,
             )
         }
 

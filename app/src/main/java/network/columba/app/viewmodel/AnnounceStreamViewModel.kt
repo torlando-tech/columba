@@ -352,7 +352,7 @@ class AnnounceStreamViewModel
         }
 
         /**
-         * Toggle contact status for an announce (replaces toggleFavorite)
+         * Toggle contact status for an announce.
          * If announce is not a contact, adds it to contacts.
          * If announce is a contact, removes it from contacts.
          */

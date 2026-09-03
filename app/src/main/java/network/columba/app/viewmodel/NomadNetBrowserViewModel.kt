@@ -628,9 +628,9 @@ class NomadNetBrowserViewModel
             // is no longer this page and the save must not resurrect the
             // closed binding behind closeSite's clear.
             viewModelScope.launch {
-                val current = _browserState.value
-                if (current is BrowserState.PageLoaded && current.nodeHash == nodeHash) {
-                    settingsRepository.saveNomadNetLastNodeHash(nodeHash)
+                settingsRepository.saveNomadNetLastNodeHash(nodeHash) {
+                    val current = _browserState.value
+                    current is BrowserState.PageLoaded && current.nodeHash == nodeHash
                 }
             }
             partialManager.detectAndLoad(document)

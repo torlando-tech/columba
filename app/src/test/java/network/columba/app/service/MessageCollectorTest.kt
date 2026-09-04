@@ -371,6 +371,51 @@ class MessageCollectorTest {
         }
 
     @Test
+    fun `processMessage treats saved contact without favorite announce as favorite`() =
+        runBlocking {
+            // Given: A message from a peer saved via "Save to Contacts" (Chats/Messaging
+            // screens). Those flows write to the contacts table and never touch the
+            // legacy announce isFavorite flag, so the announce row reports
+            // isFavorite = false even though the peer IS a saved contact.
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "contact_msg",
+                    content = "Message from saved contact",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Announce row exists but is NOT favorited (Save to Contacts never sets it)
+            coEvery { announceRepository.getAnnounce(testSourceHashHex) } returns
+                mockk {
+                    every { isFavorite } returns false
+                }
+            // But the peer IS in the contacts table
+            coEvery { contactRepository.hasContact(testSourceHashHex) } returns true
+
+            // When: Start collecting and emit
+            val startResult = runCatching { messageCollector.startCollecting() }
+            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Notification should be posted with isFavorite = true, so that
+            // "Message from Saved Peer" (with "Received Message" off) still fires.
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = true,
+                )
+            }
+        }
+
+    @Test
     fun `processMessage handles announce lookup failure gracefully for notifications`() =
         runBlocking {
             // Given: A message where announce lookup fails

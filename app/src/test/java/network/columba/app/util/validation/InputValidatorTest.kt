@@ -519,6 +519,45 @@ class InputValidatorTest {
         assertEquals(ValidationConstants.MAX_SEARCH_QUERY_LENGTH, result.getOrNull()?.length)
     }
 
+    @Test
+    fun `sanitizeSearchQuery - preserves trailing space while typing`() {
+        // Regression: the contacts search field is controlled and round-trips every
+        // keystroke through sanitization. Trimming here made it impossible to type
+        // a space (the trailing space was eaten on each render).
+        val result = InputValidator.sanitizeSearchQuery("Alice ", 200)
+        assertEquals("Alice ", result)
+    }
+
+    @Test
+    fun `sanitizeSearchQuery - preserves leading space`() {
+        val result = InputValidator.sanitizeSearchQuery(" Alice", 200)
+        assertEquals(" Alice", result)
+    }
+
+    @Test
+    fun `sanitizeSearchQuery - normalizes internal whitespace runs`() {
+        val result = InputValidator.sanitizeSearchQuery("Alice\t\t Smith", 200)
+        assertEquals("Alice Smith", result)
+    }
+
+    @Test
+    fun `sanitizeSearchQuery - removes control characters`() {
+        val result = InputValidator.sanitizeSearchQuery("Alice\u0000 Smith", 200)
+        assertEquals("Alice Smith", result)
+    }
+
+    @Test
+    fun `sanitizeSearchQuery - truncates to max length`() {
+        val result = InputValidator.sanitizeSearchQuery("a".repeat(500), 50)
+        assertEquals(50, result.length)
+    }
+
+    @Test
+    fun `sanitizeText - still trims its generic contract`() {
+        val result = InputValidator.sanitizeText("  hello  ", 100)
+        assertEquals("hello", result)
+    }
+
     // ========== CONFIG PARAMETER VALIDATION TESTS ==========
 
     @Test

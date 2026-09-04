@@ -187,6 +187,58 @@ class ContactsViewModelTest {
         }
 
     @Test
+    fun `filteredContacts - query with trailing space matches as if trimmed`() =
+        runTest {
+            // Given: the search field preserves trailing spaces while typing
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
+                    TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Alice Smith"),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            // When: field holds "Alice " (user typed a space, mid-edit). Trimmed at
+            // match time, "Alice" matches both names; untrimmed, "Alice " would only
+            // match "Alice Smith".
+            viewModel.onSearchQueryChanged("Alice ")
+            advanceUntilIdle()
+
+            // Then
+            viewModel.filteredContacts.test {
+                skipItems(1) // Skip initial
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(2, filtered.size)
+            }
+        }
+
+    @Test
+    fun `filteredContacts - whitespace-only query returns all contacts`() =
+        runTest {
+            // Given
+            val contacts =
+                listOf(
+                    TestFactories.createEnrichedContact(destinationHash = "hash1", displayName = "Alice"),
+                    TestFactories.createEnrichedContact(destinationHash = "hash2", displayName = "Bob"),
+                )
+            contactsFlow.value = contacts
+            advanceUntilIdle()
+
+            // When: the field holds only a space (user cleared to just " ")
+            viewModel.onSearchQueryChanged(" ")
+            advanceUntilIdle()
+
+            // Then: treated as an empty query, not a "contains space" match
+            viewModel.filteredContacts.test {
+                skipItems(1) // Skip initial
+                advanceUntilIdle()
+                val filtered = awaitItem()
+                assertEquals(2, filtered.size)
+            }
+        }
+
+    @Test
     fun `filteredContacts - matches destination hash`() =
         runTest {
             // Given

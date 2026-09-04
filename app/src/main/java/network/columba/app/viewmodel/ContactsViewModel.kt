@@ -121,8 +121,11 @@ class ContactsViewModel
             combine(
                 contacts,
                 searchQuery,
-            ) { contacts, query ->
-                if (query.isBlank()) {
+            ) { contacts, rawQuery ->
+                // The search field preserves trailing spaces while typing, so trim at
+                // match time (mirrors AnnounceStreamViewModel's query.trim() before SQL).
+                val query = rawQuery.trim()
+                if (query.isEmpty()) {
                     contacts
                 } else {
                     contacts.filter { contact ->

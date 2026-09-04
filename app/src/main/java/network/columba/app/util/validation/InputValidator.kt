@@ -450,11 +450,15 @@ object InputValidator {
      * - Within length limit
      * - Returns empty string if blank (search queries can be empty)
      *
+     * Leading/trailing whitespace is preserved here and trimmed at match time
+     * by the consumers, so users can type spaces in live search fields without
+     * the field fighting them on every keystroke.
+     *
      * @param query The search query to validate
      * @return ValidationResult.Success with sanitized query
      */
     fun validateSearchQuery(query: String): ValidationResult<String> {
-        val sanitized = sanitizeText(query, MAX_SEARCH_QUERY_LENGTH)
+        val sanitized = sanitizeSearchQuery(query, MAX_SEARCH_QUERY_LENGTH)
         return ValidationResult.Success(sanitized)
     }
 
@@ -507,6 +511,29 @@ object InputValidator {
     ): String =
         text
             .trim()
+            .replace(Regex("\\p{C}"), "") // Remove control characters
+            .replace(Regex("\\s+"), " ") // Normalize whitespace
+            .take(maxLength)
+
+    /**
+     * Sanitizes a live search query without trimming leading/trailing whitespace.
+     *
+     * Unlike [sanitizeText], this variant keeps the text the user is currently
+     * composing: control characters are removed and runs of whitespace are
+     * normalized, but spaces typed at the end of the query are preserved so a
+     * controlled text field does not fight the user on every keystroke.
+     * Consumers trim the query at match time, so preserved trailing spaces have
+     * no effect on filtering.
+     *
+     * @param query The search query to sanitize
+     * @param maxLength Maximum allowed length after sanitization
+     * @return Sanitized query with internal spacing and trailing spaces intact
+     */
+    fun sanitizeSearchQuery(
+        query: String,
+        maxLength: Int,
+    ): String =
+        query
             .replace(Regex("\\p{C}"), "") // Remove control characters
             .replace(Regex("\\s+"), " ") // Normalize whitespace
             .take(maxLength)

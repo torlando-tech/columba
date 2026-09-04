@@ -370,9 +370,12 @@ fun ContactsScreen(
                     OutlinedTextField(
                         value = currentSearchQuery,
                         onValueChange = { query ->
-                            // VALIDATION: Sanitize and limit search query
+                            // VALIDATION: Sanitize and limit search query.
+                            // Trailing spaces are intentionally preserved while the user
+                            // is typing (sanitizeSearchQuery does not trim); the query is
+                            // trimmed at match time in the view models.
                             val sanitized =
-                                InputValidator.sanitizeText(
+                                InputValidator.sanitizeSearchQuery(
                                     query,
                                     ValidationConstants.MAX_SEARCH_QUERY_LENGTH,
                                 )

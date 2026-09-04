@@ -637,7 +637,17 @@ class NomadNetBrowserViewModelTest {
             viewModel.identifyToNode()
             advanceUntilIdle()
 
-            // Try again — should be a no-op
+            // identifyToNode() dispatches onto the real Dispatchers.IO (only
+            // Dispatchers.Main is replaced in this test), so advanceUntilIdle()
+            // cannot observe its completion. Poll for the flag the IO coroutine
+            // sets, with a bound, instead of racing an arbitrary sleep.
+            var waitedMs = 0
+            while (!viewModel.isIdentified.value && waitedMs < 2000) {
+                Thread.sleep(25)
+                waitedMs += 25
+            }
+
+            // Try again — should be a no-op (guarded by _isIdentified)
             viewModel.identifyToNode()
             advanceUntilIdle()
 

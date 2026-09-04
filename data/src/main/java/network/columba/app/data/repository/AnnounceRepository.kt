@@ -378,38 +378,6 @@ class AnnounceRepository
         }
 
         /**
-         * Get all favorite announces as a Flow, sorted by most recently favorited.
-         * Automatically updates UI when favorites are added or removed.
-         * Includes icon data from peer_icons table.
-         */
-        fun getFavoriteAnnounces(): Flow<List<Announce>> =
-            announceDao.getEnrichedFavoriteAnnounces().map { enriched ->
-                enriched.map { it.toAnnounce() }
-            }
-
-        /**
-         * Search favorite announces by peer name or destination hash.
-         * Automatically updates UI when matching favorites are added or removed.
-         * Includes icon data from peer_icons table.
-         */
-        fun searchFavoriteAnnounces(query: String): Flow<List<Announce>> =
-            announceDao.searchEnrichedFavoriteAnnounces(query).map { enriched ->
-                enriched.map { it.toAnnounce() }
-            }
-
-        /**
-         * Toggle favorite status for an announce.
-         * If currently not favorited, sets to favorite and records timestamp.
-         * If currently favorited, removes favorite status and clears timestamp.
-         */
-        suspend fun toggleFavorite(destinationHash: String) {
-            val announce = announceDao.getAnnounce(destinationHash) ?: return
-            val newFavoriteStatus = !announce.isFavorite
-            val timestamp = if (newFavoriteStatus) System.currentTimeMillis() else null
-            announceDao.updateFavoriteStatus(destinationHash, newFavoriteStatus, timestamp)
-        }
-
-        /**
          * Set favorite status for an announce explicitly
          */
         suspend fun setFavorite(
@@ -419,11 +387,6 @@ class AnnounceRepository
             val timestamp = if (isFavorite) System.currentTimeMillis() else null
             announceDao.updateFavoriteStatus(destinationHash, isFavorite, timestamp)
         }
-
-        /**
-         * Get count of favorite announces as a Flow.
-         */
-        fun getFavoriteCount(): Flow<Int> = announceDao.getFavoriteCount()
 
         /**
          * Get a specific announce as Flow (for observing favorite status changes).

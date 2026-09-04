@@ -55,7 +55,7 @@ import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.util.formatTimeSince
 
 /**
- * Shared peer card component used by both AnnounceStreamScreen and SavedPeersScreen.
+ * Shared peer card component used by the Announce Stream.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @androidx.compose.runtime.Stable
@@ -66,7 +66,6 @@ fun PeerCard(
     onFavoriteClick: () -> Unit = {},
     onLongPress: () -> Unit = {},
     badgeContent: @Composable () -> Unit = { NodeTypeBadge(nodeType = announce.nodeType) },
-    showFavoriteToggle: Boolean = true,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
@@ -207,7 +206,7 @@ fun PeerCard(
                     modifier = Modifier.fillMaxHeight(),
                 ) {
                     StarToggleButton(
-                        isStarred = announce.isFavorite || !showFavoriteToggle,
+                        isStarred = announce.isFavorite,
                         onClick = onFavoriteClick,
                     )
                     // Prefer the raw receiving interface so classifier fixes apply

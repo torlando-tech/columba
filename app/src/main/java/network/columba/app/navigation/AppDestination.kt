@@ -120,6 +120,10 @@ enum class AppDestination(
             ),
         externalNavigationPolicy = ExternalNavigationPolicy.REUSE_SAME_ENTITY,
     ),
+    NOMADNET_HOME(
+        "nomadnet_home",
+        backContract = BackContract.TOP_LEVEL,
+    ),
     OFFLINE_MAPS("offline_maps"),
     OFFLINE_MAP_DOWNLOAD(
         "offline_map_download?updateRegionId={updateRegionId}",

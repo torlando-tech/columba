@@ -62,6 +62,7 @@ import network.columba.app.util.safeOpenUrl
 import network.columba.app.ui.screens.settings.cards.AdvancedCard
 import network.columba.app.ui.screens.settings.cards.AutoAnnounceCard
 import network.columba.app.ui.screens.settings.cards.BatteryOptimizationCard
+import network.columba.app.ui.screens.settings.cards.BottomNavigationCard
 import network.columba.app.ui.screens.settings.cards.DataMigrationCard
 import network.columba.app.ui.screens.settings.cards.IdentityCard
 import network.columba.app.ui.screens.settings.cards.ImageCompressionCard
@@ -521,6 +522,13 @@ fun SettingsScreen(
                         state.detectedCompressionPreset ==
                             network.columba.app.data.model.ImageCompressionPreset.LOW,
                     onPresetChange = { viewModel.setImageCompressionPreset(it) },
+                )
+
+                BottomNavigationCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.BOTTOM_NAVIGATION.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.BOTTOM_NAVIGATION, it) },
+                    tabs = state.bottomNavTabs,
+                    onTabsChange = { viewModel.setBottomNavTabs(it) },
                 )
 
                 ThemeSelectionCard(

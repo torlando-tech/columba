@@ -50,7 +50,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -91,6 +90,7 @@ import network.columba.app.navigation.navigateToAnsweredCall
 import network.columba.app.navigation.navigateToEntity
 import network.columba.app.navigation.navigateToIncomingCall
 import network.columba.app.navigation.shouldPresentIncomingCall
+import network.columba.app.navigation.NavTab
 import network.columba.app.notifications.CallNotificationHelper
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
@@ -741,7 +741,6 @@ fun ColumbaNavigation(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
-    var selectedTab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(detachedUsbDeviceEvents, navController) {
         detachedUsbDeviceEvents.collect { deviceId ->
@@ -926,7 +925,6 @@ fun ColumbaNavigation(
                     }
                     is PendingNavigation.AddContact -> {
                         // Navigate to contacts tab and trigger add contact dialog
-                        selectedTab = 1 // Contacts tab
                         navController.navigate(Screen.Contacts.route) {
                             popUpTo(navController.graph.startDestinationId) {
                                 saveState = true
@@ -950,7 +948,6 @@ fun ColumbaNavigation(
                     is PendingNavigation.SharedText -> {
                         sharedTextViewModel.setText(navigation.text)
 
-                        selectedTab = 0
                         val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
                         if (!poppedToChats) {
                             navController.navigate(Screen.Chats.route) {
@@ -966,7 +963,6 @@ fun ColumbaNavigation(
                     is PendingNavigation.SharedImage -> {
                         sharedImageViewModel.setImages(navigation.uris)
 
-                        selectedTab = 0
                         val poppedToChats = navController.popBackStack(Screen.Chats.route, inclusive = false)
                         if (!poppedToChats) {
                             navController.navigate(Screen.Chats.route) {
@@ -1170,19 +1166,6 @@ fun ColumbaNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Synchronize selectedTab with current route when navigating back
-    LaunchedEffect(currentRoute) {
-        Log.d("ColumbaNavigation", "📍 currentRoute changed to: $currentRoute")
-        selectedTab =
-            when (currentRoute) {
-                Screen.Chats.route -> 0
-                Screen.Contacts.route -> 1
-                Screen.Map.route -> 2
-                Screen.Settings.route -> 3
-                else -> selectedTab // Keep current selection for nested screens
-            }
-    }
-
     // Observe call state for incoming calls and navigate to IncomingCallScreen.
     // Composable functions can't @Inject, so the RnsTelephony seam singleton is
     // reached through Hilt's RnsTelephonyEntryPoint. Replaces the A.9-era
@@ -1266,7 +1249,9 @@ fun ColumbaNavigation(
         listOf(
             "offline_map_download",
             "messaging/",
-            "announce_detail/",
+            // announce_detail (Node Details) intentionally keeps the nav bar:
+            // it sits one tap from the tabs, and hiding the bar made returning
+            // from NomadNet flows feel jarring.
             "message_detail/",
             "theme_editor",
             "rnode_wizard",
@@ -1277,20 +1262,15 @@ fun ColumbaNavigation(
             "voice_call/",
             "incoming_call/",
             "interface_stats/",
-            "nomadnet_browser/",
         )
     val shouldShowBottomNav =
         currentRoute != null &&
             currentRoute !in hideBottomNavScreens &&
             hideBottomNavPrefixes.none { currentRoute.startsWith(it) }
 
-    val screens =
-        listOf(
-            Screen.Chats,
-            Screen.Contacts,
-            Screen.Map,
-            Screen.Settings,
-        )
+    // User-configurable bottom bar tabs (Settings pinned last, max NavTab.MAX_TABS).
+    // The NomadNet tab is a normal tab: the bar stays visible while browsing pages.
+    val bottomNavTabs = settingsState.bottomNavTabs
 
     // Double-back-to-exit state: first back press on a root tab shows a toast,
     // second press within 2 seconds finishes the activity.
@@ -1345,14 +1325,32 @@ fun ColumbaNavigation(
                 bottomBar = {
                     if (shouldShowBottomNav) {
                         NavigationBar {
-                            screens.forEachIndexed { index, screen ->
+                            bottomNavTabs.forEach { tab ->
                                 NavigationBarItem(
-                                    icon = { Icon(screen.icon, contentDescription = null) },
-                                    label = { Text(screen.title) },
-                                    selected = selectedTab == index,
+                                    icon = { Icon(tab.icon, contentDescription = null) },
+                                    label = { Text(tab.label) },
+                                    selected = tab.matchesRoute(currentRoute),
                                     onClick = {
-                                        selectedTab = index
-                                        navController.navigate(screen.route) {
+                                        if (currentRoute?.startsWith("nomadnet") == true) {
+                                            if (tab == NavTab.NOMADNET) {
+                                                // Already browsing; the site session ends via
+                                                // Close Site or Back, not by re-tapping the tab.
+                                                return@NavigationBarItem
+                                            }
+                                            // Browsing is modal over the tab tree: collapse
+                                            // the NomadNet stack first, then switch tabs
+                                            // normally. Popping (rather than saving state)
+                                            // guarantees a single browser view, so tab taps
+                                            // can never stack duplicates or fight over
+                                            // scroll position.
+                                            while (
+                                                navController.currentDestination?.route
+                                                    ?.startsWith("nomadnet") == true
+                                            ) {
+                                                if (!navController.popBackStack()) break
+                                            }
+                                        }
+                                        navController.navigate(tab.tabRoute) {
                                             popUpTo(navController.graph.startDestinationId) {
                                                 saveState = true
                                             }
@@ -1741,7 +1739,6 @@ fun ColumbaNavigation(
                                         navController.navigate("apk_sharing")
                                     },
                                     onNavigateToAnnounces = { filterType ->
-                                        selectedTab = 1 // Announces tab
                                         val route =
                                             if (filterType != null) {
                                                 "${Screen.Announces.route}?filterType=$filterType"
@@ -2422,7 +2419,6 @@ fun ColumbaNavigation(
                                     },
                                     onStartChat = { destHash, peerName ->
                                         // Navigate back to chats tab
-                                        selectedTab = 0
                                         navController.navigate(Screen.Chats.route) {
                                             popUpTo(navController.graph.startDestinationId) {
                                                 saveState = true
@@ -2467,6 +2463,31 @@ fun ColumbaNavigation(
                                     destinationHash = destHash,
                                     initialPath = path,
                                     onBackClick = { navController.popBackStack() },
+                                    // Standalone browser: after closing the site,
+                                    // pop back the way Back does.
+                                    onCloseSite = { navController.popBackStack() },
+                                    onOpenConversation = { conversationHash ->
+                                        val encodedHash = Uri.encode(conversationHash)
+                                        val encodedName = Uri.encode(conversationHash.take(12))
+                                        navController.navigate("messaging/$encodedHash/$encodedName")
+                                    },
+                                )
+                            }
+
+                            // NomadNet tab home: reopens the last-browsed node,
+                            // or shows the address-entry prompt on a fresh install.
+                            appComposable(AppDestination.NOMADNET_HOME) {
+                                DoubleBackToExitHandler(AppDestination.NOMADNET_HOME.routePattern)
+                                val lastNodeHash = settingsState.nomadNetLastNodeHash
+                                NomadNetBrowserScreen(
+                                    destinationHash = lastNodeHash.orEmpty(),
+                                    showHomeEntry = lastNodeHash.isNullOrEmpty(),
+                                    onBackClick = { navController.popBackStack() },
+                                    // Close Site on the tab home: closeSite() drops the
+                                    // persisted last-node hash, the state flow flips
+                                    // showHomeEntry, and the screen swaps to the address
+                                    // prompt in place - no navigation needed.
+                                    onCloseSite = {},
                                     onOpenConversation = { conversationHash ->
                                         val encodedHash = Uri.encode(conversationHash)
                                         val encodedName = Uri.encode(conversationHash.take(12))

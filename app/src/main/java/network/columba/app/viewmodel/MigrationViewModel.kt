@@ -234,7 +234,11 @@ class MigrationViewModel
             val encryptedResult = migrationImporter.isEncryptedExport(uri)
             return encryptedResult.fold(
                 onSuccess = { isEncrypted ->
-                    if (isEncrypted) {
+                    if (sequence != importSequence) {
+                        // A newer preview superseded this one; do not update
+                        // state (e.g. a stale password prompt for the old URI).
+                        false
+                    } else if (isEncrypted) {
                         Log.i(TAG, "File is encrypted, requesting password")
                         _pendingImportUri.value = uri
                         _uiState.value = MigrationUiState.PasswordRequired(uri)

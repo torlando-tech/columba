@@ -11,10 +11,12 @@ import network.columba.app.migration.MigrationExporter
 import network.columba.app.migration.MigrationImporter
 import network.columba.app.migration.MigrationPreview
 import network.columba.app.migration.PasswordRequiredException
+import network.columba.app.migration.PreviewWithData
 import network.columba.app.migration.WrongPasswordException
 import network.columba.app.service.InterfaceConfigManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,6 +94,15 @@ class MigrationViewModel
          */
         private var cachedImportFile: File? = null
 
+        /**
+         * The currently in-flight preview job. A new preview cancels it so a
+         * slow, superseded preview cannot race the latest one.
+         */
+        private var previewJob: Job? = null
+
+        /** Monotonic counter: the import for the newest preview wins, even if an older preview finished last. */
+        private var importSequence = 0L
+
         init {
             // Remove staged import bundles left behind by a cancelled preview
             // or a crash. The importer owns the cache directory; in unit
@@ -157,80 +168,129 @@ class MigrationViewModel
 
         /**
          * Preview a migration file before importing.
+         *
+         * Each preview runs in a tracked job: starting a new preview cancels
+         * the in-flight one so a slow, superseded preview cannot race the
+         * latest. A sequence counter additionally guards the install, so even
+         * if an older preview were still alive it could not overwrite the
+         * newer preview's staged file or UI state. The replaced staged file is
+         * deleted so a superseded plaintext ZIP is not left orphaned in cache.
          */
         fun previewImport(
             uri: Uri,
             password: String? = null,
         ) {
-            viewModelScope.launch {
-                try {
-                    Log.i(TAG, "Previewing import: $uri")
-                    _uiState.value = MigrationUiState.Loading("Reading migration file...")
+            previewJob?.cancel()
+            val sequence = ++importSequence
+            previewJob =
+                viewModelScope.launch {
+                    try {
+                        Log.i(TAG, "Previewing import: $uri")
+                        _uiState.value = MigrationUiState.Loading("Reading migration file...")
 
-                    // Check if file is encrypted and we don't have a password yet
-                    if (password == null) {
-                        val encryptedResult = migrationImporter.isEncryptedExport(uri)
-                        encryptedResult.fold(
-                            onSuccess = { isEncrypted ->
-                                if (isEncrypted) {
-                                    Log.i(TAG, "File is encrypted, requesting password")
-                                    _pendingImportUri.value = uri
-                                    _uiState.value = MigrationUiState.PasswordRequired(uri)
-                                    return@launch
-                                }
-                            },
-                            onFailure = { error ->
-                                _uiState.value =
-                                    MigrationUiState.Error(
-                                        "Could not read migration file: ${error.message}",
-                                    )
-                                return@launch
-                            },
+                        // Check if file is encrypted and we don't have a password yet
+                        if (password == null && !awaitEncryptionCheck(uri, sequence)) {
+                            return@launch
+                        }
+
+                        val result = migrationImporter.previewMigration(uri, password)
+                        if (sequence != importSequence) {
+                            // A newer preview superseded this one; discard the
+                            // stale result and its staged file.
+                            result.onSuccess { it.file.delete() }
+                            return@launch
+                        }
+
+                        result.fold(
+                            onSuccess = { installPreview(it, uri, password) },
+                            onFailure = { error -> handlePreviewError(error, uri) },
                         )
+                    } catch (e: WrongPasswordException) {
+                        if (sequence != importSequence) return@launch
+                        Log.w(TAG, "Wrong password for encrypted export", e)
+                        _uiState.value = MigrationUiState.WrongPassword(uri)
+                    } catch (e: PasswordRequiredException) {
+                        if (sequence != importSequence) return@launch
+                        Log.d(TAG, "Password required for encrypted export", e)
+                        _pendingImportUri.value = uri
+                        _uiState.value = MigrationUiState.PasswordRequired(uri)
+                    } catch (e: Exception) {
+                        if (sequence != importSequence) return@launch
+                        Log.e(TAG, "Preview failed with exception", e)
+                        _uiState.value =
+                            MigrationUiState.Error(
+                                "Could not read migration file: ${e.message}",
+                            )
                     }
+                }
+        }
 
-                    val result = migrationImporter.previewMigration(uri, password)
-
-                    result.fold(
-                        onSuccess = { previewWithData ->
-                            Log.i(TAG, "Preview loaded: ${previewWithData.preview.identityCount} identities")
-                            _importPreview.value = previewWithData.preview
-                            cachedImportFile = previewWithData.file
-                            _pendingImportUri.value = null
-                            _uiState.value =
-                                MigrationUiState.ImportPreview(previewWithData.preview, uri, password)
-                        },
-                        onFailure = { error ->
-                            Log.e(TAG, "Preview failed", error)
-                            when (error) {
-                                is WrongPasswordException -> {
-                                    _uiState.value = MigrationUiState.WrongPassword(uri)
-                                }
-                                is PasswordRequiredException -> {
-                                    _pendingImportUri.value = uri
-                                    _uiState.value = MigrationUiState.PasswordRequired(uri)
-                                }
-                                else -> {
-                                    _uiState.value =
-                                        MigrationUiState.Error(
-                                            "Could not read migration file: ${error.message}",
-                                        )
-                                }
-                            }
-                        },
-                    )
-                } catch (e: WrongPasswordException) {
-                    Log.w(TAG, "Wrong password for encrypted export", e)
-                    _uiState.value = MigrationUiState.WrongPassword(uri)
-                } catch (e: PasswordRequiredException) {
-                    Log.d(TAG, "Password required for encrypted export", e)
-                    _pendingImportUri.value = uri
-                    _uiState.value = MigrationUiState.PasswordRequired(uri)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Preview failed with exception", e)
+        /**
+         * Runs the "is this file encrypted?" check when no password was
+         * supplied. Returns `true` to proceed to preview; returns `false` after
+         * updating state when a password is required or the file is unreadable.
+         */
+        private suspend fun awaitEncryptionCheck(uri: Uri, sequence: Long): Boolean {
+            val encryptedResult = migrationImporter.isEncryptedExport(uri)
+            return encryptedResult.fold(
+                onSuccess = { isEncrypted ->
+                    if (isEncrypted) {
+                        Log.i(TAG, "File is encrypted, requesting password")
+                        _pendingImportUri.value = uri
+                        _uiState.value = MigrationUiState.PasswordRequired(uri)
+                        false
+                    } else {
+                        true
+                    }
+                },
+                onFailure = { error ->
+                    if (sequence != importSequence) return false
                     _uiState.value =
                         MigrationUiState.Error(
-                            "Could not read migration file: ${e.message}",
+                            "Could not read migration file: ${error.message}",
+                        )
+                    false
+                },
+            )
+        }
+
+        /**
+         * Installs a successful preview, replacing (and deleting) any previous
+         * staged file so a superseded plaintext ZIP is not left in cache.
+         */
+        private fun installPreview(
+            previewWithData: PreviewWithData,
+            uri: Uri,
+            password: String?,
+        ) {
+            Log.i(TAG, "Preview loaded: ${previewWithData.preview.identityCount} identities")
+            cachedImportFile?.let { prev ->
+                if (prev != previewWithData.file) prev.delete()
+            }
+            cachedImportFile = previewWithData.file
+            _importPreview.value = previewWithData.preview
+            _pendingImportUri.value = null
+            _uiState.value = MigrationUiState.ImportPreview(previewWithData.preview, uri, password)
+        }
+
+        /** Maps a preview failure to the matching UI state. */
+        private fun handlePreviewError(
+            error: Throwable,
+            uri: Uri,
+        ) {
+            Log.e(TAG, "Preview failed", error)
+            when (error) {
+                is WrongPasswordException -> {
+                    _uiState.value = MigrationUiState.WrongPassword(uri)
+                }
+                is PasswordRequiredException -> {
+                    _pendingImportUri.value = uri
+                    _uiState.value = MigrationUiState.PasswordRequired(uri)
+                }
+                else -> {
+                    _uiState.value =
+                        MigrationUiState.Error(
+                            "Could not read migration file: ${error.message}",
                         )
                 }
             }

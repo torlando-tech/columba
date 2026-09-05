@@ -24,26 +24,39 @@ import javax.crypto.spec.SecretKeySpec
  * [N bytes:  AES-256-GCM ciphertext (includes 16-byte auth tag)]
  * ```
  *
- * Version 0x03 (current, chunked GCM):
+ * Version 0x03 (current, chunked GCM with authenticated framing):
  * ```
  * [1 byte:  version (0x03)]
  * [16 bytes: PBKDF2 salt]
- * [12 bytes: base IV (random 4 bytes + 64-bit counter start)]
+ * [12 bytes: base IV (random)]
  * [8 bytes:  chunk size in bytes, big-endian]
  * [8 bytes:  total plaintext length in bytes, big-endian]
- * repeated per chunk:
- * [8 bytes:  chunk index, big-endian]
- * [12 bytes: chunk IV (base IV with index XORed into bytes 4..11)]
- * [chunk:    AES-256-GCM ciphertext (includes 16-byte auth tag)]
+ * repeated per chunk i (i = 0, 1, 2, ...):
+ * [8 bytes:  chunk index i, big-endian]
+ * [chunk_i:  AES-256-GCM ciphertext of the i-th plaintext chunk
+ *            (includes a 128-bit auth tag)]
  * ```
+ *
+ * The framing is fully authenticated so the stream cannot be replayed,
+ * reordered, or truncated:
+ * - Each chunk's IV is *derived* from (base IV, index) on the decrypt side
+ *   rather than read from the file, so an attacker cannot move or re-label
+ *   chunks: a chunk placed at a new position is decrypted with a different
+ *   IV and its tag fails.
+ * - Each chunk's GCM AAD is the fixed header (version + salt + base IV +
+ *   chunk size + total length) followed by the chunk index, so the header
+ *   and the per-chunk index are cryptographically bound to the ciphertext.
+ * - After the final chunk is consumed, the stream verifies the underlying
+ *   file is exhausted; a lowered total length (authenticated-prefix
+ *   attack) leaves trailing encrypted records and is rejected.
  *
  * One PBKDF2-derived key covers every chunk; each chunk carries its own
  * 128-bit GCM auth tag, so a wrong password is detected on the first
- * chunk. The chunk size is capped at [CHUNK_SIZE_BYTES] because the
- * platform GCM *decryptor* buffers an entire ciphertext buffer internally
- * (verified empirically against SunJCE): whole-file decryption of a
- * ~100 MiB export OOMs, while per-chunk decryption stays bounded to one
- * chunk plus small buffers.
+ * chunk. The chunk size is capped at [CHUNK_SIZE_BYTES] (the cap is applied
+ * while the length is still a [Long]) because the platform GCM *decryptor*
+ * buffers an entire ciphertext buffer internally (verified empirically
+ * against SunJCE): whole-file decryption of a ~100 MiB export OOMs, while
+ * per-chunk decryption stays bounded to one chunk plus small buffers.
  *
  * Unencrypted (legacy) files start with the ZIP magic bytes (0x50 0x4B)
  * and are detected automatically during import.
@@ -74,8 +87,8 @@ object MigrationCrypto {
 
     /** 0x03 fixed header size: version + salt + base IV + chunk size + total length. */
     private const val CHUNKED_HEADER_SIZE = 1 + SALT_LENGTH + IV_LENGTH + 8 + 8
-    /** 0x03 per-chunk header size: chunk index + chunk IV. */
-    private const val CHUNK_RECORD_HEADER_SIZE = 8 + IV_LENGTH
+    /** 0x03 per-chunk header size: chunk index only (the IV is derived, not stored). */
+    private const val CHUNK_RECORD_HEADER_SIZE = 8
 
     /** Minimum password length enforced at the UI layer. */
     const val MIN_PASSWORD_LENGTH = 8
@@ -96,7 +109,12 @@ object MigrationCrypto {
     ): File {
         val tmp = File(plaintextZip.parentFile, plaintextZip.name + ".enc.tmp")
         try {
-            encryptToFile(plaintextZip, password, tmp)
+            val totalLength = plaintextZip.length()
+            plaintextZip.inputStream().use { plain ->
+                tmp.outputStream().use { out ->
+                    streamEncrypt(plain, out, password, totalLength)
+                }
+            }
             if (!tmp.renameTo(plaintextZip)) {
                 tmp.copyTo(plaintextZip, overwrite = true)
             }
@@ -115,42 +133,10 @@ object MigrationCrypto {
         password: String,
         destination: File,
     ) {
-        val random = SecureRandom()
-        val salt = ByteArray(SALT_LENGTH).also { random.nextBytes(it) }
-        val baseIv = ByteArray(IV_LENGTH).also { random.nextBytes(it) }
-        val key = deriveKey(password, salt)
         val totalLength = plaintext.length()
-        val chunkSize = minOf(CHUNK_SIZE_BYTES, totalLength.coerceAtLeast(0).toInt()).coerceAtLeast(0)
-
-        destination.outputStream().use { out ->
-            out.write(ENCRYPTED_VERSION.toInt())
-            out.write(salt)
-            out.write(baseIv)
-            writeLongBigEndian(out, chunkSize.toLong())
-            writeLongBigEndian(out, totalLength)
-
-            val numChunks =
-                if (totalLength == 0L) 1L
-                else ((totalLength + chunkSize - 1) / chunkSize)
-            plaintext.inputStream().use { plainIn ->
-                for (index in 0 until numChunks) {
-                    val chunkLen =
-                        if (index == numChunks - 1) (totalLength - (numChunks - 1) * chunkSize).toInt()
-                        else chunkSize
-                    val chunk = ByteArray(chunkLen)
-                    if (chunkLen > 0) readFully(plainIn, chunk, chunkLen)
-                    val chunkIv = chunkIv(baseIv, index)
-                    val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
-                    cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, chunkIv))
-                    out.writeChunkRecord(index, chunkIv)
-                    if (chunk.isNotEmpty()) {
-                        // GCM streams: doFinal() over one chunk does not
-                        // accumulate the ciphertext, and appends the 16-byte tag.
-                        out.write(cipher.doFinal(chunk))
-                    } else {
-                        out.write(cipher.doFinal())
-                    }
-                }
+        plaintext.inputStream().use { plain ->
+            destination.outputStream().use { out ->
+                streamEncrypt(plain, out, password, totalLength)
             }
         }
     }
@@ -231,25 +217,44 @@ object MigrationCrypto {
         val salt = ByteArray(SALT_LENGTH).also { random.nextBytes(it) }
         val baseIv = ByteArray(IV_LENGTH).also { random.nextBytes(it) }
         val key = deriveKey(password, salt)
-        val chunkSize = minOf(CHUNK_SIZE_BYTES, totalLength.coerceAtLeast(0).toInt()).coerceAtLeast(0)
+        // Apply the cap while the length is still a Long so exports larger
+        // than Int.MAX_VALUE (2 GiB) cannot wrap to a negative/zero chunk
+        // size (which would divide by zero below).
+        val total = totalLength.coerceAtLeast(0L)
+        val chunkSize = minOf(CHUNK_SIZE_BYTES.toLong(), total)
 
         out.write(ENCRYPTED_VERSION.toInt())
         out.write(salt)
         out.write(baseIv)
-        writeLongBigEndian(out, chunkSize.toLong())
+        writeLongBigEndian(out, chunkSize)
         writeLongBigEndian(out, totalLength)
 
+        val headerAad =
+            ByteArray(CHUNKED_HEADER_SIZE) { index ->
+                when (index) {
+                    0 -> ENCRYPTED_VERSION
+                    in 1..SALT_LENGTH -> salt[index - 1]
+                    in (1 + SALT_LENGTH)..(SALT_LENGTH + IV_LENGTH) -> baseIv[index - 1 - SALT_LENGTH]
+                    else -> 0.toByte()
+                }
+            }.also { aad ->
+                writeLongBigEndian(aad, 1 + SALT_LENGTH + IV_LENGTH, chunkSize)
+                writeLongBigEndian(aad, 1 + SALT_LENGTH + IV_LENGTH + 8, totalLength)
+            }
+
         val numChunks =
-            if (totalLength == 0L) 1L else ((totalLength + chunkSize - 1) / chunkSize)
+            if (totalLength == 0L) 0L else ((totalLength + chunkSize - 1) / chunkSize)
         for (index in 0 until numChunks) {
-            val remaining = totalLength - index * chunkSize
-            val chunk = ByteArray(if (remaining <= 0) 0 else minOf(chunkSize, remaining.toInt()))
-            if (chunk.isNotEmpty()) readFully(plain, chunk, chunk.size)
-            val chunkIv = chunkIv(baseIv, index)
-            out.writeChunkRecord(index, chunkIv)
-            val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
-            cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, chunkIv))
-            out.write(if (chunk.isEmpty()) cipher.doFinal() else cipher.doFinal(chunk))
+            val chunkLen = minOf(chunkSize, totalLength - index * chunkSize).toInt()
+            val chunk = ByteArray(chunkLen)
+            if (chunkLen > 0) readFully(plain, chunk, chunkLen)
+            // GCM streams: doFinal() over one chunk does not accumulate the
+            // ciphertext, and appends the 16-byte tag. AAD binds the chunk
+            // (and its index) to the fixed header, see decryptStream.
+            val ciphertext =
+                encryptGcmChunk(key, baseIv, index, headerAad, chunk)
+            out.writeChunkRecord(index)
+            out.write(ciphertext)
         }
     }
 
@@ -345,16 +350,29 @@ object MigrationCrypto {
                 val headerAll = byteArrayOf(first.toByte()) + header
                 val salt = headerAll.copyOfRange(1, 1 + SALT_LENGTH)
                 val baseIv = headerAll.copyOfRange(1 + SALT_LENGTH, 1 + SALT_LENGTH + IV_LENGTH)
-                val chunkSize = readLongBigEndian(headerAll, 1 + SALT_LENGTH + IV_LENGTH).toInt()
+                val chunkSize = readLongBigEndian(headerAll, 1 + SALT_LENGTH + IV_LENGTH)
                 val totalLength = readLongBigEndian(headerAll, 9 + SALT_LENGTH + IV_LENGTH)
-                if (chunkSize < 0 || chunkSize > CHUNK_SIZE_BYTES) {
+                if (chunkSize < 0 || chunkSize > CHUNK_SIZE_BYTES.toLong()) {
                     throw InvalidExportFileException("Invalid chunk size in export header")
                 }
                 if (totalLength < 0) {
                     throw InvalidExportFileException("Invalid plaintext length in export header")
                 }
+                // A zero chunk size can only be valid for an empty plaintext:
+                // any other shape would make the per-chunk arithmetic divide
+                // by zero or spin on empty records.
+                if (chunkSize == 0L && totalLength != 0L) {
+                    throw InvalidExportFileException("Invalid export: zero chunk size for non-empty plaintext")
+                }
                 val key = deriveKey(password, salt)
-                ChunkDecryptInputStream(encryptedStream, key, baseIv, chunkSize, totalLength)
+                ChunkDecryptInputStream(
+                    src = encryptedStream,
+                    key = key,
+                    baseIv = baseIv,
+                    chunkSize = chunkSize,
+                    totalLength = totalLength,
+                    headerAad = headerAll,
+                )
             }
             else -> throw InvalidExportFileException(
                 "Unrecognized export format (version byte: 0x${
@@ -407,7 +425,12 @@ object MigrationCrypto {
         }
     }
 
-    /** 96-bit GCM IV for a chunk: random 4 bytes + 64-bit counter (base ^ index) in bytes 4..11. */
+    /**
+     * 96-bit GCM IV for chunk [index]: the random base IV with the counter
+     * XORed into bytes 4..11. Deriving the IV from the index (instead of
+     * trusting a per-record IV in the file) binds each chunk to its position
+     * in the stream.
+     */
     private fun chunkIv(
         baseIv: ByteArray,
         index: Long,
@@ -420,12 +443,61 @@ object MigrationCrypto {
         return iv
     }
 
-    private fun OutputStream.writeChunkRecord(
+    /**
+     * AAD for chunk [index]: the fixed header (version + salt + base IV +
+     * chunk size + total length) followed by the 8-byte chunk index. Binding
+     * the header and index into each chunk's GCM tag authenticates the whole
+     * framing: rewriting any header field, or moving a chunk to a new
+     * position, invalidates every chunk's tag.
+     */
+    private fun chunkAad(
+        headerAad: ByteArray,
         index: Long,
-        chunkIv: ByteArray,
-    ) {
+    ): ByteArray {
+        val aad = ByteArray(headerAad.size + 8)
+        headerAad.copyInto(aad)
+        writeLongBigEndian(aad, headerAad.size, index)
+        return aad
+    }
+
+    /** Encrypt one chunk with the derived IV and bound AAD; returns ciphertext + 128-bit tag. */
+    private fun encryptGcmChunk(
+        key: SecretKey,
+        baseIv: ByteArray,
+        index: Long,
+        headerAad: ByteArray,
+        plaintext: ByteArray,
+    ): ByteArray {
+        val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
+        cipher.init(
+            Cipher.ENCRYPT_MODE,
+            key,
+            GCMParameterSpec(GCM_TAG_BITS, chunkIv(baseIv, index)),
+        )
+        cipher.updateAAD(chunkAad(headerAad, index))
+        return if (plaintext.isEmpty()) cipher.doFinal() else cipher.doFinal(plaintext)
+    }
+
+    /** Decrypt one chunk with the derived IV and bound AAD; returns the plaintext. */
+    private fun decryptGcmChunk(
+        key: SecretKey,
+        baseIv: ByteArray,
+        index: Long,
+        headerAad: ByteArray,
+        ciphertext: ByteArray,
+    ): ByteArray {
+        val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            key,
+            GCMParameterSpec(GCM_TAG_BITS, chunkIv(baseIv, index)),
+        )
+        cipher.updateAAD(chunkAad(headerAad, index))
+        return cipher.doFinal(ciphertext)
+    }
+
+    private fun OutputStream.writeChunkRecord(index: Long) {
         writeLongBigEndian(this, index)
-        write(chunkIv)
     }
 
     private fun writeLongBigEndian(
@@ -434,6 +506,16 @@ object MigrationCrypto {
     ) {
         for (i in 7 downTo 0) {
             out.write(((value ushr (8 * i)) and 0xFF).toInt())
+        }
+    }
+
+    private fun writeLongBigEndian(
+        buf: ByteArray,
+        offset: Int,
+        value: Long,
+    ) {
+        for (i in 7 downTo 0) {
+            buf[offset + (7 - i)] = ((value ushr (8 * i)) and 0xFF).toByte()
         }
     }
 
@@ -467,18 +549,27 @@ object MigrationCrypto {
      * Buffers at most one plaintext chunk at a time; the underlying cipher
      * buffers at most one chunk of ciphertext, so peak memory is bounded by
      * ~2 x chunk size regardless of export size.
+     *
+     * Framing is authenticated: each chunk's IV is derived from
+     * (base IV, index) rather than read from the file, and each chunk's GCM
+     * AAD binds the fixed header plus the chunk index into the tag, so the
+     * stream cannot be reordered, replayed, or truncated. After the final
+     * chunk is consumed, [read] verifies the underlying stream is exhausted
+     * so a lowered total length (authenticated-prefix attack) is rejected.
      */
     private class ChunkDecryptInputStream(
         private val src: InputStream,
         private val key: SecretKey,
         private val baseIv: ByteArray,
-        private val chunkSize: Int,
+        private val chunkSize: Long,
         totalLength: Long,
+        private val headerAad: ByteArray,
     ) : InputStream() {
         private var plaintextRemaining = totalLength
         private var chunkIndex = 0L
         private var current: ByteArray? = null
         private var currentPos = 0
+        private var exhaustedChecked = false
 
         override fun read(): Int {
             while (true) {
@@ -488,7 +579,10 @@ object MigrationCrypto {
                     if (currentPos == chunk.size) current = null
                     return b and 0xFF
                 }
-                if (plaintextRemaining == 0L) return -1
+                if (plaintextRemaining == 0L) {
+                    verifyExhausted()
+                    return -1
+                }
                 loadNextChunk()
             }
         }
@@ -519,6 +613,20 @@ object MigrationCrypto {
             return got
         }
 
+        /**
+         * After all declared plaintext is consumed, the stream must be at
+         * EOF: any trailing bytes indicate a truncated total length (an
+         * authenticated-prefix attack) or a corrupt file.
+         */
+        private fun verifyExhausted() {
+            if (exhaustedChecked) return
+            exhaustedChecked = true
+            val extra = src.read()
+            if (extra != -1) {
+                throw InvalidExportFileException("Corrupt export: trailing data after final chunk")
+            }
+        }
+
         @Suppress("ThrowsCount") // Corrupt/wrong-password chunks each fail fast
         private fun loadNextChunk() {
             val recordHeader = ByteArray(CHUNK_RECORD_HEADER_SIZE)
@@ -527,20 +635,23 @@ object MigrationCrypto {
             if (index != chunkIndex) {
                 throw InvalidExportFileException("Corrupt export: chunk index $index, expected $chunkIndex")
             }
-            val chunkIv = recordHeader.copyOfRange(8, 8 + IV_LENGTH)
-            val expected = minOf(chunkSize, plaintextRemaining.toInt().coerceAtLeast(0))
-            val ciphertext = ByteArray(expected + GCM_TAG_BYTES)
+            // The IV is derived from (baseIv, index); the record no longer
+            // stores a per-chunk IV. The expected chunk length is computed
+            // with Long arithmetic (no Int narrowing), so multi-giB exports
+            // cannot wrap to a zero chunk size.
+            val expected = minOf(chunkSize, plaintextRemaining)
+            if (expected < 0L) {
+                throw InvalidExportFileException("Corrupt export: negative chunk length")
+            }
+            val ciphertext = ByteArray(expected.toInt() + GCM_TAG_BYTES)
             readFully(src, ciphertext, ciphertext.size)
-
-            val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, chunkIv))
             val decrypted =
                 try {
-                    cipher.doFinal(ciphertext)
+                    decryptGcmChunk(key, baseIv, index, headerAad, ciphertext)
                 } catch (e: javax.crypto.AEADBadTagException) {
                     throw WrongPasswordException("Incorrect password", e)
                 }
-            if (decrypted.size != expected) {
+            if (decrypted.size != expected.toInt()) {
                 throw InvalidExportFileException("Corrupt export: chunk $index size mismatch")
             }
             plaintextRemaining -= decrypted.size

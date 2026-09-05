@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 private const val TAG = "MigrationVM"
@@ -85,12 +86,17 @@ class MigrationViewModel
         val pendingImportUri: StateFlow<Uri?> = _pendingImportUri.asStateFlow()
 
         /**
-         * Cached decrypted ZIP bytes from preview, reused during import
-         * to avoid redundant PBKDF2 key derivation and AES-GCM decryption.
+         * Cached staged bundle file from preview (a local plaintext ZIP in
+         * the app cache), reused during import to avoid redundant key
+         * derivation, decryption, and content-resolver reads.
          */
-        private var cachedImportZipBytes: ByteArray? = null
+        private var cachedImportFile: File? = null
 
         init {
+            // Remove staged import bundles left behind by a cancelled preview
+            // or a crash. The importer owns the cache directory; in unit
+            // tests this is a no-op on the mock.
+            migrationImporter.cleanupStagedImports()
             loadExportPreview()
         }
 
@@ -189,7 +195,7 @@ class MigrationViewModel
                         onSuccess = { previewWithData ->
                             Log.i(TAG, "Preview loaded: ${previewWithData.preview.identityCount} identities")
                             _importPreview.value = previewWithData.preview
-                            cachedImportZipBytes = previewWithData.zipBytes
+                            cachedImportFile = previewWithData.file
                             _pendingImportUri.value = null
                             _uiState.value =
                                 MigrationUiState.ImportPreview(previewWithData.preview, uri, password)
@@ -243,15 +249,22 @@ class MigrationViewModel
                     _uiState.value = MigrationUiState.Importing
                     _importProgress.value = 0f
 
-                    val cachedBytes = cachedImportZipBytes
-                    cachedImportZipBytes = null // Release reference before long-running import
+                    val cachedFile = cachedImportFile
+                    cachedImportFile = null
                     val result =
-                        migrationImporter.importData(
-                            uri = uri,
-                            password = password,
-                            cachedZipBytes = cachedBytes,
-                            onProgress = { progress -> _importProgress.value = progress },
-                        )
+                        try {
+                            migrationImporter.importData(
+                                uri = uri,
+                                password = password,
+                                cachedZipFile = cachedFile,
+                                onProgress = { progress -> _importProgress.value = progress },
+                            )
+                        } finally {
+                            // The preview's staged file is owned by this
+                            // ViewModel (the importer only deletes files it
+                            // created). Delete it now that the import is done.
+                            cachedFile?.delete()
+                        }
 
                     when (result) {
                         is ImportResult.Success -> {
@@ -347,7 +360,7 @@ class MigrationViewModel
             _importProgress.value = 0f
             _importPreview.value = null
             _pendingImportUri.value = null
-            cachedImportZipBytes = null
+            clearCachedImportFile()
         }
 
         /**
@@ -361,7 +374,12 @@ class MigrationViewModel
         override fun onCleared() {
             super.onCleared()
             cleanupExportFiles()
-            cachedImportZipBytes = null
+            clearCachedImportFile()
+        }
+
+        private fun clearCachedImportFile() {
+            cachedImportFile?.delete()
+            cachedImportFile = null
         }
     }
 

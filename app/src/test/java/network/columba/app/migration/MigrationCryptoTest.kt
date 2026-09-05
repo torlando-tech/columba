@@ -142,4 +142,55 @@ class MigrationCryptoTest {
         val decrypted = MigrationCrypto.decrypt(encrypted, unicodePassword)
         assertArrayEquals(plaintext, decrypted)
     }
+
+    /**
+     * Build a legacy 0x02 (whole-file GCM) export using raw JCE, independent
+     * of MigrationCrypto, to prove the importer still reads pre-0x03 files.
+     *
+     * Layout: [0x02][16-byte salt][12-byte IV][GCM ciphertext + 16-byte tag]
+     */
+    private fun buildLegacy0x02(plaintext: ByteArray, password: String): ByteArray {
+        val salt = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+        val keySpec = javax.crypto.spec.PBEKeySpec(
+            password.toCharArray(),
+            salt,
+            600_000,
+            256,
+        )
+        val key = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            .generateSecret(keySpec)
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            javax.crypto.Cipher.ENCRYPT_MODE,
+            javax.crypto.spec.SecretKeySpec(key.encoded, "AES"),
+            javax.crypto.spec.GCMParameterSpec(128, iv),
+        )
+        val ciphertext = cipher.doFinal(plaintext)
+        return byteArrayOf(MigrationCrypto.LEGACY_ENCRYPTED_VERSION) +
+            salt +
+            iv +
+            ciphertext
+    }
+
+    @Test
+    fun `legacy 0x02 file decrypts and matches plaintext`() {
+        val plaintext = "legacy payload from an older app version".toByteArray()
+        val legacy = buildLegacy0x02(plaintext, testPassword)
+        assertEquals(MigrationCrypto.LEGACY_ENCRYPTED_VERSION, legacy[0])
+        val decrypted = MigrationCrypto.decrypt(legacy, testPassword)
+        assertArrayEquals(plaintext, decrypted)
+    }
+
+    @Test
+    fun `legacy 0x02 file is detected as encrypted`() {
+        val legacy = buildLegacy0x02("x".toByteArray(), testPassword)
+        assertTrue(MigrationCrypto.isEncrypted(legacy))
+    }
+
+    @Test(expected = WrongPasswordException::class)
+    fun `legacy 0x02 file with wrong password throws WrongPasswordException`() {
+        val legacy = buildLegacy0x02("x".toByteArray(), testPassword)
+        MigrationCrypto.decrypt(legacy, "wrong-password")
+    }
 }

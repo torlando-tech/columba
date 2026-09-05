@@ -2,6 +2,7 @@ package network.columba.app.migration
 
 import network.columba.app.data.db.entity.CustomThemeEntity
 import kotlinx.serialization.Serializable
+import java.io.File
 
 /**
  * Migration bundle containing all exportable app data.
@@ -398,12 +399,13 @@ data class MigrationPreview(
 )
 
 /**
- * Result of previewing a migration file, including the decrypted ZIP bytes
- * so they can be reused during import without redundant decryption.
+ * Result of previewing a migration file, including the local copy of the
+ * bundle so the import can re-stream it without redundant key derivation
+ * or re-copying from the content resolver.
  */
 class PreviewWithData(
     val preview: MigrationPreview,
-    val zipBytes: ByteArray,
+    val file: File,
 )
 
 /**

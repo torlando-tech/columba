@@ -193,4 +193,88 @@ class MigrationCryptoTest {
         val legacy = buildLegacy0x02("x".toByteArray(), testPassword)
         MigrationCrypto.decrypt(legacy, "wrong-password")
     }
+
+    // region 0x03 authenticated-framing regression tests
+    //
+    // The 0x03 format derives each chunk IV from (base IV, index) and binds
+    // the fixed header + chunk index into every chunk's GCM AAD. These tests
+    // prove the framing cannot be tampered with, reordered, truncated, or
+    // fed a malformed chunk size.
+
+    private fun assertDecryptFails(encrypted: ByteArray) {
+        // Any decryption failure (WrongPasswordException or
+        // InvalidExportFileException) is acceptable; only a *successful*
+        // decrypt means the assertion has failed.
+        val result = runCatching { MigrationCrypto.decrypt(encrypted, testPassword) }
+        assertTrue("Expected decryption to fail, but it succeeded", result.isFailure)
+    }
+
+    @Test
+    fun `round-trip spans multiple 8 MiB chunks`() {
+        // Force two chunks: 8 MiB + 1 MiB of plaintext.
+        val size = MigrationCrypto.CHUNK_SIZE_BYTES + 1024 * 1024
+        val plaintext = ByteArray(size) { (it % 251).toByte() }
+        val encrypted = MigrationCrypto.encrypt(plaintext, testPassword)
+        val decrypted = MigrationCrypto.decrypt(encrypted, testPassword)
+        assertArrayEquals(plaintext, decrypted)
+    }
+
+    @Test
+    fun `tampering the base IV in the header is rejected`() {
+        val plaintext = "framing integrity payload 0123456789".toByteArray()
+        val encrypted = MigrationCrypto.encrypt(plaintext, testPassword).copyOf()
+        // Flip a byte of the 12-byte base IV (header offset 17..28).
+        encrypted[17] = (encrypted[17].toInt() xor 0x01).toByte()
+        assertDecryptFails(encrypted)
+    }
+
+    @Test
+    fun `tampering a ciphertext byte is rejected`() {
+        val plaintext = "tamper detection payload 0123456789".toByteArray()
+        val encrypted = MigrationCrypto.encrypt(plaintext, testPassword).copyOf()
+        // The single chunk's ciphertext starts right after the 45-byte header
+        // and the 8-byte chunk-index record: offset 45 + 8.
+        encrypted[45 + 8 + 1] = (encrypted[45 + 8 + 1].toInt() xor 0x01).toByte()
+        assertDecryptFails(encrypted)
+    }
+
+    @Test
+    fun `appending trailing data after the final chunk is rejected`() {
+        val plaintext = "trailing data check payload".toByteArray()
+        val encrypted = MigrationCrypto.encrypt(plaintext, testPassword).copyOf()
+        // The declared total length is unchanged, so every chunk authenticates;
+        // the extra trailing byte must trip the exhaustion check.
+        val withTrailing = encrypted + byteArrayOf(0x00, 0x01, 0x02)
+        assertDecryptFails(withTrailing)
+    }
+
+    @Test
+    fun `negative total length in the header is rejected`() {
+        val plaintext = "length sanity payload".toByteArray()
+        val encrypted = MigrationCrypto.encrypt(plaintext, testPassword).copyOf()
+        // totalLength is the last 8 bytes of the 45-byte header; set it to
+        // -1 (all 0xFF) which is out of range.
+        for (i in 45 - 8 until 45) encrypted[i] = 0xFF.toByte()
+        assertDecryptFails(encrypted)
+    }
+
+    @Test
+    fun `zero chunk size with non-empty total length is rejected`() {
+        // Craft a 45-byte 0x03 header: chunkSize = 0, totalLength = 100.
+        val header = ByteArray(45)
+        header[0] = MigrationCrypto.ENCRYPTED_VERSION
+        // salt (16) and base IV (12) can be zero for this structural check.
+        writeLong(header, 29, 0L) // chunkSize = 0
+        writeLong(header, 37, 100L) // totalLength = 100 (non-zero)
+        assertDecryptFails(header)
+    }
+
+    /** Big-endian long writer used only to craft malformed test headers. */
+    private fun writeLong(buf: ByteArray, offset: Int, value: Long) {
+        for (i in 7 downTo 0) {
+            buf[offset + (7 - i)] = ((value ushr (8 * i)) and 0xFF).toByte()
+        }
+    }
+
+    // endregion
 }

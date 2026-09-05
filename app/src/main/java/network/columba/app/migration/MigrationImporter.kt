@@ -730,18 +730,20 @@ class MigrationImporter
             uri: Uri,
             password: String? = null,
         ): Pair<MigrationBundle, File>? {
+            var localFile: File? = null
             return try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return null
                 val cacheDir = File(context.cacheDir, IMPORT_CACHE_DIR).also { it.mkdirs() }
-                val localFile = File(cacheDir, "columba_import_${System.currentTimeMillis()}.columba")
+                val stagedFile = File(cacheDir, "columba_import_${System.currentTimeMillis()}.columba")
+                localFile = stagedFile
                 try {
-                    inputStream.use { stream -> stream.copyTo(localFile.outputStream()) }
+                    inputStream.use { stream -> stream.copyTo(stagedFile.outputStream()) }
                 } catch (e: Exception) {
-                    localFile.delete()
+                    stagedFile.delete()
                     throw e
                 }
                 if (MigrationCrypto.isEncrypted(
-                        localFile.inputStream().use { stream ->
+                        stagedFile.inputStream().use { stream ->
                             val header = ByteArray(2)
                             stream.read(header).let { bytesRead ->
                                 if (bytesRead < 1) ByteArray(0) else header
@@ -750,27 +752,37 @@ class MigrationImporter
                     )
                 ) {
                     if (password == null) {
-                        localFile.delete()
+                        stagedFile.delete()
                         throw PasswordRequiredException("This export file is encrypted")
                     }
-                    MigrationCrypto.decryptFile(localFile, password)
+                    MigrationCrypto.decryptFile(stagedFile, password)
                 }
-                streamBundleFromZipFile(localFile) ?: run {
-                    localFile.delete()
+                streamBundleFromZipFile(stagedFile) ?: run {
+                    stagedFile.delete()
                     null
                 }
             } catch (e: network.columba.app.migration.WrongPasswordException) {
-                // Thrown by MigrationCrypto (GCM auth tag mismatch).
+                // Thrown by MigrationCrypto (GCM auth tag mismatch). The staged
+                // file is a full copy of the (encrypted) bundle, so remove it
+                // rather than leaking it on every wrong-password attempt.
+                localFile?.delete()
                 Log.e(TAG, "Wrong password for encrypted export", e)
                 throw e
             } catch (e: WrongPasswordException) {
                 // data.crypto variant (identity-key decryption).
+                localFile?.delete()
                 Log.e(TAG, "Wrong password for encrypted export", e)
                 throw e
             } catch (e: PasswordRequiredException) {
+                localFile?.delete()
                 Log.e(TAG, "Password required for encrypted export", e)
                 throw e
             } catch (e: Exception) {
+                // Decryption and manifest-decoding failures otherwise leave the
+                // staged file (a full bundle copy, or a plaintext ZIP after a
+                // successful decrypt) behind. Remove it on every failure path
+                // that does not transfer ownership to a successful result.
+                localFile?.delete()
                 Log.e(TAG, "Failed to read migration bundle", e)
                 null
             }

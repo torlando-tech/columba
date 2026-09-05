@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.WrongPasswordException
 import network.columba.app.data.database.InterfaceDatabase
@@ -56,6 +57,23 @@ class MigrationImporter
             private const val TAG = "MigrationImporter"
             private const val MANIFEST_FILENAME = "manifest.json"
             private const val ATTACHMENTS_PREFIX = "attachments/"
+            /**
+             * Staged import bundle files (local plaintext ZIPs) live here
+             * while an import is in progress; [importData] removes the staged
+             * file in a finally block.
+             */
+            const val IMPORT_CACHE_DIR = "migration_import"
+        }
+
+        /**
+         * Delete staged import bundles left behind by a cancelled preview or a
+         * crash. Safe: the directory is written only by this importer during
+         * its import/preview flow.
+         */
+        fun cleanupStagedImports() {
+            File(context.cacheDir, IMPORT_CACHE_DIR).listFiles()?.forEach { file ->
+                if (file.isFile) file.delete()
+            }
         }
 
         private val json =
@@ -91,13 +109,25 @@ class MigrationImporter
                 }
             }
 
+        /**
+         * Preview a migration file before importing.
+         *
+         * The bundle is copied to the cache directory (and decrypted there if
+         * needed) so the manifest can be parsed in a streaming pass and the
+         * import can reuse the same local file without re-reading through the
+         * content resolver or holding the bundle in memory.
+         *
+         * Ownership of the staged file transfers to the caller (the
+         * ViewModel), which deletes it when the import completes, the state
+         * resets, or the ViewModel is cleared.
+         */
         suspend fun previewMigration(
             uri: Uri,
             password: String? = null,
         ): Result<PreviewWithData> =
             withContext(Dispatchers.IO) {
                 try {
-                    val (bundle, zipBytes) =
+                    val (bundle, localFile) =
                         readMigrationBundle(uri, password)
                             ?: return@withContext Result.failure(
                                 Exception("Failed to read migration file"),
@@ -120,22 +150,13 @@ class MigrationImporter
                                     callHistoryCount = bundle.callHistory.size,
                                     identityNames = bundle.identities.map { it.displayName },
                                 ),
-                            zipBytes = zipBytes,
+                            file = localFile,
                         ),
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to preview migration", e)
                     Result.failure(e)
                 }
-            }
-
-        /**
-         * Check if an import file requires a password.
-         */
-        suspend fun requiresPassword(uri: Uri): Boolean =
-            withContext(Dispatchers.IO) {
-                val (bundle, _) = readMigrationBundle(uri) ?: return@withContext false
-                bundle.keysEncrypted
             }
 
         /**
@@ -149,35 +170,55 @@ class MigrationImporter
         suspend fun importData(
             uri: Uri,
             password: String? = null,
-            cachedZipBytes: ByteArray? = null,
+            cachedZipFile: File? = null,
             onProgress: (Float) -> Unit = {},
             importPassword: CharArray? = null,
         ): ImportResult =
             withContext(Dispatchers.IO) {
+                Log.i(TAG, "Starting migration import...")
+                onProgress(0.05f)
+
+                // Stage the bundle as a local plaintext ZIP: reuse the file
+                // prepared by the preview when available (it is already
+                // decrypted), otherwise copy + decrypt from the URI. The
+                // manifest is parsed in a single streaming pass either way.
+                val (bundle, stagedFile, importerOwnedFile) =
+                    if (cachedZipFile != null && cachedZipFile.exists()) {
+                        // Reuse the preview's local bundle (already a plaintext
+                        // ZIP). The caller still owns this file, so do not
+                        // delete it here.
+                        val parsed = streamBundleFromZipFile(cachedZipFile)
+                            ?: return@withContext ImportResult.Error(
+                                "Failed to read migration file",
+                            )
+                        Triple(parsed.first, parsed.second, false)
+                    } else {
+                        val parsed = readMigrationBundle(uri, password)
+                            ?: return@withContext ImportResult.Error(
+                                "Failed to read migration file",
+                            )
+                        Triple(parsed.first, parsed.second, true)
+                    }
+
                 try {
-                    Log.i(TAG, "Starting migration import...")
-                    onProgress(0.05f)
+                    importDataInternal(bundle, stagedFile, onProgress, importPassword)
+                } finally {
+                    // Only remove files this importer created; the caller
+                    // (ViewModel) owns and re-cleans the preview's cache file.
+                    if (importerOwnedFile) stagedFile.delete()
+                }
+            }
 
-                    val (bundle, zipBytes) =
-                        if (cachedZipBytes != null) {
-                            // Reuse decrypted bytes from preview to avoid redundant PBKDF2 + decryption
-                            val manifestJson =
-                                extractManifestFromZip(java.io.ByteArrayInputStream(cachedZipBytes))
-                            val parsed =
-                                manifestJson?.let { json.decodeFromString<MigrationBundle>(it) }
-                                    ?: return@withContext ImportResult.Error(
-                                        "Failed to read migration file",
-                                    )
-                            parsed to cachedZipBytes
-                        } else {
-                            readMigrationBundle(uri, password)
-                                ?: return@withContext ImportResult.Error(
-                                    "Failed to read migration file",
-                                )
-                        }
-
+        @Suppress("LongMethod", "ComplexMethod", "ReturnCount")
+        private suspend fun importDataInternal(
+            bundle: MigrationBundle,
+            stagedFile: File,
+            onProgress: (Float) -> Unit,
+            importPassword: CharArray?,
+        ): ImportResult {
+            return try {
                     if (bundle.version > MigrationBundle.CURRENT_VERSION) {
-                        return@withContext ImportResult.Error(
+                        return ImportResult.Error(
                             "Migration file is from a newer version (${bundle.version}). " +
                                 "Please update the app first.",
                         )
@@ -185,21 +226,21 @@ class MigrationImporter
 
                     // Check minimum supported version for backwards compatibility
                     if (bundle.version < MigrationBundle.MINIMUM_VERSION) {
-                        return@withContext ImportResult.Error(
+                        return ImportResult.Error(
                             "Migration file is from an old version (${bundle.version}). " +
                                 "Minimum supported version is ${MigrationBundle.MINIMUM_VERSION}.",
                         )
                     }
 
                     if (bundle.version < 8 && bundle.callHistoryDeletions.isNotEmpty()) {
-                        return@withContext ImportResult.Error(
+                        return ImportResult.Error(
                             "Call-history deletion authority requires migration format version 8.",
                         )
                     }
 
                     // Check if password is required but not provided
                     if (bundle.keysEncrypted && importPassword == null) {
-                        return@withContext ImportResult.Error(
+                        return ImportResult.Error(
                             "This export file is password-protected. Please provide the password.",
                         )
                     }
@@ -218,7 +259,7 @@ class MigrationImporter
                     val interfacesImported = importInterfaces(bundle.interfaces)
                     onProgress(0.86f)
 
-                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(zipBytes)
+                    if (bundle.attachmentManifest.isNotEmpty()) importAttachments(stagedFile)
                     onProgress(0.90f)
 
                     importRatchets(bundle.ratchetFiles)
@@ -675,52 +716,93 @@ class MigrationImporter
             )
 
         /**
-         * Read and parse the MigrationBundle from a ZIP file.
+         * Read the migration bundle from a URI, preparing a local cache file
+         * for the rest of the import flow.
+         *
+         * The file is copied to the cache directory via [File.copyTo] (no
+         * full in-memory read), encrypted files are decrypted in-place with a
+         * streaming chunked pass, and the manifest is parsed with a streaming
+         * JSON decoder (no full JSON String). Returns null on unreadable input;
+         * password errors propagate to the caller.
          */
         @Suppress("ThrowsCount")
         private fun readMigrationBundle(
             uri: Uri,
             password: String? = null,
-        ): Pair<MigrationBundle, ByteArray>? {
+        ): Pair<MigrationBundle, File>? {
+            var localFile: File? = null
             return try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-                inputStream.use { stream ->
-                    val rawBytes = stream.readBytes()
-                    val zipBytes =
-                        if (MigrationCrypto.isEncrypted(rawBytes)) {
-                            if (password == null) {
-                                throw PasswordRequiredException("This export file is encrypted")
+                val cacheDir = File(context.cacheDir, IMPORT_CACHE_DIR).also { it.mkdirs() }
+                val stagedFile = File(cacheDir, "columba_import_${System.currentTimeMillis()}.columba")
+                localFile = stagedFile
+                try {
+                    inputStream.use { stream -> stream.copyTo(stagedFile.outputStream()) }
+                } catch (e: Exception) {
+                    stagedFile.delete()
+                    throw e
+                }
+                if (MigrationCrypto.isEncrypted(
+                        stagedFile.inputStream().use { stream ->
+                            val header = ByteArray(2)
+                            stream.read(header).let { bytesRead ->
+                                if (bytesRead < 1) ByteArray(0) else header
                             }
-                            MigrationCrypto.decrypt(rawBytes, password)
-                        } else {
-                            rawBytes
-                        }
-                    val manifestJson = extractManifestFromZip(java.io.ByteArrayInputStream(zipBytes))
-                    manifestJson?.let { json.decodeFromString<MigrationBundle>(it) to zipBytes }
+                        },
+                    )
+                ) {
+                    if (password == null) {
+                        stagedFile.delete()
+                        throw PasswordRequiredException("This export file is encrypted")
+                    }
+                    MigrationCrypto.decryptFile(stagedFile, password)
+                }
+                streamBundleFromZipFile(stagedFile) ?: run {
+                    stagedFile.delete()
+                    null
                 }
             } catch (e: network.columba.app.migration.WrongPasswordException) {
+                // Thrown by MigrationCrypto (GCM auth tag mismatch). The staged
+                // file is a full copy of the (encrypted) bundle, so remove it
+                // rather than leaking it on every wrong-password attempt.
+                localFile?.delete()
                 Log.e(TAG, "Wrong password for encrypted export", e)
                 throw e
             } catch (e: WrongPasswordException) {
+                // data.crypto variant (identity-key decryption).
+                localFile?.delete()
                 Log.e(TAG, "Wrong password for encrypted export", e)
                 throw e
             } catch (e: PasswordRequiredException) {
+                localFile?.delete()
                 Log.e(TAG, "Password required for encrypted export", e)
                 throw e
             } catch (e: Exception) {
+                // Decryption and manifest-decoding failures otherwise leave the
+                // staged file (a full bundle copy, or a plaintext ZIP after a
+                // successful decrypt) behind. Remove it on every failure path
+                // that does not transfer ownership to a successful result.
+                localFile?.delete()
                 Log.e(TAG, "Failed to read migration bundle", e)
                 null
             }
         }
 
-        private fun extractManifestFromZip(inputStream: java.io.InputStream): String? {
-            ZipInputStream(inputStream).use { zipIn ->
-                var entry = zipIn.nextEntry
-                while (entry != null) {
-                    if (entry.name == MANIFEST_FILENAME) {
-                        return zipIn.bufferedReader().readText()
+        /**
+         * Parse the manifest with a streaming JSON decoder and return the
+         * bundle together with the local ZIP file (reused for attachments).
+         */
+        private fun streamBundleFromZipFile(localFile: File): Pair<MigrationBundle, File>? {
+            localFile.inputStream().use { stream ->
+                ZipInputStream(stream).use { zipIn ->
+                    var entry = zipIn.nextEntry
+                    while (entry != null) {
+                        if (entry.name == MANIFEST_FILENAME) {
+                            val bundle = json.decodeFromStream<MigrationBundle>(zipIn)
+                            return bundle to localFile
+                        }
+                        entry = zipIn.nextEntry
                     }
-                    entry = zipIn.nextEntry
                 }
             }
             return null
@@ -876,14 +958,14 @@ class MigrationImporter
         }
 
         /**
-         * Import attachments from the ZIP file.
+         * Import attachments from the staged ZIP file.
          */
-        private fun importAttachments(zipBytes: ByteArray): Int {
+        private fun importAttachments(zipFile: File): Int {
             val attachmentsDir = File(context.filesDir, "attachments")
             attachmentsDir.mkdirs()
 
             return try {
-                extractAttachmentsFromZip(java.io.ByteArrayInputStream(zipBytes), attachmentsDir)
+                zipFile.inputStream().use { stream -> extractAttachmentsFromZip(stream, attachmentsDir) }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import attachments", e)
                 0

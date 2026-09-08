@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -61,11 +62,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -92,13 +94,16 @@ import network.columba.app.viewmodel.NomadNetBrowserViewModel.RenderingMode
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NomadNetBrowserScreen(
     destinationHash: String,
     initialPath: String = "/page/index.mu",
+    showHomeEntry: Boolean = false,
     onBackClick: () -> Unit,
+    onCloseSite: (() -> Unit)? = null,
     onOpenConversation: (String) -> Unit = {},
     viewModel: NomadNetBrowserViewModel = hiltViewModel(),
 ) {
@@ -131,8 +136,18 @@ fun NomadNetBrowserScreen(
 
     // Load initial page
     LaunchedEffect(destinationHash, initialPath) {
-        if (browserState is BrowserState.Initial) {
+        if (browserState is BrowserState.Initial && destinationHash.isNotEmpty()) {
             viewModel.loadPage(destinationHash, initialPath)
+        }
+    }
+
+    // Focus the address bar when editing starts (e.g. from the home entry
+    // prompt). The TextField only composes while editing, so give it a frame
+    // before requesting focus; swallow the case where editing already ended.
+    LaunchedEffect(isEditingUrl) {
+        if (isEditingUrl) {
+            delay(100)
+            runCatching { urlFocusRequester.requestFocus() }
         }
     }
 
@@ -250,7 +265,12 @@ fun NomadNetBrowserScreen(
                                 Modifier
                                     .fillMaxWidth()
                                     .focusRequester(urlFocusRequester)
-                                    .onFocusChanged { focusState ->
+                                    // onFocusEvent (not onFocusChanged): fires only on real
+                                    // focus transitions. onFocusChanged also re-fires the
+                                    // initial unfocused state when this field composes,
+                                    // which used to immediately cancel edit mode the moment
+                                    // the "Enter address" prompt turned it on.
+                                    .onFocusEvent { focusState ->
                                         if (focusState.isFocused && !isEditingUrl) {
                                             isEditingUrl = true
                                             val text = currentUrl ?: ""
@@ -383,7 +403,13 @@ fun NomadNetBrowserScreen(
                             BrowserCloseSiteMenuItem(
                                 onCloseSite = {
                                     showMenu = false
-                                    onBackClick()
+                                    // Close Site is more than Back: it clears the
+                                    // session and forgets the persisted last-node
+                                    // binding. The caller decides navigation: the
+                                    // standalone browser pops, the tab home stays
+                                    // put and swaps to the address prompt.
+                                    viewModel.closeSite()
+                                    if (onCloseSite != null) onCloseSite() else onBackClick()
                                 },
                             )
                         }
@@ -401,6 +427,104 @@ fun NomadNetBrowserScreen(
     ) { paddingValues ->
         when (val state = browserState) {
             is BrowserState.Initial -> {
+                if (showHomeEntry) {
+                    // Bottom-nav entry with no node yet: a dedicated address
+                    // field owned by this page. Deliberately NOT the top-bar
+                    // isEditingUrl flow — toggling that state from here raced
+                    // with the field's focus handler and made the editor flash
+                    // for a frame. This field is always present and submits
+                    // directly, so there is no shared edit-state to clobber.
+                    // No auto-focus: opening the tab must not pop the keyboard;
+                    // the user taps the field when they actually want to type.
+                    var homeUrlValue by remember { mutableStateOf(TextFieldValue("")) }
+                    val submitHomeUrl: () -> Unit = {
+                        if (homeUrlValue.text.isNotBlank()) {
+                            viewModel.navigateToUrl(homeUrlValue.text)
+                        }
+                    }
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                                // Edge-to-edge makes adjustResize a no-op, so pad
+                                // for the IME explicitly; when the keyboard shows,
+                                // the box shrinks and the block rides up above it.
+                                .imePadding(),
+                        // Bias the block toward the upper third so the Go button
+                        // stays comfortably clear of the keyboard.
+                        contentAlignment = BiasAlignment(0f, -0.4f),
+                    ) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = null,
+                                modifier = Modifier.size(56.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "NomadNet Browser",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Enter a node address to start browsing.\nFormat: <hash>:/page/index.mu",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            BasicTextField(
+                                value = homeUrlValue,
+                                onValueChange = { homeUrlValue = it },
+                                singleLine = true,
+                                textStyle =
+                                    TextStyle(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                keyboardActions = KeyboardActions(onGo = { submitHomeUrl() }),
+                                modifier = Modifier.fillMaxWidth(),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    MaterialTheme.colorScheme.surface,
+                                                    RoundedCornerShape(12.dp),
+                                                ).padding(horizontal = 16.dp, vertical = 12.dp),
+                                        contentAlignment = Alignment.CenterStart,
+                                    ) {
+                                        if (homeUrlValue.text.isEmpty()) {
+                                            Text(
+                                                text = "<hash>:/page/index.mu",
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                },
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(onClick = submitHomeUrl) {
+                                Text("Go")
+                            }
+                        }
+                    }
+                }
                 // Nothing to show yet
             }
 
@@ -445,10 +569,13 @@ fun NomadNetBrowserScreen(
                     // imePadding required because MainActivity uses enableEdgeToEdge(),
                     // which makes the manifest's adjustResize a no-op — without it the
                     // soft keyboard slides up on top of focused micron form fields.
+                    // 88.dp bottom clears the always-visible bottom nav bar
+                    // (matches ContactsScreen's content padding convention).
                     modifier =
                         Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
+                            .padding(bottom = 88.dp)
                             .imePadding(),
                 ) {
                     if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {

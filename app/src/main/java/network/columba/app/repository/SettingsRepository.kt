@@ -141,6 +141,8 @@ class SettingsRepository
             val MAP_MARKER_DECLUTTER_ENABLED = booleanPreferencesKey("map_marker_declutter_enabled")
             val MAP_STYLE_PREFERENCE = stringPreferencesKey("map_style_preference")
             val NOMADNET_RENDERING_MODE = stringPreferencesKey("nomadnet_rendering_mode")
+            val NOMADNET_LAST_NODE = stringPreferencesKey("nomadnet_last_node")
+            val BOTTOM_NAV_TABS = stringPreferencesKey("bottom_nav_tabs")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
             // Privacy preferences
@@ -1476,6 +1478,68 @@ class SettingsRepository
         suspend fun saveNomadNetRenderingMode(modeName: String) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOMADNET_RENDERING_MODE] = modeName
+            }
+        }
+
+        /**
+         * Flow of the destination hash of the last NomadNet page the user loaded,
+         * or null when none. The bottom-nav NomadNet tab navigates here so the
+         * tab reopens where the user left off; a fresh install falls back to the
+         * caller-provided default entry node.
+         */
+        val nomadNetLastNodeHashFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences -> preferences[PreferencesKeys.NOMADNET_LAST_NODE] }
+                .distinctUntilChanged()
+
+        /**
+         * Remember the destination hash of the most recently loaded NomadNet page.
+         * [whileActive] is evaluated inside the DataStore transaction (under the
+         * edit mutex), so callers can guard against a concurrent
+         * [clearNomadNetLastNodeHash] resurrecting a just-closed site: either the
+         * predicate fails and nothing is written, or the write lands before any
+         * later clear and is properly erased by it.
+         */
+        suspend fun saveNomadNetLastNodeHash(
+            nodeHash: String,
+            whileActive: () -> Boolean = { true },
+        ) {
+            if (nodeHash.isBlank()) return
+            context.dataStore.edit { preferences ->
+                if (whileActive()) {
+                    preferences[PreferencesKeys.NOMADNET_LAST_NODE] = nodeHash
+                }
+            }
+        }
+
+        /**
+         * Forget the last-browsed NomadNet page (Close Site). The bottom-nav
+         * NomadNet tab then reopens at the address-entry prompt instead of the
+         * closed site.
+         */
+        suspend fun clearNomadNetLastNodeHash() {
+            context.dataStore.edit { preferences ->
+                preferences.remove(PreferencesKeys.NOMADNET_LAST_NODE)
+            }
+        }
+
+        /**
+         * Flow of the user-configured bottom navigation tabs, stored as a
+         * comma-separated list of [network.columba.app.navigation.NavTab] ids.
+         * Emits null before first configuration; consumers map through
+         * [network.columba.app.navigation.NavTab.sanitize] for a normalized list.
+         */
+        val bottomNavTabsFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences -> preferences[PreferencesKeys.BOTTOM_NAV_TABS] }
+                .distinctUntilChanged()
+
+        /**
+         * Persist the bottom navigation tab layout as a comma-separated id list.
+         */
+        suspend fun saveBottomNavTabs(csv: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.BOTTOM_NAV_TABS] = csv
             }
         }
 

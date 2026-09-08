@@ -201,7 +201,10 @@ fun AnnounceDetailScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
+                        // The outer bottom nav bar is visible on this screen, so
+                        // clear its height (same 88.dp convention as other
+                        // nav-visible screens) for the last card.
+                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 // Identicon header

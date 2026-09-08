@@ -83,6 +83,81 @@ internal class NativeNomadNetHandler(
             }
         }
 
+    /**
+     * Fetch a `/media/` object (page image) from a NomadNet node.
+     *
+     * Mirrors upstream Browser.py `__load_image`: request `/media` with data
+     * `{"path": <full media path>, "key": None}` on the (reused, else fresh)
+     * node link. A file response arrives with metadata and the raw body in
+     * `receipt.response`; a server-side denial (Node.py `serve_media`
+     * returning `False`, commit 3028301) arrives as a msgpack `false` body
+     * (single byte 0xC0 after reticulum-kt re-serialises the scalar) and is
+     * surfaced as [network.columba.app.rns.api.RnsError.NomadnetRequestDenied].
+     */
+    suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+    ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                nomadnetCancelled = false
+                requestStatusFlow.value = "requesting media"
+                downloadProgressFlow.value = 0f
+
+                val destBytes = destinationHash.hexToBytes()
+                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes)
+                val (link, _) = resolveOrEstablishLink(destinationHash, nodeIdentity, destBytes, timeoutSeconds)
+
+                // Upstream serve_media requires both keys; "path" carries the
+                // full "/media/..." path (it strips the prefix itself).
+                val requestData: Map<String, Any?> = mapOf("path" to path, "key" to null)
+                val response = sendPageRequest(link, "/media", requestData, timeoutSeconds)
+
+                if (nomadnetCancelled) throw java.util.concurrent.CancellationException("Cancelled")
+                val data = response.bytes
+                    ?: error(response.error ?: "Media request timed out")
+                if (isMsgpackFalse(data)) {
+                    Log.i(TAG, "NomadNet: media request denied by node for $path")
+                    throw network.columba.app.rns.api.RnsException(
+                        network.columba.app.rns.api.RnsError.NomadnetRequestDenied(destinationHash, path),
+                    )
+                }
+                if (data.isEmpty()) error("Empty media response for $path")
+
+                // Unique per-fetch destination file so concurrent media loads
+                // of same-named files never clobber each other; the image
+                // cache layer moves this into its URL-keyed cache.
+                val rawName = java.io.File(path).name.ifBlank { "media" }
+                val mediaDir =
+                    appContext?.cacheDir?.resolve("nomadnet_media")
+                        ?: java.io.File(System.getProperty("java.io.tmpdir") ?: "/tmp", "nomadnet_media")
+                mediaDir.mkdirs()
+                val outFile = mediaDir.resolve("${System.nanoTime()}.$rawName")
+                check(outFile.canonicalPath.startsWith(mediaDir.canonicalPath + java.io.File.separator)) {
+                    "Rejected path traversal attempt in NomadNet media: $rawName"
+                }
+                outFile.writeBytes(data)
+
+                requestStatusFlow.value = "complete"
+                downloadProgressFlow.value = 1f
+                Log.i(TAG, "NomadNet: media fetched $path (${data.size} bytes)")
+                network.columba.app.rns.api.model.NomadnetMediaResult(
+                    filePath = outFile.absolutePath,
+                    fileName = rawName,
+                    fileSize = data.size.toLong(),
+                    path = path,
+                )
+            }.onFailure {
+                requestStatusFlow.value = if (nomadnetCancelled) "cancelled" else "failed"
+            }
+        }
+
+    /** True when [bytes] is exactly the msgpack encoding of `false` (0xC0),
+     *  the deny signal upstream NomadNet nodes send for gated media. */
+    internal fun isMsgpackFalse(bytes: ByteArray): Boolean =
+        bytes.size == 1 && bytes[0] == 0xC0.toByte()
+
     private suspend fun resolveNodeIdentity(
         destinationHash: String,
         destBytes: ByteArray,

@@ -2252,6 +2252,13 @@ class NativeRnsBackendImpl(
         nomadNetHandler.requestStatusFlow.value = "cancelled"
     }
 
+    override suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+    ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> =
+        nomadNetHandler.requestNomadnetMedia(destinationHash, path, timeoutSeconds)
+
     override suspend fun getNomadnetRequestStatus(): String = nomadNetHandler.requestStatusFlow.value
 
     override suspend fun getNomadnetDownloadProgress(): Float = nomadNetHandler.downloadProgressFlow.value

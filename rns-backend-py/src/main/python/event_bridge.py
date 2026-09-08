@@ -1655,13 +1655,21 @@ def make_nomadnet_response_capture():
         # unnecessary work. The Kotlin consumer
         # (`PythonRnsNomadnet.buildPageResult`) only ever needed the name.
         metadata_name_bytes=b"",
+        # True iff the server's response value was exactly `False` — the
+        # explicit deny signal upstream NomadNet nodes send for gated
+        # requests (Node.py serve_media returning False, 3028301). Kept
+        # separate from response_bytes so the deny never reaches Kotlin as
+        # the mangled literal b"False".
+        denied=False,
         error=None,
     )
 
     def _on_response(receipt):
         try:
             r = getattr(receipt, "response", None)
-            if hasattr(r, "read"):
+            if r is False:
+                cap.denied = True
+            elif hasattr(r, "read"):
                 cap.response_bytes = r.read()
             elif isinstance(r, (bytes, bytearray)):
                 cap.response_bytes = bytes(r)

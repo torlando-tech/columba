@@ -136,6 +136,24 @@ sealed class RnsError : Parcelable {
         }
     }
 
+    /**
+     * The destination explicitly refused a NomadNet request — the server-
+     * side access list (`.allowed` gating) rejected the caller. Distinct
+     * from [NomadnetPageNotFound] (unreachable / 404): the node is alive
+     * and answered, it just said no. Surfaced by `/media/` fetches of
+     * gated images (upstream Node.py returns `False`, 3028301).
+     */
+    data class NomadnetRequestDenied(
+        val destHash: String,
+        val path: String,
+    ) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_NOMADNET_REQUEST_DENIED)
+            parcel.writeString(destHash)
+            parcel.writeString(path)
+        }
+    }
+
     companion object {
         private const val TAG_GENERIC = 0
         private const val TAG_BACKEND_NOT_READY = 1
@@ -144,6 +162,7 @@ sealed class RnsError : Parcelable {
         private const val TAG_FEATURE_UNSUPPORTED = 4
         private const val TAG_CALL_STATE_INVALID = 5
         private const val TAG_NOMADNET_PAGE_NOT_FOUND = 6
+        private const val TAG_NOMADNET_REQUEST_DENIED = 7
 
         @JvmField
         val CREATOR: Parcelable.Creator<RnsError> = object : Parcelable.Creator<RnsError> {
@@ -156,6 +175,7 @@ sealed class RnsError : Parcelable {
                     TAG_FEATURE_UNSUPPORTED -> FeatureUnsupported(parcel.readString().orEmpty())
                     TAG_CALL_STATE_INVALID -> CallStateInvalid(parcel.readString().orEmpty(), parcel.readString().orEmpty())
                     TAG_NOMADNET_PAGE_NOT_FOUND -> NomadnetPageNotFound(parcel.readString().orEmpty(), parcel.readString().orEmpty())
+                    TAG_NOMADNET_REQUEST_DENIED -> NomadnetRequestDenied(parcel.readString().orEmpty(), parcel.readString().orEmpty())
                     else -> error("Unknown RnsError tag: $tag")
                 }
 
@@ -192,6 +212,8 @@ class RnsException(val error: RnsError) : RuntimeException(describe(error)) {
                     "Invalid call state: expected ${error.expected}, was ${error.actual}"
                 is RnsError.NomadnetPageNotFound ->
                     "NomadNet page not found: ${error.destHash}${error.path}"
+                is RnsError.NomadnetRequestDenied ->
+                    "NomadNet request denied: ${error.destHash}${error.path}"
             }
     }
 }

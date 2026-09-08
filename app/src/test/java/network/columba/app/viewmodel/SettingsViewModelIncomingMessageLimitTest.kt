@@ -109,6 +109,8 @@ class SettingsViewModelIncomingMessageLimitTest {
         SettingsViewModel.enableMonitors = false
 
         settingsRepository = mockk()
+        every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetLastNodeHashFlow } returns flowOf(null)
         identityRepository = mockk()
         rnsBackend = mockk()
         rnsCore = mockk()

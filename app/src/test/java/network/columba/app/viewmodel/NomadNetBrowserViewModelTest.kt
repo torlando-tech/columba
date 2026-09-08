@@ -67,6 +67,8 @@ class NomadNetBrowserViewModelTest {
         // No persisted rendering mode by default; individual tests can override.
         every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
         coEvery { settingsRepository.saveNomadNetRenderingMode(any()) } just Runs
+        coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any()) } just Runs
+        coEvery { settingsRepository.clearNomadNetLastNodeHash() } just Runs
         viewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
     }
 
@@ -94,6 +96,9 @@ class NomadNetBrowserViewModelTest {
             val loaded = state as NomadNetBrowserViewModel.BrowserState.PageLoaded
             assertEquals(nodeHash, loaded.nodeHash)
             assertEquals("/page/index.mu", loaded.path)
+            // The bottom-nav NomadNet tab reopens the last-browsed node, so
+            // every successful page load must persist its node hash.
+            coVerify { settingsRepository.saveNomadNetLastNodeHash(nodeHash, any()) }
         }
 
     @Test
@@ -446,6 +451,36 @@ class NomadNetBrowserViewModelTest {
 
             viewModel.goBack() // back to page 1
             assertFalse(viewModel.canGoBack.value)
+        }
+
+    // ── closeSite ──
+
+    @Test
+    fun `closeSite resets state clears history and forgets last node`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(NomadnetPageResult(simplePage, "/page/second.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.updateField("query", "test")
+            viewModel.navigateToLink("/page/second.mu", emptyList())
+            advanceUntilIdle()
+            assertTrue(viewModel.canGoBack.value)
+
+            viewModel.closeSite()
+            advanceUntilIdle()
+
+            // View resets to Initial so the tab home can swap to the address prompt.
+            assertTrue(
+                "Should be Initial, was ${viewModel.browserState.value}",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Initial,
+            )
+            assertFalse(viewModel.canGoBack.value)
+            assertTrue(viewModel.formFields.value.isEmpty())
+            // The persisted last-node binding must be forgotten.
+            coVerify { settingsRepository.clearNomadNetLastNodeHash() }
         }
 
     // ── refresh ──

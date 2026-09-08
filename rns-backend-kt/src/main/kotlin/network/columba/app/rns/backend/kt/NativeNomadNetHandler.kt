@@ -158,6 +158,17 @@ internal class NativeNomadNetHandler(
     internal fun isMsgpackFalse(bytes: ByteArray): Boolean =
         bytes.size == 1 && bytes[0] == 0xC0.toByte()
 
+    /** Live stats of the active NomadNet link, for the image auto-load gate
+     *  (upstream Browser.py reads `link.rtt` / `link.get_expected_rate()`). */
+    fun getLinkStats(destinationHash: String): network.columba.app.rns.api.model.NomadnetLinkStats? {
+        val link = nomadnetLinks[destinationHash] ?: return null
+        if (link.status != network.reticulum.link.LinkConstants.ACTIVE) return null
+        return network.columba.app.rns.api.model.NomadnetLinkStats(
+            rttSeconds = link.rtt?.let { it / 1000.0 },
+            expectedRateBps = link.getExpectedRate()?.let { it.toLong() },
+        )
+    }
+
     private suspend fun resolveNodeIdentity(
         destinationHash: String,
         destBytes: ByteArray,

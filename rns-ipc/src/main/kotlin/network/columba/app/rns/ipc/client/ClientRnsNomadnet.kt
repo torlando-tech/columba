@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NomadnetLinkStats
 import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 import network.columba.app.rns.ipc.BundleKeys
@@ -54,6 +55,15 @@ internal class ClientRnsNomadnet(
         @Suppress("DEPRECATION")
         bundle.getParcelable<NomadnetMediaResult>(BundleKeys.MEDIA)
             ?: throw RnsException(RnsError.Generic("requestNomadnetMedia payload missing 'media'", null))
+    }
+
+    override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? {
+        val bundle =
+            runCatching { awaitResult { cb -> remote.getNomadnetLinkStats(destinationHash, cb) } }
+                .getOrNull() ?: return null
+        bundle.classLoader = NomadnetLinkStats::class.java.classLoader
+        @Suppress("DEPRECATION")
+        return bundle.getParcelable<NomadnetLinkStats>(BundleKeys.STATS)
     }
 
     override suspend fun getNomadnetRequestStatus(): String =

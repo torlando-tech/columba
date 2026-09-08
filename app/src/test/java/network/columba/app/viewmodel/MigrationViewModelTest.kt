@@ -34,6 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.io.File
 
 /**
  * Unit tests for MigrationViewModel.
@@ -98,6 +99,9 @@ class MigrationViewModelTest {
 
         // Mock getExportPreview called in init
         coEvery { migrationExporter.getExportPreview() } returns testExportPreview
+
+        // Stub cleanupStagedImports - called during init
+        every { migrationImporter.cleanupStagedImports() } just Runs
 
         // Stub cleanupExportFiles - called during cleanup operations
         every { migrationExporter.cleanupExportFiles() } just Runs
@@ -225,10 +229,11 @@ class MigrationViewModelTest {
         runTest {
             val mockUri = mockk<Uri>()
             coEvery { migrationImporter.isEncryptedExport(mockUri) } returns Result.success(false)
+            val cachedFile = File.createTempFile("migration_preview_", ".columba").apply { deleteOnExit() }
             coEvery { migrationImporter.previewMigration(mockUri, any()) } returns
                 Result.success(
                     network.columba.app.migration
-                        .PreviewWithData(testImportPreview, ByteArray(0)),
+                        .PreviewWithData(testImportPreview, cachedFile),
                 )
 
             viewModel.previewImport(mockUri)

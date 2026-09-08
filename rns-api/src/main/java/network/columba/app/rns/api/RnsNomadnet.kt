@@ -1,6 +1,7 @@
 package network.columba.app.rns.api
 
 import kotlinx.coroutines.flow.StateFlow
+import network.columba.app.rns.api.model.NomadnetLinkStats
 import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 
@@ -54,6 +55,15 @@ interface RnsNomadnet {
         path: String,
         timeoutSeconds: Float = 45f,
     ): Result<NomadnetMediaResult>
+
+    /**
+     * Live stats of the currently-active NomadNet link to a node, for the
+     * image auto-load gate (upstream reads `link.rtt` /
+     * `link.get_expected_rate()`). Returns null when there is no active link
+     * or no backend — callers treat null as "insufficient data" (auto mode:
+     * do not load).
+     */
+    suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats?
 
     /**
      * One-shot snapshot of the current NomadNet request status.

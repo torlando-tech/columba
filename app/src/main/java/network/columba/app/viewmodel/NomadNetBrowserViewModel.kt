@@ -18,9 +18,15 @@ import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.ImageLoadingMode
+import network.columba.app.nomadnet.NomadNetImageCache
+import network.columba.app.nomadnet.PageImageLoader
+import network.columba.app.nomadnet.PageImageState
+import network.columba.app.nomadnet.ParsedImageRef
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
 import network.columba.app.nomadnet.buildNomadNetRequestData
+import network.columba.app.nomadnet.pageImageKey
 import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsNomadnet
@@ -33,6 +39,7 @@ class NomadNetBrowserViewModel
     constructor(
         private val nomadnet: RnsNomadnet,
         private val pageCache: NomadNetPageCache,
+        private val imageCache: NomadNetImageCache,
         private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
@@ -117,6 +124,9 @@ class NomadNetBrowserViewModel
                     _renderingMode.value = restored
                 }
             }
+            // NOTE: the image-loading-mode restore lives below, next to the
+            // _imageLoadingMode declaration — Kotlin initializes properties in
+            // declaration order and this init block runs before them.
         }
 
         private val _isIdentified = MutableStateFlow(false)
@@ -180,6 +190,61 @@ class NomadNetBrowserViewModel
 
         val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
             get() = partialManager.states
+
+        // ==================== Page images ====================
+
+        private val _imageLoadingMode = MutableStateFlow(ImageLoadingMode.AUTO)
+
+        /** Current image loading mode (upstream `image_loading` mirror). */
+        val imageLoadingMode: StateFlow<ImageLoadingMode> = _imageLoadingMode.asStateFlow()
+
+        @Volatile
+        private var imageLoadingModeUserSelected = false
+
+        /** Wall-clock timing of the last successful page fetch (bits/s EDR fallback). */
+        @Volatile
+        private var lastPageFetchSeconds: Double? = null
+
+        @Volatile
+        private var lastPageFetchBytes: Long = 0L
+
+        private val pageImageLoader: PageImageLoader by lazy {
+            PageImageLoader(
+                nomadnet = nomadnet,
+                cache = imageCache,
+                scope = viewModelScope,
+                currentNodeHash = { currentNodeHash },
+                imageLoadingMode = { _imageLoadingMode.value },
+                lastResponseSpeedBps = {
+                    val seconds = lastPageFetchSeconds
+                    if (seconds != null && seconds > 0 && lastPageFetchBytes > 0) {
+                        lastPageFetchBytes * 8 / seconds
+                    } else {
+                        null
+                    }
+                },
+            )
+        }
+
+        /** Per-image fetch states keyed by [pageImageKey]. */
+        val imageStates: StateFlow<Map<String, PageImageState>>
+            get() = pageImageLoader.imageStates
+
+        /** Explicit load of all pending images (upstream Ctrl+L). */
+        fun loadPageImages(forceReload: Boolean = false) {
+            pageImageLoader.loadImages(forceReload)
+        }
+
+        /** Retry/load one image (placeholder tap, sheet Reload). */
+        fun retryPageImage(key: String) {
+            pageImageLoader.retryImage(key)
+        }
+
+        fun setImageLoadingMode(mode: ImageLoadingMode) {
+            imageLoadingModeUserSelected = true
+            _imageLoadingMode.value = mode
+            viewModelScope.launch { settingsRepository.saveNomadNetImageLoadingMode(mode.name) }
+        }
 
         /** Returns "nodeHash:/path" format for display in the URL bar. */
         fun getCurrentUrl(): String? {
@@ -481,6 +546,7 @@ class NomadNetBrowserViewModel
             stopStatusCollection()
             stopProgressCollection()
             partialManager.clear()
+            pageImageLoader.clear()
             history.clear()
             _canGoBack.value = false
             _formFields.value = emptyMap()
@@ -569,6 +635,7 @@ class NomadNetBrowserViewModel
             super.onCleared()
             stopStatusCollection()
             stopProgressCollection()
+            pageImageLoader.cancelAll()
             // Cancel any in-flight Python page request so the IO thread isn't blocked
             // for up to PAGE_TIMEOUT_SECONDS after the user navigates away.
             // Use NonCancellable because viewModelScope is already cancelled at this point.
@@ -634,7 +701,20 @@ class NomadNetBrowserViewModel
                 }
             }
             partialManager.detectAndLoad(document)
+            pageImageLoader.scan(imageRefsFor(document))
         }
+
+        /** All image elements in a document, reduced to loader refs. */
+        private fun imageRefsFor(document: MicronDocument): List<ParsedImageRef> =
+            document.lines
+                .flatMap { it.elements }
+                .filterIsInstance<MicronElement.Image>()
+                .map { img ->
+                    ParsedImageRef(
+                        url = img.url,
+                        key = pageImageKey(img.url, img.width, img.height),
+                    )
+                }
 
         /**
          * Return a copy of [current] with parser-declared text-field defaults filled
@@ -737,6 +817,9 @@ class NomadNetBrowserViewModel
             _browserState.value = BrowserState.Loading("Requesting page...")
             startStatusCollection(epoch)
 
+            // Wall-clock fetch timing feeds the image auto-gate's fallback
+            // EDR (upstream last_response_speed()).
+            val fetchStartedAt = System.nanoTime()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val result =
@@ -754,6 +837,9 @@ class NomadNetBrowserViewModel
 
                     result.fold(
                         onSuccess = { pageResult ->
+                            lastPageFetchSeconds = (System.nanoTime() - fetchStartedAt) / 1_000_000_000.0
+                            lastPageFetchBytes =
+                                if (pageResult.type == "file") pageResult.fileSize else pageResult.content.length.toLong()
                             if (pageResult.type == "file") {
                                 // Unexpected file response on a page path —
                                 // clear loading state so screen doesn't get stuck

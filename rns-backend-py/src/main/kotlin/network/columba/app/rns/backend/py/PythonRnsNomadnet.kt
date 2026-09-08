@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NomadnetLinkStats
 import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 import org.json.JSONObject
@@ -562,6 +563,20 @@ class PythonRnsNomadnet(
             Log.i(TAG, "NomadNet: sent identify proof on link to $destinationHash")
             false
         }
+
+    /** Live stats of the cached link, mirroring the kotlin backend's gate data. */
+    override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? {
+        val link = nomadnetLinks[destinationHash] ?: return null
+        if (linkStatus(link) != LINK_ACTIVE) return null
+        return NomadnetLinkStats(
+            // Python RNS exposes link.rtt in SECONDS (reticulum-kt uses millis).
+            rttSeconds = link["rtt"]?.toJava(Double::class.javaObjectType)
+                ?: link["rtt"]?.toJava(Float::class.javaObjectType)?.toDouble(),
+            expectedRateBps = runCatching {
+                link.callAttr("get_expected_rate")?.toJava(Float::class.javaObjectType)?.toLong()
+            }.getOrNull(),
+        )
+    }
 
     // ==================== Internal helpers ====================
 

@@ -141,6 +141,7 @@ class SettingsRepository
             val MAP_MARKER_DECLUTTER_ENABLED = booleanPreferencesKey("map_marker_declutter_enabled")
             val MAP_STYLE_PREFERENCE = stringPreferencesKey("map_style_preference")
             val NOMADNET_RENDERING_MODE = stringPreferencesKey("nomadnet_rendering_mode")
+            val NOMADNET_IMAGE_LOADING_MODE = stringPreferencesKey("nomadnet_image_loading_mode")
             val NOMADNET_LAST_NODE = stringPreferencesKey("nomadnet_last_node")
             val BOTTOM_NAV_TABS = stringPreferencesKey("bottom_nav_tabs")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
@@ -1478,6 +1479,23 @@ class SettingsRepository
         suspend fun saveNomadNetRenderingMode(modeName: String) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.NOMADNET_RENDERING_MODE] = modeName
+            }
+        }
+
+        /**
+         * Flow of the NomadNet image loading mode ("never" | "manual" |
+         * "auto" | "always"; upstream `image_loading` mirror). Null when
+         * unset — callers default to auto.
+         */
+        val nomadNetImageLoadingModeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences -> preferences[PreferencesKeys.NOMADNET_IMAGE_LOADING_MODE] }
+                .distinctUntilChanged()
+
+        /** Persist the NomadNet image loading mode (lowercase name). */
+        suspend fun saveNomadNetImageLoadingMode(modeName: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOMADNET_IMAGE_LOADING_MODE] = modeName.lowercase()
             }
         }
 

@@ -86,6 +86,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.nomadnet.ImageLoadingMode
 import network.columba.app.ui.components.MicronPageContent
 import network.columba.app.viewmodel.NomadNetBrowserViewModel
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.BrowserState
@@ -114,6 +115,8 @@ fun NomadNetBrowserScreen(
     val identifyInProgress by viewModel.identifyInProgress.collectAsState()
     val identifyError by viewModel.identifyError.collectAsState()
     val partialStates by viewModel.partialStates.collectAsState()
+    val imageStates by viewModel.imageStates.collectAsState()
+    val imageLoadingMode by viewModel.imageLoadingMode.collectAsState()
     val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
@@ -400,6 +403,35 @@ fun NomadNetBrowserScreen(
                                 )
                             }
                             HorizontalDivider()
+
+                            // Image loading (upstream `image_loading`: "How, or
+                            // if at all, to load page images").
+                            ImageLoadingMode.entries.forEach { mode ->
+                                DropdownMenuItem(
+                                    text = {
+                                        val label =
+                                            when (mode) {
+                                                ImageLoadingMode.NEVER -> "Images: never"
+                                                ImageLoadingMode.MANUAL -> "Images: manual"
+                                                ImageLoadingMode.AUTO -> "Images: auto"
+                                                ImageLoadingMode.ALWAYS -> "Images: always"
+                                            }
+                                        Text(label)
+                                    },
+                                    leadingIcon = {
+                                        RadioButton(
+                                            selected = imageLoadingMode == mode,
+                                            onClick = null,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setImageLoadingMode(mode)
+                                        showMenu = false
+                                    },
+                                )
+                            }
+                            HorizontalDivider()
                             BrowserCloseSiteMenuItem(
                                 onCloseSite = {
                                     showMenu = false
@@ -653,6 +685,10 @@ fun NomadNetBrowserScreen(
                                     },
                                     minLineWidth = viewportLineWidth,
                                     partialStates = partialStates,
+                                    imageStates = imageStates,
+                                    onImageTapToLoad = { key -> viewModel.retryPageImage(key) },
+                                    onImageReload = { key -> viewModel.retryPageImage(key) },
+                                    onCopyImageLink = { url -> clipboardManager.setText(AnnotatedString(url)) },
                                 )
                             }
                         }
@@ -684,6 +720,10 @@ fun NomadNetBrowserScreen(
                                         viewModel.updateField(name, value)
                                     },
                                     partialStates = partialStates,
+                                    imageStates = imageStates,
+                                    onImageTapToLoad = { key -> viewModel.retryPageImage(key) },
+                                    onImageReload = { key -> viewModel.retryPageImage(key) },
+                                    onCopyImageLink = { url -> clipboardManager.setText(AnnotatedString(url)) },
                                     lineIndexOffset = index,
                                 )
                             }

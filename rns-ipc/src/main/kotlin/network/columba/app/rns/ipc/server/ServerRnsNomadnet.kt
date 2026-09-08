@@ -56,6 +56,13 @@ internal class ServerRnsNomadnet(
         Bundle().apply { putParcelable(BundleKeys.MEDIA, media) }
     }
 
+    override fun getNomadnetLinkStats(
+        destinationHash: String,
+        cb: IRnsResultCallback,
+    ) = dispatch(cb, scope) {
+        Bundle().apply { putParcelable(BundleKeys.STATS, impl.getNomadnetLinkStats(destinationHash)) }
+    }
+
     override fun getNomadnetRequestStatus(cb: IRnsStringCallback) = dispatchNullableString(cb, scope) {
         impl.getNomadnetRequestStatus()
     }

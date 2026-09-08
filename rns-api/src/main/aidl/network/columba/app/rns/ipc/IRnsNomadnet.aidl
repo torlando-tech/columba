@@ -29,6 +29,9 @@ oneway interface IRnsNomadnet {
         float timeoutSeconds,
         in IRnsResultCallback cb);
 
+    // getNomadnetLinkStats → "stats": NomadnetLinkStats; null when no active link
+    void getNomadnetLinkStats(String destinationHash, in IRnsResultCallback cb);
+
     // Snapshot getters for the request status / download progress flows.
     void getNomadnetRequestStatus(in IRnsStringCallback cb);
     void getNomadnetDownloadProgress(in IRnsFloatCallback cb);

@@ -73,10 +73,10 @@ class MigrationCallHistoryImportTest {
     @Test
     fun `import preserves attempt id and duplicate import is idempotent`() =
         runTest {
-            val zip = zip(bundle(listOf(call())))
+            val zip = tempZipFile(zip(bundle(listOf(call()))))
 
-            val first = requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = zip))
-            val second = requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = zip))
+            val first = requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = zip))
+            val second = requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = zip))
 
             assertEquals(1, first.callHistoryImported)
             assertEquals(0, first.callHistoryConflictsSkipped)
@@ -88,11 +88,11 @@ class MigrationCallHistoryImportTest {
     @Test
     fun `reimport cannot resurrect a deleted finalized call`() =
         runTest {
-            val archive = zip(bundle(listOf(call())))
-            requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = archive))
+            val archive = tempZipFile(zip(bundle(listOf(call()))))
+            requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = archive))
             assertEquals(1, database.callHistoryDeletionDao().deleteFinalized("attempt-1", LOCAL_IDENTITY, 500L))
 
-            val replay = requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = archive))
+            val replay = requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = archive))
 
             assertEquals(0, replay.callHistoryImported)
             assertEquals(1, replay.callHistoryConflictsSkipped)
@@ -102,18 +102,20 @@ class MigrationCallHistoryImportTest {
     @Test
     fun `transfer deletion authority removes and suppresses finalized evidence`() =
         runTest {
-            val oldArchive = zip(bundle(listOf(call())))
-            requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = oldArchive))
+            val oldArchive = tempZipFile(zip(bundle(listOf(call()))))
+            requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = oldArchive))
             val deletionArchive =
-                zip(
+                tempZipFile(
+                    zip(
                     bundle(
                         calls = emptyList(),
                         deletions = listOf(CallHistoryDeletionExport("attempt-1", LOCAL_IDENTITY, 500L)),
                     ),
+                        ),
                 )
 
-            requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = deletionArchive))
-            val replay = requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = oldArchive))
+            requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = deletionArchive))
+            val replay = requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = oldArchive))
 
             assertNull(database.callHistoryDao().getByAttemptId("attempt-1"))
             assertEquals(LOCAL_IDENTITY, database.callHistoryDeletionDao().getDeletion("attempt-1")?.localIdentityHash)
@@ -145,8 +147,8 @@ class MigrationCallHistoryImportTest {
             val first = bundle(emptyList(), listOf(CallHistoryDeletionExport("immutable-deletion", LOCAL_IDENTITY, 500L)))
             val conflict = bundle(emptyList(), listOf(CallHistoryDeletionExport("immutable-deletion", LOCAL_IDENTITY, 501L)))
 
-            requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = zip(first)))
-            val result = importer.importData(Uri.EMPTY, cachedZipBytes = zip(conflict))
+            requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zip(first))))
+            val result = importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zip(conflict)))
 
             assertTrue(result is ImportResult.Error)
             assertEquals(500L, database.callHistoryDeletionDao().getDeletion("immutable-deletion")?.deletedAt)
@@ -180,7 +182,7 @@ class MigrationCallHistoryImportTest {
                 ).jsonObject.toMutableMap()
             current["version"] = JsonPrimitive(7)
 
-            val result = importer.importData(Uri.EMPTY, cachedZipBytes = zipManifest(JsonObject(current).toString()))
+            val result = importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zipManifest(JsonObject(current).toString())))
 
             assertTrue(result is ImportResult.Error)
             assertNull(database.callHistoryDao().getByAttemptId("attempt-1"))
@@ -212,10 +214,11 @@ class MigrationCallHistoryImportTest {
             val result =
                 importer.importData(
                     Uri.EMPTY,
-                    cachedZipBytes =
-                        zip(
-                            bundle(
-                                calls = listOf(call().copy(callAttemptId = "must-roll-back")),
+                    cachedZipFile =
+                        tempZipFile(
+                            zip(
+                                bundle(
+                                    calls = listOf(call().copy(callAttemptId = "must-roll-back")),
                                 deletions =
                                     listOf(
                                         CallHistoryDeletionExport(
@@ -224,6 +227,7 @@ class MigrationCallHistoryImportTest {
                                             deletedAt = 500L,
                                         ),
                                     ),
+                                ),
                             ),
                         ),
                 )
@@ -237,12 +241,12 @@ class MigrationCallHistoryImportTest {
     @Test
     fun `conflicting attempt is skipped without overwriting local evidence`() =
         runTest {
-            importer.importData(Uri.EMPTY, cachedZipBytes = zip(bundle(listOf(call()))))
+            importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zip(bundle(listOf(call())))))
 
             val result =
                 importer.importData(
                     Uri.EMPTY,
-                    cachedZipBytes = zip(bundle(listOf(call().copy(connectedAt = 130L)))),
+                    cachedZipFile = tempZipFile(zip(bundle(listOf(call().copy(connectedAt = 130L))))),
                 ).let(::requireSuccess)
 
             assertEquals(0, result.callHistoryImported)
@@ -261,7 +265,7 @@ class MigrationCallHistoryImportTest {
                     failureReason = null,
                 )
 
-            val result = requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = zip(bundle(listOf(openCall)))))
+            val result = requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zip(bundle(listOf(openCall))))))
             val imported = database.callHistoryDao().getByAttemptId("open-attempt")
 
             assertEquals(1, result.callHistoryImported)
@@ -284,7 +288,7 @@ class MigrationCallHistoryImportTest {
                     outcome = null,
                 )
 
-            val result = importer.importData(Uri.EMPTY, cachedZipBytes = zip(bundle(listOf(overflow))))
+            val result = importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zip(bundle(listOf(overflow)))))
 
             assertTrue(result is ImportResult.Error)
             assertNull(database.callHistoryDao().getByAttemptId("overflow-attempt"))
@@ -302,7 +306,7 @@ class MigrationCallHistoryImportTest {
                     failureReason = "NETWORK_UNAVAILABLE",
                 )
 
-            val result = requireSuccess(importer.importData(Uri.EMPTY, cachedZipBytes = zip(bundle(listOf(incomingFailed)))))
+            val result = requireSuccess(importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zip(bundle(listOf(incomingFailed))))))
 
             assertEquals(1, result.callHistoryImported)
             assertEquals("FAILED", database.callHistoryDao().getByAttemptId("incoming-failed")?.outcome)
@@ -314,15 +318,17 @@ class MigrationCallHistoryImportTest {
             val result =
                 importer.importData(
                     Uri.EMPTY,
-                    cachedZipBytes =
-                        zip(
-                            bundle(
-                                listOf(
-                                    call().copy(callAttemptId = "valid-before-contradiction"),
-                                    call().copy(
-                                        callAttemptId = "contradictory",
-                                        outcome = "NOT_CONNECTED",
-                                        connectedAt = 150L,
+                    cachedZipFile =
+                        tempZipFile(
+                            zip(
+                                bundle(
+                                    listOf(
+                                        call().copy(callAttemptId = "valid-before-contradiction"),
+                                        call().copy(
+                                            callAttemptId = "contradictory",
+                                            outcome = "NOT_CONNECTED",
+                                            connectedAt = 150L,
+                                        ),
                                     ),
                                 ),
                             ),
@@ -340,15 +346,17 @@ class MigrationCallHistoryImportTest {
             val result =
                 importer.importData(
                     Uri.EMPTY,
-                    cachedZipBytes =
-                        zip(
-                            bundle(
-                                listOf(
-                                    call().copy(callAttemptId = "valid-attempt"),
-                                    call().copy(
-                                        callAttemptId = "malformed-attempt",
-                                        direction = "INCOMING",
-                                        outcome = "BUSY_REMOTE",
+                    cachedZipFile =
+                        tempZipFile(
+                            zip(
+                                bundle(
+                                    listOf(
+                                        call().copy(callAttemptId = "valid-attempt"),
+                                        call().copy(
+                                            callAttemptId = "malformed-attempt",
+                                            direction = "INCOMING",
+                                            outcome = "BUSY_REMOTE",
+                                        ),
                                     ),
                                 ),
                             ),
@@ -366,12 +374,14 @@ class MigrationCallHistoryImportTest {
             val result =
                 importer.importData(
                     Uri.EMPTY,
-                    cachedZipBytes =
-                        zip(
-                            bundle(
-                                listOf(
-                                    call().copy(callAttemptId = "valid-attempt"),
-                                    call().copy(callAttemptId = "malformed-hash", remoteIdentityHash = "not-a-hash"),
+                    cachedZipFile =
+                        tempZipFile(
+                            zip(
+                                bundle(
+                                    listOf(
+                                        call().copy(callAttemptId = "valid-attempt"),
+                                        call().copy(callAttemptId = "malformed-hash", remoteIdentityHash = "not-a-hash"),
+                                    ),
                                 ),
                             ),
                         ),
@@ -392,7 +402,7 @@ class MigrationCallHistoryImportTest {
                     remoteIdentityHash = REMOTE_IDENTITY.uppercase(),
                 )
 
-            val result = importer.importData(Uri.EMPTY, cachedZipBytes = zip(bundle(listOf(imported))))
+            val result = importer.importData(Uri.EMPTY, cachedZipFile = tempZipFile(zip(bundle(listOf(imported)))))
 
             requireSuccess(result)
             val stored = database.callHistoryDao().getByAttemptId("uppercase-hashes")!!
@@ -466,6 +476,13 @@ class MigrationCallHistoryImportTest {
         file.writeBytes(bytes)
         file.deleteOnExit()
         return Uri.fromFile(file)
+    }
+
+    private fun tempZipFile(bytes: ByteArray): File {
+        val file = File.createTempFile("call_history_transfer_", ".zip", context.cacheDir)
+        file.writeBytes(bytes)
+        file.deleteOnExit()
+        return file
     }
 
     private companion object {

@@ -41,6 +41,7 @@ internal object BundleKeys {
 
     // RnsNomadnet
     const val PAGE = "page"
+    const val MEDIA = "media"
 
     // RnsTransportAdmin
     const val INTERFACES = "interfaces"

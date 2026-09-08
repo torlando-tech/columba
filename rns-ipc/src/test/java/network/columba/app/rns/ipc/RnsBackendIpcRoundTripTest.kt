@@ -728,6 +728,11 @@ private class FakeRnsNomadnet : RnsNomadnet {
         timeoutSeconds: Float,
     ): Result<NomadnetPageResult> = Result.failure(NotImplementedError())
     override suspend fun cancelNomadnetPageRequest() {}
+    override suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+    ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> = Result.failure(NotImplementedError())
     override suspend fun getNomadnetRequestStatus(): String = status.value
     override suspend fun getNomadnetDownloadProgress(): Float = progress.value
     override suspend fun identifyNomadnetLink(destinationHash: String) = Result.success(true)

@@ -1,6 +1,7 @@
 package network.columba.app.rns.api
 
 import kotlinx.coroutines.flow.StateFlow
+import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 
 /**
@@ -33,6 +34,26 @@ interface RnsNomadnet {
 
     /** Cancel an in-flight [requestNomadnetPage]. No-op if no request is active. */
     suspend fun cancelNomadnetPageRequest()
+
+    /**
+     * Fetch a media object (page image) from a NomadNet host's `/media/`
+     * handler. The body is written to a fresh file inside the backend cache
+     * dir and returned as a [NomadnetMediaResult]; the caller owns its
+     * lifecycle from there (move into the image cache, delete on eviction).
+     *
+     * Server-side `.allowed` gating surfaces as a failed Result carrying
+     * [RnsError.NomadnetRequestDenied] (upstream Node.py `False` deny),
+     * distinct from timeouts and unreachable hosts.
+     *
+     * @param destinationHash 32-char hex destination hash of the NomadNet host.
+     * @param path Media path on the host (e.g. `/media/images/logo.webp`).
+     * @param timeoutSeconds Hard deadline for the round-trip.
+     */
+    suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float = 45f,
+    ): Result<NomadnetMediaResult>
 
     /**
      * One-shot snapshot of the current NomadNet request status.

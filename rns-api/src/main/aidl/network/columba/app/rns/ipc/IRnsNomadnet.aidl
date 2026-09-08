@@ -22,6 +22,13 @@ oneway interface IRnsNomadnet {
 
     void cancelNomadnetPageRequest(in IRnsResultCallback cb);
 
+    // requestNomadnetMedia → "media": NomadnetMediaResult
+    void requestNomadnetMedia(
+        String destinationHash,
+        String path,
+        float timeoutSeconds,
+        in IRnsResultCallback cb);
+
     // Snapshot getters for the request status / download progress flows.
     void getNomadnetRequestStatus(in IRnsStringCallback cb);
     void getNomadnetDownloadProgress(in IRnsFloatCallback cb);

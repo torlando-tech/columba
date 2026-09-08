@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 
 /**
@@ -38,6 +39,13 @@ internal class BoundRnsNomadnet(
     override suspend fun cancelNomadnetPageRequest() {
         awaitBound().nomadnet.cancelNomadnetPageRequest()
     }
+
+    override suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+    ): Result<NomadnetMediaResult> =
+        awaitBound().nomadnet.requestNomadnetMedia(destinationHash, path, timeoutSeconds)
 
     override suspend fun getNomadnetRequestStatus(): String =
         awaitBound().nomadnet.getNomadnetRequestStatus()

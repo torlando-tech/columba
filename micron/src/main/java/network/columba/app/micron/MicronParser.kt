@@ -197,6 +197,27 @@ object MicronParser {
                 }
             }
 
+            // Images: `(alt`w=..`h=..`a=c`:url) — block-level, own line.
+            // Mirrors upstream MicronParser.parse_image: everything up to the
+            // last ")" is the tag; fields split on backtick; first field is
+            // alt text, last is the URL, middle fields are key=value
+            // properties (w, h, a; unknown keys ignored). A malformed tag
+            // (no closing paren or fewer than two backtick-separated fields)
+            // falls through to plain inline text, exactly like upstream.
+            if (line.startsWith("`(")) {
+                val image = parseImage(line.substring(2))
+                if (image != null) {
+                    outputLines.add(
+                        MicronLine(
+                            elements = listOf(image),
+                            alignment = currentAlignment,
+                            indentLevel = sectionDepth,
+                        ),
+                    )
+                    continue
+                }
+            }
+
             // Regular content line — parse inline elements
             val (elements, updatedStyle, updatedAlignment) =
                 parseInline(
@@ -427,6 +448,62 @@ object MicronParser {
 
             else -> null
         }
+    }
+
+    /**
+     * Parse an image tag body (everything after the leading `` `(` ``).
+     * Mirrors upstream `MicronParser.parse_image`:
+     * `alt`w=<spec>`h=<spec>`a=<l|c|r>`:/media/foo.webp)` — the tag ends at
+     * the last ")" ; fields split on backtick; first field alt text, last
+     * field the URL (leading colon = relative to the current page's node;
+     * `<hash>:/path` for cross-node), middle fields `key=value` properties
+     * where w/h are size specs and a is alignment (l/c/r expanded to
+     * left/center/right). Unknown property keys are ignored.
+     *
+     * Returns null for structurally malformed tags (no closing paren, or
+     * fewer than two backtick-separated fields) so the line falls through to
+     * plain inline text, exactly like upstream. A well-formed tag with an
+     * empty URL still yields an Image — renderers show the alt text as an
+     * error placeholder, matching upstream's "Error loading image" line.
+     */
+    internal fun parseImage(body: String): MicronElement.Image? {
+        val endpos = body.lastIndexOf(')')
+        if (endpos <= 0) return null
+        val fields = body.substring(0, endpos).split('`')
+        if (fields.size < 2) return null
+
+        val alt = fields.first().trim()
+        val url = fields.last().trim()
+        var width: String? = null
+        var height: String? = null
+        var align: String? = null
+
+        for (prop in fields.subList(1, fields.size - 1)) {
+            val eq = prop.indexOf('=')
+            if (eq == -1) continue
+            val key = prop.substring(0, eq).trim()
+            val value = prop.substring(eq + 1).trim()
+            when (key) {
+                "w" -> width = value
+                "h" -> height = value
+                "a" ->
+                    align =
+                        when (value) {
+                            "c" -> "center"
+                            "l" -> "left"
+                            "r" -> "right"
+                            else -> value
+                        }
+            }
+        }
+
+        return MicronElement.Image(
+            alt = alt,
+            url = url,
+            width = width,
+            height = height,
+            align = align,
+        )
     }
 
     /**

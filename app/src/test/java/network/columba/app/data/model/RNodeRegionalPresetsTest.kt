@@ -40,6 +40,22 @@ class RNodeRegionalPresetsTest {
         assertTrue("Should include United Kingdom", "United Kingdom" in countries)
     }
 
+    @Test
+    fun `Germany includes the Ruhrgebiet preset with expected values`() {
+        val preset = RNodeRegionalPresets.getPresetsForCountry("Germany")
+            .firstOrNull { it.id == "de_ruhrgebiet" }
+
+        assertNotNull("Ruhrgebiet preset should exist for Germany", preset)
+        assertEquals("Ruhrgebiet", preset!!.cityOrRegion)
+        assertEquals(869_462_500L, preset.frequency)
+        assertEquals(125_000, preset.bandwidth)
+        assertEquals(8, preset.spreadingFactor)
+        assertEquals(5, preset.codingRate)
+        assertEquals(27, preset.txPower)
+        // Preset carries the long-term airtime limit applied to lt_alock on selection
+        assertEquals(10, preset.longTermAirtimeLimit)
+    }
+
     // ========== getByCountry Tests ==========
 
     @Test

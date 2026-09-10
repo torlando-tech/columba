@@ -3167,6 +3167,7 @@ class RNodeWizardViewModel
         }
 
         fun selectPreset(preset: RNodeRegionalPreset) {
+            val ltAlock = preset.longTermAirtimeLimit?.toString()
             _state.update {
                 it.copy(
                     selectedPreset = preset,
@@ -3182,6 +3183,9 @@ class RNodeWizardViewModel
                     codingRateError = null,
                     txPower = preset.txPower.toString(),
                     txPowerError = null,
+                    // Apply the preset's long-term airtime limit if it defines one
+                    ltAlock = ltAlock ?: it.ltAlock,
+                    ltAlockError = if (ltAlock != null) null else it.ltAlockError,
                 )
             }
         }

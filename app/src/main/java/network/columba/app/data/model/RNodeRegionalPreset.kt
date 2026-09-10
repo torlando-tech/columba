@@ -81,6 +81,12 @@ data class RNodeRegionalPreset(
     val codingRate: Int,
     /** Transmission power in dBm */
     val txPower: Int,
+    /**
+     * Long-term airtime limit in percent (1-100), or null when the preset
+     * carries no explicit long-term airtime constraint. Applied to the
+     * `lt_alock` field when the preset is selected.
+     */
+    val longTermAirtimeLimit: Int? = null,
     val description: String,
 )
 
@@ -795,6 +801,19 @@ object RNodeRegionalPresets {
                 codingRate = 5,
                 txPower = 14,
                 description = "Wiesbaden configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "de_ruhrgebiet",
+                countryCode = "DE",
+                countryName = "Germany",
+                cityOrRegion = "Ruhrgebiet",
+                frequency = 869462500,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                txPower = 27,
+                longTermAirtimeLimit = 10,
+                description = "Ruhrgebiet configuration (869.4625 MHz, 27 dBm, 10% LT airtime)",
             ),
             // ==================== ITALY ====================
             RNodeRegionalPreset(

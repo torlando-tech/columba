@@ -462,7 +462,12 @@ class PythonRnsNomadnet(
      * poll the capture to completion (same pattern as [sendPageRequest] /
      * [awaitResponse]: file-response bodies are snapshot Python-side before
      * upstream closes the backing temp file).
+     *
+     * Each failure mode (denied / error / null body / FAILED status /
+     * timeout) throws a distinct typed RnsException — collapsing them would
+     * lose the failure distinction (see [awaitResponse]).
      */
+    @Suppress("ThrowsCount")
     private suspend fun sendMediaRequest(
         link: PyObject,
         requestData: PyObject,

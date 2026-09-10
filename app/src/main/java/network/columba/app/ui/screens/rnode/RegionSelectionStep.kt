@@ -2,6 +2,7 @@ package network.columba.app.ui.screens.rnode
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -405,8 +406,9 @@ private fun PopularPresetCard(
             Spacer(Modifier.height(8.dp))
 
             // Settings preview - show all parameters since these are complete presets
-            Row(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 SettingChip(
                     label = "${preset.frequency / 1_000_000.0} MHz",

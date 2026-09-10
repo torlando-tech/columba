@@ -48,8 +48,6 @@ import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronElement
 import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.PageImageStatus
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -110,8 +108,8 @@ fun MicronImageBlock(
         PageImageStatus.LOADED -> {
             val file = effectiveState.file
             if (file != null) {
-                val targetWidth = resolveImageWidth(element.width, Dp.Unspecified)
-                val targetHeight = resolveImageWidth(element.height, Dp.Unspecified)
+                val targetWidth = resolveImageSize(element.width, DP_PER_COLUMN)
+                val targetHeight = resolveImageSize(element.height, DP_PER_ROW)
                 val painter =
                     rememberAsyncImagePainter(
                         ImageRequest.Builder(context)
@@ -333,23 +331,27 @@ private fun loadingStatusLine(state: PageImageState): String {
     return "$pct%$sizePart$speedPart".ifBlank { "Loading..." }
 }
 
-/** Terminal-cell size spec -> Dp (locked: 1 col = 8.dp, 1 row = 16.dp). */
+/**
+ * Terminal-cell size spec -> Dp (locked decision: fixed constants, clamp to
+ * viewport — width is `1 col = 8.dp`, height is `1 row = 16.dp`, the 2:1
+ * terminal cell aspect). `NN%` is a fraction of the 411 dp width baseline
+ * (upstream: fraction of the terminal's width/height; on mobile both resolve
+ * against the width baseline, which is the only natural constraint inside
+ * the scrolling page column). `n` (intrinsic) -> null, letting the image use
+ * its natural size clamped by the parent. Malformed specs -> null.
+ */
 @Composable
-internal fun resolveImageWidth(
+internal fun resolveImageSize(
     spec: String?,
-    @Suppress("UNUSED_PARAMETER") fallback: Dp,
+    dpPerUnit: Float,
 ): Dp? {
-    if (spec == null) return null
-    if (spec == "n") return null // native: intrinsic size, clamped by parent
+    if (spec == null || spec == "n") return null
     val density = LocalDensity.current
-    return when {
-        spec.endsWith("%") -> {
-            val pct = spec.removeSuffix("%").toFloatOrNull() ?: return null
-            with(density) { (max(0f, min(100f, pct)) * 4.11f).toDp() }
-        }
-        spec.toFloatOrNull() != null -> with(density) { (spec.toFloat() * DP_PER_COLUMN).toDp() }
-        else -> null
+    val value = when {
+        spec.endsWith("%") -> spec.removeSuffix("%").toFloatOrNull()?.coerceIn(0f, 100f)?.times(4.11f)
+        else -> spec.toFloatOrNull()?.times(dpPerUnit)
     }
+    return value?.let { with(density) { it.toDp() } }
 }
 
 private fun horizontalArrangementFor(align: String?): Arrangement.Horizontal =

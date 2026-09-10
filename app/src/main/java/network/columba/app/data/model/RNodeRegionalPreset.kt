@@ -79,8 +79,21 @@ data class RNodeRegionalPreset(
     val spreadingFactor: Int,
     /** LoRa CR (5-8) */
     val codingRate: Int,
-    /** Transmission power in dBm */
-    val txPower: Int,
+    /**
+     * Transmission power in dBm, or null when the preset carries no explicit
+     * override and the frequency region's default should be kept. Most RNode
+     * radios top out at 17-22 dBm; only the Heltec v4 reaches the higher EU868
+     * sub-band-P ceiling, so presets defer to the region default unless a
+     * board is known to need more. Applied (when non-null) when the preset is
+     * selected; a null value leaves the current / region-default TX power.
+     */
+    val txPower: Int? = null,
+    /**
+     * Long-term airtime limit in percent (1-100), or null when the preset
+     * carries no explicit long-term airtime constraint. Applied to the
+     * `lt_alock` field when the preset is selected.
+     */
+    val longTermAirtimeLimit: Int? = null,
     val description: String,
 )
 
@@ -795,6 +808,18 @@ object RNodeRegionalPresets {
                 codingRate = 5,
                 txPower = 14,
                 description = "Wiesbaden configuration",
+            ),
+            RNodeRegionalPreset(
+                id = "de_ruhrgebiet",
+                countryCode = "DE",
+                countryName = "Germany",
+                cityOrRegion = "Ruhrgebiet",
+                frequency = 869462500,
+                bandwidth = 125000,
+                spreadingFactor = 8,
+                codingRate = 5,
+                longTermAirtimeLimit = 10,
+                description = "Ruhrgebiet configuration (869.4625 MHz, region-default TX, 10% LT airtime)",
             ),
             // ==================== ITALY ====================
             RNodeRegionalPreset(

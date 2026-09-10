@@ -54,7 +54,7 @@ object RNodeConfigValidator {
     private const val MIN_CR = 5
     private const val MAX_CR = 8
     private const val MIN_TX_POWER = 0
-    private const val DEFAULT_MAX_TX_POWER = 22
+    private const val DEFAULT_MAX_TX_POWER = 27
 
     // Default frequency range (when no region is selected)
     private const val DEFAULT_MIN_FREQ = 137_000_000L

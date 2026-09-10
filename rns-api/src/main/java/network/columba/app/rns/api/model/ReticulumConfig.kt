@@ -340,7 +340,7 @@ sealed class InterfaceConfig : Parcelable {
      * @param usbDeviceId Android USB device ID for USB serial mode (required when connectionMode="usb")
      * @param frequency LoRa frequency in Hz (137000000 - 3000000000)
      * @param bandwidth LoRa bandwidth in Hz (7800 - 1625000)
-     * @param txPower Transmission power in dBm (0-22)
+     * @param txPower Transmission power in dBm (0-27)
      * @param spreadingFactor LoRa spreading factor (5-12)
      * @param codingRate LoRa coding rate (5-8)
      * @param stAlock Short-term airtime limit percentage (optional)

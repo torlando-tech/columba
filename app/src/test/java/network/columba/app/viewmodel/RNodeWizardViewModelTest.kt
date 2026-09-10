@@ -330,6 +330,7 @@ class RNodeWizardViewModelTest {
                     bandwidth = 125_000,
                     spreadingFactor = 9,
                     codingRate = 5,
+                    txPower = 17,
                     description = "Test preset",
                 )
             viewModel.selectPreset(testPreset)
@@ -356,6 +357,7 @@ class RNodeWizardViewModelTest {
                     bandwidth = 125_000,
                     spreadingFactor = 9,
                     codingRate = 5,
+                    txPower = 17,
                     description = "Test preset",
                 )
             viewModel.selectPreset(testPreset)
@@ -386,6 +388,7 @@ class RNodeWizardViewModelTest {
                     bandwidth = 125_000,
                     spreadingFactor = 9,
                     codingRate = 5,
+                    txPower = 17,
                     description = "Test preset",
                 )
             viewModel.selectPreset(testPreset)
@@ -780,15 +783,14 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
-    fun `selectPreset preserves the region TX power and applies airtime limit`() =
+    fun `selectPreset without explicit tx power keeps region default and applies airtime limit`() =
         runViewModelTest {
             advanceUntilIdle()
 
             viewModel.goToStep(WizardStep.REGION_SELECTION)
             advanceUntilIdle()
 
-            // EU868 sub-band P defaults to 14 dBm; presets never set TX power,
-            // so the region default must survive preset selection.
+            // EU868 sub-band P defaults to 14 dBm; the preset must not override it.
             viewModel.selectFrequencyRegion(euRegionP)
             advanceUntilIdle()
 
@@ -799,14 +801,15 @@ class RNodeWizardViewModelTest {
             val state = viewModel.state.value
             assertEquals(preset.id, state.selectedPreset?.id)
             assertEquals("869462500", state.frequency)
-            // Presets do not carry TX power -> region default (14) is kept.
+            // No explicit TX power on the preset -> region default (14) is kept.
+            assertNull(preset.txPower)
             assertEquals(euRegionP.defaultTxPower.toString(), state.txPower)
             // Preset carries an explicit long-term airtime limit, applied to ltAlock
             assertEquals("10", state.ltAlock)
         }
 
     @Test
-    fun `selectPreset never overrides an existing TX power value`() =
+    fun `selectPreset with explicit tx power applies it over the region default`() =
         runViewModelTest {
             advanceUntilIdle()
 
@@ -816,12 +819,19 @@ class RNodeWizardViewModelTest {
             viewModel.selectFrequencyRegion(euRegionP) // default 14 dBm
             advanceUntilIdle()
 
-            // The user raises TX power manually (e.g. a Heltec v4 allows more
-            // than the region default); selecting a preset must not clobber it.
-            viewModel.updateTxPower("17")
-            advanceUntilIdle()
-
-            val preset = RNodeRegionalPresets.presets.first { it.id == "de_ruhrgebiet" }
+            val preset =
+                RNodeRegionalPreset(
+                    id = "test_explicit_tx",
+                    countryCode = "DE",
+                    countryName = "Germany",
+                    cityOrRegion = "Test City",
+                    frequency = 869_462_500,
+                    bandwidth = 125_000,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                    txPower = 17,
+                    description = "Explicit TX test preset",
+                )
             viewModel.selectPreset(preset)
             advanceUntilIdle()
 
@@ -1654,6 +1664,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
@@ -1699,6 +1710,7 @@ class RNodeWizardViewModelTest {
                     tcpPort = 7633,
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
@@ -1801,6 +1813,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 433500000, // Custom frequency
                     bandwidth = 62500, // Custom bandwidth
+                    txPower = 10,
                     spreadingFactor = 9,
                     codingRate = 6,
                 )
@@ -1845,9 +1858,9 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 869525000,
                     bandwidth = 250000,
+                    txPower = 14,
                     spreadingFactor = 10,
                     codingRate = 5,
-                    txPower = 14,
                     stAlock = 15.0,
                     ltAlock = 5.0,
                     mode = "gateway",
@@ -1961,6 +1974,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
@@ -2259,6 +2273,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
@@ -2328,6 +2343,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
@@ -2367,6 +2383,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
@@ -2427,6 +2444,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )
@@ -2478,6 +2496,7 @@ class RNodeWizardViewModelTest {
                     targetDeviceName = "",
                     frequency = 915000000,
                     bandwidth = 125000,
+                    txPower = 17,
                     spreadingFactor = 8,
                     codingRate = 5,
                 )

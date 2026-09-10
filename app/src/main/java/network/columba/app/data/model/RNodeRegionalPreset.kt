@@ -80,6 +80,15 @@ data class RNodeRegionalPreset(
     /** LoRa CR (5-8) */
     val codingRate: Int,
     /**
+     * Transmission power in dBm, or null when the preset carries no explicit
+     * override and the frequency region's default should be kept. Most RNode
+     * radios top out at 17-22 dBm; only the Heltec v4 reaches the higher EU868
+     * sub-band-P ceiling, so presets defer to the region default unless a
+     * board is known to need more. Applied (when non-null) when the preset is
+     * selected; a null value leaves the current / region-default TX power.
+     */
+    val txPower: Int? = null,
+    /**
      * Long-term airtime limit in percent (1-100), or null when the preset
      * carries no explicit long-term airtime constraint. Applied to the
      * `lt_alock` field when the preset is selected.
@@ -674,6 +683,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 17,
                 description = "915-928 MHz AU band (default)",
             ),
             RNodeRegionalPreset(
@@ -685,6 +695,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 11,
                 codingRate = 5,
+                txPower = 17,
                 description = "Sydney long-range configuration",
             ),
             RNodeRegionalPreset(
@@ -696,6 +707,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 17,
                 description = "Brisbane configuration",
             ),
             RNodeRegionalPreset(
@@ -707,6 +719,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 17,
                 description = "Western Sydney configuration",
             ),
             // ==================== BELGIUM ====================
@@ -719,6 +732,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -730,6 +744,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Duffel configuration",
             ),
             // ==================== FINLAND ====================
@@ -742,6 +757,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -753,6 +769,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Turku configuration",
             ),
             // ==================== GERMANY ====================
@@ -765,6 +782,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -776,6 +794,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 7,
                 codingRate = 5,
+                txPower = 14,
                 description = "Darmstadt configuration",
             ),
             RNodeRegionalPreset(
@@ -787,6 +806,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Wiesbaden configuration",
             ),
             RNodeRegionalPreset(
@@ -811,6 +831,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -822,6 +843,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Salerno configuration",
             ),
             RNodeRegionalPreset(
@@ -833,6 +855,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 7,
                 codingRate = 5,
+                txPower = 14,
                 description = "Brescia configuration",
             ),
             RNodeRegionalPreset(
@@ -844,6 +867,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 7,
                 codingRate = 5,
+                txPower = 14,
                 description = "Treviso configuration",
             ),
             RNodeRegionalPreset(
@@ -855,6 +879,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 12,
                 codingRate = 5,
+                txPower = 14,
                 description = "Genova 433 MHz configuration",
             ),
             // ==================== MALAYSIA ====================
@@ -867,6 +892,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 17,
                 description = "920 MHz AS923 band",
             ),
             // ==================== NETHERLANDS ====================
@@ -879,6 +905,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -890,6 +917,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Rotterdam Nesselande configuration",
             ),
             RNodeRegionalPreset(
@@ -901,6 +929,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Brugge (Bruges) configuration",
             ),
             // ==================== NORWAY ====================
@@ -913,6 +942,7 @@ object RNodeRegionalPresets {
                 bandwidth = 62500,
                 spreadingFactor = 7,
                 codingRate = 5,
+                txPower = 14,
                 description = "Norway narrowband",
             ),
             // ==================== SINGAPORE ====================
@@ -925,6 +955,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 17,
                 description = "920 MHz AS923 band",
             ),
             // ==================== SPAIN ====================
@@ -937,6 +968,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "869 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -948,6 +980,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Madrid configuration",
             ),
             // ==================== SWEDEN ====================
@@ -960,6 +993,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -971,6 +1005,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 10,
                 codingRate = 5,
+                txPower = 14,
                 description = "Gothenburg area configuration",
             ),
             RNodeRegionalPreset(
@@ -982,6 +1017,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 12,
                 description = "433 MHz band shared by Gothenburg, Borås, Älvsered",
             ),
             RNodeRegionalPreset(
@@ -993,6 +1029,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Mörbylånga/Bredinge configuration",
             ),
             // ==================== SWITZERLAND ====================
@@ -1005,6 +1042,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz EU band",
             ),
             RNodeRegionalPreset(
@@ -1016,6 +1054,7 @@ object RNodeRegionalPresets {
                 bandwidth = 250000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 14,
                 description = "Bern configuration",
             ),
             // ==================== THAILAND ====================
@@ -1028,6 +1067,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 17,
                 description = "920 MHz AS923 band",
             ),
             // ==================== UNITED KINGDOM ====================
@@ -1040,6 +1080,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "868 MHz UK band",
             ),
             RNodeRegionalPreset(
@@ -1051,6 +1092,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "St. Helens configuration",
             ),
             RNodeRegionalPreset(
@@ -1062,6 +1104,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 9,
                 codingRate = 5,
+                txPower = 14,
                 description = "Edinburgh 868 MHz configuration",
             ),
             RNodeRegionalPreset(
@@ -1073,6 +1116,7 @@ object RNodeRegionalPresets {
                 bandwidth = 812500,
                 spreadingFactor = 7,
                 codingRate = 5,
+                txPower = 14,
                 description = "Edinburgh 2.4 GHz configuration",
             ),
             // ==================== UNITED STATES ====================
@@ -1085,6 +1129,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 17,
                 description = "915 MHz ISM band (default)",
             ),
             RNodeRegionalPreset(
@@ -1096,6 +1141,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 17,
                 description = "Portsmouth, NH configuration",
             ),
             RNodeRegionalPreset(
@@ -1107,6 +1153,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 17,
                 description = "Olympia, WA configuration",
             ),
             RNodeRegionalPreset(
@@ -1118,6 +1165,7 @@ object RNodeRegionalPresets {
                 bandwidth = 125000,
                 spreadingFactor = 8,
                 codingRate = 5,
+                txPower = 17,
                 description = "Chicago, IL configuration",
             ),
         )

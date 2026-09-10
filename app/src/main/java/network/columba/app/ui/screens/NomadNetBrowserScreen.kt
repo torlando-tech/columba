@@ -30,9 +30,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -431,6 +433,40 @@ fun NomadNetBrowserScreen(
                                     },
                                 )
                             }
+                            HorizontalDivider()
+
+                            // Upstream Ctrl+L / Ctrl+X: explicit bulk load.
+                            // Visible only in manual mode (auto/always load on
+                            // their own; never blocks even explicit loads).
+                            if (imageLoadingMode == ImageLoadingMode.MANUAL) {
+                                val hasPageImages = imageStates.isNotEmpty()
+                                if (hasPageImages) {
+                                    DropdownMenuItem(
+                                        text = { Text("Load all images") },
+                                        leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
+                                        onClick = {
+                                            viewModel.loadPageImages(forceReload = false)
+                                            showMenu = false
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Reload all images") },
+                                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                        onClick = {
+                                            viewModel.loadPageImages(forceReload = true)
+                                            showMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Clear image cache") },
+                                leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
+                                onClick = {
+                                    viewModel.clearImageCache()
+                                    showMenu = false
+                                },
+                            )
                             HorizontalDivider()
                             BrowserCloseSiteMenuItem(
                                 onCloseSite = {

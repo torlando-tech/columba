@@ -26,10 +26,9 @@ import java.io.File
  * - WebP-only rule enforced at the cache boundary (7bd3a3a); server-side
  *   `.allowed` denials surface as DENIED, not FAILED.
  *
- * Size cap ([NomadNetImagePolicy.MAX_IMAGE_BYTES]) is applied by the backend
- * media request itself (the staged body is bounded by the link's response
- * handling); a client-side pre-abort needs receipt-size plumbing on the seam
- * and is a deliberate follow-up — see plan doc.
+ * Size cap ([NomadNetImagePolicy.MAX_IMAGE_BYTES]) is enforced client-side in
+ * [fetchOne] (the backends stage whatever the link delivers, so the app layer
+ * is the enforcement point that holds for both of them).
  */
 class PageImageLoader(
     private val nomadnet: RnsNomadnet,
@@ -105,15 +104,21 @@ class PageImageLoader(
         if (forceReload) {
             // Upstream Ctrl+X: drop caches for this page's images and re-queue
             // them as placeholders so they re-download.
-            for ((key, state) in states.snapshot()) {
-                val ref = state.ref ?: continue
-                val resolved = resolveImageUrl(ref.url, currentNodeHash()) ?: continue
-                cache.remove(resolved)
-                states.put(key, PageImageState(ref = ref.withResolved(resolved)))
-            }
+            dropCachesAndReset()
             publish()
         }
         startQueueForExplicitLoad(epoch)
+    }
+
+    /** Ctrl+X step: evict each image's cache entry and reset it to placeholder. */
+    private fun dropCachesAndReset() {
+        for ((key, state) in states.snapshot()) {
+            val ref = state.ref
+            val resolved = ref?.let { resolveImageUrl(it.url, currentNodeHash()) }
+            if (ref == null || resolved == null) continue
+            cache.remove(resolved)
+            states.put(key, PageImageState(ref = ref.withResolved(resolved)))
+        }
     }
 
     /** Retry one failed/denied/placeholder image (per-image reload affordance). */
@@ -180,8 +185,8 @@ class PageImageLoader(
                 val keys = states.snapshot().keys.toList()
                 for (key in keys) {
                     if (epoch != myEpoch) return@launch
-                    val state = states.get(key) ?: continue
-                    if (state.status != PageImageStatus.PLACEHOLDER) continue
+                    val state = states.get(key)
+                    if (state == null || state.status != PageImageStatus.PLACEHOLDER) continue
                     fetchOne(key, myEpoch)
                 }
             }
@@ -191,54 +196,63 @@ class PageImageLoader(
         key: String,
         myEpoch: Int,
     ) {
-        val state = states.get(key) ?: return
-        val ref = state.ref ?: return
-        val hash = ref.nodeHash ?: return
+        val state = states.get(key)
+        val ref = state?.ref
+        val hash = ref?.nodeHash
+        if (state == null || ref == null || hash == null) return
         states.update(key) { it.copy(status = PageImageStatus.LOADING) }
         publish()
 
         val result =
             runCatching {
-                nomadnet.requestNomadnetMedia(hash, ref.mediaPath, MEDIA_TIMEOUT_SECONDS).getOrThrow()
+                val media = nomadnet.requestNomadnetMedia(hash, ref.mediaPath, MEDIA_TIMEOUT_SECONDS).getOrThrow()
+                // Client-side size cap (plan: "always mode still hits the per-image
+                // size cap"). The backends stage whatever the link delivers, so the
+                // app layer is the enforcement point that holds for both of them.
+                if (media.fileSize > NomadNetImagePolicy.MAX_IMAGE_BYTES) {
+                    runCatching { java.io.File(media.filePath).delete() }
+                    error("Image too large (${media.fileSize} bytes; cap ${NomadNetImagePolicy.MAX_IMAGE_BYTES})")
+                }
+                media
             }
 
         if (epoch != myEpoch) {
-            // Stale: drop the staged file if any.
+            // Stale (page changed mid-flight): drop the staged file if any and
+            // leave the state for the new scan to own.
             result.getOrNull()?.let { runCatching { File(it.filePath).delete() } }
-            return
-        }
-
-        result.fold(
-            onSuccess = { media ->
-                val cached = cache.put("$hash:${ref.mediaPath}", File(media.filePath))
-                if (cached != null) {
+        } else {
+            result.fold(
+                onSuccess = { media ->
+                    val cached = cache.put("$hash:${ref.mediaPath}", File(media.filePath))
+                    if (cached != null) {
+                        states.update(key) {
+                            it.copy(
+                                status = PageImageStatus.LOADED,
+                                file = cached,
+                                progress = 1f,
+                                totalBytes = media.fileSize,
+                                receivedBytes = media.fileSize,
+                            )
+                        }
+                    } else {
+                        states.update(key) {
+                            it.copy(status = PageImageStatus.FAILED, error = "Not a WebP image (rejected)")
+                        }
+                    }
+                },
+                onFailure = { error ->
+                    val denied = (error as? RnsException)?.error is RnsError.NomadnetRequestDenied
+                    Log.d(TAG, "Image $key ${if (denied) "denied by node" else "failed"}: ${error.message}")
                     states.update(key) {
                         it.copy(
-                            status = PageImageStatus.LOADED,
-                            file = cached,
-                            progress = 1f,
-                            totalBytes = media.fileSize,
-                            receivedBytes = media.fileSize,
+                            status = if (denied) PageImageStatus.DENIED else PageImageStatus.FAILED,
+                            error = error.message,
                         )
                     }
-                } else {
-                    states.update(key) {
-                        it.copy(status = PageImageStatus.FAILED, error = "Not a WebP image (rejected)")
-                    }
-                }
-            },
-            onFailure = { error ->
-                val denied = (error as? RnsException)?.error is RnsError.NomadnetRequestDenied
-                Log.d(TAG, "Image $key ${if (denied) "denied by node" else "failed"}: ${error.message}")
-                states.update(key) {
-                    it.copy(
-                        status = if (denied) PageImageStatus.DENIED else PageImageStatus.FAILED,
-                        error = error.message,
-                    )
-                }
-            },
-        )
-        publish()
+                },
+            )
+            publish()
+        }
     }
 
     private fun publish() {

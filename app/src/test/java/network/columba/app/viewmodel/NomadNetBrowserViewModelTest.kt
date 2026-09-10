@@ -61,9 +61,14 @@ class NomadNetBrowserViewModelTest {
         Dispatchers.setMain(testDispatcher)
         protocol = mockk()
         pageCache = mockk()
-        imageCache = mockk(relaxed = true)
+        imageCache = mockk()
         settingsRepository = mockk()
         every { pageCache.put(any(), any(), any(), any()) } just Runs
+        // Page-image cache: only the explicit clear (clearImageCache) and the
+        // loader's miss-path get() are reachable from these tests; stub both
+        // explicitly rather than using a relaxed mock.
+        every { imageCache.clear() } just Runs
+        every { imageCache.get(any()) } returns null
         coEvery { protocol.cancelNomadnetPageRequest() } just Runs
         coEvery { protocol.getNomadnetRequestStatus() } returns ""
         coEvery { protocol.getNomadnetLinkStats(any()) } returns null
@@ -959,5 +964,29 @@ class NomadNetBrowserViewModelTest {
             viewModel.retry()
             advanceUntilIdle()
             assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Initial)
+        }
+
+    // ── Page images ──
+
+    @Test
+    fun `setImageLoadingMode updates state and persists the choice`() =
+        runTest(testDispatcher) {
+            viewModel.setImageLoadingMode(network.columba.app.nomadnet.ImageLoadingMode.MANUAL)
+
+            assertEquals(
+                network.columba.app.nomadnet.ImageLoadingMode.MANUAL,
+                viewModel.imageLoadingMode.value,
+            )
+            coVerify(exactly = 1) { settingsRepository.saveNomadNetImageLoadingMode("MANUAL") }
+        }
+
+    @Test
+    fun `clearImageCache wipes the disk cache and resets in-flight image states`() =
+        runTest(testDispatcher) {
+            viewModel.clearImageCache()
+            advanceUntilIdle()
+
+            verify { imageCache.clear() }
+            assertTrue(viewModel.imageStates.value.isEmpty())
         }
 }

@@ -240,10 +240,10 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `validateTxPower without region uses default max`() {
-        // Default max is 22
-        val result = RNodeConfigValidator.validateTxPower("25", null)
+        // Default max is 27
+        val result = RNodeConfigValidator.validateTxPower("30", null)
         assertFalse(result.isValid)
-        assertTrue(result.errorMessage!!.contains("22"))
+        assertTrue(result.errorMessage!!.contains("27"))
     }
 
     @Test
@@ -487,7 +487,7 @@ class RNodeConfigValidatorTest {
 
     @Test
     fun `getMaxTxPower returns default without region`() {
-        assertEquals(22, RNodeConfigValidator.getMaxTxPower(null))
+        assertEquals(27, RNodeConfigValidator.getMaxTxPower(null))
     }
 
     @Test

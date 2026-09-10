@@ -424,6 +424,12 @@ private fun PopularPresetCard(
                     label = "${preset.txPower} dBm",
                     isSelected = isSelected,
                 )
+                preset.longTermAirtimeLimit?.let { limit ->
+                    SettingChip(
+                        label = "${limit}% LT",
+                        isSelected = isSelected,
+                    )
+                }
             }
         }
     }

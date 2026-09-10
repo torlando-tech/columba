@@ -11,6 +11,7 @@ import network.columba.app.data.model.DiscoveredUsbDevice
 import network.columba.app.data.model.FrequencyRegions
 import network.columba.app.data.model.ModemPreset
 import network.columba.app.data.model.RNodeRegionalPreset
+import network.columba.app.data.model.RNodeRegionalPresets
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.service.InterfaceConfigManager
@@ -779,6 +780,45 @@ class RNodeWizardViewModelTest {
                 assertNotNull(state.txPowerError)
                 assertTrue(state.txPowerError!!.contains("30"))
             }
+        }
+
+    @Test
+    fun `selectPreset applies tx power and long-term airtime limit`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            viewModel.goToStep(WizardStep.REGION_SELECTION)
+            advanceUntilIdle()
+
+            val preset = RNodeRegionalPresets.presets.first { it.id == "de_ruhrgebiet" }
+            viewModel.selectPreset(preset)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(preset.id, state.selectedPreset?.id)
+            assertEquals("869462500", state.frequency)
+            assertEquals("27", state.txPower)
+            // Preset carries an explicit long-term airtime limit, applied to ltAlock
+            assertEquals("10", state.ltAlock)
+        }
+
+    @Test
+    fun `selectPreset without airtime limit preserves existing ltAlock`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            viewModel.goToStep(WizardStep.REGION_SELECTION)
+            advanceUntilIdle()
+
+            viewModel.updateLtAlock("5")
+            advanceUntilIdle()
+
+            val preset = RNodeRegionalPresets.presets.first { it.id == "us_default" }
+            viewModel.selectPreset(preset)
+            advanceUntilIdle()
+
+            // Preset defines no long-term airtime limit, so the prior value is kept
+            assertEquals("5", viewModel.state.value.ltAlock)
         }
 
     @Test

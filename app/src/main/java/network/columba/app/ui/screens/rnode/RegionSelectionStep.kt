@@ -424,12 +424,6 @@ private fun PopularPresetCard(
                     label = "${preset.bandwidth / 1000} kHz",
                     isSelected = isSelected,
                 )
-                preset.txPower?.let { tx ->
-                    SettingChip(
-                        label = "$tx dBm",
-                        isSelected = isSelected,
-                    )
-                }
                 preset.longTermAirtimeLimit?.let { limit ->
                     SettingChip(
                         label = "${limit}% LT",

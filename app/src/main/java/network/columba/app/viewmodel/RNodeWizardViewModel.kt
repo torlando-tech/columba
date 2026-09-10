@@ -3168,7 +3168,6 @@ class RNodeWizardViewModel
 
         fun selectPreset(preset: RNodeRegionalPreset) {
             val ltAlock = preset.longTermAirtimeLimit?.toString()
-            val presetTx = preset.txPower?.toString()
             _state.update {
                 it.copy(
                     selectedPreset = preset,
@@ -3182,12 +3181,11 @@ class RNodeWizardViewModel
                     spreadingFactorError = null,
                     codingRate = preset.codingRate.toString(),
                     codingRateError = null,
-                    // Presets without an explicit TX power keep the current value
-                    // (the region default), since most RNode radios top out at
-                    // 17-22 dBm and only the Heltec v4 reaches the higher
-                    // EU868 sub-band-P ceiling.
-                    txPower = presetTx ?: it.txPower,
-                    txPowerError = if (presetTx != null) null else it.txPowerError,
+                    // TX power is intentionally not part of presets: supported
+                    // output power depends on the RNode board (e.g. the Heltec v4
+                    // exceeds the 17-22 dBm ceiling most radios have). The
+                    // wizard keeps the frequency region's default (or a value the
+                    // user set in custom mode) and the user can adjust it later.
                     // Apply the preset's long-term airtime limit if it defines one
                     ltAlock = ltAlock ?: it.ltAlock,
                     ltAlockError = if (ltAlock != null) null else it.ltAlockError,

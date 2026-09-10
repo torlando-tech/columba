@@ -235,6 +235,17 @@ class NomadNetBrowserViewModel
             pageImageLoader.loadImages(forceReload)
         }
 
+        /**
+         * Clear the on-disk NomadNet image cache entirely and reset the
+         * in-flight image states back to placeholders, so the user can re-load
+         * them on demand. Upstream's `clear`-and-renavigate, collapsed onto the
+         * mobile "Clear image cache" action.
+         */
+        fun clearImageCache() {
+            imageCache.clear()
+            pageImageLoader.clear()
+        }
+
         /** Retry/load one image (placeholder tap, sheet Reload). */
         fun retryPageImage(key: String) {
             pageImageLoader.retryImage(key)

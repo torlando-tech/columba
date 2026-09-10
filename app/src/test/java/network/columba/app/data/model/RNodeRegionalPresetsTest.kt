@@ -51,7 +51,9 @@ class RNodeRegionalPresetsTest {
         assertEquals(125_000, preset.bandwidth)
         assertEquals(8, preset.spreadingFactor)
         assertEquals(5, preset.codingRate)
-        assertEquals(27, preset.txPower)
+        // No explicit TX power: only the Heltec v4 reaches >22 dBm, so the
+        // preset defers to the frequency region's default.
+        assertNull(preset.txPower)
         // Preset carries the long-term airtime limit applied to lt_alock on selection
         assertEquals(10, preset.longTermAirtimeLimit)
     }
@@ -233,8 +235,8 @@ class RNodeRegionalPresetsTest {
     fun `all presets have valid TX power`() {
         RNodeRegionalPresets.presets.forEach { preset ->
             assertTrue(
-                "Preset ${preset.id} should have TX power 1-30, got ${preset.txPower}",
-                preset.txPower in 1..30,
+                "Preset ${preset.id} should have TX power 1-30 or none (region default), got ${preset.txPower}",
+                preset.txPower == null || preset.txPower in 1..30,
             )
         }
     }

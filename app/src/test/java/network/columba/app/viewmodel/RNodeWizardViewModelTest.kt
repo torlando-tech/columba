@@ -783,11 +783,15 @@ class RNodeWizardViewModelTest {
         }
 
     @Test
-    fun `selectPreset applies tx power and long-term airtime limit`() =
+    fun `selectPreset without explicit tx power keeps region default and applies airtime limit`() =
         runViewModelTest {
             advanceUntilIdle()
 
             viewModel.goToStep(WizardStep.REGION_SELECTION)
+            advanceUntilIdle()
+
+            // EU868 sub-band P defaults to 14 dBm; the preset must not override it.
+            viewModel.selectFrequencyRegion(euRegionP)
             advanceUntilIdle()
 
             val preset = RNodeRegionalPresets.presets.first { it.id == "de_ruhrgebiet" }
@@ -797,9 +801,42 @@ class RNodeWizardViewModelTest {
             val state = viewModel.state.value
             assertEquals(preset.id, state.selectedPreset?.id)
             assertEquals("869462500", state.frequency)
-            assertEquals("27", state.txPower)
+            // No explicit TX power on the preset -> region default (14) is kept.
+            assertNull(preset.txPower)
+            assertEquals(euRegionP.defaultTxPower.toString(), state.txPower)
             // Preset carries an explicit long-term airtime limit, applied to ltAlock
             assertEquals("10", state.ltAlock)
+        }
+
+    @Test
+    fun `selectPreset with explicit tx power applies it over the region default`() =
+        runViewModelTest {
+            advanceUntilIdle()
+
+            viewModel.goToStep(WizardStep.REGION_SELECTION)
+            advanceUntilIdle()
+
+            viewModel.selectFrequencyRegion(euRegionP) // default 14 dBm
+            advanceUntilIdle()
+
+            val preset =
+                RNodeRegionalPreset(
+                    id = "test_explicit_tx",
+                    countryCode = "DE",
+                    countryName = "Germany",
+                    cityOrRegion = "Test City",
+                    frequency = 869_462_500,
+                    bandwidth = 125_000,
+                    spreadingFactor = 8,
+                    codingRate = 5,
+                    txPower = 17,
+                    description = "Explicit TX test preset",
+                )
+            viewModel.selectPreset(preset)
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals("17", state.txPower)
         }
 
     @Test

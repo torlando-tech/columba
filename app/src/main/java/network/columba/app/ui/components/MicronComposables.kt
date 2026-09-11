@@ -214,6 +214,7 @@ private fun MicronLineComposable(
             element = image,
             state = imageStates[key],
             indentLevel = line.indentLevel,
+            minLineWidth = minLineWidth,
             onImageTapToLoad = { onImageTapToLoad(key) },
             onImageReload = { onImageReload(key) },
             onCopyLink = onCopyImageLink,

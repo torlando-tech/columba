@@ -1,5 +1,6 @@
 package network.columba.app.ui.components
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,10 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Lock
@@ -24,6 +27,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
@@ -42,9 +48,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.rememberAsyncImagePainter
-import coil.request.ImageRequest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.micron.MicronElement
 import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.PageImageStatus
@@ -78,6 +84,18 @@ fun MicronImageBlock(
     state: PageImageState?,
     maxBlockSize: Dp = Dp.Unspecified,
     indentLevel: Int = 0,
+    /**
+     * Viewport width to fall back to when the element has no explicit `w=`
+     * spec. In MONOSPACE_SCROLL the page Column is wrapped in a
+     * `horizontalScroll`, which measures children with unbounded width -
+     * `fillMaxWidth()` then resolves to 0 and the image collapses (issue:
+     * "tap to load" loads but nothing renders). Passing the viewport width
+     * (the screen already captures it in `BoxWithConstraints` before the
+     * scrolls unbind) gives the image a finite width to lay out against.
+     * Left `Unspecified` in bounded contexts (PROPORTIONAL_WRAP's
+     * LazyColumn) where `fillMaxWidth` is correct.
+     */
+    minLineWidth: Dp = Dp.Unspecified,
     onImageTapToLoad: () -> Unit = {},
     onImageReload: () -> Unit = {},
     onCopyLink: (String) -> Unit = {},
@@ -110,19 +128,65 @@ fun MicronImageBlock(
             if (file != null) {
                 val targetWidth = resolveImageSize(element.width, DP_PER_COLUMN)
                 val targetHeight = resolveImageSize(element.height, DP_PER_ROW)
-                val painter =
-                    rememberAsyncImagePainter(
-                        ImageRequest.Builder(context)
-                            .data(file)
-                            .build(),
-                    )
+                // Decode the cached file directly off the main thread and
+                // render a bitmap. Coil's rememberAsyncImagePainter gates its
+                // load on onDraw, but this Image is laid out at height 0 while
+                // the painter is in the Loading state (no intrinsic size), so
+                // the load never dispatches and the state is stuck at Loading
+                // forever - Coil 2.7.0 documents this: "will not finish
+                // loading if onDraw is not called". The image cache enforces
+                // the WebP magic before this status exists, so a local decode
+                // cannot reject the payload; it only fails on corrupt files,
+                // which fall back to the in-flight placeholder.
+                // Key on the absolute path (not the File instance): the cache
+                // hands back a fresh File wrapper per lookup, and File has
+                // identity equality, so an instance key would re-decode on
+                // every re-scan.
+                val filePath = file.absolutePath
+                var decoded by remember(filePath) { mutableStateOf<ImageBitmap?>(null) }
+                LaunchedEffect(filePath) {
+                    val loaded =
+                        withContext(Dispatchers.IO) {
+                            runCatching {
+                                BitmapFactory.decodeFile(filePath)?.asImageBitmap()
+                            }.getOrNull()
+                        }
+                    // Guard against a stale decode landing after the file key
+                    // changed (rapid re-scan): only apply the result for the
+                    // path this launch started with.
+                    if (decoded != loaded) decoded = loaded
+                }
+                // The Row is the block-level element (mirrors a text line, which
+                // stays visible in MONOSPACE_SCROLL via widthIn(min = viewport)).
+                // That mode wraps the page Column in a horizontalScroll that
+                // measures children with unbounded width, so a child with no
+                // explicit width (fillMaxWidth) resolves to ~0 and the image is
+                // invisible even though fetch + cache + LOADED state all succeeded
+                // (issue: "tap to load" loads but nothing renders). A hard
+                // .width(viewport) - not widthIn(min) - is required: it bounds the
+                // Row so the inner Image's fillMaxWidth resolves against a finite
+                // width instead of infinity. In bounded contexts (PROPORTIONAL_
+                // WRAP's LazyColumn) fillMaxWidth is correct as before.
+                val rowModifier =
+                    blockModifier
+                        .let { m ->
+                            if (minLineWidth != Dp.Unspecified) m.width(minLineWidth)
+                            else m.fillMaxWidth()
+                        }
+                        .testTag("micron-image-loaded")
                 Row(
-                    modifier =
-                        blockModifier
-                            .fillMaxWidth()
-                            .testTag("micron-image-loaded"),
+                    modifier = rowModifier,
                     horizontalArrangement = horizontalArrangementFor(element.align),
                 ) {
+                    // Height: explicit h= wins; otherwise derive from the
+                    // decoded bitmap's aspect ratio so the image scales to its
+                    // width (full-width no-spec or explicit w=) instead of
+                    // falling back to the bitmap's intrinsic height (which left
+                    // a full-width square drawn small-and-centered). w=n keeps
+                    // its intrinsic height.
+                    val imageBitmap = decoded
+                    // Compose aspectRatio is width/height.
+                    val aspect = imageBitmap?.let { it.width.toFloat() / it.height.toFloat() }
                     val imageModifier =
                         Modifier
                             .combinedClickable(
@@ -130,19 +194,46 @@ fun MicronImageBlock(
                                 onLongClick = { showSheet = true },
                             )
                             .let { m ->
-                                val w = targetWidth
-                                if (w != null) m.width(w.coerceAtLeast(0.dp)) else m.fillMaxWidth()
+                                when {
+                                    // Explicit numeric/% width (narrower than the
+                                    // Row, so horizontal alignment applies).
+                                    targetWidth != null -> m.width(targetWidth.coerceAtLeast(0.dp))
+                                    // w=n: intrinsic size, clamped to the viewport.
+                                    element.width == "n" ->
+                                        m.let { mm ->
+                                            if (minLineWidth != Dp.Unspecified) mm.widthIn(max = minLineWidth) else mm
+                                        }
+                                    // No spec: fill the Row, which already carries
+                                    // the block width.
+                                    else -> m.fillMaxWidth()
+                                }
                             }
                             .let { m ->
                                 val h = targetHeight
                                 if (h != null) m.height(h) else m
                             }
-                    Image(
-                        painter = painter,
-                        contentDescription = element.alt.ifBlank { "Image" },
-                        contentScale = ContentScale.Fit,
-                        modifier = imageModifier,
-                    )
+                            .let { m ->
+                                // Responsive height for the width-constrained,
+                                // height-free cases (no spec and explicit w=).
+                                if (targetHeight == null && element.width != "n" && aspect != null) {
+                                    m.aspectRatio(aspect)
+                                } else {
+                                    m
+                                }
+                            }
+                    if (imageBitmap != null) {
+                        Image(
+                            bitmap = imageBitmap,
+                            contentDescription = element.alt.ifBlank { "Image" },
+                            contentScale = ContentScale.Fit,
+                            modifier = imageModifier,
+                        )
+                    } else {
+                        // Local decode in flight (bounded by the 16 MiB policy
+                        // cap): hold a same-width blank so the row keeps its
+                        // position until the bitmap lands.
+                        Box(modifier = imageModifier)
+                    }
                 }
             } else {
                 ImagePlaceholder(

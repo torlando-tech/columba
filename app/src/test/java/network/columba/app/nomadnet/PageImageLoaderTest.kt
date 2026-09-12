@@ -202,6 +202,31 @@ class PageImageLoaderTest {
     }
 
     @Test
+    fun `manual mode retry loads only the tapped image not its siblings`() {
+        imageMode = ImageLoadingMode.MANUAL
+        val stageA = writeWebP(context.cacheDir, "a.webp")
+        val stageB = writeWebP(context.cacheDir, "b.webp")
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/a.webp", 60f) } returns
+            Result.success(mediaResult(stageA))
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/b.webp", 60f) } returns
+            Result.success(mediaResult(stageB))
+
+        loader.scan(listOf(ref(":/media/a.webp", "imgA"), ref(":/media/b.webp", "imgB")))
+        Thread.sleep(100)
+        assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["imgA"]!!.status)
+        assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["imgB"]!!.status)
+
+        // Tapping one placeholder must fetch only that one - the sibling stays
+        // a placeholder (previously retryImage re-queued the whole page).
+        loader.retryImage("imgA")
+        awaitState("imgA") { it.status == PageImageStatus.LOADED }
+        Thread.sleep(150)
+        assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["imgB"]!!.status)
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/a.webp", 60f) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(nodeHash, "/media/b.webp", 60f) }
+    }
+
+    @Test
     fun `never mode blocks even explicit loads`() {
         imageMode = ImageLoadingMode.NEVER
         loader.scan(listOf(ref(":/media/never.webp", "img")))

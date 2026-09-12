@@ -121,14 +121,20 @@ class PageImageLoader(
         }
     }
 
-    /** Retry one failed/denied/placeholder image (per-image reload affordance). */
+    /**
+     * Retry/reload one image only (per-image tap on a placeholder, or reload on
+     * a failed/denied one). Resets just that key to a fresh placeholder and
+     * fetches only it - unlike [loadImages], which loads every image on the
+     * page. Tapping a placeholder in manual mode must not drag the sibling
+     * placeholders along with it.
+     */
     fun retryImage(key: String) {
         if (imageLoadingMode() == ImageLoadingMode.NEVER) return
         val state = states.get(key) ?: return
         val ref = state.ref ?: return
         states.put(key, PageImageState(ref = ref))
         publish()
-        startQueueForExplicitLoad(epoch)
+        startQueueForSingle(key, epoch)
     }
 
     fun cancelAll() {
@@ -156,14 +162,23 @@ class PageImageLoader(
         )
     }
 
-    private fun startQueue(myEpoch: Int) = startQueue(myEpoch, respectModeAndGate = true)
+    private fun startQueue(myEpoch: Int) = startQueue(myEpoch, respectModeAndGate = true, onlyKey = null)
 
     /** Explicit (user-triggered) queue run: skips the mode/gate check but still honors NEVER. */
-    private fun startQueueForExplicitLoad(myEpoch: Int) = startQueue(myEpoch, respectModeAndGate = false)
+    private fun startQueueForExplicitLoad(myEpoch: Int) = startQueue(myEpoch, respectModeAndGate = false, onlyKey = null)
+
+    /**
+     * Fetch a single image (per-image tap/reload). Explicit, so it bypasses the
+     * mode gate (still honors NEVER), and is restricted to [onlyKey] so sibling
+     * placeholders are left untouched.
+     */
+    private fun startQueueForSingle(onlyKey: String, myEpoch: Int) =
+        startQueue(myEpoch, respectModeAndGate = false, onlyKey = onlyKey)
 
     private fun startQueue(
         myEpoch: Int,
         respectModeAndGate: Boolean,
+        onlyKey: String?,
     ) {
         queueJob?.cancel()
         queueJob =
@@ -182,7 +197,7 @@ class PageImageLoader(
                     }
                 }
                 // Snapshot keys once; a new scan bumps the epoch and restarts.
-                val keys = states.snapshot().keys.toList()
+                val keys = (states.snapshot().keys.toList()).filter { onlyKey == null || it == onlyKey }
                 for (key in keys) {
                     if (epoch != myEpoch) return@launch
                     val state = states.get(key)

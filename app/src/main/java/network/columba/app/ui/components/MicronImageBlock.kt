@@ -43,7 +43,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -128,6 +127,10 @@ fun MicronImageBlock(
             if (file != null) {
                 val targetWidth = resolveImageSize(element.width, DP_PER_COLUMN)
                 val targetHeight = resolveImageSize(element.height, DP_PER_ROW)
+                // Percentage width -> parent-relative fraction (100% = full
+                // width). Resolved separately from targetWidth (which only
+                // handles explicit numeric dp values).
+                val widthFraction = resolveImageFraction(element.width)
                 // Decode the cached file directly off the main thread and
                 // render a bitmap. Coil's rememberAsyncImagePainter gates its
                 // load on onDraw, but this Image is laid out at height 0 while
@@ -195,7 +198,13 @@ fun MicronImageBlock(
                             )
                             .let { m ->
                                 when {
-                                    // Explicit numeric/% width (narrower than the
+                                    // Percent width: a fraction of the Row,
+                                    // which already carries the block width.
+                                    // Resolves correctly in MONOSPACE_SCROLL
+                                    // (bounded by the viewport) and bounded
+                                    // layouts (the content column).
+                                    widthFraction != null -> m.fillMaxWidth(widthFraction)
+                                    // Explicit numeric width (narrower than the
                                     // Row, so horizontal alignment applies).
                                     targetWidth != null -> m.width(targetWidth.coerceAtLeast(0.dp))
                                     // w=n: intrinsic size, clamped to the viewport.
@@ -424,25 +433,35 @@ private fun loadingStatusLine(state: PageImageState): String {
 
 /**
  * Terminal-cell size spec -> Dp (locked decision: fixed constants, clamp to
- * viewport — width is `1 col = 8.dp`, height is `1 row = 16.dp`, the 2:1
- * terminal cell aspect). `NN%` is a fraction of the 411 dp width baseline
- * (upstream: fraction of the terminal's width/height; on mobile both resolve
- * against the width baseline, which is the only natural constraint inside
- * the scrolling page column). `n` (intrinsic) -> null, letting the image use
- * its natural size clamped by the parent. Malformed specs -> null.
+ * viewport - width is `1 col = 8.dp`, height is `1 row = 16.dp`, the 2:1
+ * terminal cell aspect). `NN` (a count of units) -> `NN * dpPerUnit` dp.
+ * `NN%` -> null here (handled as a parent-relative fraction by
+ * resolveImageFraction). `n` (intrinsic) -> null, letting the image use its
+ * natural size clamped by the parent. Malformed specs -> null.
  */
-@Composable
 internal fun resolveImageSize(
     spec: String?,
     dpPerUnit: Float,
 ): Dp? {
-    if (spec == null || spec == "n") return null
-    val density = LocalDensity.current
-    val value = when {
-        spec.endsWith("%") -> spec.removeSuffix("%").toFloatOrNull()?.coerceIn(0f, 100f)?.times(4.11f)
-        else -> spec.toFloatOrNull()?.times(dpPerUnit)
-    }
-    return value?.let { with(density) { it.toDp() } }
+    // Percent specs are resolved as a parent-relative fraction
+    // (resolveImageFraction), not an absolute dp value.
+    if (spec == null || spec == "n" || spec.endsWith("%")) return null
+    // `spec` is a count of width/height units; each unit maps to `dpPerUnit`
+    // dp, so the product is already a dp value (no density conversion).
+    return spec.toFloatOrNull()?.times(dpPerUnit)?.dp
+}
+
+/**
+ * Percentage width spec -> fraction of the available (parent) width.
+ * `100%` -> 1.0f (full width), `50%` -> 0.5f. Non-percent and malformed
+ * specs -> null. The fraction is applied via `fillMaxWidth(fraction)`, which
+ * Compose resolves against the parent width (the Row already carries the
+ * block width), so it is correct in both MONOSPACE_SCROLL (bounded by the
+ * viewport) and bounded layouts (the content column).
+ */
+internal fun resolveImageFraction(spec: String?): Float? {
+    if (spec == null || !spec.endsWith("%")) return null
+    return spec.removeSuffix("%").toFloatOrNull()?.let { (it.coerceIn(0f, 100f)) / 100f }
 }
 
 private fun horizontalArrangementFor(align: String?): Arrangement.Horizontal =

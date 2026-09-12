@@ -248,7 +248,6 @@ class SettingsViewModel
             private const val RETRY_DELAY_MS = 1000L
             private const val SHARED_INSTANCE_MONITOR_INTERVAL_MS = 5_000L // Check every 5 seconds
             private const val SHARED_INSTANCE_PORT = 37428 // Default RNS shared instance port (for logging)
-            private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L // 24 hours
 
             /**
              * Controls whether shared instance monitors are started in init.
@@ -2505,12 +2504,10 @@ class SettingsViewModel
 
         private fun loadUpdateSettings() {
             viewModelScope.launch {
-                // Eagerly read the persisted value before the startup check fires,
-                // so the check uses the correct API endpoint (not the default false).
+                // Eagerly read the persisted value so the state holds the correct
+                // endpoint choice (not the default false) before the user acts.
                 val initial = settingsRepository.includePrereleaseUpdates.first()
                 _state.update { it.copy(includePrereleaseUpdates = initial) }
-
-                maybeCheckForUpdatesOnStartup()
 
                 // Continue observing subsequent changes
                 settingsRepository.includePrereleaseUpdates.drop(1).collect { include ->
@@ -2519,22 +2516,11 @@ class SettingsViewModel
             }
         }
 
-        private suspend fun maybeCheckForUpdatesOnStartup() {
-            val lastCheck = settingsRepository.getLastUpdateCheckTime()
-            val now = System.currentTimeMillis()
-            if (now - lastCheck >= UPDATE_CHECK_INTERVAL_MS) {
-                checkForUpdates()
-            }
-        }
-
         fun checkForUpdates(includePrerelease: Boolean = _state.value.includePrereleaseUpdates) {
             _state.update { it.copy(updateCheckResult = network.columba.app.service.AppUpdateResult.Checking) }
             viewModelScope.launch {
                 val result = updateChecker.check(includePrerelease)
                 _state.update { it.copy(updateCheckResult = result) }
-                if (result !is network.columba.app.service.AppUpdateResult.Error) {
-                    settingsRepository.setLastUpdateCheckTime(System.currentTimeMillis())
-                }
             }
         }
 

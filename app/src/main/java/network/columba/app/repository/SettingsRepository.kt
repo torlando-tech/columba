@@ -168,7 +168,6 @@ class SettingsRepository
 
             // Update checker preferences
             val INCLUDE_PRERELEASE_UPDATES = booleanPreferencesKey("include_prerelease_updates")
-            val LAST_UPDATE_CHECK_TIME = longPreferencesKey("last_update_check_time")
 
             // Message sort order: false = received time (default), true = sent time
             val SORT_MESSAGES_BY_SENT_TIME = booleanPreferencesKey("sort_messages_by_sent_time")
@@ -2328,14 +2327,6 @@ class SettingsRepository
         suspend fun setIncludePrereleaseUpdates(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.INCLUDE_PRERELEASE_UPDATES] = enabled
-            }
-        }
-
-        suspend fun getLastUpdateCheckTime(): Long = context.dataStore.data.first()[PreferencesKeys.LAST_UPDATE_CHECK_TIME] ?: 0L
-
-        suspend fun setLastUpdateCheckTime(time: Long) {
-            context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.LAST_UPDATE_CHECK_TIME] = time
             }
         }
 

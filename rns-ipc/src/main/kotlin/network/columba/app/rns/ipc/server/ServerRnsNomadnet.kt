@@ -50,9 +50,10 @@ internal class ServerRnsNomadnet(
         destinationHash: String,
         path: String,
         timeoutSeconds: Float,
+        maxBytes: Long,
         cb: IRnsResultCallback,
     ) = dispatch(cb, scope) {
-        val media = impl.requestNomadnetMedia(destinationHash, path, timeoutSeconds).getOrThrow()
+        val media = impl.requestNomadnetMedia(destinationHash, path, timeoutSeconds, maxBytes).getOrThrow()
         Bundle().apply { putParcelable(BundleKeys.MEDIA, media) }
     }
 

@@ -33,8 +33,11 @@ import org.robolectric.RuntimeEnvironment
 
 /**
  * Tests for [PageImageLoader] — the page-image orchestration: cache-hit fast
- * path, the auto bandwidth gate, manual/never/explicit-load semantics, denial
- * surfacing, the WebP-only cache rule, and the per-image size cap.
+ * path, the per-image auto bandwidth gate (including cross-node images that
+ * ride a different link than the page), manual/never/explicit-load semantics,
+ * denial surfacing, the WebP-only cache rule, the per-image transfer cap
+ * (passed to the backend and enforced there), and the malformed-URL no-retry
+ * path.
  *
  * The loader's fetch queue runs on Dispatchers.IO, so assertions wait on a
  * short polling loop (deterministic: every state transition is driven by the
@@ -135,7 +138,7 @@ class PageImageLoaderTest {
         assertNotNull(state)
         assertEquals(PageImageStatus.LOADED, state!!.status)
         assertNotNull(state.file)
-        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any()) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
     }
 
     // ── Auto gate ──────────────────────────────────────────────────────────
@@ -147,14 +150,14 @@ class PageImageLoaderTest {
             NomadnetLinkStats(rttSeconds = 0.2, expectedRateBps = 50_000L)
         }
         val stage = writeWebP(context.cacheDir, "auto.webp")
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/auto.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/auto.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stage))
 
         loader.scan(listOf(ref(":/media/auto.webp", "img")))
 
         val state = awaitState("img") { it.status == PageImageStatus.LOADED }
         assertNotNull(state.file)
-        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/auto.webp", 60f) }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/auto.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
     }
 
     @Test
@@ -169,7 +172,7 @@ class PageImageLoaderTest {
         // The gate must have run before we assert (deterministic hand-off).
         assertTrue("gate did not run", gateRan.await(2, TimeUnit.SECONDS))
         assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["img"]!!.status)
-        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any()) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
     }
 
     @Test
@@ -178,7 +181,104 @@ class PageImageLoaderTest {
         loader.scan(listOf(ref(":/media/noStats.webp", "img")))
         assertTrue("gate did not run", gateRan.await(2, TimeUnit.SECONDS))
         assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["img"]!!.status)
-        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any()) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `auto gate uses each image's own destination node not the page node`() {
+        // Regression for the cross-node gate: the auto RTT/EDR policy must be
+        // evaluated against the node that actually carries the image, not the
+        // current page's node once for the whole queue. Here the page node is
+        // fast but the cross-node image's destination is slow, so the image
+        // must NOT auto-load even though the page's link is fast.
+        imageMode = ImageLoadingMode.AUTO
+        val other = "deadbeefdeadbeefdeadbeefdeadbeef"
+        coEvery { nomadnet.getNomadnetLinkStats(nodeHash) } answers {
+            gateRan.countDown()
+            NomadnetLinkStats(rttSeconds = 0.2, expectedRateBps = 50_000L) // fast page node
+        }
+        coEvery { nomadnet.getNomadnetLinkStats(other) } answers {
+            gateRan.countDown()
+            NomadnetLinkStats(rttSeconds = 2.0, expectedRateBps = 50_000L) // slow image node
+        }
+        val stage = writeWebP(context.cacheDir, "xnode2.webp")
+        coEvery { nomadnet.requestNomadnetMedia(other, "/media/xnode2.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
+            Result.success(mediaResult(stage))
+
+        loader.scan(listOf(ref("$other:/media/xnode2.webp", "img")))
+
+        // The gate must have run (against the image's own, slow, node).
+        assertTrue("gate did not run", gateRan.await(2, TimeUnit.SECONDS))
+        Thread.sleep(100)
+        // Because the image's own node is slow, the image stays a placeholder.
+        assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["img"]!!.status)
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `auto gate loads a cross-node image when its own node is fast`() {
+        // The inverse of the previous test: the page node is slow, but the
+        // cross-node image's destination is fast, so the image auto-loads.
+        imageMode = ImageLoadingMode.AUTO
+        val other = "deadbeefdeadbeefdeadbeefdeadbeef"
+        coEvery { nomadnet.getNomadnetLinkStats(nodeHash) } answers {
+            gateRan.countDown()
+            NomadnetLinkStats(rttSeconds = 2.0, expectedRateBps = 50_000L) // slow page node
+        }
+        coEvery { nomadnet.getNomadnetLinkStats(other) } answers {
+            gateRan.countDown()
+            NomadnetLinkStats(rttSeconds = 0.2, expectedRateBps = 50_000L) // fast image node
+        }
+        val stage = writeWebP(context.cacheDir, "xnode3.webp")
+        coEvery { nomadnet.requestNomadnetMedia(other, "/media/xnode3.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
+            Result.success(mediaResult(stage))
+
+        loader.scan(listOf(ref("$other:/media/xnode3.webp", "img")))
+
+        val state = awaitState("img") { it.status == PageImageStatus.LOADED }
+        assertNotNull(state.file)
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(other, "/media/xnode3.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
+    }
+
+    // ── Transfer cap passed to backend ─────────────────────────────────────
+
+    @Test
+    fun `loader passes the transfer cap to the backend`() {
+        // The per-image cap must be handed to the backend so it refuses an
+        // oversized payload at the response boundary, not deleted after the
+        // fact in the app layer.
+        imageMode = ImageLoadingMode.ALWAYS
+        val stage = writeWebP(context.cacheDir, "cap.webp")
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/cap.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
+            Result.success(mediaResult(stage))
+
+        loader.scan(listOf(ref(":/media/cap.webp", "img")))
+        val state = awaitState("img") { it.status == PageImageStatus.LOADED }
+        assertEquals(PageImageStatus.LOADED, state.status)
+        assertNotNull(state.file)
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/cap.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
+    }
+
+    @Test
+    fun `backend too-large error surfaces FAILED`() {
+        // When the backend enforces the cap, it returns a typed
+        // NomadnetResponseTooLarge failure; the loader must surface FAILED.
+        imageMode = ImageLoadingMode.ALWAYS
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/toolarge.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
+            Result.failure(
+                RnsException(
+                    RnsError.NomadnetResponseTooLarge(
+                        nodeHash,
+                        "/media/toolarge.webp",
+                        NomadNetImagePolicy.MAX_IMAGE_BYTES + 1,
+                        NomadNetImagePolicy.MAX_IMAGE_BYTES,
+                    ),
+                ),
+            )
+
+        loader.scan(listOf(ref(":/media/toolarge.webp", "img")))
+        val state = awaitState("img") { it.status == PageImageStatus.FAILED }
+        assertTrue(state.error!!.contains("too large"))
     }
 
     // ── Manual / never / explicit ──────────────────────────────────────────
@@ -187,18 +287,18 @@ class PageImageLoaderTest {
     fun `manual mode waits for explicit load`() {
         imageMode = ImageLoadingMode.MANUAL
         val stage = writeWebP(context.cacheDir, "manual.webp")
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/manual.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/manual.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stage))
 
         loader.scan(listOf(ref(":/media/manual.webp", "img")))
         // Give any (wrongly started) queue a beat to run.
         Thread.sleep(100)
         assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["img"]!!.status)
-        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any()) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
 
         loader.loadImages(forceReload = false)
         awaitState("img") { it.status == PageImageStatus.LOADED }
-        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/manual.webp", 60f) }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/manual.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
     }
 
     @Test
@@ -206,9 +306,9 @@ class PageImageLoaderTest {
         imageMode = ImageLoadingMode.MANUAL
         val stageA = writeWebP(context.cacheDir, "a.webp")
         val stageB = writeWebP(context.cacheDir, "b.webp")
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/a.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/a.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stageA))
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/b.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/b.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stageB))
 
         loader.scan(listOf(ref(":/media/a.webp", "imgA"), ref(":/media/b.webp", "imgB")))
@@ -222,8 +322,8 @@ class PageImageLoaderTest {
         awaitState("imgA") { it.status == PageImageStatus.LOADED }
         Thread.sleep(150)
         assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["imgB"]!!.status)
-        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/a.webp", 60f) }
-        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(nodeHash, "/media/b.webp", 60f) }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/a.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(nodeHash, "/media/b.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
     }
 
     @Test
@@ -234,20 +334,40 @@ class PageImageLoaderTest {
         loader.retryImage("img")
         Thread.sleep(100)
         assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["img"]!!.status)
-        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any()) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
     }
 
     @Test
     fun `always mode loads without link stats`() {
         imageMode = ImageLoadingMode.ALWAYS
         val stage = writeWebP(context.cacheDir, "always.webp")
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/always.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/always.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stage))
 
         loader.scan(listOf(ref(":/media/always.webp", "img")))
         val state = awaitState("img") { it.status == PageImageStatus.LOADED }
         assertNotNull(state.file)
-        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/always.webp", 60f) }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/always.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
+    }
+
+    // ── Mode transition applies to the active loader ───────────────────────
+
+    @Test
+    fun `applyMode always starts loading pending placeholders`() {
+        imageMode = ImageLoadingMode.MANUAL
+        val stage = writeWebP(context.cacheDir, "mode.webp")
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/mode.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
+            Result.success(mediaResult(stage))
+
+        loader.scan(listOf(ref(":/media/mode.webp", "img")))
+        Thread.sleep(100)
+        assertEquals(PageImageStatus.PLACEHOLDER, loader.imageStates.value["img"]!!.status)
+
+        // Switching the active page to ALWAYS must load the pending image now,
+        // not only on the next navigation.
+        loader.applyMode(ImageLoadingMode.ALWAYS)
+        awaitState("img") { it.status == PageImageStatus.LOADED }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/mode.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
     }
 
     // ── Failure kinds ──────────────────────────────────────────────────────
@@ -255,7 +375,7 @@ class PageImageLoaderTest {
     @Test
     fun `denied media surfaces DENIED not FAILED`() {
         imageMode = ImageLoadingMode.ALWAYS
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/gated.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/gated.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.failure(
                 RnsException(RnsError.NomadnetRequestDenied(nodeHash, "/media/gated.webp")),
             )
@@ -269,7 +389,7 @@ class PageImageLoaderTest {
     @Test
     fun `generic failure surfaces FAILED`() {
         imageMode = ImageLoadingMode.ALWAYS
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/broken.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/broken.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.failure(RuntimeException("link reset"))
 
         loader.scan(listOf(ref(":/media/broken.webp", "img")))
@@ -282,7 +402,7 @@ class PageImageLoaderTest {
     fun `non-webp response is rejected as FAILED`() {
         imageMode = ImageLoadingMode.ALWAYS
         val png = File(context.cacheDir, "fake.webp").apply { writeBytes(byteArrayOf(0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(), 1, 2, 3, 4, 5, 6, 7, 8)) }
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/fake.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/fake.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(png))
 
         loader.scan(listOf(ref(":/media/fake.webp", "img")))
@@ -296,7 +416,7 @@ class PageImageLoaderTest {
         // Torlando 2026-09-07: "always mode still hits the per-image size cap."
         imageMode = ImageLoadingMode.ALWAYS
         val small = writeWebP(context.cacheDir, "big.webp")
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/big.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/big.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(small, size = NomadNetImagePolicy.MAX_IMAGE_BYTES + 1))
 
         loader.scan(listOf(ref(":/media/big.webp", "img")))
@@ -308,13 +428,22 @@ class PageImageLoaderTest {
     // ── URL resolution / reload ────────────────────────────────────────────
 
     @Test
-    fun `malformed image url yields an error placeholder`() {
+    fun `malformed image url yields MALFORMED status and is not retryable`() {
         loader.scan(listOf(ref("not-a-valid-url", "img")))
         val state = loader.imageStates.value["img"]
         assertNotNull(state)
-        assertNotNull(state!!.error)
+        // A structurally invalid URL is permanent, not a transient placeholder:
+        // it is MALFORMED (not PLACEHOLDER) so the UI does not advertise a
+        // dead "tap to load", and retry is a no-op.
+        assertEquals(PageImageStatus.MALFORMED, state!!.status)
+        assertNotNull(state.error)
         assertTrue(state.error!!.startsWith("Malformed image URL"))
-        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any()) }
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
+
+        loader.retryImage("img")
+        Thread.sleep(50)
+        assertEquals(PageImageStatus.MALFORMED, loader.imageStates.value["img"]!!.status)
+        coVerify(exactly = 0) { nomadnet.requestNomadnetMedia(any(), any(), any(), any()) }
     }
 
     @Test
@@ -322,13 +451,13 @@ class PageImageLoaderTest {
         val other = "deadbeefdeadbeefdeadbeefdeadbeef"
         imageMode = ImageLoadingMode.ALWAYS
         val stage = writeWebP(context.cacheDir, "xnode.webp")
-        coEvery { nomadnet.requestNomadnetMedia(other, "/media/xnode.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(other, "/media/xnode.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stage))
 
         loader.scan(listOf(ref("$other:/media/xnode.webp", "img")))
         val state = awaitState("img") { it.status == PageImageStatus.LOADED }
         assertNotNull(state.file)
-        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(other, "/media/xnode.webp", 60f) }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(other, "/media/xnode.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
     }
 
     @Test
@@ -340,19 +469,19 @@ class PageImageLoaderTest {
         assertEquals(PageImageStatus.LOADED, loader.imageStates.value["img"]!!.status)
 
         val stage = writeWebP(context.cacheDir, "reload2.webp")
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/reload.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/reload.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stage))
 
         loader.scan(listOf(ref(":/media/reload.webp", "img")), forceReload = true)
         awaitState("img") { it.status == PageImageStatus.LOADED && it.file != cached }
-        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/reload.webp", 60f) }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/reload.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
     }
 
     @Test
     fun `second scan of a cached page is instant with zero requests`() {
         imageMode = ImageLoadingMode.ALWAYS
         val stage = writeWebP(context.cacheDir, "twice.webp")
-        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/twice.webp", 60f) } returns
+        coEvery { nomadnet.requestNomadnetMedia(nodeHash, "/media/twice.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) } returns
             Result.success(mediaResult(stage))
 
         loader.scan(listOf(ref(":/media/twice.webp", "img")))
@@ -362,7 +491,7 @@ class PageImageLoaderTest {
         loader.clear()
         loader.scan(listOf(ref(":/media/twice.webp", "img")))
         assertEquals(PageImageStatus.LOADED, loader.imageStates.value["img"]!!.status)
-        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/twice.webp", 60f) }
+        coVerify(exactly = 1) { nomadnet.requestNomadnetMedia(nodeHash, "/media/twice.webp", 60f, NomadNetImagePolicy.MAX_IMAGE_BYTES) }
     }
 
     // ── Cache primitives ───────────────────────────────────────────────────

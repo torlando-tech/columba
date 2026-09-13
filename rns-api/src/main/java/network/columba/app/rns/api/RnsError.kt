@@ -154,6 +154,30 @@ sealed class RnsError : Parcelable {
         }
     }
 
+    /**
+     * A NomadNet media (page-image) response exceeded the per-image transfer
+     * cap before it could be retained. Distinct from [NomadnetRequestDenied]
+     * (the node answered "no") and [NomadnetPageNotFound] (unreachable): the
+     * node sent bytes, but more than [maxBytes], so the backend failed the
+     * fetch at the response boundary instead of writing the oversized payload
+     * to temporary storage or returning it to the UI. [receivedBytes] is the
+     * actual size the node delivered.
+     */
+    data class NomadnetResponseTooLarge(
+        val destHash: String,
+        val path: String,
+        val receivedBytes: Long,
+        val maxBytes: Long,
+    ) : RnsError() {
+        override fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(TAG_NOMADNET_RESPONSE_TOO_LARGE)
+            parcel.writeString(destHash)
+            parcel.writeString(path)
+            parcel.writeLong(receivedBytes)
+            parcel.writeLong(maxBytes)
+        }
+    }
+
     companion object {
         private const val TAG_GENERIC = 0
         private const val TAG_BACKEND_NOT_READY = 1
@@ -163,6 +187,7 @@ sealed class RnsError : Parcelable {
         private const val TAG_CALL_STATE_INVALID = 5
         private const val TAG_NOMADNET_PAGE_NOT_FOUND = 6
         private const val TAG_NOMADNET_REQUEST_DENIED = 7
+        private const val TAG_NOMADNET_RESPONSE_TOO_LARGE = 8
 
         @JvmField
         val CREATOR: Parcelable.Creator<RnsError> = object : Parcelable.Creator<RnsError> {
@@ -176,6 +201,12 @@ sealed class RnsError : Parcelable {
                     TAG_CALL_STATE_INVALID -> CallStateInvalid(parcel.readString().orEmpty(), parcel.readString().orEmpty())
                     TAG_NOMADNET_PAGE_NOT_FOUND -> NomadnetPageNotFound(parcel.readString().orEmpty(), parcel.readString().orEmpty())
                     TAG_NOMADNET_REQUEST_DENIED -> NomadnetRequestDenied(parcel.readString().orEmpty(), parcel.readString().orEmpty())
+                    TAG_NOMADNET_RESPONSE_TOO_LARGE -> NomadnetResponseTooLarge(
+                        parcel.readString().orEmpty(),
+                        parcel.readString().orEmpty(),
+                        parcel.readLong(),
+                        parcel.readLong(),
+                    )
                     else -> error("Unknown RnsError tag: $tag")
                 }
 
@@ -214,6 +245,8 @@ class RnsException(val error: RnsError) : RuntimeException(describe(error)) {
                     "NomadNet page not found: ${error.destHash}${error.path}"
                 is RnsError.NomadnetRequestDenied ->
                     "NomadNet request denied: ${error.destHash}${error.path}"
+                is RnsError.NomadnetResponseTooLarge ->
+                    "NomadNet media too large: got ${error.receivedBytes} bytes, cap ${error.maxBytes} (${error.destHash}${error.path})"
             }
     }
 }

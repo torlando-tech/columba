@@ -47,9 +47,10 @@ internal class ClientRnsNomadnet(
         destinationHash: String,
         path: String,
         timeoutSeconds: Float,
+        maxBytes: Long,
     ): Result<NomadnetMediaResult> = runCatching {
         val bundle = awaitResult { cb ->
-            remote.requestNomadnetMedia(destinationHash, path, timeoutSeconds, cb)
+            remote.requestNomadnetMedia(destinationHash, path, timeoutSeconds, maxBytes, cb)
         }
         bundle.classLoader = NomadnetMediaResult::class.java.classLoader
         @Suppress("DEPRECATION")

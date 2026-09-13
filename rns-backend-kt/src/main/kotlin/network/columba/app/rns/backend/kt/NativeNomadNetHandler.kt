@@ -1,6 +1,8 @@
 package network.columba.app.rns.backend.kt
 
 import android.util.Log
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.MutableStateFlow
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
@@ -98,6 +100,7 @@ internal class NativeNomadNetHandler(
         destinationHash: String,
         path: String,
         timeoutSeconds: Float,
+        maxBytes: Long = Long.MAX_VALUE,
     ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
@@ -121,6 +124,20 @@ internal class NativeNomadNetHandler(
                     Log.i(TAG, "NomadNet: media request denied by node for $path")
                     throw network.columba.app.rns.api.RnsException(
                         network.columba.app.rns.api.RnsError.NomadnetRequestDenied(destinationHash, path),
+                    )
+                }
+                // Enforce the transfer cap at the response boundary, before the
+                // payload is written to temporary storage or handed back. The RNS
+                // Link API delivers the full body to the callback at once (no
+                // streaming), so this is the earliest point after delivery; failing
+                // here keeps an oversized payload off disk and out of the image
+                // cache, and surfaces a typed error instead of a generic one.
+                if (data.size.toLong() > maxBytes) {
+                    Log.w(TAG, "NomadNet: media response too large for $path (${data.size} > $maxBytes)")
+                    throw network.columba.app.rns.api.RnsException(
+                        network.columba.app.rns.api.RnsError.NomadnetResponseTooLarge(
+                            destinationHash, path, data.size.toLong(), maxBytes,
+                        ),
                     )
                 }
                 if (data.isEmpty()) error("Empty media response for $path")
@@ -314,7 +331,7 @@ internal class NativeNomadNetHandler(
         val error: String?,
     )
 
-    private fun sendPageRequest(
+    private suspend fun sendPageRequest(
         link: network.reticulum.link.Link,
         path: String,
         requestData: Any?,
@@ -351,7 +368,29 @@ internal class NativeNomadNetHandler(
         )
 
         val requestTimeout = (timeoutSeconds * 1000 * 2 / 3).toLong().coerceAtLeast(10000)
-        responseLatch.await(requestTimeout, java.util.concurrent.TimeUnit.MILLISECONDS)
+        // Poll the latch in short increments instead of one blocking
+        // `await(timeout)` so a cancelled caller (the page-image loader queue
+        // unwinding on navigation, or cancelNomadnetPageRequest) releases the
+        // wait promptly. A non-cancellable full-timeout await left the native
+        // backend blocked for up to the whole deadline even after the request's
+        // coroutine was cancelled, so stale image traffic kept competing with
+        // the next page request over the shared NomadNet link. ensureActive()
+        // throws CancellationException on the next tick, which the caller's
+        // withContext/runCatching surfaces as a cancelled fetch.
+        val deadline = System.currentTimeMillis() + requestTimeout
+        var finished = false
+        while (!finished) {
+            // Cancellation check: if the caller's job was cancelled (page-image
+            // loader queue unwinding on navigation, or cancelNomadnetPageRequest),
+            // stop waiting and surface a CancellationException so the stale fetch
+            // is dropped instead of holding the link for the whole deadline.
+            if (currentCoroutineContext().job?.isActive == false) {
+                throw java.util.concurrent.CancellationException("Cancelled")
+            }
+            val remaining = deadline - System.currentTimeMillis()
+            finished = remaining <= 0L ||
+                responseLatch.await(minOf(100L, remaining), java.util.concurrent.TimeUnit.MILLISECONDS)
+        }
         Log.i(TAG, "NomadNet: latch returned gotResponse=${responseBytes != null}, responseBytes=${responseBytes?.size}, error=$responseError")
 
         return PageResponse(responseBytes, responseMetadata, responseError)

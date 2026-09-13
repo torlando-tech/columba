@@ -49,11 +49,17 @@ interface RnsNomadnet {
      * @param destinationHash 32-char hex destination hash of the NomadNet host.
      * @param path Media path on the host (e.g. `/media/images/logo.webp`).
      * @param timeoutSeconds Hard deadline for the round-trip.
+     * @param maxBytes Transfer cap in bytes. The backend enforces this at the
+     *   response boundary - if the node delivers more than [maxBytes], the
+     *   fetch fails with [RnsError.NomadnetResponseTooLarge] and the oversized
+     *   payload is not written to temporary storage or returned. Defaults to
+     *   no cap for callers that do not need one (page-file downloads).
      */
     suspend fun requestNomadnetMedia(
         destinationHash: String,
         path: String,
         timeoutSeconds: Float = 45f,
+        maxBytes: Long = Long.MAX_VALUE,
     ): Result<NomadnetMediaResult>
 
     /**

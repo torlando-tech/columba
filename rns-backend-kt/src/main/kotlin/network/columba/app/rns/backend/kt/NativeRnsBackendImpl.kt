@@ -2256,8 +2256,9 @@ class NativeRnsBackendImpl(
         destinationHash: String,
         path: String,
         timeoutSeconds: Float,
+        maxBytes: Long,
     ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> =
-        nomadNetHandler.requestNomadnetMedia(destinationHash, path, timeoutSeconds)
+        nomadNetHandler.requestNomadnetMedia(destinationHash, path, timeoutSeconds, maxBytes)
 
     override suspend fun getNomadnetLinkStats(destinationHash: String): network.columba.app.rns.api.model.NomadnetLinkStats? =
         nomadNetHandler.getLinkStats(destinationHash)

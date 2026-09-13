@@ -414,7 +414,12 @@ class BoundRnsBackendTest {
     private class StubRnsNomadnet : RnsNomadnet {
         override suspend fun requestNomadnetPage(destinationHash: String, path: String, formDataJson: String?, timeoutSeconds: Float): Result<NomadnetPageResult> = error("not used")
         override suspend fun cancelNomadnetPageRequest() {}
-        override suspend fun requestNomadnetMedia(destinationHash: String, path: String, timeoutSeconds: Float): Result<network.columba.app.rns.api.model.NomadnetMediaResult> = error("not used")
+        override suspend fun requestNomadnetMedia(
+            destinationHash: String,
+            path: String,
+            timeoutSeconds: Float,
+            maxBytes: Long,
+        ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> = error("not used")
         override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? = null
         override suspend fun getNomadnetRequestStatus(): String = "idle"
         override suspend fun getNomadnetDownloadProgress(): Float = 0f

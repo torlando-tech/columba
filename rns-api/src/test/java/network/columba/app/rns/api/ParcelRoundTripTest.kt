@@ -140,6 +140,13 @@ class ParcelRoundTripTest {
         assertEquals(original, restored)
     }
 
+    @Test
+    fun `RnsError NomadnetResponseTooLarge round-trips`() {
+        val original = RnsError.NomadnetResponseTooLarge("abc123", "/media/big.webp", 17_000_000L, 16_000_000L)
+        val restored = roundTrip(original, RnsError.CREATOR)
+        assertEquals(original, restored)
+    }
+
     // ==================== NetworkStatus ====================
 
     @Test

@@ -23,6 +23,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.MessageCollector
 import network.columba.app.service.PropagationNodeManager
+import network.columba.app.service.SharedInstanceStatus
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.startup.ConfigApplyFlagManager
 import network.columba.app.startup.ServiceIdentityVerifier
@@ -549,22 +550,10 @@ class ColumbaApplication : Application() {
                         // or Sideband on 127.0.0.1:37428) - and after a toggle-off restart
                         // the banner/toggle snap back to "own instance" and look stuck.
                         // This is the cold-start counterpart of the same check in
-                        // InterfaceConfigManager.applyInterfaceChanges().
-                        try {
-                            val isShared = rnsTransportAdmin.isSharedInstanceAvailable()
-                            settingsRepository.saveIsSharedInstance(isShared)
-                            android.util.Log.d(
-                                "ColumbaApplication",
-                                "Shared instance status: isShared=$isShared",
-                            )
-                        } catch (e: Exception) {
-                            // Best-effort: status persistence must not fail app startup.
-                            android.util.Log.e(
-                                "ColumbaApplication",
-                                "Failed to check shared instance status",
-                                e,
-                            )
-                        }
+                        // InterfaceConfigManager.applyInterfaceChanges(); both call
+                        // SharedInstanceStatus.persist() so they cannot drift apart.
+                        // Best-effort: a failure here must not fail app startup.
+                        SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
 
                         // networkStatus.collect (set up earlier) already pushes
                         // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no

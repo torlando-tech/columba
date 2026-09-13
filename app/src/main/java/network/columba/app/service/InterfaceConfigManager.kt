@@ -406,18 +406,11 @@ class InterfaceConfigManager
                     // DataStore flag is never written on the restart path, so the
                     // shared-instance banner/toggle stay stuck on "own instance" even
                     // after the daemon switches modes (e.g. toggling "Use Columba's own
-                    // instance" off). Called inline in this suspend flow (not
-                    // fire-and-forget) so the write is part of the restart lifecycle and
-                    // the unit test can assert on it deterministically.
-                    try {
-                        val isShared = rnsTransportAdmin.isSharedInstanceAvailable()
-                        settingsRepository.saveIsSharedInstance(isShared)
-                        Log.d(TAG, "Shared instance status after restart: isShared=$isShared")
-                    } catch (e: Exception) {
-                        // Best-effort: a failure to persist the status flag must not fail
-                        // an otherwise-successful restart (the daemon is already up).
-                        Log.e(TAG, "Failed to persist shared instance status after restart", e)
-                    }
+                    // instance" off). Both call sites share
+                    // SharedInstanceStatus.persist() so they cannot drift apart.
+                    // Best-effort: a failure to persist the status flag must not fail
+                    // an otherwise-successful restart (the daemon is already up).
+                    SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
 
                     // Signal caller that service is usable (before post-init bookkeeping)
                     onServiceReady?.invoke()

@@ -148,11 +148,15 @@ class InterfaceConfigManagerTest {
         coEvery { rnsCore.shutdown() } returns Result.success(Unit)
         coEvery { rnsCore.initialize(any()) } returns Result.success(Unit)
 
-        // Shared-instance status persistence — default: not using a shared instance.
-        // applyInterfaceChanges() persists the actual transport mode on the
-        // initialize() success path, so every test that drives a successful restart
-        // reaches these stubs.
+        // Shared-instance status persistence — defaults: not using a shared
+        // instance. applyInterfaceChanges() persists the actual transport mode
+        // on the initialize() success path (via SharedInstanceStatus.persist),
+        // so every test that drives a successful restart reaches these stubs.
+        // The client signal is `available && !hosting`, so stub hosting too;
+        // the availability=false default short-circuits before the hosting
+        // probe, but stub it for tests that flip availability to true.
         coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+        coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
         coEvery { settingsRepository.saveIsSharedInstance(any()) } just Runs
 
         // applyInterfaceChanges() refreshes the persisted snapshot on the

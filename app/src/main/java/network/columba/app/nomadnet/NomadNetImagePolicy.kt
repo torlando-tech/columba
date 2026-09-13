@@ -82,6 +82,14 @@ enum class PageImageStatus {
     LOADED,
     DENIED,
     FAILED,
+    /**
+     * The image URL is structurally invalid (no `:` separator, empty path,
+     * malformed node hash) so it can never be resolved to a fetch. Distinct
+     * from [FAILED] (a fetch was attempted and failed transiently, so retry is
+     * meaningful): a malformed reference is permanent, so the UI renders the
+     * error without offering a tap-to-retry affordance.
+     */
+    MALFORMED,
 }
 
 /** Per-image fetch state, mirroring upstream page_images dict entries. */

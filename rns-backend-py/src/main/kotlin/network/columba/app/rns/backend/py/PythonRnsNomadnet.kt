@@ -411,6 +411,7 @@ class PythonRnsNomadnet(
         destinationHash: String,
         path: String,
         timeoutSeconds: Float,
+        maxBytes: Long,
     ): Result<NomadnetMediaResult> =
         pyResult {
             runtime.requireRunning()
@@ -428,6 +429,22 @@ class PythonRnsNomadnet(
                 // (toPyDict's __setitem__ passthrough maps Kotlin null).
                 val requestData = mapOf("path" to path, "key" to null).toPyDict()
                 val response = sendMediaRequest(link, requestData, timeoutSeconds, destinationHash)
+
+                // Enforce the transfer cap at the response boundary, before the
+                // payload is written to the staging file. RNS/LXMF deliver the
+                // full body to the receipt callback at once (no streaming), so
+                // this is the earliest point the Kotlin layer can act after
+                // delivery; failing here keeps an oversized payload off disk and
+                // out of the image cache and surfaces a typed error instead of
+                // the caller-side size check in PageImageLoader.fetchOne.
+                if (response.size.toLong() > maxBytes) {
+                    Log.w(TAG, "NomadNet: media response too large for $path (${response.size} > $maxBytes)")
+                    throw RnsException(
+                        RnsError.NomadnetResponseTooLarge(
+                            destinationHash, path, response.size.toLong(), maxBytes,
+                        ),
+                    )
+                }
 
                 _nomadnetRequestStatusFlow.value = "complete"
                 _nomadnetDownloadProgressFlow.value = 1f

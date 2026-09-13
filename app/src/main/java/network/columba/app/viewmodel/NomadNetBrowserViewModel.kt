@@ -201,6 +201,31 @@ class NomadNetBrowserViewModel
         @Volatile
         private var imageLoadingModeUserSelected = false
 
+        // Restore the user's persisted image-loading mode so it survives a
+        // ViewModel recreation (process death / config change). Mirrors the
+        // rendering-mode restore in the init block above: a user who selected
+        // never/manual/always must not silently fall back to AUTO. Without this
+        // _imageLoadingMode always started at AUTO and the saved choice was
+        // dropped (issue 4). Lives here (not the init block) because Kotlin
+        // initializes properties in declaration order and this field must exist
+        // before we write to it.
+        init {
+            viewModelScope.launch {
+                val restored =
+                    try {
+                        ImageLoadingMode.fromName(settingsRepository.nomadNetImageLoadingModeFlow.first())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read persisted image loading mode; using default", e)
+                        ImageLoadingMode.AUTO
+                    }
+                if (!imageLoadingModeUserSelected) {
+                    _imageLoadingMode.value = restored
+                }
+            }
+        }
+
         /** Wall-clock timing of the last successful page fetch (bits/s EDR fallback). */
         @Volatile
         private var lastPageFetchSeconds: Double? = null
@@ -240,10 +265,22 @@ class NomadNetBrowserViewModel
          * in-flight image states back to placeholders, so the user can re-load
          * them on demand. Upstream's `clear`-and-renavigate, collapsed onto the
          * mobile "Clear image cache" action.
+         *
+         * After clearing, re-scan the current document (if any) so its image
+         * references are re-registered as placeholders. [PageImageLoader.clear]
+         * on its own would wipe the registered states and leave the displayed
+         * page with unfetchable placeholders: retryImage would no-op (the key
+         * no longer exists) and the bulk-load menu would vanish because
+         * imageStates is empty (issue 3).
          */
         fun clearImageCache() {
             imageCache.clear()
-            pageImageLoader.clear()
+            val current = browserState.value as? BrowserState.PageLoaded
+            if (current != null) {
+                pageImageLoader.scan(imageRefsFor(current.document), forceReload = true)
+            } else {
+                pageImageLoader.clear()
+            }
         }
 
         /** Retry/load one image (placeholder tap, sheet Reload). */
@@ -254,6 +291,11 @@ class NomadNetBrowserViewModel
         fun setImageLoadingMode(mode: ImageLoadingMode) {
             imageLoadingModeUserSelected = true
             _imageLoadingMode.value = mode
+            // Apply the transition to the active loader so it takes effect on
+            // the currently-displayed page, not only on the next navigation
+            // (issue 5): ALWAYS starts loading pending images, NEVER cancels a
+            // running queue, AUTO re-evaluates the gate.
+            pageImageLoader.applyMode(mode)
             viewModelScope.launch { settingsRepository.saveNomadNetImageLoadingMode(mode.name) }
         }
 
@@ -821,6 +863,15 @@ class NomadNetBrowserViewModel
             cacheResponse: Boolean,
         ) {
             val epoch = ++fetchEpoch
+            // Navigation starts a new page request over the shared NomadNet
+            // link. Cancel any in-flight page-image queue first so stale image
+            // traffic doesn't compete with the page request this single-flight
+            // design prioritizes (issue 7). The new page's own images are
+            // re-scanned (and their queue started) in emitPageLoaded when the
+            // fetch completes. Without this, an image fetch could sit in a
+            // long backend await for the whole link timeout after the user
+            // already navigated away.
+            pageImageLoader.cancelAll()
             stopProgressCollection()
             lastFetchNodeHash = nodeHash
             lastFetchPath = path

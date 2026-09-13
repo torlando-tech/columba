@@ -45,8 +45,9 @@ internal class BoundRnsNomadnet(
         destinationHash: String,
         path: String,
         timeoutSeconds: Float,
+        maxBytes: Long,
     ): Result<NomadnetMediaResult> =
-        awaitBound().nomadnet.requestNomadnetMedia(destinationHash, path, timeoutSeconds)
+        awaitBound().nomadnet.requestNomadnetMedia(destinationHash, path, timeoutSeconds, maxBytes)
 
     override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? =
         runCatching { awaitBound().nomadnet.getNomadnetLinkStats(destinationHash) }.getOrNull()

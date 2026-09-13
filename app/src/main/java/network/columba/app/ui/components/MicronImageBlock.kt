@@ -1,6 +1,5 @@
 package network.columba.app.ui.components
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +52,7 @@ import kotlinx.coroutines.withContext
 import network.columba.app.micron.MicronElement
 import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.PageImageStatus
+import network.columba.app.util.ImageUtils
 import kotlin.math.roundToInt
 
 /**
@@ -150,9 +150,11 @@ fun MicronImageBlock(
                 LaunchedEffect(filePath) {
                     val loaded =
                         withContext(Dispatchers.IO) {
-                            runCatching {
-                                BitmapFactory.decodeFile(filePath)?.asImageBitmap()
-                            }.getOrNull()
+                            // Bounds-first, sampled decode: caps the decoded
+                            // dimension so a page-controlled image cannot
+                            // allocate an unbounded bitmap and crash the app
+                            // with an uncaught OutOfMemoryError (issue 2).
+                            decodePageImageFile(file)
                         }
                     // Guard against a stale decode landing after the file key
                     // changed (rapid re-scan): only apply the result for the
@@ -293,6 +295,19 @@ fun MicronImageBlock(
                 showTapAffordance = true,
                 onClick = onImageTapToLoad,
                 modifier = blockModifier.testTag("micron-image-placeholder"),
+            )
+        }
+
+        PageImageStatus.MALFORMED -> {
+            // Structurally invalid image URL: render the error, but no
+            // tap-to-retry affordance - it can never resolve to a fetch, so
+            // offering a retry would be a dead no-op (issue 8).
+            ImagePlaceholder(
+                element = element,
+                statusLine = effectiveState.error ?: "Invalid image URL",
+                showTapAffordance = false,
+                onClick = {},
+                modifier = blockModifier.testTag("micron-image-malformed"),
             )
         }
     }
@@ -462,6 +477,50 @@ internal fun resolveImageSize(
 internal fun resolveImageFraction(spec: String?): Float? {
     if (spec == null || !spec.endsWith("%")) return null
     return spec.removeSuffix("%").toFloatOrNull()?.let { (it.coerceIn(0f, 100f)) / 100f }
+}
+
+/**
+ * Max decoded dimension (px) for an inline page image. A wire-size-compliant
+ * WebP can still carry dimensions whose decoded pixel buffer (width * height *
+ * 4 bytes) far exceeds the 16 MiB compressed-file cap, and an unrestricted
+ * `BitmapFactory.decodeFile` on such a payload throws `OutOfMemoryError` - an
+ * `Error` that `runCatching` does not catch - crashing the app while rendering
+ * a page-controlled image. We bounds-first decode (read dimensions with
+ * `inJustDecodeBounds`), pick an `inSampleSize` via [ImageUtils.calculateSampleSize],
+ * and decode at the sampled size, mirroring the repository's existing preview
+ * load path (`ImageUtils.loadBitmap`). Capping the decoded dimension to
+ * [MAX_DECODED_IMAGE_DIMENSION] keeps the worst-case bitmap allocation bounded
+ * (<= ~16 MB) instead of proportional to the source resolution.
+ */
+internal const val MAX_DECODED_IMAGE_DIMENSION = 2048
+
+/**
+ * Decode a cached page-image [file] to an [ImageBitmap] using a bounds-first,
+ * sampled strategy (see [MAX_DECODED_IMAGE_DIMENSION]). Returns null if the
+ * file is missing, not a decodable image, or the decoded bitmap is empty.
+ * Call on a background dispatcher; this is a blocking file + decode operation.
+ */
+internal fun decodePageImageFile(
+    file: java.io.File,
+    maxDimensionPx: Int = MAX_DECODED_IMAGE_DIMENSION,
+): ImageBitmap? {
+    // Bounds pass: read only the dimensions, no pixel allocation.
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeFile(file.absolutePath, bounds)
+    val sampleSize = ImageUtils.calculateSampleSize(bounds.outWidth, bounds.outHeight, maxDimensionPx)
+    // Sampled pass: the allocation is now bounded by maxDimensionPx.
+    val options =
+        if (sampleSize > 1) {
+            android.graphics.BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        } else {
+            null
+        }
+    val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
+    if (bitmap.width <= 0 || bitmap.height <= 0) {
+        bitmap.recycle()
+        return null
+    }
+    return bitmap.asImageBitmap()
 }
 
 private fun horizontalArrangementFor(align: String?): Arrangement.Horizontal =

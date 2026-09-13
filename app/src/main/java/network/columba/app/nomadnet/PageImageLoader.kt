@@ -75,9 +75,18 @@ class PageImageLoader(
         for (ref in refs) {
             val resolved = resolveImageUrl(ref.url, currentNodeHash())
             if (resolved == null) {
+                // Structurally invalid URL: it can never resolve to a fetch, so
+                // mark it MALFORMED (not PLACEHOLDER) - the UI renders the
+                // error without a tap-to-retry affordance, and retryImage is a
+                // no-op for it. A PLACEHOLDER here would advertise "tap to load"
+                // on a reference that is permanently unfetchable (issue 8).
                 states.put(
                     ref.key,
-                    PageImageState(ref = ref, error = "Malformed image URL: ${ref.url}"),
+                    PageImageState(
+                        ref = ref,
+                        status = PageImageStatus.MALFORMED,
+                        error = "Malformed image URL: ${ref.url}",
+                    ),
                 )
                 continue
             }
@@ -130,8 +139,14 @@ class PageImageLoader(
      */
     fun retryImage(key: String) {
         if (imageLoadingMode() == ImageLoadingMode.NEVER) return
-        val state = states.get(key) ?: return
-        val ref = state.ref ?: return
+        val state = states.get(key)
+        val ref = state?.ref
+        // A malformed reference is structurally unfetchable - retrying it just
+        // resets it to a placeholder and fetchOne returns (no node hash), so it
+        // would sit as a permanently tappable no-op. DENIED and FAILED stay
+        // retryable: the node may allow it later, or a transient fetch may
+        // succeed on retry.
+        if (state == null || state.status == PageImageStatus.MALFORMED || ref == null) return
         states.put(key, PageImageState(ref = ref))
         publish()
         startQueueForSingle(key, epoch)
@@ -149,9 +164,59 @@ class PageImageLoader(
         publish()
     }
 
-    private suspend fun gatePasses(): Boolean {
-        val hash = currentNodeHash()
-        val stats = runCatching { nomadnet.getNomadnetLinkStats(hash) }.getOrNull()
+    /**
+     * Apply a loading-mode transition to the active loader (issue 5). Called
+     * when the user selects a new [ImageLoadingMode] for a page that is
+     * already displayed: a mode change must take effect on the current page,
+     * not only on the next navigation.
+     *
+     * Every transition first cancels any running queue and resets in-flight
+     * LOADING states back to placeholders, so no queue left over from a
+     * previous mode keeps fetching under the new mode, and an abandoned
+     * fetch does not sit in a stale "loading" state. The transition is then
+     * re-derived from scratch:
+     *
+     * - ALWAYS: start an explicit load of every registered placeholder (the
+     *   user just asked for all images to load).
+     * - AUTO: re-evaluate the bandwidth gate for the registered placeholders.
+     * - MANUAL: leave placeholders as-is (a manual user loads on demand).
+     * - NEVER: leave placeholders as-is; nothing auto-fetches, so tapping is
+     *   blocked and the queue simply does not start.
+     *
+     * Already-LOADED / DENIED / FAILED / MALFORMED states are untouched, so
+     * switching modes never discards an already-rendered image.
+     */
+    fun applyMode(mode: ImageLoadingMode) {
+        // Clean transition: stop any queue from the previous mode and reset
+        // in-flight fetches so the new mode re-evaluates them.
+        cancelAll()
+        resetLoadingStates()
+        publish()
+        when (mode) {
+            ImageLoadingMode.ALWAYS -> startQueueForExplicitLoad(epoch)
+            ImageLoadingMode.AUTO -> startQueue(epoch)
+            ImageLoadingMode.MANUAL -> Unit
+            ImageLoadingMode.NEVER -> Unit
+        }
+    }
+
+    /**
+     * Reset any LOADING image states back to placeholders. Called after a
+     * queue cancel so an abandoned fetch is re-evaluated by the new mode
+     * instead of hanging in a perpetual "loading" state (the cancelled
+     * [fetchOne] leaves its result unapplied because the epoch no longer
+     * matches).
+     */
+    private fun resetLoadingStates() {
+        for ((key, state) in states.snapshot()) {
+            if (state.status == PageImageStatus.LOADING) {
+                states.put(key, PageImageState(ref = state.ref))
+            }
+        }
+    }
+
+    private suspend fun gatePasses(nodeHash: String): Boolean {
+        val stats = runCatching { nomadnet.getNomadnetLinkStats(nodeHash) }.getOrNull()
         return NomadNetImagePolicy.shouldLoadAutomatically(
             mode = imageLoadingMode(),
             // No loopback nodes in Columba's browsing model.
@@ -183,28 +248,56 @@ class PageImageLoader(
         queueJob?.cancel()
         queueJob =
             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                // Mode + auto-gate decision happens inside the coroutine
-                // (the gate needs a suspend call). Explicit user loads skip
-                // the gate but NEVER mode still blocks everything.
+                // Mode decision happens inside the coroutine (the gate needs a
+                // suspend call). Explicit user loads skip the gate but NEVER
+                // mode still blocks everything.
                 if (imageLoadingMode() == ImageLoadingMode.NEVER) return@launch
-                if (respectModeAndGate) {
-                    when (imageLoadingMode()) {
-                        ImageLoadingMode.MANUAL -> return@launch
-                        ImageLoadingMode.ALWAYS -> Unit
-                        ImageLoadingMode.AUTO ->
-                            if (!gatePasses()) return@launch
-                        ImageLoadingMode.NEVER -> return@launch
-                    }
-                }
+                if (respectModeAndGate && imageLoadingMode() == ImageLoadingMode.MANUAL) return@launch
                 // Snapshot keys once; a new scan bumps the epoch and restarts.
                 val keys = (states.snapshot().keys.toList()).filter { onlyKey == null || it == onlyKey }
                 for (key in keys) {
-                    if (epoch != myEpoch) return@launch
-                    val state = states.get(key)
-                    if (state == null || state.status != PageImageStatus.PLACEHOLDER) continue
-                    fetchOne(key, myEpoch)
+                    // processKey returns false when the epoch changed mid-loop
+                    // (a new scan superseded this run), which stops the queue.
+                    if (!processKey(key, myEpoch, respectModeAndGate)) return@launch
                 }
             }
+    }
+
+    /**
+     * Fetch a single registered image if it is a placeholder and passes the
+     * per-image auto gate; no-op otherwise. Returns [false] only when the
+     * epoch changed (a newer scan superseded this run), signalling the queue
+     * loop to stop; [true] when this key was processed (fetched or
+     * intentionally skipped) and the loop should continue.
+     *
+     * The per-image auto gate (issue 6) evaluates the RTT/EDR policy against
+     * THIS image's own destination node, not the current page's node once for
+     * the whole queue. A page can reference cross-node images (explicit
+     * `<hash>:` path) that ride a different - possibly slow - link than the
+     * page itself; gating the whole queue on the page node would authorize a
+     * fast page's link to download from a slow destination, or block a fast
+     * destination because the page node is slow.
+     */
+    private suspend fun processKey(
+        key: String,
+        myEpoch: Int,
+        respectModeAndGate: Boolean,
+    ): Boolean {
+        if (epoch != myEpoch) return false
+        val state = states.get(key)
+        val placeholder = state != null && state.status == PageImageStatus.PLACEHOLDER
+        // Auto-gate (issue 6): evaluate the RTT/EDR policy against THIS image's
+        // own destination node. A null node hash means the reference never
+        // resolved, so it cannot pass the gate (no fetch). Explicit loads
+        // (respectModeAndGate = false) skip the gate entirely.
+        val gateOk =
+            !respectModeAndGate ||
+                imageLoadingMode() != ImageLoadingMode.AUTO ||
+                (state?.ref?.nodeHash?.let { gatePasses(it) } == true)
+        if (placeholder && gateOk) {
+            fetchOne(key, myEpoch)
+        }
+        return epoch == myEpoch
     }
 
     private suspend fun fetchOne(
@@ -220,10 +313,15 @@ class PageImageLoader(
 
         val result =
             runCatching {
-                val media = nomadnet.requestNomadnetMedia(hash, ref.mediaPath, MEDIA_TIMEOUT_SECONDS).getOrThrow()
-                // Client-side size cap (plan: "always mode still hits the per-image
-                // size cap"). The backends stage whatever the link delivers, so the
-                // app layer is the enforcement point that holds for both of them.
+                // Pass the transfer cap to the backend so it refuses an
+                // oversized payload at the response boundary (before staging to
+                // disk), instead of the app layer deleting it after the fact.
+                // The client-side check below remains as a belt-and-suspenders
+                // guard for backends that predate the cap (or tests that stub
+                // the interface without it).
+                val media =
+                    nomadnet.requestNomadnetMedia(hash, ref.mediaPath, MEDIA_TIMEOUT_SECONDS, NomadNetImagePolicy.MAX_IMAGE_BYTES)
+                        .getOrThrow()
                 if (media.fileSize > NomadNetImagePolicy.MAX_IMAGE_BYTES) {
                     runCatching { java.io.File(media.filePath).delete() }
                     error("Image too large (${media.fileSize} bytes; cap ${NomadNetImagePolicy.MAX_IMAGE_BYTES})")

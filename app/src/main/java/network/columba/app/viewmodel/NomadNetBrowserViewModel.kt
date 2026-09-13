@@ -18,9 +18,15 @@ import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.ImageLoadingMode
+import network.columba.app.nomadnet.NomadNetImageCache
+import network.columba.app.nomadnet.PageImageLoader
+import network.columba.app.nomadnet.PageImageState
+import network.columba.app.nomadnet.ParsedImageRef
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
 import network.columba.app.nomadnet.buildNomadNetRequestData
+import network.columba.app.nomadnet.pageImageKey
 import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsNomadnet
@@ -33,6 +39,7 @@ class NomadNetBrowserViewModel
     constructor(
         private val nomadnet: RnsNomadnet,
         private val pageCache: NomadNetPageCache,
+        private val imageCache: NomadNetImageCache,
         private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
@@ -117,6 +124,9 @@ class NomadNetBrowserViewModel
                     _renderingMode.value = restored
                 }
             }
+            // NOTE: the image-loading-mode restore lives below, next to the
+            // _imageLoadingMode declaration — Kotlin initializes properties in
+            // declaration order and this init block runs before them.
         }
 
         private val _isIdentified = MutableStateFlow(false)
@@ -180,6 +190,114 @@ class NomadNetBrowserViewModel
 
         val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
             get() = partialManager.states
+
+        // ==================== Page images ====================
+
+        private val _imageLoadingMode = MutableStateFlow(ImageLoadingMode.AUTO)
+
+        /** Current image loading mode (upstream `image_loading` mirror). */
+        val imageLoadingMode: StateFlow<ImageLoadingMode> = _imageLoadingMode.asStateFlow()
+
+        @Volatile
+        private var imageLoadingModeUserSelected = false
+
+        // Restore the user's persisted image-loading mode so it survives a
+        // ViewModel recreation (process death / config change). Mirrors the
+        // rendering-mode restore in the init block above: a user who selected
+        // never/manual/always must not silently fall back to AUTO. Without this
+        // _imageLoadingMode always started at AUTO and the saved choice was
+        // dropped (issue 4). Lives here (not the init block) because Kotlin
+        // initializes properties in declaration order and this field must exist
+        // before we write to it.
+        init {
+            viewModelScope.launch {
+                val restored =
+                    try {
+                        ImageLoadingMode.fromName(settingsRepository.nomadNetImageLoadingModeFlow.first())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read persisted image loading mode; using default", e)
+                        ImageLoadingMode.AUTO
+                    }
+                if (!imageLoadingModeUserSelected) {
+                    _imageLoadingMode.value = restored
+                }
+            }
+        }
+
+        /** Wall-clock timing of the last successful page fetch (bits/s EDR fallback). */
+        @Volatile
+        private var lastPageFetchSeconds: Double? = null
+
+        @Volatile
+        private var lastPageFetchBytes: Long = 0L
+
+        private val pageImageLoader: PageImageLoader by lazy {
+            PageImageLoader(
+                nomadnet = nomadnet,
+                cache = imageCache,
+                scope = viewModelScope,
+                currentNodeHash = { currentNodeHash },
+                imageLoadingMode = { _imageLoadingMode.value },
+                lastResponseSpeedBps = {
+                    val seconds = lastPageFetchSeconds
+                    if (seconds != null && seconds > 0 && lastPageFetchBytes > 0) {
+                        lastPageFetchBytes * 8 / seconds
+                    } else {
+                        null
+                    }
+                },
+            )
+        }
+
+        /** Per-image fetch states keyed by [pageImageKey]. */
+        val imageStates: StateFlow<Map<String, PageImageState>>
+            get() = pageImageLoader.imageStates
+
+        /** Explicit load of all pending images (upstream Ctrl+L). */
+        fun loadPageImages(forceReload: Boolean = false) {
+            pageImageLoader.loadImages(forceReload)
+        }
+
+        /**
+         * Clear the on-disk NomadNet image cache entirely and reset the
+         * in-flight image states back to placeholders, so the user can re-load
+         * them on demand. Upstream's `clear`-and-renavigate, collapsed onto the
+         * mobile "Clear image cache" action.
+         *
+         * After clearing, re-scan the current document (if any) so its image
+         * references are re-registered as placeholders. [PageImageLoader.clear]
+         * on its own would wipe the registered states and leave the displayed
+         * page with unfetchable placeholders: retryImage would no-op (the key
+         * no longer exists) and the bulk-load menu would vanish because
+         * imageStates is empty (issue 3).
+         */
+        fun clearImageCache() {
+            imageCache.clear()
+            val current = browserState.value as? BrowserState.PageLoaded
+            if (current != null) {
+                pageImageLoader.scan(imageRefsFor(current.document), forceReload = true)
+            } else {
+                pageImageLoader.clear()
+            }
+        }
+
+        /** Retry/load one image (placeholder tap, sheet Reload). */
+        fun retryPageImage(key: String) {
+            pageImageLoader.retryImage(key)
+        }
+
+        fun setImageLoadingMode(mode: ImageLoadingMode) {
+            imageLoadingModeUserSelected = true
+            _imageLoadingMode.value = mode
+            // Apply the transition to the active loader so it takes effect on
+            // the currently-displayed page, not only on the next navigation
+            // (issue 5): ALWAYS starts loading pending images, NEVER cancels a
+            // running queue, AUTO re-evaluates the gate.
+            pageImageLoader.applyMode(mode)
+            viewModelScope.launch { settingsRepository.saveNomadNetImageLoadingMode(mode.name) }
+        }
 
         /** Returns "nodeHash:/path" format for display in the URL bar. */
         fun getCurrentUrl(): String? {
@@ -481,6 +599,7 @@ class NomadNetBrowserViewModel
             stopStatusCollection()
             stopProgressCollection()
             partialManager.clear()
+            pageImageLoader.clear()
             history.clear()
             _canGoBack.value = false
             _formFields.value = emptyMap()
@@ -569,6 +688,7 @@ class NomadNetBrowserViewModel
             super.onCleared()
             stopStatusCollection()
             stopProgressCollection()
+            pageImageLoader.cancelAll()
             // Cancel any in-flight Python page request so the IO thread isn't blocked
             // for up to PAGE_TIMEOUT_SECONDS after the user navigates away.
             // Use NonCancellable because viewModelScope is already cancelled at this point.
@@ -634,7 +754,20 @@ class NomadNetBrowserViewModel
                 }
             }
             partialManager.detectAndLoad(document)
+            pageImageLoader.scan(imageRefsFor(document))
         }
+
+        /** All image elements in a document, reduced to loader refs. */
+        private fun imageRefsFor(document: MicronDocument): List<ParsedImageRef> =
+            document.lines
+                .flatMap { it.elements }
+                .filterIsInstance<MicronElement.Image>()
+                .map { img ->
+                    ParsedImageRef(
+                        url = img.url,
+                        key = pageImageKey(img.url, img.width, img.height),
+                    )
+                }
 
         /**
          * Return a copy of [current] with parser-declared text-field defaults filled
@@ -730,6 +863,15 @@ class NomadNetBrowserViewModel
             cacheResponse: Boolean,
         ) {
             val epoch = ++fetchEpoch
+            // Navigation starts a new page request over the shared NomadNet
+            // link. Cancel any in-flight page-image queue first so stale image
+            // traffic doesn't compete with the page request this single-flight
+            // design prioritizes (issue 7). The new page's own images are
+            // re-scanned (and their queue started) in emitPageLoaded when the
+            // fetch completes. Without this, an image fetch could sit in a
+            // long backend await for the whole link timeout after the user
+            // already navigated away.
+            pageImageLoader.cancelAll()
             stopProgressCollection()
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
@@ -737,6 +879,9 @@ class NomadNetBrowserViewModel
             _browserState.value = BrowserState.Loading("Requesting page...")
             startStatusCollection(epoch)
 
+            // Wall-clock fetch timing feeds the image auto-gate's fallback
+            // EDR (upstream last_response_speed()).
+            val fetchStartedAt = System.nanoTime()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val result =
@@ -754,6 +899,9 @@ class NomadNetBrowserViewModel
 
                     result.fold(
                         onSuccess = { pageResult ->
+                            lastPageFetchSeconds = (System.nanoTime() - fetchStartedAt) / 1_000_000_000.0
+                            lastPageFetchBytes =
+                                if (pageResult.type == "file") pageResult.fileSize else pageResult.content.length.toLong()
                             if (pageResult.type == "file") {
                                 // Unexpected file response on a page path —
                                 // clear loading state so screen doesn't get stuck

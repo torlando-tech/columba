@@ -22,6 +22,19 @@ oneway interface IRnsNomadnet {
 
     void cancelNomadnetPageRequest(in IRnsResultCallback cb);
 
+    // requestNomadnetMedia → "media": NomadnetMediaResult
+    // maxBytes: transfer cap; Long.MAX_VALUE = no cap. The backend fails the
+    // fetch (RnsError.NomadnetResponseTooLarge) if the node delivers more.
+    void requestNomadnetMedia(
+        String destinationHash,
+        String path,
+        float timeoutSeconds,
+        long maxBytes,
+        in IRnsResultCallback cb);
+
+    // getNomadnetLinkStats → "stats": NomadnetLinkStats; null when no active link
+    void getNomadnetLinkStats(String destinationHash, in IRnsResultCallback cb);
+
     // Snapshot getters for the request status / download progress flows.
     void getNomadnetRequestStatus(in IRnsStringCallback cb);
     void getNomadnetDownloadProgress(in IRnsFloatCallback cb);

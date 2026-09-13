@@ -1126,5 +1126,113 @@ class MicronParserTest {
         assertEquals('\u2500', divider.character)
     }
 
+    // ==================== Images ====================
+
+    private fun parseSingleImage(tag: String): MicronElement.Image {
+        val doc = MicronParser.parse(tag)
+        val line = doc.lines.single { it.elements.none { e -> e is MicronElement.LineBreak } }
+        return line.elements.single() as MicronElement.Image
+    }
+
+    @Test
+    fun `full image tag parses alt url and properties`() {
+        val image = parseSingleImage("`(" + "RNS logo" + "`w=60%`a=center`" + ":/media/demo.webp)")
+        assertEquals("RNS logo", image.alt)
+        assertEquals(":/media/demo.webp", image.url)
+        assertEquals("60%", image.width)
+        assertEquals("center", image.align)
+        assertNull(image.height)
+    }
+
+    @Test
+    fun `image tag shorthand alignment expands`() {
+        val image = parseSingleImage("`(" + "alt" + "`w=n`a=c`" + ":x.webp)")
+        assertEquals("n", image.width)
+        assertEquals("center", image.align)
+    }
+
+    @Test
+    fun `image tag height property parses`() {
+        val image = parseSingleImage("`(" + "alt" + "`w=40`h=80`" + ":x.webp)")
+        assertEquals("40", image.width)
+        assertEquals("80", image.height)
+    }
+
+    @Test
+    fun `image tag left shorthand alignment expands`() {
+        val image = parseSingleImage("`(" + "alt" + "`w=n`a=l`" + ":x.webp)")
+        assertEquals("left", image.align)
+    }
+
+    @Test
+    fun `image tag right shorthand alignment expands`() {
+        val image = parseSingleImage("`(" + "alt" + "`w=n`a=r`" + ":x.webp)")
+        assertEquals("right", image.align)
+    }
+
+    @Test
+    fun `image tag without properties parses alt and url only`() {
+        val image = parseSingleImage("`(" + "pic" + "`" + ":/media/pic.webp)")
+        assertEquals("pic", image.alt)
+        assertEquals(":/media/pic.webp", image.url)
+    }
+
+    @Test
+    fun `image tag cross-node url keeps hash prefix`() {
+        val image = parseSingleImage("`(" + "far" + "`" + "ff00aa11bb22cc33dd44ee55ff667788:/media/x.webp)")
+        assertEquals("ff00aa11bb22cc33dd44ee55ff667788:/media/x.webp", image.url)
+    }
+
+    @Test
+    fun `unknown image properties are ignored`() {
+        val image = parseSingleImage("`(" + "alt" + "`z=9`w=40`" + ":x.webp)")
+        assertEquals("40", image.width)
+    }
+
+    @Test
+    fun `image property field without equals is skipped`() {
+        // A middle property field with no `=` (e.g. `foo`) is skipped by the
+        // property loop (mirrors upstream, which only reads key=value pairs).
+        val image = parseSingleImage("`(" + "alt" + "`foo`w=40`" + ":x.webp)")
+        assertEquals("40", image.width)
+    }
+
+    @Test
+    fun `malformed image tag falls through to inline text`() {
+        // No closing paren -> upstream parse_image bails (returns None) and
+        // the line renders as plain text. Columba mirrors exactly.
+        val doc = MicronParser.parse("`(" + "broken thing")
+        val line = doc.lines.single { it.elements.none { e -> e is MicronElement.LineBreak } }
+        assertTrue(line.elements.none { it is MicronElement.Image })
+    }
+
+    @Test
+    fun `well-formed tag with empty url yields image for error placeholder`() {
+        // Upstream: empty URL in a well-formed tag -> "Error loading image"
+        // placeholder widget, not a fall-through. Columba models this as an
+        // Image with empty url; the renderer shows the alt as placeholder.
+        val image = parseSingleImage("`(" + "pic" + "`w=n`" + ")")
+        assertEquals("", image.url)
+        assertEquals("pic", image.alt)
+    }
+
+    @Test
+    fun `url without backtick separator falls through to inline text`() {
+        // Upstream splits the tag on backtick: "pic:/media/pic.webp" is a
+        // single field -> parse_image bails -> the line renders as plain
+        // inline text (the backtick-entry path consumes the "(" as an
+        // unknown command). Columba mirrors: no Image element is produced.
+        val doc = MicronParser.parse("`(" + "pic:/media/pic.webp)")
+        val line = doc.lines.single { it.elements.none { e -> e is MicronElement.LineBreak } }
+        assertTrue(line.elements.none { it is MicronElement.Image })
+    }
+
+    @Test
+    fun `image alt with inner parens keeps last paren as terminator`() {
+        val image = parseSingleImage("`(" + "logo (fresh)" + "`w=n`" + ":y.webp)")
+        assertEquals("logo (fresh)", image.alt)
+        assertEquals(":y.webp", image.url)
+    }
+
     private fun MicronDocument.singleText(): MicronElement.Text = lines.single().elements.single() as MicronElement.Text
 }

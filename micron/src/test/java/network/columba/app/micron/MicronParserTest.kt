@@ -1152,6 +1152,25 @@ class MicronParserTest {
     }
 
     @Test
+    fun `image tag height property parses`() {
+        val image = parseSingleImage("`(" + "alt" + "`w=40`h=80`" + ":x.webp)")
+        assertEquals("40", image.width)
+        assertEquals("80", image.height)
+    }
+
+    @Test
+    fun `image tag left shorthand alignment expands`() {
+        val image = parseSingleImage("`(" + "alt" + "`w=n`a=l`" + ":x.webp)")
+        assertEquals("left", image.align)
+    }
+
+    @Test
+    fun `image tag right shorthand alignment expands`() {
+        val image = parseSingleImage("`(" + "alt" + "`w=n`a=r`" + ":x.webp)")
+        assertEquals("right", image.align)
+    }
+
+    @Test
     fun `image tag without properties parses alt and url only`() {
         val image = parseSingleImage("`(" + "pic" + "`" + ":/media/pic.webp)")
         assertEquals("pic", image.alt)
@@ -1167,6 +1186,14 @@ class MicronParserTest {
     @Test
     fun `unknown image properties are ignored`() {
         val image = parseSingleImage("`(" + "alt" + "`z=9`w=40`" + ":x.webp)")
+        assertEquals("40", image.width)
+    }
+
+    @Test
+    fun `image property field without equals is skipped`() {
+        // A middle property field with no `=` (e.g. `foo`) is skipped by the
+        // property loop (mirrors upstream, which only reads key=value pairs).
+        val image = parseSingleImage("`(" + "alt" + "`foo`w=40`" + ":x.webp)")
         assertEquals("40", image.width)
     }
 

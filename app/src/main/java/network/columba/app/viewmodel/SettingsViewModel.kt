@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.BuildConfig
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
@@ -40,6 +42,7 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.util.SharedInstanceProbe
 import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.PropagationNodeManager
@@ -255,6 +258,22 @@ class SettingsViewModel
              * @suppress VisibleForTesting
              */
             internal var enableMonitors = true
+
+            /**
+             * TCP reachability check used by [sharedInstanceAvailability] to
+             * detect a co-hosted shared master while Columba is in own-mode.
+             * Defaults to the real [SharedInstanceProbe.isAvailable]; swapped
+             * for a stub in unit tests so no real socket connect runs on the
+             * JVM test host.
+             * @suppress VisibleForTesting
+             */
+            internal var sharedInstanceProbe: suspend (
+                host: String,
+                port: Int,
+                timeoutMs: Int,
+            ) -> Boolean = { host, port, timeoutMs ->
+                SharedInstanceProbe.isAvailable(host, port, timeoutMs)
+            }
         }
 
         private val _state =
@@ -343,7 +362,7 @@ class SettingsViewModel
                                 _state.first { !it.isLoading }
                                 runCatching {
                                     updateHostingShareInstanceState(
-                                        isOnline = rnsTransportAdmin.isSharedInstanceAvailable(),
+                                        isOnline = sharedInstanceAvailability(),
                                         currentState = _state.value,
                                     )
                                 }.onFailure { e ->
@@ -1444,6 +1463,61 @@ class SettingsViewModel
         }
 
         /**
+         * Determines whether a shared Reticulum instance is available on this
+         * host for the Settings UI to offer (or return to).
+         *
+         * ORs two independent signals:
+         *
+         * - [RnsTransportAdmin.isSharedInstanceAvailable] - the live daemon's
+         *   own mode: true when Columba is connected to another app's shared
+         *   master (shared-client) or is itself the master (hosting).
+         * - [SharedInstanceProbe.isAvailable] - a direct TCP connect to
+         *   127.0.0.1:37428, the same reachability check
+         *   [network.columba.app.rns.api.util.SharedInstanceProbe.shouldShareInstance]
+         *   uses to decide whether the daemon can join a shared master.
+         *
+         * The daemon flag alone is a *current-mode* signal, not an
+         * *availability* signal: in steady own-instance mode it is false even
+         * while Sideband (or another RNS app) still hosts the shared master.
+         * The UI's card visibility, the toggle's enable logic, and the
+         * "No shared instance available" hint are all designed around
+         * availability, so without the probe the card vanishes and the
+         * switch-back-to-shared toggle becomes unreachable after any restart
+         * that lands Columba in own-mode - the user is trapped in that mode.
+         *
+         * Best-effort: probe/IPC failures are logged and yield whichever
+         * signal did succeed (false if both fail), never crashing the caller.
+         * The probe runs on [Dispatchers.IO] (blocking socket connect with a
+         * 1s timeout, same parameters the daemon uses) so the main thread and
+         * the 5s monitor cadence are never blocked longer than that.
+         *
+         * [sharedInstanceProbe] is the seam used for the TCP reachability
+         * check; it defaults to [SharedInstanceProbe.isAvailable] and can be
+         * swapped in unit tests (which have no real RNS master to connect to).
+         */
+        private suspend fun sharedInstanceAvailability(): Boolean {
+            // Daemon-mode check first. This is a plain passthrough on purpose:
+            // an IPC failure (e.g. BackendNotReady from a dead binder) must
+            // propagate to the caller's try/catch so the monitor skips the
+            // tick and retries - swallowing it here would turn a dead binder
+            // into a false "not available" and hide the banner.
+            if (rnsTransportAdmin.isSharedInstanceAvailable()) return true
+            // We are in own-mode: a shared instance is still "available" if
+            // another app's master is reachable, so the banner stays visible
+            // and the toggle can switch back to shared. The probe is
+            // best-effort (a failed connect simply means "not probed").
+            return runCatching {
+                withContext(Dispatchers.IO) {
+                    sharedInstanceProbe(
+                        "127.0.0.1",
+                        SHARED_INSTANCE_PORT,
+                        SharedInstanceProbe.DEFAULT_TIMEOUT_MS,
+                    )
+                }
+            }.getOrDefault(false)
+        }
+
+        /**
          * Start monitoring for shared instance availability.
          * This periodically queries the service to check if a shared instance is reachable.
          * Updates sharedInstanceOnline for toggle enable logic and sharedInstanceAvailable
@@ -1474,7 +1548,12 @@ class SettingsViewModel
                             // RnsException and retry next interval, rather than letting
                             // it escape viewModelScope.
                             try {
-                                val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
+                                // Availability = "a shared instance is present on
+                                // this host", not "are we in shared mode" - the
+                                // method also TCP-probes 37428 so the banner
+                                // stays visible (and the toggle reachable) in
+                                // steady own-mode while a master is hosted.
+                                val isOnline = sharedInstanceAvailability()
                                 // Hosting/conflict polling runs on the same cadence so
                                 // the UI can't see a torn state between the two flags.
                                 updateHostingShareInstanceState(isOnline, currentState)

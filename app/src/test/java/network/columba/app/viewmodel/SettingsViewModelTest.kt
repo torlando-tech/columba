@@ -113,6 +113,10 @@ class SettingsViewModelTest {
 
         // Disable monitor coroutines during testing to avoid infinite loops
         SettingsViewModel.enableMonitors = false
+        // No real TCP connect in unit tests: default the availability probe
+        // to "no co-hosted master" (tests that need a reachable master swap
+        // the seam to true).
+        SettingsViewModel.sharedInstanceProbe = { _, _, _ -> false }
 
         settingsRepository = mockk()
         identityRepository = mockk()
@@ -2519,6 +2523,155 @@ class SettingsViewModelTest {
                 viewModel.state.value.sharedInstanceOnline,
             )
             assertTrue("hosting poll should have been retried after the transient failure", hostingCalls >= 2)
+        }
+
+    /**
+     * Regression: shared-instance card vanishes in steady own-mode, trapping
+     * the user in own instance.
+     *
+     * The card's visibility and the toggle's enable state depend on
+     * `sharedInstanceOnline`. Before this fix the monitor drove that purely
+     * from `isSharedInstanceAvailable()`, which reads the daemon's OWN mode
+     * flags (`is_connected_to_shared_instance || is_shared_instance`) - a
+     * current-mode signal, not an availability signal. In steady own-mode
+     * those flags are false even while Sideband still hosts the shared
+     * master on 127.0.0.1:37428, so the monitor flipped
+     * `sharedInstanceOnline` to false, the card disappeared, and there was
+     * no toggle left to switch back to shared.
+     *
+     * After the fix the availability check ORs the daemon-mode signal with a
+     * TCP reachability probe of the shared master (the same check the daemon
+     * uses to decide it can join). Model that: daemon reports own-mode
+     * (`isSharedInstanceAvailable() = false`), but the probe finds a master
+     * on 37428. The monitor must report the shared instance online so the
+     * banner stays visible and the switch-back toggle is reachable.
+     */
+    @Test
+    fun `availability monitor reports shared online in own-mode when a master is reachable`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            // Daemon is in own-mode: its own mode flags are false.
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+            // But another app still hosts the shared master on 37428.
+            var probeCalls = 0
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ ->
+                probeCalls++
+                true
+            }
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            // init delay (INIT_DELAY_MS*4 = 2s) + two 5s poll intervals.
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            // The probe runs on Dispatchers.IO (a real thread pool), so its
+            // resumption can reach the test scheduler a beat after the virtual
+            // time advances. Settle with a bounded real-time wait so this stays
+            // deterministic.
+            val deadline = System.currentTimeMillis() + 2_000
+            while (System.currentTimeMillis() < deadline) {
+                if (viewModel.state.value.sharedInstanceOnline && probeCalls >= 1) break
+                Thread.sleep(20)
+                testScheduler.runCurrent()
+            }
+
+            assertTrue(
+                "A reachable shared master must keep the instance 'online' for the UI in " +
+                    "own-mode so the banner and switch-back toggle stay reachable",
+                viewModel.state.value.sharedInstanceOnline,
+            )
+            assertTrue("the availability probe must have run while the daemon was in own-mode", probeCalls >= 1)
+        }
+
+    /**
+     * Companion to the own-mode probe test: when the daemon is in own-mode
+     * AND no shared master is reachable, the instance must report offline
+     * (no false "shared available" when there is nothing to switch to).
+     */
+    @Test
+    fun `availability monitor reports shared offline in own-mode when no master is reachable`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ -> false }
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            assertFalse(
+                "With no reachable master and no shared mode, the instance must not report online",
+                viewModel.state.value.sharedInstanceOnline,
+            )
+        }
+
+    /**
+     * The daemon-mode signal short-circuits the probe: when the daemon
+     * reports a shared mode (client or host) the probe must not be needed,
+     * so a probe that would time out (or hang) is never invoked.
+     */
+    @Test
+    fun `availability short-circuits the probe when the daemon is already in shared mode`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns true
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns true
+            var probeCalls = 0
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ ->
+                probeCalls++
+                true
+            }
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            assertTrue("shared mode must report the instance online", viewModel.state.value.sharedInstanceOnline)
+            assertEquals("probe must be skipped when the daemon is already in a shared mode", 0, probeCalls)
         }
 
     @Test

@@ -379,6 +379,39 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+  python-rns-contract-tests:
+    name: Python RNS Interface Contract Tests
+    # Runs the rns-backend-py python suite against the REAL pinned RNS/LXMF
+    # (installed from the exact SHAs in rns-backend-py/build.gradle.kts).
+    # The stub-based unit tests pass anywhere; the contract test drives real
+    # announce traffic through RNS's own transport (Transport.inbound +
+    # process_announce_queue) so a drift in the RNS<->adapter callback contract
+    # (e.g. the RNS 1.5.x `size=` keyword on the Interface announce callbacks)
+    # is caught here instead of on-device. No emulator, no JDK.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        # Chaquopy bundles CPython 3.11 into the APK; test against the same
+        # minor so the pinned wheels resolve the way the build does.
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install pinned RNS/LXMF and run the python suite
+        # The runner builds an isolated venv, installs the exact git+SHA pins
+        # from build.gradle.kts, then runs each test file in its own subprocess
+        # (the stub-based tests replace sys.modules["RNS"], so they cannot share
+        # a process with the contract test).
+        run: python rns-backend-py/run_python_tests.py
+
   proguard-verification:
     name: Verify Python-Kotlin Bridge (R8)
     # Builds the minified pythonBackend RELEASE APK and asserts, against R8's own

@@ -30,6 +30,7 @@ stub-based unit suite keeps running anywhere.
 
 import importlib.util
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -90,7 +91,9 @@ class RnsInterfaceContractTests(unittest.TestCase):
         # naturally; RNS registered ``Reticulum.exit_handler`` on ``atexit``
         # during ``Reticulum.__init__``, so the graceful teardown (interface
         # detach, thread shutdown) still runs without the hard os._exit.
-        pass
+        if getattr(cls, "_configdir", None):
+            shutil.rmtree(cls._configdir, ignore_errors=True)  # type: ignore[arg-type]
+            cls._configdir = None
 
     def _make_interface(self):
         """Build the adapter through RNS's real base __init__ (as the app does

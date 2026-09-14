@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,29 +61,38 @@ def pinned_shas() -> dict[str, str]:
     }
 
 
-def build_venv() -> Path:
+def build_venv():
+    """Build an isolated venv with the pinned RNS/LXMF. Returns (venv_dir, py).
+
+    The caller is responsible for removing ``venv_dir`` (see ``main``'s
+    ``finally``) so repeated runs don't accumulate virtual environments.
+    """
     shas = pinned_shas()
     print(f"[run_python_tests] pinned RNS={shas['rns'][:12]} "
           f"LXMF={shas['lxmf'][:12]} ble={shas['ble'][:12]}", file=sys.stderr)
     venv = Path(tempfile.mkdtemp(prefix="rns_contract_venv_"))
     py = venv / "bin" / "python"
-    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
-    r = subprocess.run([str(py), "-m", "pip", "install", "-q", "--upgrade", "pip"],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        sys.stderr.write(r.stdout + r.stderr)
-        raise SystemExit("pip self-upgrade failed")
-    r = subprocess.run(
-        [str(py), "-m", "pip", "install", "-q",
-         f"git+https://github.com/torlando-tech/Reticulum@{shas['rns']}",
-         f"git+https://github.com/torlando-tech/LXMF@{shas['lxmf']}",
-         "cryptography>=42.0.0"],
-        capture_output=True, text=True,
-    )
-    if r.returncode != 0:
-        sys.stderr.write(r.stdout + "\n" + r.stderr + "\n")
-        raise SystemExit("pinned RNS/LXMF install failed")
-    return py
+    try:
+        subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
+        r = subprocess.run([str(py), "-m", "pip", "install", "-q", "--upgrade", "pip"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.stderr.write(r.stdout + r.stderr)
+            raise SystemExit("pip self-upgrade failed")
+        r = subprocess.run(
+            [str(py), "-m", "pip", "install", "-q",
+             f"git+https://github.com/torlando-tech/Reticulum@{shas['rns']}",
+             f"git+https://github.com/torlando-tech/LXMF@{shas['lxmf']}",
+             "cryptography>=42.0.0"],
+            capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            sys.stderr.write(r.stdout + "\n" + r.stderr + "\n")
+            raise SystemExit("pinned RNS/LXMF install failed")
+    except BaseException:
+        shutil.rmtree(venv, ignore_errors=True)
+        raise
+    return venv, py
 
 
 def run_one(py: Path, test_file: Path) -> int:
@@ -105,14 +115,17 @@ def main() -> int:
     if not test_files:
         raise SystemExit(f"no test files found under {TEST_DIR}")
 
-    py = build_venv()
+    venv_dir, py = build_venv()
     failures = 0
-    for t in test_files:
-        print(f"\n[run_python_tests] === {t.name} ===", file=sys.stderr)
-        rc = run_one(py, t)
-        status = "PASS" if rc == 0 else "FAIL"
-        print(f"[run_python_tests] {t.name}: {status} (rc={rc})", file=sys.stderr)
-        failures += 1 if rc != 0 else 0
+    try:
+        for t in test_files:
+            print(f"\n[run_python_tests] === {t.name} ===", file=sys.stderr)
+            rc = run_one(py, t)
+            status = "PASS" if rc == 0 else "FAIL"
+            print(f"[run_python_tests] {t.name}: {status} (rc={rc})", file=sys.stderr)
+            failures += 1 if rc != 0 else 0
+    finally:
+        shutil.rmtree(venv_dir, ignore_errors=True)
 
     print(f"\n[run_python_tests] {len(test_files) - failures}/{len(test_files)} "
           f"files passed", file=sys.stderr)

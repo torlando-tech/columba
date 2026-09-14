@@ -66,4 +66,43 @@ class SharedInstanceProbeTest {
             ),
         )
     }
+
+    @Test
+    fun `isAvailable retries until the master appears`() {
+        // A shared master (e.g. Sideband) can come up between probe attempts:
+        // the first connect fails, a later one succeeds. Pick a free port and
+        // start a listener after a short delay; the retrying probe must find it.
+        val port = ServerSocket(0).use { it.localPort }
+        Thread {
+            Thread.sleep(150)
+            // Keep the listener alive for the duration of the probe, then close.
+            ServerSocket(port).use { Thread.sleep(2_000) }
+        }.start()
+        assertTrue(
+            SharedInstanceProbe.isAvailable(
+                port = port,
+                timeoutMs = 100,
+                attempts = 8,
+                retryDelayMs = 50,
+            ),
+        )
+    }
+
+    @Test
+    fun `isAvailable returns false after exhausting retries on a closed port`() {
+        val freePort = ServerSocket(0).use { it.localPort }
+        val start = System.currentTimeMillis()
+        assertFalse(
+            SharedInstanceProbe.isAvailable(
+                port = freePort,
+                timeoutMs = 50,
+                attempts = 3,
+                retryDelayMs = 100,
+            ),
+        )
+        // Retries must actually happen: 3 connects (instant on a refused
+        // loopback port) + 2 x 100ms backoffs.
+        val elapsed = System.currentTimeMillis() - start
+        assertTrue("expected >= ~200ms of retries, got ${elapsed}ms", elapsed in 180..3_000)
+    }
 }

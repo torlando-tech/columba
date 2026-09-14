@@ -376,31 +376,41 @@ class InterfaceConfigManager
                             incomingMessageSizeLimitKb = incomingMessageSizeLimitKb,
                         )
 
-                    rnsCore
-                        .initialize(config)
-                        .onSuccess {
-                            Log.d(TAG, "✓ Reticulum initialized successfully")
+                    val initResult = rnsCore.initialize(config)
+                    initResult.onFailure { error ->
+                        // The outer finally clears is_applying_config — keep the flag set
+                        // here so any stale ACTION_STOP redelivery during the in-flight
+                        // service restart (Step 4 → Step 7 window) is still recognised
+                        // as an apply-time redelivery and ignored in
+                        // ReticulumService.onStartCommand.
+                        Log.e(TAG, "Failed to initialize Reticulum", error)
+                        throw Exception("Failed to initialize Reticulum: ${error.message}", error)
+                    }
+                    Log.d(TAG, "✓ Reticulum initialized successfully")
 
-                            // Refresh the persisted snapshot with the config we just
-                            // applied. Without this, the snapshot only ever reflects
-                            // ColumbaApplication.onCreate's cold-start config — so any
-                            // field changed via Apply & Restart (e.g. shareInstanceHosting)
-                            // silently reverts the next time the OS reaps and START_STICKY-
-                            // restarts the :reticulum process from the stale snapshot.
-                            ReticulumConfigSnapshot.write(
-                                context = context,
-                                config = config,
-                                identityHashHex = activeIdentity?.identityHash,
-                            )
-                        }.onFailure { error ->
-                            // The outer finally clears is_applying_config — keep the flag set
-                            // here so any stale ACTION_STOP redelivery during the in-flight
-                            // service restart (Step 4 → Step 7 window) is still recognised
-                            // as an apply-time redelivery and ignored in
-                            // ReticulumService.onStartCommand.
-                            Log.e(TAG, "Failed to initialize Reticulum", error)
-                            throw Exception("Failed to initialize Reticulum: ${error.message}", error)
-                        }
+                    // Refresh the persisted snapshot with the config we just
+                    // applied. Without this, the snapshot only ever reflects
+                    // ColumbaApplication.onCreate's cold-start config — so any
+                    // field changed via Apply & Restart (e.g. shareInstanceHosting)
+                    // silently reverts the next time the OS reaps and START_STICKY-
+                    // restarts the :reticulum process from the stale snapshot.
+                    ReticulumConfigSnapshot.write(
+                        context = context,
+                        config = config,
+                        identityHashHex = activeIdentity?.identityHash,
+                    )
+
+                    // Persist shared instance status so the Settings UI banner reflects
+                    // the actual transport mode. This is the same check performed in
+                    // ColumbaApplication.onCreate(); without it the `isSharedInstance`
+                    // DataStore flag is never written on the restart path, so the
+                    // shared-instance banner/toggle stay stuck on "own instance" even
+                    // after the daemon switches modes (e.g. toggling "Use Columba's own
+                    // instance" off). Both call sites share
+                    // SharedInstanceStatus.persist() so they cannot drift apart.
+                    // Best-effort: a failure to persist the status flag must not fail
+                    // an otherwise-successful restart (the daemon is already up).
+                    SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
 
                     // Signal caller that service is usable (before post-init bookkeeping)
                     onServiceReady?.invoke()

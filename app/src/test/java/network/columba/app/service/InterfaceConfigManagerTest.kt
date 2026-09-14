@@ -148,6 +148,17 @@ class InterfaceConfigManagerTest {
         coEvery { rnsCore.shutdown() } returns Result.success(Unit)
         coEvery { rnsCore.initialize(any()) } returns Result.success(Unit)
 
+        // Shared-instance status persistence — defaults: not using a shared
+        // instance. applyInterfaceChanges() persists the actual transport mode
+        // on the initialize() success path (via SharedInstanceStatus.persist),
+        // so every test that drives a successful restart reaches these stubs.
+        // The client signal is `available && !hosting`, so stub hosting too;
+        // the availability=false default short-circuits before the hosting
+        // probe, but stub it for tests that flip availability to true.
+        coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+        coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+        coEvery { settingsRepository.saveIsSharedInstance(any()) } just Runs
+
         // applyInterfaceChanges() refreshes the persisted snapshot on the
         // initialize() success path. ReticulumConfigSnapshot.write() does real
         // Android Parcel + file I/O, which isn't on the JVM unit-test classpath
@@ -788,5 +799,58 @@ class InterfaceConfigManagerTest {
 
             // And: Message collector should still be started
             verify { messageCollector.startCollecting() }
+        }
+
+    // ========== Shared Instance Status Persistence Tests ==========
+    //
+    // Regression: the Settings shared-instance banner/toggle is driven by the
+    // `isSharedInstance` DataStore flag. That flag was previously only written in
+    // unit tests, never in production code, so the banner always displayed
+    // "Using Columba's Own Instance" even when connected to a shared instance
+    // (e.g. reticulum-android on 127.0.0.1:37428), and toggling "Use Columba's
+    // own instance" off restarted the daemon correctly but the UI snapped back
+    // to the "own instance" state and appeared stuck.
+
+    @Test
+    fun `applyInterfaceChanges - persists shared instance status as false when not shared`() =
+        runTest {
+            // Given: not connected to a shared instance
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: Should succeed and persist isSharedInstance = false
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+            coVerify(exactly = 1) { settingsRepository.saveIsSharedInstance(false) }
+        }
+
+    @Test
+    fun `applyInterfaceChanges - persists shared instance status as true when connected to shared instance`() =
+        runTest {
+            // Given: connected to a shared instance
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns true
+
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: Should succeed and persist isSharedInstance = true
+            assertTrue("applyInterfaceChanges should succeed", result.isSuccess)
+            coVerify(exactly = 1) { settingsRepository.saveIsSharedInstance(true) }
+        }
+
+    @Test
+    fun `applyInterfaceChanges - does not call saveIsSharedInstance when initialization fails`() =
+        runTest {
+            // Given: initialize() fails
+            coEvery { rnsCore.initialize(any()) } returns
+                Result.failure(RuntimeException("init failed"))
+
+            // When
+            val result = manager.applyInterfaceChanges()
+
+            // Then: Should fail and NOT persist any shared instance status
+            assertTrue("applyInterfaceChanges should fail", result.isFailure)
+            coVerify(exactly = 0) { settingsRepository.saveIsSharedInstance(any()) }
         }
 }

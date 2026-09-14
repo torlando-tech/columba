@@ -17,6 +17,7 @@ import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.util.SharedInstanceProbe
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.LocationSharingManager
@@ -295,6 +296,13 @@ class SettingsViewModelTest {
         clearAllMocks()
         // Restore default behavior for other tests
         SettingsViewModel.enableMonitors = true
+        // Restore the production probe: tests swap the process-wide seam with
+        // stubs (some backed by cancelled deferreds). The test JVM is reused
+        // across classes, so a leaked stub would poison a later test's
+        // availability monitor.
+        SettingsViewModel.sharedInstanceProbe = { host, port, timeoutMs ->
+            SharedInstanceProbe.isAvailable(host, port, timeoutMs)
+        }
     }
 
     private fun createViewModel(): SettingsViewModel =

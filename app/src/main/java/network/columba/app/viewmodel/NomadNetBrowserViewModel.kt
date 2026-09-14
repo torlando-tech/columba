@@ -453,6 +453,12 @@ class NomadNetBrowserViewModel
             formDataJson: String,
         ) {
             val epoch = ++fetchEpoch
+            // Same single-flight hygiene as fetchPage: a form submission is a
+            // new page request over the shared NomadNet link, so cancel any
+            // in-flight page-image queue first to keep stale image traffic off
+            // the link. The target page's images are re-scanned in
+            // emitPageLoaded once the fetch completes.
+            pageImageLoader.cancelAll()
             stopProgressCollection()
             lastFetchNodeHash = nodeHash
             lastFetchPath = path

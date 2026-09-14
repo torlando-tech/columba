@@ -49,6 +49,7 @@ class NomadNetBrowserViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var protocol: RnsNomadnet
     private lateinit var pageCache: NomadNetPageCache
+    private lateinit var imageCache: network.columba.app.nomadnet.NomadNetImageCache
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: NomadNetBrowserViewModel
 
@@ -60,16 +61,25 @@ class NomadNetBrowserViewModelTest {
         Dispatchers.setMain(testDispatcher)
         protocol = mockk()
         pageCache = mockk()
+        imageCache = mockk()
         settingsRepository = mockk()
         every { pageCache.put(any(), any(), any(), any()) } just Runs
+        // Page-image cache: only the explicit clear (clearImageCache) and the
+        // loader's miss-path get() are reachable from these tests; stub both
+        // explicitly rather than using a relaxed mock.
+        every { imageCache.clear() } just Runs
+        every { imageCache.get(any()) } returns null
         coEvery { protocol.cancelNomadnetPageRequest() } just Runs
         coEvery { protocol.getNomadnetRequestStatus() } returns ""
+        coEvery { protocol.getNomadnetLinkStats(any()) } returns null
         // No persisted rendering mode by default; individual tests can override.
         every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetImageLoadingModeFlow } returns flowOf(null)
         coEvery { settingsRepository.saveNomadNetRenderingMode(any()) } just Runs
+        coEvery { settingsRepository.saveNomadNetImageLoadingMode(any()) } just Runs
         coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any()) } just Runs
         coEvery { settingsRepository.clearNomadNetLastNodeHash() } just Runs
-        viewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+        viewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
     }
 
     @Suppress("SleepInsteadOfDelay")
@@ -573,7 +583,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf("PROPORTIONAL_WRAP")
 
-            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
             advanceUntilIdle()
 
             assertEquals(
@@ -602,7 +612,7 @@ class NomadNetBrowserViewModelTest {
             every { settingsRepository.nomadNetRenderingModeFlow } returns controllableFlow
 
             // init launches and suspends on first() because nothing has been emitted yet.
-            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
 
             // User picks a mode before the persisted value has been read back.
             racingViewModel.setRenderingMode(NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM)
@@ -954,5 +964,29 @@ class NomadNetBrowserViewModelTest {
             viewModel.retry()
             advanceUntilIdle()
             assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Initial)
+        }
+
+    // ── Page images ──
+
+    @Test
+    fun `setImageLoadingMode updates state and persists the choice`() =
+        runTest(testDispatcher) {
+            viewModel.setImageLoadingMode(network.columba.app.nomadnet.ImageLoadingMode.MANUAL)
+
+            assertEquals(
+                network.columba.app.nomadnet.ImageLoadingMode.MANUAL,
+                viewModel.imageLoadingMode.value,
+            )
+            coVerify(exactly = 1) { settingsRepository.saveNomadNetImageLoadingMode("MANUAL") }
+        }
+
+    @Test
+    fun `clearImageCache wipes the disk cache and resets in-flight image states`() =
+        runTest(testDispatcher) {
+            viewModel.clearImageCache()
+            advanceUntilIdle()
+
+            verify { imageCache.clear() }
+            assertTrue(viewModel.imageStates.value.isEmpty())
         }
 }

@@ -80,6 +80,10 @@ fun MicronPageContent(
     modifier: Modifier = Modifier,
     minLineWidth: Dp = Dp.Unspecified,
     partialStates: Map<String, PartialManager.PartialState> = emptyMap(),
+    imageStates: Map<String, network.columba.app.nomadnet.PageImageState> = emptyMap(),
+    onImageTapToLoad: (String) -> Unit = {},
+    onImageReload: (String) -> Unit = {},
+    onCopyImageLink: (String) -> Unit = {},
     lineIndexOffset: Int = 0,
 ) {
     val defaultFg = MaterialTheme.colorScheme.onSurface
@@ -117,6 +121,10 @@ fun MicronPageContent(
                     onFieldUpdate = onFieldUpdate,
                     minLineWidth = minLineWidth,
                     partialStates = partialStates,
+                    imageStates = imageStates,
+                    onImageTapToLoad = onImageTapToLoad,
+                    onImageReload = onImageReload,
+                    onCopyImageLink = onCopyImageLink,
                     squareLineHeightSp = squareLineHeightSp,
                 )
             }
@@ -136,6 +144,10 @@ private fun MicronLineComposable(
     onFieldUpdate: (name: String, value: String) -> Unit,
     minLineWidth: Dp = Dp.Unspecified,
     partialStates: Map<String, PartialManager.PartialState> = emptyMap(),
+    imageStates: Map<String, network.columba.app.nomadnet.PageImageState> = emptyMap(),
+    onImageTapToLoad: (String) -> Unit = {},
+    onImageReload: (String) -> Unit = {},
+    onCopyImageLink: (String) -> Unit = {},
     squareLineHeightSp: TextUnit = TextUnit.Unspecified,
 ) {
     // Check if line is a line break
@@ -191,6 +203,22 @@ private fun MicronLineComposable(
                 )
             }
         }
+        return
+    }
+
+    // Check if line is an inline image (upstream parity: block-level, own line)
+    val image = line.elements.firstOrNull() as? MicronElement.Image
+    if (image != null) {
+        val key = network.columba.app.nomadnet.pageImageKey(image.url, image.width, image.height)
+        MicronImageBlock(
+            element = image,
+            state = imageStates[key],
+            indentLevel = line.indentLevel,
+            minLineWidth = minLineWidth,
+            onImageTapToLoad = { onImageTapToLoad(key) },
+            onImageReload = { onImageReload(key) },
+            onCopyLink = onCopyImageLink,
+        )
         return
     }
 
@@ -473,6 +501,14 @@ private fun buildMicronAnnotatedString(
     buildAnnotatedString {
         for (element in elements) {
             when (element) {
+                is MicronElement.Image -> {
+                    // Block-level; handled by MicronLineComposable directly.
+                    // Inside mixed inline runs (which upstream never emits),
+                    // render the alt text so nothing silently disappears.
+                    if (element.alt.isNotEmpty()) {
+                        append(element.alt)
+                    }
+                }
                 is MicronElement.Text -> {
                     if (element.content.isNotEmpty()) {
                         appendTextWithAutolinkedUrls(element.content, element.style.toSpanStyle(defaultFg))

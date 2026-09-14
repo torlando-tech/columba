@@ -46,6 +46,24 @@ internal class ServerRnsNomadnet(
         Bundle.EMPTY
     }
 
+    override fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+        maxBytes: Long,
+        cb: IRnsResultCallback,
+    ) = dispatch(cb, scope) {
+        val media = impl.requestNomadnetMedia(destinationHash, path, timeoutSeconds, maxBytes).getOrThrow()
+        Bundle().apply { putParcelable(BundleKeys.MEDIA, media) }
+    }
+
+    override fun getNomadnetLinkStats(
+        destinationHash: String,
+        cb: IRnsResultCallback,
+    ) = dispatch(cb, scope) {
+        Bundle().apply { putParcelable(BundleKeys.STATS, impl.getNomadnetLinkStats(destinationHash)) }
+    }
+
     override fun getNomadnetRequestStatus(cb: IRnsStringCallback) = dispatchNullableString(cb, scope) {
         impl.getNomadnetRequestStatus()
     }

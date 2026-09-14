@@ -55,6 +55,20 @@ class RnsErrorTest {
     }
 
     @Test
+    fun `NomadnetResponseTooLarge carries dest hash, path, and byte counts`() {
+        val err = RnsError.NomadnetResponseTooLarge(
+            destHash = "abc123",
+            path = "/media/big.webp",
+            receivedBytes = 17_000_000L,
+            maxBytes = 16_000_000L,
+        )
+        assertEquals("abc123", err.destHash)
+        assertEquals("/media/big.webp", err.path)
+        assertEquals(17_000_000L, err.receivedBytes)
+        assertEquals(16_000_000L, err.maxBytes)
+    }
+
+    @Test
     fun `equality is structural for data classes`() {
         val a = RnsError.IdentityNotFound("aa")
         val b = RnsError.IdentityNotFound("aa")

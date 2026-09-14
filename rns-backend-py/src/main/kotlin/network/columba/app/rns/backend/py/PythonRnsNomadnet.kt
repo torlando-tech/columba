@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NomadnetLinkStats
+import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 import org.json.JSONObject
 import java.io.File
@@ -399,6 +401,141 @@ class PythonRnsNomadnet(
 
     // ==================== Cancellation & status ====================
 
+    /**
+     * Fetch a `/media/` object (page image), mirroring
+     * [requestNomadnetPage]'s choreography. The capture's `denied` flag
+     * (event_bridge) carries upstream's explicit `False` deny signal for
+     * gated media, surfaced as [RnsError.NomadnetRequestDenied].
+     */
+    override suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+        maxBytes: Long,
+    ): Result<NomadnetMediaResult> =
+        pyResult {
+            runtime.requireRunning()
+            cancelled = false
+            _nomadnetRequestStatusFlow.value = "requesting"
+            _nomadnetDownloadProgressFlow.value = 0f
+
+            try {
+                val destBytes = destinationHash.hexToBytes()
+                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes, timeoutSeconds)
+                val link = establishLink(destinationHash, nodeIdentity, timeoutSeconds)
+
+                // Upstream serve_media requires {"path", "key"}; "path"
+                // carries the full "/media/..." path, "key" is Python None
+                // (toPyDict's __setitem__ passthrough maps Kotlin null).
+                val requestData = mapOf("path" to path, "key" to null).toPyDict()
+                val response = sendMediaRequest(link, requestData, timeoutSeconds, destinationHash)
+
+                // Enforce the transfer cap at the response boundary, before the
+                // payload is written to the staging file. RNS/LXMF deliver the
+                // full body to the receipt callback at once (no streaming), so
+                // this is the earliest point the Kotlin layer can act after
+                // delivery; failing here keeps an oversized payload off disk and
+                // out of the image cache and surfaces a typed error instead of
+                // the caller-side size check in PageImageLoader.fetchOne.
+                if (response.size.toLong() > maxBytes) {
+                    Log.w(TAG, "NomadNet: media response too large for $path (${response.size} > $maxBytes)")
+                    throw RnsException(
+                        RnsError.NomadnetResponseTooLarge(
+                            destinationHash, path, response.size.toLong(), maxBytes,
+                        ),
+                    )
+                }
+
+                _nomadnetRequestStatusFlow.value = "complete"
+                _nomadnetDownloadProgressFlow.value = 1f
+
+                // Unique per-fetch file name so same-named images on one page
+                // never clobber each other in flight.
+                val rawName = java.io.File(path).name.ifBlank { "media" }
+                val mediaDir = File(
+                    System.getProperty("java.io.tmpdir") ?: "/tmp",
+                    "nomadnet_media",
+                ).apply { mkdirs() }
+                val outFile = File(mediaDir, "${System.nanoTime()}.$rawName")
+                check(
+                    outFile.canonicalPath.startsWith(mediaDir.canonicalPath + File.separator),
+                ) { "Rejected path traversal in NomadNet media: $rawName" }
+                outFile.writeBytes(response)
+                Log.i(TAG, "NomadNet: media fetched $path (${response.size} bytes)")
+                NomadnetMediaResult(
+                    filePath = outFile.absolutePath,
+                    fileName = rawName,
+                    fileSize = response.size.toLong(),
+                    path = path,
+                )
+            } catch (e: Throwable) {
+                _nomadnetRequestStatusFlow.value = if (cancelled) "idle" else "failed"
+                throw e
+            }
+        }
+
+    /**
+     * Issue `link.request("/media", {"path": ..., "key": None}, ...)` and
+     * poll the capture to completion (same pattern as [sendPageRequest] /
+     * [awaitResponse]: file-response bodies are snapshot Python-side before
+     * upstream closes the backing temp file).
+     *
+     * Each failure mode (denied / error / null body / FAILED status /
+     * timeout) throws a distinct typed RnsException — collapsing them would
+     * lose the failure distinction (see [awaitResponse]).
+     */
+    @Suppress("ThrowsCount")
+    private suspend fun sendMediaRequest(
+        link: PyObject,
+        requestData: PyObject,
+        timeoutSeconds: Float,
+        destinationHash: String,
+    ): ByteArray {
+        val capture = runtime.eventBridge.callAttr("make_nomadnet_response_capture")
+        val receipt = link.callAttr(
+            "request",
+            "/media",
+            requestData,
+            capture["on_response"],
+            capture["on_failed"],
+            null,
+            timeoutSeconds.toDouble(),
+        )
+        if (receipt == null || receipt.toString() == "False") {
+            throw RnsException(
+                RnsError.Generic("NomadNet media request could not be sent", null),
+            )
+        }
+
+        _nomadnetRequestStatusFlow.value = "receiving"
+        val deadline = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
+        while (System.currentTimeMillis() < deadline) {
+            throwIfCancelled()
+            val progress = receipt["progress"]?.toJava(Float::class.javaObjectType) ?: 0f
+            _nomadnetDownloadProgressFlow.value = progress.coerceIn(0f, 1f)
+
+            if (capture["done"]?.toJava(Boolean::class.javaObjectType) == true) {
+                if (capture["denied"]?.toJava(Boolean::class.javaObjectType) == true) {
+                    throw RnsException(RnsError.NomadnetRequestDenied(destinationHash, "/media"))
+                }
+                capture["error"]?.toString()?.takeIf { it.isNotEmpty() && it != "None" }?.let {
+                    throw RnsException(
+                        RnsError.Generic("NomadNet media request failed: $it", null),
+                    )
+                }
+                return capture["response_bytes"]?.toJava(ByteArray::class.java)
+                    ?: throw RnsException(
+                        RnsError.Generic("NomadNet media response READY but body was null", null),
+                    )
+            }
+            if (receipt["status"]?.toJava(Long::class.javaObjectType) == RECEIPT_FAILED) {
+                throw RnsException(RnsError.Generic("NomadNet media request failed", null))
+            }
+            delay(POLL_INTERVAL_MS)
+        }
+        throw RnsException(RnsError.Generic("NomadNet media request timed out", null))
+    }
+
     override suspend fun cancelNomadnetPageRequest() {
         cancelled = true
         // Tear down every in-flight link; the polling loops observe `cancelled`
@@ -448,6 +585,20 @@ class PythonRnsNomadnet(
             Log.i(TAG, "NomadNet: sent identify proof on link to $destinationHash")
             false
         }
+
+    /** Live stats of the cached link, mirroring the kotlin backend's gate data. */
+    override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? {
+        val link = nomadnetLinks[destinationHash] ?: return null
+        if (linkStatus(link) != LINK_ACTIVE) return null
+        return NomadnetLinkStats(
+            // Python RNS exposes link.rtt in SECONDS (reticulum-kt uses millis).
+            rttSeconds = link["rtt"]?.toJava(Double::class.javaObjectType)
+                ?: link["rtt"]?.toJava(Float::class.javaObjectType)?.toDouble(),
+            expectedRateBps = runCatching {
+                link.callAttr("get_expected_rate")?.toJava(Float::class.javaObjectType)?.toLong()
+            }.getOrNull(),
+        )
+    }
 
     // ==================== Internal helpers ====================
 

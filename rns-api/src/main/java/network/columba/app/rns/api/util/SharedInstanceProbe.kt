@@ -42,10 +42,12 @@ object SharedInstanceProbe {
      * availability check would wrongly report "no shared instance".
      *
      * Retries bound the worst-case "unavailable" latency to
-     * `attempts * timeout + (attempts - 1) * delay` (default ≈1.6s), which is
-     * acceptable on both call sites: the daemon's join-decision runs on a
-     * background thread, and the Settings monitor polls on a 5s cadence.
-     * An immediate success (the common case) still returns after one attempt.
+     * `attempts * timeout + (attempts - 1) * delay` (default: 3 x 1s + 2 x
+     * 300ms = ~3.6s when every attempt times out; faster when the port
+     * refuses instantly), which is acceptable on both call sites: the daemon
+     * join-decision and the Settings availability check both run on
+     * background threads, never on the main thread. An immediate success
+     * (the common case) still returns after one attempt.
      */
     const val DEFAULT_ATTEMPTS = 3
     const val DEFAULT_RETRY_DELAY_MS = 300L

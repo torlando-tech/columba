@@ -31,6 +31,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -2672,6 +2674,75 @@ class SettingsViewModelTest {
 
             assertTrue("shared mode must report the instance online", viewModel.state.value.sharedInstanceOnline)
             assertEquals("probe must be skipped when the daemon is already in a shared mode", 0, probeCalls)
+        }
+
+    /**
+     * Cancellation must not be misread as "shared instance lost".
+     *
+     * If the monitor coroutine is cancelled while its IO probe is in flight,
+     * the [CancellationException] must terminate the monitor job rather than
+     * being swallowed into `false` (which would be processed as a real
+     * offline transition and could trigger an unnecessary service restart
+     * during monitor replacement / teardown).
+     *
+     * Red-capable: with the pre-fix `runCatching { ... }.getOrDefault(false)`
+     * the exception is caught, the loop survives, and the job is still Active
+     * after the probe's deferred is cancelled.
+     */
+    @Test
+    fun `cancellation in flight during the availability probe terminates the monitor instead of reading as offline`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            // Daemon in own-mode, so the probe is reached.
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+            networkStatusFlow.value = NetworkStatus.READY
+
+            val probeDeferred = CompletableDeferred<Boolean>()
+            var probeStarted = false
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ ->
+                probeStarted = true
+                probeDeferred.await()
+            }
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            // Advance past the initial delay + into the first poll so the
+            // probe coroutine starts on Dispatchers.IO and suspends. The probe
+            // resumes on a real IO thread, so bound the wait generously.
+            val start = System.currentTimeMillis()
+            while (!probeStarted && System.currentTimeMillis() - start < 5_000) {
+                testScheduler.advanceTimeBy(100L)
+                testScheduler.runCurrent()
+                Thread.sleep(20)
+            }
+            assertTrue("the availability probe must have started", probeStarted)
+
+            // Cancel the probe mid-flight.
+            probeDeferred.cancel()
+
+            val job = SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { it.get(viewModel) as? Job }
+                ?: throw AssertionError("the availability monitor job must exist")
+
+            // The rethrown CancellationException must complete the job rather
+            // than leave the monitor loop running with a false offline read.
+            val deadline = System.currentTimeMillis() + 5_000
+            while (System.currentTimeMillis() < deadline && !job.isCompleted) {
+                Thread.sleep(20)
+                testScheduler.runCurrent()
+            }
+            assertTrue(
+                "cancellation during the probe must terminate the monitor job, not continue as an offline tick",
+                job.isCompleted,
+            )
         }
 
     @Test

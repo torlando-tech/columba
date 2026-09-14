@@ -1488,8 +1488,15 @@ class SettingsViewModel
          * Best-effort: probe/IPC failures are logged and yield whichever
          * signal did succeed (false if both fail), never crashing the caller.
          * The probe runs on [Dispatchers.IO] (blocking socket connect with a
-         * 1s timeout, same parameters the daemon uses) so the main thread and
-         * the 5s monitor cadence are never blocked longer than that.
+         * 1s timeout per attempt, bounded retries, worst case ~3.6s) so the
+         * main thread is never blocked; it only runs inside the monitor's
+         * coroutine, where a slower probe delays the next availability
+         * update rather than the UI.
+         *
+         * Cancellation is rethrown: if this monitor job is cancelled while
+         * the IO probe is in flight, treating that as `false` would be read
+         * as a real "shared instance lost" transition and could trigger an
+         * unnecessary service restart during monitor replacement / teardown.
          *
          * [sharedInstanceProbe] is the seam used for the TCP reachability
          * check; it defaults to [SharedInstanceProbe.isAvailable] and can be
@@ -1506,7 +1513,10 @@ class SettingsViewModel
             // another app's master is reachable, so the banner stays visible
             // and the toggle can switch back to shared. The probe is
             // best-effort (a failed connect simply means "not probed").
-            return runCatching {
+            // CancellationException is rethrown so a cancelled monitor job is
+            // never misread as a real "shared instance lost" transition (see
+            // the method docs); only genuine probe/IPC failures yield false.
+            return try {
                 withContext(Dispatchers.IO) {
                     sharedInstanceProbe(
                         "127.0.0.1",
@@ -1514,7 +1524,16 @@ class SettingsViewModel
                         SharedInstanceProbe.DEFAULT_TIMEOUT_MS,
                     )
                 }
-            }.getOrDefault(false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "shared instance probe failed; yielding not-available: ${e.message}",
+                    e,
+                )
+                false
+            }
         }
 
         /**

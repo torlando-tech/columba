@@ -286,4 +286,19 @@
     </plurals>
     <string name="transfer_percent">%1$d%%</string>
     <string name="transfer_progress_description">%1$s, %2$d percent</string>
+    <string name="nomadnet_identify_dialog_title">Identify to Node</string>
+    <string name="nomadnet_identify_dialog_title_identified">Node Identification</string>
+    <string name="nomadnet_identify_dialog_body">This will reveal your identity to the node operator. The page will refresh after identifying.</string>
+    <string name="nomadnet_identify_dialog_body_identified">You are identified to this node.</string>
+    <string name="nomadnet_identify_always_toggle">Always identify to this node</string>
+    <string name="nomadnet_identify_always_subtitle">Automatically identify when browsing this site</string>
+    <string name="nomadnet_identify_button">Identify</string>
+    <string name="nomadnet_identify_done_button">Done</string>
+    <string name="nomadnet_identify_cancel_button">Cancel</string>
+    <string name="nomadnet_identify_cd">Identify to node</string>
+    <string name="nomadnet_identify_manage_cd">Manage identification</string>
+    <string name="nomadnet_node_detail_auto_identify_title">Auto-Identify</string>
+    <string name="nomadnet_node_detail_auto_identify_subtitle">Automatically identify to this node</string>
+    <string name="nomadnet_auto_identify_enabled_snackbar">Always identifying to this node</string>
+    <string name="nomadnet_auto_identify_disabled_snackbar">Stopped auto-identifying to this node</string>
 </resources>

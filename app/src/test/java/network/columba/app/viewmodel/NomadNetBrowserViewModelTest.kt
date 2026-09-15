@@ -75,6 +75,7 @@ class NomadNetBrowserViewModelTest {
         // No persisted rendering mode by default; individual tests can override.
         every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
         every { settingsRepository.nomadNetImageLoadingModeFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(emptySet())
         coEvery { settingsRepository.saveNomadNetRenderingMode(any()) } just Runs
         coEvery { settingsRepository.saveNomadNetImageLoadingMode(any()) } just Runs
         coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any()) } just Runs
@@ -698,6 +699,91 @@ class NomadNetBrowserViewModelTest {
 
             coVerify(exactly = 1) { protocol.identifyNomadnetLink(any()) }
             assertTrue(viewModel.isIdentified.value)
+        }
+
+    @Test
+    fun `loadPage auto-identifies to a flagged node`() =
+        runTest(testDispatcher) {
+            // The persisted set already contains this node, so loading its page
+            // must fire the identify request without a user tap.
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(setOf(nodeHash))
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+
+            val autoViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            advanceUntilIdle()
+            autoViewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            // identifyToNode runs on the real Dispatchers.IO, so poll for the
+            // call with a bound rather than an arbitrary sleep.
+            var identified = false
+            var waitedMs = 0
+            while (!identified && waitedMs < 2000) {
+                identified = runCatching {
+                    coVerify(exactly = 1) { protocol.identifyNomadnetLink(nodeHash) }
+                    true
+                }.getOrDefault(false)
+                if (!identified) {
+                    Thread.sleep(25)
+                    waitedMs += 25
+                }
+            }
+            assertTrue(identified)
+        }
+
+    @Test
+    fun `loadPage does not auto-identify to an unflagged node`() =
+        runTest(testDispatcher) {
+            // Default setUp stub: the persisted set is empty, so a plain page
+            // load must NOT fire the identify request.
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            // Give any (erroneous) IO coroutine time to run, then assert the
+            // identify request never happened.
+            Thread.sleep(150)
+            coVerify(exactly = 0) { protocol.identifyNomadnetLink(any()) }
+            assertFalse(viewModel.isIdentified.value)
+        }
+
+    @Test
+    fun `identifyToNode persists the always-identify opt-in when requested`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+            val saved = mutableListOf<Set<String>>()
+            coEvery { settingsRepository.saveNomadNetAutoIdentifyNodes(capture(saved)) } just Runs
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            viewModel.identifyToNode(autoIdentify = true)
+            advanceUntilIdle()
+
+            // The opt-in is persisted before the identify request, so it must
+            // land regardless of the request outcome.
+            assertTrue(saved.any { it == setOf(nodeHash) })
+        }
+
+    @Test
+    fun `identifyToNode does not persist opt-in when autoIdentify is false`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+            val saved = mutableListOf<Set<String>>()
+            coEvery { settingsRepository.saveNomadNetAutoIdentifyNodes(capture(saved)) } just Runs
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            viewModel.identifyToNode(autoIdentify = false)
+            advanceUntilIdle()
+
+            assertTrue(saved.isEmpty())
         }
 
     @Test

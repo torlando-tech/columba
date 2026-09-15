@@ -124,13 +124,34 @@ class NomadNetBrowserViewModel
                     _renderingMode.value = restored
                 }
             }
-            // NOTE: the image-loading-mode restore lives below, next to the
-            // _imageLoadingMode declaration — Kotlin initializes properties in
-            // declaration order and this init block runs before them.
+            // NOTE: the auto-identify set observation lives in its own init
+            // block below (after the _autoIdentifyNodes declaration) so the
+            // property is initialized before the collect writes to it; the
+            // image-loading-mode restore likewise lives next to its field.
         }
 
         private val _isIdentified = MutableStateFlow(false)
         val isIdentified: StateFlow<Boolean> = _isIdentified.asStateFlow()
+
+        // Destination hashes of nodes the user opted into auto-identification
+        // for ("Always identify to this node"). Restored from DataStore in init;
+        // the browser auto-identifies to these nodes on every page load.
+        private val _autoIdentifyNodes = MutableStateFlow<Set<String>>(emptySet())
+        val autoIdentifyNodes: StateFlow<Set<String>> = _autoIdentifyNodes.asStateFlow()
+
+        init {
+            // Observe the auto-identify node set reactively so flagged nodes
+            // keep being identified on every page load, and the browser dialog
+            // stays in sync with toggles made elsewhere (e.g. the Node Details
+            // card). DataStore is the source of truth; this mirrors it.
+            // (Lives after the _autoIdentifyNodes declaration because Kotlin
+            // runs property initializers and init blocks in source order.)
+            viewModelScope.launch {
+                settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
+                    _autoIdentifyNodes.value = nodes
+                }
+            }
+        }
 
         private val _identifyInProgress = MutableStateFlow(false)
         val identifyInProgress: StateFlow<Boolean> = _identifyInProgress.asStateFlow()
@@ -667,10 +688,21 @@ class NomadNetBrowserViewModel
             viewModelScope.launch { settingsRepository.saveNomadNetRenderingMode(mode.name) }
         }
 
-        fun identifyToNode() {
+        fun identifyToNode(autoIdentify: Boolean = false) {
             if (_identifyInProgress.value || _isIdentified.value) return
             val nodeHash = currentNodeHash
             if (nodeHash.isEmpty()) return
+
+            // Persist the "always identify" opt-in first so it survives even if
+            // the identify request below fails; the flag is independent of a
+            // single request succeeding.
+            if (autoIdentify) {
+                viewModelScope.launch {
+                    settingsRepository.saveNomadNetAutoIdentifyNodes(
+                        _autoIdentifyNodes.value + nodeHash,
+                    )
+                }
+            }
 
             _identifyInProgress.value = true
             viewModelScope.launch(Dispatchers.IO) {
@@ -761,6 +793,12 @@ class NomadNetBrowserViewModel
             }
             partialManager.detectAndLoad(document)
             pageImageLoader.scan(imageRefsFor(document))
+            // Auto-identify to nodes the user flagged ("Always identify to
+            // this node"). identifyToNode is a no-op when already identified
+            // or in progress, so this is safe to fire on every page load.
+            if (nodeHash in _autoIdentifyNodes.value) {
+                identifyToNode()
+            }
         }
 
         /** All image elements in a document, reduced to loader refs. */

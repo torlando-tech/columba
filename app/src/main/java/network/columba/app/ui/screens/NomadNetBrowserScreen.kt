@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,6 +51,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -62,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -78,6 +81,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -88,8 +92,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.nomadnet.ImageLoadingMode
 import network.columba.app.ui.components.MicronPageContent
+import network.columba.app.viewmodel.NomadNetAutoIdentifyViewModel
 import network.columba.app.viewmodel.NomadNetBrowserViewModel
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.BrowserState
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.NavigationEvent
@@ -98,6 +104,7 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,6 +116,7 @@ fun NomadNetBrowserScreen(
     onCloseSite: (() -> Unit)? = null,
     onOpenConversation: (String) -> Unit = {},
     viewModel: NomadNetBrowserViewModel = hiltViewModel(),
+    autoIdentifyViewModel: NomadNetAutoIdentifyViewModel = hiltViewModel(),
 ) {
     val browserState by viewModel.browserState.collectAsState()
     val formFields by viewModel.formFields.collectAsState()
@@ -116,6 +124,7 @@ fun NomadNetBrowserScreen(
     val isIdentified by viewModel.isIdentified.collectAsState()
     val identifyInProgress by viewModel.identifyInProgress.collectAsState()
     val identifyError by viewModel.identifyError.collectAsState()
+    val autoIdentifyNodes by autoIdentifyViewModel.autoIdentifyNodes.collectAsState()
     val partialStates by viewModel.partialStates.collectAsState()
     val imageStates by viewModel.imageStates.collectAsState()
     val imageLoadingMode by viewModel.imageLoadingMode.collectAsState()
@@ -129,6 +138,7 @@ fun NomadNetBrowserScreen(
             ?.let { "${it.nodeHash}:${it.path}" }
     var zoomScale by remember(currentPage) { mutableFloatStateOf(1f) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -201,6 +211,16 @@ fun NomadNetBrowserScreen(
     }
 
     if (showIdentifyConfirm) {
+        // Derive the "always identify" toggle from the persisted set for the
+        // current node; the Switch reflects (and writes) that state via
+        // setAutoIdentifyForNode, so it stays in sync with recomposition.
+        val loadedNodeHash =
+            (browserState as? BrowserState.PageLoaded)?.nodeHash.orEmpty()
+        val autoIdentifyOn = loadedNodeHash.isNotEmpty() && loadedNodeHash in autoIdentifyNodes
+        // Resolve the toggle snackbar labels here (composable context) so the
+        // non-suspend switch handler can hand them to the suspend snackbar.
+        val autoIdentifyEnabledMsg = stringResource(R.string.nomadnet_auto_identify_enabled_snackbar)
+        val autoIdentifyDisabledMsg = stringResource(R.string.nomadnet_auto_identify_disabled_snackbar)
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showIdentifyConfirm = false },
             icon = {
@@ -210,24 +230,76 @@ fun NomadNetBrowserScreen(
                     tint = MaterialTheme.colorScheme.primary,
                 )
             },
-            title = { Text("Identify to Node") },
-            text = {
+            title = {
                 Text(
-                    "This will reveal your identity to the node operator. " +
-                        "The page will refresh after identifying.",
+                    if (isIdentified) {
+                        stringResource(R.string.nomadnet_identify_dialog_title_identified)
+                    } else {
+                        stringResource(R.string.nomadnet_identify_dialog_title)
+                    },
                 )
             },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        if (isIdentified) {
+                            stringResource(R.string.nomadnet_identify_dialog_body_identified)
+                        } else {
+                            stringResource(R.string.nomadnet_identify_dialog_body)
+                        },
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.nomadnet_identify_always_toggle),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                stringResource(R.string.nomadnet_identify_always_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = autoIdentifyOn,
+                            onCheckedChange = { newValue ->
+                                if (loadedNodeHash.isNotEmpty()) {
+                                    autoIdentifyViewModel.setAutoIdentifyForNode(loadedNodeHash, newValue)
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            if (newValue) autoIdentifyEnabledMsg else autoIdentifyDisabledMsg,
+                                        )
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            },
             confirmButton = {
-                TextButton(onClick = {
-                    showIdentifyConfirm = false
-                    viewModel.identifyToNode()
-                }) {
-                    Text("Identify")
+                TextButton(
+                    onClick = {
+                        showIdentifyConfirm = false
+                        if (!isIdentified) {
+                            viewModel.identifyToNode(autoIdentify = autoIdentifyOn)
+                        }
+                    },
+                ) {
+                    Text(
+                        if (isIdentified) {
+                            stringResource(R.string.nomadnet_identify_done_button)
+                        } else {
+                            stringResource(R.string.nomadnet_identify_button)
+                        },
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showIdentifyConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.nomadnet_identify_cancel_button))
                 }
             },
         )
@@ -325,13 +397,20 @@ fun NomadNetBrowserScreen(
                 },
                 actions = {
                     if (browserState is BrowserState.PageLoaded) {
+                        // Tappable even when already identified: re-opening the
+                        // dialog then shows manage mode (toggle state + Done).
                         IconButton(
                             onClick = { showIdentifyConfirm = true },
-                            enabled = !isIdentified && !identifyInProgress,
+                            enabled = !identifyInProgress,
                         ) {
                             Icon(
                                 Icons.Default.Fingerprint,
-                                contentDescription = if (isIdentified) "Identified" else "Identify to node",
+                                contentDescription =
+                                    if (isIdentified) {
+                                        stringResource(R.string.nomadnet_identify_manage_cd)
+                                    } else {
+                                        stringResource(R.string.nomadnet_identify_cd)
+                                    },
                                 tint =
                                     if (isIdentified) {
                                         MaterialTheme.colorScheme.primary

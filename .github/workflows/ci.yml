@@ -767,9 +767,9 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 600
           script: >-
-            export COLUMBA_SERIAL=emulator-5554
-            export COLUMBA_APP_ID=network.columba.app.debug
-            export COLUMBA_RECOVERY_S=120
+            COLUMBA_SERIAL=emulator-5554
+            COLUMBA_APP_ID=network.columba.app.debug
+            COLUMBA_RECOVERY_S=120
             python -m pytest -s -v --tb=short tests/e2e_profile_swap/test_rns_recover.py
             --junit-xml=artifacts/rns-recovery-e2e/results.xml;
 

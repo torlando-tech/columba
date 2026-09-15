@@ -11,6 +11,7 @@ import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceInterfaceSighting
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.viewmodel.AnnounceStreamViewModel
+import network.columba.app.viewmodel.NomadNetAutoIdentifyViewModel
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,15 @@ class AnnounceDetailScreenTest {
 
     val composeTestRule get() = composeRule
 
+    // The screen observes this flow unconditionally (autoIdentifyNodes); stub it
+    // so the default hiltViewModel() factory is never invoked under Robolectric.
+    // Empty set means no node is flagged, so the auto-identify card is OFF (and
+    // not shown for the lxmf.* announce fixtures used below).
+    private val mockAutoIdentifyViewModel =
+        mockk<NomadNetAutoIdentifyViewModel> {
+            every { autoIdentifyNodes } returns MutableStateFlow(emptySet())
+        }
+
     // ========== Transfer Size Limit Card Tests ==========
 
     @Test
@@ -58,6 +68,7 @@ class AnnounceDetailScreenTest {
                     onStartChat = { _, _ -> },
                     onViewAnnounce = {},
                     viewModel = mockViewModel,
+                    autoIdentifyViewModel = mockAutoIdentifyViewModel,
                 )
             }
         }
@@ -90,6 +101,7 @@ class AnnounceDetailScreenTest {
                     onStartChat = { _, _ -> },
                     onViewAnnounce = {},
                     viewModel = mockViewModel,
+                    autoIdentifyViewModel = mockAutoIdentifyViewModel,
                 )
             }
         }
@@ -118,6 +130,7 @@ class AnnounceDetailScreenTest {
                     onStartChat = { _, _ -> },
                     onViewAnnounce = {},
                     viewModel = mockViewModel,
+                    autoIdentifyViewModel = mockAutoIdentifyViewModel,
                 )
             }
         }
@@ -146,6 +159,7 @@ class AnnounceDetailScreenTest {
                     onStartChat = { _, _ -> },
                     onViewAnnounce = {},
                     viewModel = mockViewModel,
+                    autoIdentifyViewModel = mockAutoIdentifyViewModel,
                 )
             }
         }
@@ -173,6 +187,7 @@ class AnnounceDetailScreenTest {
                     onStartChat = { _, _ -> },
                     onViewAnnounce = {},
                     viewModel = mockViewModel,
+                    autoIdentifyViewModel = mockAutoIdentifyViewModel,
                 )
             }
         }
@@ -218,6 +233,7 @@ class AnnounceDetailScreenTest {
                     onStartChat = { _, _ -> },
                     onViewAnnounce = {},
                     viewModel = mockViewModel,
+                    autoIdentifyViewModel = mockAutoIdentifyViewModel,
                 )
             }
         }

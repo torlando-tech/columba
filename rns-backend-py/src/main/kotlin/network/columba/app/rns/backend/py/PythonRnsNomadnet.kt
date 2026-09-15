@@ -70,7 +70,9 @@ class PythonRnsNomadnet(
         _nomadnetDownloadProgressFlow.asStateFlow()
 
     /** hex destination hash -> live `RNS.Link` to that NomadNet node. */
-    private val nomadnetLinks = ConcurrentHashMap<String, PyObject>()
+    // internal (not private) so the JVM link-lifecycle tests in this module
+    // can seed/inspect a cached link without a live Chaquopy RNS runtime.
+    internal val nomadnetLinks = ConcurrentHashMap<String, PyObject>()
 
     /** Cooperative-cancel flag, flipped by [cancelNomadnetPageRequest]. */
     @Volatile

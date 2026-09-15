@@ -139,20 +139,6 @@ class NomadNetBrowserViewModel
         private val _autoIdentifyNodes = MutableStateFlow<Set<String>>(emptySet())
         val autoIdentifyNodes: StateFlow<Set<String>> = _autoIdentifyNodes.asStateFlow()
 
-        init {
-            // Observe the auto-identify node set reactively so flagged nodes
-            // keep being identified on every page load, and the browser dialog
-            // stays in sync with toggles made elsewhere (e.g. the Node Details
-            // card). DataStore is the source of truth; this mirrors it.
-            // (Lives after the _autoIdentifyNodes declaration because Kotlin
-            // runs property initializers and init blocks in source order.)
-            viewModelScope.launch {
-                settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
-                    _autoIdentifyNodes.value = nodes
-                }
-            }
-        }
-
         private val _identifyInProgress = MutableStateFlow(false)
         val identifyInProgress: StateFlow<Boolean> = _identifyInProgress.asStateFlow()
 
@@ -190,6 +176,28 @@ class NomadNetBrowserViewModel
         private var lastFetchNodeHash = ""
         private var lastFetchPath = DEFAULT_PATH
         private var lastFetchFormDataJson: String? = null
+
+        init {
+            // Observe the auto-identify node set reactively so flagged nodes
+            // keep being identified on every page load, and the browser dialog
+            // stays in sync with toggles made elsewhere (e.g. the Node Details
+            // card). DataStore is the source of truth; this mirrors it.
+            //
+            // The auto-trigger fires from this collector (not just on page
+            // load) so a fast cached first page that loads before DataStore's
+            // first emission is still identified once the set arrives.
+            // (Lives after the currentNodeHash declaration because Kotlin runs
+            // property initializers and init blocks in source order, and the
+            // collector reads currentNodeHash on the first emission.)
+            viewModelScope.launch {
+                settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
+                    _autoIdentifyNodes.value = nodes
+                    if (currentNodeHash.isNotEmpty() && currentNodeHash in nodes) {
+                        identifyToNode()
+                    }
+                }
+            }
+        }
 
         @Volatile
         private var fetchEpoch = 0
@@ -607,6 +615,14 @@ class NomadNetBrowserViewModel
             partialManager.clear()
             val entry = history.removeAt(history.lastIndex)
             _canGoBack.value = history.isNotEmpty()
+            // Reset identification when crossing back to a different node,
+            // matching loadPage/navigateToLink: a stale "identified" flag from
+            // the previous node would otherwise short-circuit the auto-trigger
+            // and make the dialog open in manage mode for a node we never
+            // actually identified to.
+            if (entry.nodeHash != currentNodeHash) {
+                _isIdentified.value = false
+            }
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
@@ -695,12 +711,11 @@ class NomadNetBrowserViewModel
 
             // Persist the "always identify" opt-in first so it survives even if
             // the identify request below fails; the flag is independent of a
-            // single request succeeding.
+            // single request succeeding. Atomic add - the repository reads the
+            // latest persisted set, so this can't clobber other nodes.
             if (autoIdentify) {
                 viewModelScope.launch {
-                    settingsRepository.saveNomadNetAutoIdentifyNodes(
-                        _autoIdentifyNodes.value + nodeHash,
-                    )
+                    settingsRepository.setNomadNetAutoIdentifyNode(nodeHash, true)
                 }
             }
 
@@ -793,9 +808,11 @@ class NomadNetBrowserViewModel
             }
             partialManager.detectAndLoad(document)
             pageImageLoader.scan(imageRefsFor(document))
-            // Auto-identify to nodes the user flagged ("Always identify to
-            // this node"). identifyToNode is a no-op when already identified
-            // or in progress, so this is safe to fire on every page load.
+            // Auto-identify to a node the user flagged ("Always identify to
+            // this node"). Covers navigation to a node that is already in the
+            // set (the set itself hasn't changed, so the reactive collector
+            // won't re-emit for it). identifyToNode is a no-op when already
+            // identified or in progress, so this is safe on every page load.
             if (nodeHash in _autoIdentifyNodes.value) {
                 identifyToNode()
             }

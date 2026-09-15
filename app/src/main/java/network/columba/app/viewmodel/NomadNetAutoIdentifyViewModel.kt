@@ -16,8 +16,10 @@ import javax.inject.Inject
  *
  * Both the NomadNet browser (the identify dialog's switch + the on-load
  * auto-trigger) and the Node Details card observe this so the toggle stays
- * in sync across surfaces. The persisted set is the source of truth; this
- * ViewModel mirrors it reactively and writes toggles back.
+ * in sync across surfaces. DataStore is the source of truth; this ViewModel
+ * mirrors it reactively and persists toggles through an atomic
+ * read-modify-write so overlapping writes from different screens cannot
+ * clobber each other.
  */
 @HiltViewModel
 class NomadNetAutoIdentifyViewModel
@@ -37,21 +39,16 @@ class NomadNetAutoIdentifyViewModel
         }
 
         /**
-         * Toggle the "always identify" opt-in for [nodeHash] and persist it.
-         * [enabled] is the desired new state for the node.
+         * Toggle the "always identify" opt-in for [nodeHash]. The persisted set
+         * is updated atomically in the repository (read-modify-write inside one
+         * DataStore edit); the mirrored [autoIdentifyNodes] StateFlow is then
+         * updated by the observer from the authoritative emission, so both
+         * surfaces converge on the same value.
          */
         fun setAutoIdentifyForNode(nodeHash: String, enabled: Boolean) {
             if (nodeHash.isBlank()) return
-            val normalized = nodeHash.lowercase()
-            val next =
-                if (enabled) {
-                    _autoIdentifyNodes.value + normalized
-                } else {
-                    _autoIdentifyNodes.value - normalized
-                }
-            _autoIdentifyNodes.value = next
             viewModelScope.launch {
-                settingsRepository.saveNomadNetAutoIdentifyNodes(next)
+                settingsRepository.setNomadNetAutoIdentifyNode(nodeHash, enabled)
             }
         }
     }

@@ -434,6 +434,42 @@ class NomadNetBrowserViewModelTest {
     }
 
     @Test
+    fun `goBack resets identification when returning to a different node`() =
+        runTest(testDispatcher) {
+            // Regression: _isIdentified is one global flag. After identifying to
+            // node B and navigating back to an identified node A, the stale flag
+            // must be reset on the destination change or A stays "identified".
+            val nodeB = "1234567890abcdef1234567890abcdef"
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(any()) } returns Result.success(true)
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.identifyToNode()
+            waitUntilIdentified()
+            assertTrue(viewModel.isIdentified.value)
+
+            // Navigate to node B and identify to it, then go back to A.
+            viewModel.navigateToLink("$nodeB:/page/index.mu", emptyList())
+            advanceUntilIdle()
+            viewModel.identifyToNode()
+            waitUntilIdentified()
+
+            val wentBack = viewModel.goBack()
+            assertTrue(wentBack)
+            assertFalse(viewModel.isIdentified.value)
+        }
+
+    /** Poll the real Dispatchers.IO identify coroutine with a bound. */
+    private fun waitUntilIdentified(timeoutMs: Int = 2000) {
+        var waitedMs = 0
+        while (!viewModel.isIdentified.value && waitedMs < timeoutMs) {
+            Thread.sleep(25)
+            waitedMs += 25
+        }
+    }
+
+    @Test
     fun `multiple goBack pops stack correctly`() =
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
@@ -755,8 +791,14 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
-            val saved = mutableListOf<Set<String>>()
-            coEvery { settingsRepository.saveNomadNetAutoIdentifyNodes(capture(saved)) } just Runs
+            val savedHash = mutableListOf<String>()
+            val savedEnabled = mutableListOf<Boolean>()
+            coEvery {
+                settingsRepository.setNomadNetAutoIdentifyNode(
+                    capture(savedHash),
+                    capture(savedEnabled),
+                )
+            } just Runs
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -764,9 +806,11 @@ class NomadNetBrowserViewModelTest {
             viewModel.identifyToNode(autoIdentify = true)
             advanceUntilIdle()
 
-            // The opt-in is persisted before the identify request, so it must
-            // land regardless of the request outcome.
-            assertTrue(saved.any { it == setOf(nodeHash) })
+            // The opt-in is persisted (atomically) before the identify request,
+            // so it must land regardless of the request outcome.
+            assertTrue(savedHash.contains(nodeHash))
+            val idx = savedHash.indexOf(nodeHash)
+            assertTrue(idx >= 0 && savedEnabled[idx])
         }
 
     @Test
@@ -774,8 +818,14 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
-            val saved = mutableListOf<Set<String>>()
-            coEvery { settingsRepository.saveNomadNetAutoIdentifyNodes(capture(saved)) } just Runs
+            val savedHash = mutableListOf<String>()
+            val savedEnabled = mutableListOf<Boolean>()
+            coEvery {
+                settingsRepository.setNomadNetAutoIdentifyNode(
+                    capture(savedHash),
+                    capture(savedEnabled),
+                )
+            } just Runs
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -783,7 +833,7 @@ class NomadNetBrowserViewModelTest {
             viewModel.identifyToNode(autoIdentify = false)
             advanceUntilIdle()
 
-            assertTrue(saved.isEmpty())
+            assertTrue(savedHash.isEmpty())
         }
 
     @Test

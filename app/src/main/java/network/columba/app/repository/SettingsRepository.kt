@@ -1588,6 +1588,29 @@ class SettingsRepository
         }
 
         /**
+         * Atomically add or remove [nodeHash] from the auto-identify set. The
+         * read-modify-write happens inside a single DataStore edit, so
+         * overlapping toggles from different screens (browser dialog vs the
+         * Node Details card) each observe the latest persisted set instead of
+         * clobbering each other's writes from a stale local snapshot.
+         */
+        suspend fun setNomadNetAutoIdentifyNode(nodeHash: String, enabled: Boolean) {
+            val normalized = normalizeNomadNetNodeHashes(setOf(nodeHash)).firstOrNull() ?: return
+            context.dataStore.edit { preferences ->
+                val current =
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES]
+                        ?.let { normalizeNomadNetNodeHashes(it) }
+                        ?: emptySet()
+                val next = if (enabled) current + normalized else current - normalized
+                if (next.isEmpty()) {
+                    preferences.remove(PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES)
+                } else {
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] = next
+                }
+            }
+        }
+
+        /**
          * Flow of the user-configured bottom navigation tabs, stored as a
          * comma-separated list of [network.columba.app.navigation.NavTab] ids.
          * Emits null before first configuration; consumers map through

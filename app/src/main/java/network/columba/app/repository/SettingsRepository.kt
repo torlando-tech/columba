@@ -143,6 +143,7 @@ class SettingsRepository
             val NOMADNET_RENDERING_MODE = stringPreferencesKey("nomadnet_rendering_mode")
             val NOMADNET_IMAGE_LOADING_MODE = stringPreferencesKey("nomadnet_image_loading_mode")
             val NOMADNET_LAST_NODE = stringPreferencesKey("nomadnet_last_node")
+            val NOMADNET_AUTO_IDENTIFY_NODES = stringSetPreferencesKey("nomadnet_auto_identify_nodes")
             val BOTTOM_NAV_TABS = stringPreferencesKey("bottom_nav_tabs")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
@@ -1537,6 +1538,75 @@ class SettingsRepository
         suspend fun clearNomadNetLastNodeHash() {
             context.dataStore.edit { preferences ->
                 preferences.remove(PreferencesKeys.NOMADNET_LAST_NODE)
+            }
+        }
+
+        /**
+         * Flow of the destination hashes of NomadNet nodes the user opted into
+         * auto-identification for ("Always identify to this node"). The browser
+         * automatically sends its identify request to these nodes on every page
+         * load, so services that require identification keep working without a
+         * tap. Only normalized 32-char hex hashes are kept.
+         */
+        val nomadNetAutoIdentifyNodesFlow: Flow<Set<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    normalizeNomadNetNodeHashes(preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] ?: emptySet())
+                }.distinctUntilChanged()
+
+        /**
+         * Get the auto-identify node set (non-flow).
+         */
+        suspend fun getNomadNetAutoIdentifyNodes(): Set<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    normalizeNomadNetNodeHashes(preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] ?: emptySet())
+                }.first()
+
+        /**
+         * Persist the set of nodes to auto-identify to. Empty set removes the
+         * key so an exhausted set does not linger in backups.
+         */
+        suspend fun saveNomadNetAutoIdentifyNodes(nodeHashes: Set<String>) {
+            val normalized = normalizeNomadNetNodeHashes(nodeHashes)
+            context.dataStore.edit { preferences ->
+                if (normalized.isEmpty()) {
+                    preferences.remove(PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES)
+                } else {
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] = normalized
+                }
+            }
+        }
+
+        private fun normalizeNomadNetNodeHashes(nodeHashes: Set<String>): Set<String> {
+            val hex32 = Regex("^[0-9a-f]{32}$")
+            return nodeHashes
+                .asSequence()
+                .map { it.trim().lowercase() }
+                .filter { hex32.matches(it) }
+                .toSet()
+        }
+
+        /**
+         * Atomically add or remove [nodeHash] from the auto-identify set. The
+         * read-modify-write happens inside a single DataStore edit, so
+         * overlapping toggles from different screens (browser dialog vs the
+         * Node Details card) each observe the latest persisted set instead of
+         * clobbering each other's writes from a stale local snapshot.
+         */
+        suspend fun setNomadNetAutoIdentifyNode(nodeHash: String, enabled: Boolean) {
+            val normalized = normalizeNomadNetNodeHashes(setOf(nodeHash)).firstOrNull() ?: return
+            context.dataStore.edit { preferences ->
+                val current =
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES]
+                        ?.let { normalizeNomadNetNodeHashes(it) }
+                        ?: emptySet()
+                val next = if (enabled) current + normalized else current - normalized
+                if (next.isEmpty()) {
+                    preferences.remove(PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES)
+                } else {
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] = next
+                }
             }
         }
 

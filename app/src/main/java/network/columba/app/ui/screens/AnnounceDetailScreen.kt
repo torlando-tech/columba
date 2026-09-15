@@ -44,11 +44,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,16 +63,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
 import network.columba.app.ui.components.NodeTypeBadge
 import network.columba.app.ui.components.ProfileIcon
 import network.columba.app.ui.util.getInterfaceInfo
 import network.columba.app.util.formatTimeSince
 import network.columba.app.viewmodel.AnnounceStreamViewModel
+import network.columba.app.viewmodel.NomadNetAutoIdentifyViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -79,8 +86,11 @@ fun AnnounceDetailScreen(
     onViewAnnounce: (destinationHash: String) -> Unit,
     onBrowseNode: (destinationHash: String) -> Unit = {},
     viewModel: AnnounceStreamViewModel = hiltViewModel(),
+    autoIdentifyViewModel: NomadNetAutoIdentifyViewModel = hiltViewModel(),
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val autoIdentifyNodes by autoIdentifyViewModel.autoIdentifyNodes.collectAsState()
 
     // Observe specific announce reactively (not search in list)
     val announce by viewModel.getAnnounceFlow(destinationHash).collectAsState(initial = null)
@@ -109,7 +119,24 @@ fun AnnounceDetailScreen(
     var showBlockDialog by remember { mutableStateOf(false) }
     val isTransportEnabled by viewModel.isTransportEnabled.collectAsState(initial = false)
 
+    // One-shot snackbar for the auto-identify toggle. [autoIdentifyToggleCount]
+    // increments on each user toggle; the effect below skips the initial 0 and
+    // reads [autoIdentifyToggleEnabled] at that moment.
+    var autoIdentifyToggleCount by remember { mutableStateOf(0) }
+    var autoIdentifyToggleEnabled by remember { mutableStateOf(false) }
+    // Resolve the (constant) labels in composable context; the suspend
+    // LaunchedEffect body cannot call stringResource itself.
+    val autoIdentifyEnabledMsg = stringResource(R.string.nomadnet_auto_identify_enabled_snackbar)
+    val autoIdentifyDisabledMsg = stringResource(R.string.nomadnet_auto_identify_disabled_snackbar)
+    LaunchedEffect(autoIdentifyToggleCount) {
+        if (autoIdentifyToggleCount == 0) return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            if (autoIdentifyToggleEnabled) autoIdentifyEnabledMsg else autoIdentifyDisabledMsg,
+        )
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -392,6 +419,22 @@ fun AnnounceDetailScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
+                }
+
+                // Auto-identify toggle for NomadNet content nodes. Lets the
+                // user opt this site into "always identify" so services that
+                // require identification keep working without a tap. The
+                // switch reflects the same persisted set the browser dialog
+                // uses, so the two surfaces stay in sync.
+                if (announceNonNull.aspect == "nomadnetwork.node") {
+                    AutoIdentifyCard(
+                        enabled = destinationHash in autoIdentifyNodes,
+                        onToggle = { newValue ->
+                            autoIdentifyViewModel.setAutoIdentifyForNode(destinationHash, newValue)
+                            autoIdentifyToggleEnabled = newValue
+                            autoIdentifyToggleCount++
+                        },
+                    )
                 }
 
                 // Block button
@@ -689,6 +732,76 @@ private fun UnsetRelayConfirmationDialog(
             }
         },
     )
+}
+
+/**
+ * Interactive card for the per-node auto-identify toggle, styled to match
+ * the [InfoCard] information cards on the Node Details screen. The switch
+ * label and subtitle make the privacy consequence explicit rather than a
+ * bare on/off.
+ */
+@Composable
+private fun AutoIdentifyCard(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Icon, matching InfoCard's leading-icon treatment.
+            Box(
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Fingerprint,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+
+            // Content
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.nomadnet_node_detail_auto_identify_title),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = stringResource(R.string.nomadnet_node_detail_auto_identify_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

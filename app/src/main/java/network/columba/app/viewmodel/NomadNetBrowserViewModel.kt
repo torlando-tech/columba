@@ -202,6 +202,13 @@ class NomadNetBrowserViewModel
         @Volatile
         private var fetchEpoch = 0
 
+        // Set when identification succeeds for a node whose page has not yet
+        // reached PageLoaded (still loading), so emitPageLoaded can re-fetch
+        // the post-identification content once it lands. Cleared by loadPage
+        // (navigation) and consumed by emitPageLoaded.
+        @Volatile
+        private var pendingIdentifyRefreshFor: String? = null
+
         @Volatile
         private var statusCollectionJob: kotlinx.coroutines.Job? = null
 
@@ -385,6 +392,9 @@ class NomadNetBrowserViewModel
                 _isIdentified.value = false
             }
             currentNodeHash = destinationHash
+            // A pending post-identification refresh is scoped to a node; drop it
+            // on a new navigation so it can't trigger a spurious re-fetch later.
+            pendingIdentifyRefreshFor = null
             _formFields.value = emptyMap()
 
             // A path reaching here (from a nomadnetwork:// deep link or the URL
@@ -452,6 +462,9 @@ class NomadNetBrowserViewModel
 
             if (nodeHash != currentNodeHash) {
                 _isIdentified.value = false
+                // New node: drop a pending post-identification refresh scoped to
+                // the previous node so it can't cause a spurious re-fetch.
+                pendingIdentifyRefreshFor = null
             }
             _formFields.value = emptyMap()
 
@@ -622,6 +635,7 @@ class NomadNetBrowserViewModel
             // actually identified to.
             if (entry.nodeHash != currentNodeHash) {
                 _isIdentified.value = false
+                pendingIdentifyRefreshFor = null
             }
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
@@ -725,7 +739,17 @@ class NomadNetBrowserViewModel
                     nomadnet.identifyNomadnetLink(nodeHash).fold(
                         onSuccess = { alreadyIdentified ->
                             _isIdentified.value = true
-                            if (!alreadyIdentified) refresh()
+                            if (alreadyIdentified) return@fold
+                            if (_browserState.value is BrowserState.PageLoaded) {
+                                // Page is displayed; refresh shows identified content.
+                                refresh()
+                            } else {
+                                // The page for this node is still loading; the
+                                // in-flight pre-identification fetch will complete
+                                // and be shown. Flag it so emitPageLoaded re-fetches
+                                // post-identification content once it lands.
+                                pendingIdentifyRefreshFor = nodeHash
+                            }
                         },
                         onFailure = { _identifyError.value = it.message ?: "Unknown error" },
                     )
@@ -808,6 +832,14 @@ class NomadNetBrowserViewModel
             }
             partialManager.detectAndLoad(document)
             pageImageLoader.scan(imageRefsFor(document))
+            // If identification for this node completed while its page was still
+            // loading, the just-displayed page is pre-identification content.
+            // Re-fetch it now (identified) so an access-gated service doesn't
+            // show anonymous/denied content on the first visit.
+            if (pendingIdentifyRefreshFor == nodeHash) {
+                pendingIdentifyRefreshFor = null
+                refresh()
+            }
             // Auto-identify to a node the user flagged ("Always identify to
             // this node"). Covers navigation to a node that is already in the
             // set (the set itself hasn't changed, so the reactive collector

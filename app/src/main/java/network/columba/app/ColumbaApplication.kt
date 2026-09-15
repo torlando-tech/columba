@@ -117,6 +117,9 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var interfaceTransportObserver: network.columba.app.service.manager.InterfaceTransportObserver
 
+    @Inject
+    lateinit var rnsTransportRecoveryManager: network.columba.app.service.manager.RnsTransportRecoveryManager
+
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Default for background initialization (no main-thread work needed)
     // SupervisorJob ensures failures don't crash the entire app
@@ -635,6 +638,12 @@ class ColumbaApplication : Application() {
         // the filtered enabled set into the native stack. Safe to start before Reticulum is ready
         // (early `reloadInterfaces` calls just log a failure and the next transport change wins).
         interfaceTransportObserver.start(applicationScope)
+
+        // Auto-recovery for #1127: on restart-gated (python) backends, re-apply the
+        // interface set if the stack comes up READY but missing enabled interfaces
+        // after a transport transition (profile-swap / network-gap restart). No-op
+        // on hot-reload (kotlin) backends and while the stack is healthy.
+        rnsTransportRecoveryManager.start()
     }
 
     override fun onTerminate() {
@@ -645,6 +654,7 @@ class ColumbaApplication : Application() {
         messageCollector.stopCollecting()
         identityResolutionManager.stop()
         interfaceTransportObserver.stop()
+        rnsTransportRecoveryManager.stop()
 
         // Shutdown and unbind from service when app terminates
         applicationScope.launch {

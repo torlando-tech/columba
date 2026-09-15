@@ -9,7 +9,7 @@ import network.columba.app.rns.api.model.DeliveryMethod
 
 /**
  * Debug-only BroadcastReceiver that exposes the [TestController] surface
- * to `adb shell am broadcast`. All 17 manifest actions are routed; see
+ * to `adb shell am broadcast`. All manifest actions are routed; see
  * the `when` block below.
  *
  * Action contract (one action per row; reply lines under
@@ -210,6 +210,15 @@ class TestReceiver : BroadcastReceiver() {
 
             "network.columba.test.ANNOUNCE" ->
                 TestController.handleAnnounce(app)
+
+            "network.columba.test.LIVE_STATE" ->
+                TestController.handleLiveState(app)
+
+            "network.columba.test.RESTART_SERVICE" ->
+                TestController.handleRestartService(app)
+
+            "network.columba.test.ONBOARD" ->
+                TestController.handleOnboard(app)
 
             "network.columba.test.LIST_INTERFACES" ->
                 TestController.handleListInterfaces(app)

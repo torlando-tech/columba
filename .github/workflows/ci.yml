@@ -707,3 +707,86 @@ jobs:
           pkill -9 qemu-system || true
           adb kill-server || true
 
+  rns-recovery-e2e:
+    name: RNS Profile-Swap Recovery E2E (issue #1127)
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669 # v6.3.0
+        with:
+          cache-read-only: false
+
+      - name: Install E2E host dependencies
+        run: |
+          python -m pip install --disable-pip-version-check pytest pytest-timeout
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Python-backend E2E APK
+        run: ./gradlew :app:assembleNoSentryPythonBackendDebug --stacktrace --max-workers=2
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The suite self-onboards a fresh emulator (creates an identity + one
+      # AutoInterface via the debug ONBOARD hook), so no manual onboarding step
+      # is required. RED on unfixed code: the primary test fails because RNS
+      # stays READY-but-0-interfaces after the profile-swap restart.
+      - name: Run RNS profile-swap recovery E2E
+        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 3072
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: >-
+            COLUMBA_SERIAL=emulator-5554
+            COLUMBA_APP_ID=network.columba.app.debug
+            COLUMBA_RECOVERY_S=120
+            COLUMBA_E2E_APK=app/build/outputs/apk/noSentryPythonBackend/debug/app-noSentry-pythonBackend-x86_64-debug.apk
+            python -m pytest -s -v --tb=short tests/e2e_profile_swap/test_rns_recover.py
+            --junit-xml=artifacts/rns-recovery-e2e/results.xml;
+
+      - name: Upload RNS recovery E2E evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rns-recovery-e2e-evidence
+          path: artifacts/rns-recovery-e2e/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Cleanup emulator
+        if: always()
+        run: |
+          adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+          pkill -9 qemu-system || true
+          adb kill-server || true
+

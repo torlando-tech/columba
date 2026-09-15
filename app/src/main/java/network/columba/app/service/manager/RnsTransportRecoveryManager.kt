@@ -48,7 +48,7 @@ import javax.inject.Singleton
  * a bounded poll: every [CHECK_INTERVAL_MS] it verifies that every enabled
  * IP-riding interface is present in the live RNS transport, and stops once the set
  * is [isIntactNow intact]. When one or more are missing it runs the proven
- * recovery primitive — [InterfaceConfigManager.applyInterfaceChanges], the same
+ * recovery primitive - [InterfaceConfigManager.applyInterfaceChanges], the same
  * full service restart the UI "Restart" button performs: re-read the DB, re-filter
  * against the CURRENT transport, fresh `:reticulum` process, refresh the persisted
  * snapshot.
@@ -116,7 +116,7 @@ class RnsTransportRecoveryManager
          */
         fun start() {
             if (job != null) {
-                Log.d(TAG, "Already started — skipping duplicate start()")
+                Log.d(TAG, "Already started - skipping duplicate start()")
                 return
             }
             job =
@@ -143,7 +143,7 @@ class RnsTransportRecoveryManager
                     delay(CHECK_INTERVAL_MS)
                     maybeRecover()
                     if (isIntactNow()) {
-                        Log.d(TAG, "Interface set intact after recovery window — stopping checks")
+                        Log.d(TAG, "Interface set intact after recovery window - stopping checks")
                         return@launch
                     }
                 }
@@ -158,12 +158,11 @@ class RnsTransportRecoveryManager
          */
         suspend fun isIntactNow(): Boolean {
             if (rnsCore.networkStatus.value !is NetworkStatus.READY) return false
-            val enabled = interfaceRepository.enabledInterfaces.first()
-            val ipRiding = enabled.filter { it.ridesOnIpCarrier() }
+            val ipRiding = interfaceRepository.enabledInterfaces.first()
+                .filter { it.ridesOnIpCarrier() }
             if (ipRiding.isEmpty()) return true
-            val live = readLiveInterfaceNames() ?: return false
-            val missing = ipRiding.map { it.name }.toSet() - live
-            return missing.isEmpty()
+            val live = readLiveInterfaceNames()
+            return live != null && ipRiding.map { it.name }.all { name -> name in live }
         }
 
         /**
@@ -173,53 +172,75 @@ class RnsTransportRecoveryManager
          * @return true when a full interface re-apply (restart) was executed.
          */
         suspend fun maybeRecover(): Boolean {
-            // Capability gate: hot-reload backends heal via the observer's real
-            // reloadInterfaces; a full restart there would be pure churn.
-            if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) return false
-
-            if (rnsCore.networkStatus.value !is NetworkStatus.READY) {
-                Log.d(TAG, "Skip recovery: RNS not READY (${rnsCore.networkStatus.value})")
+            skipReason()?.let {
+                Log.d(TAG, "Skip recovery: $it")
                 return false
             }
-
-            if (configApplyFlagManager.isApplyingConfig()) {
-                Log.d(TAG, "Skip recovery: interface apply already in flight")
-                return false
-            }
-
-            if (System.currentTimeMillis() - lastRecoveryStartMs < RECOVERY_COOLDOWN_MS) {
-                Log.d(TAG, "Skip recovery: cooldown active")
-                return false
-            }
-
             return mutex.withLock {
-                // Re-check under the lock: a concurrent manual Restart may have
-                // started between the outer checks and now.
-                if (configApplyFlagManager.isApplyingConfig()) return@withLock false
-                val transport = transportObserver.currentTransport.value
-                if (transport == CurrentTransport.NONE) {
-                    Log.d(TAG, "Skip recovery: transport NONE (network down)")
-                    return@withLock false
-                }
-                if (rnsCore.networkStatus.value !is NetworkStatus.READY) return@withLock false
-                if (isIntactNow()) {
-                    Log.d(TAG, "Interface set intact; no recovery needed")
-                    return@withLock false
-                }
-
-                Log.i(TAG, "#1127 recovery: transport=$transport, RNS READY but interfaces " +
-                    "missing; running full interface re-apply (service restart)")
-                lastRecoveryStartMs = System.currentTimeMillis()
-                interfaceConfigManager.applyInterfaceChanges()
-                    .onSuccess { Log.i(TAG, "#1127 recovery: interface re-apply succeeded") }
-                    .onFailure { e ->
-                        Log.e(TAG, "#1127 recovery: interface re-apply failed", e)
-                        // Reset the cooldown on failure so the next poll can retry
-                        // promptly instead of waiting out the full window.
-                        lastRecoveryStartMs = 0L
-                    }
-                true
+                if (shouldSkipLocked()) return@withLock false
+                performRecovery()
             }
+        }
+
+        /**
+         * Coarse pre-gate (read-only, before taking the lock). Returns a human
+         * reason when recovery must be skipped, or null when the coarse checks
+         * all pass and the guarded action may proceed.
+         */
+        private suspend fun skipReason(): String? {
+            val hotReload = rnsBackend.capabilities.value.interfaces.hotReloadInterfaces
+            if (hotReload || rnsCore.networkStatus.value !is NetworkStatus.READY) {
+                return if (hotReload) {
+                    "hot-reload backend (heals via observer reloadInterfaces)"
+                } else {
+                    "RNS not READY (${rnsCore.networkStatus.value})"
+                }
+            }
+            if (configApplyFlagManager.isApplyingConfig()) return "interface apply already in flight"
+            val withinCooldown = System.currentTimeMillis() - lastRecoveryStartMs < RECOVERY_COOLDOWN_MS
+            return if (withinCooldown) "cooldown active" else null
+        }
+
+        /**
+         * Fine-grated re-checks under the lock (a concurrent manual Restart may
+         * have started since [skipReason]). True when the guarded action must
+         * still be skipped.
+         */
+        private suspend fun shouldSkipLocked(): Boolean {
+            if (configApplyFlagManager.isApplyingConfig()) {
+                Log.d(TAG, "Skip recovery: interface apply in flight (under lock)")
+                return true
+            }
+            val transport = transportObserver.currentTransport.value
+            if (transport == CurrentTransport.NONE ||
+                rnsCore.networkStatus.value !is NetworkStatus.READY
+            ) {
+                Log.d(TAG, "Skip recovery: transport=$transport, status=${rnsCore.networkStatus.value}")
+                return true
+            }
+            val intact = isIntactNow()
+            return if (intact) {
+                Log.d(TAG, "Interface set intact; no recovery needed")
+                true
+            } else {
+                false
+            }
+        }
+
+        /** Runs the full interface re-apply (service restart). */
+        private suspend fun performRecovery(): Boolean {
+            Log.i(TAG, "#1127 recovery: transport=${transportObserver.currentTransport.value}, " +
+                "RNS READY but interfaces missing; running full interface re-apply (service restart)")
+            lastRecoveryStartMs = System.currentTimeMillis()
+            interfaceConfigManager.applyInterfaceChanges()
+                .onSuccess { Log.i(TAG, "#1127 recovery: interface re-apply succeeded") }
+                .onFailure { e ->
+                    Log.e(TAG, "#1127 recovery: interface re-apply failed", e)
+                    // Reset the cooldown on failure so the next poll can retry
+                    // promptly instead of waiting out the full window.
+                    lastRecoveryStartMs = 0L
+                }
+            return true
         }
 
         /**

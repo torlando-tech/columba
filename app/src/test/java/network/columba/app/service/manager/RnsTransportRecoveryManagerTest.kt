@@ -93,7 +93,7 @@ class RnsTransportRecoveryManagerTest {
         interfaceRepository = mockk()
         interfaceConfigManager = mockk()
         configApplyFlagManager = mockk()
-        transportObserver = mockk(relaxed = true)
+        transportObserver = mockk()
 
         networkStatus = MutableStateFlow(NetworkStatus.READY)
         capabilities = MutableStateFlow(caps(hotReload = false))

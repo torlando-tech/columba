@@ -1,10 +1,13 @@
 package network.columba.app.service.manager
 
+import android.os.SystemClock
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -55,6 +58,7 @@ class RnsTransportRecoveryManagerTest {
     private var applyingConfig = false
     private var debugInfo: Map<String, Any> = mapOf("interfaces" to emptyList<Any>())
     private var enabledInterfaces: List<InterfaceConfig> = emptyList()
+    private var clockMs = 0L
 
     private lateinit var manager: RnsTransportRecoveryManager
 
@@ -101,6 +105,12 @@ class RnsTransportRecoveryManagerTest {
         applyingConfig = false
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         enabledInterfaces = listOf(autoInterface())
+        // Baseline well past the initial lastRecoveryStartMs=0 sentinel so the first
+        // recovery is never (falsely) inside the cooldown window.
+        clockMs = 1_000_000L
+
+        mockkStatic(SystemClock::class)
+        every { SystemClock.elapsedRealtime() } answers { clockMs }
 
         every { rnsCore.networkStatus } returns networkStatus
         every { rnsBackend.capabilities } returns capabilities
@@ -126,6 +136,7 @@ class RnsTransportRecoveryManagerTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkStatic(SystemClock::class)
         clearAllMocks()
     }
 
@@ -268,10 +279,15 @@ class RnsTransportRecoveryManagerTest {
     fun `does not restart again within the cooldown after a recovery`() = runTest {
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         assertTrue(manager.maybeRecover())
-        // Immediately after: cooldown active, live set still empty.
+        // Immediately after (same clock tick): cooldown active, live set still empty.
         val second = manager.maybeRecover()
         assertFalse(second)
         coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        // Once the cooldown elapses the manager may recover again (live set still empty).
+        clockMs += RnsTransportRecoveryManager.RECOVERY_COOLDOWN_MS + 1
+        val third = manager.maybeRecover()
+        assertTrue(third)
+        coVerify(exactly = 2) { interfaceConfigManager.applyInterfaceChanges(any()) }
     }
 
     // --- isIntactNow invariant ---

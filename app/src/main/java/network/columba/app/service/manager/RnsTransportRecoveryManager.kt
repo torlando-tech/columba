@@ -1,5 +1,6 @@
 package network.columba.app.service.manager
 
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -53,9 +54,14 @@ import javax.inject.Singleton
  * against the CURRENT transport, fresh `:reticulum` process, refresh the persisted
  * snapshot.
  *
- * The poll is bounded and short-lived (a few minutes) rather than a perpetual
- * ticker: it is only scheduled in response to a real transport transition and
- * exits as soon as the set is intact, so a healthy stack pays nothing.
+ * The poll is bounded rather than a perpetual ticker: it is only scheduled in
+ * response to a real transport transition and exits as soon as the set is intact
+ * (or a bounded not-READY grace / READY-anchored window elapses), so a healthy
+ * stack pays nothing. The recovery window is anchored to the moment RNS first
+ * reports READY (not the transport transition) because the dead signature is only
+ * observable once READY, and it then stays active across the re-initialization a
+ * recovery restart causes. All timing is monotonic ([SystemClock.elapsedRealtime])
+ * so a device-clock correction cannot expire the window early.
  *
  * ## Guards (each independently prevents a restart loop)
  *
@@ -90,15 +96,22 @@ class RnsTransportRecoveryManager
             /** Interval between recovery checks inside the window. */
             const val CHECK_INTERVAL_MS: Long = 6_000L
 
-            /** Wall-clock recovery window per transport transition (~3 min). It is a
-             * deadline rather than a fixed check count so it stays active across RNS
-             * re-initializations: a python cold start reaches READY ~20-30s in, and a
-             * recovery restart re-inits RNS for another ~30s. A count-based budget would
-             * be spent during those non-READY phases and expire before the healthy state
-             * is observed. */
-            const val RECOVERY_WINDOW_MS: Long = 180_000L
+            /** Recovery window, measured from the moment RNS first reports READY
+             * (not from the transport transition). The dead signature - "READY but
+             * interfaces missing" - cannot be observed until RNS is READY, so a window
+             * anchored to the transition would be partly or wholly spent in the
+             * not-READY cold-start phase and expire before the dead state is ever seen.
+             * The window then stays active across the re-initialization a recovery
+             * restart causes. A python cold start reaches READY ~20-30s in, and a
+             * recovery restart re-inits RNS for another ~30s, so 3 min covers both. */
+            const val READY_RECOVERY_WINDOW_MS: Long = 180_000L
 
-            /** Minimum spacing between two recovery restarts. */
+            /** How long the poll keeps running while RNS is not READY before it gives
+             * up (bounded, so it is not a perpetual ticker). Covers a python cold start
+             * and the re-init following a recovery restart. */
+            const val NOT_READY_GRACE_MS: Long = 90_000L
+
+            /** Minimum spacing between two recovery restarts (monotonic clock). */
             const val RECOVERY_COOLDOWN_MS: Long = 30_000L
         }
 
@@ -139,14 +152,37 @@ class RnsTransportRecoveryManager
 
         private fun scheduleChecks(transport: CurrentTransport) {
             if (transport == CurrentTransport.NONE) return
-            val deadline = System.currentTimeMillis() + RECOVERY_WINDOW_MS
             applicationScope.launch {
-                while (System.currentTimeMillis() < deadline) {
+                var firstReadyMs: Long? = null
+                var notReadySinceMs: Long? = null
+                while (true) {
                     delay(CHECK_INTERVAL_MS)
                     maybeRecover()
                     if (isIntactNow()) {
                         Log.d(TAG, "Interface set intact - stopping recovery window")
                         return@launch
+                    }
+                    // The dead state is only observable once RNS is READY, so the
+                    // recovery window is anchored to the FIRST READY, not to the
+                    // transport transition. Before that, allow a bounded grace period
+                    // (covers a python cold start + the re-init a recovery restart
+                    // causes); after that, the READY-anchored window applies. All timing
+                    // is monotonic so a device-clock jump cannot expire the window.
+                    val ready = rnsCore.networkStatus.value is NetworkStatus.READY
+                    val now = SystemClock.elapsedRealtime()
+                    if (ready) {
+                        notReadySinceMs = null
+                        val anchor = firstReadyMs ?: now.also { firstReadyMs = it }
+                        if (now - anchor >= READY_RECOVERY_WINDOW_MS) {
+                            Log.d(TAG, "Recovery window elapsed after READY - stopping checks")
+                            return@launch
+                        }
+                    } else {
+                        val since = notReadySinceMs ?: now.also { notReadySinceMs = it }
+                        if (now - since >= NOT_READY_GRACE_MS) {
+                            Log.d(TAG, "RNS not READY for the grace window - stopping checks")
+                            return@launch
+                        }
                     }
                 }
             }
@@ -210,7 +246,8 @@ class RnsTransportRecoveryManager
                 }
             }
             if (configApplyFlagManager.isApplyingConfig()) return "interface apply already in flight"
-            val withinCooldown = System.currentTimeMillis() - lastRecoveryStartMs < RECOVERY_COOLDOWN_MS
+            val withinCooldown =
+                SystemClock.elapsedRealtime() - lastRecoveryStartMs < RECOVERY_COOLDOWN_MS
             return if (withinCooldown) "cooldown active" else null
         }
 
@@ -244,7 +281,7 @@ class RnsTransportRecoveryManager
         private suspend fun performRecovery(): Boolean {
             Log.i(TAG, "#1127 recovery: transport=${transportObserver.currentTransport.value}, " +
                 "RNS READY but interfaces missing; running full interface re-apply (service restart)")
-            lastRecoveryStartMs = System.currentTimeMillis()
+            lastRecoveryStartMs = SystemClock.elapsedRealtime()
             interfaceConfigManager.applyInterfaceChanges()
                 .onSuccess { Log.i(TAG, "#1127 recovery: interface re-apply succeeded") }
                 .onFailure { e ->

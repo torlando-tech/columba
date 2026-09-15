@@ -17,7 +17,7 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.host.manager.CurrentTransport
-import network.columba.app.rns.host.manager.ridesOnIpCarrier
+import network.columba.app.rns.host.manager.filterByTransport
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.startup.ConfigApplyFlagManager
 import javax.inject.Inject
@@ -45,11 +45,11 @@ import javax.inject.Singleton
  * through the observer's real `reloadInterfaces` call, so this manager is dormant
  * for them. For restart-gated backends (python, `hotReloadInterfaces = false`) it
  * watches the main-process transport stream. On any non-NONE transport it begins
- * a bounded poll: every [CHECK_INTERVAL_MS] it verifies that every enabled
- * IP-riding interface is present in the live RNS transport, and stops once the set
- * is [isIntactNow intact]. When one or more are missing it runs the proven
- * recovery primitive - [InterfaceConfigManager.applyInterfaceChanges], the same
- * full service restart the UI "Restart" button performs: re-read the DB, re-filter
+ * a bounded poll: every [CHECK_INTERVAL_MS] it verifies that every interface the
+ * current transport filter would apply is present in the live RNS transport, and
+ * stops once the set is [isIntactNow intact]. When one or more are missing it runs
+ * the proven recovery primitive - [InterfaceConfigManager.applyInterfaceChanges], the
+ * same full service restart the UI "Restart" button performs: re-read the DB, re-filter
  * against the CURRENT transport, fresh `:reticulum` process, refresh the persisted
  * snapshot.
  *
@@ -87,15 +87,16 @@ class RnsTransportRecoveryManager
         companion object {
             private const val TAG = "RnsTransportRecovery"
 
-            /** Interval between recovery checks after a transport transition. The first
-             * check fires this long after the transition; it is deliberately short because a
-             * python cold start reaches READY (base interfaces present) well before
-             * AutoDiscovery *peers* populate, so a READY-with-0-live-interfaces state is the
-             * dead signature, not a transient. */
+            /** Interval between recovery checks inside the window. */
             const val CHECK_INTERVAL_MS: Long = 6_000L
 
-            /** Maximum number of checks per transition (~36s coverage window). */
-            const val MAX_CHECKS: Int = 6
+            /** Wall-clock recovery window per transport transition (~3 min). It is a
+             * deadline rather than a fixed check count so it stays active across RNS
+             * re-initializations: a python cold start reaches READY ~20-30s in, and a
+             * recovery restart re-inits RNS for another ~30s. A count-based budget would
+             * be spent during those non-READY phases and expire before the healthy state
+             * is observed. */
+            const val RECOVERY_WINDOW_MS: Long = 180_000L
 
             /** Minimum spacing between two recovery restarts. */
             const val RECOVERY_COOLDOWN_MS: Long = 30_000L
@@ -138,12 +139,13 @@ class RnsTransportRecoveryManager
 
         private fun scheduleChecks(transport: CurrentTransport) {
             if (transport == CurrentTransport.NONE) return
+            val deadline = System.currentTimeMillis() + RECOVERY_WINDOW_MS
             applicationScope.launch {
-                repeat(MAX_CHECKS) {
+                while (System.currentTimeMillis() < deadline) {
                     delay(CHECK_INTERVAL_MS)
                     maybeRecover()
                     if (isIntactNow()) {
-                        Log.d(TAG, "Interface set intact after recovery window - stopping checks")
+                        Log.d(TAG, "Interface set intact - stopping recovery window")
                         return@launch
                     }
                 }
@@ -151,18 +153,29 @@ class RnsTransportRecoveryManager
         }
 
         /**
-         * Pure liveness check: RNS is READY and every enabled IP-riding interface
-         * is present in the live transport set. Public so unit tests can drive the
-         * invariant directly. Returns false when the live set cannot be read (so an
-         * unknown state is never mistaken for "intact").
+         * Pure liveness check: RNS is READY and every interface that the current
+         * transport filter would apply is present in the live transport set.
+         *
+         * The expected set is [filterByTransport]-filtered against the CURRENT
+         * transport (the same predicate [InterfaceConfigManager.applyInterfaceChanges]
+         * uses to build the runtime config), not every enabled IP-riding interface.
+         * An enabled interface restricted to another transport (e.g. a WIFI_ONLY
+         * interface while the device is on cellular) is deliberately NOT in the live
+         * set; requiring it would treat a healthy, filtered configuration as damaged
+         * and restart RNS in a loop.
+         *
+         * Public so unit tests can drive the invariant directly. Returns false when
+         * the live set cannot be read (so an unknown state is never mistaken for
+         * "intact").
          */
         suspend fun isIntactNow(): Boolean {
             if (rnsCore.networkStatus.value !is NetworkStatus.READY) return false
-            val ipRiding = interfaceRepository.enabledInterfaces.first()
-                .filter { it.ridesOnIpCarrier() }
-            if (ipRiding.isEmpty()) return true
+            val transport = transportObserver.currentTransport.value
+            val enabled = interfaceRepository.enabledInterfaces.first()
+            val expected = filterByTransport(enabled, transport).map { it.name }.toSet()
+            if (expected.isEmpty()) return true
             val live = readLiveInterfaceNames()
-            return live != null && ipRiding.map { it.name }.all { name -> name in live }
+            return live != null && expected.all { name -> name in live }
         }
 
         /**

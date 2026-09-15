@@ -200,9 +200,12 @@ class RnsTransportRecoveryManagerTest {
         }
 
     @Test
-    fun `does not restart when only non-IP (BLE) interfaces are enabled`() = runTest {
+    fun `does not restart when only non-IP (BLE) interfaces are enabled and live`() = runTest {
+        // A BLE-only config is intact when the BLE interface is live; the applied set
+        // (filterByTransport keeps non-IP interfaces) is fully present, so no restart.
         enabledInterfaces = listOf(bleInterface())
-        debugInfo = mapOf("interfaces" to emptyList<Any>())
+        debugInfo =
+            mapOf("interfaces" to listOf(mapOf("name" to "Bluetooth LE", "online" to true)))
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
         coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
@@ -301,10 +304,46 @@ class RnsTransportRecoveryManagerTest {
     }
 
     @Test
-    fun `isIntactNow is vacuously true when no IP-riding interface is enabled`() = runTest {
-        enabledInterfaces = listOf(bleInterface())
+    fun `isIntactNow is vacuously true when no interface is enabled at all`() = runTest {
+        enabledInterfaces = emptyList()
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         assertTrue(manager.isIntactNow())
+    }
+
+    @Test
+    fun `isIntactNow is true when a non-IP (BLE) interface is live`() = runTest {
+        // filterByTransport keeps non-IP interfaces (BLE never rides the IP carrier),
+        // so an enabled BLE interface IS expected to be live.
+        enabledInterfaces = listOf(bleInterface())
+        debugInfo =
+            mapOf("interfaces" to listOf(mapOf("name" to "Bluetooth LE", "online" to true)))
+        assertTrue(manager.isIntactNow())
+    }
+
+    @Test
+    fun `isIntactNow is false when a non-IP (BLE) interface is missing`() = runTest {
+        enabledInterfaces = listOf(bleInterface())
+        debugInfo = mapOf("interfaces" to emptyList<Any>())
+        assertFalse(manager.isIntactNow())
+    }
+
+    @Test
+    fun `isIntactNow ignores an interface filtered out by the current transport`() = runTest {
+        // A WIFI_ONLY interface is deliberately NOT live while the device is on
+        // cellular: applyInterfaceChanges filters it out. isIntactNow must treat the
+        // healthy filtered state as intact (not restart in a loop).
+        currentTransport.value = CurrentTransport.CELLULAR
+        debugInfo = mapOf("interfaces" to emptyList<Any>()) // no IP interface live
+        assertTrue(manager.isIntactNow())
+    }
+
+    @Test
+    fun `isIntactNow is false when a transport-eligible interface is missing`() = runTest {
+        // On WiFi a WIFI_ONLY interface IS expected live; if it is absent the set is
+        // damaged and recovery should fire.
+        currentTransport.value = CurrentTransport.WIFI_LIKE
+        debugInfo = mapOf("interfaces" to emptyList<Any>())
+        assertFalse(manager.isIntactNow())
     }
 
     // --- getDebugInfo shape tolerance ---

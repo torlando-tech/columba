@@ -399,11 +399,18 @@ def precondition(device) -> bool:
     """
     if not device.installed():
         apk = os.environ.get("COLUMBA_E2E_APK")
-        if not apk or not os.path.exists(apk):
+        if not apk:
+            # Local run.sh mode: the app is expected to already be installed; its
+            # absence is a setup condition, not a test failure, so skip.
             pytest.skip(f"{APP_ID} not installed (build+install via run.sh first)")
+        # CI mode: COLUMBA_E2E_APK was supplied, so the suite MUST run. A missing
+        # APK or a failed install is a hard failure - skipping would let both
+        # recovery tests pass vacuously and the lane falsely go green.
+        if not os.path.exists(apk):
+            pytest.fail(f"COLUMBA_E2E_APK set but {apk} not found - cannot install")
         print(f"[#1127] {APP_ID} not installed - installing {apk}")
         if not device.install(apk):
-            pytest.skip(f"{APP_ID} install from COLUMBA_E2E_APK failed")
+            pytest.fail(f"{APP_ID} install from COLUMBA_E2E_APK failed")
     if device.dest() is None:
         # Fresh install (CI emulator): programmatically complete onboarding
         # (identity + one AutoInterface), then re-check. If it still can't be

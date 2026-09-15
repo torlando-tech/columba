@@ -770,6 +770,7 @@ jobs:
             COLUMBA_SERIAL=emulator-5554
             COLUMBA_APP_ID=network.columba.app.debug
             COLUMBA_RECOVERY_S=120
+            COLUMBA_E2E_APK=app/build/outputs/apk/noSentryPythonBackend/debug/app-noSentry-pythonBackend-x86_64-debug.apk
             python -m pytest -s -v --tb=short tests/e2e_profile_swap/test_rns_recover.py
             --junit-xml=artifacts/rns-recovery-e2e/results.xml;
 

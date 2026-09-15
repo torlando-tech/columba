@@ -196,6 +196,19 @@ class Device:
         # this predicate was always False and the suite always skipped.)
         return self.a.shell(f"pm list packages {APP_ID}").strip() != ""
 
+    def install(self, apk: str, timeout: int = 300) -> bool:
+        """Install a debug APK over any existing build (CI self-install).
+
+        `run.sh` normally does the build+install; CI runs pytest directly, so the
+        suite installs from `COLUMBA_E2E_APK` when the app is absent. `-g` grants
+        all manifest permissions (the suite broadcasts debug hooks and needs them
+        without a manual grant step). Returns True when `pm list` confirms it.
+        """
+        out = self.a.raw("install", "-r", "-g", apk, timeout=timeout)
+        ok = "Success" in out
+        print(f"[#1127] adb install {apk}: {'OK' if ok else out.strip()[:200]}")
+        return ok
+
     def dest(self) -> str | None:
         self.a.broadcast("network.columba.test.GET_DEST")
         time.sleep(2.0)
@@ -233,7 +246,7 @@ class Device:
                 # Interface was just inserted; a service restart applies it to
                 # the live stack (same path the UI takes after onboarding).
                 # Readiness is left to the precondition's subsequent
-                # wait_live_state(intact, ...) — python RNS needs ~25-30s.
+                # wait_live_state(intact, ...) - python RNS needs ~25-30s.
                 self.a.broadcast("network.columba.test.RESTART_SERVICE")
                 return True
             time.sleep(5)
@@ -385,7 +398,12 @@ def precondition(device) -> bool:
     deciding the device is unready.
     """
     if not device.installed():
-        pytest.skip(f"{APP_ID} not installed (build+install via run.sh first)")
+        apk = os.environ.get("COLUMBA_E2E_APK")
+        if not apk or not os.path.exists(apk):
+            pytest.skip(f"{APP_ID} not installed (build+install via run.sh first)")
+        print(f"[#1127] {APP_ID} not installed - installing {apk}")
+        if not device.install(apk):
+            pytest.skip(f"{APP_ID} install from COLUMBA_E2E_APK failed")
     if device.dest() is None:
         # Fresh install (CI emulator): programmatically complete onboarding
         # (identity + one AutoInterface), then re-check. If it still can't be

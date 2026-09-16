@@ -111,6 +111,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         settingsRepository = mockk()
         every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
         every { settingsRepository.nomadNetLastNodeHashFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetLastViewPathFlow } returns flowOf(null)
         identityRepository = mockk()
         rnsBackend = mockk()
         rnsCore = mockk()

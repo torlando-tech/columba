@@ -218,6 +218,8 @@ data class SettingsState(
     val bottomNavTabs: List<network.columba.app.navigation.NavTab> = network.columba.app.navigation.NavTab.DEFAULT,
     // Destination hash of the last-browsed NomadNet node, or null when none.
     val nomadNetLastNodeHash: String? = null,
+    // Path of the last-browsed NomadNet page (deep page), or null when none.
+    val nomadNetLastViewPath: String? = null,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -618,6 +620,7 @@ class SettingsViewModel
                             // from loadBottomNavTabs()
                             bottomNavTabs = _state.value.bottomNavTabs,
                             nomadNetLastNodeHash = _state.value.nomadNetLastNodeHash,
+                            nomadNetLastViewPath = _state.value.nomadNetLastViewPath,
                             // Preserve protocol versions from fetchProtocolVersions()
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
@@ -1852,6 +1855,13 @@ class SettingsViewModel
                 settingsRepository.nomadNetLastNodeHashFlow.collect { hash ->
                     _state.update { current ->
                         if (current.nomadNetLastNodeHash == hash) current else current.copy(nomadNetLastNodeHash = hash)
+                    }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.nomadNetLastViewPathFlow.collect { path ->
+                    _state.update { current ->
+                        if (current.nomadNetLastViewPath == path) current else current.copy(nomadNetLastViewPath = path)
                     }
                 }
             }

@@ -70,7 +70,10 @@ class PythonRnsNomadnet(
         _nomadnetDownloadProgressFlow.asStateFlow()
 
     /** hex destination hash -> live `RNS.Link` to that NomadNet node. */
-    private val nomadnetLinks = ConcurrentHashMap<String, PyObject>()
+    // internal (not private) so the JVM link-lifecycle tests in this module
+    // can seed/inspect the cached-link contract with a raw
+    // `PyObject.getInstance(...)` handle (no native RNS runtime needed).
+    internal val nomadnetLinks = ConcurrentHashMap<String, PyObject>()
 
     /** Cooperative-cancel flag, flipped by [cancelNomadnetPageRequest]. */
     @Volatile
@@ -537,14 +540,20 @@ class PythonRnsNomadnet(
     }
 
     override suspend fun cancelNomadnetPageRequest() {
+        // Signal only: in-flight page/media/identify poll loops observe
+        // `cancelled` (via throwIfCancelled) and unwind on their next tick.
+        //
+        // Deliberately does NOT tear down the cached links. The upstream python
+        // browser (reticulum nomadnet Browser.py `__load`) keeps its
+        // per-destination link across requests, and the kotlin backend's
+        // cancelNomadnetPageRequest mirrors that (it only sets the cancel flag,
+        // never touches its link map). Tearing links down here forced a cold
+        // re-establishment whenever a ViewModel was torn down (e.g. leaving the
+        // NomadNet tab), which is what surfaced as "failed to establish link to
+        // nomadnet node". Keeping the ACTIVE links lets a re-entry reuse the
+        // warm link. A cached link that has since gone inactive is dropped on
+        // reuse by establishLink() (it only reuses LINK_ACTIVE entries).
         cancelled = true
-        // Tear down every in-flight link; the polling loops observe `cancelled`
-        // and unwind on their next tick.
-        nomadnetLinks.values.forEach { link ->
-            runCatching { link.callAttr("teardown") }
-                .onFailure { Log.w(TAG, "NomadNet: link teardown on cancel failed", it) }
-        }
-        nomadnetLinks.clear()
         _nomadnetRequestStatusFlow.value = "idle"
         _nomadnetDownloadProgressFlow.value = 0f
         Log.i(TAG, "NomadNet: request cancelled")

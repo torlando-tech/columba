@@ -143,6 +143,7 @@ class SettingsRepository
             val NOMADNET_RENDERING_MODE = stringPreferencesKey("nomadnet_rendering_mode")
             val NOMADNET_IMAGE_LOADING_MODE = stringPreferencesKey("nomadnet_image_loading_mode")
             val NOMADNET_LAST_NODE = stringPreferencesKey("nomadnet_last_node")
+            val NOMADNET_LAST_PATH = stringPreferencesKey("nomadnet_last_path")
             val NOMADNET_AUTO_IDENTIFY_NODES = stringSetPreferencesKey("nomadnet_auto_identify_nodes")
             val BOTTOM_NAV_TABS = stringPreferencesKey("bottom_nav_tabs")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
@@ -1511,21 +1512,35 @@ class SettingsRepository
                 .distinctUntilChanged()
 
         /**
-         * Remember the destination hash of the most recently loaded NomadNet page.
-         * [whileActive] is evaluated inside the DataStore transaction (under the
-         * edit mutex), so callers can guard against a concurrent
-         * [clearNomadNetLastNodeHash] resurrecting a just-closed site: either the
-         * predicate fails and nothing is written, or the write lands before any
-         * later clear and is properly erased by it.
+         * Flow of the path of the last NomadNet page the user loaded (the deep
+         * page, e.g. a forum thread two levels in), or null when none. Persisted
+         * alongside [nomadNetLastNodeHashFlow] so the bottom-nav NomadNet tab
+         * reopens the exact page the user left on, not just the node's index.
+         */
+        val nomadNetLastViewPathFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences -> preferences[PreferencesKeys.NOMADNET_LAST_PATH] }
+                .distinctUntilChanged()
+
+        /**
+         * Remember the destination hash and path of the most recently loaded
+         * NomadNet page. Both keys are written in a single edit so the (node,
+         * path) pair is always consistent. [whileActive] is evaluated inside the
+         * DataStore transaction (under the edit mutex), so callers can guard
+         * against a concurrent [clearNomadNetLastNodeHash] resurrecting a
+         * just-closed site: either the predicate fails and nothing is written,
+         * or the write lands before any later clear and is properly erased by it.
          */
         suspend fun saveNomadNetLastNodeHash(
             nodeHash: String,
+            viewPath: String = DEFAULT_NOMADNET_PATH,
             whileActive: () -> Boolean = { true },
         ) {
             if (nodeHash.isBlank()) return
             context.dataStore.edit { preferences ->
                 if (whileActive()) {
                     preferences[PreferencesKeys.NOMADNET_LAST_NODE] = nodeHash
+                    preferences[PreferencesKeys.NOMADNET_LAST_PATH] = viewPath
                 }
             }
         }
@@ -1533,11 +1548,13 @@ class SettingsRepository
         /**
          * Forget the last-browsed NomadNet page (Close Site). The bottom-nav
          * NomadNet tab then reopens at the address-entry prompt instead of the
-         * closed site.
+         * closed site. Both the node and path keys are cleared so a stale deep
+         * path can never resurrect the closed site.
          */
         suspend fun clearNomadNetLastNodeHash() {
             context.dataStore.edit { preferences ->
                 preferences.remove(PreferencesKeys.NOMADNET_LAST_NODE)
+                preferences.remove(PreferencesKeys.NOMADNET_LAST_PATH)
             }
         }
 
@@ -1998,6 +2015,11 @@ class SettingsRepository
         companion object {
             /** Default incoming message size limit: 1MB */
             const val DEFAULT_INCOMING_SIZE_LIMIT_KB = 1024
+
+            /** NomadNet entry path - a node's index page. Used when a last-browsed
+             *  node has no recorded deep path (e.g. it was first reached via a deep
+             *  link or a pre-path-save session). */
+            const val DEFAULT_NOMADNET_PATH = "/page/index.mu"
 
             /** Minimum incoming message size limit: 512KB */
             const val MIN_INCOMING_SIZE_LIMIT_KB = 512

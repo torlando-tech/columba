@@ -103,6 +103,25 @@ class PythonRnsNomadnet(
     private fun beginRequest(): Int =
         requestGeneration.incrementAndGet()
 
+    /**
+     * Test seam: begin a request generation exactly as [requestNomadnetPage] /
+     * [requestNomadnetMedia] do, without a live RNS runtime, so the
+     * generation/cancel contract can be probed directly. Mirrors [beginRequest].
+     */
+    internal fun testBeginRequest(): Int = beginRequest()
+
+    /**
+     * Test seam: expose the generation contract without a live RNS runtime.
+     * Mirrors [nomadnetLinks] being `internal`. Returns the current latest
+     * generation (what the next [beginRequest] will claim is not; this is the
+     * last claimed one) and the generation the last cancel targeted.
+     */
+    internal val testCancelState: Pair<Int, Int>
+        get() = requestGeneration.get() to cancelGeneration
+
+    /** Test seam: the [isCancelled] predicate for direct contract tests. */
+    internal fun testIsCancelled(generation: Int): Boolean = isCancelled(generation)
+
     // ==================== Page / file requests ====================
 
     override suspend fun requestNomadnetPage(
@@ -654,15 +673,22 @@ class PythonRnsNomadnet(
 
     /**
      * True if the request owning [generation] has been cancelled. A request is
-     * cancelled when either an explicit [cancelNomadnetPageRequest] targeted its
-     * generation ([cancelGeneration] == generation) or a newer request has begun
-     * (requestGeneration > generation) and superseded it. Request-scoped: a
-     * replacement can never "revive" a cancelled predecessor (which now runs on
-     * an older generation) and a stale cancel can never leak into a later,
-     * unrelated request (which owns a newer generation).
+     * cancelled only when an explicit [cancelNomadnetPageRequest] happened at or
+     * after it began: [cancelGeneration] records the latest generation at the
+     * last cancel, so any request begun at or before that moment (generation <=
+     * [cancelGeneration]) is cancelled, while a request begun *after* the cancel
+     * (a higher generation) is unaffected.
+     *
+     * This deliberately has NO "a newer request superseded me" term: the browser
+     * runs partial-page and image requests CONCURRENTLY (PartialManager +
+     * PageImageLoader), so a sibling request starting must never cancel a
+     * legitimate in-flight request. Cancellation is driven only by an explicit
+     * cancel, and a replacement request never clears it - so a cancelled request
+     * cannot be "revived" by a new one, and a stale cancel can never leak into a
+     * later, unrelated request (which owns a higher generation).
      */
     private fun isCancelled(generation: Int): Boolean =
-        cancelGeneration == generation || requestGeneration.get() > generation
+        generation <= cancelGeneration
 
     /** [isCancelled] as a throw, called from each in-flight poll loop. */
     private fun throwIfCancelled(generation: Int) {

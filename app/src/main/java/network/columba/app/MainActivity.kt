@@ -2479,8 +2479,17 @@ fun ColumbaNavigation(
                             appComposable(AppDestination.NOMADNET_HOME) {
                                 DoubleBackToExitHandler(AppDestination.NOMADNET_HOME.routePattern)
                                 val lastNodeHash = settingsState.nomadNetLastNodeHash
+                                // Reopen the exact page the user left on: the deep
+                                // path (a forum thread, etc.) restored from the
+                                // @Singleton page cache, falling back to the node's
+                                // index when no deep path was recorded (deep-link
+                                // entry or a session saved before path persistence).
+                                val lastViewPath =
+                                    settingsState.nomadNetLastViewPath
+                                        ?: network.columba.app.repository.SettingsRepository.DEFAULT_NOMADNET_PATH
                                 NomadNetBrowserScreen(
                                     destinationHash = lastNodeHash.orEmpty(),
+                                    initialPath = lastViewPath,
                                     showHomeEntry = lastNodeHash.isNullOrEmpty(),
                                     onBackClick = { navController.popBackStack() },
                                     // Close Site on the tab home: closeSite() drops the

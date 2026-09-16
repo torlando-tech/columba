@@ -1675,4 +1675,44 @@ class SettingsRepositoryTest {
                 assertEquals(mode, repository.themeModeFlow.first())
             }
         }
+
+    // ── NomadNet last-viewed page (node + deep path) ──
+
+    @Test
+    fun `saveNomadNetLastNodeHash persists the node hash and the deep path`() =
+        runTest {
+            val node = "abcdef01234567890abcdef012345678"
+            val deepPath = "/page/forum/thread.mu"
+
+            repository.saveNomadNetLastNodeHash(node, deepPath)
+
+            val page = repository.nomadNetLastPageFlow.first()
+            assertEquals(node, page.nodeHash)
+            assertEquals(deepPath, page.viewPath)
+        }
+
+    @Test
+    fun `saveNomadNetLastNodeHash defaults the path to the node index when omitted`() =
+        runTest {
+            val node = "abcdef01234567890abcdef012345678"
+
+            repository.saveNomadNetLastNodeHash(node)
+
+            val page = repository.nomadNetLastPageFlow.first()
+            assertEquals(node, page.nodeHash)
+            assertEquals("/page/index.mu", page.viewPath)
+        }
+
+    @Test
+    fun `clearNomadNetLastNodeHash clears both the node hash and the deep path`() =
+        runTest {
+            val node = "abcdef01234567890abcdef012345678"
+            repository.saveNomadNetLastNodeHash(node, "/page/forum/thread.mu")
+
+            repository.clearNomadNetLastNodeHash()
+
+            val page = repository.nomadNetLastPageFlow.first()
+            assertNull(page.nodeHash)
+            assertNull(page.viewPath)
+        }
 }

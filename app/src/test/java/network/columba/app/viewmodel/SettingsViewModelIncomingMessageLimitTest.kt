@@ -5,6 +5,7 @@ import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.NomadNetLastPage
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkStatus
@@ -110,7 +111,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         settingsRepository = mockk()
         every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
-        every { settingsRepository.nomadNetLastNodeHashFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetLastPageFlow } returns flowOf(NomadNetLastPage(null, null))
         identityRepository = mockk()
         rnsBackend = mockk()
         rnsCore = mockk()

@@ -718,26 +718,33 @@ class NomadNetBrowserViewModel
             viewModelScope.launch { settingsRepository.saveNomadNetRenderingMode(mode.name) }
         }
 
-        fun identifyToNode(autoIdentify: Boolean = false) {
+        /**
+         * Identify to the current node: trigger the identification request and,
+         * on success, mark the node identified and refresh its page.
+         *
+         * This deliberately does NOT write the "always identify" opt-in set:
+         * that persisted preference is owned solely by the toggle
+         * (NomadNetAutoIdentifyViewModel.setAutoIdentifyForNode). Writing it here
+         * from the dialog's Confirm button raced a just-made toggle-off (the
+         * DataStore write is async, so the Compose snapshot Confirm read was
+         * stale) and could silently restore a node the user had turned off.
+         */
+        fun identifyToNode() {
             if (_identifyInProgress.value || _isIdentified.value) return
             val nodeHash = currentNodeHash
             if (nodeHash.isEmpty()) return
-
-            // Persist the "always identify" opt-in first so it survives even if
-            // the identify request below fails; the flag is independent of a
-            // single request succeeding. Atomic add - the repository reads the
-            // latest persisted set, so this can't clobber other nodes.
-            if (autoIdentify) {
-                viewModelScope.launch {
-                    settingsRepository.setNomadNetAutoIdentifyNode(nodeHash, true)
-                }
-            }
 
             _identifyInProgress.value = true
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     nomadnet.identifyNomadnetLink(nodeHash).fold(
                         onSuccess = { alreadyIdentified ->
+                            // The request targets the node captured as [nodeHash].
+                            // If the user has since navigated to a different node,
+                            // this outcome is stale: applying it would mark the new
+                            // node as identified (suppressing its auto-identify and
+                            // showing a false "identified" state).
+                            if (currentNodeHash != nodeHash) return@fold
                             _isIdentified.value = true
                             if (alreadyIdentified) return@fold
                             if (_browserState.value is BrowserState.PageLoaded) {
@@ -751,10 +758,18 @@ class NomadNetBrowserViewModel
                                 pendingIdentifyRefreshFor = nodeHash
                             }
                         },
-                        onFailure = { _identifyError.value = it.message ?: "Unknown error" },
+                        onFailure = {
+                            // Same staleness guard: a failure for a node the user has
+                            // already left must not surface as an error for the
+                            // current node.
+                            if (currentNodeHash != nodeHash) return@fold
+                            _identifyError.value = it.message ?: "Unknown error"
+                        },
                     )
                 } catch (e: Exception) {
-                    _identifyError.value = e.message ?: "Unknown error"
+                    if (currentNodeHash == nodeHash) {
+                        _identifyError.value = e.message ?: "Unknown error"
+                    }
                 } finally {
                     _identifyInProgress.value = false
                 }

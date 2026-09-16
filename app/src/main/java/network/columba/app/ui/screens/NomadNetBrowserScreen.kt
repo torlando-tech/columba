@@ -284,7 +284,12 @@ fun NomadNetBrowserScreen(
                     onClick = {
                         showIdentifyConfirm = false
                         if (!isIdentified) {
-                            viewModel.identifyToNode(autoIdentify = autoIdentifyOn)
+                            // Only trigger the identification request. The
+                            // "always identify" opt-in is owned solely by the
+                            // toggle above; re-persisting it from here with the
+                            // (possibly stale) snapshot raced a just-made
+                            // toggle-off and could restore the node.
+                            viewModel.identifyToNode()
                         }
                     },
                 ) {

@@ -738,7 +738,7 @@ jobs:
 
       - name: Install E2E host dependencies
         run: |
-          python -m pip install --disable-pip-version-check pytest pytest-timeout
+          python -m pip install --disable-pip-version-check -r tests/e2e_profile_swap/requirements.txt
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

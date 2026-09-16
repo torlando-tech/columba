@@ -729,9 +729,14 @@ class NomadNetBrowserViewModel
          * DataStore write is async, so the Compose snapshot Confirm read was
          * stale) and could silently restore a node the user had turned off.
          */
-        fun identifyToNode() {
+        fun identifyToNode(targetNodeHash: String? = null) {
             if (_identifyInProgress.value || _isIdentified.value) return
-            val nodeHash = currentNodeHash
+            // An explicit target (passed by the stale-request retry below) is used
+            // verbatim; otherwise the current node. Capturing the target here -
+            // rather than re-reading currentNodeHash later - closes the
+            // cross-dispatcher race where navigation between the eligibility
+            // check and the request start would identify the wrong node.
+            val nodeHash = targetNodeHash ?: currentNodeHash
             if (nodeHash.isEmpty()) return
 
             _identifyInProgress.value = true
@@ -775,28 +780,38 @@ class NomadNetBrowserViewModel
                     // If this request was for a node the user has already left, its
                     // stale result was discarded above, but its completion is what
                     // frees the in-progress flag that blocked the CURRENT node's own
-                    // identify. Trigger the current node's identify now if it is
-                    // still pending: the flag guard skipped it while this older
-                    // request was in flight, and no later event would re-trigger it
-                    // (the reactive collector and emitPageLoaded both already ran).
-                    // The stale condition makes this a one-shot retry per navigation.
-                    if (shouldRetryCurrentNodeIdentify(nodeHash)) {
-                        identifyToNode()
-                    }
+                    // identify. Retry the current node's identify now if it is still
+                    // pending: the flag guard skipped it while this older request was
+                    // in flight, and no later event would re-trigger it (the reactive
+                    // collector and emitPageLoaded both already ran). The helper
+                    // validates and captures the target in one pass, so navigation
+                    // between the check and the request start cannot make the retry
+                    // identify a different node.
+                    pendingRetryTarget(nodeHash)?.let { identifyToNode(it) }
                 }
             }
         }
 
         /**
-         * True when a stale identify for [previousNodeHash] has just completed and
-         * the CURRENT node still needs its own auto-identify: the user navigated
-         * to a different, non-empty node that is flagged for auto-identify and not
-         * yet identified. One-shot per navigation, so it cannot loop.
+         * Returns the node whose auto-identify should be retried now that the
+         * identify for [completedNodeHash] has completed and was discarded as
+         * stale, or null when no retry is due. Non-null only when the current node
+         * differs from the completed one, is flagged for auto-identify, and is not
+         * yet identified. Re-reads currentNodeHash against the captured target so a
+         * navigation that lands between the two reads aborts the retry. One-shot
+         * per completion, so it cannot loop.
          */
-        private fun shouldRetryCurrentNodeIdentify(previousNodeHash: String): Boolean {
-            if (currentNodeHash == previousNodeHash || currentNodeHash.isEmpty()) return false
-            if (currentNodeHash !in _autoIdentifyNodes.value || _isIdentified.value) return false
-            return true
+        private fun pendingRetryTarget(completedNodeHash: String): String? {
+            val target = currentNodeHash
+            return if (target.isEmpty() || target == completedNodeHash) {
+                null
+            } else if (target !in _autoIdentifyNodes.value) {
+                null
+            } else if (currentNodeHash != target || _isIdentified.value) {
+                null
+            } else {
+                target
+            }
         }
 
         override fun onCleared() {

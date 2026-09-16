@@ -469,6 +469,21 @@ class NomadNetBrowserViewModelTest {
         }
     }
 
+    /**
+     * Wait until the in-flight identify coroutine on the real Dispatchers.IO has
+     * fully settled: its finally block clears the in-progress flag after the
+     * result (success, failure, or stale-discard) has been handled. Bounded, so a
+     * regression that leaves the flag set fails rather than hangs. Preferred over
+     * a fixed sleep, which runTest cannot synchronize with the IO dispatcher.
+     */
+    private fun waitUntilIdentifySettled(timeoutMs: Int = 2000) {
+        var waitedMs = 0
+        while (viewModel.identifyInProgress.value && waitedMs < timeoutMs) {
+            Thread.sleep(25)
+            waitedMs += 25
+        }
+    }
+
     @Test
     fun `multiple goBack pops stack correctly`() =
         runTest(testDispatcher) {
@@ -803,7 +818,7 @@ class NomadNetBrowserViewModelTest {
 
             viewModel.identifyToNode()
             advanceUntilIdle()
-            Thread.sleep(100) // wait for the real Dispatchers.IO identify coroutine
+            waitUntilIdentifySettled()
 
             assertTrue(viewModel.isIdentified.value)
             coVerify(exactly = 0) { settingsRepository.setNomadNetAutoIdentifyNode(any(), any()) }
@@ -839,7 +854,7 @@ class NomadNetBrowserViewModelTest {
 
             // A's identify finally completes (for node A, no longer the current node).
             identifyGate.tryEmit(Unit)
-            Thread.sleep(100) // wait for the IO coroutine to resume and apply (or drop)
+            waitUntilIdentifySettled()
 
             // The stale outcome for A must not mark B as identified.
             assertFalse(viewModel.isIdentified.value)

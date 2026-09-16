@@ -1852,16 +1852,15 @@ class SettingsViewModel
                 }
             }
             viewModelScope.launch {
-                settingsRepository.nomadNetLastNodeHashFlow.collect { hash ->
+                settingsRepository.nomadNetLastPageFlow.collect { page ->
                     _state.update { current ->
-                        if (current.nomadNetLastNodeHash == hash) current else current.copy(nomadNetLastNodeHash = hash)
-                    }
-                }
-            }
-            viewModelScope.launch {
-                settingsRepository.nomadNetLastViewPathFlow.collect { path ->
-                    _state.update { current ->
-                        if (current.nomadNetLastViewPath == path) current else current.copy(nomadNetLastViewPath = path)
+                        if (current.nomadNetLastNodeHash == page.nodeHash &&
+                            current.nomadNetLastViewPath == page.viewPath
+                        ) current
+                        else current.copy(
+                            nomadNetLastNodeHash = page.nodeHash,
+                            nomadNetLastViewPath = page.viewPath,
+                        )
                     }
                 }
             }

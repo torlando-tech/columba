@@ -45,6 +45,16 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 )
 
 /**
+ * The (node, path) pair of the last NomadNet page the user loaded, published as
+ * ONE consistent value so a reader can never see a node without its matching
+ * path. Both null on a fresh install (no page browsed yet).
+ */
+data class NomadNetLastPage(
+    val nodeHash: String?,
+    val viewPath: String?,
+)
+
+/**
  * Repository for managing user settings using DataStore.
  * Currently handles display name persistence.
  */
@@ -1501,25 +1511,30 @@ class SettingsRepository
         }
 
         /**
-         * Flow of the destination hash of the last NomadNet page the user loaded,
-         * or null when none. The bottom-nav NomadNet tab navigates here so the
-         * tab reopens where the user left off; a fresh install falls back to the
-         * caller-provided default entry node.
+         * The (node, path) pair of the last NomadNet page the user loaded, read
+         * as ONE consistent snapshot, or both null when none. The bottom-nav
+         * NomadNet tab navigates here so the tab reopens the exact page the user
+         * left on; a fresh install falls back to the caller-provided default
+         * entry node.
+         *
+         * Read from a SINGLE DataStore emission (both keys in one
+         * [Map]), not two separate mapped flows: two independent flows can
+         * publish the node and path as separate [StateFlow] updates, so a
+         * reader (the NomadNet home screen) could observe a new node with a
+         * stale or null path and start loading a mismatched pair before the
+         * corrected update lands. One combined emission guarantees the pair is
+         * always consistent. [distinctUntilChanged] suppresses duplicate
+         * emissions so the home screen only reloads when the pair genuinely
+         * changes.
          */
-        val nomadNetLastNodeHashFlow: Flow<String?> =
+        val nomadNetLastPageFlow: Flow<NomadNetLastPage> =
             context.dataStore.data
-                .map { preferences -> preferences[PreferencesKeys.NOMADNET_LAST_NODE] }
-                .distinctUntilChanged()
-
-        /**
-         * Flow of the path of the last NomadNet page the user loaded (the deep
-         * page, e.g. a forum thread two levels in), or null when none. Persisted
-         * alongside [nomadNetLastNodeHashFlow] so the bottom-nav NomadNet tab
-         * reopens the exact page the user left on, not just the node's index.
-         */
-        val nomadNetLastViewPathFlow: Flow<String?> =
-            context.dataStore.data
-                .map { preferences -> preferences[PreferencesKeys.NOMADNET_LAST_PATH] }
+                .map { preferences ->
+                    NomadNetLastPage(
+                        nodeHash = preferences[PreferencesKeys.NOMADNET_LAST_NODE],
+                        viewPath = preferences[PreferencesKeys.NOMADNET_LAST_PATH],
+                    )
+                }
                 .distinctUntilChanged()
 
         /**

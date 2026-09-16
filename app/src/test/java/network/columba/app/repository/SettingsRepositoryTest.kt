@@ -1686,8 +1686,9 @@ class SettingsRepositoryTest {
 
             repository.saveNomadNetLastNodeHash(node, deepPath)
 
-            assertEquals(node, repository.nomadNetLastNodeHashFlow.first())
-            assertEquals(deepPath, repository.nomadNetLastViewPathFlow.first())
+            val page = repository.nomadNetLastPageFlow.first()
+            assertEquals(node, page.nodeHash)
+            assertEquals(deepPath, page.viewPath)
         }
 
     @Test
@@ -1697,11 +1698,9 @@ class SettingsRepositoryTest {
 
             repository.saveNomadNetLastNodeHash(node)
 
-            assertEquals(node, repository.nomadNetLastNodeHashFlow.first())
-            assertEquals(
-                "/page/index.mu",
-                repository.nomadNetLastViewPathFlow.first(),
-            )
+            val page = repository.nomadNetLastPageFlow.first()
+            assertEquals(node, page.nodeHash)
+            assertEquals("/page/index.mu", page.viewPath)
         }
 
     @Test
@@ -1712,7 +1711,8 @@ class SettingsRepositoryTest {
 
             repository.clearNomadNetLastNodeHash()
 
-            assertNull(repository.nomadNetLastNodeHashFlow.first())
-            assertNull(repository.nomadNetLastViewPathFlow.first())
+            val page = repository.nomadNetLastPageFlow.first()
+            assertNull(page.nodeHash)
+            assertNull(page.viewPath)
         }
 }

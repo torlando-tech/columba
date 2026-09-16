@@ -849,6 +849,67 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `auto-identify destination is retried when a stale identify was in flight`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile 4/5 finding): with node A's identify in
+            // flight, navigating to auto-identify node B returns from
+            // identifyToNode because the in-progress flag still belongs to A.
+            // When A's stale result is discarded, its completion must retry B's
+            // identify, or B stays anonymous until some unrelated action fires.
+            //
+            // A fresh ViewModel is constructed AFTER the set stub so the reactive
+            // collector populates _autoIdentifyNodes with nodeB (a finite flowOf
+            // is consumed once at init, so re-stubbing the setUp ViewModel's flow
+            // would not re-collect).
+            val nodeB = "1234567890abcdef1234567890abcdef"
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(setOf(nodeB))
+            every { pageCache.get(any(), any()) } returns simplePage
+            // Gate A's identify call so it stays in flight while we navigate to B.
+            val identifyGate = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } coAnswers {
+                identifyGate.first()
+                Result.success(true)
+            }
+            // B's identify returns already-identified (no page refresh needed).
+            coEvery { protocol.identifyNomadnetLink(nodeB) } returns Result.success(true)
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            advanceUntilIdle()
+
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            vm.identifyToNode()
+            // A's IO coroutine is now suspended at identifyNomadnetLink(nodeHash).
+            advanceUntilIdle()
+
+            // Navigate to auto-identify node B while A's identify is in flight.
+            // B's own identifyToNode returns early (in-progress flag belongs to A).
+            vm.loadPage(nodeB)
+            advanceUntilIdle()
+            assertFalse(vm.isIdentified.value)
+            // B's blocked identify was never issued while A held the flag.
+            coVerify(exactly = 0) { protocol.identifyNomadnetLink(nodeB) }
+
+            // A's identify completes; its stale result is discarded and its
+            // finally block retries B's identify.
+            identifyGate.tryEmit(Unit)
+
+            // Poll for B's identify to complete on the real Dispatchers.IO.
+            var identified = false
+            var waitedMs = 0
+            while (!identified && waitedMs < 2000) {
+                identified = vm.isIdentified.value
+                if (!identified) {
+                    Thread.sleep(25)
+                    waitedMs += 25
+                }
+            }
+            // B must end up identified (retried by A's completion), not left anonymous.
+            assertTrue("B should be retried and identified once A's stale identify completes", identified)
+        }
+
+    @Test
     fun `clearIdentifyError resets error`() {
         // Access private state indirectly — identifyToNode failure sets error
         viewModel.clearIdentifyError()

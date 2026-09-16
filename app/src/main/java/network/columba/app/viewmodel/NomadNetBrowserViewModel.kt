@@ -772,8 +772,31 @@ class NomadNetBrowserViewModel
                     }
                 } finally {
                     _identifyInProgress.value = false
+                    // If this request was for a node the user has already left, its
+                    // stale result was discarded above, but its completion is what
+                    // frees the in-progress flag that blocked the CURRENT node's own
+                    // identify. Trigger the current node's identify now if it is
+                    // still pending: the flag guard skipped it while this older
+                    // request was in flight, and no later event would re-trigger it
+                    // (the reactive collector and emitPageLoaded both already ran).
+                    // The stale condition makes this a one-shot retry per navigation.
+                    if (shouldRetryCurrentNodeIdentify(nodeHash)) {
+                        identifyToNode()
+                    }
                 }
             }
+        }
+
+        /**
+         * True when a stale identify for [previousNodeHash] has just completed and
+         * the CURRENT node still needs its own auto-identify: the user navigated
+         * to a different, non-empty node that is flagged for auto-identify and not
+         * yet identified. One-shot per navigation, so it cannot loop.
+         */
+        private fun shouldRetryCurrentNodeIdentify(previousNodeHash: String): Boolean {
+            if (currentNodeHash == previousNodeHash || currentNodeHash.isEmpty()) return false
+            if (currentNodeHash !in _autoIdentifyNodes.value || _isIdentified.value) return false
+            return true
         }
 
         override fun onCleared() {

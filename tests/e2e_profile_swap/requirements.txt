@@ -1,0 +1,11 @@
+# Pinned host dependencies for the RNS profile-swap recovery E2E lane
+# (tests/e2e_profile_swap). Mirrors the pinning discipline of
+# tests/transfer_progress_e2e/requirements.txt so the lane resolves a
+# deterministic, reviewed dependency set instead of mutable PyPI releases.
+# The suite only needs pytest + pytest-timeout (the rest is stdlib); the
+# pytest runtime deps are pinned too so a transitive cannot float.
+pytest==9.1.1
+pytest-timeout==2.4.0
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0

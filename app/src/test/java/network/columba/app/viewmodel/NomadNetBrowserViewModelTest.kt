@@ -469,6 +469,21 @@ class NomadNetBrowserViewModelTest {
         }
     }
 
+    /**
+     * Wait until the in-flight identify coroutine on the real Dispatchers.IO has
+     * fully settled: its finally block clears the in-progress flag after the
+     * result (success, failure, or stale-discard) has been handled. Bounded, so a
+     * regression that leaves the flag set fails rather than hangs. Preferred over
+     * a fixed sleep, which runTest cannot synchronize with the IO dispatcher.
+     */
+    private fun waitUntilIdentifySettled(timeoutMs: Int = 2000) {
+        var waitedMs = 0
+        while (viewModel.identifyInProgress.value && waitedMs < timeoutMs) {
+            Thread.sleep(25)
+            waitedMs += 25
+        }
+    }
+
     @Test
     fun `multiple goBack pops stack correctly`() =
         runTest(testDispatcher) {
@@ -787,53 +802,126 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
-    fun `identifyToNode persists the always-identify opt-in when requested`() =
+    fun `identifyToNode does not persist the always-identify opt-in (the toggle owns it)`() =
         runTest(testDispatcher) {
+            // Regression: the dialog's Confirm button used to re-persist the
+            // "always identify" opt-in from a possibly-stale Compose snapshot,
+            // which raced a just-made toggle-off (the DataStore write is async)
+            // and could silently restore a node the user had turned off. The
+            // persisted set is now owned solely by the toggle, so identifyToNode
+            // must never write it.
             every { pageCache.get(any(), any()) } returns simplePage
             coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
-            val savedHash = mutableListOf<String>()
-            val savedEnabled = mutableListOf<Boolean>()
-            coEvery {
-                settingsRepository.setNomadNetAutoIdentifyNode(
-                    capture(savedHash),
-                    capture(savedEnabled),
-                )
-            } just Runs
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
 
-            viewModel.identifyToNode(autoIdentify = true)
+            viewModel.identifyToNode()
             advanceUntilIdle()
+            waitUntilIdentifySettled()
 
-            // The opt-in is persisted (atomically) before the identify request,
-            // so it must land regardless of the request outcome.
-            assertTrue(savedHash.contains(nodeHash))
-            val idx = savedHash.indexOf(nodeHash)
-            assertTrue(idx >= 0 && savedEnabled[idx])
+            assertTrue(viewModel.isIdentified.value)
+            coVerify(exactly = 0) { settingsRepository.setNomadNetAutoIdentifyNode(any(), any()) }
         }
 
     @Test
-    fun `identifyToNode does not persist opt-in when autoIdentify is false`() =
+    fun `stale identify outcome is dropped when the user navigates to another node`() =
         runTest(testDispatcher) {
+            // Regression: identifying to node A while the user navigates to
+            // node B before A's request completes used to mark B as identified
+            // (suppressing B's auto-identify and showing a false "identified"
+            // state). The outcome must be scoped to the node it targeted.
+            val nodeB = "1234567890abcdef1234567890abcdef"
             every { pageCache.get(any(), any()) } returns simplePage
-            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
-            val savedHash = mutableListOf<String>()
-            val savedEnabled = mutableListOf<Boolean>()
-            coEvery {
-                settingsRepository.setNomadNetAutoIdentifyNode(
-                    capture(savedHash),
-                    capture(savedEnabled),
-                )
-            } just Runs
+            // Gate A's identify call so we can navigate away before it returns.
+            val identifyGate = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } coAnswers {
+                identifyGate.first()
+                Result.success(true)
+            }
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
 
-            viewModel.identifyToNode(autoIdentify = false)
+            viewModel.identifyToNode()
+            // The IO coroutine is now suspended at identifyNomadnetLink(nodeHash).
             advanceUntilIdle()
 
-            assertTrue(savedHash.isEmpty())
+            // Navigate to a different node while A's identify is still in flight.
+            viewModel.loadPage(nodeB)
+            advanceUntilIdle()
+            assertFalse(viewModel.isIdentified.value)
+
+            // A's identify finally completes (for node A, no longer the current node).
+            identifyGate.tryEmit(Unit)
+            waitUntilIdentifySettled()
+
+            // The stale outcome for A must not mark B as identified.
+            assertFalse(viewModel.isIdentified.value)
+            val state = viewModel.browserState.value
+            assertTrue(state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeB, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
+        }
+
+    @Test
+    fun `auto-identify destination is retried when a stale identify was in flight`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile 4/5 finding): with node A's identify in
+            // flight, navigating to auto-identify node B returns from
+            // identifyToNode because the in-progress flag still belongs to A.
+            // When A's stale result is discarded, its completion must retry B's
+            // identify, or B stays anonymous until some unrelated action fires.
+            //
+            // A fresh ViewModel is constructed AFTER the set stub so the reactive
+            // collector populates _autoIdentifyNodes with nodeB (a finite flowOf
+            // is consumed once at init, so re-stubbing the setUp ViewModel's flow
+            // would not re-collect).
+            val nodeB = "1234567890abcdef1234567890abcdef"
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(setOf(nodeB))
+            every { pageCache.get(any(), any()) } returns simplePage
+            // Gate A's identify call so it stays in flight while we navigate to B.
+            val identifyGate = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } coAnswers {
+                identifyGate.first()
+                Result.success(true)
+            }
+            // B's identify returns already-identified (no page refresh needed).
+            coEvery { protocol.identifyNomadnetLink(nodeB) } returns Result.success(true)
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            advanceUntilIdle()
+
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            vm.identifyToNode()
+            // A's IO coroutine is now suspended at identifyNomadnetLink(nodeHash).
+            advanceUntilIdle()
+
+            // Navigate to auto-identify node B while A's identify is in flight.
+            // B's own identifyToNode returns early (in-progress flag belongs to A).
+            vm.loadPage(nodeB)
+            advanceUntilIdle()
+            assertFalse(vm.isIdentified.value)
+            // B's blocked identify was never issued while A held the flag.
+            coVerify(exactly = 0) { protocol.identifyNomadnetLink(nodeB) }
+
+            // A's identify completes; its stale result is discarded and its
+            // finally block retries B's identify.
+            identifyGate.tryEmit(Unit)
+
+            // Poll for B's identify to complete on the real Dispatchers.IO.
+            var identified = false
+            var waitedMs = 0
+            while (!identified && waitedMs < 2000) {
+                identified = vm.isIdentified.value
+                if (!identified) {
+                    Thread.sleep(25)
+                    waitedMs += 25
+                }
+            }
+            // B must end up identified (retried by A's completion), not left anonymous.
+            assertTrue("B should be retried and identified once A's stale identify completes", identified)
         }
 
     @Test

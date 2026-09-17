@@ -718,26 +718,38 @@ class NomadNetBrowserViewModel
             viewModelScope.launch { settingsRepository.saveNomadNetRenderingMode(mode.name) }
         }
 
-        fun identifyToNode(autoIdentify: Boolean = false) {
+        /**
+         * Identify to the current node: trigger the identification request and,
+         * on success, mark the node identified and refresh its page.
+         *
+         * This deliberately does NOT write the "always identify" opt-in set:
+         * that persisted preference is owned solely by the toggle
+         * (NomadNetAutoIdentifyViewModel.setAutoIdentifyForNode). Writing it here
+         * from the dialog's Confirm button raced a just-made toggle-off (the
+         * DataStore write is async, so the Compose snapshot Confirm read was
+         * stale) and could silently restore a node the user had turned off.
+         */
+        fun identifyToNode(targetNodeHash: String? = null) {
             if (_identifyInProgress.value || _isIdentified.value) return
-            val nodeHash = currentNodeHash
+            // An explicit target (passed by the stale-request retry below) is used
+            // verbatim; otherwise the current node. Capturing the target here -
+            // rather than re-reading currentNodeHash later - closes the
+            // cross-dispatcher race where navigation between the eligibility
+            // check and the request start would identify the wrong node.
+            val nodeHash = targetNodeHash ?: currentNodeHash
             if (nodeHash.isEmpty()) return
-
-            // Persist the "always identify" opt-in first so it survives even if
-            // the identify request below fails; the flag is independent of a
-            // single request succeeding. Atomic add - the repository reads the
-            // latest persisted set, so this can't clobber other nodes.
-            if (autoIdentify) {
-                viewModelScope.launch {
-                    settingsRepository.setNomadNetAutoIdentifyNode(nodeHash, true)
-                }
-            }
 
             _identifyInProgress.value = true
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     nomadnet.identifyNomadnetLink(nodeHash).fold(
                         onSuccess = { alreadyIdentified ->
+                            // The request targets the node captured as [nodeHash].
+                            // If the user has since navigated to a different node,
+                            // this outcome is stale: applying it would mark the new
+                            // node as identified (suppressing its auto-identify and
+                            // showing a false "identified" state).
+                            if (currentNodeHash != nodeHash) return@fold
                             _isIdentified.value = true
                             if (alreadyIdentified) return@fold
                             if (_browserState.value is BrowserState.PageLoaded) {
@@ -751,13 +763,54 @@ class NomadNetBrowserViewModel
                                 pendingIdentifyRefreshFor = nodeHash
                             }
                         },
-                        onFailure = { _identifyError.value = it.message ?: "Unknown error" },
+                        onFailure = {
+                            // Same staleness guard: a failure for a node the user has
+                            // already left must not surface as an error for the
+                            // current node.
+                            if (currentNodeHash != nodeHash) return@fold
+                            _identifyError.value = it.message ?: "Unknown error"
+                        },
                     )
                 } catch (e: Exception) {
-                    _identifyError.value = e.message ?: "Unknown error"
+                    if (currentNodeHash == nodeHash) {
+                        _identifyError.value = e.message ?: "Unknown error"
+                    }
                 } finally {
                     _identifyInProgress.value = false
+                    // If this request was for a node the user has already left, its
+                    // stale result was discarded above, but its completion is what
+                    // frees the in-progress flag that blocked the CURRENT node's own
+                    // identify. Retry the current node's identify now if it is still
+                    // pending: the flag guard skipped it while this older request was
+                    // in flight, and no later event would re-trigger it (the reactive
+                    // collector and emitPageLoaded both already ran). The helper
+                    // validates and captures the target in one pass, so navigation
+                    // between the check and the request start cannot make the retry
+                    // identify a different node.
+                    pendingRetryTarget(nodeHash)?.let { identifyToNode(it) }
                 }
+            }
+        }
+
+        /**
+         * Returns the node whose auto-identify should be retried now that the
+         * identify for [completedNodeHash] has completed and was discarded as
+         * stale, or null when no retry is due. Non-null only when the current node
+         * differs from the completed one, is flagged for auto-identify, and is not
+         * yet identified. Re-reads currentNodeHash against the captured target so a
+         * navigation that lands between the two reads aborts the retry. One-shot
+         * per completion, so it cannot loop.
+         */
+        private fun pendingRetryTarget(completedNodeHash: String): String? {
+            val target = currentNodeHash
+            return if (target.isEmpty() || target == completedNodeHash) {
+                null
+            } else if (target !in _autoIdentifyNodes.value) {
+                null
+            } else if (currentNodeHash != target || _isIdentified.value) {
+                null
+            } else {
+                target
             }
         }
 

@@ -678,9 +678,29 @@ class NomadNetBrowserViewModel
                 partialManager.clear()
                 // A var-bearing page (loaded via request data) must be re-fetched
                 // with that same data - a bare fetch drops the request variables
-                // and the node rejects the page ("Invalid thread"). Re-submit
-                // through the same form path when the current page is the one we
-                // last submitted; otherwise a plain cache-bypassing fetch.
+                // and the node rejects the page ("Invalid thread"). Rebuild the
+                // request data from the DISPLAYED page's own field tokens (not
+                // lastFetch*), so back-navigation to an earlier same-node/same-
+                //path page refreshes with that page's vars rather than a later
+                // page's vars still lingering in lastFetch* state.
+                val tokenData = buildNomadNetRequestData(
+                    currentState.fieldTokens,
+                    _formFields.value,
+                )
+                if (tokenData != null) {
+                    submitFormAndNavigate(
+                        currentState.nodeHash,
+                        currentState.path,
+                        tokenData,
+                        currentState.fieldTokens,
+                    )
+                    return
+                }
+                // No link-field tokens on the displayed page: it was either a
+                // plain page (fetchPage) or a form submission triggered from a
+                // tokenless page (submitFormAndNavigate with no tokens). In the
+                // latter case the request data is still in lastFetch* and the
+                // displayed page is exactly the one we last submitted.
                 val formData = lastFetchFormDataJson
                 if (currentState.nodeHash == lastFetchNodeHash &&
                     currentState.path == lastFetchPath &&

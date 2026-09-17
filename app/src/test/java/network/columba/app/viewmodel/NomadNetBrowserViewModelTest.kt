@@ -233,6 +233,58 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `refresh after goBack re-submits the displayed page's own vars, not a later page's`() =
+        runTest(testDispatcher) {
+            // Regression for the (node, path) match in refresh(): back-navigating
+            // to an earlier page that shares the node+path but uses different
+            // request vars must refresh with THAT page's vars (the displayed
+            // state), not a later page's vars left in lastFetch* state. Refresh
+            // rebuilds data from the displayed page's fieldTokens, so it can't
+            // resurrect a later page's data over the restored one.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", match { it != null }, any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            // Forward page 1: thread=a
+            viewModel.navigateToLink("/page/forum/thread.mu", listOf("thread=a"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+            // Forward page 2 (same node+path, different var): thread=b
+            viewModel.navigateToLink("/page/forum/thread.mu", listOf("thread=b"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+            // Go BACK to thread=a (same node+path, different var). lastFetch*
+            // still points at thread=b (the later page) after this.
+            viewModel.goBack()
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertTrue(
+                "Displayed page after goBack must be the earlier (thread=a) page",
+                state.fieldTokens == listOf("thread=a"),
+            )
+
+            viewModel.refresh()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            // Refresh must re-submit thread=a (the displayed page's vars), not
+            // thread=b (the later page's vars still in lastFetch*). The inline
+            // var token "thread=a" is sent as var_thread=a in the request data.
+            coVerify {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it?.contains("\"var_thread\":\"a\"") == true },
+                    any(),
+                )
+            }
+        }
+
+    @Test
     fun `retry on a failed var-bearing page preserves the field tokens for persist`() =
         runTest(testDispatcher) {
             // A var-bearing page that fails on first request, then succeeds on

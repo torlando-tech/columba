@@ -676,8 +676,21 @@ class NomadNetBrowserViewModel
             if (currentState is BrowserState.PageLoaded) {
                 _isPullRefreshing.value = true
                 partialManager.clear()
-                // Bypass cache read, but still cache the fresh response
-                fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
+                // A var-bearing page (loaded via request data) must be re-fetched
+                // with that same data - a bare fetch drops the request variables
+                // and the node rejects the page ("Invalid thread"). Re-submit
+                // through the same form path when the current page is the one we
+                // last submitted; otherwise a plain cache-bypassing fetch.
+                val formData = lastFetchFormDataJson
+                if (currentState.nodeHash == lastFetchNodeHash &&
+                    currentState.path == lastFetchPath &&
+                    formData != null
+                ) {
+                    submitFormAndNavigate(lastFetchNodeHash, lastFetchPath, formData, lastFetchFieldTokens)
+                } else {
+                    // Bypass cache read, but still cache the fresh response.
+                    fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
+                }
             }
         }
 
@@ -686,7 +699,10 @@ class NomadNetBrowserViewModel
             if (lastFetchNodeHash.isNotEmpty()) {
                 val formData = lastFetchFormDataJson
                 if (formData != null) {
-                    submitFormAndNavigate(lastFetchNodeHash, lastFetchPath, formData)
+                    // Carry the link-field tokens so a recovered var-bearing page
+                    // re-submits the same request variables and re-persists the
+                    // full backtick path - not a bare path the node would reject.
+                    submitFormAndNavigate(lastFetchNodeHash, lastFetchPath, formData, lastFetchFieldTokens)
                 } else {
                     loadPage(lastFetchNodeHash, lastFetchPath)
                 }

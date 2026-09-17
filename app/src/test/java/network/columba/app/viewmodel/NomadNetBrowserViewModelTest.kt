@@ -146,6 +146,49 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `a var-bearing page persists the full path with its backtick field block`() =
+        runTest(testDispatcher) {
+            // A forum thread is opened with request variables (the backtick
+            // block). Restoring it later must re-submit those variables, so the
+            // persisted path must carry the full block, not just the bare path.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            // In-page link to the thread with var fields (the reported repro).
+            viewModel.navigateToLink(
+                "/page/forum/thread.mu",
+                listOf("cat=general", "thread=a-gentle-look-at-prns"),
+            )
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for the Dispatchers.IO fetch
+
+            val state = viewModel.browserState.value
+            assertTrue(
+                "Should be PageLoaded, was $state",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+
+            // The persisted path must be the FULL path with the backtick block,
+            // so restoring it re-submits the same request variables.
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(
+                    nodeHash,
+                    "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns",
+                    any(),
+                )
+            }
+        }
+
+    @Test
     fun `loadPage with cache miss fetches from network`() =
         runTest(testDispatcher) {
             every { pageCache.get(nodeHash, "/page/index.mu") } returns null

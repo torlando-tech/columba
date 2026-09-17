@@ -25,6 +25,7 @@ import network.columba.app.nomadnet.PageImageState
 import network.columba.app.nomadnet.ParsedImageRef
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
+import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.nomadnet.buildNomadNetRequestData
 import network.columba.app.nomadnet.pageImageKey
 import network.columba.app.nomadnet.splitNomadNetPathFields
@@ -60,6 +61,7 @@ class NomadNetBrowserViewModel
                 val document: MicronDocument,
                 val path: String,
                 val nodeHash: String,
+                val fieldTokens: List<String> = emptyList(),
             ) : BrowserState()
 
             data class Error(
@@ -90,6 +92,7 @@ class NomadNetBrowserViewModel
             val path: String,
             val formFields: Map<String, String>,
             val document: MicronDocument,
+            val fieldTokens: List<String> = emptyList(),
         )
 
         private val _browserState = MutableStateFlow<BrowserState>(BrowserState.Initial)
@@ -176,6 +179,8 @@ class NomadNetBrowserViewModel
         private var lastFetchNodeHash = ""
         private var lastFetchPath = DEFAULT_PATH
         private var lastFetchFormDataJson: String? = null
+        /** Link-field tokens (backtick block) for the last fetch, for persist-path reconstruction. */
+        private var lastFetchFieldTokens: List<String> = emptyList()
 
         init {
             // Observe the auto-identify node set reactively so flagged nodes
@@ -409,7 +414,7 @@ class NomadNetBrowserViewModel
             val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
             if (formDataJson != null) {
                 // Variable submissions always fetch fresh (response depends on data).
-                submitFormAndNavigate(destinationHash, requestPath, formDataJson)
+                submitFormAndNavigate(destinationHash, requestPath, formDataJson, fieldNames)
                 return
             }
 
@@ -472,7 +477,7 @@ class NomadNetBrowserViewModel
             if (path.startsWith("/file/")) {
                 downloadFile(nodeHash, path)
             } else if (formDataJson != null) {
-                submitFormAndNavigate(nodeHash, path, formDataJson)
+                submitFormAndNavigate(nodeHash, path, formDataJson, fieldNames)
             } else {
                 // Non-form link: check cache first
                 val cached = pageCache.get(nodeHash, path)
@@ -493,6 +498,7 @@ class NomadNetBrowserViewModel
             nodeHash: String,
             path: String,
             formDataJson: String,
+            fieldTokens: List<String> = emptyList(),
         ) {
             val epoch = ++fetchEpoch
             // Same single-flight hygiene as fetchPage: a form submission is a
@@ -505,6 +511,7 @@ class NomadNetBrowserViewModel
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
+            lastFetchFieldTokens = fieldTokens
             _browserState.value = BrowserState.Loading("Requesting page...")
             startStatusCollection(epoch)
             viewModelScope.launch(Dispatchers.IO) {
@@ -525,7 +532,7 @@ class NomadNetBrowserViewModel
                         onSuccess = { pageResult ->
                             currentNodeHash = nodeHash
                             val document = MicronParser.parse(pageResult.content)
-                            emitPageLoaded(document, pageResult.path, nodeHash)
+                            emitPageLoaded(document, pageResult.path, nodeHash, lastFetchFieldTokens)
                         },
                         onFailure = { error ->
                             _browserState.value =
@@ -640,7 +647,7 @@ class NomadNetBrowserViewModel
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
-            emitPageLoaded(entry.document, entry.path, entry.nodeHash)
+            emitPageLoaded(entry.document, entry.path, entry.nodeHash, entry.fieldTokens)
             return true
         }
 
@@ -792,6 +799,7 @@ class NomadNetBrowserViewModel
                         path = currentState.path,
                         formFields = _formFields.value.toMap(),
                         document = currentState.document,
+                        fieldTokens = currentState.fieldTokens,
                     ),
                 )
                 _canGoBack.value = true
@@ -810,6 +818,7 @@ class NomadNetBrowserViewModel
             document: MicronDocument,
             path: String,
             nodeHash: String,
+            fieldTokens: List<String> = emptyList(),
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
@@ -818,14 +827,21 @@ class NomadNetBrowserViewModel
                     document = document,
                     path = path,
                     nodeHash = nodeHash,
+                    fieldTokens = fieldTokens,
                 )
             // Remember where the user is so the bottom-nav NomadNet tab can
             // reopen the exact page the user left on (node + deep path) instead
             // of a cold default. Guarded: if the user hit Close Site while this
             // page was in flight, state is no longer this page and the save must
             // not resurrect the closed binding behind closeSite's clear.
+            //
+            // Persist the FULL path including the backtick field block (if any)
+            // so that restoring it via loadPage re-submits the same request
+            // variables. Without this, a forum thread (or any var-bearing page)
+            // reopens as a bare-path fetch and the node rejects it.
+            val persistPath = buildNomadNetPersistPath(path, fieldTokens)
             viewModelScope.launch {
-                settingsRepository.saveNomadNetLastNodeHash(nodeHash, path) {
+                settingsRepository.saveNomadNetLastNodeHash(nodeHash, persistPath) {
                     val current = _browserState.value
                     current is BrowserState.PageLoaded && current.nodeHash == nodeHash
                 }
@@ -969,6 +985,7 @@ class NomadNetBrowserViewModel
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = null
+            lastFetchFieldTokens = emptyList()
             _browserState.value = BrowserState.Loading("Requesting page...")
             startStatusCollection(epoch)
 

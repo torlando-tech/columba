@@ -7,6 +7,7 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.NomadNetLastPage
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
@@ -178,7 +179,7 @@ class SettingsViewModelTest {
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
         every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
-        every { settingsRepository.nomadNetLastNodeHashFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetLastPageFlow } returns flowOf(NomadNetLastPage(null, null))
         every { settingsRepository.shareInstanceHostingEnabledFlow } returns shareInstanceHostingEnabledFlow
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
         coEvery { settingsRepository.saveShareInstanceHostingEnabled(any()) } returns Unit

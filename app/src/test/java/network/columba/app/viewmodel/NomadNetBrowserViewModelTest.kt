@@ -78,7 +78,7 @@ class NomadNetBrowserViewModelTest {
         every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(emptySet())
         coEvery { settingsRepository.saveNomadNetRenderingMode(any()) } just Runs
         coEvery { settingsRepository.saveNomadNetImageLoadingMode(any()) } just Runs
-        coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any()) } just Runs
+        coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any(), any()) } just Runs
         coEvery { settingsRepository.clearNomadNetLastNodeHash() } just Runs
         viewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
     }
@@ -107,9 +107,42 @@ class NomadNetBrowserViewModelTest {
             val loaded = state as NomadNetBrowserViewModel.BrowserState.PageLoaded
             assertEquals(nodeHash, loaded.nodeHash)
             assertEquals("/page/index.mu", loaded.path)
-            // The bottom-nav NomadNet tab reopens the last-browsed node, so
-            // every successful page load must persist its node hash.
-            coVerify { settingsRepository.saveNomadNetLastNodeHash(nodeHash, any()) }
+            // The bottom-nav NomadNet tab reopens the exact page the user left
+            // on, so every successful page load must persist its node hash and
+            // the deep path.
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(nodeHash, "/page/index.mu", any())
+            }
+        }
+
+    @Test
+    fun `a deep in-browser navigation persists the deep path for tab re-entry`() =
+        runTest(testDispatcher) {
+            // Index loads from cache, then the user follows an in-page link to a
+            // deep forum thread (also cached). Tapping the NomadNet tab later
+            // must be able to restore that exact deep path, so it is persisted
+            // on navigation.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            every { pageCache.get(nodeHash, "/page/forum/thread.mu") } returns simplePage
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.navigateToLink("/page/forum/thread.mu", emptyList())
+            advanceUntilIdle()
+
+            // The browser must have actually landed on the deep page (behavior,
+            // not just wiring), so the persisted path is the real current page.
+            val state = viewModel.browserState.value
+            assertTrue(
+                "Should be PageLoaded, was $state",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            assertEquals("/page/forum/thread.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+
+            // ...and that exact deep path was persisted for tab re-entry.
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(nodeHash, "/page/forum/thread.mu", any())
+            }
         }
 
     @Test

@@ -7,6 +7,7 @@ import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.NomadNetLastPage
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
@@ -17,12 +18,14 @@ import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.util.SharedInstanceProbe
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -30,6 +33,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -94,6 +99,7 @@ class SettingsViewModelTest {
     private val lastAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val nextAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val themePreferenceFlow = MutableStateFlow(PresetTheme.VIBRANT)
+    private val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
     private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
     private val autoRetrieveEnabledFlow = MutableStateFlow(true)
@@ -111,6 +117,10 @@ class SettingsViewModelTest {
 
         // Disable monitor coroutines during testing to avoid infinite loops
         SettingsViewModel.enableMonitors = false
+        // No real TCP connect in unit tests: default the availability probe
+        // to "no co-hosted master" (tests that need a reachable master swap
+        // the seam to true).
+        SettingsViewModel.sharedInstanceProbe = { _, _, _ -> false }
 
         settingsRepository = mockk()
         identityRepository = mockk()
@@ -168,6 +178,8 @@ class SettingsViewModelTest {
         // Setup repository flow mocks
         every { settingsRepository.preferOwnInstanceFlow } returns preferOwnInstanceFlow
         every { settingsRepository.isSharedInstanceFlow } returns isSharedInstanceFlow
+        every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetLastPageFlow } returns flowOf(NomadNetLastPage(null, null))
         every { settingsRepository.shareInstanceHostingEnabledFlow } returns shareInstanceHostingEnabledFlow
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
         coEvery { settingsRepository.saveShareInstanceHostingEnabled(any()) } returns Unit
@@ -177,6 +189,7 @@ class SettingsViewModelTest {
         every { settingsRepository.lastAutoAnnounceTimeFlow } returns lastAutoAnnounceTimeFlow
         every { settingsRepository.nextAutoAnnounceTimeFlow } returns nextAutoAnnounceTimeFlow
         every { settingsRepository.themePreferenceFlow } returns themePreferenceFlow
+        every { settingsRepository.themeModeFlow } returns themeModeFlow
         every { settingsRepository.getAllCustomThemes() } returns flowOf(emptyList())
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
@@ -212,7 +225,6 @@ class SettingsViewModelTest {
         every { settingsRepository.telemetryAllowedRequestersFlow } returns flowOf(emptySet<String>())
         every { settingsRepository.includePrereleaseUpdates } returns MutableStateFlow(false)
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
-        coEvery { settingsRepository.getLastUpdateCheckTime() } returns System.currentTimeMillis()
 
         // Stub settings save methods
         coEvery { settingsRepository.savePreferOwnInstance(any()) } just Runs
@@ -221,6 +233,7 @@ class SettingsViewModelTest {
         coEvery { settingsRepository.saveAutoAnnounceIntervalHours(any()) } just Runs
         coEvery { settingsRepository.saveLastAutoAnnounceTime(any()) } just Runs
         coEvery { settingsRepository.saveThemePreference(any()) } just Runs
+        coEvery { settingsRepository.saveThemeModePreference(any()) } just Runs
         coEvery { settingsRepository.saveDefaultDeliveryMethod(any()) } just Runs
         coEvery { settingsRepository.saveTryPropagationOnFail(any()) } just Runs
         coEvery { settingsRepository.saveAutoSelectPropagationNode(any()) } just Runs
@@ -269,6 +282,7 @@ class SettingsViewModelTest {
         coEvery { rnsCore.shutdown() } returns Result.success(Unit)
         coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
         coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+        coEvery { rnsTransportAdmin.getSharedInstanceAccessConfig() } returns null
 
         // Mock MapTileSourceManager flows
         every { mapTileSourceManager.hasOfflineMaps() } returns flowOf(false)
@@ -283,6 +297,13 @@ class SettingsViewModelTest {
         clearAllMocks()
         // Restore default behavior for other tests
         SettingsViewModel.enableMonitors = true
+        // Restore the production probe: tests swap the process-wide seam with
+        // stubs (some backed by cancelled deferreds). The test JVM is reused
+        // across classes, so a leaked stub would poison a later test's
+        // availability monitor.
+        SettingsViewModel.sharedInstanceProbe = { host, port, timeoutMs ->
+            SharedInstanceProbe.isAvailable(host, port, timeoutMs)
+        }
     }
 
     private fun createViewModel(): SettingsViewModel =
@@ -305,6 +326,34 @@ class SettingsViewModelTest {
             updateChecker = updateChecker,
             crashReportManager = crashReportManager,
         )
+
+    @Test
+    fun `copy host access config emits one shot without retaining secret in state`() =
+        runTest {
+            val secretConfig = "[reticulum]\n  rpc_key = 0011aaff\n"
+            coEvery { rnsTransportAdmin.getSharedInstanceAccessConfig() } returns secretConfig
+            viewModel = createViewModel()
+
+            viewModel.sharedInstanceAccessEvents.test {
+                viewModel.copySharedInstanceAccessConfig()
+                assertEquals(SharedInstanceAccessEvent.Copy(secretConfig), awaitItem())
+                assertFalse(viewModel.state.value.toString().contains(secretConfig))
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `copy host access config emits unavailable when backend returns null`() =
+        runTest {
+            viewModel = createViewModel()
+
+            viewModel.sharedInstanceAccessEvents.test {
+                viewModel.copySharedInstanceAccessConfig()
+                assertEquals(SharedInstanceAccessEvent.Unavailable, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     // region parseRpcKey Tests
 
@@ -1859,6 +1908,38 @@ class SettingsViewModelTest {
             }
         }
 
+    @Test
+    fun `setThemeMode mode savesToRepository`() =
+        runTest {
+            viewModel = createViewModel()
+
+            ThemeMode.entries.forEach { mode ->
+                val result = runCatching { viewModel.setThemeMode(mode) }
+
+                assertTrue("setThemeMode should complete successfully", result.isSuccess)
+                coVerify { settingsRepository.saveThemeModePreference(mode) }
+            }
+        }
+
+    @Test
+    fun `state collectsThemeModeFromRepository`() =
+        runTest {
+            themeModeFlow.value = ThemeMode.DARK
+            viewModel = createViewModel()
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                assertEquals(ThemeMode.DARK, state.themeMode)
+
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
     // endregion
 
     // region Service Control Tests
@@ -2453,6 +2534,224 @@ class SettingsViewModelTest {
                 viewModel.state.value.sharedInstanceOnline,
             )
             assertTrue("hosting poll should have been retried after the transient failure", hostingCalls >= 2)
+        }
+
+    /**
+     * Regression: shared-instance card vanishes in steady own-mode, trapping
+     * the user in own instance.
+     *
+     * The card's visibility and the toggle's enable state depend on
+     * `sharedInstanceOnline`. Before this fix the monitor drove that purely
+     * from `isSharedInstanceAvailable()`, which reads the daemon's OWN mode
+     * flags (`is_connected_to_shared_instance || is_shared_instance`) - a
+     * current-mode signal, not an availability signal. In steady own-mode
+     * those flags are false even while Sideband still hosts the shared
+     * master on 127.0.0.1:37428, so the monitor flipped
+     * `sharedInstanceOnline` to false, the card disappeared, and there was
+     * no toggle left to switch back to shared.
+     *
+     * After the fix the availability check ORs the daemon-mode signal with a
+     * TCP reachability probe of the shared master (the same check the daemon
+     * uses to decide it can join). Model that: daemon reports own-mode
+     * (`isSharedInstanceAvailable() = false`), but the probe finds a master
+     * on 37428. The monitor must report the shared instance online so the
+     * banner stays visible and the switch-back toggle is reachable.
+     */
+    @Test
+    fun `availability monitor reports shared online in own-mode when a master is reachable`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            // Daemon is in own-mode: its own mode flags are false.
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+            // But another app still hosts the shared master on 37428.
+            var probeCalls = 0
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ ->
+                probeCalls++
+                true
+            }
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            // init delay (INIT_DELAY_MS*4 = 2s) + two 5s poll intervals.
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            // The probe runs on Dispatchers.IO (a real thread pool), so its
+            // resumption can reach the test scheduler a beat after the virtual
+            // time advances. Settle with a bounded real-time wait so this stays
+            // deterministic.
+            val deadline = System.currentTimeMillis() + 2_000
+            while (System.currentTimeMillis() < deadline) {
+                if (viewModel.state.value.sharedInstanceOnline && probeCalls >= 1) break
+                Thread.sleep(20)
+                testScheduler.runCurrent()
+            }
+
+            assertTrue(
+                "A reachable shared master must keep the instance 'online' for the UI in " +
+                    "own-mode so the banner and switch-back toggle stay reachable",
+                viewModel.state.value.sharedInstanceOnline,
+            )
+            assertTrue("the availability probe must have run while the daemon was in own-mode", probeCalls >= 1)
+        }
+
+    /**
+     * Companion to the own-mode probe test: when the daemon is in own-mode
+     * AND no shared master is reachable, the instance must report offline
+     * (no false "shared available" when there is nothing to switch to).
+     */
+    @Test
+    fun `availability monitor reports shared offline in own-mode when no master is reachable`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ -> false }
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            assertFalse(
+                "With no reachable master and no shared mode, the instance must not report online",
+                viewModel.state.value.sharedInstanceOnline,
+            )
+        }
+
+    /**
+     * The daemon-mode signal short-circuits the probe: when the daemon
+     * reports a shared mode (client or host) the probe must not be needed,
+     * so a probe that would time out (or hang) is never invoked.
+     */
+    @Test
+    fun `availability short-circuits the probe when the daemon is already in shared mode`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns true
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns true
+            var probeCalls = 0
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ ->
+                probeCalls++
+                true
+            }
+            networkStatusFlow.value = NetworkStatus.READY
+
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
+            testScheduler.runCurrent()
+
+            SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { (it.get(viewModel) as? Job)?.cancel() }
+            advanceUntilIdle()
+
+            assertTrue("shared mode must report the instance online", viewModel.state.value.sharedInstanceOnline)
+            assertEquals("probe must be skipped when the daemon is already in a shared mode", 0, probeCalls)
+        }
+
+    /**
+     * Cancellation must not be misread as "shared instance lost".
+     *
+     * If the monitor coroutine is cancelled while its IO probe is in flight,
+     * the [CancellationException] must terminate the monitor job rather than
+     * being swallowed into `false` (which would be processed as a real
+     * offline transition and could trigger an unnecessary service restart
+     * during monitor replacement / teardown).
+     *
+     * Red-capable: with the pre-fix `runCatching { ... }.getOrDefault(false)`
+     * the exception is caught, the loop survives, and the job is still Active
+     * after the probe's deferred is cancelled.
+     */
+    @Test
+    fun `cancellation in flight during the availability probe terminates the monitor instead of reading as offline`() =
+        runTest {
+            SettingsViewModel.enableMonitors = false
+
+            // Daemon in own-mode, so the probe is reached.
+            coEvery { rnsTransportAdmin.isSharedInstanceAvailable() } returns false
+            coEvery { rnsTransportAdmin.isHostingSharedInstance() } returns false
+            networkStatusFlow.value = NetworkStatus.READY
+
+            val probeDeferred = CompletableDeferred<Boolean>()
+            var probeStarted = false
+            SettingsViewModel.sharedInstanceProbe = { _, _, _ ->
+                probeStarted = true
+                probeDeferred.await()
+            }
+            viewModel = createViewModel()
+
+            SettingsViewModel::class.java
+                .getDeclaredMethod("startSharedInstanceAvailabilityMonitor")
+                .apply { isAccessible = true }
+                .invoke(viewModel)
+
+            // Advance past the initial delay + into the first poll so the
+            // probe coroutine starts on Dispatchers.IO and suspends. The probe
+            // resumes on a real IO thread, so bound the wait generously.
+            val start = System.currentTimeMillis()
+            while (!probeStarted && System.currentTimeMillis() - start < 5_000) {
+                testScheduler.advanceTimeBy(100L)
+                testScheduler.runCurrent()
+                Thread.sleep(20)
+            }
+            assertTrue("the availability probe must have started", probeStarted)
+
+            // Cancel the probe mid-flight.
+            probeDeferred.cancel()
+
+            val job = SettingsViewModel::class.java
+                .getDeclaredField("sharedInstanceAvailabilityJob")
+                .apply { isAccessible = true }
+                .let { it.get(viewModel) as? Job }
+                ?: throw AssertionError("the availability monitor job must exist")
+
+            // The rethrown CancellationException must complete the job rather
+            // than leave the monitor loop running with a false offline read.
+            val deadline = System.currentTimeMillis() + 5_000
+            while (System.currentTimeMillis() < deadline && !job.isCompleted) {
+                Thread.sleep(20)
+                testScheduler.runCurrent()
+            }
+            assertTrue(
+                "cancellation during the probe must terminate the monitor job, not continue as an offline tick",
+                job.isCompleted,
+            )
         }
 
     @Test

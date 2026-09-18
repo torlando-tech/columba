@@ -1,11 +1,16 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.bluetooth.BluetoothAdapter
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.data.database.entity.InterfaceEntity
+import network.columba.app.rns.host.manager.CurrentTransport
+import network.columba.app.ui.components.RNodeBatteryIndicator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -25,6 +30,189 @@ class InterfaceManagementScreenTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    @Test
+    fun `RNode card exposes repair action when pairing is required`() {
+        var repairRequested = false
+        val rnode =
+            InterfaceEntity(
+                id = 42,
+                name = "RNode E517 BLE",
+                type = "RNode",
+                configJson = """{"connection_mode":"ble","target_device_name":"RNode E517"}""",
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                InterfaceCard(
+                    interfaceEntity = rnode,
+                    onToggle = {},
+                    bluetoothState = BluetoothAdapter.STATE_ON,
+                    blePermissionsGranted = true,
+                    currentTransport = CurrentTransport.WIFI_LIKE,
+                    isOnline = false,
+                    statusReason = "pairing_required",
+                    onRepairPairing = { repairRequested = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Pairing required").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Repair").performClick()
+        assertTrue(repairRequested)
+    }
+
+    // ========== RNode battery on interface card (follow-up to PR 1103) ==========
+
+    @Test
+    fun `RNode card shows battery percent when online with a live reading`() {
+        val rnode =
+            InterfaceEntity(
+                id = 1,
+                name = "RNode E517 BLE",
+                type = "RNode",
+                configJson = """{"connection_mode":"ble","target_device_name":"RNode E517"}""",
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                InterfaceCard(
+                    interfaceEntity = rnode,
+                    onToggle = {},
+                    bluetoothState = BluetoothAdapter.STATE_ON,
+                    blePermissionsGranted = true,
+                    isOnline = true,
+                    rnodeBattery = 82,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Online").assertIsDisplayed()
+        composeTestRule.onNodeWithText("82%").assertIsDisplayed()
+    }
+
+    @Test
+    fun `RNode card hides battery when online but no reading yet`() {
+        val rnode =
+            InterfaceEntity(
+                id = 1,
+                name = "RNode E517 BLE",
+                type = "RNode",
+                configJson = """{"connection_mode":"ble"}""",
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                InterfaceCard(
+                    interfaceEntity = rnode,
+                    onToggle = {},
+                    bluetoothState = BluetoothAdapter.STATE_ON,
+                    blePermissionsGranted = true,
+                    isOnline = true,
+                    rnodeBattery = null,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("82%").assertDoesNotExist()
+    }
+
+    @Test
+    fun `RNode card hides battery when offline even if a reading is present`() {
+        // A reading can arrive a beat after the interface goes offline; the card
+        // must not show a battery next to an "Offline" status.
+        val rnode =
+            InterfaceEntity(
+                id = 1,
+                name = "RNode E517 BLE",
+                type = "RNode",
+                configJson = """{"connection_mode":"ble"}""",
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                InterfaceCard(
+                    interfaceEntity = rnode,
+                    onToggle = {},
+                    bluetoothState = BluetoothAdapter.STATE_ON,
+                    blePermissionsGranted = true,
+                    isOnline = false,
+                    rnodeBattery = 47,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Offline").assertIsDisplayed()
+        composeTestRule.onNodeWithText("47%").assertDoesNotExist()
+    }
+
+    @Test
+    fun `non-RNode card hides battery even when a reading is present`() {
+        val tcp =
+            InterfaceEntity(
+                id = 1,
+                name = "Laptop",
+                type = "TCPClient",
+                configJson = """{"target_host":"10.0.0.245","target_port":4242}""",
+            )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                InterfaceCard(
+                    interfaceEntity = tcp,
+                    onToggle = {},
+                    bluetoothState = BluetoothAdapter.STATE_ON,
+                    blePermissionsGranted = true,
+                    isOnline = true,
+                    rnodeBattery = 82,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("82%").assertDoesNotExist()
+    }
+
+    @Test
+    fun `RNodeBatteryIndicator renders the percent label`() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                RNodeBatteryIndicator(percent = 12)
+            }
+        }
+
+        composeTestRule.onNodeWithText("12%").assertIsDisplayed()
+    }
+
+    @Test
+    fun `pending restart suppresses stale runtime pairing reason only for changed interface`() {
+        assertEquals(
+            null,
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = true,
+                pendingInterfaceIds = setOf(42),
+            ),
+        )
+        assertEquals(
+            "pairing_required",
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = true,
+                pendingInterfaceIds = setOf(99),
+            ),
+        )
+        assertEquals(
+            "pairing_required",
+            effectiveRuntimeStatusReason(
+                statusReason = "pairing_required",
+                interfaceId = 42,
+                hasPendingChanges = false,
+                pendingInterfaceIds = setOf(42),
+            ),
+        )
+    }
 
     // ========== formatAddressWithPort Tests ==========
 

@@ -9,7 +9,7 @@ import network.columba.app.rns.api.model.DeliveryMethod
 
 /**
  * Debug-only BroadcastReceiver that exposes the [TestController] surface
- * to `adb shell am broadcast`. All 17 manifest actions are routed; see
+ * to `adb shell am broadcast`. All manifest actions are routed; see
  * the `when` block below.
  *
  * Action contract (one action per row; reply lines under
@@ -211,6 +211,15 @@ class TestReceiver : BroadcastReceiver() {
             "network.columba.test.ANNOUNCE" ->
                 TestController.handleAnnounce(app)
 
+            "network.columba.test.LIVE_STATE" ->
+                TestController.handleLiveState(app)
+
+            "network.columba.test.RESTART_SERVICE" ->
+                TestController.handleRestartService(app)
+
+            "network.columba.test.ONBOARD" ->
+                TestController.handleOnboard(app)
+
             "network.columba.test.LIST_INTERFACES" ->
                 TestController.handleListInterfaces(app)
 
@@ -273,6 +282,26 @@ class TestReceiver : BroadcastReceiver() {
                     )
                 } else {
                     TestController.handleRemoveInterface(app, name)
+                }
+            }
+
+            "network.columba.test.SHOW_INCOMING_CALL_TEST" -> {
+                // Debug-only: post the real incoming-call FSI notification on demand
+                // (issue #1079 diagnostics) so the full-screen takeover can be
+                // reproduced without placing a real call. Optional extras:
+                //   hash - identity hash to carry (default: a test hash)
+                //   name - caller display name (default: "E2E Test Caller")
+                val hash = intent.getStringExtra("hash") ?: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                val name = intent.getStringExtra("name") ?: "E2E Test Caller"
+                try {
+                    val helper = network.columba.app.notifications.CallNotificationHelper(app)
+                    helper.showIncomingCallNotification(hash, name)
+                    Log.i(
+                        TestController.LOGCAT_TAG,
+                        "fsi_test_posted hash=${hash.take(8)} name=$name",
+                    )
+                } catch (e: Exception) {
+                    Log.e(TestController.LOGCAT_TAG, "fsi_test_err ${e.message}")
                 }
             }
 

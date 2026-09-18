@@ -8,6 +8,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import io.mockk.Runs
 import io.mockk.clearAllMocks
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -20,7 +21,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.data.db.dao.AnnounceDao
@@ -138,6 +141,60 @@ class MapViewModelTest {
         MapViewModel.ioDispatcher = Dispatchers.IO
         clearAllMocks()
     }
+
+    @Test
+    fun `periodic polling follows overlapping resumed map owners`() =
+        runTest {
+            MapViewModel.enablePeriodicRefresh = true
+            viewModel =
+                MapViewModel(
+                    savedStateHandle,
+                    contactRepository,
+                    receivedLocationDao,
+                    locationSharingManager,
+                    announceDao,
+                    conversationDao,
+                    settingsRepository,
+                    mapTileSourceManager,
+                    telemetryCollectorManager,
+                    offlineMapRegionRepository,
+                    reticulumProtocol,
+                    interfaceFirstSeenDao,
+                )
+            runCurrent()
+            advanceTimeBy(5_000L)
+            runCurrent()
+            clearMocks(reticulumProtocol, answers = false)
+            var transportPolls = 0
+            coEvery { reticulumProtocol.getDiscoveredInterfaces() } answers {
+                transportPolls++
+                emptyList()
+            }
+
+            val mapOwner = "MAP"
+            val focusOwner = "MAP_FOCUS"
+
+            // MAP_FOCUS resumes before MAP is disposed. Duplicate cleanup of MAP
+            // must not suppress polling owned by MAP_FOCUS.
+            viewModel.setPollingOwnerResumed(mapOwner, true)
+            viewModel.setPollingOwnerResumed(focusOwner, true)
+            viewModel.setPollingOwnerResumed(mapOwner, false)
+            viewModel.setPollingOwnerResumed(mapOwner, false)
+
+            advanceTimeBy(25_000L)
+            runCurrent()
+
+            assertEquals(1, transportPolls)
+
+            // Final disposal stops subsequent periodic polls, and cleanup remains
+            // idempotent if both ON_PAUSE and onDispose release the same owner.
+            viewModel.setPollingOwnerResumed(focusOwner, false)
+            viewModel.setPollingOwnerResumed(focusOwner, false)
+            advanceTimeBy(30_000L)
+            runCurrent()
+
+            assertEquals(1, transportPolls)
+        }
 
     @Test
     fun `initial state has no user location`() =

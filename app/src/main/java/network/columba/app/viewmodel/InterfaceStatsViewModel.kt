@@ -28,6 +28,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import tech.torlando.rns.stats.data.HistoryBuffer
+import tech.torlando.rns.stats.data.InterfaceHistoryPoint
 import javax.inject.Inject
 
 /**
@@ -44,9 +46,11 @@ data class InterfaceStatsState(
     // RNode-specific stats (from live connection)
     val rssi: Int? = null,
     val snr: Float? = null,
+    val rnodeBattery: Int? = null,
     // Traffic stats (from Python/RNS)
     val rxBytes: Long = 0,
     val txBytes: Long = 0,
+    val trafficHistory: List<InterfaceHistoryPoint> = emptyList(),
     // Parsed config fields for display
     val connectionMode: String? = null,
     val targetDeviceName: String? = null,
@@ -119,6 +123,7 @@ class InterfaceStatsViewModel
 
         private val _state = MutableStateFlow(InterfaceStatsState())
         val state: StateFlow<InterfaceStatsState> = _state.asStateFlow()
+        private val trafficHistory = HistoryBuffer()
 
         // Track when we started showing "connecting" state
         private var connectingStartTime: Long = 0L
@@ -210,6 +215,7 @@ class InterfaceStatsViewModel
                 val isOnline = interfaceStats?.get("online") as? Boolean ?: false
                 val rxBytes = (interfaceStats?.get("rxb") as? Number)?.toLong() ?: 0L
                 val txBytes = (interfaceStats?.get("txb") as? Number)?.toLong() ?: 0L
+                val history = recordTrafficSample(interfaceStats, rxBytes, txBytes)
 
                 // Track if interface has ever been online during this session
                 if (isOnline) {
@@ -244,6 +250,10 @@ class InterfaceStatsViewModel
                     }
                 }
 
+                // For RNode interfaces, also fetch the live battery (0-100, -1 absent).
+                // Live fetch per poll (not a cached value); binder call off Main.
+                val rnodeBattery = readRNodeBattery(entity.type)
+
                 // Check USB permission for USB-mode RNode interfaces that are offline
                 val needsUsbPermission =
                     if (!isOnline && _state.value.connectionMode == "usb") {
@@ -263,13 +273,40 @@ class InterfaceStatsViewModel
                         isConnecting = isConnecting,
                         rxBytes = rxBytes,
                         txBytes = txBytes,
+                        trafficHistory = history,
                         rssi = rssi,
+                        rnodeBattery = rnodeBattery,
                         needsUsbPermission = needsUsbPermission,
                     )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing stats", e)
             }
+        }
+
+        private suspend fun readRNodeBattery(interfaceType: String): Int? {
+            if (interfaceType != "RNode") return null
+            val battery =
+                withContext(Dispatchers.IO) {
+                    transportAdmin.getRNodeBattery()
+                }
+            return if (battery > -1) battery else null
+        }
+
+        private fun recordTrafficSample(
+            interfaceStats: Map<String, Any>?,
+            rxBytes: Long,
+            txBytes: Long,
+        ): List<InterfaceHistoryPoint> {
+            if (interfaceStats == null) return trafficHistory.toList()
+            trafficHistory.add(
+                InterfaceHistoryPoint(
+                    timestamp = System.currentTimeMillis(),
+                    rxBytes = rxBytes,
+                    txBytes = txBytes,
+                ),
+            )
+            return trafficHistory.toList()
         }
 
         /**

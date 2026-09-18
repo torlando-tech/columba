@@ -6,8 +6,10 @@ import android.view.WindowManager
 import dagger.hilt.android.EntryPointAccessors
 import network.columba.app.di.RnsTelephonyEntryPoint
 import network.columba.app.notifications.CallNotificationHelper
+import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.ui.theme.ThemeMode
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -16,6 +18,8 @@ import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -59,6 +63,7 @@ class IncomingCallActivityTest {
     private lateinit var context: Application
     private lateinit var callStateFlow: MutableStateFlow<CallState>
     private lateinit var mockTelephony: RnsTelephony
+    private lateinit var themeModeFlow: MutableSharedFlow<ThemeMode>
 
     @Before
     fun setup() {
@@ -75,8 +80,13 @@ class IncomingCallActivityTest {
         coEvery { mockTelephony.answerCall() } returns Result.success(Unit)
         coEvery { mockTelephony.declineCall() } answers { }
 
+        themeModeFlow = MutableSharedFlow()
+        val mockSettingsRepository = mockk<SettingsRepository>()
+        every { mockSettingsRepository.themeModeFlow } returns themeModeFlow
+
         val mockEntryPoint = mockk<RnsTelephonyEntryPoint>()
         every { mockEntryPoint.telephony() } returns mockTelephony
+        every { mockEntryPoint.settingsRepository() } returns mockSettingsRepository
         mockkStatic(EntryPointAccessors::class)
         every {
             EntryPointAccessors.fromApplication(any<android.content.Context>(), RnsTelephonyEntryPoint::class.java)
@@ -120,6 +130,22 @@ class IncomingCallActivityTest {
     }
 
     // ========== Window Configuration Tests ==========
+
+    @Test
+    fun `renders call controls before persisted theme mode is available`() =
+        runTest {
+            val intent = buildCallIntent()
+            val controller = Robolectric.buildActivity(IncomingCallActivity::class.java, intent)
+
+            controller.create()
+
+            val content = controller.get().findViewById<android.view.ViewGroup>(android.R.id.content)
+            assertEquals("Call controls must render immediately", 1, content.childCount)
+
+            themeModeFlow.emit(ThemeMode.DARK)
+
+            assertEquals("Persisted theme updates must keep call controls visible", 1, content.childCount)
+        }
 
     @Test
     fun `configures FLAG_KEEP_SCREEN_ON`() {

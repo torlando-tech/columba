@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import network.columba.app.rns.api.RnsError
@@ -27,10 +29,41 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.TransferPhase
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
+
+internal enum class OutgoingTransferPollAction {
+    WAIT,
+    PUBLISH,
+    STOP,
+}
+
+internal fun outgoingTransferPollAction(
+    representation: Int?,
+    state: Int,
+): OutgoingTransferPollAction = when {
+    representation == PythonRnsLxmf.LXMF_REPRESENTATION_RESOURCE -> OutgoingTransferPollAction.PUBLISH
+    representation == PythonRnsLxmf.LXMF_REPRESENTATION_PACKET -> OutgoingTransferPollAction.STOP
+    state in setOf(
+        PythonRnsLxmf.LXMF_STATE_SENT,
+        PythonRnsLxmf.LXMF_STATE_DELIVERED,
+        PythonRnsLxmf.LXMF_STATE_REJECTED,
+        PythonRnsLxmf.LXMF_STATE_CANCELLED,
+        PythonRnsLxmf.LXMF_STATE_FAILED,
+    ) -> OutgoingTransferPollAction.STOP
+    else -> OutgoingTransferPollAction.WAIT
+}
+
+internal fun outgoingTransferPhase(state: Int): TransferPhase =
+    if (state == PythonRnsLxmf.LXMF_STATE_SENDING) {
+        TransferPhase.TRANSFERRING
+    } else {
+        TransferPhase.PREPARING
+    }
 
 /**
  * `RnsLxmf` over upstream Python LXMF, driven through Chaquopy.
@@ -53,13 +86,23 @@ class PythonRnsLxmf(
     private val runtime: PythonRnsRuntime,
     private val events: PythonEventBridge,
 ) : RnsLxmf {
-    private companion object {
+    internal companion object {
         const val TAG = "PythonRnsLxmf"
 
         // LXMF.LXMessage delivery-method ints (LXMF/LXMessage.py).
         const val LXMF_METHOD_OPPORTUNISTIC = 0x01
         const val LXMF_METHOD_DIRECT = 0x02
         const val LXMF_METHOD_PROPAGATED = 0x03
+        const val LXMF_REPRESENTATION_UNKNOWN = 0x00
+        const val LXMF_REPRESENTATION_PACKET = 0x01
+        const val LXMF_REPRESENTATION_RESOURCE = 0x02
+        const val LXMF_STATE_OUTBOUND = 0x01
+        const val LXMF_STATE_SENDING = 0x02
+        const val LXMF_STATE_SENT = 0x04
+        const val LXMF_STATE_DELIVERED = 0x08
+        const val LXMF_STATE_REJECTED = 0xFD
+        const val LXMF_STATE_CANCELLED = 0xFE
+        const val LXMF_STATE_FAILED = 0xFF
 
         /** Bound on how long to wait for a recipient identity to resolve via a path request. */
         const val PATH_RESOLVE_TIMEOUT_MS = 10_000L
@@ -67,6 +110,7 @@ class PythonRnsLxmf(
 
         /** Live-poll cadence for upstream `propagation_transfer_state`. */
         const val PROPAGATION_POLL_INTERVAL_MS = 500L
+        const val TRANSFER_POLL_INTERVAL_MS = 500L
     }
 
     /**
@@ -90,6 +134,9 @@ class PythonRnsLxmf(
         MutableSharedFlow<PropagationState>(replay = 1, extraBufferCapacity = 8)
     override val propagationStateFlow: SharedFlow<PropagationState> =
         _propagationStateFlow.asSharedFlow()
+
+    private val outgoingTransferProgress =
+        MutableSharedFlow<TransferProgressUpdate>(replay = 8, extraBufferCapacity = 64)
 
     /** Mirrors `NativeRnsBackendImpl` — a polling hint with no LXMF-side effect on this backend. */
     @Volatile
@@ -213,6 +260,9 @@ class PythonRnsLxmf(
         val recipientDest = resolveRecipientDestination(destinationHash)
         val sourceDest = runtime.localDestination
             ?: throw RnsException(RnsError.BackendNotReady)
+        val originatingIdentityHash =
+            runtime.localIdentity?.toModelIdentity()?.hash?.toHex()
+                ?: throw RnsException(RnsError.BackendNotReady)
 
         // LXMF.LXMessage(destination, source, content, title, fields, desired_method)
         val lxmessage = runtime.lxmfModule.callAttr(
@@ -246,17 +296,198 @@ class PythonRnsLxmf(
             events.onLxmfFailure,
             events.onLxmfRetryingPropagated,
             tryPropagation,
+            originatingIdentityHash,
         )
 
         router.callAttr("handle_outbound", lxmessage)
 
         val hashBytes = lxmessage["hash"]?.toJava(ByteArray::class.java) ?: ByteArray(0)
+        // handle_outbound() queues work on a Python thread. The representation is
+        // still UNKNOWN here and becomes PACKET or RESOURCE when LXMessage.send() runs.
+        startOutgoingTransferPoll(hashBytes.toHex(), lxmessage)
         return MessageReceipt(
             messageHash = hashBytes,
             timestamp = System.currentTimeMillis(),
             destinationHash = recipientDest["hash"]?.toJava(ByteArray::class.java)
                 ?: destinationHash,
         )
+    }
+
+    override fun observeTransferProgress(): Flow<TransferProgressUpdate> =
+        merge(outgoingTransferProgress.asSharedFlow(), incomingTransferProgress())
+
+    private fun startOutgoingTransferPoll(messageHash: String, lxmessage: PyObject) {
+        backgroundScope.launch {
+            var last: TransferProgressUpdate? = null
+            while (isActive) {
+                val state = lxmessage.pyInt("state") ?: 0
+                when (outgoingTransferPollAction(lxmessage.pyInt("representation"), state)) {
+                    OutgoingTransferPollAction.WAIT -> {
+                        delay(TRANSFER_POLL_INTERVAL_MS)
+                        continue
+                    }
+                    OutgoingTransferPollAction.STOP -> break
+                    OutgoingTransferPollAction.PUBLISH -> Unit
+                }
+                val update = runCatching { outgoingTransferUpdate(messageHash, lxmessage, state) }
+                    .onFailure { Log.w(TAG, "Unable to read outgoing Resource progress", it) }
+                    .getOrNull()
+                if (update != null && update != last) {
+                    outgoingTransferProgress.emit(update)
+                    last = update
+                }
+                if (update?.isTerminal == true) break
+                delay(TRANSFER_POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun outgoingTransferUpdate(
+        messageHash: String,
+        lxmessage: PyObject,
+        state: Int,
+    ): TransferProgressUpdate {
+        val resource = lxmessage["resource_representation"]?.takeUnless { it.isPythonNone() }
+        val phase = when (state) {
+            LXMF_STATE_SENT, LXMF_STATE_DELIVERED -> TransferPhase.COMPLETE
+            LXMF_STATE_REJECTED, LXMF_STATE_CANCELLED, LXMF_STATE_FAILED -> TransferPhase.FAILED
+            else -> outgoingTransferPhase(state)
+        }
+        val resourceProgress = if (phase == TransferPhase.TRANSFERRING) {
+            outgoingResourceProgress(resource)
+        } else {
+            0.0
+        }
+        return TransferProgressUpdate(
+            transferId = resource?.get("hash")?.toJava(ByteArray::class.java)?.toHex() ?: messageHash,
+            messageHash = messageHash,
+            direction = Direction.OUT,
+            progress = resourceProgress.coerceIn(0.0, 1.0).toFloat(),
+            phase = phase,
+            totalBytes = resource?.pyLongCall("get_transfer_size"),
+            deliveryMethod = lxmfDeliveryMethod(
+                lxmessage.pyInt("desired_method") ?: lxmessage.pyInt("method"),
+            ),
+            currentAttempt = lxmessage.pyInt("delivery_attempts")
+                ?.coerceAtMost(runtime.lxmRouter?.pyInt("MAX_DELIVERY_ATTEMPTS") ?: Int.MAX_VALUE),
+            maxAttempts = runtime.lxmRouter?.pyInt("MAX_DELIVERY_ATTEMPTS"),
+        )
+    }
+
+    /**
+     * Overall progress of an outgoing (possibly split) RNS resource.
+     *
+     * Resources larger than RNS's MAX_EFFICIENT_SIZE transfer one segment at a
+     * time over a CHAIN of Resource objects linked by `next_segment`. The
+     * LXMessage's `resource_representation` stays pinned to the first segment
+     * object, whose `get_progress()` freezes at 1/total_segments once segment
+     * 1 concludes (e.g. a 6-segment file reports a stuck 16.7% for the whole
+     * rest of the transfer). Walk the chain to the current tip and read its
+     * progress, which already accounts for the previously completed segments.
+     */
+    private fun outgoingResourceProgress(resource: PyObject?): Double {
+        var chain = resource ?: return 0.0
+        var hops = 0
+        while (hops < 128) {
+            val next = runCatching { chain["next_segment"] }
+                .getOrNull()
+                ?.takeUnless { it.isPythonNone() } ?: break
+            chain = next
+            hops++
+        }
+        return runCatching { chain.pyDoubleCall("get_progress") }.getOrNull() ?: 0.0
+    }
+
+    /**
+     * None-check that never invokes the object's `__str__`/`__repr__`.
+     *
+     * Chaquopy's `PyObject.toString()` calls Python's `str()`, and
+     * `RNS.Resource.__str__` dereferences `self.link.link_id` - which throws
+     * `AttributeError` once the segment's link is gone. That crash used to
+     * kill the whole outgoing progress update (see the stuck progress bar),
+     * so None checks on Resource objects must go through `repr()`, which is
+     * the type default and never throws here.
+     */
+    private fun PyObject.isPythonNone(): Boolean =
+        runCatching { repr() == "None" }.getOrDefault(false)
+
+    private fun incomingTransferProgress(): Flow<TransferProgressUpdate> = flow {
+        val previous = LinkedHashMap<String, TransferProgressUpdate>()
+        while (kotlin.coroutines.coroutineContext.isActive) {
+            val current = runCatching { readIncomingTransfers() }
+                .onFailure { Log.w(TAG, "Unable to read inbound Resources", it) }
+                .getOrNull()
+            if (current != null) {
+                val currentById = current.associateBy { it.transferId }
+                current.forEach { update ->
+                    if (previous[update.transferId] != update) emit(update)
+                }
+                previous.values
+                    .filter { it.transferId !in currentById }
+                    .forEach { emit(it.copy(progress = 1f, phase = TransferPhase.COMPLETE)) }
+                previous.clear()
+                previous.putAll(currentById)
+            }
+            delay(TRANSFER_POLL_INTERVAL_MS)
+        }
+    }
+
+    private fun readIncomingTransfers(): List<TransferProgressUpdate> {
+        val router = runtime.lxmRouter ?: return emptyList()
+        val resources = router.callAttr("inbound_resources") ?: return emptyList()
+        return resources.asList().mapNotNull { resource ->
+            runCatching {
+                val transferId = resource["hash"]?.toJava(ByteArray::class.java)?.toHex()
+                    ?: return@runCatching null
+                TransferProgressUpdate(
+                    transferId = transferId,
+                    messageHash = null,
+                    sourceDestinationHash = resource.incomingSourceDestinationHash(),
+                    direction = Direction.IN,
+                    progress = resource.pyDoubleCall("get_progress").coerceIn(0.0, 1.0).toFloat(),
+                    phase = TransferPhase.TRANSFERRING,
+                    totalBytes = resource.pyLongCall("get_transfer_size"),
+                    deliveryMethod = DeliveryMethod.DIRECT,
+                )
+            }.getOrNull()
+        }
+    }
+
+    private fun PyObject.incomingSourceDestinationHash(): String? {
+        val link = callAttr("get_link")?.takeUnless { it.toString() == "None" }
+        val remoteIdentity =
+            link?.callAttr("get_remote_identity")?.takeUnless { it.toString() == "None" }
+        val destinationClass = runtime.rnsModule["Destination"]
+        val fullName = "${LxmfFields.APP_NAME}.${LxmfFields.DELIVERY_ASPECT}"
+        return if (remoteIdentity == null || destinationClass == null) {
+            null
+        } else {
+            destinationClass.callAttr("hash_from_name_and_identity", fullName, remoteIdentity)
+        }
+            ?.toJava(ByteArray::class.java)
+            ?.toHex()
+    }
+
+    private fun PyObject.pyInt(name: String): Int? =
+        get(name)?.let { value ->
+            runCatching { value.toJava(Int::class.javaObjectType) }.getOrNull()
+                ?: runCatching { value.toJava(Long::class.javaObjectType).toInt() }.getOrNull()
+        }
+
+    private fun PyObject.pyDoubleCall(name: String): Double =
+        callAttr(name)?.let { runCatching { it.toJava(Double::class.javaObjectType) }.getOrNull() } ?: 0.0
+
+    private fun PyObject.pyLongCall(name: String): Long? =
+        callAttr(name)?.takeUnless { it.toString() == "None" }?.let { value ->
+            runCatching { value.toJava(Long::class.javaObjectType) }.getOrNull()
+                ?: runCatching { value.toJava(Int::class.javaObjectType).toLong() }.getOrNull()
+        }
+
+    private fun lxmfDeliveryMethod(method: Int?): DeliveryMethod? = when (method) {
+        LXMF_METHOD_OPPORTUNISTIC -> DeliveryMethod.OPPORTUNISTIC
+        LXMF_METHOD_DIRECT -> DeliveryMethod.DIRECT
+        LXMF_METHOD_PROPAGATED -> DeliveryMethod.PROPAGATED
+        else -> null
     }
 
     /**
@@ -586,16 +817,18 @@ class PythonRnsLxmf(
     }
 
     override fun setIncomingMessageSizeLimit(limitKb: Int) {
-        // Upstream LXMF has no inbound message-size cap of its own — its
-        // `message_storage_limit` bounds a propagation *node's* served store,
-        // not inbound delivery, so calling it here would be wrong. The lxmf-kt
-        // port (kotlin backend) enforces a real `incomingMessageSizeLimitKb`;
-        // the Python equivalent is a post-reassembly drop in event_bridge.py.
-        // Known degradation vs the kotlin backend: LXMF fully reassembles a
-        // message before its delivery callback fires, so oversized messages are
-        // rejected before reaching the UI / storage, but the bandwidth + CPU of
-        // receiving them cannot be saved (upstream LXMF exposes no earlier
-        // hook). Recorded in the RNS dual-build handoff.
+        // event_bridge.py applies the cap in two places:
+        //  - pre-transfer, on link-based (DIRECT) delivery: it mirrors the cap
+        //    onto LXMF's own gate (LXMRouter.delivery_per_transfer_limit), so
+        //    oversized resources are refused at advertisement time, before any
+        //    bytes transfer (columba#1106 — previously this gate stayed at
+        //    LXMF's built-in 1000 KB default and rejected every direct
+        //    delivery over ~1 MB no matter what the user configured);
+        //  - post-reassembly, for all methods (incl. opportunistic, which has
+        //    no pre-transfer hook): a drop in the delivery callback, so
+        //    oversized messages never reach the UI / storage.
+        // `message_storage_limit` is NOT the right knob here — it bounds a
+        // propagation *node's* served store, not inbound delivery.
         runCatching {
             runtime.eventBridge.callAttr("set_incoming_message_size_limit", limitKb)
         }.onFailure { Log.w(TAG, "setIncomingMessageSizeLimit($limitKb) failed", it) }

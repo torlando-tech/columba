@@ -92,7 +92,7 @@ class ReactionWireCodecTest {
     // ===================== legacy 0x10 fallback =====================
 
     @Test
-    fun `legacy 0x10 dict is parsed when no canonical field present`() {
+    fun `legacy 0x10 ignores spoofable sender and uses authenticated source hash`() {
         val fieldsJson =
             """{"16":{"reaction_to":"$targetHash","emoji":"😂","sender":"deadbeef"}}"""
         val parsed =
@@ -100,8 +100,8 @@ class ReactionWireCodecTest {
         requireNotNull(parsed)
         assertEquals(targetHash, parsed.getString("reaction_to"))
         assertEquals("😂", parsed.getString("emoji"))
-        // Legacy carried the reactor explicitly — preserve it.
-        assertEquals("deadbeef", parsed.getString("sender"))
+        // Legacy sender is wire-controlled; authenticated envelope source wins.
+        assertEquals(sourceHash, parsed.getString("sender"))
         assertEquals(sourceHash, parsed.getString("source_hash"))
     }
 

@@ -102,6 +102,13 @@ interface RnsTransportAdmin {
      */
     suspend fun isHostingSharedInstance(): Boolean
 
+    /**
+     * Returns a pasteable Reticulum access configuration for this live shared-instance host.
+     * Returns null unless this process is currently the host. Implementations must not persist
+     * or include this secret-bearing value in diagnostic surfaces.
+     */
+    suspend fun getSharedInstanceAccessConfig(): String?
+
     // ==================== Diagnostics ====================
 
     /** Free-form key/value debug snapshot. Surfaced on the developer screen. */
@@ -135,6 +142,18 @@ interface RnsTransportAdmin {
      * don't need a separate "absent" branch in the signal-strength UI.
      */
     fun getRNodeRssi(): Int
+
+    /**
+     * Last reported RNode battery level in percent (0-100). Returns -1
+     * (the RNODE_BATTERY_ABSENT convention) when no RNode is connected or the
+     * firmware has not emitted a battery frame yet, so callers don't need a
+     * separate "absent" branch.
+     *
+     * Unlike [getRNodeRssi] this is `suspend` and performs a live fetch on
+     * every call (the Python backend reads the current value off the live
+     * RNode interface), not a cached bind-time snapshot.
+     */
+    suspend fun getRNodeBattery(): Int
 
     // ==================== BLE ====================
 

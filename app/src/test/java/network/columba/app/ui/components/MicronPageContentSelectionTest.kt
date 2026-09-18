@@ -1,14 +1,21 @@
 package network.columba.app.ui.components
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronLine
@@ -32,6 +39,7 @@ import org.robolectric.annotation.Config
  * gestures, so we assert the structural invariant via testTag plus a regression
  * guard that link clicks still reach `onLinkClick` while inside the container.
  */
+@OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MicronPageContentSelectionTest {
@@ -73,6 +81,48 @@ class MicronPageContentSelectionTest {
 
         composeTestRule.onAllNodesWithText(line1).assertCountEquals(1)
         composeTestRule.onAllNodesWithText(line2).assertCountEquals(1)
+    }
+
+    @Test
+    fun micronPageContent_formFieldEnterKeyInsertsNewline() {
+        val fieldName = "message"
+        val document =
+            MicronDocument(
+                lines =
+                    listOf(
+                        MicronLine(
+                            elements =
+                                listOf(
+                                    MicronElement.Field(
+                                        name = fieldName,
+                                        defaultValue = "",
+                                        width = 20,
+                                        masked = false,
+                                        style = MicronStyle(),
+                                    ),
+                                ),
+                        ),
+                    ),
+            )
+        val fieldValue = mutableStateOf("")
+
+        composeTestRule.setContent {
+            MicronPageContent(
+                document = document,
+                formFields = mapOf(fieldName to fieldValue.value),
+                renderingMode = RenderingMode.PROPORTIONAL_WRAP,
+                onLinkClick = { _, _ -> },
+                onFieldUpdate = { _, value -> fieldValue.value = value },
+            )
+        }
+
+        val field = composeTestRule.onNodeWithText(fieldName)
+        field.requestFocus()
+        field.performTextInput("first line")
+        field.performKeyInput { pressKey(Key.Enter) }
+        field.performTextInput("second line")
+
+        assertEquals("first line\nsecond line", fieldValue.value)
     }
 
     @Test

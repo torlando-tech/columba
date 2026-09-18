@@ -52,7 +52,7 @@ System.getenv("LOCAL_LXST_KT")?.let {
     includeBuild(it) {
         dependencySubstitution {
             substitute(module("com.github.torlando-tech:LXST-kt"))
-                .using(project(":lxst-core"))
+                .using(project(":lxst"))
         }
     }
 }
@@ -66,5 +66,6 @@ include(":rns-ipc")
 include(":rns-host")
 include(":rns-backend-kt")
 include(":rns-backend-py")
+include(":rns-stats")
 include(":detekt-rules")
 include(":screenshot-tests")

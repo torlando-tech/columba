@@ -139,6 +139,7 @@ class InterfaceConfigExtTest {
                 name = "Test RNode",
                 enabled = true,
                 targetDeviceName = "RNode-BT",
+                targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
                 connectionMode = "ble",
                 frequency = 868000000L,
                 bandwidth = 250000,
@@ -156,6 +157,7 @@ class InterfaceConfigExtTest {
         val json = JSONObject(config.toJsonString())
 
         assertEquals("RNode-BT", json.getString("target_device_name"))
+        assertEquals("AA:BB:CC:DD:EE:FF", json.getString("target_device_address"))
         assertEquals("ble", json.getString("connection_mode"))
         assertEquals(868000000L, json.getLong("frequency"))
         assertEquals(250000, json.getInt("bandwidth"))
@@ -189,6 +191,7 @@ class InterfaceConfigExtTest {
         assertFalse(json.has("lt_alock"))
         assertFalse(json.has("network_name"))
         assertFalse(json.has("passphrase"))
+        assertFalse(json.has("target_device_address"))
     }
 
     @Test

@@ -1,6 +1,8 @@
 package network.columba.app.rns.backend.kt
 
 import android.util.Log
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.MutableStateFlow
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.toHex
@@ -82,6 +84,107 @@ internal class NativeNomadNetHandler(
                 }
             }
         }
+
+    /**
+     * Fetch a `/media/` object (page image) from a NomadNet node.
+     *
+     * Mirrors upstream Browser.py `__load_image`: request `/media` with data
+     * `{"path": <full media path>, "key": None}` on the (reused, else fresh)
+     * node link. A file response arrives with metadata and the raw body in
+     * `receipt.response`; a server-side denial (Node.py `serve_media`
+     * returning `False`, commit 3028301) arrives as a msgpack `false` body
+     * (single byte 0xC0 after reticulum-kt re-serialises the scalar) and is
+     * surfaced as [network.columba.app.rns.api.RnsError.NomadnetRequestDenied].
+     */
+    suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+        maxBytes: Long = Long.MAX_VALUE,
+    ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                nomadnetCancelled = false
+                requestStatusFlow.value = "requesting media"
+                downloadProgressFlow.value = 0f
+
+                val destBytes = destinationHash.hexToBytes()
+                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes)
+                val (link, _) = resolveOrEstablishLink(destinationHash, nodeIdentity, destBytes, timeoutSeconds)
+
+                // Upstream serve_media requires both keys; "path" carries the
+                // full "/media/..." path (it strips the prefix itself).
+                val requestData: Map<String, Any?> = mapOf("path" to path, "key" to null)
+                val response = sendPageRequest(link, "/media", requestData, timeoutSeconds)
+
+                if (nomadnetCancelled) throw java.util.concurrent.CancellationException("Cancelled")
+                val data = response.bytes
+                    ?: error(response.error ?: "Media request timed out")
+                if (isMsgpackFalse(data)) {
+                    Log.i(TAG, "NomadNet: media request denied by node for $path")
+                    throw network.columba.app.rns.api.RnsException(
+                        network.columba.app.rns.api.RnsError.NomadnetRequestDenied(destinationHash, path),
+                    )
+                }
+                // Enforce the transfer cap at the response boundary, before the
+                // payload is written to temporary storage or handed back. The RNS
+                // Link API delivers the full body to the callback at once (no
+                // streaming), so this is the earliest point after delivery; failing
+                // here keeps an oversized payload off disk and out of the image
+                // cache, and surfaces a typed error instead of a generic one.
+                if (data.size.toLong() > maxBytes) {
+                    Log.w(TAG, "NomadNet: media response too large for $path (${data.size} > $maxBytes)")
+                    throw network.columba.app.rns.api.RnsException(
+                        network.columba.app.rns.api.RnsError.NomadnetResponseTooLarge(
+                            destinationHash, path, data.size.toLong(), maxBytes,
+                        ),
+                    )
+                }
+                if (data.isEmpty()) error("Empty media response for $path")
+
+                // Unique per-fetch destination file so concurrent media loads
+                // of same-named files never clobber each other; the image
+                // cache layer moves this into its URL-keyed cache.
+                val rawName = java.io.File(path).name.ifBlank { "media" }
+                val mediaDir =
+                    appContext?.cacheDir?.resolve("nomadnet_media")
+                        ?: java.io.File(System.getProperty("java.io.tmpdir") ?: "/tmp", "nomadnet_media")
+                mediaDir.mkdirs()
+                val outFile = mediaDir.resolve("${System.nanoTime()}.$rawName")
+                check(outFile.canonicalPath.startsWith(mediaDir.canonicalPath + java.io.File.separator)) {
+                    "Rejected path traversal attempt in NomadNet media: $rawName"
+                }
+                outFile.writeBytes(data)
+
+                requestStatusFlow.value = "complete"
+                downloadProgressFlow.value = 1f
+                Log.i(TAG, "NomadNet: media fetched $path (${data.size} bytes)")
+                network.columba.app.rns.api.model.NomadnetMediaResult(
+                    filePath = outFile.absolutePath,
+                    fileName = rawName,
+                    fileSize = data.size.toLong(),
+                    path = path,
+                )
+            }.onFailure {
+                requestStatusFlow.value = if (nomadnetCancelled) "cancelled" else "failed"
+            }
+        }
+
+    /** True when [bytes] is exactly the msgpack encoding of `false` (0xC0),
+     *  the deny signal upstream NomadNet nodes send for gated media. */
+    internal fun isMsgpackFalse(bytes: ByteArray): Boolean =
+        bytes.size == 1 && bytes[0] == 0xC0.toByte()
+
+    /** Live stats of the active NomadNet link, for the image auto-load gate
+     *  (upstream Browser.py reads `link.rtt` / `link.get_expected_rate()`). */
+    fun getLinkStats(destinationHash: String): network.columba.app.rns.api.model.NomadnetLinkStats? {
+        val link = nomadnetLinks[destinationHash] ?: return null
+        if (link.status != network.reticulum.link.LinkConstants.ACTIVE) return null
+        return network.columba.app.rns.api.model.NomadnetLinkStats(
+            rttSeconds = link.rtt?.let { it / 1000.0 },
+            expectedRateBps = link.getExpectedRate()?.let { it.toLong() },
+        )
+    }
 
     private suspend fun resolveNodeIdentity(
         destinationHash: String,
@@ -228,7 +331,7 @@ internal class NativeNomadNetHandler(
         val error: String?,
     )
 
-    private fun sendPageRequest(
+    private suspend fun sendPageRequest(
         link: network.reticulum.link.Link,
         path: String,
         requestData: Any?,
@@ -265,7 +368,29 @@ internal class NativeNomadNetHandler(
         )
 
         val requestTimeout = (timeoutSeconds * 1000 * 2 / 3).toLong().coerceAtLeast(10000)
-        responseLatch.await(requestTimeout, java.util.concurrent.TimeUnit.MILLISECONDS)
+        // Poll the latch in short increments instead of one blocking
+        // `await(timeout)` so a cancelled caller (the page-image loader queue
+        // unwinding on navigation, or cancelNomadnetPageRequest) releases the
+        // wait promptly. A non-cancellable full-timeout await left the native
+        // backend blocked for up to the whole deadline even after the request's
+        // coroutine was cancelled, so stale image traffic kept competing with
+        // the next page request over the shared NomadNet link. ensureActive()
+        // throws CancellationException on the next tick, which the caller's
+        // withContext/runCatching surfaces as a cancelled fetch.
+        val deadline = System.currentTimeMillis() + requestTimeout
+        var finished = false
+        while (!finished) {
+            // Cancellation check: if the caller's job was cancelled (page-image
+            // loader queue unwinding on navigation, or cancelNomadnetPageRequest),
+            // stop waiting and surface a CancellationException so the stale fetch
+            // is dropped instead of holding the link for the whole deadline.
+            if (currentCoroutineContext().job?.isActive == false) {
+                throw java.util.concurrent.CancellationException("Cancelled")
+            }
+            val remaining = deadline - System.currentTimeMillis()
+            finished = remaining <= 0L ||
+                responseLatch.await(minOf(100L, remaining), java.util.concurrent.TimeUnit.MILLISECONDS)
+        }
         Log.i(TAG, "NomadNet: latch returned gotResponse=${responseBytes != null}, responseBytes=${responseBytes?.size}, error=$responseError")
 
         return PageResponse(responseBytes, responseMetadata, responseError)

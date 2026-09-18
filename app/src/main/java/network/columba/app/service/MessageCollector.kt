@@ -50,7 +50,6 @@ class MessageCollector
         private val identityRepository: IdentityRepository,
         private val notificationHelper: NotificationHelper,
         private val peerIconDao: PeerIconDao,
-        private val conversationLinkManager: ConversationLinkManager,
     ) {
         companion object {
             private const val TAG = "MessageCollector"
@@ -144,13 +143,7 @@ class MessageCollector
                                 }
                             }
 
-                            val isFavorite =
-                                try {
-                                    announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Could not check if peer is favorite", e)
-                                    false
-                                }
+                            val isFavorite = isSavedPeer(sourceHash)
 
                             // Only notify if the message hasn't been read yet
                             // This prevents duplicate notifications after service restart
@@ -170,10 +163,6 @@ class MessageCollector
                             } else {
                                 Log.d(TAG, "Skipping notification for already-read message ${receivedMessage.messageHash.take(16)}")
                             }
-
-                            // Record peer activity for "last seen" status
-                            // Receiving a message proves the peer was recently online
-                            conversationLinkManager.recordPeerActivity(sourceHash)
 
                             return@collect
                         }
@@ -278,18 +267,8 @@ class MessageCollector
                             conversationRepository.saveMessage(sourceHash, peerName, dataMessage, publicKey)
                             Log.d(TAG, "Message saved to database for peer ${sourceHash.take(16)} (hasPublicKey=${publicKey != null})")
 
-                            // Record peer activity for "last seen" status
-                            // Receiving a message proves the peer was recently online
-                            conversationLinkManager.recordPeerActivity(sourceHash)
-
                             // Check if sender is a saved peer (favorite)
-                            val isFavorite =
-                                try {
-                                    announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Could not check if peer is favorite", e)
-                                    false
-                                }
+                            val isFavorite = isSavedPeer(sourceHash)
 
                             // Show notification for received message
                             try {
@@ -465,6 +444,39 @@ class MessageCollector
 
             // Format the hash as a short, readable identifier
             return PeerNameResolver.formatHashAsFallback(peerHash)
+        }
+
+        /**
+         * Determine whether [sourceHash] is a "saved peer" for notification purposes.
+         *
+         * A peer is considered saved if it is either:
+         *  - flagged as a favorite on its announce row (legacy "Save Peer" via the
+         *    announce stream star), OR
+         *  - present in the active identity's contacts table (written by the
+         *    "Save to Contacts" flows in Chats/Messaging, QR import, manual entry,
+         *    and propagation-node relay setup, which do not touch the announce flag).
+         *
+         * Both signals must be checked: the contacts table is the source of truth for
+         * "saved" as the user experiences it, and the legacy flag is kept so peers saved
+         * before the contacts table existed continue to notify. Either signal being true
+         * is sufficient.
+         */
+        private suspend fun isSavedPeer(sourceHash: String): Boolean {
+            val favoriteFlag =
+                try {
+                    announceRepository.getAnnounce(sourceHash)?.isFavorite ?: false
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not check if peer is favorite", e)
+                    false
+                }
+            if (favoriteFlag) return true
+
+            return try {
+                contactRepository.hasContact(sourceHash)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not check if peer is a saved contact", e)
+                false
+            }
         }
 
         /**

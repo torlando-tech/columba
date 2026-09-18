@@ -36,11 +36,13 @@ import network.columba.app.rns.api.model.ReticulumConfig
 object ReticulumConfigSnapshot {
     private const val TAG = "ReticulumConfigSnapshot"
     private const val FILE_NAME = "rns_config_snapshot.bin"
-    // Bumped to 2 when ReticulumConfig.shareInstanceHosting was added. Old
-    // V1 snapshots don't include the new boolean and would unmarshal with
-    // a torn parcel layout from this version onward, so we explicitly
-    // discard them; the UI re-initialises on next launch and writes V2.
-    private const val VERSION = 2
+    // Bumped to 3 when ReticulumConfig.incomingMessageSizeLimitKb was
+    // added. Older snapshots don't include the new field and would
+    // unmarshal with a torn parcel layout from this version onward, so we
+    // explicitly discard them; the UI re-initialises on next launch and
+    // writes V3. (V2 -> V1 discard for shareInstanceHosting: see git
+    // history of this constant.)
+    private const val VERSION = 3
 
     /**
      * The deserialized snapshot: a config without an identity key plus the
@@ -145,6 +147,35 @@ object ReticulumConfigSnapshot {
         } finally {
             parcel.recycle()
         }
+    }
+
+    /**
+     * Update only [ReticulumConfig.incomingMessageSizeLimitKb] on the
+     * existing snapshot, without re-initializing the backend.
+     *
+     * The user can change the incoming-message size limit at runtime; the
+     * settings path then updates DataStore and the live router, but the
+     * on-disk restart snapshot would otherwise keep the initialization-time
+     * value. A `:reticulum`-only recovery (UI process dead) reads this
+     * snapshot, so it would resurrect a stale delivery gate - DIRECT
+     * transfers incorrectly accepted or rejected until the UI re-applies
+     * the setting (columba#1106).
+     *
+     * No-op (debug-logged) when no snapshot exists yet; the next full
+     * initialization writes a fresh one with the current value.
+     */
+    fun updateIncomingMessageSizeLimitKb(context: Context, limitKb: Long?) {
+        val snapshot = read(context)
+        if (snapshot == null) {
+            Log.d(TAG, "No snapshot to update for incoming limit ($limitKb KB)")
+            return
+        }
+        write(
+            context = context,
+            config = snapshot.configWithoutKey.copy(incomingMessageSizeLimitKb = limitKb),
+            identityHashHex = snapshot.identityHashHex,
+        )
+        Log.d(TAG, "Snapshot incoming limit updated: $limitKb KB")
     }
 
     /** Delete the snapshot — used after `shutdown()` to force fresh wiring on next start. */

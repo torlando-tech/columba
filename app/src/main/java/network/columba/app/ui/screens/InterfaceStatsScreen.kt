@@ -43,9 +43,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.ui.components.RNodeBatteryIndicator
 import network.columba.app.util.InterfaceFormattingUtils
 import network.columba.app.viewmodel.InterfaceStatsViewModel
+import tech.torlando.rns.stats.ui.TrafficSpeedChart
 import java.util.Locale
 
 /**
@@ -169,6 +172,7 @@ private fun StatsContent(
             isOnline = state.isOnline,
             isConnecting = state.isConnecting,
             needsUsbPermission = state.needsUsbPermission,
+            rnodeBattery = state.rnodeBattery,
             onToggleEnabled = onToggleEnabled,
             onRequestUsbPermission = onRequestUsbPermission,
         )
@@ -205,6 +209,12 @@ private fun StatsContent(
             snr = state.snr,
         )
 
+        TrafficSpeedChart(
+            history = state.trafficHistory,
+            rxColor = MaterialTheme.colorScheme.primary,
+            txColor = MaterialTheme.colorScheme.tertiary,
+        )
+
         // Action Buttons - only show Edit for interfaces that support it
         if (supportsEdit) {
             OutlinedButton(
@@ -225,6 +235,7 @@ private fun StatusCard(
     isOnline: Boolean,
     isConnecting: Boolean,
     needsUsbPermission: Boolean,
+    rnodeBattery: Int?,
     onToggleEnabled: () -> Unit,
     onRequestUsbPermission: () -> Unit,
 ) {
@@ -285,6 +296,16 @@ private fun StatusCard(
                 Switch(
                     checked = isEnabled,
                     onCheckedChange = { onToggleEnabled() },
+                )
+            }
+
+            // RNode battery (only present for RNode interfaces with a live reading)
+            rnodeBattery?.let { percent ->
+                Spacer(modifier = Modifier.height(8.dp))
+                RNodeBatteryIndicator(
+                    percent = percent,
+                    fontSize = 16.sp,
+                    textStyle = MaterialTheme.typography.bodyMedium,
                 )
             }
 

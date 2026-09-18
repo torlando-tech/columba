@@ -1175,12 +1175,23 @@ class ColumbaRNodeInterface:
                 RNS.log(f"Error processing held announce: {e}", RNS.LOG_ERROR)
         self.held_announces = []
 
-    def sent_announce(self, from_spawned=False):
-        """Called when an announce is sent on this interface. Tracks announce frequency."""
+    def sent_announce(self, size=0, from_spawned=False):
+        """Called when an announce is sent on this interface. Tracks announce frequency.
+
+        Signature follows the RNS >= 1.5.0 base Interface contract
+        (`sent_announce(self, size=0, from_spawned=False)`); the 1.5.x
+        transport calls this with the `size=` keyword, so the old 1.4.x
+        two-arg form raises TypeError on every RNode announce.
+        """
         self.oa_freq_deque.append(time.time())
 
-    def received_announce(self):
-        """Called when an announce is received on this interface. Tracks announce frequency."""
+    def received_announce(self, size=0, from_spawned=False):
+        """Called when an announce is received on this interface. Tracks announce frequency.
+
+        Signature follows the RNS >= 1.5.0 base Interface contract
+        (`received_announce(self, size=0, from_spawned=False)`); see
+        `sent_announce` for why the 1.4.x form is no longer callable.
+        """
         self.ia_freq_deque.append(time.time())
 
     def should_ingress_limit(self):

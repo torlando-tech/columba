@@ -1,6 +1,8 @@
 package network.columba.app.ui.screens.tcpclient
 
 import android.app.Application
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -11,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TcpClientWizardTestFixtures
+import network.columba.app.viewmodel.TcpClientWizardStep
 import network.columba.app.viewmodel.TcpClientWizardViewModel
 import io.mockk.Runs
 import io.mockk.every
@@ -18,6 +21,7 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -40,6 +44,38 @@ class TcpClientWizardScreenTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    @Test
+    fun saveSuccess_isConsumedBeforeCompletionNavigation() {
+        val state =
+            MutableStateFlow(
+                TcpClientWizardTestFixtures.reviewConfigureState().copy(saveSuccess = true),
+            )
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
+        var completionCount = 0
+        var completionWasConsumed = false
+        every { mockViewModel.state } returns state
+        every { mockViewModel.canProceed() } returns true
+        every { mockViewModel.consumeSaveSuccess() } answers {
+            completionWasConsumed = true
+            state.value = state.value.copy(saveSuccess = false)
+        }
+
+        composeTestRule.setContent {
+            TcpClientWizardScreen(
+                onNavigateBack = {},
+                onComplete = {
+                    assertTrue(completionWasConsumed)
+                    completionCount++
+                },
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        assertEquals(1, completionCount)
+        verify(exactly = 1) { mockViewModel.consumeSaveSuccess() }
+    }
 
     // ========== TopAppBar Title Tests ==========
 
@@ -147,6 +183,59 @@ class TcpClientWizardScreenTest {
         // Then
         assertTrue("Back button click should succeed", result.isSuccess)
         verify { mockViewModel.goToPreviousStep() }
+    }
+
+    @Test
+    fun systemBack_onFirstStep_matchesToolbarBack() {
+        var backClicked = false
+        lateinit var backDispatcher: OnBackPressedDispatcher
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(TcpClientWizardTestFixtures.serverSelectionState())
+        every { mockViewModel.canProceed() } returns false
+        every { mockViewModel.getCommunityServers() } returns TcpClientWizardTestFixtures.testServers
+
+        composeTestRule.setContent {
+            backDispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            TcpClientWizardScreen(
+                onNavigateBack = { backClicked = true },
+                onComplete = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.runOnUiThread { backDispatcher.onBackPressed() }
+        composeTestRule.waitForIdle()
+
+        assertTrue(backClicked)
+    }
+
+    @Test
+    fun systemBack_onSecondStep_matchesToolbarBack() {
+        lateinit var backDispatcher: OnBackPressedDispatcher
+        val mockViewModel = mockk<TcpClientWizardViewModel>()
+        val state = MutableStateFlow(TcpClientWizardTestFixtures.reviewConfigureState())
+        every { mockViewModel.state } returns state
+        every { mockViewModel.canProceed() } returns true
+        every { mockViewModel.getCommunityServers() } returns TcpClientWizardTestFixtures.testServers
+        every { mockViewModel.goToPreviousStep() } answers {
+            state.value = state.value.copy(currentStep = TcpClientWizardStep.SERVER_SELECTION)
+        }
+
+        composeTestRule.setContent {
+            backDispatcher = LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            TcpClientWizardScreen(
+                onNavigateBack = {},
+                onComplete = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.runOnUiThread { backDispatcher.onBackPressed() }
+        composeTestRule.waitForIdle()
+
+        assertEquals(TcpClientWizardStep.SERVER_SELECTION, state.value.currentStep)
+        verify(exactly = 1) { mockViewModel.goToPreviousStep() }
     }
 
     // ========== BottomBar Button Tests ==========
@@ -342,32 +431,6 @@ class TcpClientWizardScreenTest {
         // Then
         assertTrue("OK button click should succeed", result.isSuccess)
         verify { mockViewModel.clearSaveError() }
-    }
-
-    // ========== Save Success Tests ==========
-
-    @Test
-    fun saveSuccess_callsOnComplete() {
-        // Given
-        var completeCalled = false
-        val mockViewModel = mockk<TcpClientWizardViewModel>()
-        every { mockViewModel.state } returns
-            MutableStateFlow(
-                TcpClientWizardTestFixtures.successState(),
-            )
-        every { mockViewModel.canProceed() } returns true
-
-        // When
-        composeTestRule.setContent {
-            TcpClientWizardScreen(
-                onNavigateBack = {},
-                onComplete = { completeCalled = true },
-                viewModel = mockViewModel,
-            )
-        }
-
-        // Then - LaunchedEffect triggers onComplete when saveSuccess is true
-        assertTrue(completeCalled)
     }
 
     // ========== Saving State Tests ==========

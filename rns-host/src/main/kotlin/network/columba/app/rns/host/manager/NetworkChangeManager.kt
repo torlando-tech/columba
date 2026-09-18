@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.util.Log
 
 /**
@@ -42,7 +41,7 @@ class NetworkChangeManager(
 
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var isMonitoring = false
-    private var lastNetworkId: String? = null
+    private var currentDefaultNetwork: Network? = null
 
     // Last-emitted transport, used to suppress duplicate `onTransportChanged` callbacks
     // when capabilities update without actually changing the transport class. Initialised
@@ -61,30 +60,29 @@ class NetworkChangeManager(
         networkCallback =
             object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    val networkId = network.toString()
-                    Log.d(TAG, "Network available: $networkId (previous: $lastNetworkId)")
+                    val previous = currentDefaultNetwork
+                    currentDefaultNetwork = network
+                    Log.d(TAG, "Default network available: $network (previous: $previous)")
 
-                    // Trigger on first connection OR network switch.
-                    // First-connection case (lastNetworkId == null) handles the scenario where
+                    // Trigger on first connection OR default-network switch.
+                    // First-connection case (previous == null) handles the scenario where
                     // the app starts without WiFi and later connects — AutoInterface needs to
                     // scan for the new network interface. The caller guards against premature
                     // invocation before Reticulum is initialized.
-                    if (lastNetworkId == null || lastNetworkId != networkId) {
+                    if (previous == null || previous != network) {
                         Log.i(TAG, "Network changed - reacquiring locks and triggering announce")
                         handleNetworkChange()
                     }
-                    lastNetworkId = networkId
                 }
 
                 override fun onLost(network: Network) {
                     Log.d(TAG, "Network lost: $network")
-                    // If no default network remains, emit NONE so transport-restricted
-                    // interfaces detach. ConnectivityManager.activeNetwork goes null only
-                    // after the OS finishes the disconnection, so check it here.
-                    if (connectivityManager.activeNetwork == null) {
+                    // Only the current default route can drive transport loss. If another
+                    // callback already promoted a replacement default, ignore this stale loss.
+                    if (currentDefaultNetwork == network) {
+                        currentDefaultNetwork = null
                         emitTransportIfChanged(CurrentTransport.NONE)
                     }
-                    // Don't clear lastNetworkId here - we want to detect when a new network connects
                 }
 
                 override fun onCapabilitiesChanged(
@@ -96,23 +94,15 @@ class NetworkChangeManager(
                     val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                     Log.v(TAG, "Network capabilities changed: internet=$hasInternet, validated=$isValidated")
 
-                    // Compute transport class and emit if it changed since last emission.
-                    // `onCapabilitiesChanged` fires after `onAvailable` and again whenever a
-                    // capability flips (validation, metered, etc.) — the last-value cache
-                    // collapses those into a single `onTransportChanged` per actual transport
-                    // transition.
-                    emitTransportIfChanged(currentTransportOf(networkCapabilities))
+                    // Only the current default route can drive transport classification.
+                    if (network == currentDefaultNetwork) {
+                        emitTransportIfChanged(currentTransportOf(networkCapabilities))
+                    }
                 }
             }
 
-        val request =
-            NetworkRequest
-                .Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .build()
-
         try {
-            connectivityManager.registerNetworkCallback(request, networkCallback!!)
+            connectivityManager.registerDefaultNetworkCallback(networkCallback!!)
             isMonitoring = true
             Log.d(TAG, "Network monitoring started")
         } catch (e: Exception) {
@@ -135,7 +125,7 @@ class NetworkChangeManager(
         }
         networkCallback = null
         isMonitoring = false
-        lastNetworkId = null
+        currentDefaultNetwork = null
         lastTransport = null
     }
 

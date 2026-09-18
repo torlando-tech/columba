@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,8 +31,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +51,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -59,13 +64,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -74,6 +81,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -84,7 +92,11 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import network.columba.app.R
+import network.columba.app.nomadnet.ImageLoadingMode
+import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.ui.components.MicronPageContent
+import network.columba.app.viewmodel.NomadNetAutoIdentifyViewModel
 import network.columba.app.viewmodel.NomadNetBrowserViewModel
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.BrowserState
 import network.columba.app.viewmodel.NomadNetBrowserViewModel.NavigationEvent
@@ -92,15 +104,20 @@ import network.columba.app.viewmodel.NomadNetBrowserViewModel.RenderingMode
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NomadNetBrowserScreen(
     destinationHash: String,
     initialPath: String = "/page/index.mu",
+    showHomeEntry: Boolean = false,
     onBackClick: () -> Unit,
+    onCloseSite: (() -> Unit)? = null,
     onOpenConversation: (String) -> Unit = {},
     viewModel: NomadNetBrowserViewModel = hiltViewModel(),
+    autoIdentifyViewModel: NomadNetAutoIdentifyViewModel = hiltViewModel(),
 ) {
     val browserState by viewModel.browserState.collectAsState()
     val formFields by viewModel.formFields.collectAsState()
@@ -108,7 +125,10 @@ fun NomadNetBrowserScreen(
     val isIdentified by viewModel.isIdentified.collectAsState()
     val identifyInProgress by viewModel.identifyInProgress.collectAsState()
     val identifyError by viewModel.identifyError.collectAsState()
+    val autoIdentifyNodes by autoIdentifyViewModel.autoIdentifyNodes.collectAsState()
     val partialStates by viewModel.partialStates.collectAsState()
+    val imageStates by viewModel.imageStates.collectAsState()
+    val imageLoadingMode by viewModel.imageLoadingMode.collectAsState()
     val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
     val canGoBack by viewModel.canGoBack.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
@@ -119,6 +139,7 @@ fun NomadNetBrowserScreen(
             ?.let { "${it.nodeHash}:${it.path}" }
     var zoomScale by remember(currentPage) { mutableFloatStateOf(1f) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -131,8 +152,18 @@ fun NomadNetBrowserScreen(
 
     // Load initial page
     LaunchedEffect(destinationHash, initialPath) {
-        if (browserState is BrowserState.Initial) {
+        if (browserState is BrowserState.Initial && destinationHash.isNotEmpty()) {
             viewModel.loadPage(destinationHash, initialPath)
+        }
+    }
+
+    // Focus the address bar when editing starts (e.g. from the home entry
+    // prompt). The TextField only composes while editing, so give it a frame
+    // before requesting focus; swallow the case where editing already ended.
+    LaunchedEffect(isEditingUrl) {
+        if (isEditingUrl) {
+            delay(100)
+            runCatching { urlFocusRequester.requestFocus() }
         }
     }
 
@@ -181,6 +212,16 @@ fun NomadNetBrowserScreen(
     }
 
     if (showIdentifyConfirm) {
+        // Derive the "always identify" toggle from the persisted set for the
+        // current node; the Switch reflects (and writes) that state via
+        // setAutoIdentifyForNode, so it stays in sync with recomposition.
+        val loadedNodeHash =
+            (browserState as? BrowserState.PageLoaded)?.nodeHash.orEmpty()
+        val autoIdentifyOn = loadedNodeHash.isNotEmpty() && loadedNodeHash in autoIdentifyNodes
+        // Resolve the toggle snackbar labels here (composable context) so the
+        // non-suspend switch handler can hand them to the suspend snackbar.
+        val autoIdentifyEnabledMsg = stringResource(R.string.nomadnet_auto_identify_enabled_snackbar)
+        val autoIdentifyDisabledMsg = stringResource(R.string.nomadnet_auto_identify_disabled_snackbar)
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showIdentifyConfirm = false },
             icon = {
@@ -190,24 +231,81 @@ fun NomadNetBrowserScreen(
                     tint = MaterialTheme.colorScheme.primary,
                 )
             },
-            title = { Text("Identify to Node") },
-            text = {
+            title = {
                 Text(
-                    "This will reveal your identity to the node operator. " +
-                        "The page will refresh after identifying.",
+                    if (isIdentified) {
+                        stringResource(R.string.nomadnet_identify_dialog_title_identified)
+                    } else {
+                        stringResource(R.string.nomadnet_identify_dialog_title)
+                    },
                 )
             },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        if (isIdentified) {
+                            stringResource(R.string.nomadnet_identify_dialog_body_identified)
+                        } else {
+                            stringResource(R.string.nomadnet_identify_dialog_body)
+                        },
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.nomadnet_identify_always_toggle),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                stringResource(R.string.nomadnet_identify_always_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = autoIdentifyOn,
+                            onCheckedChange = { newValue ->
+                                if (loadedNodeHash.isNotEmpty()) {
+                                    autoIdentifyViewModel.setAutoIdentifyForNode(loadedNodeHash, newValue)
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            if (newValue) autoIdentifyEnabledMsg else autoIdentifyDisabledMsg,
+                                        )
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            },
             confirmButton = {
-                TextButton(onClick = {
-                    showIdentifyConfirm = false
-                    viewModel.identifyToNode()
-                }) {
-                    Text("Identify")
+                TextButton(
+                    onClick = {
+                        showIdentifyConfirm = false
+                        if (!isIdentified) {
+                            // Only trigger the identification request. The
+                            // "always identify" opt-in is owned solely by the
+                            // toggle above; re-persisting it from here with the
+                            // (possibly stale) snapshot raced a just-made
+                            // toggle-off and could restore the node.
+                            viewModel.identifyToNode()
+                        }
+                    },
+                ) {
+                    Text(
+                        if (isIdentified) {
+                            stringResource(R.string.nomadnet_identify_done_button)
+                        } else {
+                            stringResource(R.string.nomadnet_identify_button)
+                        },
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showIdentifyConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.nomadnet_identify_cancel_button))
                 }
             },
         )
@@ -222,7 +320,7 @@ fun NomadNetBrowserScreen(
                     // so Compose tracks the dependency and recomposes the title
                     val currentUrl =
                         (browserState as? BrowserState.PageLoaded)?.let {
-                            "${it.nodeHash}:${it.path}"
+                            "${it.nodeHash}:${buildNomadNetPersistPath(it.path, it.fieldTokens)}"
                         }
                     if (currentUrl != null || isEditingUrl) {
                         // Address bar — rounded container with contrasting background
@@ -250,7 +348,12 @@ fun NomadNetBrowserScreen(
                                 Modifier
                                     .fillMaxWidth()
                                     .focusRequester(urlFocusRequester)
-                                    .onFocusChanged { focusState ->
+                                    // onFocusEvent (not onFocusChanged): fires only on real
+                                    // focus transitions. onFocusChanged also re-fires the
+                                    // initial unfocused state when this field composes,
+                                    // which used to immediately cancel edit mode the moment
+                                    // the "Enter address" prompt turned it on.
+                                    .onFocusEvent { focusState ->
                                         if (focusState.isFocused && !isEditingUrl) {
                                             isEditingUrl = true
                                             val text = currentUrl ?: ""
@@ -300,13 +403,20 @@ fun NomadNetBrowserScreen(
                 },
                 actions = {
                     if (browserState is BrowserState.PageLoaded) {
+                        // Tappable even when already identified: re-opening the
+                        // dialog then shows manage mode (toggle state + Done).
                         IconButton(
                             onClick = { showIdentifyConfirm = true },
-                            enabled = !isIdentified && !identifyInProgress,
+                            enabled = !identifyInProgress,
                         ) {
                             Icon(
                                 Icons.Default.Fingerprint,
-                                contentDescription = if (isIdentified) "Identified" else "Identify to node",
+                                contentDescription =
+                                    if (isIdentified) {
+                                        stringResource(R.string.nomadnet_identify_manage_cd)
+                                    } else {
+                                        stringResource(R.string.nomadnet_identify_cd)
+                                    },
                                 tint =
                                     if (isIdentified) {
                                         MaterialTheme.colorScheme.primary
@@ -330,7 +440,7 @@ fun NomadNetBrowserScreen(
                             // Copy URL — derive from compose state
                             val shareableUrl =
                                 (browserState as? BrowserState.PageLoaded)?.let {
-                                    "nomadnetwork://${it.nodeHash}:${it.path}"
+                                    "nomadnetwork://${it.nodeHash}:${buildNomadNetPersistPath(it.path, it.fieldTokens)}"
                                 }
                             if (shareableUrl != null) {
                                 DropdownMenuItem(
@@ -380,10 +490,79 @@ fun NomadNetBrowserScreen(
                                 )
                             }
                             HorizontalDivider()
+
+                            // Image loading (upstream `image_loading`: "How, or
+                            // if at all, to load page images").
+                            ImageLoadingMode.entries.forEach { mode ->
+                                DropdownMenuItem(
+                                    text = {
+                                        val label =
+                                            when (mode) {
+                                                ImageLoadingMode.NEVER -> "Images: never"
+                                                ImageLoadingMode.MANUAL -> "Images: manual"
+                                                ImageLoadingMode.AUTO -> "Images: auto"
+                                                ImageLoadingMode.ALWAYS -> "Images: always"
+                                            }
+                                        Text(label)
+                                    },
+                                    leadingIcon = {
+                                        RadioButton(
+                                            selected = imageLoadingMode == mode,
+                                            onClick = null,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setImageLoadingMode(mode)
+                                        showMenu = false
+                                    },
+                                )
+                            }
+                            HorizontalDivider()
+
+                            // Upstream Ctrl+L / Ctrl+X: explicit bulk load.
+                            // Visible only in manual mode (auto/always load on
+                            // their own; never blocks even explicit loads).
+                            if (imageLoadingMode == ImageLoadingMode.MANUAL) {
+                                val hasPageImages = imageStates.isNotEmpty()
+                                if (hasPageImages) {
+                                    DropdownMenuItem(
+                                        text = { Text("Load all images") },
+                                        leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
+                                        onClick = {
+                                            viewModel.loadPageImages(forceReload = false)
+                                            showMenu = false
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Reload all images") },
+                                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                        onClick = {
+                                            viewModel.loadPageImages(forceReload = true)
+                                            showMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Clear image cache") },
+                                leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
+                                onClick = {
+                                    viewModel.clearImageCache()
+                                    showMenu = false
+                                },
+                            )
+                            HorizontalDivider()
                             BrowserCloseSiteMenuItem(
                                 onCloseSite = {
                                     showMenu = false
-                                    onBackClick()
+                                    // Close Site is more than Back: it clears the
+                                    // session and forgets the persisted last-node
+                                    // binding. The caller decides navigation: the
+                                    // standalone browser pops, the tab home stays
+                                    // put and swaps to the address prompt.
+                                    viewModel.closeSite()
+                                    if (onCloseSite != null) onCloseSite() else onBackClick()
                                 },
                             )
                         }
@@ -401,6 +580,104 @@ fun NomadNetBrowserScreen(
     ) { paddingValues ->
         when (val state = browserState) {
             is BrowserState.Initial -> {
+                if (showHomeEntry) {
+                    // Bottom-nav entry with no node yet: a dedicated address
+                    // field owned by this page. Deliberately NOT the top-bar
+                    // isEditingUrl flow — toggling that state from here raced
+                    // with the field's focus handler and made the editor flash
+                    // for a frame. This field is always present and submits
+                    // directly, so there is no shared edit-state to clobber.
+                    // No auto-focus: opening the tab must not pop the keyboard;
+                    // the user taps the field when they actually want to type.
+                    var homeUrlValue by remember { mutableStateOf(TextFieldValue("")) }
+                    val submitHomeUrl: () -> Unit = {
+                        if (homeUrlValue.text.isNotBlank()) {
+                            viewModel.navigateToUrl(homeUrlValue.text)
+                        }
+                    }
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                                // Edge-to-edge makes adjustResize a no-op, so pad
+                                // for the IME explicitly; when the keyboard shows,
+                                // the box shrinks and the block rides up above it.
+                                .imePadding(),
+                        // Bias the block toward the upper third so the Go button
+                        // stays comfortably clear of the keyboard.
+                        contentAlignment = BiasAlignment(0f, -0.4f),
+                    ) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = null,
+                                modifier = Modifier.size(56.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "NomadNet Browser",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Enter a node address to start browsing.\nFormat: <hash>:/page/index.mu",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            BasicTextField(
+                                value = homeUrlValue,
+                                onValueChange = { homeUrlValue = it },
+                                singleLine = true,
+                                textStyle =
+                                    TextStyle(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                keyboardActions = KeyboardActions(onGo = { submitHomeUrl() }),
+                                modifier = Modifier.fillMaxWidth(),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    MaterialTheme.colorScheme.surface,
+                                                    RoundedCornerShape(12.dp),
+                                                ).padding(horizontal = 16.dp, vertical = 12.dp),
+                                        contentAlignment = Alignment.CenterStart,
+                                    ) {
+                                        if (homeUrlValue.text.isEmpty()) {
+                                            Text(
+                                                text = "<hash>:/page/index.mu",
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                },
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(onClick = submitHomeUrl) {
+                                Text("Go")
+                            }
+                        }
+                    }
+                }
                 // Nothing to show yet
             }
 
@@ -432,9 +709,9 @@ fun NomadNetBrowserScreen(
 
             is BrowserState.PageLoaded -> {
                 // Update URL field when page changes (only if not editing)
-                LaunchedEffect(state.nodeHash, state.path) {
+                LaunchedEffect(state.nodeHash, state.path, state.fieldTokens) {
                     if (!isEditingUrl) {
-                        val url = "${state.nodeHash}:${state.path}"
+                        val url = "${state.nodeHash}:${buildNomadNetPersistPath(state.path, state.fieldTokens)}"
                         urlFieldValue = TextFieldValue(url)
                     }
                 }
@@ -445,10 +722,13 @@ fun NomadNetBrowserScreen(
                     // imePadding required because MainActivity uses enableEdgeToEdge(),
                     // which makes the manifest's adjustResize a no-op — without it the
                     // soft keyboard slides up on top of focused micron form fields.
+                    // 88.dp bottom clears the always-visible bottom nav bar
+                    // (matches ContactsScreen's content padding convention).
                     modifier =
                         Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
+                            .padding(bottom = 88.dp)
                             .imePadding(),
                 ) {
                     if (renderingMode == RenderingMode.MONOSPACE_SCROLL) {
@@ -526,6 +806,10 @@ fun NomadNetBrowserScreen(
                                     },
                                     minLineWidth = viewportLineWidth,
                                     partialStates = partialStates,
+                                    imageStates = imageStates,
+                                    onImageTapToLoad = { key -> viewModel.retryPageImage(key) },
+                                    onImageReload = { key -> viewModel.retryPageImage(key) },
+                                    onCopyImageLink = { url -> clipboardManager.setText(AnnotatedString(url)) },
                                 )
                             }
                         }
@@ -557,6 +841,10 @@ fun NomadNetBrowserScreen(
                                         viewModel.updateField(name, value)
                                     },
                                     partialStates = partialStates,
+                                    imageStates = imageStates,
+                                    onImageTapToLoad = { key -> viewModel.retryPageImage(key) },
+                                    onImageReload = { key -> viewModel.retryPageImage(key) },
+                                    onCopyImageLink = { url -> clipboardManager.setText(AnnotatedString(url)) },
                                     lineIndexOffset = index,
                                 )
                             }

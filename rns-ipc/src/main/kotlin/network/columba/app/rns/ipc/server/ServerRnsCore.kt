@@ -232,6 +232,10 @@ internal class ServerRnsCore(
         dispatch(cb, scope) { impl.blockDestination(destinationHashHex).bundleOrThrow() }
     override fun unblockDestination(destinationHashHex: String, cb: IRnsResultCallback) =
         dispatch(cb, scope) { impl.unblockDestination(destinationHashHex).bundleOrThrow() }
+    override fun blockIdentity(identityHashHex: String, cb: IRnsResultCallback) =
+        dispatch(cb, scope) { impl.blockIdentity(identityHashHex).bundleOrThrow() }
+    override fun unblockIdentity(identityHashHex: String, cb: IRnsResultCallback) =
+        dispatch(cb, scope) { impl.unblockIdentity(identityHashHex).bundleOrThrow() }
     override fun blackholeIdentity(identityHashHex: String, cb: IRnsResultCallback) =
         dispatch(cb, scope) { impl.blackholeIdentity(identityHashHex).bundleOrThrow() }
     override fun unblackholeIdentity(identityHashHex: String, cb: IRnsResultCallback) =
@@ -248,6 +252,8 @@ private fun Map<String, Any>.toIdentityKeyBundle(): Bundle {
     // "No identity_hash in result" because (a) the bundle didn't carry
     // identity_hash at all, (b) it didn't carry destination_hash or
     // file_path either.
+    (this[BundleKeys.SUCCESS] as? Boolean)?.let { bundle.putBoolean(BundleKeys.SUCCESS, it) }
+    (this[BundleKeys.ERROR] as? String)?.let { bundle.putString(BundleKeys.ERROR, it) }
     (this[BundleKeys.KEY_DATA] as? ByteArray)?.let { bundle.putByteArray(BundleKeys.KEY_DATA, it) }
     (this[BundleKeys.DISPLAY_NAME] as? String)?.let { bundle.putString(BundleKeys.DISPLAY_NAME, it) }
     (this[BundleKeys.IDENTITY_HASH] as? String)?.let { bundle.putString(BundleKeys.IDENTITY_HASH, it) }

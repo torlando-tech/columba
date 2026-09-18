@@ -17,12 +17,13 @@ ktlint = "12.1.1"
 detekt = "1.23.7"
 serialization = "1.11.0"
 coil = "2.7.0"
+markdownRenderer = "0.41.0"
 desugarJdkLibs = "2.1.5"
 
 # JitPack-published libraries (formerly git submodules)
-reticulumKt = "v0.0.21"
-lxmfKt = "v0.0.13"
-lxstKt = "v0.0.4"
+reticulumKt = "v0.0.22"
+lxmfKt = "v0.0.14"
+lxstKt = "v0.0.8"
 
 [libraries]
 # JitPack-published Reticulum/LXMF/LXST stack (migrated from git submodules)
@@ -43,6 +44,8 @@ compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-activity = { module = "androidx.activity:activity-compose", version = "1.9.3" }
 compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
+markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
+markdown-renderer-code = { module = "com.mikepenz:multiplatform-markdown-renderer-code", version.ref = "markdownRenderer" }
 navigation = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
 
 # Hilt
@@ -65,6 +68,7 @@ lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", v
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
+lifecycle-runtime-testing = { module = "androidx.lifecycle:lifecycle-runtime-testing", version.ref = "lifecycle" }
 
 # Core
 core-ktx = { module = "androidx.core:core-ktx", version = "1.15.0" }

@@ -178,7 +178,7 @@ fun InterfaceConfigDialog(
                         // showing the selector would be misleading.
                         if (configState.networkRestrictionApplies) {
                             NetworkRestrictionSelector(
-                                selectedRestriction = configState.networkRestriction,
+                                selectedRestriction = configState.effectiveNetworkRestriction,
                                 onRestrictionChange = {
                                     onConfigUpdate(configState.copy(networkRestriction = it))
                                 },

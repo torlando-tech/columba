@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.test.TestFactories
+import network.columba.app.data.model.InterfaceType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -21,7 +22,7 @@ import org.robolectric.annotation.Config
 
 /**
  * UI tests for PeerCard composable.
- * Tests the peer card component used on announces and saved peers screens.
+ * Tests the peer card component used on the Announce Stream screen.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -85,7 +86,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = {},
-                showFavoriteToggle = true,
             )
         }
 
@@ -104,30 +104,10 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = {},
-                showFavoriteToggle = true,
             )
         }
 
         // Then
-        composeTestRule.onNodeWithContentDescription("Remove from contacts").assertIsDisplayed()
-    }
-
-    @Test
-    fun peerCard_starButton_showsRemoveFromContacts_whenShowFavoriteToggleFalse() {
-        // Given - on SavedPeersScreen, showFavoriteToggle is false and all items show as starred
-        val announce = TestFactories.createAnnounce(isFavorite = false)
-
-        // When
-        composeTestRule.setContent {
-            PeerCard(
-                announce = announce,
-                onClick = {},
-                onFavoriteClick = {},
-                showFavoriteToggle = false,
-            )
-        }
-
-        // Then - should show as starred even when isFavorite is false
         composeTestRule.onNodeWithContentDescription("Remove from contacts").assertIsDisplayed()
     }
 
@@ -142,7 +122,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = { favoriteClicked = true },
-                showFavoriteToggle = true,
             )
         }
 
@@ -164,7 +143,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = { favoriteClicked = true },
-                showFavoriteToggle = true,
             )
         }
 
@@ -209,7 +187,6 @@ class PeerCardTest {
                 announce = announce,
                 onClick = {},
                 onFavoriteClick = { clickCount++ },
-                showFavoriteToggle = true,
             )
         }
 
@@ -246,7 +223,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("WiFi").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path Local").assertIsDisplayed()
     }
 
     @Test
@@ -267,7 +244,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("WiFi").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path Local").assertIsDisplayed()
     }
 
     @Test
@@ -285,7 +262,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Internet").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path TCP").assertIsDisplayed()
     }
 
     @Test
@@ -303,7 +280,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Bluetooth").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path BLE").assertIsDisplayed()
     }
 
     @Test
@@ -321,7 +298,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path RNode").assertIsDisplayed()
     }
 
     @Test
@@ -342,7 +319,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("LoRa/RNode").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path RNode").assertIsDisplayed()
     }
 
     @Test
@@ -366,7 +343,7 @@ class PeerCardTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Internet").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Current path TCP").assertIsDisplayed()
     }
 
     @Test
@@ -460,6 +437,30 @@ class PeerCardTest {
     }
 
     // ========== Signal Strength Indicator Tests ==========
+
+    @Test
+    fun peerCard_displaysAdditionalInterfaceCount() {
+        val announce =
+            TestFactories.createAnnounce(
+                receivingInterface = "RNodeInterface[Radio]",
+                recentInterfaceTypes =
+                    setOf(
+                        InterfaceType.RNODE,
+                        InterfaceType.TCP_CLIENT,
+                        InterfaceType.BLE,
+                    ),
+            )
+
+        composeTestRule.setContent {
+            PeerCard(announce = announce)
+        }
+
+        composeTestRule.onNodeWithText("+2", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription(
+                "Current path RNode; also seen via 2 other interface types in the past 30 days",
+            ).assertIsDisplayed()
+    }
 
     @Test
     fun peerCard_displaysWeakSignal_forHighHops() {

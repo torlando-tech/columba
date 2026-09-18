@@ -125,6 +125,7 @@ internal class NativeTelemetryHandler(
             approxRadius = json.optInt("approxRadius", 0),
             sourceHash = json.optString("source_hash", "").ifBlank { null }?.lowercase(),
             appearance = appearanceFromFields,
+            isDirect = !json.optBoolean("relayed", false),
         )
     }.getOrElse {
         Log.w(TAG, "JSON -> LocationTelemetry conversion failed: ${it.message}")
@@ -296,6 +297,7 @@ internal class NativeTelemetryHandler(
             telemetry.put("ts", entryTimestampSeconds * 1000L)
         }
         telemetry.put("source_hash", sourceHash.lowercase())
+        telemetry.put("relayed", true)
 
         val appearance = sanitizeAppearanceField(entry.getOrNull(3))
         if (appearance != null) {

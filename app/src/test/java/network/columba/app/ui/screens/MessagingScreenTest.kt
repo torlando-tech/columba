@@ -1,29 +1,43 @@
 package network.columba.app.ui.screens
 
 import android.app.Application
+import android.Manifest
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.paging.PagingData
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.testing.TestLifecycleOwner
+import network.columba.app.audio.VoiceMessageRecordingState
+import network.columba.app.audio.VoiceMessageFormat
 import network.columba.app.service.SyncProgress
 import network.columba.app.test.MessagingTestFixtures
 import network.columba.app.test.RegisterComponentActivityRule
+import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
 import network.columba.app.ui.model.ReplyPreviewUi
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
+import network.columba.app.viewmodel.ComposerSendResult
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -40,6 +54,8 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -50,6 +66,30 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 class MessagingScreenTest {
+    @Test
+    fun `text send keeps keyboard panel while IME remains visible`() {
+        assertEquals(
+            InputPanelMode.KEYBOARD,
+            inputPanelModeAfterSend(
+                currentMode = InputPanelMode.KEYBOARD,
+                wasVoiceMessage = false,
+                imeIsVisible = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `text send clears stale panel mode when IME is hidden`() {
+        assertEquals(
+            InputPanelMode.NONE,
+            inputPanelModeAfterSend(
+                currentMode = InputPanelMode.PANEL,
+                wasVoiceMessage = false,
+                imeIsVisible = false,
+            ),
+        )
+    }
+
     private val registerActivityRule = RegisterComponentActivityRule()
     private val composeRule = createComposeRule()
 
@@ -78,6 +118,9 @@ class MessagingScreenTest {
         // Setup default mock returns
         every { mockViewModel.messages } returns flowOf(PagingData.empty())
         every { mockViewModel.announceInfo } returns MutableStateFlow(null)
+        every { mockViewModel.peerActivity } returns MutableStateFlow(null)
+        every { mockViewModel.currentConversationHash } returns
+            MutableStateFlow(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH)
         every { mockViewModel.selectedImageData } returns MutableStateFlow(null)
         every { mockViewModel.selectedImageFormat } returns MutableStateFlow(null)
         every { mockViewModel.isProcessingImage } returns MutableStateFlow(false)
@@ -92,6 +135,7 @@ class MessagingScreenTest {
         every { mockViewModel.selectedFileAttachments } returns MutableStateFlow(emptyList())
         every { mockViewModel.totalAttachmentSize } returns MutableStateFlow(0)
         every { mockViewModel.fileAttachmentError } returns MutableSharedFlow()
+        every { mockViewModel.composerSendResult } returns MutableSharedFlow()
         every { mockViewModel.isProcessingFile } returns MutableStateFlow(false)
         // Location sharing mocks
         every { mockViewModel.contacts } returns MutableStateFlow(emptyList())
@@ -123,6 +167,10 @@ class MessagingScreenTest {
         every { mockViewModel.messageFontScale } returns MutableStateFlow(1.0f)
         // Contact location mock (locate on map feature)
         every { mockViewModel.hasContactLocation } returns MutableStateFlow(false)
+        // Voice-message recording mocks
+        every { mockViewModel.voiceRecordingState } returns MutableStateFlow(VoiceMessageRecordingState())
+        every { mockViewModel.isVoiceMessageSupported } returns true
+        every { mockViewModel.isVoiceRecordingBlockedByCall } returns MutableStateFlow(false)
     }
 
     // ========== Empty State Tests ==========
@@ -186,6 +234,63 @@ class MessagingScreenTest {
 
         // Then
         assertTrue(backClicked)
+    }
+
+    @Test
+    fun topAppBar_backButton_cancelsActiveVoiceRecordingBeforeNavigation() {
+        shadowOf(RuntimeEnvironment.getApplication() as Application).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        var backClicked = false
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = { backClicked = true },
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Attach").performClick()
+        composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
+        composeTestRule.onNodeWithText("Record").performClick()
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        verify { mockViewModel.requestCancelVoiceRecording() }
+        assertTrue(backClicked)
+    }
+
+    @Test
+    fun voiceMessageButton_opensQualityPicker_andStartsSelectedProfile() {
+        shadowOf(RuntimeEnvironment.getApplication() as Application).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Attach").performClick()
+        composeTestRule.onNodeWithContentDescription("Record a voice message").performClick()
+
+        composeTestRule.onNodeWithText("Select Voice Message Quality").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Codec2 1200").assertExists()
+        composeTestRule.onNodeWithText("Codec2 2400").assertExists()
+        composeTestRule.onNodeWithText("Codec2 3200").assertExists()
+        composeTestRule.onNodeWithText("Medium Quality").assertExists()
+        composeTestRule.onNodeWithText("High Quality").assertExists()
+        composeTestRule.onNodeWithText("Maximum Quality").assertExists()
+        composeTestRule.onNodeWithText("Original Quality").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Low Latency").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Ultra Low Latency").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Sideband", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("MeshChatX", substring = true).assertDoesNotExist()
+        verify(exactly = 0) { mockViewModel.requestStartVoiceRecording(any(), any()) }
+
+        composeTestRule.onNodeWithText("High Quality").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Record").performClick()
+
+        verify { mockViewModel.requestStartVoiceRecording(VoiceMessageFormat.OPUS_HIGH, any()) }
     }
 
     @Test
@@ -348,14 +453,15 @@ class MessagingScreenTest {
 
     @Test
     fun onlineStatus_displaysLastSeen_whenRecentlySeen() {
-        // Given - announce with recent lastSeenTimestamp (< 5 minutes ago).
-        // "Online" is now reserved for an active link only; announce-only
-        // presence renders as "Last seen X ago" so the user judges from
-        // the relative time, not a misleading "Online" label produced by
-        // RNS announce_table cache replays.
-        every { mockViewModel.announceInfo } returns
+        // Given - recent verified inbound peer activity.
+        // "Online" is reserved for an active link only.
+        every { mockViewModel.peerActivity } returns
             MutableStateFlow(
-                MessagingTestFixtures.createOnlineAnnounce(),
+                network.columba.app.data.db.entity.PeerActivityEntity(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    lastReceivedAt = System.currentTimeMillis() - 60_000L,
+                    activityType = network.columba.app.data.db.entity.PeerActivityType.MESSAGE,
+                ),
             )
 
         // When
@@ -375,10 +481,14 @@ class MessagingScreenTest {
 
     @Test
     fun onlineStatus_displaysOffline_whenNotRecentlySeen() {
-        // Given - announce with old lastSeenTimestamp (> 5 minutes ago)
-        every { mockViewModel.announceInfo } returns
+        // Given - old verified inbound activity.
+        every { mockViewModel.peerActivity } returns
             MutableStateFlow(
-                MessagingTestFixtures.createOfflineAnnounce(),
+                network.columba.app.data.db.entity.PeerActivityEntity(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    lastReceivedAt = System.currentTimeMillis() - 60 * 60 * 1_000L,
+                    activityType = network.columba.app.data.db.entity.PeerActivityType.ANNOUNCE,
+                ),
             )
 
         // When
@@ -392,6 +502,50 @@ class MessagingScreenTest {
         }
 
         // Then - should show relative time instead of "Online"
+        composeTestRule.onNodeWithText("Online").assertDoesNotExist()
+    }
+
+    @Test
+    fun onlineStatus_ignoresActivityFromPreviousConversation() {
+        every { mockViewModel.peerActivity } returns
+            MutableStateFlow(
+                network.columba.app.data.db.entity.PeerActivityEntity(
+                    destinationHash = "different-peer",
+                    lastReceivedAt = System.currentTimeMillis(),
+                    activityType = network.columba.app.data.db.entity.PeerActivityType.MESSAGE,
+                ),
+            )
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
+        composeTestRule.onNodeWithText("Last seen", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Online").assertDoesNotExist()
+    }
+
+    @Test
+    fun onlineStatus_ignoresActiveLinkFromPreviousConversation() {
+        every { mockViewModel.currentConversationHash } returns MutableStateFlow("different-peer")
+        every { mockViewModel.conversationLinkState } returns
+            MutableStateFlow(
+                network.columba.app.service.ConversationLinkManager.LinkState(isActive = true),
+            )
+
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+
         composeTestRule.onNodeWithText("Online").assertDoesNotExist()
     }
 
@@ -419,6 +573,23 @@ class MessagingScreenTest {
     }
 
     // ========== MessageInputBar Tests ==========
+
+    @Test
+    fun inputBar_sending_keepsAccessibleNameAndState() {
+        composeTestRule.setContent {
+            MessageInputBar(
+                messageText = "Sending",
+                onMessageTextChange = {},
+                onSendClick = {},
+                isSending = true,
+            )
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Send message")
+            .assertIsNotEnabled()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Sending message"))
+    }
 
     @Test
     fun inputBar_emptyText_sendButtonDisabled() {
@@ -498,6 +669,130 @@ class MessagingScreenTest {
         // Then
         assertTrue("Send button click should succeed", result.isSuccess)
         verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, "Test message") }
+    }
+
+    @Test
+    fun inputBar_sendClick_keepsComposerAboveVisibleKeyboard() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalMessagingImeBottomInsetOverride provides 900) {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Type a message...").performTextInput("Keep composer visible")
+        val spacerBeforeSend = composeTestRule.onNodeWithTag("messageKeyboardSpacer").fetchSemanticsNode()
+        assertTrue(spacerBeforeSend.layoutInfo.coordinates.isAttached)
+
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        verify {
+            mockViewModel.sendMessage(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Keep composer visible",
+            )
+        }
+        val spacerAfterSend = composeTestRule.onNodeWithTag("messageKeyboardSpacer").fetchSemanticsNode()
+        assertTrue(spacerAfterSend.layoutInfo.coordinates.isAttached)
+    }
+
+    @Test
+    fun screen_reportsConversationVisibleAgainWhenResumed() {
+        val lifecycleOwner = TestLifecycleOwner(initialState = Lifecycle.State.RESUMED)
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    viewModel = mockViewModel,
+                )
+            }
+        }
+
+        verify(exactly = 1) {
+            mockViewModel.onConversationVisible(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH)
+        }
+
+        composeTestRule.runOnIdle {
+            lifecycleOwner.currentState = Lifecycle.State.STARTED
+        }
+        composeTestRule.runOnIdle {
+            lifecycleOwner.currentState = Lifecycle.State.RESUMED
+        }
+
+        verify(exactly = 2) {
+            mockViewModel.onConversationVisible(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH)
+        }
+        assertEquals(Lifecycle.State.RESUMED, lifecycleOwner.currentState)
+    }
+
+    @Test
+    fun inputBar_clearsSubmittedTextOnlyAfterDurableSendResult() {
+        val results = MutableSharedFlow<ComposerSendResult>(extraBufferCapacity = 2)
+        every { mockViewModel.composerSendResult } returns results
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        composeTestRule.onNodeWithText("Type a message...").performTextInput("Test message")
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Test message",
+                clearComposer = false,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message").assertExists()
+
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                "Test message",
+                clearComposer = true,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message").assertDoesNotExist()
+    }
+
+    @Test
+    fun inputBar_preservesOriginalWhitespaceThroughDurableSendResult() {
+        val results = MutableSharedFlow<ComposerSendResult>(extraBufferCapacity = 1)
+        every { mockViewModel.composerSendResult } returns results
+        composeTestRule.setContent {
+            MessagingScreen(
+                destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                onBackClick = {},
+                viewModel = mockViewModel,
+            )
+        }
+        val submitted = "  Test message  "
+        composeTestRule.onNodeWithText("Type a message...").performTextInput(submitted)
+        composeTestRule.onNodeWithContentDescription("Send message").performClick()
+
+        verify { mockViewModel.sendMessage(MessagingTestFixtures.Constants.TEST_DESTINATION_HASH, submitted) }
+        results.tryEmit(
+            ComposerSendResult(
+                MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                submitted,
+                clearComposer = true,
+            ),
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Test message", substring = true).assertDoesNotExist()
     }
 
     @Test
@@ -1893,8 +2188,8 @@ class MessagingScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        // Then - propagated shows single checkmark (same as sent)
-        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+        // Then - propagated shows the accepted-by-relay indicator
+        composeTestRule.onNodeWithContentDescription("Stored on relay network").assertIsDisplayed()
     }
 
     @Test
@@ -1914,7 +2209,71 @@ class MessagingScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        // Then - retrying_propagated shows single checkmark
-        composeTestRule.onNodeWithText("✓").assertIsDisplayed()
+        // Then - retrying_propagated shows the relay-upload indicator
+        composeTestRule.onNodeWithContentDescription("Sending to relay network").assertIsDisplayed()
+    }
+    // ========== Notification Entry Integration Tests ==========
+
+    /**
+     * Verify that MessagingScreen composes correctly with fromNotification=true
+     * and instantiates the [NotificationScrollCoordinator] for the one-shot
+     * scroll-to-bottom effect.
+     *
+     * The coordinator behaviour (wait-for-readiness, one-shot only,
+     * non-notification no-scroll) is covered by [NotificationScrollCoordinatorTest].
+     * These integration tests verify the screen correctly wires the parameter
+     * through to the coordinator.
+     */
+    @Test
+    fun fromNotification_true_screenComposesWithCoordinator() {
+        // When - composing with fromNotification = true
+        var composeError: Throwable? = null
+        runCatching {
+            composeTestRule.setContent {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    fromNotification = true,
+                    viewModel = mockViewModel,
+                )
+            }
+            composeTestRule.waitForIdle()
+        }.onFailure { composeError = it }
+
+        // Then - no composition error; the NotificationScrollCoordinator is
+        // created inside the composable and will drive the one-shot scroll
+        // once Paging content is ready.
+        assertTrue(
+            "Screen should compose without error when fromNotification is true, "
+                + "wiring the coordinator for the one-shot notification scroll",
+            composeError == null,
+        )
+    }
+
+    @Test
+    fun fromNotification_false_screenComposesWithCoordinator() {
+        // When - composing with fromNotification = false (default)
+        var composeError: Throwable? = null
+        runCatching {
+            composeTestRule.setContent {
+                MessagingScreen(
+                    destinationHash = MessagingTestFixtures.Constants.TEST_DESTINATION_HASH,
+                    peerName = MessagingTestFixtures.Constants.TEST_PEER_NAME,
+                    onBackClick = {},
+                    fromNotification = false,
+                    viewModel = mockViewModel,
+                )
+            }
+            composeTestRule.waitForIdle()
+        }.onFailure { composeError = it }
+
+        // Then - no composition error; coordinator is created but will never
+        // return true from shouldScroll() because fromNotification is false.
+        assertTrue(
+            "Screen should compose without error when fromNotification is false, "
+                + "wiring a coordinator that never triggers forced scroll",
+            composeError == null,
+        )
     }
 }

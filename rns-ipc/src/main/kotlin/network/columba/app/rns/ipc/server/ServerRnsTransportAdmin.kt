@@ -70,6 +70,10 @@ internal class ServerRnsTransportAdmin(
         impl.isHostingSharedInstance()
     }
 
+    override fun getSharedInstanceAccessConfig(cb: IRnsStringCallback) = dispatchNullableString(cb, scope) {
+        impl.getSharedInstanceAccessConfig()
+    }
+
     override fun getDebugInfo(cb: IRnsResultCallback) = dispatch(cb, scope) {
         impl.getDebugInfo().toBundle()
     }
@@ -98,6 +102,12 @@ internal class ServerRnsTransportAdmin(
         impl.getRNodeRssi()
     }
 
+    // Live fetch: `impl.getRNodeBattery()` is `suspend` and re-reads on every
+    // call, so the dispatch block runs the current backend value.
+    override fun getRNodeBattery(cb: IRnsIntCallback) = dispatchNullableInt(cb, scope) {
+        impl.getRNodeBattery()
+    }
+
     override fun getBleConnectionDetails(cb: IRnsStringCallback) = dispatchNullableString(cb, scope) {
         impl.getBleConnectionDetails()
     }
@@ -113,7 +123,13 @@ internal class ServerRnsTransportAdmin(
     override fun registerDebugInfoObserver(cb: IRnsStringEventCallback) = debugHub.registerObserver(cb)
     override fun unregisterDebugInfoObserver(cb: IRnsStringEventCallback) = debugHub.unregisterObserver(cb)
 
-    override fun registerInterfaceStatusObserver(cb: IRnsStringEventCallback) = ifStatusHub.registerObserver(cb)
+    override fun registerInterfaceStatusObserver(
+        cb: IRnsStringEventCallback,
+        readyCb: IRnsUnitEventCallback,
+    ) {
+        ifStatusHub.registerObserver(cb)
+        readyCb.onEvent()
+    }
     override fun unregisterInterfaceStatusObserver(cb: IRnsStringEventCallback) = ifStatusHub.unregisterObserver(cb)
 
     override fun registerReactionReceivedObserver(cb: IRnsStringEventCallback) = reactionHub.registerObserver(cb)

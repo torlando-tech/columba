@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,8 +56,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import network.columba.app.R
 import network.columba.app.data.model.BluetoothType
 import network.columba.app.data.model.DiscoveredRNode
 import network.columba.app.data.model.DiscoveredUsbDevice
@@ -131,43 +134,45 @@ fun DeviceDiscoveryStep(viewModel: RNodeWizardViewModel) {
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        // Connection type selector
-        Text(
-            "Connection Method",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = state.connectionType == RNodeConnectionType.BLUETOOTH,
-                onClick = { viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH) },
-                label = { Text("Bluetooth") },
-                leadingIcon = {
-                    Icon(Icons.Default.Bluetooth, contentDescription = null, Modifier.size(18.dp))
-                },
+        if (!state.isPairingRepairMode) {
+            // Connection type selector
+            Text(
+                "Connection Method",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FilterChip(
-                selected = state.connectionType == RNodeConnectionType.TCP_WIFI,
-                onClick = { viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI) },
-                label = { Text("WiFi / TCP") },
-                leadingIcon = {
-                    Icon(Icons.Default.Wifi, contentDescription = null, Modifier.size(18.dp))
-                },
-            )
-            FilterChip(
-                selected = state.connectionType == RNodeConnectionType.USB_SERIAL,
-                onClick = { viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL) },
-                label = { Text("USB") },
-                leadingIcon = {
-                    Icon(Icons.Default.Usb, contentDescription = null, Modifier.size(18.dp))
-                },
-            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = state.connectionType == RNodeConnectionType.BLUETOOTH,
+                    onClick = { viewModel.setConnectionType(RNodeConnectionType.BLUETOOTH) },
+                    label = { Text("Bluetooth") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Bluetooth, contentDescription = null, Modifier.size(18.dp))
+                    },
+                )
+                FilterChip(
+                    selected = state.connectionType == RNodeConnectionType.TCP_WIFI,
+                    onClick = { viewModel.setConnectionType(RNodeConnectionType.TCP_WIFI) },
+                    label = { Text("WiFi / TCP") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Wifi, contentDescription = null, Modifier.size(18.dp))
+                    },
+                )
+                FilterChip(
+                    selected = state.connectionType == RNodeConnectionType.USB_SERIAL,
+                    onClick = { viewModel.setConnectionType(RNodeConnectionType.USB_SERIAL) },
+                    label = { Text("USB") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Usb, contentDescription = null, Modifier.size(18.dp))
+                    },
+                )
+            }
+            Spacer(Modifier.height(16.dp))
         }
-        Spacer(Modifier.height(16.dp))
 
         // Show content based on connection type
         when (state.connectionType) {
@@ -311,6 +316,53 @@ private fun BluetoothDeviceDiscovery(
     state: RNodeWizardState,
 ) {
     Column {
+        if (state.isPairingRepairMode && state.selectedDevice?.isPaired != true) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.rnode_pairing_required),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text =
+                            stringResource(
+                                R.string.rnode_pairing_repair_explanation,
+                                state.pairingRepairDeviceName.orEmpty(),
+                            ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (state.pairingRepairDeviceAddress == null) {
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_repair_identity_unavailable),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_repair_pairing_mode),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_repair_select_device),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         // Scanning indicator
         if (state.isScanning) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -508,8 +560,10 @@ private fun BluetoothDeviceDiscovery(
             Spacer(Modifier.height(16.dp))
         }
 
-        // Current device (in edit mode)
-        if (state.isEditMode && state.selectedDevice != null && !state.showManualEntry) {
+        // Current device (in ordinary edit mode only)
+        val currentDevice = state.selectedDevice
+        val showCurrentDevice = state.isEditMode && !state.isPairingRepairMode && !state.showManualEntry
+        if (showCurrentDevice && currentDevice != null) {
             Text(
                 "Current Device",
                 style = MaterialTheme.typography.labelMedium,
@@ -517,11 +571,11 @@ private fun BluetoothDeviceDiscovery(
             )
             Spacer(Modifier.height(8.dp))
             BluetoothDeviceCard(
-                device = state.selectedDevice!!,
+                device = currentDevice,
                 isSelected = true,
                 onSelect = { },
                 onPair = { },
-                onSetType = { viewModel.setDeviceType(state.selectedDevice!!, it) },
+                onSetType = { viewModel.setDeviceType(currentDevice, it) },
                 isPairingInProgress = false,
             )
             Spacer(Modifier.height(16.dp))
@@ -541,8 +595,17 @@ private fun BluetoothDeviceDiscovery(
             items(
                 items =
                     state.discoveredDevices.filter {
-                        // In edit mode, don't show the current device in the list
-                        !(state.isEditMode && it.name == state.selectedDevice?.name)
+                        if (state.isPairingRepairMode) {
+                            it.name == state.pairingRepairDeviceName &&
+                                state.pairingRepairDeviceAddress?.equals(it.address, ignoreCase = true) == true
+                        } else {
+                            // Ordinary edit mode shows the current device separately.
+                            !(
+                                state.isEditMode &&
+                                    currentDevice != null &&
+                                    it.address.equals(currentDevice.address, ignoreCase = true)
+                            )
+                        }
                     },
                 key = { it.address },
             ) { device ->
@@ -563,39 +626,41 @@ private fun BluetoothDeviceDiscovery(
                 )
             }
 
-            // Manual entry option
-            item {
-                OutlinedCard(
-                    onClick = { viewModel.showManualEntry() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            if (!state.isPairingRepairMode) {
+                // Manual entry option
+                item {
+                    OutlinedCard(
+                        onClick = { viewModel.showManualEntry() },
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                "Enter device manually",
-                                style = MaterialTheme.typography.titleMedium,
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Text(
-                                "If your device isn't listed",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    "Enter device manually",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "If your device isn't listed",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
             }
 
             // USB-assisted pairing section
-            if (!state.showManualEntry) {
+            if (!state.showManualEntry && !state.isPairingRepairMode) {
                 item {
                     Spacer(Modifier.height(16.dp))
                     Text(
@@ -907,7 +972,7 @@ private fun BluetoothDeviceCard(
                                     )
                                     Spacer(Modifier.width(2.dp))
                                     Text(
-                                        "Paired",
+                                        stringResource(R.string.rnode_paired_in_android),
                                         style = MaterialTheme.typography.labelSmall,
                                         color =
                                             if (isSelected) {

@@ -538,6 +538,15 @@ class ConversationRepository
             return messageDao.getMessageById(messageId, activeIdentity.identityHash)
         }
 
+        /** Resolve a message under immutable local-identity provenance. */
+        suspend fun getMessageById(
+            messageId: String,
+            originatingIdentityHash: String,
+        ): MessageEntity? {
+            if (originatingIdentityHash.isBlank()) return null
+            return messageDao.getMessageById(messageId, originatingIdentityHash)
+        }
+
         /**
          * Get IDs of recent received messages for the active identity.
          * Used to pre-seed the notification dedup cache at startup so that
@@ -563,6 +572,29 @@ class ConversationRepository
             messageDao.updateMessageStatus(messageId, activeIdentity.identityHash, status)
             android.util.Log.d("ConversationRepository", "Updated message $messageId status to $status")
         }
+
+        suspend fun applyDeliveryStatus(
+            messageId: String,
+            status: String,
+        ): Boolean {
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            return messageDao.applyDeliveryStatus(messageId, activeIdentity.identityHash, status) > 0
+        }
+
+        /**
+         * Atomically applies an advisory callback to its immutable originating identity and
+         * returns the exact resulting outgoing row for identity-scoped UI side effects.
+         */
+        suspend fun applyDeliveryStatus(
+            messageId: String,
+            status: String,
+            originatingIdentityHash: String,
+        ): MessageEntity? =
+            messageDao.applyDeliveryStatusAndGet(
+                messageId = messageId,
+                identityHash = originatingIdentityHash,
+                status = status,
+            )
 
         private fun ConversationEntity.toConversation() =
             Conversation(
@@ -617,6 +649,18 @@ class ConversationRepository
         ) {
             val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return
             messageDao.updateSentInterface(messageId, activeIdentity.identityHash, sentInterface)
+        }
+
+        /**
+         * Update the sent interface for an advisory event's immutable originating identity.
+         */
+        suspend fun updateMessageSentInterface(
+            messageId: String,
+            sentInterface: String?,
+            originatingIdentityHash: String,
+        ) {
+            if (originatingIdentityHash.isBlank()) return
+            messageDao.updateSentInterface(messageId, originatingIdentityHash, sentInterface)
         }
 
         /**
@@ -800,7 +844,10 @@ class ConversationRepository
 
         /**
          * Extract the first filename from LXMF file attachments field.
-         * Field 5 format: [[filename, size, mimetype, data], ...]
+         *
+         * Field 5 is a JSON array whose entries are either objects
+         * ({"filename": ...}) or positional wire-format arrays
+         * ([filename, data_hex, ...] from Sideband and other LXMF apps).
          */
         @Suppress("SwallowedException", "ReturnCount") // JSON parsing errors are expected
         private fun extractFirstFileName(fieldsJson: String): String? {
@@ -808,8 +855,14 @@ class ConversationRepository
                 val json = org.json.JSONObject(fieldsJson)
                 val field5 = json.optJSONArray("5") ?: return null
                 if (field5.length() == 0) return null
-                val firstAttachment = field5.optJSONArray(0) ?: return null
-                firstAttachment.optString(0).takeIf { it.isNotEmpty() }
+                val rawName =
+                    when (val firstAttachment = field5.opt(0)) {
+                        is JSONObject -> firstAttachment.optString("filename", "")
+                        is JSONArray -> firstAttachment.optString(0, "")
+                        else -> ""
+                    }
+                val filename = decodeHexFilenameOrNull(rawName) ?: rawName
+                filename.takeIf { it.isNotEmpty() }
             } catch (e: Exception) {
                 null
             }
@@ -972,43 +1025,38 @@ class ConversationRepository
                 while (keys.hasNext()) {
                     val key = keys.next()
                     val value = fields.opt(key)
+                    val handled = extractSpecialAttachmentField(messageId, key, value, modifiedFields)
 
-                    // Special handling for field 5 (file attachments array)
-                    // Extract each file's data separately, keep metadata inline
-                    if (key == "5" && value is JSONArray) {
-                        val extractedArray = extractFileAttachmentsForSent(messageId, value)
-                        modifiedFields.put("5", extractedArray)
-                        continue
-                    }
+                    if (!handled) {
+                        // Get string representation of value for size check
+                        val valueStr = value?.toString().orEmpty()
 
-                    // Get string representation of value for size check
-                    val valueStr = value?.toString().orEmpty()
-
-                    if (valueStr.length > AttachmentStorageManager.SIZE_THRESHOLD) {
-                        // Save large field to disk
-                        val filePath = attachmentStorage.saveAttachment(messageId, key, valueStr)
-                        if (filePath != null) {
-                            // Replace with file reference
-                            val refObj =
-                                JSONObject().apply {
-                                    put(AttachmentStorageManager.FILE_REF_KEY, filePath)
-                                }
-                            modifiedFields.put(key, refObj)
-                            android.util.Log.i(
-                                "ConversationRepository",
-                                "Extracted field '$key' (${valueStr.length} chars) to disk: $filePath",
-                            )
+                        if (valueStr.length > AttachmentStorageManager.SIZE_THRESHOLD) {
+                            // Save large field to disk
+                            val filePath = attachmentStorage.saveAttachment(messageId, key, valueStr)
+                            if (filePath != null) {
+                                // Replace with file reference
+                                val refObj =
+                                    JSONObject().apply {
+                                        put(AttachmentStorageManager.FILE_REF_KEY, filePath)
+                                    }
+                                modifiedFields.put(key, refObj)
+                                android.util.Log.i(
+                                    "ConversationRepository",
+                                    "Extracted field '$key' (${valueStr.length} chars) to disk: $filePath",
+                                )
+                            } else {
+                                // Save failed, keep original (may still fail at load, but at least try)
+                                modifiedFields.put(key, value)
+                                android.util.Log.w(
+                                    "ConversationRepository",
+                                    "Failed to extract field '$key', keeping inline",
+                                )
+                            }
                         } else {
-                            // Save failed, keep original (may still fail at load, but at least try)
+                            // Keep small fields inline
                             modifiedFields.put(key, value)
-                            android.util.Log.w(
-                                "ConversationRepository",
-                                "Failed to extract field '$key', keeping inline",
-                            )
                         }
-                    } else {
-                        // Keep small fields inline
-                        modifiedFields.put(key, value)
                     }
                 }
 
@@ -1024,11 +1072,50 @@ class ConversationRepository
             }
         }
 
+        @Suppress("ReturnCount")
+        private fun extractSpecialAttachmentField(
+            messageId: String,
+            key: String,
+            value: Any?,
+            modifiedFields: JSONObject,
+        ): Boolean {
+            if (key == "5" && value is JSONArray) {
+                modifiedFields.put("5", extractFileAttachmentsForSent(messageId, value))
+                return true
+            }
+            if (key != "7") return false
+            if (value !is JSONArray) return false
+            if (value.length() < 2) return false
+
+            val payload = value.optString(1, "")
+            if (payload.length <= AttachmentStorageManager.SIZE_THRESHOLD) {
+                modifiedFields.put("7", value)
+                return true
+            }
+            val filePath = attachmentStorage.saveAttachment(messageId, "7_audio", payload)
+            if (filePath == null) {
+                modifiedFields.put("7", value)
+                return true
+            }
+            modifiedFields.put(
+                "7",
+                JSONArray()
+                    .put(value.optInt(0, -1))
+                    .put(JSONObject().put(AttachmentStorageManager.FILE_REF_KEY, filePath)),
+            )
+            return true
+        }
+
         /**
          * Extract file attachment data to disk for sent messages, keeping metadata inline.
          *
-         * Input format: [{"filename": "doc.pdf", "size": 12345, "data": "hex..."}, ...]
-         * Output format: [{"filename": "doc.pdf", "size": 12345, "_data_ref": "/path/to/file"}, ...]
+         * Two entry shapes are accepted (see MessageMapper.parseFileAttachmentsArray):
+         * 1. Object: {"filename": "doc.pdf", "size": 12345, "data": "hex..."}
+         * 2. Positional wire format (Sideband and other LXMF apps): [filename, data_hex]
+         *    with an optional element [2] carrying the size in bytes.
+         *
+         * Output format (normalized to objects):
+         * [{"filename": "doc.pdf", "size": 12345, "_data_ref": "/path/to/file"}, ...]
          *
          * This matches the format used by EventHandler for received messages, ensuring
          * consistent handling in MessageMapper.
@@ -1037,7 +1124,7 @@ class ConversationRepository
          * @param attachments Original file attachments array
          * @return Modified array with data extracted to disk
          */
-        @Suppress("SwallowedException", "TooGenericExceptionCaught", "NestedBlockDepth")
+        @Suppress("SwallowedException", "TooGenericExceptionCaught")
         private fun extractFileAttachmentsForSent(
             messageId: String,
             attachments: JSONArray,
@@ -1045,50 +1132,20 @@ class ConversationRepository
             val result = JSONArray()
 
             for (i in 0 until attachments.length()) {
+                val entry = attachments.opt(i)
                 try {
-                    val attachment = attachments.getJSONObject(i)
-                    val filename = attachment.optString("filename", "unknown")
-                    val size = attachment.optInt("size", 0)
-                    val data = attachment.optString("data", "")
-
                     val modifiedAttachment =
-                        JSONObject().apply {
-                            put("filename", filename)
-                            put("size", size)
+                        when (entry) {
+                            is JSONObject -> extractObjectFileAttachment(messageId, i, entry)
+                            is JSONArray -> extractPositionalFileAttachment(messageId, i, entry)
+                            else -> null
                         }
-
-                    // Pass through existing _data_ref if data was already streamed to disk
-                    if (data.isEmpty() && attachment.has("_data_ref")) {
-                        modifiedAttachment.put("_data_ref", attachment.getString("_data_ref"))
+                    if (modifiedAttachment == null) {
+                        // Unrecognized entry shape; keep it as-is
+                        result.put(entry)
+                    } else {
                         result.put(modifiedAttachment)
-                        continue
                     }
-
-                    // Extract data to disk if present and non-empty
-                    if (data.isNotEmpty()) {
-                        val filePath =
-                            attachmentStorage.saveAttachment(
-                                messageId,
-                                "5_$i", // Unique key per file: "5_0", "5_1", etc.
-                                data,
-                            )
-                        if (filePath != null) {
-                            modifiedAttachment.put("_data_ref", filePath)
-                            android.util.Log.d(
-                                "ConversationRepository",
-                                "Extracted sent file '$filename' data to: $filePath",
-                            )
-                        } else {
-                            // Keep data inline if save failed
-                            modifiedAttachment.put("data", data)
-                            android.util.Log.w(
-                                "ConversationRepository",
-                                "Failed to extract sent file '$filename', keeping inline",
-                            )
-                        }
-                    }
-
-                    result.put(modifiedAttachment)
                 } catch (e: Exception) {
                     android.util.Log.w(
                         "ConversationRepository",
@@ -1096,7 +1153,7 @@ class ConversationRepository
                         e,
                     )
                     // Keep original attachment if processing fails
-                    result.put(attachments.opt(i))
+                    result.put(entry)
                 }
             }
 
@@ -1105,5 +1162,128 @@ class ConversationRepository
                 "Extracted ${attachments.length()} sent file attachment(s) to disk",
             )
             return result
+        }
+
+        /**
+         * Extract data from an object-format attachment entry
+         * ({"filename", "size", "data"} with optional "_data_ref"/"_binary_ref").
+         */
+        private fun extractObjectFileAttachment(
+            messageId: String,
+            index: Int,
+            attachment: JSONObject,
+        ): JSONObject {
+            val filename = attachment.optString("filename", "unknown")
+            val size = attachment.optInt("size", 0)
+            val data = attachment.optString("data", "")
+
+            val modifiedAttachment =
+                JSONObject().apply {
+                    put("filename", filename)
+                    put("size", size)
+                }
+
+            // Pass through existing refs if data was already staged to disk
+            if (data.isEmpty()) {
+                if (attachment.has("_data_ref")) {
+                    modifiedAttachment.put("_data_ref", attachment.getString("_data_ref"))
+                } else if (attachment.has("_binary_ref")) {
+                    modifiedAttachment.put("_binary_ref", attachment.getString("_binary_ref"))
+                }
+                return modifiedAttachment
+            }
+
+            saveFileAttachmentData(messageId, index, filename, data, modifiedAttachment)
+            return modifiedAttachment
+        }
+
+        /**
+         * Extract data from a positional wire-format attachment entry
+         * ([filename, data_hex, size?] from Sideband and other LXMF apps).
+         *
+         * Normalizes to the object format so the stored row only ever holds
+         * one shape, which MessageMapper and the read paths already accept.
+         *
+         * @return null when the entry is too short to be a positional pair,
+         *         in which case the caller keeps the original entry.
+         */
+        @Suppress("ReturnCount")
+        private fun extractPositionalFileAttachment(
+            messageId: String,
+            index: Int,
+            entry: JSONArray,
+        ): JSONObject? {
+            if (entry.length() < 2) return null
+            val rawFilename = entry.optString(0, "unknown").ifEmpty { "unknown" }
+            val filename = decodeHexFilenameOrNull(rawFilename) ?: rawFilename
+            val data = entry.optString(1, "")
+            // Data is hex-encoded; each byte is 2 hex chars. Prefer an explicit
+            // size element when present - matches MessageMapper.parsePositionalAttachment.
+            val size = entry.optInt(2, data.length / 2)
+
+            val modifiedAttachment =
+                JSONObject().apply {
+                    put("filename", filename)
+                    put("size", size)
+                }
+
+            if (data.isNotEmpty()) {
+                saveFileAttachmentData(messageId, index, filename, data, modifiedAttachment)
+            }
+            return modifiedAttachment
+        }
+
+        /** Save hex [data] to disk under key "5_$index", keeping it inline on failure. */
+        private fun saveFileAttachmentData(
+            messageId: String,
+            index: Int,
+            filename: String,
+            data: String,
+            target: JSONObject,
+        ) {
+            val filePath =
+                attachmentStorage.saveAttachment(
+                    messageId,
+                    "5_$index", // Unique key per file: "5_0", "5_1", etc.
+                    data,
+                )
+            if (filePath != null) {
+                target.put("_data_ref", filePath)
+                android.util.Log.d(
+                    "ConversationRepository",
+                    "Extracted sent file '$filename' data to: $filePath",
+                )
+            } else {
+                // Keep data inline if save failed
+                target.put("data", data)
+                android.util.Log.w(
+                    "ConversationRepository",
+                    "Failed to extract sent file '$filename', keeping inline",
+                )
+            }
+        }
+
+        /**
+         * If [s] looks like hex (even length, all hex digits) and decodes to
+         * printable UTF-8, return the decoded string; else null.
+         *
+         * Columba backends hex-encode ByteArray filename fields while Sideband
+         * sends plain strings; this mirrors MessageMapper's decoding behavior.
+         */
+        @Suppress("SwallowedException")
+        private fun decodeHexFilenameOrNull(s: String): String? {
+            if (s.length < 2 || s.length % 2 != 0) return null
+            if (!s.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
+            return try {
+                val bytes = ByteArray(s.length / 2) {
+                    ((Character.digit(s[it * 2], 16) shl 4) + Character.digit(s[it * 2 + 1], 16)).toByte()
+                }
+                val decoded = String(bytes, Charsets.UTF_8)
+                // Filenames are practically always printable; reject if decode
+                // produced control characters (other than tab/newline)
+                if (decoded.any { it.code in 0..31 && it != '\t' && it != '\n' }) null else decoded
+            } catch (e: Exception) {
+                null
+            }
         }
     }

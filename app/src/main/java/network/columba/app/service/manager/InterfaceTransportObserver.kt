@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -57,6 +56,7 @@ class InterfaceTransportObserver
         }
 
         private var callback: ConnectivityManager.NetworkCallback? = null
+        private var currentDefaultNetwork: Network? = null
 
         @Volatile
         private var lastTransport: CurrentTransport? = null
@@ -88,40 +88,34 @@ class InterfaceTransportObserver
             }
             val cb =
                 object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        currentDefaultNetwork = network
+                    }
+
                     override fun onCapabilitiesChanged(
                         network: Network,
                         networkCapabilities: NetworkCapabilities,
                     ) {
-                        // The callback fires for every network matching NET_CAPABILITY_INTERNET,
-                        // not just the default route — classify by activeNetwork so a cellular
-                        // backup network's capability update doesn't masquerade as a transport
-                        // change while Wi-Fi is still the default.
-                        applyTransport(snapshotTransport(), scope)
+                        if (network == currentDefaultNetwork) {
+                            applyTransport(currentTransportOf(networkCapabilities), scope)
+                        }
                     }
 
                     override fun onLost(network: Network) {
-                        if (connectivityManager.activeNetwork == null) {
+                        if (network == currentDefaultNetwork) {
+                            currentDefaultNetwork = null
                             applyTransport(CurrentTransport.NONE, scope)
                         }
                     }
                 }
-            val request =
-                NetworkRequest
-                    .Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build()
+            // Refresh the construction-time seed before registration. Registration may
+            // synchronously or asynchronously dispatch a newer default-network callback;
+            // no snapshot write may occur after that callback or it could overwrite the
+            // coherent callback result with stale transport A while `lastTransport` is B.
+            _currentTransport.value = currentTransportOf(connectivityManager)
             try {
-                connectivityManager.registerNetworkCallback(request, cb)
+                connectivityManager.registerDefaultNetworkCallback(cb)
                 callback = cb
-                // Seed the reactive view at start() so the StateFlow's initial value
-                // reflects reality before the first capability callback fires. Without
-                // this, collectors that subscribe between start() and the first callback
-                // would briefly observe NONE even on a Wi-Fi-connected device. We do NOT
-                // touch `lastTransport` here — leaving it null preserves the
-                // "first callback always emits a transition" contract that
-                // `applyTransport()` relies on (boot-on-cellular drops a wifi-only
-                // AutoInterface immediately, not on the first carrier change).
-                _currentTransport.value = currentTransportOf(connectivityManager)
                 Log.d(TAG, "Transport observer started")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to register transport observer", e)
@@ -140,6 +134,7 @@ class InterfaceTransportObserver
                 }
             }
             callback = null
+            currentDefaultNetwork = null
             lastTransport = null
             reloadJob?.cancel()
             reloadJob = null

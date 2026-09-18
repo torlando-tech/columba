@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,12 +25,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.columba.app.BuildConfig
 import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
+import network.columba.app.navigation.NavTab
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.BatteryProfile
@@ -39,12 +42,15 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.util.SharedInstanceProbe
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.RelayInfo
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 import javax.inject.Inject
 
 /**
@@ -62,6 +68,7 @@ enum class SettingsCardId {
     MAP_SOURCES,
     MESSAGE_DELIVERY,
     IMAGE_COMPRESSION,
+    BOTTOM_NAVIGATION,
     THEME,
     BATTERY,
     DATA_MIGRATION,
@@ -70,6 +77,13 @@ enum class SettingsCardId {
     ADVANCED,
     ABOUT,
     SHARED_INSTANCE_BANNER,
+}
+
+/** Secret-bearing shared-instance access results, delivered once and never retained in state. */
+sealed interface SharedInstanceAccessEvent {
+    data class Copy(val configuration: String) : SharedInstanceAccessEvent
+
+    data object Unavailable : SharedInstanceAccessEvent
 }
 
 @androidx.compose.runtime.Immutable
@@ -96,6 +110,7 @@ data class SettingsState(
     val iconBackgroundColor: String? = null,
     val selectedTheme: AppTheme = PresetTheme.VIBRANT,
     val customThemes: List<AppTheme> = emptyList(),
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val isRestarting: Boolean = false,
     val networkStatus: NetworkStatus = NetworkStatus.CONNECTING,
     // Shared instance state
@@ -198,6 +213,13 @@ data class SettingsState(
     val includePrereleaseUpdates: Boolean = false,
     // Message sort order: false = received time (default), true = sent time
     val sortMessagesBySentTime: Boolean = false,
+    // User-configured bottom navigation tabs (normalized: Settings pinned last,
+    // max NavTab.MAX_TABS entries). Matches the persisted value via sanitize().
+    val bottomNavTabs: List<network.columba.app.navigation.NavTab> = network.columba.app.navigation.NavTab.DEFAULT,
+    // Destination hash of the last-browsed NomadNet node, or null when none.
+    val nomadNetLastNodeHash: String? = null,
+    // Path of the last-browsed NomadNet page (deep page), or null when none.
+    val nomadNetLastViewPath: String? = null,
 )
 
 @Suppress("TooManyFunctions", "LargeClass") // ViewModel with many user interaction methods is expected
@@ -231,7 +253,6 @@ class SettingsViewModel
             private const val RETRY_DELAY_MS = 1000L
             private const val SHARED_INSTANCE_MONITOR_INTERVAL_MS = 5_000L // Check every 5 seconds
             private const val SHARED_INSTANCE_PORT = 37428 // Default RNS shared instance port (for logging)
-            private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L // 24 hours
 
             /**
              * Controls whether shared instance monitors are started in init.
@@ -239,6 +260,22 @@ class SettingsViewModel
              * @suppress VisibleForTesting
              */
             internal var enableMonitors = true
+
+            /**
+             * TCP reachability check used by [sharedInstanceAvailability] to
+             * detect a co-hosted shared master while Columba is in own-mode.
+             * Defaults to the real [SharedInstanceProbe.isAvailable]; swapped
+             * for a stub in unit tests so no real socket connect runs on the
+             * JVM test host.
+             * @suppress VisibleForTesting
+             */
+            internal var sharedInstanceProbe: suspend (
+                host: String,
+                port: Int,
+                timeoutMs: Int,
+            ) -> Boolean = { host, port, timeoutMs ->
+                SharedInstanceProbe.isAvailable(host, port, timeoutMs)
+            }
         }
 
         private val _state =
@@ -249,6 +286,10 @@ class SettingsViewModel
                 ),
             )
         val state: StateFlow<SettingsState> = _state.asStateFlow()
+
+        private val _sharedInstanceAccessEvents = MutableSharedFlow<SharedInstanceAccessEvent>(extraBufferCapacity = 1)
+        val sharedInstanceAccessEvents: SharedFlow<SharedInstanceAccessEvent> =
+            _sharedInstanceAccessEvents.asSharedFlow()
 
         /**
          * The active RNS backend's capabilities — forwards [RnsBackend.capabilities].
@@ -272,6 +313,8 @@ class SettingsViewModel
             loadMapSourceSettings()
             // Load notifications enabled setting
             loadNotificationsSettings()
+            // Load user-configured bottom navigation tabs
+            loadBottomNavTabs()
             // Load privacy settings
             loadPrivacySettings()
             // Load protocol versions for About screen
@@ -321,7 +364,7 @@ class SettingsViewModel
                                 _state.first { !it.isLoading }
                                 runCatching {
                                     updateHostingShareInstanceState(
-                                        isOnline = rnsTransportAdmin.isSharedInstanceAvailable(),
+                                        isOnline = sharedInstanceAvailability(),
                                         currentState = _state.value,
                                     )
                                 }.onFailure { e ->
@@ -400,6 +443,7 @@ class SettingsViewModel
                         settingsRepository.retrievalIntervalSecondsFlow,
                         settingsRepository.shareInstanceHostingEnabledFlow,
                         settingsRepository.crashReportingConsentFlow,
+                        settingsRepository.themeModeFlow,
                     ) { flows ->
                         @Suppress("UNCHECKED_CAST")
                         val activeIdentity = flows[0] as network.columba.app.data.db.entity.LocalIdentityEntity?
@@ -457,6 +501,9 @@ class SettingsViewModel
                         @Suppress("UNCHECKED_CAST")
                         val crashReportingEnabled = flows[17] as Boolean
 
+                        @Suppress("UNCHECKED_CAST")
+                        val themeMode = flows[18] as ThemeMode
+
                         val displayName = activeIdentity?.displayName ?: defaultName
                         val resolvedIdentityHash = identityInfo.first ?: activeIdentity?.identityHash ?: _state.value.identityHash
                         val resolvedDestinationHash = identityInfo.second ?: activeIdentity?.destinationHash ?: _state.value.destinationHash
@@ -482,6 +529,7 @@ class SettingsViewModel
                             iconBackgroundColor = activeIdentity?.iconBackgroundColor,
                             selectedTheme = selectedTheme,
                             customThemes = customThemes,
+                            themeMode = themeMode,
                             isRestarting = _state.value.isRestarting,
                             networkStatus = _state.value.networkStatus,
                             // Shared instance state from repository (set by service)
@@ -568,6 +616,11 @@ class SettingsViewModel
                             incomingMessageSizeLimitKb = _state.value.incomingMessageSizeLimitKb,
                             // Preserve message sorting from loadLocationSharingSettings()
                             sortMessagesBySentTime = _state.value.sortMessagesBySentTime,
+                            // Preserve bottom nav tabs + last-browsed NomadNet node
+                            // from loadBottomNavTabs()
+                            bottomNavTabs = _state.value.bottomNavTabs,
+                            nomadNetLastNodeHash = _state.value.nomadNetLastNodeHash,
+                            nomadNetLastViewPath = _state.value.nomadNetLastViewPath,
                             // Preserve protocol versions from fetchProtocolVersions()
                             reticulumVersion = _state.value.reticulumVersion,
                             lxmfVersion = _state.value.lxmfVersion,
@@ -988,6 +1041,19 @@ class SettingsViewModel
         }
 
         /**
+         * Set the theme mode (System/Light/Dark).
+         * The mode is applied immediately and persisted across app restarts.
+         *
+         * @param mode The theme mode to apply
+         */
+        fun setThemeMode(mode: ThemeMode) {
+            viewModelScope.launch {
+                settingsRepository.saveThemeModePreference(mode)
+                Log.d(TAG, "Theme mode changed to: ${mode.name}")
+            }
+        }
+
+        /**
          * Apply a custom theme by its ID
          */
         fun applyCustomTheme(themeId: Long) {
@@ -1400,6 +1466,80 @@ class SettingsViewModel
         }
 
         /**
+         * Determines whether a shared Reticulum instance is available on this
+         * host for the Settings UI to offer (or return to).
+         *
+         * ORs two independent signals:
+         *
+         * - [RnsTransportAdmin.isSharedInstanceAvailable] - the live daemon's
+         *   own mode: true when Columba is connected to another app's shared
+         *   master (shared-client) or is itself the master (hosting).
+         * - [SharedInstanceProbe.isAvailable] - a direct TCP connect to
+         *   127.0.0.1:37428, the same reachability check
+         *   [network.columba.app.rns.api.util.SharedInstanceProbe.shouldShareInstance]
+         *   uses to decide whether the daemon can join a shared master.
+         *
+         * The daemon flag alone is a *current-mode* signal, not an
+         * *availability* signal: in steady own-instance mode it is false even
+         * while Sideband (or another RNS app) still hosts the shared master.
+         * The UI's card visibility, the toggle's enable logic, and the
+         * "No shared instance available" hint are all designed around
+         * availability, so without the probe the card vanishes and the
+         * switch-back-to-shared toggle becomes unreachable after any restart
+         * that lands Columba in own-mode - the user is trapped in that mode.
+         *
+         * Best-effort: probe/IPC failures are logged and yield whichever
+         * signal did succeed (false if both fail), never crashing the caller.
+         * The probe runs on [Dispatchers.IO] (blocking socket connect with a
+         * 1s timeout per attempt, bounded retries, worst case ~3.6s) so the
+         * main thread is never blocked; it only runs inside the monitor's
+         * coroutine, where a slower probe delays the next availability
+         * update rather than the UI.
+         *
+         * Cancellation is rethrown: if this monitor job is cancelled while
+         * the IO probe is in flight, treating that as `false` would be read
+         * as a real "shared instance lost" transition and could trigger an
+         * unnecessary service restart during monitor replacement / teardown.
+         *
+         * [sharedInstanceProbe] is the seam used for the TCP reachability
+         * check; it defaults to [SharedInstanceProbe.isAvailable] and can be
+         * swapped in unit tests (which have no real RNS master to connect to).
+         */
+        private suspend fun sharedInstanceAvailability(): Boolean {
+            // Daemon-mode check first. This is a plain passthrough on purpose:
+            // an IPC failure (e.g. BackendNotReady from a dead binder) must
+            // propagate to the caller's try/catch so the monitor skips the
+            // tick and retries - swallowing it here would turn a dead binder
+            // into a false "not available" and hide the banner.
+            if (rnsTransportAdmin.isSharedInstanceAvailable()) return true
+            // We are in own-mode: a shared instance is still "available" if
+            // another app's master is reachable, so the banner stays visible
+            // and the toggle can switch back to shared. The probe is
+            // best-effort (a failed connect simply means "not probed").
+            // CancellationException is rethrown so a cancelled monitor job is
+            // never misread as a real "shared instance lost" transition (see
+            // the method docs); only genuine probe/IPC failures yield false.
+            return try {
+                withContext(Dispatchers.IO) {
+                    sharedInstanceProbe(
+                        "127.0.0.1",
+                        SHARED_INSTANCE_PORT,
+                        SharedInstanceProbe.DEFAULT_TIMEOUT_MS,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "shared instance probe failed; yielding not-available: ${e.message}",
+                    e,
+                )
+                false
+            }
+        }
+
+        /**
          * Start monitoring for shared instance availability.
          * This periodically queries the service to check if a shared instance is reachable.
          * Updates sharedInstanceOnline for toggle enable logic and sharedInstanceAvailable
@@ -1430,7 +1570,12 @@ class SettingsViewModel
                             // RnsException and retry next interval, rather than letting
                             // it escape viewModelScope.
                             try {
-                                val isOnline = rnsTransportAdmin.isSharedInstanceAvailable()
+                                // Availability = "a shared instance is present on
+                                // this host", not "are we in shared mode" - the
+                                // method also TCP-probes 37428 so the banner
+                                // stays visible (and the toggle reachable) in
+                                // steady own-mode while a master is hosted.
+                                val isOnline = sharedInstanceAvailability()
                                 // Hosting/conflict polling runs on the same cadence so
                                 // the UI can't see a torn state between the two flags.
                                 updateHostingShareInstanceState(isOnline, currentState)
@@ -1692,6 +1837,50 @@ class SettingsViewModel
         }
 
         /**
+         * Load the user-configured bottom navigation tabs. Subscribes to the
+         * persisted value so the bar updates live when the settings card changes.
+         * Values pass through [NavTab.sanitize] so a corrupt or stale layout can
+         * never render an empty or over-full bar.
+         */
+        private fun loadBottomNavTabs() {
+            viewModelScope.launch {
+                settingsRepository.bottomNavTabsFlow.collect { csv ->
+                    val tabs = NavTab.sanitize(csv)
+                    _state.update { current ->
+                        if (current.bottomNavTabs == tabs) current else current.copy(bottomNavTabs = tabs)
+                    }
+                }
+            }
+            viewModelScope.launch {
+                settingsRepository.nomadNetLastPageFlow.collect { page ->
+                    _state.update { current ->
+                        if (current.nomadNetLastNodeHash == page.nodeHash &&
+                            current.nomadNetLastViewPath == page.viewPath
+                        ) current
+                        else current.copy(
+                            nomadNetLastNodeHash = page.nodeHash,
+                            nomadNetLastViewPath = page.viewPath,
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Persist a new bottom navigation tab layout. The list is sanitized before
+         * saving (Settings pinned last, capped at [NavTab.MAX_TABS]), so callers
+         * cannot store an invalid layout.
+         */
+        fun setBottomNavTabs(tabs: List<NavTab>) {
+            val sanitized = NavTab.sanitize(tabs.joinToString(",") { it.id })
+            viewModelScope.launch {
+                settingsRepository.saveBottomNavTabs(sanitized.joinToString(",") { it.id })
+                _state.update { it.copy(bottomNavTabs = sanitized) }
+                Log.d(TAG, "Bottom navigation tabs updated: ${sanitized.map { it.id }}")
+            }
+        }
+
+        /**
          * Set the notifications enabled setting.
          * When disabled, all notifications are suppressed.
          */
@@ -1860,6 +2049,19 @@ class SettingsViewModel
             viewModelScope.launch {
                 settingsRepository.saveShareInstanceHostingEnabled(enabled)
                 Log.d(TAG, "Share-instance hosting preference set to $enabled (pending restart to apply)")
+            }
+        }
+
+        /** Fetch the live host secret only on demand and hand it directly to the UI. */
+        fun copySharedInstanceAccessConfig() {
+            viewModelScope.launch {
+                val configuration = runCatching {
+                    rnsTransportAdmin.getSharedInstanceAccessConfig()
+                }.getOrNull()
+                _sharedInstanceAccessEvents.emit(
+                    configuration?.let(SharedInstanceAccessEvent::Copy)
+                        ?: SharedInstanceAccessEvent.Unavailable,
+                )
             }
         }
 
@@ -2035,6 +2237,14 @@ class SettingsViewModel
 
                 // Apply the change at runtime via the protocol
                 rnsLxmf.setIncomingMessageSizeLimit(limitKb)
+
+                // Keep the on-disk restart snapshot in sync: a :reticulum-only
+                // recovery (UI process dead) reads it, so without this it would
+                // resurrect the previous delivery gate (columba#1106)
+                ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(
+                    context,
+                    limitKb.toLong(),
+                )
             }
         }
 
@@ -2401,12 +2611,10 @@ class SettingsViewModel
 
         private fun loadUpdateSettings() {
             viewModelScope.launch {
-                // Eagerly read the persisted value before the startup check fires,
-                // so the check uses the correct API endpoint (not the default false).
+                // Eagerly read the persisted value so the state holds the correct
+                // endpoint choice (not the default false) before the user acts.
                 val initial = settingsRepository.includePrereleaseUpdates.first()
                 _state.update { it.copy(includePrereleaseUpdates = initial) }
-
-                maybeCheckForUpdatesOnStartup()
 
                 // Continue observing subsequent changes
                 settingsRepository.includePrereleaseUpdates.drop(1).collect { include ->
@@ -2415,22 +2623,11 @@ class SettingsViewModel
             }
         }
 
-        private suspend fun maybeCheckForUpdatesOnStartup() {
-            val lastCheck = settingsRepository.getLastUpdateCheckTime()
-            val now = System.currentTimeMillis()
-            if (now - lastCheck >= UPDATE_CHECK_INTERVAL_MS) {
-                checkForUpdates()
-            }
-        }
-
         fun checkForUpdates(includePrerelease: Boolean = _state.value.includePrereleaseUpdates) {
             _state.update { it.copy(updateCheckResult = network.columba.app.service.AppUpdateResult.Checking) }
             viewModelScope.launch {
                 val result = updateChecker.check(includePrerelease)
                 _state.update { it.copy(updateCheckResult = result) }
-                if (result !is network.columba.app.service.AppUpdateResult.Error) {
-                    settingsRepository.setLastUpdateCheckTime(System.currentTimeMillis())
-                }
             }
         }
 

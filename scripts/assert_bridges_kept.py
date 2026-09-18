@@ -49,7 +49,7 @@ BRIDGE_METHODS = {
         "connect", "disconnect", "findDeviceByVidPid", "isConnected", "notifyBluetoothPin", "read",
     },
     "network.columba.app.rns.backend.py.StampGeneratorCallback": {
-        # event_bridge.install_external_stamp_generator calls generate(workblock, cost) by name.
+        # event_bridge.install_external_stamp_generator calls generate(workblock, cost, token) by name.
         "generate",
     },
 }

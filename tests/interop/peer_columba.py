@@ -66,6 +66,30 @@ class ColumbaRxMsg:
         )
 
 
+@dataclass
+class ColumbaRxAudio:
+    msg_id_hex: str
+    mode: int
+    byte_count: int
+    sha256: str
+
+    @classmethod
+    def parse(cls, line: str) -> Optional["ColumbaRxAudio"]:
+        match = re.search(
+            r"rx_audio\s+id=([0-9a-fA-F]+)\s+mode=(\d+)\s+"
+            r"bytes=(\d+)\s+sha256=([0-9a-fA-F]{64})",
+            line,
+        )
+        if not match:
+            return None
+        return cls(
+            msg_id_hex=match.group(1).lower(),
+            mode=int(match.group(2)),
+            byte_count=int(match.group(3)),
+            sha256=match.group(4).lower(),
+        )
+
+
 def _sh_quote(s: str) -> str:
     """POSIX-shell single-quote escaping. Wraps `s` so the device shell
     sees it as one token — required for JSON payloads going through
@@ -325,6 +349,24 @@ class ColumbaPeer:
         raise AssertionError(
             f"Columba did not log an rx_msg within {timeout}s "
             f"(from_hex={from_hex})"
+        )
+
+    def wait_for_audio(
+        self,
+        msg_id_hex: str,
+        timeout: float = 30.0,
+        poll: float = 0.5,
+    ) -> ColumbaRxAudio:
+        deadline = time.time() + timeout
+        expected_id = msg_id_hex.lower()
+        while time.time() < deadline:
+            for line in self._read_logcat_lines():
+                audio = ColumbaRxAudio.parse(line)
+                if audio is not None and audio.msg_id_hex == expected_id:
+                    return audio
+            time.sleep(poll)
+        raise AssertionError(
+            f"Columba did not log rx_audio for id={msg_id_hex} within {timeout}s"
         )
 
     def wait_for_location(

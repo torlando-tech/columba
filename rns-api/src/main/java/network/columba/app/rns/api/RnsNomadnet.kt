@@ -1,6 +1,8 @@
 package network.columba.app.rns.api
 
 import kotlinx.coroutines.flow.StateFlow
+import network.columba.app.rns.api.model.NomadnetLinkStats
+import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 
 /**
@@ -33,6 +35,41 @@ interface RnsNomadnet {
 
     /** Cancel an in-flight [requestNomadnetPage]. No-op if no request is active. */
     suspend fun cancelNomadnetPageRequest()
+
+    /**
+     * Fetch a media object (page image) from a NomadNet host's `/media/`
+     * handler. The body is written to a fresh file inside the backend cache
+     * dir and returned as a [NomadnetMediaResult]; the caller owns its
+     * lifecycle from there (move into the image cache, delete on eviction).
+     *
+     * Server-side `.allowed` gating surfaces as a failed Result carrying
+     * [RnsError.NomadnetRequestDenied] (upstream Node.py `False` deny),
+     * distinct from timeouts and unreachable hosts.
+     *
+     * @param destinationHash 32-char hex destination hash of the NomadNet host.
+     * @param path Media path on the host (e.g. `/media/images/logo.webp`).
+     * @param timeoutSeconds Hard deadline for the round-trip.
+     * @param maxBytes Transfer cap in bytes. The backend enforces this at the
+     *   response boundary - if the node delivers more than [maxBytes], the
+     *   fetch fails with [RnsError.NomadnetResponseTooLarge] and the oversized
+     *   payload is not written to temporary storage or returned. Defaults to
+     *   no cap for callers that do not need one (page-file downloads).
+     */
+    suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float = 45f,
+        maxBytes: Long = Long.MAX_VALUE,
+    ): Result<NomadnetMediaResult>
+
+    /**
+     * Live stats of the currently-active NomadNet link to a node, for the
+     * image auto-load gate (upstream reads `link.rtt` /
+     * `link.get_expected_rate()`). Returns null when there is no active link
+     * or no backend — callers treat null as "insufficient data" (auto mode:
+     * do not load).
+     */
+    suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats?
 
     /**
      * One-shot snapshot of the current NomadNet request status.

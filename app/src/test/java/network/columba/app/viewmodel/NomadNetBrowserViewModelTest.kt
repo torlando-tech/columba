@@ -49,6 +49,7 @@ class NomadNetBrowserViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var protocol: RnsNomadnet
     private lateinit var pageCache: NomadNetPageCache
+    private lateinit var imageCache: network.columba.app.nomadnet.NomadNetImageCache
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: NomadNetBrowserViewModel
 
@@ -60,14 +61,26 @@ class NomadNetBrowserViewModelTest {
         Dispatchers.setMain(testDispatcher)
         protocol = mockk()
         pageCache = mockk()
+        imageCache = mockk()
         settingsRepository = mockk()
         every { pageCache.put(any(), any(), any(), any()) } just Runs
+        // Page-image cache: only the explicit clear (clearImageCache) and the
+        // loader's miss-path get() are reachable from these tests; stub both
+        // explicitly rather than using a relaxed mock.
+        every { imageCache.clear() } just Runs
+        every { imageCache.get(any()) } returns null
         coEvery { protocol.cancelNomadnetPageRequest() } just Runs
         coEvery { protocol.getNomadnetRequestStatus() } returns ""
+        coEvery { protocol.getNomadnetLinkStats(any()) } returns null
         // No persisted rendering mode by default; individual tests can override.
         every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetImageLoadingModeFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(emptySet())
         coEvery { settingsRepository.saveNomadNetRenderingMode(any()) } just Runs
-        viewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+        coEvery { settingsRepository.saveNomadNetImageLoadingMode(any()) } just Runs
+        coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any(), any()) } just Runs
+        coEvery { settingsRepository.clearNomadNetLastNodeHash() } just Runs
+        viewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
     }
 
     @Suppress("SleepInsteadOfDelay")
@@ -94,6 +107,236 @@ class NomadNetBrowserViewModelTest {
             val loaded = state as NomadNetBrowserViewModel.BrowserState.PageLoaded
             assertEquals(nodeHash, loaded.nodeHash)
             assertEquals("/page/index.mu", loaded.path)
+            // The bottom-nav NomadNet tab reopens the exact page the user left
+            // on, so every successful page load must persist its node hash and
+            // the deep path.
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(nodeHash, "/page/index.mu", any())
+            }
+        }
+
+    @Test
+    fun `a deep in-browser navigation persists the deep path for tab re-entry`() =
+        runTest(testDispatcher) {
+            // Index loads from cache, then the user follows an in-page link to a
+            // deep forum thread (also cached). Tapping the NomadNet tab later
+            // must be able to restore that exact deep path, so it is persisted
+            // on navigation.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            every { pageCache.get(nodeHash, "/page/forum/thread.mu") } returns simplePage
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.navigateToLink("/page/forum/thread.mu", emptyList())
+            advanceUntilIdle()
+
+            // The browser must have actually landed on the deep page (behavior,
+            // not just wiring), so the persisted path is the real current page.
+            val state = viewModel.browserState.value
+            assertTrue(
+                "Should be PageLoaded, was $state",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            assertEquals("/page/forum/thread.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+
+            // ...and that exact deep path was persisted for tab re-entry.
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(nodeHash, "/page/forum/thread.mu", any())
+            }
+        }
+
+    @Test
+    fun `a var-bearing page persists the full path with its backtick field block`() =
+        runTest(testDispatcher) {
+            // A forum thread is opened with request variables (the backtick
+            // block). Restoring it later must re-submit those variables, so the
+            // persisted path must carry the full block, not just the bare path.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            // In-page link to the thread with var fields (the reported repro).
+            viewModel.navigateToLink(
+                "/page/forum/thread.mu",
+                listOf("cat=general", "thread=a-gentle-look-at-prns"),
+            )
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for the Dispatchers.IO fetch
+
+            val state = viewModel.browserState.value
+            assertTrue(
+                "Should be PageLoaded, was $state",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+
+            // The persisted path must be the FULL path with the backtick block,
+            // so restoring it re-submits the same request variables.
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(
+                    nodeHash,
+                    "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns",
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    fun `refresh on a var-bearing page re-submits the request data, not a bare fetch`() =
+        runTest(testDispatcher) {
+            // Pull-to-refresh (and any re-fetch) of a page that was loaded with
+            // request variables must re-submit those variables. A bare fetch
+            // (null data) drops them and the node rejects the page with
+            // "Invalid thread" - the same failure this whole change targets.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+            coEvery {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", null, any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.navigateToLink(
+                "/page/forum/thread.mu",
+                listOf("cat=general", "thread=a-gentle-look-at-prns"),
+            )
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "Thread page should be loaded",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+
+            viewModel.refresh()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            // The refresh must NOT issue a bare (null-data) fetch for the
+            // var-bearing path - the initial link tap already covered that.
+            coVerify(exactly = 0) {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", null, any())
+            }
+        }
+
+    @Test
+    fun `refresh after goBack re-submits the displayed page's own vars, not a later page's`() =
+        runTest(testDispatcher) {
+            // Regression for the (node, path) match in refresh(): back-navigating
+            // to an earlier page that shares the node+path but uses different
+            // request vars must refresh with THAT page's vars (the displayed
+            // state), not a later page's vars left in lastFetch* state. Refresh
+            // rebuilds data from the displayed page's fieldTokens, so it can't
+            // resurrect a later page's data over the restored one.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", match { it != null }, any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            // Forward page 1: thread=a
+            viewModel.navigateToLink("/page/forum/thread.mu", listOf("thread=a"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+            // Forward page 2 (same node+path, different var): thread=b
+            viewModel.navigateToLink("/page/forum/thread.mu", listOf("thread=b"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+            // Go BACK to thread=a (same node+path, different var). lastFetch*
+            // still points at thread=b (the later page) after this.
+            viewModel.goBack()
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertTrue(
+                "Displayed page after goBack must be the earlier (thread=a) page",
+                state.fieldTokens == listOf("thread=a"),
+            )
+
+            viewModel.refresh()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            // Refresh must re-submit thread=a (the displayed page's vars), not
+            // thread=b (the later page's vars still in lastFetch*). The inline
+            // var token "thread=a" is sent as var_thread=a in the request data.
+            coVerify {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it?.contains("\"var_thread\":\"a\"") == true },
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    fun `retry on a failed var-bearing page preserves the field tokens for persist`() =
+        runTest(testDispatcher) {
+            // A var-bearing page that fails on first request, then succeeds on
+            // retry, must persist its FULL path (with the backtick block) so a
+            // later restore re-submits the same request variables - not a bare
+            // path the node would reject.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            var threadCalls = 0
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } coAnswers {
+                threadCalls++
+                if (threadCalls == 1) {
+                    Result.failure(RuntimeException("NomadNet timeout"))
+                } else {
+                    Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+                }
+            }
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.navigateToLink(
+                "/page/forum/thread.mu",
+                listOf("cat=general", "thread=a-gentle-look-at-prns"),
+            )
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "First request should fail",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Error,
+            )
+
+            viewModel.retry()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(
+                "Retry should recover the page",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(
+                    nodeHash,
+                    "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns",
+                    any(),
+                )
+            }
         }
 
     @Test
@@ -418,6 +661,57 @@ class NomadNetBrowserViewModelTest {
     }
 
     @Test
+    fun `goBack resets identification when returning to a different node`() =
+        runTest(testDispatcher) {
+            // Regression: _isIdentified is one global flag. After identifying to
+            // node B and navigating back to an identified node A, the stale flag
+            // must be reset on the destination change or A stays "identified".
+            val nodeB = "1234567890abcdef1234567890abcdef"
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(any()) } returns Result.success(true)
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.identifyToNode()
+            waitUntilIdentified()
+            assertTrue(viewModel.isIdentified.value)
+
+            // Navigate to node B and identify to it, then go back to A.
+            viewModel.navigateToLink("$nodeB:/page/index.mu", emptyList())
+            advanceUntilIdle()
+            viewModel.identifyToNode()
+            waitUntilIdentified()
+
+            val wentBack = viewModel.goBack()
+            assertTrue(wentBack)
+            assertFalse(viewModel.isIdentified.value)
+        }
+
+    /** Poll the real Dispatchers.IO identify coroutine with a bound. */
+    private fun waitUntilIdentified(timeoutMs: Int = 2000) {
+        var waitedMs = 0
+        while (!viewModel.isIdentified.value && waitedMs < timeoutMs) {
+            Thread.sleep(25)
+            waitedMs += 25
+        }
+    }
+
+    /**
+     * Wait until the in-flight identify coroutine on the real Dispatchers.IO has
+     * fully settled: its finally block clears the in-progress flag after the
+     * result (success, failure, or stale-discard) has been handled. Bounded, so a
+     * regression that leaves the flag set fails rather than hangs. Preferred over
+     * a fixed sleep, which runTest cannot synchronize with the IO dispatcher.
+     */
+    private fun waitUntilIdentifySettled(timeoutMs: Int = 2000) {
+        var waitedMs = 0
+        while (viewModel.identifyInProgress.value && waitedMs < timeoutMs) {
+            Thread.sleep(25)
+            waitedMs += 25
+        }
+    }
+
+    @Test
     fun `multiple goBack pops stack correctly`() =
         runTest(testDispatcher) {
             every { pageCache.get(any(), any()) } returns simplePage
@@ -446,6 +740,36 @@ class NomadNetBrowserViewModelTest {
 
             viewModel.goBack() // back to page 1
             assertFalse(viewModel.canGoBack.value)
+        }
+
+    // ── closeSite ──
+
+    @Test
+    fun `closeSite resets state clears history and forgets last node`() =
+        runTest(testDispatcher) {
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(NomadnetPageResult(simplePage, "/page/second.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.updateField("query", "test")
+            viewModel.navigateToLink("/page/second.mu", emptyList())
+            advanceUntilIdle()
+            assertTrue(viewModel.canGoBack.value)
+
+            viewModel.closeSite()
+            advanceUntilIdle()
+
+            // View resets to Initial so the tab home can swap to the address prompt.
+            assertTrue(
+                "Should be Initial, was ${viewModel.browserState.value}",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Initial,
+            )
+            assertFalse(viewModel.canGoBack.value)
+            assertTrue(viewModel.formFields.value.isEmpty())
+            // The persisted last-node binding must be forgotten.
+            coVerify { settingsRepository.clearNomadNetLastNodeHash() }
         }
 
     // ── refresh ──
@@ -538,7 +862,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf("PROPORTIONAL_WRAP")
 
-            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
             advanceUntilIdle()
 
             assertEquals(
@@ -567,7 +891,7 @@ class NomadNetBrowserViewModelTest {
             every { settingsRepository.nomadNetRenderingModeFlow } returns controllableFlow
 
             // init launches and suspends on first() because nothing has been emitted yet.
-            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, settingsRepository)
+            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
 
             // User picks a mode before the persisted value has been read back.
             racingViewModel.setRenderingMode(NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM)
@@ -637,12 +961,194 @@ class NomadNetBrowserViewModelTest {
             viewModel.identifyToNode()
             advanceUntilIdle()
 
-            // Try again — should be a no-op
+            // identifyToNode() dispatches onto the real Dispatchers.IO (only
+            // Dispatchers.Main is replaced in this test), so advanceUntilIdle()
+            // cannot observe its completion. Poll for the flag the IO coroutine
+            // sets, with a bound, instead of racing an arbitrary sleep.
+            var waitedMs = 0
+            while (!viewModel.isIdentified.value && waitedMs < 2000) {
+                Thread.sleep(25)
+                waitedMs += 25
+            }
+
+            // Try again — should be a no-op (guarded by _isIdentified)
             viewModel.identifyToNode()
             advanceUntilIdle()
 
             coVerify(exactly = 1) { protocol.identifyNomadnetLink(any()) }
             assertTrue(viewModel.isIdentified.value)
+        }
+
+    @Test
+    fun `loadPage auto-identifies to a flagged node`() =
+        runTest(testDispatcher) {
+            // The persisted set already contains this node, so loading its page
+            // must fire the identify request without a user tap.
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(setOf(nodeHash))
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+
+            val autoViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            advanceUntilIdle()
+            autoViewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            // identifyToNode runs on the real Dispatchers.IO, so poll for the
+            // call with a bound rather than an arbitrary sleep.
+            var identified = false
+            var waitedMs = 0
+            while (!identified && waitedMs < 2000) {
+                identified = runCatching {
+                    coVerify(exactly = 1) { protocol.identifyNomadnetLink(nodeHash) }
+                    true
+                }.getOrDefault(false)
+                if (!identified) {
+                    Thread.sleep(25)
+                    waitedMs += 25
+                }
+            }
+            assertTrue(identified)
+        }
+
+    @Test
+    fun `loadPage does not auto-identify to an unflagged node`() =
+        runTest(testDispatcher) {
+            // Default setUp stub: the persisted set is empty, so a plain page
+            // load must NOT fire the identify request.
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            // Give any (erroneous) IO coroutine time to run, then assert the
+            // identify request never happened.
+            Thread.sleep(150)
+            coVerify(exactly = 0) { protocol.identifyNomadnetLink(any()) }
+            assertFalse(viewModel.isIdentified.value)
+        }
+
+    @Test
+    fun `identifyToNode does not persist the always-identify opt-in (the toggle owns it)`() =
+        runTest(testDispatcher) {
+            // Regression: the dialog's Confirm button used to re-persist the
+            // "always identify" opt-in from a possibly-stale Compose snapshot,
+            // which raced a just-made toggle-off (the DataStore write is async)
+            // and could silently restore a node the user had turned off. The
+            // persisted set is now owned solely by the toggle, so identifyToNode
+            // must never write it.
+            every { pageCache.get(any(), any()) } returns simplePage
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            viewModel.identifyToNode()
+            advanceUntilIdle()
+            waitUntilIdentifySettled()
+
+            assertTrue(viewModel.isIdentified.value)
+            coVerify(exactly = 0) { settingsRepository.setNomadNetAutoIdentifyNode(any(), any()) }
+        }
+
+    @Test
+    fun `stale identify outcome is dropped when the user navigates to another node`() =
+        runTest(testDispatcher) {
+            // Regression: identifying to node A while the user navigates to
+            // node B before A's request completes used to mark B as identified
+            // (suppressing B's auto-identify and showing a false "identified"
+            // state). The outcome must be scoped to the node it targeted.
+            val nodeB = "1234567890abcdef1234567890abcdef"
+            every { pageCache.get(any(), any()) } returns simplePage
+            // Gate A's identify call so we can navigate away before it returns.
+            val identifyGate = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } coAnswers {
+                identifyGate.first()
+                Result.success(true)
+            }
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            viewModel.identifyToNode()
+            // The IO coroutine is now suspended at identifyNomadnetLink(nodeHash).
+            advanceUntilIdle()
+
+            // Navigate to a different node while A's identify is still in flight.
+            viewModel.loadPage(nodeB)
+            advanceUntilIdle()
+            assertFalse(viewModel.isIdentified.value)
+
+            // A's identify finally completes (for node A, no longer the current node).
+            identifyGate.tryEmit(Unit)
+            waitUntilIdentifySettled()
+
+            // The stale outcome for A must not mark B as identified.
+            assertFalse(viewModel.isIdentified.value)
+            val state = viewModel.browserState.value
+            assertTrue(state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeB, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
+        }
+
+    @Test
+    fun `auto-identify destination is retried when a stale identify was in flight`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile 4/5 finding): with node A's identify in
+            // flight, navigating to auto-identify node B returns from
+            // identifyToNode because the in-progress flag still belongs to A.
+            // When A's stale result is discarded, its completion must retry B's
+            // identify, or B stays anonymous until some unrelated action fires.
+            //
+            // A fresh ViewModel is constructed AFTER the set stub so the reactive
+            // collector populates _autoIdentifyNodes with nodeB (a finite flowOf
+            // is consumed once at init, so re-stubbing the setUp ViewModel's flow
+            // would not re-collect).
+            val nodeB = "1234567890abcdef1234567890abcdef"
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(setOf(nodeB))
+            every { pageCache.get(any(), any()) } returns simplePage
+            // Gate A's identify call so it stays in flight while we navigate to B.
+            val identifyGate = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            coEvery { protocol.identifyNomadnetLink(nodeHash) } coAnswers {
+                identifyGate.first()
+                Result.success(true)
+            }
+            // B's identify returns already-identified (no page refresh needed).
+            coEvery { protocol.identifyNomadnetLink(nodeB) } returns Result.success(true)
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            advanceUntilIdle()
+
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+
+            vm.identifyToNode()
+            // A's IO coroutine is now suspended at identifyNomadnetLink(nodeHash).
+            advanceUntilIdle()
+
+            // Navigate to auto-identify node B while A's identify is in flight.
+            // B's own identifyToNode returns early (in-progress flag belongs to A).
+            vm.loadPage(nodeB)
+            advanceUntilIdle()
+            assertFalse(vm.isIdentified.value)
+            // B's blocked identify was never issued while A held the flag.
+            coVerify(exactly = 0) { protocol.identifyNomadnetLink(nodeB) }
+
+            // A's identify completes; its stale result is discarded and its
+            // finally block retries B's identify.
+            identifyGate.tryEmit(Unit)
+
+            // Poll for B's identify to complete on the real Dispatchers.IO.
+            var identified = false
+            var waitedMs = 0
+            while (!identified && waitedMs < 2000) {
+                identified = vm.isIdentified.value
+                if (!identified) {
+                    Thread.sleep(25)
+                    waitedMs += 25
+                }
+            }
+            // B must end up identified (retried by A's completion), not left anonymous.
+            assertTrue("B should be retried and identified once A's stale identify completes", identified)
         }
 
     @Test
@@ -909,5 +1415,29 @@ class NomadNetBrowserViewModelTest {
             viewModel.retry()
             advanceUntilIdle()
             assertTrue(viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Initial)
+        }
+
+    // ── Page images ──
+
+    @Test
+    fun `setImageLoadingMode updates state and persists the choice`() =
+        runTest(testDispatcher) {
+            viewModel.setImageLoadingMode(network.columba.app.nomadnet.ImageLoadingMode.MANUAL)
+
+            assertEquals(
+                network.columba.app.nomadnet.ImageLoadingMode.MANUAL,
+                viewModel.imageLoadingMode.value,
+            )
+            coVerify(exactly = 1) { settingsRepository.saveNomadNetImageLoadingMode("MANUAL") }
+        }
+
+    @Test
+    fun `clearImageCache wipes the disk cache and resets in-flight image states`() =
+        runTest(testDispatcher) {
+            viewModel.clearImageCache()
+            advanceUntilIdle()
+
+            verify { imageCache.clear() }
+            assertTrue(viewModel.imageStates.value.isEmpty())
         }
 }

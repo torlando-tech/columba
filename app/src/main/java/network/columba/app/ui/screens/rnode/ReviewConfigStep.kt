@@ -398,7 +398,7 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
                 Spacer(Modifier.height(8.dp))
 
                 // SF, CR, TX Power row
-                val maxTxPower = regionLimits?.maxTxPower ?: 22
+                val maxTxPower = regionLimits?.maxTxPower ?: 27
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

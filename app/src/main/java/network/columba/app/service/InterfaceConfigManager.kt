@@ -30,6 +30,11 @@ import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class PendingInterfaceChanges(
+    val hasPendingChanges: Boolean = false,
+    val interfaceIds: Set<Long> = emptySet(),
+)
+
 /**
  * Manager for applying interface configuration changes to the running Reticulum instance.
  *
@@ -66,6 +71,9 @@ class InterfaceConfigManager
         companion object {
             private const val TAG = "InterfaceConfigManager"
             private const val APPLY_CHANGES_TIMEOUT_MS = 60_000L
+            private const val PREFS_NAME = "columba_prefs"
+            private const val KEY_HAS_PENDING_INTERFACE_CHANGES = "has_pending_interface_changes"
+            private const val KEY_PENDING_INTERFACE_IDS = "pending_interface_ids"
         }
 
         /**
@@ -330,6 +338,11 @@ class InterfaceConfigManager
                     val batteryProfile = settingsRepository.getBatteryProfile()
                     Log.d(TAG, "Battery profile: $batteryProfile")
 
+                    // Load the incoming-message size limit so the restarting backend
+                    // primes the user's gate before the first delivery (columba#1106)
+                    val incomingMessageSizeLimitKb =
+                        settingsRepository.getIncomingMessageSizeLimitKb().toLong()
+
                     // Load discovery settings
                     val discoverInterfaces = settingsRepository.getDiscoverInterfacesEnabled()
                     val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
@@ -360,33 +373,44 @@ class InterfaceConfigManager
                             discoverInterfaces = discoverInterfaces,
                             autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                             autoconnectIfacOnly = autoconnectIfacOnly,
+                            incomingMessageSizeLimitKb = incomingMessageSizeLimitKb,
                         )
 
-                    rnsCore
-                        .initialize(config)
-                        .onSuccess {
-                            Log.d(TAG, "✓ Reticulum initialized successfully")
+                    val initResult = rnsCore.initialize(config)
+                    initResult.onFailure { error ->
+                        // The outer finally clears is_applying_config — keep the flag set
+                        // here so any stale ACTION_STOP redelivery during the in-flight
+                        // service restart (Step 4 → Step 7 window) is still recognised
+                        // as an apply-time redelivery and ignored in
+                        // ReticulumService.onStartCommand.
+                        Log.e(TAG, "Failed to initialize Reticulum", error)
+                        throw Exception("Failed to initialize Reticulum: ${error.message}", error)
+                    }
+                    Log.d(TAG, "✓ Reticulum initialized successfully")
 
-                            // Refresh the persisted snapshot with the config we just
-                            // applied. Without this, the snapshot only ever reflects
-                            // ColumbaApplication.onCreate's cold-start config — so any
-                            // field changed via Apply & Restart (e.g. shareInstanceHosting)
-                            // silently reverts the next time the OS reaps and START_STICKY-
-                            // restarts the :reticulum process from the stale snapshot.
-                            ReticulumConfigSnapshot.write(
-                                context = context,
-                                config = config,
-                                identityHashHex = activeIdentity?.identityHash,
-                            )
-                        }.onFailure { error ->
-                            // The outer finally clears is_applying_config — keep the flag set
-                            // here so any stale ACTION_STOP redelivery during the in-flight
-                            // service restart (Step 4 → Step 7 window) is still recognised
-                            // as an apply-time redelivery and ignored in
-                            // ReticulumService.onStartCommand.
-                            Log.e(TAG, "Failed to initialize Reticulum", error)
-                            throw Exception("Failed to initialize Reticulum: ${error.message}", error)
-                        }
+                    // Refresh the persisted snapshot with the config we just
+                    // applied. Without this, the snapshot only ever reflects
+                    // ColumbaApplication.onCreate's cold-start config — so any
+                    // field changed via Apply & Restart (e.g. shareInstanceHosting)
+                    // silently reverts the next time the OS reaps and START_STICKY-
+                    // restarts the :reticulum process from the stale snapshot.
+                    ReticulumConfigSnapshot.write(
+                        context = context,
+                        config = config,
+                        identityHashHex = activeIdentity?.identityHash,
+                    )
+
+                    // Persist shared instance status so the Settings UI banner reflects
+                    // the actual transport mode. This is the same check performed in
+                    // ColumbaApplication.onCreate(); without it the `isSharedInstance`
+                    // DataStore flag is never written on the restart path, so the
+                    // shared-instance banner/toggle stay stuck on "own instance" even
+                    // after the daemon switches modes (e.g. toggling "Use Columba's own
+                    // instance" off). Both call sites share
+                    // SharedInstanceStatus.persist() so they cannot drift apart.
+                    // Best-effort: a failure to persist the status flag must not fail
+                    // an otherwise-successful restart (the daemon is already up).
+                    SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
 
                     // Signal caller that service is usable (before post-init bookkeeping)
                     onServiceReady?.invoke()
@@ -461,25 +485,45 @@ class InterfaceConfigManager
          * Used when interfaces are modified outside of InterfaceManagementViewModel
          * (e.g., from RNode wizard).
          */
-        fun setPendingChanges(hasPending: Boolean) {
-            context
-                .getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean("has_pending_interface_changes", hasPending)
-                .apply()
+        @Synchronized
+        fun setPendingChanges(
+            hasPending: Boolean,
+            interfaceId: Long? = null,
+        ) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val editor = prefs.edit().putBoolean(KEY_HAS_PENDING_INTERFACE_CHANGES, hasPending)
+            if (!hasPending) {
+                editor.remove(KEY_PENDING_INTERFACE_IDS)
+            } else if (interfaceId != null) {
+                val pendingIds = prefs.getStringSet(KEY_PENDING_INTERFACE_IDS, emptySet()).orEmpty().toMutableSet()
+                pendingIds += interfaceId.toString()
+                editor.putStringSet(KEY_PENDING_INTERFACE_IDS, pendingIds)
+            }
+            editor.apply()
         }
 
         /**
-         * Check if there are pending interface changes and clear the flag.
-         * @return true if there were pending changes, false otherwise
+         * Consume externally written pending state, including the identities of
+         * interfaces whose pre-update runtime diagnostics are now stale.
          */
-        fun checkAndClearPendingChanges(): Boolean {
-            val prefs = context.getSharedPreferences("columba_prefs", Context.MODE_PRIVATE)
-            val hasPending = prefs.getBoolean("has_pending_interface_changes", false)
-            if (hasPending) {
-                prefs.edit().putBoolean("has_pending_interface_changes", false).apply()
+        @Synchronized
+        fun consumePendingChanges(): PendingInterfaceChanges {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val hasPending = prefs.getBoolean(KEY_HAS_PENDING_INTERFACE_CHANGES, false)
+            val interfaceIds =
+                prefs
+                    .getStringSet(KEY_PENDING_INTERFACE_IDS, emptySet())
+                    .orEmpty()
+                    .mapNotNull(String::toLongOrNull)
+                    .toSet()
+            if (hasPending || interfaceIds.isNotEmpty()) {
+                prefs
+                    .edit()
+                    .putBoolean(KEY_HAS_PENDING_INTERFACE_CHANGES, false)
+                    .remove(KEY_PENDING_INTERFACE_IDS)
+                    .apply()
             }
-            return hasPending
+            return PendingInterfaceChanges(hasPending, interfaceIds)
         }
 
         /**

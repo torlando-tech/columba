@@ -18,9 +18,16 @@ import kotlinx.coroutines.launch
 import network.columba.app.micron.MicronDocument
 import network.columba.app.micron.MicronElement
 import network.columba.app.micron.MicronParser
+import network.columba.app.nomadnet.ImageLoadingMode
+import network.columba.app.nomadnet.NomadNetImageCache
+import network.columba.app.nomadnet.PageImageLoader
+import network.columba.app.nomadnet.PageImageState
+import network.columba.app.nomadnet.ParsedImageRef
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.nomadnet.PartialManager
+import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.nomadnet.buildNomadNetRequestData
+import network.columba.app.nomadnet.pageImageKey
 import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsNomadnet
@@ -33,6 +40,7 @@ class NomadNetBrowserViewModel
     constructor(
         private val nomadnet: RnsNomadnet,
         private val pageCache: NomadNetPageCache,
+        private val imageCache: NomadNetImageCache,
         private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
@@ -53,6 +61,7 @@ class NomadNetBrowserViewModel
                 val document: MicronDocument,
                 val path: String,
                 val nodeHash: String,
+                val fieldTokens: List<String> = emptyList(),
             ) : BrowserState()
 
             data class Error(
@@ -83,6 +92,7 @@ class NomadNetBrowserViewModel
             val path: String,
             val formFields: Map<String, String>,
             val document: MicronDocument,
+            val fieldTokens: List<String> = emptyList(),
         )
 
         private val _browserState = MutableStateFlow<BrowserState>(BrowserState.Initial)
@@ -117,10 +127,20 @@ class NomadNetBrowserViewModel
                     _renderingMode.value = restored
                 }
             }
+            // NOTE: the auto-identify set observation lives in its own init
+            // block below (after the _autoIdentifyNodes declaration) so the
+            // property is initialized before the collect writes to it; the
+            // image-loading-mode restore likewise lives next to its field.
         }
 
         private val _isIdentified = MutableStateFlow(false)
         val isIdentified: StateFlow<Boolean> = _isIdentified.asStateFlow()
+
+        // Destination hashes of nodes the user opted into auto-identification
+        // for ("Always identify to this node"). Restored from DataStore in init;
+        // the browser auto-identifies to these nodes on every page load.
+        private val _autoIdentifyNodes = MutableStateFlow<Set<String>>(emptySet())
+        val autoIdentifyNodes: StateFlow<Set<String>> = _autoIdentifyNodes.asStateFlow()
 
         private val _identifyInProgress = MutableStateFlow(false)
         val identifyInProgress: StateFlow<Boolean> = _identifyInProgress.asStateFlow()
@@ -159,9 +179,40 @@ class NomadNetBrowserViewModel
         private var lastFetchNodeHash = ""
         private var lastFetchPath = DEFAULT_PATH
         private var lastFetchFormDataJson: String? = null
+        /** Link-field tokens (backtick block) for the last fetch, for persist-path reconstruction. */
+        private var lastFetchFieldTokens: List<String> = emptyList()
+
+        init {
+            // Observe the auto-identify node set reactively so flagged nodes
+            // keep being identified on every page load, and the browser dialog
+            // stays in sync with toggles made elsewhere (e.g. the Node Details
+            // card). DataStore is the source of truth; this mirrors it.
+            //
+            // The auto-trigger fires from this collector (not just on page
+            // load) so a fast cached first page that loads before DataStore's
+            // first emission is still identified once the set arrives.
+            // (Lives after the currentNodeHash declaration because Kotlin runs
+            // property initializers and init blocks in source order, and the
+            // collector reads currentNodeHash on the first emission.)
+            viewModelScope.launch {
+                settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
+                    _autoIdentifyNodes.value = nodes
+                    if (currentNodeHash.isNotEmpty() && currentNodeHash in nodes) {
+                        identifyToNode()
+                    }
+                }
+            }
+        }
 
         @Volatile
         private var fetchEpoch = 0
+
+        // Set when identification succeeds for a node whose page has not yet
+        // reached PageLoaded (still loading), so emitPageLoaded can re-fetch
+        // the post-identification content once it lands. Cleared by loadPage
+        // (navigation) and consumed by emitPageLoaded.
+        @Volatile
+        private var pendingIdentifyRefreshFor: String? = null
 
         @Volatile
         private var statusCollectionJob: kotlinx.coroutines.Job? = null
@@ -180,6 +231,114 @@ class NomadNetBrowserViewModel
 
         val partialStates: StateFlow<Map<String, PartialManager.PartialState>>
             get() = partialManager.states
+
+        // ==================== Page images ====================
+
+        private val _imageLoadingMode = MutableStateFlow(ImageLoadingMode.AUTO)
+
+        /** Current image loading mode (upstream `image_loading` mirror). */
+        val imageLoadingMode: StateFlow<ImageLoadingMode> = _imageLoadingMode.asStateFlow()
+
+        @Volatile
+        private var imageLoadingModeUserSelected = false
+
+        // Restore the user's persisted image-loading mode so it survives a
+        // ViewModel recreation (process death / config change). Mirrors the
+        // rendering-mode restore in the init block above: a user who selected
+        // never/manual/always must not silently fall back to AUTO. Without this
+        // _imageLoadingMode always started at AUTO and the saved choice was
+        // dropped (issue 4). Lives here (not the init block) because Kotlin
+        // initializes properties in declaration order and this field must exist
+        // before we write to it.
+        init {
+            viewModelScope.launch {
+                val restored =
+                    try {
+                        ImageLoadingMode.fromName(settingsRepository.nomadNetImageLoadingModeFlow.first())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read persisted image loading mode; using default", e)
+                        ImageLoadingMode.AUTO
+                    }
+                if (!imageLoadingModeUserSelected) {
+                    _imageLoadingMode.value = restored
+                }
+            }
+        }
+
+        /** Wall-clock timing of the last successful page fetch (bits/s EDR fallback). */
+        @Volatile
+        private var lastPageFetchSeconds: Double? = null
+
+        @Volatile
+        private var lastPageFetchBytes: Long = 0L
+
+        private val pageImageLoader: PageImageLoader by lazy {
+            PageImageLoader(
+                nomadnet = nomadnet,
+                cache = imageCache,
+                scope = viewModelScope,
+                currentNodeHash = { currentNodeHash },
+                imageLoadingMode = { _imageLoadingMode.value },
+                lastResponseSpeedBps = {
+                    val seconds = lastPageFetchSeconds
+                    if (seconds != null && seconds > 0 && lastPageFetchBytes > 0) {
+                        lastPageFetchBytes * 8 / seconds
+                    } else {
+                        null
+                    }
+                },
+            )
+        }
+
+        /** Per-image fetch states keyed by [pageImageKey]. */
+        val imageStates: StateFlow<Map<String, PageImageState>>
+            get() = pageImageLoader.imageStates
+
+        /** Explicit load of all pending images (upstream Ctrl+L). */
+        fun loadPageImages(forceReload: Boolean = false) {
+            pageImageLoader.loadImages(forceReload)
+        }
+
+        /**
+         * Clear the on-disk NomadNet image cache entirely and reset the
+         * in-flight image states back to placeholders, so the user can re-load
+         * them on demand. Upstream's `clear`-and-renavigate, collapsed onto the
+         * mobile "Clear image cache" action.
+         *
+         * After clearing, re-scan the current document (if any) so its image
+         * references are re-registered as placeholders. [PageImageLoader.clear]
+         * on its own would wipe the registered states and leave the displayed
+         * page with unfetchable placeholders: retryImage would no-op (the key
+         * no longer exists) and the bulk-load menu would vanish because
+         * imageStates is empty (issue 3).
+         */
+        fun clearImageCache() {
+            imageCache.clear()
+            val current = browserState.value as? BrowserState.PageLoaded
+            if (current != null) {
+                pageImageLoader.scan(imageRefsFor(current.document), forceReload = true)
+            } else {
+                pageImageLoader.clear()
+            }
+        }
+
+        /** Retry/load one image (placeholder tap, sheet Reload). */
+        fun retryPageImage(key: String) {
+            pageImageLoader.retryImage(key)
+        }
+
+        fun setImageLoadingMode(mode: ImageLoadingMode) {
+            imageLoadingModeUserSelected = true
+            _imageLoadingMode.value = mode
+            // Apply the transition to the active loader so it takes effect on
+            // the currently-displayed page, not only on the next navigation
+            // (issue 5): ALWAYS starts loading pending images, NEVER cancels a
+            // running queue, AUTO re-evaluates the gate.
+            pageImageLoader.applyMode(mode)
+            viewModelScope.launch { settingsRepository.saveNomadNetImageLoadingMode(mode.name) }
+        }
 
         /** Returns "nodeHash:/path" format for display in the URL bar. */
         fun getCurrentUrl(): String? {
@@ -238,6 +397,9 @@ class NomadNetBrowserViewModel
                 _isIdentified.value = false
             }
             currentNodeHash = destinationHash
+            // A pending post-identification refresh is scoped to a node; drop it
+            // on a new navigation so it can't trigger a spurious re-fetch later.
+            pendingIdentifyRefreshFor = null
             _formFields.value = emptyMap()
 
             // A path reaching here (from a nomadnetwork:// deep link or the URL
@@ -252,7 +414,7 @@ class NomadNetBrowserViewModel
             val formDataJson = buildNomadNetRequestData(fieldNames, _formFields.value)
             if (formDataJson != null) {
                 // Variable submissions always fetch fresh (response depends on data).
-                submitFormAndNavigate(destinationHash, requestPath, formDataJson)
+                submitFormAndNavigate(destinationHash, requestPath, formDataJson, fieldNames)
                 return
             }
 
@@ -305,6 +467,9 @@ class NomadNetBrowserViewModel
 
             if (nodeHash != currentNodeHash) {
                 _isIdentified.value = false
+                // New node: drop a pending post-identification refresh scoped to
+                // the previous node so it can't cause a spurious re-fetch.
+                pendingIdentifyRefreshFor = null
             }
             _formFields.value = emptyMap()
 
@@ -312,7 +477,7 @@ class NomadNetBrowserViewModel
             if (path.startsWith("/file/")) {
                 downloadFile(nodeHash, path)
             } else if (formDataJson != null) {
-                submitFormAndNavigate(nodeHash, path, formDataJson)
+                submitFormAndNavigate(nodeHash, path, formDataJson, fieldNames)
             } else {
                 // Non-form link: check cache first
                 val cached = pageCache.get(nodeHash, path)
@@ -333,12 +498,20 @@ class NomadNetBrowserViewModel
             nodeHash: String,
             path: String,
             formDataJson: String,
+            fieldTokens: List<String> = emptyList(),
         ) {
             val epoch = ++fetchEpoch
+            // Same single-flight hygiene as fetchPage: a form submission is a
+            // new page request over the shared NomadNet link, so cancel any
+            // in-flight page-image queue first to keep stale image traffic off
+            // the link. The target page's images are re-scanned in
+            // emitPageLoaded once the fetch completes.
+            pageImageLoader.cancelAll()
             stopProgressCollection()
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = formDataJson
+            lastFetchFieldTokens = fieldTokens
             _browserState.value = BrowserState.Loading("Requesting page...")
             startStatusCollection(epoch)
             viewModelScope.launch(Dispatchers.IO) {
@@ -359,7 +532,7 @@ class NomadNetBrowserViewModel
                         onSuccess = { pageResult ->
                             currentNodeHash = nodeHash
                             val document = MicronParser.parse(pageResult.content)
-                            emitPageLoaded(document, pageResult.path, nodeHash)
+                            emitPageLoaded(document, pageResult.path, nodeHash, lastFetchFieldTokens)
                         },
                         onFailure = { error ->
                             _browserState.value =
@@ -462,11 +635,40 @@ class NomadNetBrowserViewModel
             partialManager.clear()
             val entry = history.removeAt(history.lastIndex)
             _canGoBack.value = history.isNotEmpty()
+            // Reset identification when crossing back to a different node,
+            // matching loadPage/navigateToLink: a stale "identified" flag from
+            // the previous node would otherwise short-circuit the auto-trigger
+            // and make the dialog open in manage mode for a node we never
+            // actually identified to.
+            if (entry.nodeHash != currentNodeHash) {
+                _isIdentified.value = false
+                pendingIdentifyRefreshFor = null
+            }
             currentNodeHash = entry.nodeHash
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
-            emitPageLoaded(entry.document, entry.path, entry.nodeHash)
+            emitPageLoaded(entry.document, entry.path, entry.nodeHash, entry.fieldTokens)
             return true
+        }
+
+        /**
+         * Close the browsed site: forget the persisted last-node hash (so the
+         * bottom-nav NomadNet tab reopens at the address-entry prompt instead
+         * of this site), drop in-memory history, and reset the view state.
+         */
+        fun closeSite() {
+            // Invalidate any in-flight request so its result doesn't repopulate
+            // the view after we reset to Initial.
+            fetchEpoch++
+            stopStatusCollection()
+            stopProgressCollection()
+            partialManager.clear()
+            pageImageLoader.clear()
+            history.clear()
+            _canGoBack.value = false
+            _formFields.value = emptyMap()
+            _browserState.value = BrowserState.Initial
+            viewModelScope.launch { settingsRepository.clearNomadNetLastNodeHash() }
         }
 
         fun refresh() {
@@ -474,8 +676,41 @@ class NomadNetBrowserViewModel
             if (currentState is BrowserState.PageLoaded) {
                 _isPullRefreshing.value = true
                 partialManager.clear()
-                // Bypass cache read, but still cache the fresh response
-                fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
+                // A var-bearing page (loaded via request data) must be re-fetched
+                // with that same data - a bare fetch drops the request variables
+                // and the node rejects the page ("Invalid thread"). Rebuild the
+                // request data from the DISPLAYED page's own field tokens (not
+                // lastFetch*), so back-navigation to an earlier same-node/same-
+                //path page refreshes with that page's vars rather than a later
+                // page's vars still lingering in lastFetch* state.
+                val tokenData = buildNomadNetRequestData(
+                    currentState.fieldTokens,
+                    _formFields.value,
+                )
+                if (tokenData != null) {
+                    submitFormAndNavigate(
+                        currentState.nodeHash,
+                        currentState.path,
+                        tokenData,
+                        currentState.fieldTokens,
+                    )
+                    return
+                }
+                // No link-field tokens on the displayed page: it was either a
+                // plain page (fetchPage) or a form submission triggered from a
+                // tokenless page (submitFormAndNavigate with no tokens). In the
+                // latter case the request data is still in lastFetch* and the
+                // displayed page is exactly the one we last submitted.
+                val formData = lastFetchFormDataJson
+                if (currentState.nodeHash == lastFetchNodeHash &&
+                    currentState.path == lastFetchPath &&
+                    formData != null
+                ) {
+                    submitFormAndNavigate(lastFetchNodeHash, lastFetchPath, formData, lastFetchFieldTokens)
+                } else {
+                    // Bypass cache read, but still cache the fresh response.
+                    fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
+                }
             }
         }
 
@@ -484,7 +719,10 @@ class NomadNetBrowserViewModel
             if (lastFetchNodeHash.isNotEmpty()) {
                 val formData = lastFetchFormDataJson
                 if (formData != null) {
-                    submitFormAndNavigate(lastFetchNodeHash, lastFetchPath, formData)
+                    // Carry the link-field tokens so a recovered var-bearing page
+                    // re-submits the same request variables and re-persists the
+                    // full backtick path - not a bare path the node would reject.
+                    submitFormAndNavigate(lastFetchNodeHash, lastFetchPath, formData, lastFetchFieldTokens)
                 } else {
                     loadPage(lastFetchNodeHash, lastFetchPath)
                 }
@@ -523,9 +761,25 @@ class NomadNetBrowserViewModel
             viewModelScope.launch { settingsRepository.saveNomadNetRenderingMode(mode.name) }
         }
 
-        fun identifyToNode() {
+        /**
+         * Identify to the current node: trigger the identification request and,
+         * on success, mark the node identified and refresh its page.
+         *
+         * This deliberately does NOT write the "always identify" opt-in set:
+         * that persisted preference is owned solely by the toggle
+         * (NomadNetAutoIdentifyViewModel.setAutoIdentifyForNode). Writing it here
+         * from the dialog's Confirm button raced a just-made toggle-off (the
+         * DataStore write is async, so the Compose snapshot Confirm read was
+         * stale) and could silently restore a node the user had turned off.
+         */
+        fun identifyToNode(targetNodeHash: String? = null) {
             if (_identifyInProgress.value || _isIdentified.value) return
-            val nodeHash = currentNodeHash
+            // An explicit target (passed by the stale-request retry below) is used
+            // verbatim; otherwise the current node. Capturing the target here -
+            // rather than re-reading currentNodeHash later - closes the
+            // cross-dispatcher race where navigation between the eligibility
+            // check and the request start would identify the wrong node.
+            val nodeHash = targetNodeHash ?: currentNodeHash
             if (nodeHash.isEmpty()) return
 
             _identifyInProgress.value = true
@@ -533,16 +787,73 @@ class NomadNetBrowserViewModel
                 try {
                     nomadnet.identifyNomadnetLink(nodeHash).fold(
                         onSuccess = { alreadyIdentified ->
+                            // The request targets the node captured as [nodeHash].
+                            // If the user has since navigated to a different node,
+                            // this outcome is stale: applying it would mark the new
+                            // node as identified (suppressing its auto-identify and
+                            // showing a false "identified" state).
+                            if (currentNodeHash != nodeHash) return@fold
                             _isIdentified.value = true
-                            if (!alreadyIdentified) refresh()
+                            if (alreadyIdentified) return@fold
+                            if (_browserState.value is BrowserState.PageLoaded) {
+                                // Page is displayed; refresh shows identified content.
+                                refresh()
+                            } else {
+                                // The page for this node is still loading; the
+                                // in-flight pre-identification fetch will complete
+                                // and be shown. Flag it so emitPageLoaded re-fetches
+                                // post-identification content once it lands.
+                                pendingIdentifyRefreshFor = nodeHash
+                            }
                         },
-                        onFailure = { _identifyError.value = it.message ?: "Unknown error" },
+                        onFailure = {
+                            // Same staleness guard: a failure for a node the user has
+                            // already left must not surface as an error for the
+                            // current node.
+                            if (currentNodeHash != nodeHash) return@fold
+                            _identifyError.value = it.message ?: "Unknown error"
+                        },
                     )
                 } catch (e: Exception) {
-                    _identifyError.value = e.message ?: "Unknown error"
+                    if (currentNodeHash == nodeHash) {
+                        _identifyError.value = e.message ?: "Unknown error"
+                    }
                 } finally {
                     _identifyInProgress.value = false
+                    // If this request was for a node the user has already left, its
+                    // stale result was discarded above, but its completion is what
+                    // frees the in-progress flag that blocked the CURRENT node's own
+                    // identify. Retry the current node's identify now if it is still
+                    // pending: the flag guard skipped it while this older request was
+                    // in flight, and no later event would re-trigger it (the reactive
+                    // collector and emitPageLoaded both already ran). The helper
+                    // validates and captures the target in one pass, so navigation
+                    // between the check and the request start cannot make the retry
+                    // identify a different node.
+                    pendingRetryTarget(nodeHash)?.let { identifyToNode(it) }
                 }
+            }
+        }
+
+        /**
+         * Returns the node whose auto-identify should be retried now that the
+         * identify for [completedNodeHash] has completed and was discarded as
+         * stale, or null when no retry is due. Non-null only when the current node
+         * differs from the completed one, is flagged for auto-identify, and is not
+         * yet identified. Re-reads currentNodeHash against the captured target so a
+         * navigation that lands between the two reads aborts the retry. One-shot
+         * per completion, so it cannot loop.
+         */
+        private fun pendingRetryTarget(completedNodeHash: String): String? {
+            val target = currentNodeHash
+            return if (target.isEmpty() || target == completedNodeHash) {
+                null
+            } else if (target !in _autoIdentifyNodes.value) {
+                null
+            } else if (currentNodeHash != target || _isIdentified.value) {
+                null
+            } else {
+                target
             }
         }
 
@@ -550,6 +861,7 @@ class NomadNetBrowserViewModel
             super.onCleared()
             stopStatusCollection()
             stopProgressCollection()
+            pageImageLoader.cancelAll()
             // Cancel any in-flight Python page request so the IO thread isn't blocked
             // for up to PAGE_TIMEOUT_SECONDS after the user navigates away.
             // Use NonCancellable because viewModelScope is already cancelled at this point.
@@ -576,6 +888,7 @@ class NomadNetBrowserViewModel
                         path = currentState.path,
                         formFields = _formFields.value.toMap(),
                         document = currentState.document,
+                        fieldTokens = currentState.fieldTokens,
                     ),
                 )
                 _canGoBack.value = true
@@ -594,6 +907,7 @@ class NomadNetBrowserViewModel
             document: MicronDocument,
             path: String,
             nodeHash: String,
+            fieldTokens: List<String> = emptyList(),
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
@@ -602,9 +916,56 @@ class NomadNetBrowserViewModel
                     document = document,
                     path = path,
                     nodeHash = nodeHash,
+                    fieldTokens = fieldTokens,
                 )
+            // Remember where the user is so the bottom-nav NomadNet tab can
+            // reopen the exact page the user left on (node + deep path) instead
+            // of a cold default. Guarded: if the user hit Close Site while this
+            // page was in flight, state is no longer this page and the save must
+            // not resurrect the closed binding behind closeSite's clear.
+            //
+            // Persist the FULL path including the backtick field block (if any)
+            // so that restoring it via loadPage re-submits the same request
+            // variables. Without this, a forum thread (or any var-bearing page)
+            // reopens as a bare-path fetch and the node rejects it.
+            val persistPath = buildNomadNetPersistPath(path, fieldTokens)
+            viewModelScope.launch {
+                settingsRepository.saveNomadNetLastNodeHash(nodeHash, persistPath) {
+                    val current = _browserState.value
+                    current is BrowserState.PageLoaded && current.nodeHash == nodeHash
+                }
+            }
             partialManager.detectAndLoad(document)
+            pageImageLoader.scan(imageRefsFor(document))
+            // If identification for this node completed while its page was still
+            // loading, the just-displayed page is pre-identification content.
+            // Re-fetch it now (identified) so an access-gated service doesn't
+            // show anonymous/denied content on the first visit.
+            if (pendingIdentifyRefreshFor == nodeHash) {
+                pendingIdentifyRefreshFor = null
+                refresh()
+            }
+            // Auto-identify to a node the user flagged ("Always identify to
+            // this node"). Covers navigation to a node that is already in the
+            // set (the set itself hasn't changed, so the reactive collector
+            // won't re-emit for it). identifyToNode is a no-op when already
+            // identified or in progress, so this is safe on every page load.
+            if (nodeHash in _autoIdentifyNodes.value) {
+                identifyToNode()
+            }
         }
+
+        /** All image elements in a document, reduced to loader refs. */
+        private fun imageRefsFor(document: MicronDocument): List<ParsedImageRef> =
+            document.lines
+                .flatMap { it.elements }
+                .filterIsInstance<MicronElement.Image>()
+                .map { img ->
+                    ParsedImageRef(
+                        url = img.url,
+                        key = pageImageKey(img.url, img.width, img.height),
+                    )
+                }
 
         /**
          * Return a copy of [current] with parser-declared text-field defaults filled
@@ -700,13 +1061,26 @@ class NomadNetBrowserViewModel
             cacheResponse: Boolean,
         ) {
             val epoch = ++fetchEpoch
+            // Navigation starts a new page request over the shared NomadNet
+            // link. Cancel any in-flight page-image queue first so stale image
+            // traffic doesn't compete with the page request this single-flight
+            // design prioritizes (issue 7). The new page's own images are
+            // re-scanned (and their queue started) in emitPageLoaded when the
+            // fetch completes. Without this, an image fetch could sit in a
+            // long backend await for the whole link timeout after the user
+            // already navigated away.
+            pageImageLoader.cancelAll()
             stopProgressCollection()
             lastFetchNodeHash = nodeHash
             lastFetchPath = path
             lastFetchFormDataJson = null
+            lastFetchFieldTokens = emptyList()
             _browserState.value = BrowserState.Loading("Requesting page...")
             startStatusCollection(epoch)
 
+            // Wall-clock fetch timing feeds the image auto-gate's fallback
+            // EDR (upstream last_response_speed()).
+            val fetchStartedAt = System.nanoTime()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val result =
@@ -724,6 +1098,9 @@ class NomadNetBrowserViewModel
 
                     result.fold(
                         onSuccess = { pageResult ->
+                            lastPageFetchSeconds = (System.nanoTime() - fetchStartedAt) / 1_000_000_000.0
+                            lastPageFetchBytes =
+                                if (pageResult.type == "file") pageResult.fileSize else pageResult.content.length.toLong()
                             if (pageResult.type == "file") {
                                 // Unexpected file response on a page path —
                                 // clear loading state so screen doesn't get stuck

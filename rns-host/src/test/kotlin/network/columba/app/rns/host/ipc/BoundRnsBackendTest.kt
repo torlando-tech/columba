@@ -41,6 +41,7 @@ import network.columba.app.rns.api.model.LinkSpeedProbeResult
 import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.NomadnetLinkStats
 import network.columba.app.rns.api.model.NomadnetPageResult
 import network.columba.app.rns.api.model.PacketReceipt
 import network.columba.app.rns.api.model.PacketType
@@ -48,6 +49,8 @@ import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.api.model.TransferPhase
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.model.VoiceCallState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -82,6 +85,30 @@ import kotlinx.coroutines.flow.first
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class BoundRnsBackendTest {
+    @Test
+    fun `BoundRnsLxmf republishes transfer progress after binding`() = runTest {
+        val flow = MutableStateFlow<RnsBackend?>(null)
+        val lxmf = BoundRnsLxmf(flow.asStateFlow(), backgroundScope)
+        val fake = FakeRnsBackend()
+        val update = TransferProgressUpdate(
+            transferId = "resource-id",
+            messageHash = "message-id",
+            direction = Direction.OUT,
+            progress = 0.25f,
+            phase = TransferPhase.TRANSFERRING,
+            totalBytes = 1_024L,
+            deliveryMethod = DeliveryMethod.DIRECT,
+        )
+
+        lxmf.observeTransferProgress().test {
+            flow.value = fake
+            advanceUntilIdle()
+            fake.lxmfFake.transferProgressEmitter.emit(update)
+            assertEquals(update, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `BoundRnsCore suspend call awaits binding then forwards`() = runTest {
         val flow = MutableStateFlow<RnsBackend?>(null)
@@ -167,6 +194,23 @@ class BoundRnsBackendTest {
     }
 
     @Test
+    fun `BoundRnsTransportAdmin replays interface status emitted before bind`() = runTest {
+        val flow = MutableStateFlow<RnsBackend?>(null)
+        val admin = BoundRnsTransportAdmin(flow.asStateFlow(), backgroundScope)
+        val fake = FakeRnsBackend()
+        val payload = """{"updates":{"Test RNode":true}}"""
+        fake.transportAdminFake.emitInterfaceStatus(payload)
+
+        flow.value = fake
+        advanceUntilIdle()
+
+        admin.interfaceStatusFlow.test {
+            assertEquals(payload, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `BoundRnsTelephony callState republishes across rebinds`() = runTest {
         val flow = MutableStateFlow<RnsBackend?>(null)
         val tel = BoundRnsTelephony(flow.asStateFlow(), backgroundScope)
@@ -206,7 +250,8 @@ class BoundRnsBackendTest {
 
         override val capabilities: StateFlow<BackendCapabilities> = capabilitiesEmitter.asStateFlow()
         override val core: RnsCore = coreFake
-        override val lxmf: RnsLxmf = StubRnsLxmf()
+        val lxmfFake = StubRnsLxmf()
+        override val lxmf: RnsLxmf = lxmfFake
         override val telephony: RnsTelephony = telephonyFake
         override val telemetry: RnsTelemetry = StubRnsTelemetry()
         override val nomadnet: RnsNomadnet = StubRnsNomadnet()
@@ -265,6 +310,8 @@ class BoundRnsBackendTest {
         override suspend fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>) = Result.success(0)
         override suspend fun blockDestination(destinationHashHex: String) = Result.success(Unit)
         override suspend fun unblockDestination(destinationHashHex: String) = Result.success(Unit)
+        override suspend fun blockIdentity(identityHashHex: String) = Result.success(Unit)
+        override suspend fun unblockIdentity(identityHashHex: String) = Result.success(Unit)
         override suspend fun blackholeIdentity(identityHashHex: String) = Result.success(Unit)
         override suspend fun unblackholeIdentity(identityHashHex: String) = Result.success(Unit)
     }
@@ -300,7 +347,7 @@ class BoundRnsBackendTest {
         private val statusChangedEmitter = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 16)
         private val bleConnectionsEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 32)
         private val debugInfoEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
-        private val interfaceStatusEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 32)
+        private val interfaceStatusEmitter = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 32)
         private val reactionReceivedEmitter = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 32)
 
         override fun setBatteryProfile(profile: BatteryProfile) { batteryProfileSets.add(profile) }
@@ -313,12 +360,17 @@ class BoundRnsBackendTest {
         override suspend fun getAutoconnectedEndpoints() = emptySet<String>()
         override suspend fun isSharedInstanceAvailable() = false
         override suspend fun isHostingSharedInstance() = false
+        override suspend fun getSharedInstanceAccessConfig(): String? = null
         override suspend fun getDebugInfo() = emptyMap<String, Any>()
         override suspend fun getFailedInterfaces(): List<FailedInterface> = emptyList()
         override suspend fun getInterfaceStats(interfaceName: String) = null
         override suspend fun reconnectRNodeInterface() {}
         override fun getRNodeRssi(): Int = rssi
+        override suspend fun getRNodeBattery(): Int = -1
         override fun getBleConnectionDetails(): String = bleConnections
+        fun emitInterfaceStatus(payload: String) {
+            check(interfaceStatusEmitter.tryEmit(payload))
+        }
         override val interfaceStatusChanged: SharedFlow<Unit> = statusChangedEmitter.asSharedFlow()
         override val bleConnectionsFlow: SharedFlow<String> = bleConnectionsEmitter.asSharedFlow()
         override val debugInfoFlow: SharedFlow<String> = debugInfoEmitter.asSharedFlow()
@@ -330,11 +382,14 @@ class BoundRnsBackendTest {
     // FakeRnsBackend can be a concrete RnsBackend without `by lazy { error(...) }`
     // surprises during construction.
     private class StubRnsLxmf : RnsLxmf {
+        val transferProgressEmitter = MutableSharedFlow<TransferProgressUpdate>(extraBufferCapacity = 1)
+
         override suspend fun sendLxmfMessage(destinationHash: ByteArray, content: String, sourceIdentity: Identity, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?): Result<MessageReceipt> = error("not used")
         override suspend fun sendLxmfMessageWithMethod(destinationHash: ByteArray, content: String, sourceIdentity: Identity, deliveryMethod: DeliveryMethod, tryPropagationOnFail: Boolean, imageData: ByteArray?, imageFormat: String?, fileAttachments: List<Pair<String, ByteArray>>?, replyToMessageId: String?, replyQuotedContent: String?, iconAppearance: IconAppearance?, extraFields: Map<Int, Any>?): Result<MessageReceipt> = error("not used")
         override suspend fun sendReaction(destinationHash: ByteArray, targetMessageId: String, emoji: String, sourceIdentity: Identity): Result<MessageReceipt> = error("not used")
         override fun observeMessages() = kotlinx.coroutines.flow.emptyFlow<ReceivedMessage>()
         override fun observeDeliveryStatus() = kotlinx.coroutines.flow.emptyFlow<DeliveryStatusUpdate>()
+        override fun observeTransferProgress() = transferProgressEmitter.asSharedFlow()
         override suspend fun getLxmfIdentity(): Result<Identity> = error("not used")
         override suspend fun getLxmfDestination(): Result<Destination> = error("not used")
         override suspend fun setOutboundPropagationNode(destHash: ByteArray?) = Result.success(Unit)
@@ -359,6 +414,13 @@ class BoundRnsBackendTest {
     private class StubRnsNomadnet : RnsNomadnet {
         override suspend fun requestNomadnetPage(destinationHash: String, path: String, formDataJson: String?, timeoutSeconds: Float): Result<NomadnetPageResult> = error("not used")
         override suspend fun cancelNomadnetPageRequest() {}
+        override suspend fun requestNomadnetMedia(
+            destinationHash: String,
+            path: String,
+            timeoutSeconds: Float,
+            maxBytes: Long,
+        ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> = error("not used")
+        override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? = null
         override suspend fun getNomadnetRequestStatus(): String = "idle"
         override suspend fun getNomadnetDownloadProgress(): Float = 0f
         override suspend fun identifyNomadnetLink(destinationHash: String) = Result.success(false)

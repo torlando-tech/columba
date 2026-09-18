@@ -70,6 +70,9 @@ internal class BoundRnsTransportAdmin(
     override suspend fun isHostingSharedInstance(): Boolean =
         awaitBound().transportAdmin.isHostingSharedInstance()
 
+    override suspend fun getSharedInstanceAccessConfig(): String? =
+        awaitBound().transportAdmin.getSharedInstanceAccessConfig()
+
     override suspend fun getDebugInfo(): Map<String, Any> =
         awaitBound().transportAdmin.getDebugInfo()
 
@@ -84,6 +87,9 @@ internal class BoundRnsTransportAdmin(
     }
 
     override fun getRNodeRssi(): Int = backendFlow.value?.transportAdmin?.getRNodeRssi() ?: -100
+
+    override suspend fun getRNodeBattery(): Int =
+        awaitBound().transportAdmin.getRNodeBattery()
 
     override fun getBleConnectionDetails(): String =
         backendFlow.value?.transportAdmin?.getBleConnectionDetails() ?: "[]"
@@ -114,7 +120,7 @@ internal class BoundRnsTransportAdmin(
         backendFlow
             .filterNotNull()
             .flatMapLatest { it.transportAdmin.interfaceStatusFlow }
-            .shareIn(scope, SharingStarted.Eagerly, replay = 0)
+            .shareIn(scope, SharingStarted.Eagerly, replay = 1)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val reactionReceivedFlow: SharedFlow<String> =

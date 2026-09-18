@@ -231,6 +231,37 @@ class ContactsScreenTest {
     }
 
     @Test
+    fun contactsScreen_searchBar_preservesSpacesInQuery() {
+        val mockViewModel = createMockContactsViewModel()
+
+        composeTestRule.setContent {
+            ContactsScreen(viewModel = mockViewModel, announceViewModel = createMockAnnounceStreamViewModel())
+        }
+
+        // Open search bar
+        composeTestRule.onNodeWithContentDescription("Search").performClick()
+        composeTestRule.onNodeWithText("Search by name, hash, or tag...").assertIsDisplayed()
+
+        // Regression for the "contacts search bar doesn't let you type a space" bug:
+        // the field used to run every keystroke through a validator that trimmed,
+        // so a trailing space (the state right after the user presses the space key)
+        // was eaten on the next render and the query never contained a space.
+        val field = composeTestRule.onNodeWithText("Search by name, hash, or tag...")
+        field.performTextInput("Alice")
+        composeTestRule.waitForIdle()
+
+        // User presses the space key: the field content becomes "Alice "
+        field.performTextInput("Alice ")
+        composeTestRule.waitForIdle()
+        verify { mockViewModel.onSearchQueryChanged("Alice ") }
+
+        // User continues typing: the internal space must survive into the query
+        field.performTextInput("Alice Smith")
+        composeTestRule.waitForIdle()
+        verify { mockViewModel.onSearchQueryChanged("Alice Smith") }
+    }
+
+    @Test
     fun contactsScreen_searchBar_clearButton_clearsText() {
         val mockViewModel = createMockContactsViewModel(searchQuery = "Test")
 
@@ -417,7 +448,7 @@ class ContactsScreenTest {
     }
 
     @Test
-    fun contactListItem_online_displaysOnlineStatus() {
+    fun contactListItem_onlineFlag_doesNotClaimLiveOnlineState() {
         val contact =
             TestFactories.createEnrichedContact(
                 TestFactories.EnrichedContactConfig(
@@ -434,11 +465,11 @@ class ContactsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Online").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Online").assertDoesNotExist()
     }
 
     @Test
-    fun contactListItem_online_displaysHops() {
+    fun contactListItem_onlineFlag_doesNotDisplayLiveRouteHops() {
         val contact =
             TestFactories.createEnrichedContact(
                 TestFactories.EnrichedContactConfig(
@@ -456,7 +487,29 @@ class ContactsScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("3 hops", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 hops", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun contactListItem_relativeTimeUsesInjectedLifecycleClock() {
+        val contact =
+            TestFactories.createEnrichedContact(
+                TestFactories.EnrichedContactConfig(
+                    displayName = "Alice",
+                    lastSeenTimestamp = 60_000L,
+                ),
+            )
+
+        composeTestRule.setContent {
+            ContactListItem(
+                contact = contact,
+                nowMillis = 6 * 60_000L,
+                onClick = {},
+                onPinClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithText("5 minutes ago").assertIsDisplayed()
     }
 
     @Test

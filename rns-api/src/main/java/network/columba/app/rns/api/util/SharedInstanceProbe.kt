@@ -30,6 +30,28 @@ object SharedInstanceProbe {
     const val DEFAULT_PORT = 37428
     const val DEFAULT_TIMEOUT_MS = 1_000
 
+    /**
+     * How many times [isAvailable] retries a failed connect, and how long it
+     * waits between attempts.
+     *
+     * A single 1s connect is racy on a busy device: if the co-hosted master
+     * (Sideband) is restarting its backend, or the loopback stack is briefly
+     * contended, the connect fails even though a shared master is (or will be
+     * within a second or two) present. Callers of [shouldShareInstance] would
+     * then wrongly fall back to own-instance mode, and the Settings
+     * availability check would wrongly report "no shared instance".
+     *
+     * Retries bound the worst-case "unavailable" latency to
+     * `attempts * timeout + (attempts - 1) * delay` (default: 3 x 1s + 2 x
+     * 300ms = ~3.6s when every attempt times out; faster when the port
+     * refuses instantly), which is acceptable on both call sites: the daemon
+     * join-decision and the Settings availability check both run on
+     * background threads, never on the main thread. An immediate success
+     * (the common case) still returns after one attempt.
+     */
+    const val DEFAULT_ATTEMPTS = 3
+    const val DEFAULT_RETRY_DELAY_MS = 300L
+
     /** AutoInterface default `data_port` (`AutoInterface.DEFAULT_DATA_PORT`). */
     const val DEFAULT_AUTO_INTERFACE_DATA_PORT = 29717
 
@@ -37,13 +59,25 @@ object SharedInstanceProbe {
         host: String = "127.0.0.1",
         port: Int = DEFAULT_PORT,
         timeoutMs: Int = DEFAULT_TIMEOUT_MS,
-    ): Boolean =
-        runCatching {
-            Socket().use { sock ->
-                sock.connect(InetSocketAddress(host, port), timeoutMs)
-                sock.isConnected
+        attempts: Int = DEFAULT_ATTEMPTS,
+        retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
+    ): Boolean {
+        repeat(attempts) { attempt ->
+            if (
+                runCatching {
+                    Socket().use { sock ->
+                        sock.connect(InetSocketAddress(host, port), timeoutMs)
+                        sock.isConnected
+                    }
+                }.getOrDefault(false)
+            ) {
+                return true
             }
-        }.getOrDefault(false)
+            // Not the last attempt: back off briefly before retrying.
+            if (attempt < attempts - 1) Thread.sleep(retryDelayMs)
+        }
+        return false
+    }
 
     /**
      * Try to bind a UDP socket to [port] on the wildcard address with

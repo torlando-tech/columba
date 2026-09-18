@@ -68,6 +68,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -82,7 +83,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import network.columba.app.R
 import network.columba.app.data.database.entity.InterfaceEntity
@@ -93,6 +98,7 @@ import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.ui.components.BlePermissionBottomSheet
 import network.columba.app.ui.components.InterfaceConfigDialog
 import network.columba.app.ui.components.LocalCapabilities
+import network.columba.app.ui.components.RNodeBatteryIndicator
 import network.columba.app.ui.components.interfaceTypeIconData
 import network.columba.app.viewmodel.InterfaceManagementViewModel
 
@@ -104,6 +110,7 @@ import network.columba.app.viewmodel.InterfaceManagementViewModel
 fun InterfaceManagementScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRNodeWizard: (interfaceId: Long?) -> Unit = {},
+    onNavigateToRNodePairingRepair: (interfaceId: Long) -> Unit = {},
     onNavigateToTcpClientWizard: (interfaceId: Long?) -> Unit = {},
     onNavigateToInterfaceStats: (interfaceId: Long) -> Unit = {},
     onNavigateToDiscoveredInterfaces: () -> Unit = {},
@@ -112,6 +119,18 @@ fun InterfaceManagementScreen(
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val configState by viewModel.configState.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.refreshExternalPendingChanges()
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // State for delete confirmation dialog
     var interfaceToDelete by remember { mutableStateOf<InterfaceEntity?>(null) }
@@ -310,6 +329,16 @@ fun InterfaceManagementScreen(
                         ) {
                             state.interfaces.forEach { iface ->
                                 val isOnline = state.interfaceOnlineStatus[iface.name]
+                                val statusReason =
+                                    effectiveRuntimeStatusReason(
+                                        statusReason =
+                                            state.transportInterfaces
+                                                .firstOrNull { it.name == iface.name }
+                                                ?.statusReason,
+                                        interfaceId = iface.id,
+                                        hasPendingChanges = state.hasPendingChanges,
+                                        pendingInterfaceIds = state.pendingInterfaceIds,
+                                    )
                                 // Count spawned peers for this interface
                                 val spawnedPeers =
                                     state.transportInterfaces.filter {
@@ -332,8 +361,13 @@ fun InterfaceManagementScreen(
                                             blePermissionsGranted = state.blePermissionsGranted,
                                             currentTransport = state.currentTransport,
                                             isOnline = isOnline,
+                                            rnodeBattery = state.rnodeBatteryByInterface[iface.name],
+                                            statusReason = statusReason,
                                             peerCount = spawnedPeers.size,
                                             onErrorClick = { errorDialogInterface = iface },
+                                            onRepairPairing = {
+                                                onNavigateToRNodePairingRepair(iface.id)
+                                            },
                                             onRequestPermissions =
                                                 if (iface.isBleInterface()) {
                                                     { permissionLauncher.launch(BlePermissionManager.getRequiredPermissions().toTypedArray()) }
@@ -575,6 +609,13 @@ fun InterfaceManagementScreen(
     }
 }
 
+internal fun effectiveRuntimeStatusReason(
+    statusReason: String?,
+    interfaceId: Long,
+    hasPendingChanges: Boolean,
+    pendingInterfaceIds: Set<Long>,
+): String? = statusReason.takeUnless { hasPendingChanges && interfaceId in pendingInterfaceIds }
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InterfaceCard(
@@ -588,14 +629,26 @@ fun InterfaceCard(
     blePermissionsGranted: Boolean,
     currentTransport: CurrentTransport = CurrentTransport.NONE,
     isOnline: Boolean? = null,
+    rnodeBattery: Int? = null,
+    statusReason: String? = null,
     peerCount: Int = 0,
     onErrorClick: (() -> Unit)? = null,
     onRequestPermissions: (() -> Unit)? = null,
+    onRepairPairing: (() -> Unit)? = null,
 ) {
     val toggleEnabled = interfaceEntity.shouldToggleBeEnabled(bluetoothState, blePermissionsGranted)
     val errorMessage = interfaceEntity.getErrorMessage(bluetoothState, blePermissionsGranted, isOnline)
     val online = isOnline == true && interfaceEntity.enabled
-    val statusColor = if (online) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val pairingRequired =
+        interfaceEntity.enabled &&
+            interfaceEntity.type == "RNode" &&
+            statusReason == "pairing_required"
+    val statusColor =
+        when {
+            online -> Color(0xFF4CAF50)
+            pairingRequired -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        }
     val restrictionView = interfaceEntity.restrictionView(currentTransport)
     // Whether the card's right-column status reads "Restricted" instead of "Offline".
     // Only applies when the runtime filter would actually drop this interface — i.e.
@@ -605,6 +658,10 @@ fun InterfaceCard(
             restrictionView is InterfaceRestrictionView.Blocked ||
                 restrictionView is InterfaceRestrictionView.NoNetwork
         )
+    // RNode battery is only shown when we have a live reading on a connected RNode.
+    // The backend reports null when the RNode is offline / has no frame yet, so this
+    // flag doubles as the "is the reading trustworthy" gate (matches the notification).
+    val battery = if (online && interfaceEntity.type == "RNode") rnodeBattery else null
 
     Card(
         modifier =
@@ -705,6 +762,27 @@ fun InterfaceCard(
                             }
                         }
                     }
+                } else if (pairingRequired) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.rnode_pairing_required),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        if (onRepairPairing != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = onRepairPairing) {
+                                Text(stringResource(R.string.repair_rnode_pairing))
+                            }
+                        }
+                    }
                 } else if (interfaceEntity.enabled && errorMessage != null) {
                     Text(
                         text = errorMessage,
@@ -713,6 +791,20 @@ fun InterfaceCard(
                         modifier = if (onErrorClick != null) Modifier.clickable(onClick = onErrorClick) else Modifier,
                     )
                 }
+            }
+
+            // RNode battery in its own column, between the name/type block and the
+            // status/toggle column. The row is center-vertical, so this adds no
+            // vertical height. Rendered only when there's a live reading on a
+            // connected RNode (see `battery`).
+            battery?.let { percent ->
+                Spacer(modifier = Modifier.width(16.dp))
+                RNodeBatteryIndicator(
+                    percent = percent,
+                    fontSize = 14.sp,
+                    textStyle = MaterialTheme.typography.labelMedium,
+                )
+                Spacer(modifier = Modifier.width(16.dp))
             }
 
             // Right column: status + peer count + toggle
@@ -730,7 +822,7 @@ fun InterfaceCard(
                         when {
                             !interfaceEntity.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
                             online -> Color(0xFF4CAF50)
-                            // "Restricted" is informational, not error — the user configured this. Keep
+                            // "Restricted" is informational, not error - the user configured this. Keep
                             // the muted tone instead of error-red so the card doesn't read as malfunctioning.
                             else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         },

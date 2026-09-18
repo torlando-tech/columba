@@ -1,12 +1,15 @@
 package network.columba.app.rns.ipc.client
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -65,6 +68,9 @@ internal class ClientRnsTransportAdmin(
     override suspend fun isHostingSharedInstance(): Boolean =
         awaitBool { cb -> remote.isHostingSharedInstance(cb) }
 
+    override suspend fun getSharedInstanceAccessConfig(): String? =
+        awaitNullableString { cb -> remote.getSharedInstanceAccessConfig(cb) }
+
     override suspend fun getDebugInfo(): Map<String, Any> {
         val bundle = awaitResult { cb -> remote.getDebugInfo(cb) }
         return bundle.toAnyMap()
@@ -96,6 +102,14 @@ internal class ClientRnsTransportAdmin(
 
     override fun getRNodeRssi(): Int = lastRssi
 
+    // Battery is a LIVE value: fresh AIDL round-trip per call. The stats screen
+    // polls at 1s and the notification poller at ~15s, so a bind-time cache
+    // (the getRNodeRssi pattern) would be wrong. -1 when absent / on error.
+    override suspend fun getRNodeBattery(): Int =
+        runCatching {
+            awaitNullableInt { cb -> remote.getRNodeBattery(cb) } ?: -1
+        }.getOrDefault(-1)
+
     // getBleConnectionDetails is also non-suspend on the Kotlin side. Same
     // observer-cache trick — the BLE connections SharedFlow emits the same
     // JSON snapshot whenever peers connect/disconnect, so caching covers the
@@ -107,7 +121,8 @@ internal class ClientRnsTransportAdmin(
     private val interfaceStatusChangedShared = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val bleConnectionsShared = MutableSharedFlow<String>(extraBufferCapacity = 32)
     private val debugInfoShared = MutableSharedFlow<String>(extraBufferCapacity = 64)
-    private val interfaceStatusShared = MutableSharedFlow<String>(extraBufferCapacity = 32)
+    private val interfaceStatusShared = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 32)
+    private val interfaceStatusReady = CompletableDeferred<Unit>()
     private val reactionReceivedShared = MutableSharedFlow<String>(extraBufferCapacity = 32)
 
     init {
@@ -127,10 +142,20 @@ internal class ClientRnsTransportAdmin(
             unregister = { remote.unregisterDebugInfoObserver(it) },
         ).onEach { debugInfoShared.emit(it) }.launchIn(scope)
 
-        stringEventFlow(
-            register = { remote.registerInterfaceStatusObserver(it) },
-            unregister = { remote.unregisterInterfaceStatusObserver(it) },
-        ).onEach { interfaceStatusShared.emit(it) }.launchIn(scope)
+        val interfaceStatusJob =
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                interfaceStatusEventFlow(
+                    register = { cb, readyCb -> remote.registerInterfaceStatusObserver(cb, readyCb) },
+                    unregister = { remote.unregisterInterfaceStatusObserver(it) },
+                ).collect { interfaceStatusShared.emit(it) }
+            }
+        interfaceStatusJob.invokeOnCompletion { cause ->
+            if (!interfaceStatusReady.isCompleted) {
+                interfaceStatusReady.completeExceptionally(
+                    cause ?: IllegalStateException("Interface status observer ended before registration was ready"),
+                )
+            }
+        }
 
         stringEventFlow(
             register = { remote.registerReactionReceivedObserver(it) },
@@ -155,6 +180,28 @@ internal class ClientRnsTransportAdmin(
         }
         if (!registerObserverOrClose { register(cb) }) return@callbackFlow
         awaitClose { runCatching { unregister(cb) } }
+    }
+
+    private fun interfaceStatusEventFlow(
+        register: (IRnsStringEventCallback, IRnsUnitEventCallback) -> Unit,
+        unregister: (IRnsStringEventCallback) -> Unit,
+    ): Flow<String> = callbackFlow {
+        val cb = object : IRnsStringEventCallback.Stub() {
+            override fun onString(value: String?) {
+                if (value != null) trySend(value)
+            }
+        }
+        val readyCb = object : IRnsUnitEventCallback.Stub() {
+            override fun onEvent() {
+                interfaceStatusReady.complete(Unit)
+            }
+        }
+        if (!registerObserverOrClose { register(cb, readyCb) }) return@callbackFlow
+        awaitClose { runCatching { unregister(cb) } }
+    }
+
+    internal suspend fun awaitInterfaceStatusReady() {
+        interfaceStatusReady.await()
     }
 
     override val interfaceStatusChanged: SharedFlow<Unit> get() = interfaceStatusChangedShared.asSharedFlow()

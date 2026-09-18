@@ -119,6 +119,7 @@ fun SharedInstanceBannerCard(
     onExpandToggle: (Boolean) -> Unit,
     onTogglePreferOwnInstance: (Boolean) -> Unit,
     onRpcKeyChange: (String?) -> Unit,
+    onCopyAccessConfiguration: () -> Unit = {},
 ) {
     val toggleEnabled = isSharedInstanceToggleEnabled(isUsingSharedInstance, sharedInstanceOnline)
 
@@ -247,6 +248,9 @@ fun SharedInstanceBannerCard(
                             style = MaterialTheme.typography.bodyMedium,
                             color = contentColor,
                         )
+                        Button(onClick = onCopyAccessConfiguration) {
+                            Text("Copy access configuration")
+                        }
                     } else if (isInformationalState) {
                         // Informational state - shared instance went offline, Columba restarted
                         Text(

@@ -98,6 +98,148 @@ class DeviceDiscoveryStepTest {
     }
 
     @Test
+    fun pairedDevice_showsAndroidScopedBondLabel() {
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    discoveredDevices = listOf(pairedBleDevice),
+                    isPairingInProgress = false,
+                    isAssociating = false,
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Paired in Android").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Paired").assertDoesNotExist()
+    }
+
+    @Test
+    fun pairingRepair_showsRecoveryInstructions_insteadOfCurrentDevice() {
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = "RNode E517",
+                    pairingRepairDeviceAddress = "AA:BB:CC:DD:EE:51",
+                    selectedDevice = null,
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Pairing required").assertIsDisplayed()
+        composeTestRule.onNodeWithText("RNode E517", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hold USR for five seconds to enter pairing mode.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Heltec V3", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Current Device").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Connection Method").assertDoesNotExist()
+        composeTestRule.onRoot().performTouchInput { swipeUp() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Enter device manually").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Pair via USB").assertDoesNotExist()
+    }
+
+    @Test
+    fun pairingRepair_withoutSavedIdentity_failsClosed() {
+        val sameNameDevice =
+            pairedBleDevice.copy(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:99",
+            )
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = "RNode E517",
+                    discoveredDevices = listOf(sameNameDevice),
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule
+            .onNodeWithText(
+                "This interface has no saved Bluetooth identity. " +
+                    "Open Edit, select the original RNode, and save once before using Repair.",
+            ).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hold USR for five seconds to enter pairing mode.").assertDoesNotExist()
+        composeTestRule.onNodeWithText("RNode E517").assertDoesNotExist()
+    }
+
+    @Test
+    fun pairingRepair_showsOnlyConfiguredRNode() {
+        val configuredDevice =
+            pairedBleDevice.copy(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:51",
+            )
+        val otherDevice =
+            pairedBleDevice.copy(
+                name = "RNode OTHER",
+                address = "AA:BB:CC:DD:EE:00",
+            )
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = "RNode E517",
+                    pairingRepairDeviceAddress = configuredDevice.address,
+                    discoveredDevices = listOf(otherDevice, configuredDevice),
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("RNode E517").assertIsDisplayed()
+        composeTestRule.onNodeWithText("RNode OTHER").assertDoesNotExist()
+    }
+
+    @Test
+    fun pairingRepair_afterSuccessfulBond_hidesRecoveryInstructions() {
+        val pairedDevice =
+            pairedBleDevice.copy(
+                name = "RNode E517",
+                address = "AA:BB:CC:DD:EE:51",
+            )
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        every { mockViewModel.state } returns
+            MutableStateFlow(
+                RNodeWizardState(
+                    isEditMode = true,
+                    isPairingRepairMode = true,
+                    pairingRepairDeviceName = "RNode E517",
+                    pairingRepairDeviceAddress = pairedDevice.address,
+                    discoveredDevices = listOf(pairedDevice),
+                    selectedDevice = pairedDevice,
+                ),
+            )
+
+        composeTestRule.setContent {
+            DeviceDiscoveryStep(viewModel = mockViewModel)
+        }
+
+        composeTestRule.onNodeWithText("Pairing required").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Hold USR for five seconds to enter pairing mode.").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Paired in Android").assertIsDisplayed()
+    }
+
+    @Test
     fun pairedDevice_cardClick_selectsDevice() {
         // Given
         val mockViewModel = mockk<RNodeWizardViewModel>()
@@ -709,15 +851,20 @@ class DeviceDiscoveryStepTest {
     }
 
     @Test
-    fun editMode_allowsSelectingDifferentDevice() {
+    fun editMode_allowsSelectingDifferentAddressWithSameName() {
         // Given
         val mockViewModel = mockk<RNodeWizardViewModel>()
+        val sameNameOther =
+            pairedBleDevice.copy(
+                address = "AA:BB:CC:DD:EE:99",
+                isPaired = false,
+            )
         val state =
             RNodeWizardState(
                 connectionType = RNodeConnectionType.BLUETOOTH,
                 isEditMode = true,
                 selectedDevice = pairedBleDevice,
-                discoveredDevices = listOf(unpairedBleDevice, pairedBleDevice),
+                discoveredDevices = listOf(sameNameOther, pairedBleDevice),
             )
         every { mockViewModel.state } returns MutableStateFlow(state)
 
@@ -726,9 +873,8 @@ class DeviceDiscoveryStepTest {
             DeviceDiscoveryStep(viewModel = mockViewModel)
         }
 
-        // Then - other devices should be visible in the list
-        composeTestRule.onNodeWithText("RNode 1234").assertIsDisplayed()
-        // The current device (RNode 5678) should not be in the list below, only in "Current Device" section
+        // Then - the current card and explicit same-name alternative are both visible.
+        composeTestRule.onAllNodesWithText("RNode 5678").assertCountEquals(2)
     }
 
     // ========== USB Bluetooth Pairing Mode Tests ==========

@@ -39,4 +39,5 @@ data class BlockedPeerEntity(
     val displayName: String?,
     val blockedTimestamp: Long,
     val isBlackholeEnabled: Boolean = false,
+    val routingAspect: String? = null,
 )

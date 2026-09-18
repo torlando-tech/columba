@@ -31,6 +31,8 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    sourceSets["test"].assets.srcDir("$projectDir/schemas")
 }
 
 dependencies {
@@ -71,6 +73,7 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)
     testImplementation(libs.turbine)
+    testImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
     testImplementation("org.json:json:20240303") // Real JSON implementation for unit tests
     androidTestImplementation(libs.junit.android)
     androidTestImplementation(libs.test.core)
@@ -83,4 +86,5 @@ dependencies {
 
 ksp {
     arg("correctErrorTypes", "true")
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

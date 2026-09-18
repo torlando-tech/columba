@@ -15,11 +15,14 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.InterfaceConfigManager
+import network.columba.app.service.PendingInterfaceChanges
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -29,10 +32,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -57,6 +62,7 @@ class InterfaceManagementViewModelStatusEventTest {
     private lateinit var transportObserver: network.columba.app.service.manager.InterfaceTransportObserver
     private lateinit var rnsBackend: RnsBackend
     private lateinit var interfaceStatusFlow: MutableSharedFlow<String>
+    private lateinit var interfaceStatusChanged: MutableSharedFlow<Unit>
     private lateinit var debugInfoFlow: MutableSharedFlow<String>
     private lateinit var viewModel: InterfaceManagementViewModel
 
@@ -107,11 +113,13 @@ class InterfaceManagementViewModelStatusEventTest {
             flowOf(BleConnectionsState.Success(emptyList()))
 
         // Mock InterfaceConfigManager
-        every { configManager.checkAndClearPendingChanges() } returns false
+        every { configManager.consumePendingChanges() } returns PendingInterfaceChanges()
 
         // Mock event flows for NativeReticulumProtocol (event-driven updates)
         interfaceStatusFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        interfaceStatusChanged = MutableSharedFlow(extraBufferCapacity = 1)
         debugInfoFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        every { serviceProtocol.interfaceStatusChanged } returns interfaceStatusChanged
         every { serviceProtocol.interfaceStatusFlow } returns interfaceStatusFlow
         every { serviceProtocol.debugInfoFlow } returns debugInfoFlow
 
@@ -159,6 +167,39 @@ class InterfaceManagementViewModelStatusEventTest {
         }
 
     @Test
+    fun `refreshExternalPendingChanges surfaces wizard changes on Python backend`() =
+        runTest {
+            every { configManager.consumePendingChanges() } returnsMany
+                listOf(
+                    PendingInterfaceChanges(),
+                    PendingInterfaceChanges(hasPendingChanges = true, interfaceIds = setOf(42)),
+                )
+            every { rnsBackend.capabilities } returns
+                MutableStateFlow(
+                    BackendCapabilities.UNKNOWN.copy(
+                        interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = false),
+                    ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+            assertFalse(viewModel.state.value.hasPendingChanges)
+
+            viewModel.refreshExternalPendingChanges()
+
+            assertTrue(viewModel.state.value.hasPendingChanges)
+            assertEquals(setOf(42L), viewModel.state.value.pendingInterfaceIds)
+            verify(exactly = 2) { configManager.consumePendingChanges() }
+        }
+
+    @Test
     fun `ViewModel observes NativeReticulumProtocol interfaceStatusFlow`() =
         runTest {
             viewModel =
@@ -199,6 +240,123 @@ class InterfaceManagementViewModelStatusEventTest {
 
             // Verify state was updated from the event
             assertEquals(false, viewModel.state.value.interfaceOnlineStatus["ble0"])
+        }
+
+    @Test
+    fun `debug info exposes pairing required reason for an RNode`() =
+        runTest {
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            debugInfoFlow.emit(
+                """{"interfaces":[{"name":"RNode E517 BLE","type":"RNode","online":false,"status_reason":"pairing_required"}]}""",
+            )
+            advanceUntilIdle()
+
+            assertEquals(
+                "pairing_required",
+                viewModel.state.value.transportInterfaces.single().statusReason,
+            )
+        }
+
+    @Test
+    fun `replayed RNode status delta updates reconnect state without clearing siblings`() =
+        runTest {
+            coEvery { serviceProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf("online" to true)
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "Test RNode", "online" to false),
+                            mapOf("name" to "Sibling", "online" to true),
+                        ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
+
+            interfaceStatusFlow.emit("""{"updates":{"Test RNode":true}}""")
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["Sibling"])
+        }
+
+    @Test
+    fun `RNode delta wins when stale poll completes after reconnect event`() =
+        runTest {
+            coEvery { serviceProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf("online" to true)
+            val fetchStarted = CompletableDeferred<Unit>()
+            val releaseFetch = CompletableDeferred<Unit>()
+            coEvery { serviceProtocol.getDebugInfo() } coAnswers {
+                fetchStarted.complete(Unit)
+                releaseFetch.await()
+                mapOf(
+                    "interfaces" to
+                        listOf(mapOf("name" to "Test RNode", "online" to false)),
+                )
+            }
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+
+            runCurrent()
+            fetchStarted.await()
+            interfaceStatusFlow.emit("""{"updates":{"Test RNode":true}}""")
+            releaseFetch.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
+        }
+
+    @Test
+    fun `current snapshot wins over stale RNode replay cached before ViewModel starts`() =
+        runTest {
+            interfaceStatusFlow.emit("""{"updates":{"Test RNode":true}}""")
+            coEvery { serviceProtocol.getInterfaceStats("Test RNode") } returns
+                mapOf("online" to false)
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(mapOf("name" to "Test RNode", "online" to false)),
+                )
+
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.state.value.interfaceOnlineStatus["Test RNode"])
         }
 
     @Test
@@ -270,6 +428,7 @@ class InterfaceManagementViewModelStatusEventTest {
         runTest {
             // Use a generic ReticulumProtocol mock instead of NativeReticulumProtocol
             val genericProtocol: RnsTransportAdmin = mockk()
+            every { genericProtocol.interfaceStatusChanged } returns MutableSharedFlow()
             every { genericProtocol.interfaceStatusFlow } returns MutableSharedFlow()
             every { genericProtocol.debugInfoFlow } returns MutableSharedFlow()
             coEvery { genericProtocol.getDebugInfo() } returns emptyMap()
@@ -1275,6 +1434,66 @@ class InterfaceManagementViewModelStatusEventTest {
             assertEquals(before.interfaces, after.interfaces)
             assertEquals(before.interfaceOnlineStatus, after.interfaceOnlineStatus)
             assertEquals(before.transportInterfaces, after.transportInterfaces)
+        }
+
+    // endregion
+
+    // region RNode battery on interface cards (follow-up to PR 1103)
+
+    @Test
+    fun `RNode batteries are associated with their configured interface names`() =
+        runTest {
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "RNode Alpha", "type" to "RNode", "online" to true, "battery" to 82),
+                            mapOf("name" to "RNode Beta", "type" to "RNode", "online" to true, "battery" to 47),
+                            mapOf("name" to "TCP RNode", "type" to "RNode", "online" to true),
+                        ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            assertEquals(
+                mapOf("RNode Alpha" to 82, "RNode Beta" to 47),
+                viewModel.state.value.rnodeBatteryByInterface,
+            )
+            coVerify(exactly = 0) { serviceProtocol.getRNodeBattery() }
+        }
+
+    @Test
+    fun `absent and invalid per-interface battery readings are omitted`() =
+        runTest {
+            coEvery { serviceProtocol.getDebugInfo() } returns
+                mapOf(
+                    "interfaces" to
+                        listOf(
+                            mapOf("name" to "No Frame", "type" to "RNode", "online" to true),
+                            mapOf("name" to "Invalid Low", "type" to "RNode", "online" to true, "battery" to -1),
+                            mapOf("name" to "Invalid High", "type" to "RNode", "online" to true, "battery" to 101),
+                        ),
+                )
+            viewModel =
+                InterfaceManagementViewModel(
+                    interfaceRepository,
+                    configManager,
+                    bleStatusRepository,
+                    serviceProtocol,
+                    transportObserver,
+                    rnsBackend,
+                )
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.rnodeBatteryByInterface.isEmpty())
         }
 
     // endregion

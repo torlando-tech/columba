@@ -98,6 +98,17 @@ data class ReticulumConfig(
      * providing spam prevention. Range: 8-20, default: 14.
      */
     val requiredDiscoveryValue: Int = 14,
+    /**
+     * User-configured incoming-message size cap (binary KB), applied by the
+     * backend to the LXMF delivery gate at startup - before the delivery
+     * destination becomes reachable - so the first DIRECT resource
+     * advertisement is evaluated against the user's gate, not the backend's
+     * built-in default (columba#1106 startup window).
+     *
+     * null = not set (backend keeps its built-in default);
+     * 0 = unlimited (explicit user choice).
+     */
+    val incomingMessageSizeLimitKb: Long? = null,
 ) : Parcelable {
     // Data-class-generated equals/hashCode use reference equality for ByteArray, so
     // two configs with identical key bytes would otherwise never compare equal. Override
@@ -123,7 +134,8 @@ data class ReticulumConfig(
             autoconnectDiscoveredInterfaces == other.autoconnectDiscoveredInterfaces &&
             autoconnectIfacOnly == other.autoconnectIfacOnly &&
             interfaceDiscoverySources == other.interfaceDiscoverySources &&
-            requiredDiscoveryValue == other.requiredDiscoveryValue
+            requiredDiscoveryValue == other.requiredDiscoveryValue &&
+            incomingMessageSizeLimitKb == other.incomingMessageSizeLimitKb
     }
 
     override fun hashCode(): Int {
@@ -144,6 +156,7 @@ data class ReticulumConfig(
         result = 31 * result + autoconnectIfacOnly.hashCode()
         result = 31 * result + (interfaceDiscoverySources?.hashCode() ?: 0)
         result = 31 * result + requiredDiscoveryValue
+        result = 31 * result + (incomingMessageSizeLimitKb?.hashCode() ?: 0)
         return result
     }
 
@@ -175,7 +188,8 @@ data class ReticulumConfig(
             "autoconnectDiscoveredInterfaces=$autoconnectDiscoveredInterfaces, " +
             "autoconnectIfacOnly=$autoconnectIfacOnly, " +
             "interfaceDiscoverySources=$interfaceDiscoverySources, " +
-            "requiredDiscoveryValue=$requiredDiscoveryValue" +
+            "requiredDiscoveryValue=$requiredDiscoveryValue, " +
+            "incomingMessageSizeLimitKb=$incomingMessageSizeLimitKb" +
             ")"
 }
 
@@ -319,13 +333,14 @@ sealed class InterfaceConfig : Parcelable {
      * @param name User-friendly name for this interface
      * @param enabled Whether this interface should be initialized
      * @param targetDeviceName Bluetooth device name of the paired RNode (required for Bluetooth)
+     * @param targetDeviceAddress Optional stable Android Bluetooth address used only to bind repair to the configured device
      * @param connectionMode Connection mode: "classic" (SPP/RFCOMM), "ble" (GATT), "tcp" (WiFi), or "usb" (serial)
      * @param tcpHost IP address or hostname for TCP/WiFi mode (required when connectionMode="tcp")
      * @param tcpPort TCP port for WiFi mode (default: 7633, the RNode standard port)
      * @param usbDeviceId Android USB device ID for USB serial mode (required when connectionMode="usb")
      * @param frequency LoRa frequency in Hz (137000000 - 3000000000)
      * @param bandwidth LoRa bandwidth in Hz (7800 - 1625000)
-     * @param txPower Transmission power in dBm (0-22)
+     * @param txPower Transmission power in dBm (0-27)
      * @param spreadingFactor LoRa spreading factor (5-12)
      * @param codingRate LoRa coding rate (5-8)
      * @param stAlock Short-term airtime limit percentage (optional)
@@ -339,6 +354,8 @@ sealed class InterfaceConfig : Parcelable {
         override val name: String = "RNode LoRa",
         override val enabled: Boolean = true,
         val targetDeviceName: String = "", // Required for Bluetooth, empty for TCP/USB
+        // App-owned repair identity; intentionally omitted from Parcelable/runtime transport.
+        val targetDeviceAddress: String? = null,
         val connectionMode: String = "classic", // "classic", "ble", "tcp", or "usb"
         val tcpHost: String? = null, // IP/hostname for TCP mode
         val tcpPort: Int = 7633, // RNode TCP port (default)

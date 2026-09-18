@@ -1,8 +1,11 @@
 package network.columba.app.ui.screens
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -105,6 +108,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
@@ -112,6 +116,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -143,7 +148,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -155,28 +164,50 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.columba.app.R
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
+import network.columba.app.rns.api.BackendCapabilities.Support
+import network.columba.app.rns.api.model.Direction
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.ui.components.AttachmentPanel
+import network.columba.app.ui.components.OVERLAY_MAX_CAPTURE_HEIGHT_PX
+import network.columba.app.ui.components.VoiceMessageBubble
+import network.columba.app.ui.components.VoiceDraftPreview
+import network.columba.app.ui.components.VoiceRecordingControls
 import network.columba.app.ui.components.CodecSelectionDialog
+import network.columba.app.ui.components.QualityOption
+import network.columba.app.ui.components.QualitySelectionDialog
 import network.columba.app.ui.components.FileAttachmentCard
 import network.columba.app.ui.components.FileAttachmentOptionsSheet
 import network.columba.app.ui.components.FileAttachmentPreviewRow
+import network.columba.app.ui.components.findActivity
 import network.columba.app.ui.components.FullEmojiPickerDialog
 import network.columba.app.ui.components.ImageOptionsSheet
 import network.columba.app.ui.components.ImageQualitySelectionDialog
 import network.columba.app.ui.components.LocationPermissionBottomSheet
+import network.columba.app.ui.components.LocalCapabilities
+import network.columba.app.ui.components.MarkdownMessageText
+import network.columba.app.ui.components.MessageTransferProgress
+import network.columba.app.ui.components.MessageStatusIndicator
+import network.columba.app.util.isPyxisUpdateFilename
 import network.columba.app.ui.components.QuickShareLocationBottomSheet
 import network.columba.app.ui.components.ReactionDisplayRow
 import network.columba.app.ui.components.ReactionModeOverlay
@@ -186,9 +217,16 @@ import network.columba.app.ui.components.SelectableTextDialog
 import network.columba.app.ui.components.StarToggleButton
 import network.columba.app.ui.components.SwipeableMessageBubble
 import network.columba.app.ui.components.SyncStatusBottomSheet
+import network.columba.app.ui.components.ConversationTransferTray
 import network.columba.app.ui.components.simpleVerticalScrollbar
 import network.columba.app.ui.model.CodecProfile
 import network.columba.app.ui.model.LocationSharingState
+import network.columba.app.ui.model.MessageRenderer
+import network.columba.app.audio.VoiceMessagePlayer
+import network.columba.app.audio.VoiceMessageMetadata
+import network.columba.app.audio.VoiceMessagePlayerState
+import network.columba.app.audio.VoiceMessageFormat
+import network.columba.app.ui.model.AudioAttachmentUi
 import network.columba.app.ui.theme.MeshConnected
 import network.columba.app.ui.theme.MeshOffline
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -199,17 +237,19 @@ import network.columba.app.util.ImageUtils
 import network.columba.app.util.LocationPermissionManager
 import network.columba.app.util.MediaPermissionManager
 import network.columba.app.util.formatRelativeTime
+import network.columba.app.util.formatTimeSince
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.viewmodel.ContactToggleResult
 import network.columba.app.viewmodel.MessagingViewModel
 import network.columba.app.viewmodel.SharedImageViewModel
 import network.columba.app.viewmodel.SharedTextViewModel
+import android.Manifest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 private const val URL_ANNOTATION_TAG = "url"
-
+private const val VOICE_PREVIEW_KEY = "voice-recording-preview"
 @Composable
 private fun LinkifiedMessageText(
     text: String,
@@ -330,10 +370,14 @@ fun MessagingScreen(
     onViewMessageDetails: (messageId: String) -> Unit = {},
     onVoiceCall: (profileCode: Int) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
+    onUpdatePyxisPackage: (Uri) -> Unit = {},
+    fromNotification: Boolean = false,
+    notificationEventId: Long = 0L,
     viewModel: MessagingViewModel = hiltViewModel(),
 ) {
     val pagingItems = viewModel.messages.collectAsLazyPagingItems()
-    val announceInfo by viewModel.announceInfo.collectAsStateWithLifecycle()
+    val peerActivity by viewModel.peerActivity.collectAsStateWithLifecycle()
+    val currentConversationHash by viewModel.currentConversationHash.collectAsStateWithLifecycle()
     val conversationLinkState by viewModel.conversationLinkState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
@@ -405,6 +449,13 @@ fun MessagingScreen(
     val isProcessingImage by viewModel.isProcessingImage.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val syncProgress by viewModel.syncProgress.collectAsStateWithLifecycle()
+    val transferProgress by viewModel.transferProgress.collectAsStateWithLifecycle()
+    val capabilities = LocalCapabilities.current
+    val supportsTransferProgress =
+        capabilities.messaging.outgoingResourceProgress == Support.FULL ||
+            capabilities.messaging.incomingDirectResourceProgress == Support.FULL
+    val activeTransferProgress = if (supportsTransferProgress) transferProgress.values.toList() else emptyList()
+    val incomingTransfers = activeTransferProgress.filter { it.isIncomingForConversation(destinationHash) }
     val isContactSaved by viewModel.isContactSaved.collectAsStateWithLifecycle()
     var showSyncStatusSheet by remember { mutableStateOf(false) }
     val syncStatusSheetState = rememberModalBottomSheetState()
@@ -420,6 +471,8 @@ fun MessagingScreen(
     val totalAttachmentSize by viewModel.totalAttachmentSize.collectAsStateWithLifecycle()
     val isProcessingFile by viewModel.isProcessingFile.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
+    val voiceRecordingState by viewModel.voiceRecordingState.collectAsStateWithLifecycle()
+    val isVoiceRecordingBlockedByCall by viewModel.isVoiceRecordingBlockedByCall.collectAsStateWithLifecycle()
 
     // Observe loaded image IDs to trigger recomposition when images become available
     val loadedImageIds by viewModel.loadedImageIds.collectAsStateWithLifecycle()
@@ -439,6 +492,8 @@ fun MessagingScreen(
     var showCodecSelectionDialog by remember { mutableStateOf(false) }
     var recommendedCodecProfile by remember { mutableStateOf(CodecProfile.DEFAULT) }
     var isProbingLinkSpeed by remember { mutableStateOf(false) }
+    var showVoiceMessageQualityDialog by remember { mutableStateOf(false) }
+    var voiceMessageFormat by remember(destinationHash) { mutableStateOf(VoiceMessageFormat.DEFAULT) }
 
     // Location permission launcher
     val locationPermissionLauncher =
@@ -658,7 +713,7 @@ fun MessagingScreen(
 
     // Track IME (keyboard) visibility
     val density = LocalDensity.current
-    val imeBottomInset = WindowInsets.ime.getBottom(density)
+    val imeBottomInset = LocalMessagingImeBottomInsetOverride.current ?: WindowInsets.ime.getBottom(density)
     val imeIsVisible = imeBottomInset > 0
 
     // Attachment panel state machine
@@ -701,6 +756,72 @@ fun MessagingScreen(
                 viewModel.loadRecentPhotos(context)
             }
         }
+
+    var showVoiceControls by remember { mutableStateOf(false) }
+    var audioPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+    LaunchedEffect(destinationHash, viewModel) {
+        viewModel.composerSendResult.collect { result ->
+            if (
+                result.destinationHash == destinationHash &&
+                result.clearComposer &&
+                messageText == result.submittedText
+            ) {
+                messageText = ""
+                showVoiceControls = false
+            }
+        }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val audioPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            if (granted) {
+                audioPermissionPermanentlyDenied = false
+                showVoiceControls = true
+                viewModel.requestStartVoiceRecording(voiceMessageFormat)
+            } else {
+                val activity = runCatching { context.findActivity() }.getOrNull()
+                audioPermissionPermanentlyDenied =
+                    activity != null &&
+                    !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    val voicePlayer = remember { VoiceMessagePlayer(context, scope) }
+    val voicePlayerState by voicePlayer.state.collectAsStateWithLifecycle()
+    val voiceMetadata by voicePlayer.metadata.collectAsStateWithLifecycle()
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> {
+                        if (
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                            PackageManager.PERMISSION_GRANTED
+                        ) {
+                            audioPermissionPermanentlyDenied = false
+                        }
+                    }
+                    Lifecycle.Event.ON_STOP -> viewModel.requestCancelActiveVoiceRecording()
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            voicePlayer.close()
+            viewModel.requestCancelActiveVoiceRecording()
+        }
+    }
+
+    val cancelActiveVoiceRecording = {
+        voicePlayer.close()
+        viewModel.requestCancelVoiceRecording()
+        showVoiceControls = false
+    }
+    BackHandler(enabled = showVoiceControls && voiceRecordingState.selectedRecording == null) {
+        cancelActiveVoiceRecording()
+    }
 
     // Back handler: dismiss panel on back press
     BackHandler(enabled = inputPanelMode == InputPanelMode.PANEL) {
@@ -747,6 +868,32 @@ fun MessagingScreen(
         }
     }
 
+    // Notification-entry scroll: when the user taps a message notification, force-scroll
+    // to the newest message even if the user was previously reading history. This is a
+    // one-shot effect keyed on the notification event so each tap fires once, including
+    // repeated taps while the same conversation remains the current destination.
+    // The [NotificationScrollCoordinator] encapsulates the one-shot logic so it can be
+    // unit-tested without Compose.
+    val notifScrollCoordinator = remember(destinationHash, fromNotification, notificationEventId) {
+        NotificationScrollCoordinator(fromNotification)
+    }
+    LaunchedEffect(destinationHash, fromNotification, notificationEventId) {
+        // Wait for messages to load.
+        // IMPORTANT: newestMessageId is NOT a key above — if it were, the effect would
+        // re-run on every new inbound message and yank the user from history, even when
+        // fromNotification is still true (it persists as a nav argument for the lifetime
+        // of the composable). By reading newestMessageId inside via snapshotFlow instead,
+        // we wait for the initial load and then exit; the effect does NOT re-run on
+        // subsequent messages.
+        snapshotFlow { newestMessageId }.firstOrNull { it != null }
+        notifScrollCoordinator.onContentReady()
+        if (notifScrollCoordinator.shouldScroll()) {
+            Log.d("MessagingScreen", "Notification entry: scrolling to newest message")
+            listState.scrollToItem(0)
+            hasScrolledToBottom = true
+        }
+    }
+
     // Smart auto-scroll when new messages arrive:
     // - Always scroll when YOU send a message (to show your sent message)
     // - Only scroll on received messages if you're already at bottom (don't interrupt reading)
@@ -779,6 +926,11 @@ fun MessagingScreen(
             listState.scrollToItem(0) // Instant scroll to index 0 (newest message)
         }
     }
+
+    // A notification can be posted while Columba is backgrounded even when this conversation
+    // remains composed. Re-assert visibility on every resume so that notification is dismissed
+    // and the newly visible messages are marked read.
+    ConversationVisibilityEffect(destinationHash, viewModel::onConversationVisible)
 
     // Load messages for this peer
     LaunchedEffect(destinationHash) {
@@ -817,45 +969,20 @@ fun MessagingScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // Online status indicator - combines link activity, delivery proofs, and announces
-                        val lastSeenFromAnnounce = announceInfo?.lastSeenTimestamp ?: 0L
-                        val lastActivityFromLink = conversationLinkState?.lastActivityTimestamp ?: 0L
-                        val hasActiveLink = conversationLinkState?.isActive == true
-                        val isEstablishing = conversationLinkState?.isEstablishing == true
-
-                        // A failed link probe is a STRONGER negative signal than
-                        // a recent announce is a positive one: it proves we just
-                        // actively tried to reach the peer and couldn't. The
-                        // announce only proved the peer existed at announce time;
-                        // failure proves the path is broken right now. Suppress
-                        // the optimistic "recent activity" indicator when a
-                        // recent failure is on record.
-                        //
-                        // ConversationLinkManager stamps lastActivityTimestamp
-                        // even on the failure path (line ~286), so the timestamp
-                        // alone can't distinguish success-recent from
-                        // failure-recent — `error != null` is the discriminator.
-                        val recentLinkFailure =
-                            conversationLinkState?.error != null &&
-                                lastActivityFromLink > 0 &&
-                                System.currentTimeMillis() - lastActivityFromLink < (5 * 60 * 1000L)
-
-                        // "Last successful activity" — drives the relative-time
-                        // display and the hasRecentActivity check. When the most
-                        // recent link state is an error, the link's
-                        // lastActivityTimestamp is a failure marker (not real
-                        // activity), so fall back to the announce timestamp.
-                        val lastSuccessfulActivity =
-                            if (conversationLinkState?.error == null) {
-                                maxOf(lastSeenFromAnnounce, lastActivityFromLink)
-                            } else {
-                                lastSeenFromAnnounce
-                            }
-                        val lastActivity = lastSuccessfulActivity
+                        // "Online" is live-link state. "Last seen" comes from
+                        // the durable, verified inbound-activity record and never
+                        // from an outgoing message or a failed probe.
+                        val lastActivity =
+                            peerActivity
+                                ?.takeIf { it.destinationHash.equals(destinationHash, ignoreCase = true) }
+                                ?.lastReceivedAt ?: 0L
+                        val linkMatchesConversation =
+                            currentConversationHash?.equals(destinationHash, ignoreCase = true) == true
+                        val hasActiveLink = linkMatchesConversation && conversationLinkState?.isActive == true
+                        val isEstablishing = linkMatchesConversation && conversationLinkState?.isEstablishing == true
                         val hasRecentActivity =
-                            !recentLinkFailure &&
-                                lastSuccessfulActivity > 0 &&
-                                System.currentTimeMillis() - lastSuccessfulActivity < (5 * 60 * 1000L)
+                            lastActivity > 0 &&
+                                timestampTick - lastActivity in 0 until (5 * 60 * 1000L)
 
                         // Debug logging
                         android.util.Log.d(
@@ -935,7 +1062,7 @@ fun MessagingScreen(
                                     when {
                                         isEstablishing -> "Connecting..."
                                         hasActiveLink -> "Online"
-                                        lastActivity > 0 -> "Last seen ${formatRelativeTime(lastActivity).lowercase()}"
+                                        lastActivity > 0 -> "Last seen ${formatTimeSince(lastActivity, timestampTick)}"
                                         else -> ""
                                     }
                                 Text(
@@ -963,7 +1090,14 @@ fun MessagingScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(
+                        onClick = {
+                            if (showVoiceControls && voiceRecordingState.selectedRecording == null) {
+                                cancelActiveVoiceRecording()
+                            }
+                            onBackClick()
+                        },
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -1138,6 +1272,12 @@ fun MessagingScreen(
                     ),
             )
 
+            ConversationTransferTray(
+                incomingTransfers = incomingTransfers,
+                syncProgress = syncProgress,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+
             // Messages + Input area using Google's official pattern
             Column(
                 modifier =
@@ -1258,9 +1398,27 @@ fun MessagingScreen(
                                             myIdentityHash = myIdentityHash,
                                             peerName = peerName,
                                             syncProgress = syncProgress,
+                                            transferProgress =
+                                                activeTransferProgress.firstOrNull {
+                                                    it.direction == Direction.OUT &&
+                                                        it.messageHash?.equals(message.id, ignoreCase = true) == true
+                                                },
                                             isImageLoading = needsImageLoading,
                                             fontScale = messageFontScale,
                                             timestampTick = timestampTick,
+                                            voicePlayerState =
+                                                voicePlayerState.takeIf { it.messageKey == displayMessage.id }
+                                                    ?: VoiceMessagePlayerState(),
+                                            voiceMetadata = voiceMetadata[displayMessage.id],
+                                            onVoiceMetadataNeeded = { attachment ->
+                                                voicePlayer.prepareMetadata(displayMessage.id, attachment)
+                                            },
+                                            onVoiceMetadataCancelled = voicePlayer::cancelMetadata,
+                                            onVoiceToggle = {
+                                                displayMessage.audioAttachment?.let { attachment ->
+                                                    voicePlayer.toggle(displayMessage.id, attachment)
+                                                }
+                                            },
                                             onViewDetails = onViewMessageDetails,
                                             onRetry = { viewModel.retryFailedMessage(message.id) },
                                             onFileAttachmentTap = { messageId, fileIndex, filename ->
@@ -1306,8 +1464,42 @@ fun MessagingScreen(
                     )
                 }
 
-                // Message Input Bar - at bottom of Column
-                MessageInputBar(
+                if (showVoiceControls && voiceRecordingState.selectedRecording == null) {
+                    VoiceRecordingControls(
+                        state = voiceRecordingState,
+                        hasPermission =
+                            androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO,
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+                        permissionPermanentlyDenied = audioPermissionPermanentlyDenied,
+                        isSupported = viewModel.isVoiceMessageSupported,
+                        isBlockedByCall = isVoiceRecordingBlockedByCall,
+                        onRequestPermission = {
+                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        onOpenPermissionSettings = {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", context.packageName, null),
+                                ),
+                            )
+                        },
+                        onStart = {
+                            voicePlayer.close()
+                            viewModel.requestStartVoiceRecording(voiceMessageFormat)
+                        },
+                        onStop = { viewModel.requestStopVoiceRecording() },
+                        onCancel = {
+                            voicePlayer.close()
+                            viewModel.requestCancelVoiceRecording()
+                            showVoiceControls = false
+                        },
+                    )
+                } else {
+                    // Message Input Bar - at bottom of Column
+                    MessageInputBar(
                     modifier =
                         Modifier
                             .fillMaxWidth(),
@@ -1325,10 +1517,43 @@ fun MessagingScreen(
                     selectedFileAttachments = selectedFileAttachments,
                     totalAttachmentSize = totalAttachmentSize,
                     onRemoveFileAttachment = { index -> viewModel.removeFileAttachment(index) },
+                    hasVoiceAttachment = voiceRecordingState.selectedRecording != null,
+                    voiceAttachmentDurationMillis = voiceRecordingState.selectedRecording?.durationMillis,
+                    voicePreviewState =
+                        voicePlayerState.takeIf { it.messageKey == VOICE_PREVIEW_KEY }
+                            ?: VoiceMessagePlayerState(),
+                    onVoicePreviewToggle = {
+                        voiceRecordingState.selectedRecording?.file?.let { file ->
+                            voicePlayer.toggleFile(
+                                VOICE_PREVIEW_KEY,
+                                file,
+                                voiceRecordingState.selectedFormat ?: VoiceMessageFormat.DEFAULT,
+                            )
+                        }
+                    },
+                    onRemoveVoiceAttachment = {
+                        voicePlayer.close()
+                        viewModel.requestRemoveVoiceRecording()
+                        showVoiceControls = false
+                    },
                     onSendClick = {
-                        if (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty()) {
-                            viewModel.sendMessage(destinationHash, messageText.trim())
-                            messageText = ""
+                        val hasComposerContent =
+                            listOf(
+                                messageText.isNotBlank(),
+                                selectedImageData != null,
+                                selectedFileAttachments.isNotEmpty(),
+                                voiceRecordingState.selectedRecording != null,
+                            ).any { it }
+                        if (hasComposerContent) {
+                            voicePlayer.close()
+                            val wasVoiceMessage = voiceRecordingState.selectedRecording != null
+                            viewModel.sendMessage(destinationHash, messageText)
+                            inputPanelMode =
+                                inputPanelModeAfterSend(
+                                    currentMode = inputPanelMode,
+                                    wasVoiceMessage = wasVoiceMessage,
+                                    imeIsVisible = imeIsVisible,
+                                )
                         }
                     },
                     isSending = isSending,
@@ -1344,7 +1569,8 @@ fun MessagingScreen(
                         }
                     },
                     isAttachmentPanelActive = inputPanelMode == InputPanelMode.PANEL,
-                )
+                    )
+                }
 
                 // Bottom space: attachment panel, keyboard spacer, or nothing
                 when (inputPanelMode) {
@@ -1366,7 +1592,7 @@ fun MessagingScreen(
                                 imageLauncher.launch("image/*")
                                 inputPanelMode = InputPanelMode.NONE
                             },
-                            onFileClick = {
+                    onFileClick = {
                                 try {
                                     filePickerLauncher.launch(arrayOf("*/*"))
                                 } catch (e: android.content.ActivityNotFoundException) {
@@ -1377,16 +1603,25 @@ fun MessagingScreen(
                                             context.getString(R.string.error_no_file_manager),
                                             Toast.LENGTH_SHORT,
                                         ).show()
-                                }
-                                inputPanelMode = InputPanelMode.NONE
-                            },
-                            modifier = Modifier.navigationBarsPadding(),
-                        )
-                    }
+                            }
+                            inputPanelMode = InputPanelMode.NONE
+                        },
+                        onVoiceClick = {
+                            showVoiceMessageQualityDialog = true
+                            inputPanelMode = InputPanelMode.NONE
+                        },
+                        modifier = Modifier.navigationBarsPadding(),
+                    )
+                }
                     InputPanelMode.KEYBOARD -> {
                         // Manual IME spacer replaces .imePadding()
                         val imeHeightDp = with(density) { imeBottomInset.toDp() }
-                        Spacer(modifier = Modifier.height(imeHeightDp))
+                        Spacer(
+                            modifier =
+                                Modifier
+                                    .height(imeHeightDp)
+                                    .testTag("messageKeyboardSpacer"),
+                        )
                     }
                     InputPanelMode.NONE -> {
                         // Nav bar padding only when nothing else is showing
@@ -1470,6 +1705,7 @@ fun MessagingScreen(
                     messageY = state.messageY,
                     messageWidth = state.messageWidth,
                     messageHeight = state.messageHeight,
+                    messageContent = selectableMessageContent,
                     onReactionSelected = { emoji ->
                         viewModel.sendReaction(state.messageId, emoji)
                     },
@@ -1558,6 +1794,28 @@ fun MessagingScreen(
                 pendingFileSave = Triple(messageId, fileIndex, filename)
                 fileSaveLauncher.launch(filename)
             },
+            onUpdatePyxis =
+                if (isPyxisUpdateFilename(filename)) {
+                    {
+                        showFileOptionsSheet = false
+                        scope.launch {
+                            val result = viewModel.getFileAttachmentUri(context, messageId, fileIndex)
+                            if (result != null) {
+                                onUpdatePyxisPackage(result.first)
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.pyxis_update_attachment_load_failed),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    null
+                },
             onDismiss = {
                 showFileOptionsSheet = false
                 selectedFileInfo = null
@@ -1702,6 +1960,42 @@ fun MessagingScreen(
         )
     }
 
+    if (showVoiceMessageQualityDialog) {
+        QualitySelectionDialog(
+            title = stringResource(R.string.voice_message_quality_dialog_title),
+            subtitle = stringResource(R.string.voice_message_quality_dialog_subtitle),
+            options =
+                VoiceMessageFormat.OUTBOUND_OPTIONS.map { format ->
+                    QualityOption(
+                        format,
+                        stringResource(format.displayNameRes),
+                        stringResource(format.descriptionRes),
+                    )
+                },
+            initialSelection = voiceMessageFormat,
+            recommendedOption = VoiceMessageFormat.DEFAULT,
+            linkState = conversationLinkState,
+            confirmButtonText = stringResource(R.string.voice_message_quality_dialog_record),
+            onDismiss = { showVoiceMessageQualityDialog = false },
+            onConfirm = { format ->
+                showVoiceMessageQualityDialog = false
+                voiceMessageFormat = format
+                showVoiceControls = true
+                when {
+                    !viewModel.isVoiceMessageSupported -> Unit
+                    isVoiceRecordingBlockedByCall -> Unit
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.RECORD_AUDIO,
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED ->
+                        viewModel.requestStartVoiceRecording(format)
+                    audioPermissionPermanentlyDenied -> Unit
+                    else -> audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+        )
+    }
+
     // Codec selection dialog for voice calls. Fires the link-speed
     // probe via LaunchedEffect when the dialog enters composition (and
     // re-fires on re-open). isProbingLinkSpeed flips to false when the
@@ -1719,7 +2013,10 @@ fun MessagingScreen(
             onDismiss = { showCodecSelectionDialog = false },
             onProfileSelected = { profile ->
                 showCodecSelectionDialog = false
-                onVoiceCall(profile.code)
+                scope.launch {
+                    withContext(Dispatchers.IO) { viewModel.cancelActiveVoiceRecording() }
+                    onVoiceCall(profile.code)
+                }
             },
         )
     }
@@ -1764,9 +2061,15 @@ fun MessageBubble(
     myIdentityHash: String? = null,
     peerName: String = "",
     syncProgress: SyncProgress = SyncProgress.Idle,
+    transferProgress: TransferProgressUpdate? = null,
     isImageLoading: Boolean = false,
     fontScale: Float = 1.0f,
-    @Suppress("UNUSED_PARAMETER") timestampTick: Long = 0L,
+    timestampTick: Long = System.currentTimeMillis(),
+    voicePlayerState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
+    voiceMetadata: VoiceMessageMetadata? = null,
+    onVoiceMetadataNeeded: (AudioAttachmentUi) -> Unit = {},
+    onVoiceMetadataCancelled: (String) -> Unit = {},
+    onVoiceToggle: () -> Unit = {},
     onViewDetails: (messageId: String) -> Unit = {},
     onRetry: () -> Unit = {},
     onFileAttachmentTap: (messageId: String, fileIndex: Int, filename: String) -> Unit = { _, _, _ -> },
@@ -1866,12 +2169,19 @@ fun MessageBubble(
                         .widthIn(max = 280.dp)
                         .drawWithCache {
                             val width = this.size.width.toInt()
-                            val height = this.size.height.toInt()
+                            // Cap the recorded snapshot at the GPU-safe height (see the
+                            // text bubble path). A full-height capture of a very tall
+                            // bubble can exceed the hardware texture limit and fail.
+                            val captureHeight =
+                                min(
+                                    this.size.height.toInt(),
+                                    OVERLAY_MAX_CAPTURE_HEIGHT_PX,
+                                )
                             onDrawWithContent {
                                 graphicsLayer.record(
                                     size =
                                         androidx.compose.ui.unit
-                                            .IntSize(width, height),
+                                            .IntSize(width, captureHeight),
                                 ) {
                                     this@onDrawWithContent.drawContent()
                                 }
@@ -1889,7 +2199,9 @@ fun MessageBubble(
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 scope.launch {
                                     val bitmap = graphicsLayer.toImageBitmap()
-                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                    val capturedHeight =
+                                        min(bubbleHeight, OVERLAY_MAX_CAPTURE_HEIGHT_PX)
+                                    onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, capturedHeight)
                                 }
                             },
                             indication = null,
@@ -1929,19 +2241,25 @@ fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = formatTimestamp(message.receivedAt ?: message.timestamp),
+                            text = formatTimestamp(message.receivedAt ?: message.timestamp, timestampTick),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                         )
                         if (isFromMe) {
-                            Text(
-                                text = getMessageStatusIcon(message.status),
-                                style = MaterialTheme.typography.labelSmall,
+                            MessageStatusIndicator(
+                                status = message.status,
                                 color = Color.White,
                             )
                         }
                     }
                 }
+            }
+
+            transferProgress?.let { progress ->
+                MessageTransferProgress(
+                    update = progress,
+                    modifier = Modifier.widthIn(max = 280.dp).padding(top = 8.dp),
+                )
             }
 
             // Fullscreen dialog for GIF-only messages
@@ -1978,12 +2296,19 @@ fun MessageBubble(
                             .widthIn(max = 300.dp)
                             .drawWithCache {
                                 val width = this.size.width.toInt()
-                                val height = this.size.height.toInt()
+                                // Cap the recorded snapshot at the GPU-safe height. A full-height
+                                // capture of a very tall bubble can exceed the hardware texture
+                                // limit and fail silently, leaving the reaction overlay blank.
+                                val captureHeight =
+                                    min(
+                                        this.size.height.toInt(),
+                                        OVERLAY_MAX_CAPTURE_HEIGHT_PX,
+                                    )
                                 onDrawWithContent {
                                     graphicsLayer.record(
                                         size =
                                             androidx.compose.ui.unit
-                                                .IntSize(width, height),
+                                                .IntSize(width, captureHeight),
                                     ) {
                                         this@onDrawWithContent.drawContent()
                                     }
@@ -2001,7 +2326,9 @@ fun MessageBubble(
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     scope.launch {
                                         val bitmap = graphicsLayer.toImageBitmap()
-                                        onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, bubbleHeight)
+                                        val capturedHeight =
+                                            min(bubbleHeight, OVERLAY_MAX_CAPTURE_HEIGHT_PX)
+                                        onLongPress(message.id, isFromMe, message.status == "failed", bitmap, bubbleX, bubbleY, bubbleWidth, capturedHeight)
                                     }
                                 },
                                 // Disable ripple - we use scale animation instead
@@ -2161,6 +2488,31 @@ fun MessageBubble(
                             }
                         }
 
+                        message.audioAttachment?.let { audio ->
+                            DisposableEffect(message.id, audio) {
+                                if (audio.isPlayable) onVoiceMetadataNeeded(audio)
+                                onDispose { onVoiceMetadataCancelled(message.id) }
+                            }
+                            VoiceMessageBubble(
+                                title = stringResource(R.string.message_voice_bubble_title),
+                                state =
+                                    if (audio.isPlayable) {
+                                        voicePlayerState
+                                    } else {
+                                        VoiceMessagePlayerState(error = "unsupported")
+                                    },
+                                onToggle = onVoiceToggle,
+                                durationMillis = audio.durationMs?.toInt() ?: voiceMetadata?.durationMs,
+                                waveformLevels = voiceMetadata?.waveformLevels.orEmpty(),
+                            )
+                            Spacer(
+                                modifier =
+                                    Modifier.height(
+                                        if (message.hasFileAttachments || message.content.isNotBlank()) 8.dp else 4.dp,
+                                    ),
+                            )
+                        }
+
                         // Display file attachments if present (LXMF field 5 = FILE_ATTACHMENTS)
                         if (message.hasFileAttachments) {
                             message.fileAttachments.forEach { fileAttachment ->
@@ -2178,18 +2530,33 @@ fun MessageBubble(
                             }
                         }
 
-                        LinkifiedMessageText(
-                            text = message.content,
-                            isFromMe = isFromMe,
-                            fontScale = fontScale,
-                        )
+                        if (message.content.isNotBlank()) {
+                            if (message.renderer == MessageRenderer.MARKDOWN) {
+                                MarkdownMessageText(
+                                    markdown = message.content,
+                                    isFromMe = isFromMe,
+                                    fontScale = fontScale,
+                                )
+                            } else {
+                                LinkifiedMessageText(
+                                    text = message.content,
+                                    isFromMe = isFromMe,
+                                    fontScale = fontScale,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        transferProgress?.let { progress ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            MessageTransferProgress(update = progress)
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = formatTimestamp(message.receivedAt ?: message.timestamp),
+                                text = formatTimestamp(message.receivedAt ?: message.timestamp, timestampTick),
                                 style = MaterialTheme.typography.labelSmall,
                                 color =
                                     if (isFromMe) {
@@ -2199,9 +2566,8 @@ fun MessageBubble(
                                     },
                             )
                             if (isFromMe) {
-                                Text(
-                                    text = getMessageStatusIcon(message.status),
-                                    style = MaterialTheme.typography.labelSmall,
+                                MessageStatusIndicator(
+                                    status = message.status,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                                 )
                             }
@@ -2310,6 +2676,11 @@ fun MessageInputBar(
     selectedFileAttachments: List<FileAttachment> = emptyList(),
     totalAttachmentSize: Int = 0,
     onRemoveFileAttachment: (Int) -> Unit = {},
+    hasVoiceAttachment: Boolean = false,
+    voiceAttachmentDurationMillis: Long? = null,
+    voicePreviewState: VoiceMessagePlayerState = VoiceMessagePlayerState(),
+    onVoicePreviewToggle: () -> Unit = {},
+    onRemoveVoiceAttachment: () -> Unit = {},
     onSendClick: () -> Unit,
     isSending: Boolean = false,
     onAttachmentPanelToggle: () -> Unit = {},
@@ -2418,6 +2789,15 @@ fun MessageInputBar(
                 }
             }
 
+            voiceAttachmentDurationMillis?.let { durationMillis ->
+                VoiceDraftPreview(
+                    durationMillis = durationMillis,
+                    state = voicePreviewState,
+                    onToggle = onVoicePreviewToggle,
+                    onRemove = onRemoveVoiceAttachment,
+                )
+            }
+
             // Character count display
             val remaining = ValidationConstants.MAX_MESSAGE_LENGTH - messageText.length
             if (remaining < 100) {
@@ -2438,7 +2818,10 @@ fun MessageInputBar(
             // shared by the send button and the bare-Enter key handler below.
             val canSend =
                 !isSending &&
-                    (messageText.isNotBlank() || selectedImageData != null || selectedFileAttachments.isNotEmpty())
+                    (
+                        messageText.isNotBlank() || selectedImageData != null ||
+                            selectedFileAttachments.isNotEmpty() || hasVoiceAttachment
+                    )
 
             Row(
                 modifier =
@@ -2571,7 +2954,13 @@ fun MessageInputBar(
                 FilledIconButton(
                     onClick = onSendClick,
                     enabled = canSend,
-                    modifier = Modifier.size(48.dp),
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .semantics {
+                                contentDescription = "Send message"
+                                if (isSending) stateDescription = "Sending message"
+                            },
                     shape = CircleShape,
                     colors =
                         IconButtonDefaults.filledIconButtonColors(
@@ -2590,7 +2979,7 @@ fun MessageInputBar(
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send message",
+                            contentDescription = null,
                         )
                     }
                 }
@@ -2629,10 +3018,10 @@ fun EmptyMessagesState() {
     }
 }
 
-private enum class InputPanelMode { NONE, KEYBOARD, PANEL }
-
-private fun formatTimestamp(timestamp: Long): String {
-    val now = System.currentTimeMillis()
+private fun formatTimestamp(
+    timestamp: Long,
+    now: Long,
+): String {
     val diff = now - timestamp
 
     return when {
@@ -2937,26 +3326,6 @@ private fun formatFileSize(bytes: Long): String =
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         bytes < 1024 * 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
         else -> String.format(java.util.Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
-    }
-
-/**
- * Get the status icon character for a message status.
- *
- * @param status The message status string
- * @return Unicode character representing the status:
- *   - "○" (hollow circle) for pending - message created, waiting to send
- *   - "✓" (single check) for sent/retrying_propagated/propagated - transmitted or stored on relay
- *   - "✓✓" (double check) for delivered - delivered and acknowledged by recipient
- *   - "!" (exclamation) for failed - delivery failed
- *   - "" (empty) for unknown status
- */
-internal fun getMessageStatusIcon(status: String): String =
-    when (status) {
-        "pending" -> "○"
-        "sent", "retrying_propagated", "propagated" -> "✓"
-        "delivered" -> "✓✓"
-        "failed" -> "!"
-        else -> ""
     }
 
 @Composable

@@ -2,6 +2,7 @@ package network.columba.app.migration
 
 import network.columba.app.data.db.entity.CustomThemeEntity
 import kotlinx.serialization.Serializable
+import java.io.File
 
 /**
  * Migration bundle containing all exportable app data.
@@ -19,6 +20,8 @@ data class MigrationBundle(
     val peerIdentities: List<PeerIdentityExport> = emptyList(),
     val interfaces: List<InterfaceExport> = emptyList(),
     val customThemes: List<CustomThemeExport> = emptyList(),
+    val callHistory: List<CallHistoryExport> = emptyList(),
+    val callHistoryDeletions: List<CallHistoryDeletionExport> = emptyList(),
     val settings: SettingsExport,
     val attachmentManifest: List<AttachmentRef> = emptyList(),
     val ratchetFiles: List<RatchetRef> = emptyList(),
@@ -26,7 +29,7 @@ data class MigrationBundle(
     val keysEncrypted: Boolean = false,
 ) {
     companion object {
-        const val CURRENT_VERSION = 7
+        const val CURRENT_VERSION = 8
 
         // Minimum version we can import - older files may have incompatible structure
         const val MINIMUM_VERSION = 1
@@ -236,6 +239,32 @@ data class CustomThemeExport(
     val darkOutlineVariant: Int,
 )
 
+/** Call evidence. Service-process ownership is intentionally not transferable. */
+@Serializable
+data class CallHistoryExport(
+    val callAttemptId: String,
+    val localIdentityHash: String,
+    val remoteIdentityHash: String,
+    val direction: String,
+    val peerDisplayNameSnapshot: String?,
+    val codecProfileCode: Int?,
+    val attemptedAt: Long,
+    val ringingAt: Long?,
+    val connectedAt: Long?,
+    val endedAt: Long?,
+    val outcome: String?,
+    val inferredEnding: Boolean,
+    val failureReason: String?,
+)
+
+/** Minimal authority preventing a deleted call from being recreated by a later import. */
+@Serializable
+data class CallHistoryDeletionExport(
+    val callAttemptId: String,
+    val localIdentityHash: String,
+    val deletedAt: Long,
+)
+
 /**
  * A single preference entry for serialization.
  * Stores the key name, type identifier, and string-encoded value.
@@ -352,6 +381,7 @@ sealed class ExportResult {
         val peerIdentityCount: Int,
         val interfaceCount: Int,
         val customThemeCount: Int,
+        val callHistoryCount: Int = 0,
     ) : ExportResult()
 
     data class Error(
@@ -372,6 +402,8 @@ sealed class ImportResult {
         val peerIdentitiesImported: Int,
         val interfacesImported: Int,
         val customThemesImported: Int,
+        val callHistoryImported: Int = 0,
+        val callHistoryConflictsSkipped: Int = 0,
     ) : ImportResult()
 
     data class Error(
@@ -394,16 +426,18 @@ data class MigrationPreview(
     val peerIdentityCount: Int,
     val interfaceCount: Int,
     val customThemeCount: Int,
+    val callHistoryCount: Int = 0,
     val identityNames: List<String>,
 )
 
 /**
- * Result of previewing a migration file, including the decrypted ZIP bytes
- * so they can be reused during import without redundant decryption.
+ * Result of previewing a migration file, including the local copy of the
+ * bundle so the import can re-stream it without redundant key derivation
+ * or re-copying from the content resolver.
  */
 class PreviewWithData(
     val preview: MigrationPreview,
-    val zipBytes: ByteArray,
+    val file: File,
 )
 
 /**

@@ -16,9 +16,12 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.notifications.NotificationHelper
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.service.ActiveConversationManager
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.IdentityResolutionManager
@@ -118,6 +121,12 @@ class MessagingViewModelImageLoadingTest {
                         mockk<IdentityResolutionManager>().also {
                             coEvery { it.requestPathForContact(any()) } just Runs
                         },
+                    notificationHelper = mockk<NotificationHelper>().also {
+                        every { it.cancelNotificationForConversation(any()) } just Runs
+                    },
+                    rnsTelephony = mockk<RnsTelephony>().also {
+                        every { it.callState } returns MutableStateFlow(CallState.Idle)
+                    },
                 )
             advanceUntilIdle()
             testBody()
@@ -150,6 +159,7 @@ class MessagingViewModelImageLoadingTest {
 
         // Mock conversationLinkManager flows
         every { conversationLinkManager.linkStates } returns MutableStateFlow(emptyMap())
+        every { conversationLinkManager.observePeerActivity(any()) } returns flowOf(null)
 
         // Mock locationSharingManager flows
         every { locationSharingManager.activeSessions } returns MutableStateFlow(emptyList())
@@ -186,6 +196,7 @@ class MessagingViewModelImageLoadingTest {
         coEvery { rnsLxmf.getLxmfIdentity() } returns Result.success(testIdentity)
         every { rnsLxmf.setConversationActive(any()) } just Runs
         every { rnsLxmf.observeDeliveryStatus() } returns flowOf()
+        every { rnsLxmf.observeTransferProgress() } returns flowOf()
         every { rnsTransportAdmin.reactionReceivedFlow } returns MutableSharedFlow()
     }
 

@@ -1,6 +1,11 @@
 package network.columba.app.ui.screens
 
+import network.columba.app.util.isPyxisUpdateFilename
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -11,6 +16,20 @@ import org.junit.Test
  * to avoid Android framework dependencies in unit tests.
  */
 class MessagingScreenLinkUtilsTest {
+    @Test
+    fun `recognizes Pyxis update attachment names`() {
+        assertTrue(isPyxisUpdateFilename("pyxis-v0.3.0.pyxis.zip"))
+        assertTrue(isPyxisUpdateFilename("UPDATE.PYXIS"))
+        assertTrue(isPyxisUpdateFilename("  candidate.pyxis.zip  "))
+    }
+
+    @Test
+    fun `does not offer updater for generic archives or binaries`() {
+        assertFalse(isPyxisUpdateFilename("firmware.bin"))
+        assertFalse(isPyxisUpdateFilename("firmware.zip"))
+        assertFalse(isPyxisUpdateFilename("not-pyxis.zip"))
+    }
+
     // ==========================================
     // Scheme Handling Tests
     // ==========================================
@@ -49,6 +68,24 @@ class MessagingScreenLinkUtilsTest {
     fun `handles mixed case scheme`() {
         val result = toBrowsableUrl("HtTpS://example.com")
         assertEquals("HtTpS://example.com", result)
+    }
+
+    @Test
+    fun `safe Markdown links allow web and Reticulum schemes`() {
+        assertNotNull(toSafeBrowsableUrl("https://example.com/docs"))
+        assertNotNull(toSafeBrowsableUrl("nomadnetwork://9ce92808be498e9e05590ff27cbfdfe4:/page/index.mu"))
+        assertNotNull(toSafeBrowsableUrl("lxma://example"))
+    }
+
+    @Test
+    fun `safe Markdown links reject active and local content schemes`() {
+        listOf(
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "file:///data/data/network.columba.app/files/private",
+            "content://network.columba.app/private",
+            "intent://example/#Intent;scheme=https;end",
+        ).forEach { unsafe -> assertNull(unsafe, toSafeBrowsableUrl(unsafe)) }
     }
 
     // ==========================================

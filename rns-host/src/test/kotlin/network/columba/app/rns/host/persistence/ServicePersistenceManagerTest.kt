@@ -1,18 +1,26 @@
 package network.columba.app.rns.host.persistence
 
 import android.content.Context
+import androidx.room.withTransaction
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.dao.AnnounceDao
+import network.columba.app.data.db.dao.BlockedPeerDao
 import network.columba.app.data.db.dao.ContactDao
 import network.columba.app.data.db.dao.ConversationDao
 import network.columba.app.data.db.dao.LocalIdentityDao
 import network.columba.app.data.db.dao.MessageDao
+import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
+import network.columba.app.data.db.dao.PendingDeliveryStatusDao
 import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
+import network.columba.app.data.util.HashUtils
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -22,7 +30,9 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.mockkStatic
 import io.mockk.unmockkObject
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -46,12 +56,15 @@ class ServicePersistenceManagerTest {
     private lateinit var testScope: TestScope
     private lateinit var database: ColumbaDatabase
     private lateinit var announceDao: AnnounceDao
+    private lateinit var blockedPeerDao: BlockedPeerDao
     private lateinit var contactDao: ContactDao
     private lateinit var messageDao: MessageDao
     private lateinit var conversationDao: ConversationDao
     private lateinit var localIdentityDao: LocalIdentityDao
     private lateinit var peerIdentityDao: PeerIdentityDao
+    private lateinit var peerActivityDao: PeerActivityDao
     private lateinit var peerIconDao: PeerIconDao
+    private lateinit var pendingDeliveryStatusDao: PendingDeliveryStatusDao
     private lateinit var settingsAccessor: ServiceSettingsAccessor
     private lateinit var persistenceManager: ServicePersistenceManager
 
@@ -67,40 +80,123 @@ class ServicePersistenceManagerTest {
         testScope = TestScope(UnconfinedTestDispatcher())
         database = mockk()
         announceDao = mockk()
+        blockedPeerDao = mockk()
         contactDao = mockk()
         messageDao = mockk()
         conversationDao = mockk()
         localIdentityDao = mockk()
         peerIdentityDao = mockk()
+        peerActivityDao = mockk()
         peerIconDao = mockk()
+        pendingDeliveryStatusDao = mockk()
         settingsAccessor = mockk()
 
         // Mock database DAOs
         every { database.announceDao() } returns announceDao
+        every { database.blockedPeerDao() } returns blockedPeerDao
         every { database.contactDao() } returns contactDao
         every { database.messageDao() } returns messageDao
         every { database.conversationDao() } returns conversationDao
         every { database.localIdentityDao() } returns localIdentityDao
         every { database.peerIdentityDao() } returns peerIdentityDao
+        every { database.peerActivityDao() } returns peerActivityDao
         every { database.peerIconDao() } returns peerIconDao
+        every { database.pendingDeliveryStatusDao() } returns pendingDeliveryStatusDao
+        coEvery { peerActivityDao.recordActivity(any(), any(), any()) } just Runs
+        coEvery { peerActivityDao.recordActivityOnce(any(), any(), any(), any()) } returns false
+        coEvery { announceDao.upsertAnnounce(any()) } just Runs
+        coEvery { announceDao.upsertInterfaceSighting(any()) } just Runs
+        coEvery { announceDao.upsertInterfaceSightingMetadata(any()) } just Runs
+        coEvery { peerIdentityDao.getPeerIdentity(any()) } returns null
+        coEvery { peerIdentityDao.insertPeerIdentity(any()) } just Runs
+        coEvery { localIdentityDao.getActiveIdentitySync() } returns null
 
         // Mock ServiceDatabaseProvider singleton
         mockkObject(ServiceDatabaseProvider)
         every { ServiceDatabaseProvider.getDatabase(any()) } returns database
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction<Unit>(any()) } coAnswers {
+            secondArg<suspend () -> Unit>().invoke()
+        }
 
         // Default: don't block unknown senders
         every { settingsAccessor.getBlockUnknownSenders() } returns false
 
-        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor)
+        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor, false)
     }
 
     @After
     fun tearDown() {
+        unmockkStatic("androidx.room.RoomDatabaseKt")
         unmockkObject(ServiceDatabaseProvider)
         clearAllMocks()
     }
 
     // ========== persistAnnounce() Tests ==========
+
+    @Test
+    fun `persistDeliveryStatus durably queues until row appears and survives manager restart`() =
+        runTest {
+            val message = mockk<MessageEntity>()
+            every { message.isFromMe } returns true
+            val identity = mockk<LocalIdentityEntity>()
+            every { identity.identityHash } returns "owning-identity"
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns identity
+            var pending: PendingDeliveryStatusEntity? = null
+            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any(), any(), any()) } coAnswers {
+                pending = PendingDeliveryStatusEntity(firstArg(), secondArg(), thirdArg(), arg(3), arg(4))
+            }
+            coEvery { pendingDeliveryStatusDao.oldest(any()) } coAnswers { listOfNotNull(pending) }
+            coEvery { pendingDeliveryStatusDao.delete(any(), any()) } coAnswers { pending = null }
+            coEvery { pendingDeliveryStatusDao.deleteOlderThan(any()) } returns 0
+            coEvery { pendingDeliveryStatusDao.trimToNewest(any()) } returns 0
+            coEvery { messageDao.getMessageById("message-hash", "owning-identity") } returns null
+            coEvery {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered", null)
+            } returns 1
+
+            val update = DeliveryStatusUpdate("message-hash", DeliveryStatus.DELIVERED, 1L, "owning-identity")
+            assertTrue(persistenceManager.persistDeliveryStatus(update))
+            assertTrue(pending != null)
+
+            coEvery { messageDao.getMessageById("message-hash", "owning-identity") } returns message
+            val restarted = ServicePersistenceManager(context, testScope, settingsAccessor, false)
+            assertTrue(restarted.reconcilePendingDeliveryStatuses())
+
+            coVerify(exactly = 1) {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "delivered", null)
+            }
+            assertTrue(pending == null)
+            coVerify { pendingDeliveryStatusDao.deleteOlderThan(any()) }
+            coVerify { pendingDeliveryStatusDao.trimToNewest(512) }
+        }
+
+    @Test
+    fun `persistDeliveryStatus retries transient DAO failure without losing durable event`() =
+        runTest {
+            val message = mockk<MessageEntity>()
+            every { message.isFromMe } returns true
+            val identity = mockk<LocalIdentityEntity>()
+            every { identity.identityHash } returns "owning-identity"
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns identity
+            val pending = PendingDeliveryStatusEntity("owning-identity", "message-hash", "failed", null, 1L)
+            coEvery { pendingDeliveryStatusDao.reduce(any(), any(), any(), any(), any()) } just Runs
+            coEvery { pendingDeliveryStatusDao.deleteOlderThan(any()) } returns 0
+            coEvery { pendingDeliveryStatusDao.trimToNewest(any()) } returns 0
+            coEvery { pendingDeliveryStatusDao.oldest(any()) } returns listOf(pending) andThen listOf(pending)
+            coEvery { messageDao.getMessageById("message-hash", "owning-identity") } returns message
+            coEvery { messageDao.applyDeliveryStatus(any(), any(), any(), any()) } throws
+                IllegalStateException("busy") andThen 1
+            coEvery { pendingDeliveryStatusDao.delete("owning-identity", "message-hash") } just Runs
+
+            val update = DeliveryStatusUpdate("message-hash", DeliveryStatus.FAILED, 1L, "owning-identity")
+            assertTrue(persistenceManager.persistDeliveryStatus(update))
+
+            coVerify(exactly = 2) {
+                messageDao.applyDeliveryStatus("message-hash", "owning-identity", "failed", null)
+            }
+            coVerify(exactly = 1) { pendingDeliveryStatusDao.delete("owning-identity", "message-hash") }
+        }
 
     @Test
     fun `persistAnnounce saves new announce to database`() =
@@ -131,6 +227,7 @@ class ServicePersistenceManagerTest {
             testScope.advanceUntilIdle()
 
             assertTrue("persistAnnounce should complete without throwing", result.isSuccess)
+            coVerify(exactly = 1) { database.withTransaction<Unit>(any()) }
             coVerify { announceDao.upsertAnnounce(any()) }
         }
 
@@ -224,6 +321,14 @@ class ServicePersistenceManagerTest {
                     },
                 )
             }
+            coVerify {
+                peerIdentityDao.insertPeerIdentity(
+                    match { identity ->
+                        identity.peerHash == HashUtils.computeIdentityHash(testPublicKey) &&
+                            identity.publicKey.contentEquals(testPublicKey)
+                    },
+                )
+            }
         }
 
     @Test
@@ -256,6 +361,89 @@ class ServicePersistenceManagerTest {
 
             // Verify exception was handled (no crash)
             assertTrue("persistAnnounce should handle exception gracefully", result.isSuccess)
+        }
+
+    @Test
+    fun `persistAnnounce preserves valid name and propagation limit when omitted`() =
+        runTest {
+            val existing =
+                AnnounceEntity(
+                    destinationHash = testDestinationHash,
+                    peerName = "Known Peer",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = 100L,
+                    nodeType = "PROPAGATION_NODE",
+                    receivingInterface = "BLE",
+                    propagationTransferLimitKb = 512,
+                )
+            coEvery { announceDao.getAnnounce(testDestinationHash) } returns existing
+            coEvery { announceDao.upsertAnnounce(any()) } just Runs
+
+            val persisted =
+                persistenceManager.persistAnnounce(
+                    destinationHash = testDestinationHash,
+                    peerName = "Peer 01020304",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 2,
+                    timestamp = 200L,
+                    nodeType = "PROPAGATION_NODE",
+                    receivingInterface = "BLE",
+                    receivingInterfaceType = "BLE",
+                    aspect = "lxmf.propagation",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                )
+
+            assertTrue(persisted)
+            coVerify {
+                announceDao.upsertAnnounce(
+                    match { it.peerName == "Known Peer" && it.propagationTransferLimitKb == 512 },
+                )
+            }
+        }
+
+    @Test
+    fun `persistAnnounce rejects peers blocked for the active identity`() =
+        runTest {
+            val activeIdentity =
+                LocalIdentityEntity(
+                    identityHash = testIdentityHash,
+                    displayName = "Test",
+                    destinationHash = "local_destination",
+                    filePath = "/test/path",
+                    createdTimestamp = 1L,
+                    lastUsedTimestamp = 1L,
+                    isActive = true,
+                )
+            coEvery { localIdentityDao.getActiveIdentitySync() } returns activeIdentity
+            coEvery { blockedPeerDao.isBlocked(testDestinationHash, testIdentityHash) } returns true
+
+            val persisted =
+                persistenceManager.persistAnnounce(
+                    destinationHash = testDestinationHash,
+                    peerName = "Blocked Peer",
+                    publicKey = testPublicKey,
+                    appData = null,
+                    hops = 1,
+                    timestamp = 200L,
+                    nodeType = "PEER",
+                    receivingInterface = "BLE",
+                    receivingInterfaceType = "BLE",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                )
+
+            assertFalse(persisted)
+            coVerify(exactly = 0) { announceDao.upsertAnnounce(any()) }
+            coVerify(exactly = 0) { peerIdentityDao.insertPeerIdentity(any()) }
         }
 
     // ========== persistPeerIdentity() Tests ==========

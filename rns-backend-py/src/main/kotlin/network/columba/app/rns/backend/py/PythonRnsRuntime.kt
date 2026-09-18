@@ -305,6 +305,24 @@ class PythonRnsRuntime(
         val lxmfStorage = File(config.storagePath, "lxmf").apply { mkdirs() }
         val router = lxmfModule.callAttr("LXMRouter", identity, lxmfStorage.absolutePath)
         lxmRouter = router
+
+        // Apply the persisted incoming-message size limit to the fresh router
+        // BEFORE the delivery destination is registered, so the first DIRECT
+        // resource advertisement is evaluated against the user's configured
+        // gate rather than LXMF's built-in 1000 KB default (columba#1106
+        // startup window). null = host did not supply a limit (keep default).
+        config.incomingMessageSizeLimitKb?.let { limitKb ->
+            runCatching {
+                eventBridge.callAttr("prime_incoming_message_size_limit", router, limitKb)
+            }.onFailure {
+                Log.w(
+                    TAG,
+                    "Failed to prime incoming message size limit: ${it.message}",
+                    it,
+                )
+            }
+        }
+
         localDestination = router.callAttr(
             "register_delivery_identity",
             identity,
@@ -394,6 +412,8 @@ class PythonRnsRuntime(
     @Synchronized
     fun stop() {
         if (!running.get()) return
+        runCatching { eventBridge.callAttr("uninstall_external_stamp_generator") }
+            .onFailure { Log.w(TAG, "External stamp generator unregister failed", it) }
         runCatching { eventBridge.callAttr("deregister_callbacks") }
             .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
         runCatching {
@@ -473,10 +493,9 @@ class PythonRnsRuntime(
  * Chaquopy's SAM-callable dispatch (`JavaObject.__call__` → bridge
  * apply) boxes args as `Object[]` instead of typed `byte[] / int`,
  * causing `ClassCastException` in the synthetic apply wrapper. A
- * normal class with a method whose JVM signature is
- * `generate([B, I) -> Object` makes Chaquopy take its typed-method
+ * normal class with typed `generate` overloads makes Chaquopy take its typed-method
  * dispatch path (`JavaMethod.__call__`), which correctly converts
- * Python `bytes → byte[]` and `int → int` before invocation.
+ * Python `bytes → byte[]`, `int → int`, and the cancellation token before invocation.
  *
  * Invoked from Python via
  * `event_bridge.install_external_stamp_generator(callback)`, which
@@ -489,7 +508,7 @@ class PythonRnsRuntime(
  * builtin so they expose the buffer protocol that LXStamper then
  * concatenates with the workblock.
  */
-@ReflectivelyKept // event_bridge.py calls generate(workblock, cost) by name via Chaquopy — R8 must not rename/strip it
+@ReflectivelyKept // event_bridge.py calls generate(workblock, cost, token) by name via Chaquopy — R8 must not rename/strip it
 internal class StampGeneratorCallback(
     private val generator: StampGenerator,
 ) {
@@ -500,6 +519,12 @@ internal class StampGeneratorCallback(
     fun generate(
         workblock: ByteArray,
         stampCost: Int,
+    ): PyObject = generate(workblock, stampCost, null)
+
+    fun generate(
+        workblock: ByteArray,
+        stampCost: Int,
+        cancellationToken: PyObject?,
     ): PyObject {
         Log.d(
             TAG,
@@ -509,7 +534,9 @@ internal class StampGeneratorCallback(
 
         val result =
             runBlocking(Dispatchers.Default) {
-                generator.generateStamp(workblock, stampCost)
+                generator.generateStamp(workblock, stampCost) {
+                    cancellationToken?.callAttr("is_cancelled")?.toBoolean() == true
+                }
             }
 
         Log.d(TAG, "Stamp generated: value=${result.value}, rounds=${result.rounds}")

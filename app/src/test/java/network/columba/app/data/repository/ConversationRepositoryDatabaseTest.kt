@@ -2,10 +2,12 @@ package network.columba.app.data.repository
 
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.ConversationEntity
+import network.columba.app.data.db.entity.MessageEntity
 import network.columba.app.data.storage.AttachmentStorageManager
 import network.columba.app.test.DatabaseTest
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -20,6 +22,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Database-backed tests for ConversationRepository.
@@ -422,7 +426,263 @@ class ConversationRepositoryDatabaseTest : DatabaseTest() {
             assertEquals("delivered", updated?.status)
         }
 
+    @Test
+    fun `identity-scoped advisory reduction ignores active identity switch with duplicate hash`() =
+        runTest {
+            val identityA = TEST_IDENTITY_HASH
+            val identityB = "identity-b"
+            val duplicateHash = "duplicate-advisory-hash"
+            val peerA = "peer-a"
+            val peerB = "peer-b"
+            insertTestIdentity(identityHash = identityB, displayName = "Identity B", isActive = false)
+            var originalB: MessageEntity? = null
+            listOf(identityA to peerA, identityB to peerB).forEachIndexed { index, (identity, peer) ->
+                conversationDao.insertConversation(
+                    ConversationEntity(
+                        peerHash = peer,
+                        identityHash = identity,
+                        peerName = peer,
+                        lastMessage = "pending",
+                        lastMessageTimestamp = index.toLong(),
+                    ),
+                )
+                val message =
+                    MessageEntity(
+                        id = duplicateHash,
+                        conversationHash = peer,
+                        identityHash = identity,
+                        content = identity,
+                        timestamp = index.toLong(),
+                        isFromMe = true,
+                        status = "pending",
+                        isRead = identity == identityA,
+                        fieldsJson = if (identity == identityB) "{\"b\":true}" else null,
+                        reactionsJson = if (identity == identityB) "{\"👍\":[\"b\"]}" else null,
+                        deliveryMethod = if (identity == identityB) "propagated" else "direct",
+                        errorMessage = if (identity == identityB) "identity-b-error" else null,
+                        replyToMessageId = if (identity == identityB) "identity-b-reply" else null,
+                        receivedHopCount = if (identity == identityB) 7 else null,
+                        receivedInterface = if (identity == identityB) "B Receive" else null,
+                        receivedRssi = if (identity == identityB) -71 else null,
+                        receivedSnr = if (identity == identityB) 3.5f else null,
+                        receivedAt = if (identity == identityB) 99L else null,
+                        sentInterface = if (identity == identityB) "B Original" else null,
+                    )
+                messageDao.insertMessage(message)
+                if (identity == identityB) originalB = message
+            }
+
+            // Callback A has already been received; force A -> B before both mutation boundaries.
+            localIdentityDao.setActive(identityB)
+            val reduced = repository.applyDeliveryStatus(duplicateHash, "delivered", identityA)
+            repository.updateMessageSentInterface(duplicateHash, "A Route", requireNotNull(reduced).identityHash)
+
+            assertEquals(identityA, reduced.identityHash)
+            assertEquals(peerA, reduced.conversationHash)
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
+            assertEquals("A Route", messageDao.getMessageById(duplicateHash, identityA)?.sentInterface)
+            assertEquals(originalB, messageDao.getMessageById(duplicateHash, identityB))
+            assertEquals(identityA, repository.getMessageById(duplicateHash, identityA)?.identityHash)
+            assertNull(repository.getMessageById(duplicateHash, " "))
+        }
+
     // ========== Delete Conversation Tests ==========
+
+    @Test
+    fun `saveMessage preserves audio mode when large payload is extracted`() =
+        runTest {
+            val payload = "ab".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/audio_payload.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_large_audio", "7_audio", payload)
+            } returns storedPath
+            val fields = JSONObject().put("7", JSONArray().put(16).put(payload)).toString()
+            val message =
+                Message(
+                    id = "msg_large_audio",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_large_audio", TEST_IDENTITY_HASH)
+            val storedAudio = JSONObject(saved!!.fieldsJson!!).getJSONArray("7")
+            assertEquals(16, storedAudio.getInt(0))
+            assertEquals(storedPath, storedAudio.getJSONObject(1).getString("_file_ref"))
+            verify(exactly = 1) {
+                mockAttachmentStorage.saveAttachment("msg_large_audio", "7_audio", payload)
+            }
+        }
+
+    @Test
+    fun `saveMessage preserves audio mode when another field triggers extraction`() =
+        runTest {
+            val audioPayload = "4f676753"
+            val largeOtherField = "ab".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            every {
+                mockAttachmentStorage.saveAttachment("msg_small_audio", "99", largeOtherField)
+            } returns "/tmp/other_payload.hex"
+            val fields =
+                JSONObject()
+                    .put("7", JSONArray().put(16).put(audioPayload))
+                    .put("99", largeOtherField)
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_small_audio",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_small_audio", TEST_IDENTITY_HASH)
+            val storedAudio = JSONObject(saved!!.fieldsJson!!).getJSONArray("7")
+            assertEquals(16, storedAudio.getInt(0))
+            assertEquals(audioPayload, storedAudio.getString(1))
+        }
+
+    // ========== File attachment extraction tests ==========
+
+    @Test
+    fun `saveMessage extracts Sideband-style positional file attachment to disk`() =
+        runTest {
+            // Wire format from Sideband and other LXMF apps:
+            // "5": [["filename.mp4", "hexdata..."]]
+            val hexData = "ab".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/positional_file.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_positional_file", "5_0", hexData)
+            } returns storedPath
+            val fields =
+                JSONObject()
+                    .put(
+                        "5",
+                        JSONArray()
+                            .put(JSONArray().put("G4 Doorbell Pro.mp4").put(hexData)),
+                    )
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_positional_file",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_positional_file", TEST_IDENTITY_HASH)
+            val stored = JSONObject(saved!!.fieldsJson!!).getJSONArray("5").getJSONObject(0)
+            assertEquals("G4 Doorbell Pro.mp4", stored.getString("filename"))
+            assertEquals(hexData.length / 2, stored.getInt("size"))
+            assertEquals(storedPath, stored.getString("_data_ref"))
+            verify(exactly = 1) {
+                mockAttachmentStorage.saveAttachment("msg_positional_file", "5_0", hexData)
+            }
+
+            // The stored row must stay far below the SQLite CursorWindow
+            // limit (~2 MB). If the hex is kept inline, the conversation
+            // query fails and the whole chat renders empty - the original
+            // bug this test guards against.
+            assertTrue(
+                "stored fieldsJson must not keep the file data inline, got ${saved.fieldsJson?.length} chars",
+                saved.fieldsJson!!.length < AttachmentStorageManager.SIZE_THRESHOLD,
+            )
+        }
+
+    @Test
+    fun `saveMessage decodes hex-encoded filename in positional file attachment`() =
+        runTest {
+            // Columba backends hex-encode ByteArray filename fields
+            val filename = "doc.pdf"
+            val hexFilename = filename.toByteArray().joinToString("") { "%02x".format(it) }
+            val hexData = "cd".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/hex_name_file.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_hex_name", "5_0", hexData)
+            } returns storedPath
+            val fields =
+                JSONObject()
+                    .put("5", JSONArray().put(JSONArray().put(hexFilename).put(hexData)))
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_hex_name",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_hex_name", TEST_IDENTITY_HASH)
+            val stored = JSONObject(saved!!.fieldsJson!!).getJSONArray("5").getJSONObject(0)
+            assertEquals(filename, stored.getString("filename"))
+            assertEquals(storedPath, stored.getString("_data_ref"))
+        }
+
+    @Test
+    fun `saveMessage extracts object-format file attachment data to disk`() =
+        runTest {
+            // Columba's own format: "5": [{"filename", "size", "data"}]
+            val hexData = "ef".repeat(AttachmentStorageManager.SIZE_THRESHOLD / 2 + 1)
+            val storedPath = "/tmp/object_file.hex"
+            every {
+                mockAttachmentStorage.saveAttachment("msg_object_file", "5_0", hexData)
+            } returns storedPath
+            val fields =
+                JSONObject()
+                    .put(
+                        "5",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("filename", "doc.pdf")
+                                    .put("size", hexData.length / 2)
+                                    .put("data", hexData),
+                            ),
+                    )
+                    .toString()
+            val message =
+                Message(
+                    id = "msg_object_file",
+                    destinationHash = TEST_PEER_HASH,
+                    content = "",
+                    timestamp = 1000L,
+                    isFromMe = false,
+                    status = "delivered",
+                    fieldsJson = fields,
+                )
+
+            repository.saveMessage(TEST_PEER_HASH, "Peer", message, null)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val saved = messageDao.getMessageById("msg_object_file", TEST_IDENTITY_HASH)
+            val stored = JSONObject(saved!!.fieldsJson!!).getJSONArray("5").getJSONObject(0)
+            assertEquals("doc.pdf", stored.getString("filename"))
+            assertEquals(hexData.length / 2, stored.getInt("size"))
+            assertEquals(storedPath, stored.getString("_data_ref"))
+        }
 
     @Test
     fun `deleteConversation removes conversation and messages`() =

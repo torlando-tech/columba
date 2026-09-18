@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -303,6 +305,20 @@ class MapViewModel
             )
         val state: StateFlow<MapState> = _state.asStateFlow()
 
+        // MAP and MAP_FOCUS share this ViewModel and can overlap during navigation.
+        // Track exact resumed owners so disposal of one destination cannot pause another.
+        private val resumedPollingOwners = MutableStateFlow<Set<Any>>(emptySet())
+
+        /** Updates periodic polling ownership for one MapScreen composition. */
+        fun setPollingOwnerResumed(
+            ownerId: Any,
+            resumed: Boolean,
+        ) {
+            resumedPollingOwners.update { owners ->
+                if (resumed) owners + ownerId else owners - ownerId
+            }
+        }
+
         // Refresh trigger for periodic staleness recalculation
         private val _refreshTrigger = MutableStateFlow(0L)
 
@@ -540,6 +556,9 @@ class MapViewModel
                 viewModelScope.launch {
                     while (isActive) {
                         delay(REFRESH_INTERVAL_MS)
+                        // Only poll when the map screen is visible; suspend otherwise
+                        // to avoid leaking N+1 DB spans into the foreground transaction.
+                        resumedPollingOwners.filter { it.isNotEmpty() }.first()
                         _refreshTrigger.value = System.currentTimeMillis()
                         loadInterfaceMarkers()
                     }
@@ -781,8 +800,8 @@ class MapViewModel
                                 id to iface
                             }
 
-                        // Batch-insert first-seen rows in a single Room transaction
-                        // to avoid N+1 INSERT OR IGNORE statements per interface.
+                        // Persist first-seen rows in one DAO call. Room's collection insert
+                        // adapter may still execute the prepared statement once per entity.
                         val entities =
                             withId.map { (id, _) ->
                                 network.columba.app.data.db.entity

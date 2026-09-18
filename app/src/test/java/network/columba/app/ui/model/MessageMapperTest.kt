@@ -4,6 +4,8 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import network.columba.app.data.repository.Message
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -91,6 +93,68 @@ class MessageMapperTest {
     }
 
     @Test
+    fun `toMessageUi parses canonical opus audio attachment`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"7":[16,"0a0b0c"]}"""))
+
+        val result = message.toMessageUi()
+
+        assertNotNull(result.audioAttachment)
+        assertEquals(AudioAttachmentMode.AM_OPUS_OGG, result.audioAttachment?.mode)
+        assertTrue(result.audioAttachment?.isPlayable == true)
+        assertNotNull(result.audioAttachment?.fieldsJson)
+    }
+
+    @Test
+    fun `toMessageUi parses codec2 audio attachment as playable`() {
+        val modes =
+            listOf(
+                0x04 to AudioAttachmentMode.AM_CODEC2_1200,
+                0x08 to AudioAttachmentMode.AM_CODEC2_2400,
+                0x09 to AudioAttachmentMode.AM_CODEC2_3200,
+            )
+
+        modes.forEach { (wireMode, expectedMode) ->
+            val result = createMessage(TestMessageConfig(fieldsJson = """{"7":[$wireMode,"0a0b0c"]}""")).toMessageUi()
+
+            assertEquals(expectedMode, result.audioAttachment?.mode)
+            assertTrue(result.audioAttachment?.isPlayable == true)
+        }
+    }
+
+    @Test
+    fun `toMessageUi preserves unsupported audio mode without crashing`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"7":[99,"0a0b0c"]}"""))
+
+        val result = message.toMessageUi()
+
+        assertNotNull(result.audioAttachment)
+        assertEquals(AudioAttachmentMode.UNSUPPORTED, result.audioAttachment?.mode)
+        assertFalse(result.audioAttachment?.isPlayable == true)
+    }
+
+    @Test
+    fun `toMessageUi handles repository file ref audio payload`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"7":[16,{"_file_ref":"/tmp/voice.opus"}]}"""))
+
+        val result = message.toMessageUi()
+
+        assertNotNull(result.audioAttachment)
+        assertEquals(AudioAttachmentMode.AM_OPUS_OGG, result.audioAttachment?.mode)
+    }
+
+    @Test
+    fun `toMessageUi rejects audio payload wrappers beyond structural depth limit`() {
+        var payload = JSONObject().put("data", "0a0b0c")
+        repeat(8) { payload = JSONObject().put("payload", payload) }
+        val fields = JSONObject().put("7", JSONArray().put(16).put(payload)).toString()
+
+        val result = createMessage(TestMessageConfig(fieldsJson = fields)).toMessageUi()
+
+        assertNotNull(result.audioAttachment)
+        assertNull(result.audioAttachment?.payloadRef)
+    }
+
+    @Test
     fun `toMessageUi sets hasImageAttachment true for file reference`() {
         val message =
             createMessage(
@@ -162,6 +226,48 @@ class MessageMapperTest {
 
         assertEquals("propagated", result.deliveryMethod)
         assertEquals("Connection timeout", result.errorMessage)
+    }
+
+    @Test
+    fun `toMessageUi maps LXMF markdown renderer field`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"15":2}"""))
+
+        val result = message.toMessageUi()
+
+        assertEquals(MessageRenderer.MARKDOWN, result.renderer)
+        assertNull(result.fieldsJson)
+    }
+
+    @Test
+    fun `toMessageUi defaults to plain text without renderer field`() {
+        val message = createMessage(TestMessageConfig(fieldsJson = """{"1":"unrelated"}"""))
+
+        assertEquals(MessageRenderer.PLAIN, message.toMessageUi().renderer)
+    }
+
+    @Test
+    fun `toMessageUi preserves known non-markdown renderer values`() {
+        assertEquals(
+            MessageRenderer.MICRON,
+            createMessage(TestMessageConfig(fieldsJson = """{"15":1}""")).toMessageUi().renderer,
+        )
+        assertEquals(
+            MessageRenderer.BBCODE,
+            createMessage(TestMessageConfig(fieldsJson = """{"15":3}""")).toMessageUi().renderer,
+        )
+    }
+
+    @Test
+    fun `toMessageUi falls back to plain text for malformed or unknown renderer`() {
+        val malformed = createMessage(TestMessageConfig(fieldsJson = """{"15":"2"}"""))
+        val fractional = createMessage(TestMessageConfig(fieldsJson = """{"15":2.5}"""))
+        val unknown = createMessage(TestMessageConfig(fieldsJson = """{"15":99}"""))
+        val invalidJson = createMessage(TestMessageConfig(fieldsJson = "not-json"))
+
+        assertEquals(MessageRenderer.PLAIN, malformed.toMessageUi().renderer)
+        assertEquals(MessageRenderer.PLAIN, fractional.toMessageUi().renderer)
+        assertEquals(MessageRenderer.PLAIN, unknown.toMessageUi().renderer)
+        assertEquals(MessageRenderer.PLAIN, invalidJson.toMessageUi().renderer)
     }
 
     // ========== decodeAndCacheImage() TESTS ==========
@@ -2167,6 +2273,28 @@ class MessageMapperTest {
                 isAnimatedImage = true,
                 imageData = byteArrayOf(1, 2, 3),
                 hasFileAttachments = true,
+            )
+
+        assertFalse(messageUi.isMediaOnlyMessage)
+    }
+
+    @Test
+    fun `isMediaOnlyMessage returns false when has audio attachment`() {
+        val messageUi =
+            MessageUi(
+                id = "test",
+                destinationHash = "hash",
+                content = "",
+                timestamp = 0L,
+                isFromMe = true,
+                status = "delivered",
+                isAnimatedImage = true,
+                imageData = byteArrayOf(1, 2, 3),
+                audioAttachment =
+                    AudioAttachmentUi(
+                        mode = AudioAttachmentMode.AM_OPUS_OGG,
+                        isPlayable = true,
+                    ),
             )
 
         assertFalse(messageUi.isMediaOnlyMessage)

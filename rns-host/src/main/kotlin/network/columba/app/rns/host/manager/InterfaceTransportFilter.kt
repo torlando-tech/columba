@@ -20,6 +20,12 @@ enum class CurrentTransport {
     /** Cellular (mobile data). */
     CELLULAR,
 
+    /**
+     * A live default network exists, but Android's callback-visible capabilities do not
+     * identify a Wi-Fi / Ethernet / cellular underlay. VPN-only defaults land here.
+     */
+    UNKNOWN,
+
     /** No active default network. */
     NONE,
 }
@@ -71,31 +77,28 @@ fun InterfaceConfig.ridesOnIpCarrier(): Boolean =
     }
 
 /**
- * Snapshot the device's current transport from the system `ConnectivityManager`. Returns
- * `NONE` if no default network is active or capabilities are unavailable.
+ * Snapshot the currently active default network. A missing default route maps to `NONE`;
+ * a live default whose capabilities are not yet published maps to `UNKNOWN`.
  */
 fun currentTransportOf(connectivityManager: ConnectivityManager): CurrentTransport {
-    val active = connectivityManager.activeNetwork ?: return CurrentTransport.NONE
-    val caps = connectivityManager.getNetworkCapabilities(active) ?: return CurrentTransport.NONE
-    return currentTransportOf(caps)
+    val activeNetwork = connectivityManager.activeNetwork ?: return CurrentTransport.NONE
+    val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return CurrentTransport.UNKNOWN
+    return currentTransportOf(capabilities)
 }
 
 /**
- * Map a `NetworkCapabilities` instance to the closest matching `CurrentTransport`. Wi-Fi
- * and Ethernet collapse to `WIFI_LIKE`; cellular maps to `CELLULAR`; anything else (e.g.
- * `TRANSPORT_VPN` alone, `TRANSPORT_BLUETOOTH` tether) falls through to `NONE`.
- *
- * For VPN over an underlying transport (the common case), Android typically reports both
- * `TRANSPORT_VPN` and the underlying transport on the same `NetworkCapabilities` — so the
- * underlying-transport check still wins, which is the intended VPN behaviour (classify by
- * the underlying transport, not the VPN itself).
+ * Map a `NetworkCapabilities` instance to the closest matching `CurrentTransport`.
+ * Wi-Fi and Ethernet collapse to `WIFI_LIKE`; cellular maps to `CELLULAR`. If Android
+ * exposes only VPN or another unsupported transport on the live default network,
+ * classify that as `UNKNOWN` so unrestricted IP interfaces stay alive without falsely
+ * enabling Wi-Fi-only or cellular-only ones. `NONE` is reserved for no live default.
  */
 fun currentTransportOf(capabilities: NetworkCapabilities): CurrentTransport =
     when {
         capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> CurrentTransport.WIFI_LIKE
         capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> CurrentTransport.WIFI_LIKE
         capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> CurrentTransport.CELLULAR
-        else -> CurrentTransport.NONE
+        else -> CurrentTransport.UNKNOWN
     }
 
 /**

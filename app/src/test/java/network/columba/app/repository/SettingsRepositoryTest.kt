@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import network.columba.app.data.repository.CustomThemeRepository
+import network.columba.app.ui.theme.ThemeMode
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -1655,5 +1656,63 @@ class SettingsRepositoryTest {
             repository.saveLocationPrecisionRadius(0)
 
             assertTrue(repository.preciseLocationPromptDismissedFlow.first())
+        }
+
+    // ========== Theme Mode Tests ==========
+
+    @Test
+    fun themeModeFlow_defaultsToSystemWhenUnset() =
+        runTest {
+            val mode = repository.themeModeFlow.first()
+            assertEquals(ThemeMode.SYSTEM, mode)
+        }
+
+    @Test
+    fun themeModeFlow_persistsSavedMode() =
+        runTest {
+            ThemeMode.entries.forEach { mode ->
+                repository.saveThemeModePreference(mode)
+                assertEquals(mode, repository.themeModeFlow.first())
+            }
+        }
+
+    // ── NomadNet last-viewed page (node + deep path) ──
+
+    @Test
+    fun `saveNomadNetLastNodeHash persists the node hash and the deep path`() =
+        runTest {
+            val node = "abcdef01234567890abcdef012345678"
+            val deepPath = "/page/forum/thread.mu"
+
+            repository.saveNomadNetLastNodeHash(node, deepPath)
+
+            val page = repository.nomadNetLastPageFlow.first()
+            assertEquals(node, page.nodeHash)
+            assertEquals(deepPath, page.viewPath)
+        }
+
+    @Test
+    fun `saveNomadNetLastNodeHash defaults the path to the node index when omitted`() =
+        runTest {
+            val node = "abcdef01234567890abcdef012345678"
+
+            repository.saveNomadNetLastNodeHash(node)
+
+            val page = repository.nomadNetLastPageFlow.first()
+            assertEquals(node, page.nodeHash)
+            assertEquals("/page/index.mu", page.viewPath)
+        }
+
+    @Test
+    fun `clearNomadNetLastNodeHash clears both the node hash and the deep path`() =
+        runTest {
+            val node = "abcdef01234567890abcdef012345678"
+            repository.saveNomadNetLastNodeHash(node, "/page/forum/thread.mu")
+
+            repository.clearNomadNetLastNodeHash()
+
+            val page = repository.nomadNetLastPageFlow.first()
+            assertNull(page.nodeHash)
+            assertNull(page.viewPath)
         }
 }

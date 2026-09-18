@@ -23,10 +23,14 @@ import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelemetry
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.service.InterfaceConfigManager
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * Debug-only test surface for the columba phone harness.
@@ -50,8 +54,11 @@ object TestController {
         fun rnsCore(): RnsCore
         fun rnsLxmf(): RnsLxmf
         fun rnsTelemetry(): RnsTelemetry
+        fun rnsTransportAdmin(): RnsTransportAdmin
         fun interfaceRepository(): InterfaceRepository
         fun interfaceConfigManager(): InterfaceConfigManager
+        fun identityRepository(): network.columba.app.data.repository.IdentityRepository
+        fun settingsRepository(): network.columba.app.repository.SettingsRepository
     }
 
     // Surface uncaught throws inside any scope.launch as a parseable
@@ -75,11 +82,15 @@ object TestController {
     private var rnsCore: RnsCore? = null
     private var rnsLxmf: RnsLxmf? = null
     private var rnsTelemetry: RnsTelemetry? = null
+    private var rnsTransportAdmin: RnsTransportAdmin? = null
     private var interfaceRepo: InterfaceRepository? = null
     private var interfaceConfigManager: InterfaceConfigManager? = null
+    private var identityRepo: network.columba.app.data.repository.IdentityRepository? = null
+    private var settingsRepo: network.columba.app.repository.SettingsRepository? = null
     private val rxQueue = mutableListOf<ReceivedMessage>()
     private val rxLock = Any()
     private val deliveryStates = mutableMapOf<String, String>() // msgHashHex -> stateName
+    private val deliveryOrigins = mutableMapOf<String, String>() // msgHashHex -> immutable attempt owner
     private val deliveryLock = Any()
     private var initialized = false
     private var receiveJob: Job? = null
@@ -95,8 +106,11 @@ object TestController {
         rnsCore = ep.rnsCore()
         rnsLxmf = ep.rnsLxmf()
         rnsTelemetry = ep.rnsTelemetry()
+        rnsTransportAdmin = ep.rnsTransportAdmin()
         interfaceRepo = ep.interfaceRepository()
         interfaceConfigManager = ep.interfaceConfigManager()
+        identityRepo = ep.identityRepository()
+        settingsRepo = ep.settingsRepository()
         receiveJob = scope.launch {
             rnsLxmf!!.observeMessages().collect { msg ->
                 synchronized(rxLock) { rxQueue.add(msg) }
@@ -112,6 +126,7 @@ object TestController {
                     "rx_msg source=stream from=${msg.sourceHash.toHex()} " +
                         "id=${msg.messageHash} content=${escape(msg.content)}",
                 )
+                logAudioField(msg)
             }
         }
         deliveryJob = scope.launch {
@@ -119,9 +134,15 @@ object TestController {
                 // DeliveryStatusUpdate.messageHash is already a hex string;
                 // status is one of "delivered" | "failed" | "retrying_propagated"
                 val idHex = upd.messageHash
-                val stateName = upd.status.uppercase()
-                synchronized(deliveryLock) { deliveryStates[idHex] = stateName }
-                Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$stateName")
+                val stateName = upd.status.wireValue.uppercase()
+                synchronized(deliveryLock) {
+                    deliveryStates[idHex] = stateName
+                    upd.originatingIdentityHash?.let { deliveryOrigins[idHex] = it }
+                }
+                Log.i(
+                    LOGCAT_TAG,
+                    "msg_state id=$idHex state=$stateName origin=${upd.originatingIdentityHash ?: "missing"}",
+                )
             }
         }
         // Surface FIELD_TELEMETRY entries on received LXMF messages.
@@ -159,6 +180,34 @@ object TestController {
         }
         initialized = true
         Log.i(LOGCAT_TAG, "controller_ready")
+    }
+
+    private fun logAudioField(message: ReceivedMessage) {
+        val fields = message.fieldsJson?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return
+        val audio = fields.optJSONArray(LxmfFields.FIELD_AUDIO.toString()) ?: return
+        if (audio.length() != 2) return
+        val mode = audio.optInt(0, -1)
+        val payload = decodeInlineHex(audio.opt(1)) ?: return
+        val sha256 = MessageDigest.getInstance("SHA-256").digest(payload).toHex()
+        Log.i(
+            LOGCAT_TAG,
+            "rx_audio id=${message.messageHash} mode=$mode bytes=${payload.size} sha256=$sha256",
+        )
+    }
+
+    private fun decodeInlineHex(value: Any?): ByteArray? {
+        val hex =
+            when (value) {
+                is String -> value
+                is JSONArray -> value.optString(1, "")
+                else -> return null
+            }
+        if (hex.length % 2 != 0 || !hex.matches(Regex("[0-9a-fA-F]*"))) return null
+        return runCatching {
+            ByteArray(hex.length / 2) { index ->
+                hex.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+            }
+        }.getOrNull()
     }
 
     fun handleGetDest(context: Context) {
@@ -479,7 +528,8 @@ object TestController {
     fun handleGetMsgState(context: Context, idHex: String) {
         ensureInit(context)
         val state = synchronized(deliveryLock) { deliveryStates[idHex] } ?: "UNKNOWN"
-        Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$state")
+        val origin = synchronized(deliveryLock) { deliveryOrigins[idHex] } ?: "UNKNOWN"
+        Log.i(LOGCAT_TAG, "msg_state id=$idHex state=$state origin=$origin")
     }
 
     fun handleGetRx(context: Context) {
@@ -551,6 +601,74 @@ object TestController {
                 )
             }
             Log.i(LOGCAT_TAG, "interface_list_done count=${rows.size}")
+        }
+    }
+
+    /**
+     * Debug-only live RNS state read for the #1127 e2e harness.
+     *
+     * `LIST_INTERFACES` reports the *configured* interfaces (Room DB, enabled flag).
+     * That count stays at 1 even when the live RNS transport has lost its interface.
+     * This reads the *live* `RNS.Transport.interfaces` (via `RnsTransportAdmin.
+     * getDebugInfo()`) plus the current `RnsCore.networkStatus`, which is exactly the
+     * pair the Network Status UI renders. That is the #1127 signature: status READY
+     * but `live_count=0`.
+     *
+     * NOTE on counts: `live` includes AutoDiscovery *peer* sub-interfaces, so it
+     * legitimately exceeds the enabled-configured count (`db`). "Intact" therefore
+     * means every *enabled configured* name is present in the live set, not that
+     * `live == db`. `enabled=` is the pipe-joined, sorted set of enabled
+     * configured interface names; `live_iface` lines (one per live interface,
+     * `|`-separated from the summary line) are the live name set.
+     *
+     * Lines:
+     *   `live_state status=<...> initialized=<bool> db=<n> live=<n>
+     *            online=<n> enabled=<pipe-sep enabled-configured names|->`
+     *   `live_iface <name>`            (one per live interface)
+     *   `live_state_err reason=<...>`  (on hook failure)
+     */
+    fun handleLiveState(context: Context) {
+        ensureInit(context)
+        scope.launch {
+            try {
+                val status = rnsCore!!.networkStatus.value
+                val statusStr = when (status) {
+                    is network.columba.app.rns.api.model.NetworkStatus.READY -> "READY"
+                    is network.columba.app.rns.api.model.NetworkStatus.INITIALIZING -> "INITIALIZING"
+                    is network.columba.app.rns.api.model.NetworkStatus.CONNECTING -> "CONNECTING"
+                    is network.columba.app.rns.api.model.NetworkStatus.SHUTDOWN -> "SHUTDOWN"
+                    is network.columba.app.rns.api.model.NetworkStatus.ERROR -> "ERROR"
+                    else -> status.toString()
+                }
+
+                val dbCount = interfaceRepo!!.enabledInterfaceCount.first()
+                val enabledNames = interfaceRepo!!.allInterfaceEntities.first()
+                    .filter { it.enabled }
+                    .map { it.name }
+                    .sorted()
+
+                val debug = rnsTransportAdmin!!.getDebugInfo()
+                @Suppress("UNCHECKED_CAST")
+                val liveIfaces = (debug["interfaces"] as? List<Map<String, Any>>) ?: emptyList()
+                val online = liveIfaces.count { it["online"] == true }
+                val enabledStr = enabledNames.joinToString("|")
+                    .ifEmpty { "-" }
+
+                Log.i(
+                    LOGCAT_TAG,
+                    "live_state status=$statusStr initialized=${debug["initialized"] == true} " +
+                        "db=$dbCount live=${liveIfaces.size} online=$online " +
+                        "enabled=${if (enabledStr == "-") "-" else escape(enabledStr)}",
+                )
+                for (iface in liveIfaces) {
+                    Log.i(LOGCAT_TAG, "live_iface ${escape((iface["name"] ?: "?").toString())}")
+                }
+            } catch (e: Exception) {
+                Log.e(
+                    LOGCAT_TAG,
+                    "live_state_err reason=${escape(e.javaClass.simpleName + ":" + (e.message ?: ""))}",
+                )
+            }
         }
     }
 
@@ -702,6 +820,89 @@ object TestController {
             }
             interfaceRepo!!.deleteInterface(e.id)
             applyAndLog("interface_removed", "name=${escape(name)} id=${e.id}")
+        }
+    }
+
+    /**
+     * Debug-only: drives the SAME restart the UI's "Restart" button performs
+     * (`InterfaceConfigManager.applyInterfaceChanges()` — full
+     * shutdown + fresh `:reticulum` process + `initialize()` re-applying the
+     * DB interface set). Exposed so the #1127 e2e harness can verify the
+     * recovery path: after the dead-state assertion, tapping this must bring
+     * the live interface count back to the configured (DB) count.
+     *
+     * Line: `service_restart applied=true|false err=…`
+     */
+    fun handleRestartService(context: Context) {
+        ensureInit(context)
+        scope.launch {
+            applyAndLog(event = "service_restart", extras = "")
+        }
+    }
+
+    /**
+     * Debug-only: minimal programmatic onboarding for a fresh install that has
+     * never completed the onboarding flow. Mirrors the production
+     * `OnboardingViewModel.skipOnboarding` path:
+     *
+     * 1. If no active identity exists in Room yet, create one from the live
+     *    LXMF stack and switch it as active.
+     * 2. If no interface exists yet, insert a single enabled
+     *    [network.columba.app.rns.api.model.InterfaceConfig.AutoInterface]
+     *    (safe default, no external peer needed).
+     * 3. Mark onboarding as completed.
+     *
+     * Line: `onboarded identity=<hex> interface=<name> done=true`
+     * Line on failure: `onboard_err reason=…`
+     */
+    fun handleOnboard(context: Context) {
+        ensureInit(context)
+        scope.launch {
+            try {
+                var identityHex = ""
+                val existingActive = identityRepo!!.getActiveIdentitySync()
+                if (existingActive == null) {
+                    val identity = rnsLxmf!!.getLxmfIdentity().getOrThrow()
+                    val destination = rnsLxmf!!.getLxmfDestination().getOrThrow()
+                    identityHex = identity.hash.joinToString("") { "%02x".format(it) }
+                    val destHash = destination.hash.joinToString("") { "%02x".format(it) }
+                    val keyData = rnsCore!!.getFullIdentityKey()
+                    val result = identityRepo!!.createIdentity(
+                        identityHash = identityHex,
+                        displayName = "CI Peer",
+                        destinationHash = destHash,
+                        filePath = "",
+                        keyData = keyData,
+                    )
+                    result.getOrThrow()
+                    identityRepo!!.switchActiveIdentity(identityHex)
+                } else {
+                    identityHex = existingActive.identityHash
+                }
+
+                var interfaceName = ""
+                val existing = interfaceRepo!!.allInterfaces.first()
+                if (existing.isEmpty()) {
+                    interfaceRepo!!.insertInterface(
+                        network.columba.app.rns.api.model.InterfaceConfig.AutoInterface(
+                            name = "Local WiFi",
+                            enabled = true,
+                        ),
+                    )
+                    interfaceName = "Local WiFi"
+                } else {
+                    interfaceName = existing.first().name
+                }
+
+                settingsRepo!!.markOnboardingCompleted()
+
+                Log.i(
+                    LOGCAT_TAG,
+                    "onboarded identity=${identityHex.take(8)} interface=${escape(interfaceName)} done=true",
+                )
+            } catch (e: Exception) {
+                Log.e(LOGCAT_TAG, "onboard_err reason=${escape(e.javaClass.simpleName + ":" + (e.message ?: ""))}")
+            }
         }
     }
 

@@ -1,7 +1,10 @@
 package network.columba.app.service
 
 import android.util.Log
+import network.columba.app.data.db.entity.PeerActivityEntity
+import network.columba.app.data.db.entity.PeerActivityType
 import network.columba.app.data.model.ImageCompressionPreset
+import network.columba.app.data.repository.PeerActivityRepository
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.util.HexUtils
 import kotlinx.coroutines.CoroutineScope
@@ -12,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,6 +34,7 @@ class ConversationLinkManager
     @Inject
     constructor(
         private val rnsCore: RnsCore,
+        private val peerActivityRepository: PeerActivityRepository,
     ) {
         companion object {
             private const val TAG = "ConversationLinkManager"
@@ -274,6 +279,9 @@ class ConversationLinkManager
                                     lastActivityTimestamp = if (linkResult.isActive) System.currentTimeMillis() else 0L,
                                 ),
                             )
+                            if (linkResult.isActive) {
+                                persistSuccessfulLinkActivity(destHashHex)
+                            }
                         },
                         onFailure = { e ->
                             Log.w(TAG, "Failed to establish link to ${destHashHex.take(16)}: ${e.message}")
@@ -283,7 +291,6 @@ class ConversationLinkManager
                                     isActive = false,
                                     isEstablishing = false,
                                     error = e.message,
-                                    lastActivityTimestamp = System.currentTimeMillis(),
                                 ),
                             )
                         },
@@ -296,7 +303,6 @@ class ConversationLinkManager
                             isActive = false,
                             isEstablishing = false,
                             error = e.message,
-                            lastActivityTimestamp = System.currentTimeMillis(),
                         ),
                     )
                 }
@@ -342,6 +348,10 @@ class ConversationLinkManager
          */
         fun getLinkState(destHashHex: String): LinkState? = _linkStates.value[destHashHex]
 
+        /** Observe durable verified inbound activity for a conversation peer. */
+        fun observePeerActivity(destHashHex: String): kotlinx.coroutines.flow.Flow<PeerActivityEntity?> =
+            peerActivityRepository.observeActivity(destHashHex)
+
         /**
          * Record peer activity (delivery proof, incoming message, etc).
          *
@@ -357,18 +367,12 @@ class ConversationLinkManager
             destHashHex: String,
             timestamp: Long = System.currentTimeMillis(),
         ) {
-            val current = _linkStates.value[destHashHex]
-            if (current != null) {
-                updateLinkState(destHashHex, current.copy(lastActivityTimestamp = timestamp))
-            } else {
-                // Create minimal entry for peers we haven't linked to yet
-                updateLinkState(
-                    destHashHex,
-                    LinkState(
-                        isActive = false,
-                        lastActivityTimestamp = timestamp,
-                    ),
-                )
+            _linkStates.update { states ->
+                val current = states[destHashHex]
+                val updated =
+                    current?.copy(lastActivityTimestamp = maxOf(current.lastActivityTimestamp, timestamp))
+                        ?: LinkState(isActive = false, lastActivityTimestamp = timestamp)
+                states + (destHashHex to updated)
             }
             Log.d(TAG, "Recorded peer activity for ${destHashHex.take(16)}")
         }
@@ -516,6 +520,26 @@ class ConversationLinkManager
                     lastActivityTimestamp = System.currentTimeMillis(),
                 ),
             )
+            persistSuccessfulLinkActivity(destHashHex)
+        }
+
+        /** Persist a verified inbound event without conflating it with live-link state. */
+        private fun recordVerifiedPeerActivity(
+            destHashHex: String,
+            activityType: String,
+            receivedAt: Long = System.currentTimeMillis(),
+        ) {
+            scope.launch {
+                peerActivityRepository.recordActivity(
+                    destinationHash = destHashHex,
+                    receivedAt = receivedAt,
+                    activityType = activityType,
+                )
+            }
+        }
+
+        private fun persistSuccessfulLinkActivity(destHashHex: String) {
+            recordVerifiedPeerActivity(destHashHex, PeerActivityType.LINK)
         }
 
         /**

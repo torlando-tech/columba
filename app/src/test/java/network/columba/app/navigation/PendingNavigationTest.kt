@@ -233,4 +233,41 @@ class PendingNavigationTest {
             )
         }
     }
+
+    // ==================== Conversation fromNotification Tests ====================
+
+    @Test
+    fun `Conversation defaults fromNotification to false`() {
+        val nav = PendingNavigation.Conversation("hash123", "Peer")
+
+        assertEquals("hash123", nav.destinationHash)
+        assertEquals("Peer", nav.peerName)
+        org.junit.Assert.assertFalse("fromNotification should default to false", nav.fromNotification)
+    }
+
+    @Test
+    fun `Conversation with fromNotification true preserves flag`() {
+        val nav = PendingNavigation.Conversation("hash123", "Peer", fromNotification = true)
+
+        assertEquals("hash123", nav.destinationHash)
+        assertEquals("Peer", nav.peerName)
+        org.junit.Assert.assertTrue("fromNotification should be true", nav.fromNotification)
+    }
+
+    @Test
+    fun `Conversation fromNotification instances with same values are equal`() {
+        val nav1 = PendingNavigation.Conversation("hash123", "Peer", fromNotification = true)
+        val nav2 = PendingNavigation.Conversation("hash123", "Peer", fromNotification = true)
+
+        assertEquals(nav1, nav2)
+        assertEquals(nav1.hashCode(), nav2.hashCode())
+    }
+
+    @Test
+    fun `Conversation fromNotification false differs from true`() {
+        val navFalse = PendingNavigation.Conversation("hash123", "Peer", fromNotification = false)
+        val navTrue = PendingNavigation.Conversation("hash123", "Peer", fromNotification = true)
+
+        assertNotEquals("Same conversation with different fromNotification should not be equal", navFalse, navTrue)
+    }
 }

@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import network.columba.app.rns.api.RnsError
 import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NomadnetLinkStats
+import network.columba.app.rns.api.model.NomadnetMediaResult
 import network.columba.app.rns.api.model.NomadnetPageResult
 import org.json.JSONObject
 import java.io.File
@@ -68,11 +70,57 @@ class PythonRnsNomadnet(
         _nomadnetDownloadProgressFlow.asStateFlow()
 
     /** hex destination hash -> live `RNS.Link` to that NomadNet node. */
-    private val nomadnetLinks = ConcurrentHashMap<String, PyObject>()
+    // internal (not private) so the JVM link-lifecycle tests in this module
+    // can seed/inspect the cached-link contract with a raw
+    // `PyObject.getInstance(...)` handle (no native RNS runtime needed).
+    internal val nomadnetLinks = ConcurrentHashMap<String, PyObject>()
 
-    /** Cooperative-cancel flag, flipped by [cancelNomadnetPageRequest]. */
+    /**
+     * Request-scoped cancellation. Each page/media request claims the next
+     * generation ([requestGeneration]); a request is considered cancelled if its
+     * generation is no longer the latest (a replacement request began) OR
+     * [cancelGeneration] matches it (an explicit [cancelNomadnetPageRequest]
+     * targeted the then-current request). This fixes the old shared-Boolean
+     * bug where a replacement request resetting the flag would let the still
+     * winding-down old request keep running on the retained link, and a cancel
+     * cannot leak into a later, unrelated user request.
+     */
+    private val requestGeneration = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** The generation an explicit [cancelNomadnetPageRequest] targeted (0 = none). */
     @Volatile
-    private var cancelled = false
+    private var cancelGeneration = 0
+
+    /**
+     * Claim the next request generation. Called once per [requestNomadnetPage]
+     * / [requestNomadnetMedia]. A brand-new request is never cancelled: it is
+     * the latest generation, so the supersession check in [isCancelled] is
+     * false for it, and any pending [cancelGeneration] (which targeted an older
+     * request) no longer matches. Deliberately does NOT clear [cancelGeneration]
+     * - the cancel belongs to the request the user cancelled, not the one that
+     * replaces it.
+     */
+    private fun beginRequest(): Int =
+        requestGeneration.incrementAndGet()
+
+    /**
+     * Test seam: begin a request generation exactly as [requestNomadnetPage] /
+     * [requestNomadnetMedia] do, without a live RNS runtime, so the
+     * generation/cancel contract can be probed directly. Mirrors [beginRequest].
+     */
+    internal fun testBeginRequest(): Int = beginRequest()
+
+    /**
+     * Test seam: expose the generation contract without a live RNS runtime.
+     * Mirrors [nomadnetLinks] being `internal`. Returns the current latest
+     * generation (what the next [beginRequest] will claim is not; this is the
+     * last claimed one) and the generation the last cancel targeted.
+     */
+    internal val testCancelState: Pair<Int, Int>
+        get() = requestGeneration.get() to cancelGeneration
+
+    /** Test seam: the [isCancelled] predicate for direct contract tests. */
+    internal fun testIsCancelled(generation: Int): Boolean = isCancelled(generation)
 
     // ==================== Page / file requests ====================
 
@@ -84,7 +132,7 @@ class PythonRnsNomadnet(
     ): Result<NomadnetPageResult> =
         pyResult {
             runtime.requireRunning()
-            cancelled = false
+            val generation = beginRequest()
             _nomadnetRequestStatusFlow.value = "requesting"
             _nomadnetDownloadProgressFlow.value = 0f
 
@@ -92,15 +140,15 @@ class PythonRnsNomadnet(
             val destBytes = destinationHash.hexToBytes()
 
             try {
-                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes, timeoutSeconds)
-                val link = establishLink(destinationHash, nodeIdentity, timeoutSeconds)
+                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes, timeoutSeconds, generation)
+                val link = establishLink(destinationHash, nodeIdentity, timeoutSeconds, generation)
                 val handle = sendPageRequest(link, safePath, formDataJson, timeoutSeconds)
-                val result = awaitResponse(handle, safePath, timeoutSeconds)
+                val result = awaitResponse(handle, safePath, timeoutSeconds, generation)
                 _nomadnetRequestStatusFlow.value = "complete"
                 _nomadnetDownloadProgressFlow.value = 1f
                 result
             } catch (e: Throwable) {
-                _nomadnetRequestStatusFlow.value = if (cancelled) "idle" else "failed"
+                _nomadnetRequestStatusFlow.value = if (isCancelled(generation)) "idle" else "failed"
                 throw e
             }
         }
@@ -114,6 +162,7 @@ class PythonRnsNomadnet(
         destinationHash: String,
         destBytes: ByteArray,
         timeoutSeconds: Float,
+        generation: Int,
     ): PyObject {
         val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
         identityClass.callAttr("recall", destBytes.toPyBytes())?.let { return it }
@@ -127,7 +176,7 @@ class PythonRnsNomadnet(
         val deadline = System.currentTimeMillis() +
             (timeoutSeconds * 1000 / 3).toLong().coerceAtLeast(15_000L)
         while (System.currentTimeMillis() < deadline) {
-            throwIfCancelled()
+            throwIfCancelled(generation)
             delay(POLL_INTERVAL_MS)
             identityClass.callAttr("recall", destBytes.toPyBytes())?.let { return it }
         }
@@ -147,6 +196,7 @@ class PythonRnsNomadnet(
         destinationHash: String,
         nodeIdentity: PyObject,
         timeoutSeconds: Float,
+        generation: Int,
     ): PyObject {
         nomadnetLinks[destinationHash]?.let { existing ->
             if (linkStatus(existing) == LINK_ACTIVE) {
@@ -174,7 +224,7 @@ class PythonRnsNomadnet(
         val deadline = System.currentTimeMillis() +
             (timeoutSeconds * 1000 / 3).toLong().coerceAtLeast(5_000L)
         while (System.currentTimeMillis() < deadline) {
-            throwIfCancelled()
+            throwIfCancelled(generation)
             if (linkStatus(link) == LINK_ACTIVE) {
                 nomadnetLinks[destinationHash] = link
                 Log.i(TAG, "NomadNet: link established to $destinationHash")
@@ -254,12 +304,13 @@ class PythonRnsNomadnet(
         handle: PageRequestHandle,
         safePath: String,
         timeoutSeconds: Float,
+        generation: Int,
     ): NomadnetPageResult {
         val (receipt, capture) = handle
         _nomadnetRequestStatusFlow.value = "receiving"
         val deadline = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
         while (System.currentTimeMillis() < deadline) {
-            throwIfCancelled()
+            throwIfCancelled(generation)
 
             val progress = receipt["progress"]?.toJava(Float::class.javaObjectType) ?: 0f
             _nomadnetDownloadProgressFlow.value = progress.coerceIn(0f, 1f)
@@ -399,15 +450,162 @@ class PythonRnsNomadnet(
 
     // ==================== Cancellation & status ====================
 
-    override suspend fun cancelNomadnetPageRequest() {
-        cancelled = true
-        // Tear down every in-flight link; the polling loops observe `cancelled`
-        // and unwind on their next tick.
-        nomadnetLinks.values.forEach { link ->
-            runCatching { link.callAttr("teardown") }
-                .onFailure { Log.w(TAG, "NomadNet: link teardown on cancel failed", it) }
+    /**
+     * Fetch a `/media/` object (page image), mirroring
+     * [requestNomadnetPage]'s choreography. The capture's `denied` flag
+     * (event_bridge) carries upstream's explicit `False` deny signal for
+     * gated media, surfaced as [RnsError.NomadnetRequestDenied].
+     */
+    override suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+        maxBytes: Long,
+    ): Result<NomadnetMediaResult> =
+        pyResult {
+            runtime.requireRunning()
+            val generation = beginRequest()
+            _nomadnetRequestStatusFlow.value = "requesting"
+            _nomadnetDownloadProgressFlow.value = 0f
+
+            try {
+                val destBytes = destinationHash.hexToBytes()
+                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes, timeoutSeconds, generation)
+                val link = establishLink(destinationHash, nodeIdentity, timeoutSeconds, generation)
+
+                // Upstream serve_media requires {"path", "key"}; "path"
+                // carries the full "/media/..." path, "key" is Python None
+                // (toPyDict's __setitem__ passthrough maps Kotlin null).
+                val requestData = mapOf("path" to path, "key" to null).toPyDict()
+                val response = sendMediaRequest(link, requestData, timeoutSeconds, destinationHash, generation)
+
+                // Enforce the transfer cap at the response boundary, before the
+                // payload is written to the staging file. RNS/LXMF deliver the
+                // full body to the receipt callback at once (no streaming), so
+                // this is the earliest point the Kotlin layer can act after
+                // delivery; failing here keeps an oversized payload off disk and
+                // out of the image cache and surfaces a typed error instead of
+                // the caller-side size check in PageImageLoader.fetchOne.
+                if (response.size.toLong() > maxBytes) {
+                    Log.w(TAG, "NomadNet: media response too large for $path (${response.size} > $maxBytes)")
+                    throw RnsException(
+                        RnsError.NomadnetResponseTooLarge(
+                            destinationHash, path, response.size.toLong(), maxBytes,
+                        ),
+                    )
+                }
+
+                _nomadnetRequestStatusFlow.value = "complete"
+                _nomadnetDownloadProgressFlow.value = 1f
+
+                // Unique per-fetch file name so same-named images on one page
+                // never clobber each other in flight.
+                val rawName = java.io.File(path).name.ifBlank { "media" }
+                val mediaDir = File(
+                    System.getProperty("java.io.tmpdir") ?: "/tmp",
+                    "nomadnet_media",
+                ).apply { mkdirs() }
+                val outFile = File(mediaDir, "${System.nanoTime()}.$rawName")
+                check(
+                    outFile.canonicalPath.startsWith(mediaDir.canonicalPath + File.separator),
+                ) { "Rejected path traversal in NomadNet media: $rawName" }
+                outFile.writeBytes(response)
+                Log.i(TAG, "NomadNet: media fetched $path (${response.size} bytes)")
+                NomadnetMediaResult(
+                    filePath = outFile.absolutePath,
+                    fileName = rawName,
+                    fileSize = response.size.toLong(),
+                    path = path,
+                )
+            } catch (e: Throwable) {
+                _nomadnetRequestStatusFlow.value = if (isCancelled(generation)) "idle" else "failed"
+                throw e
+            }
         }
-        nomadnetLinks.clear()
+
+    /**
+     * Issue `link.request("/media", {"path": ..., "key": None}, ...)` and
+     * poll the capture to completion (same pattern as [sendPageRequest] /
+     * [awaitResponse]: file-response bodies are snapshot Python-side before
+     * upstream closes the backing temp file).
+     *
+     * Each failure mode (denied / error / null body / FAILED status /
+     * timeout) throws a distinct typed RnsException — collapsing them would
+     * lose the failure distinction (see [awaitResponse]).
+     */
+    @Suppress("ThrowsCount")
+    private suspend fun sendMediaRequest(
+        link: PyObject,
+        requestData: PyObject,
+        timeoutSeconds: Float,
+        destinationHash: String,
+        generation: Int,
+    ): ByteArray {
+        val capture = runtime.eventBridge.callAttr("make_nomadnet_response_capture")
+        val receipt = link.callAttr(
+            "request",
+            "/media",
+            requestData,
+            capture["on_response"],
+            capture["on_failed"],
+            null,
+            timeoutSeconds.toDouble(),
+        )
+        if (receipt == null || receipt.toString() == "False") {
+            throw RnsException(
+                RnsError.Generic("NomadNet media request could not be sent", null),
+            )
+        }
+
+        _nomadnetRequestStatusFlow.value = "receiving"
+        val deadline = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
+        while (System.currentTimeMillis() < deadline) {
+            throwIfCancelled(generation)
+            val progress = receipt["progress"]?.toJava(Float::class.javaObjectType) ?: 0f
+            _nomadnetDownloadProgressFlow.value = progress.coerceIn(0f, 1f)
+
+            if (capture["done"]?.toJava(Boolean::class.javaObjectType) == true) {
+                if (capture["denied"]?.toJava(Boolean::class.javaObjectType) == true) {
+                    throw RnsException(RnsError.NomadnetRequestDenied(destinationHash, "/media"))
+                }
+                capture["error"]?.toString()?.takeIf { it.isNotEmpty() && it != "None" }?.let {
+                    throw RnsException(
+                        RnsError.Generic("NomadNet media request failed: $it", null),
+                    )
+                }
+                return capture["response_bytes"]?.toJava(ByteArray::class.java)
+                    ?: throw RnsException(
+                        RnsError.Generic("NomadNet media response READY but body was null", null),
+                    )
+            }
+            if (receipt["status"]?.toJava(Long::class.javaObjectType) == RECEIPT_FAILED) {
+                throw RnsException(RnsError.Generic("NomadNet media request failed", null))
+            }
+            delay(POLL_INTERVAL_MS)
+        }
+        throw RnsException(RnsError.Generic("NomadNet media request timed out", null))
+    }
+
+    override suspend fun cancelNomadnetPageRequest() {
+        // Signal only: in-flight page/media poll loops observe the generation
+        // (via throwIfCancelled) and unwind on their next tick.
+        //
+        // Deliberately does NOT tear down the cached links. The upstream python
+        // browser (reticulum nomadnet Browser.py `__load`) keeps its
+        // per-destination link across requests, and the kotlin backend's
+        // cancelNomadnetPageRequest mirrors that (it only sets the cancel flag,
+        // never touches its link map). Tearing links down here forced a cold
+        // re-establishment whenever a ViewModel was torn down (e.g. leaving the
+        // NomadNet tab), which is what surfaced as "failed to establish link to
+        // nomadnet node". Keeping the ACTIVE links lets a re-entry reuse the
+        // warm link. A cached link that has since gone inactive is dropped on
+        // reuse by establishLink() (it only reuses LINK_ACTIVE entries).
+        //
+        // Target the CURRENT generation: the cancel applies to the request that
+        // is in flight right now. A request begun *after* this cancel gets a
+        // newer generation and is unaffected, so a stale cancel can never leak
+        // into the next user action.
+        cancelGeneration = requestGeneration.get()
         _nomadnetRequestStatusFlow.value = "idle"
         _nomadnetDownloadProgressFlow.value = 0f
         Log.i(TAG, "NomadNet: request cancelled")
@@ -449,6 +647,20 @@ class PythonRnsNomadnet(
             false
         }
 
+    /** Live stats of the cached link, mirroring the kotlin backend's gate data. */
+    override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? {
+        val link = nomadnetLinks[destinationHash] ?: return null
+        if (linkStatus(link) != LINK_ACTIVE) return null
+        return NomadnetLinkStats(
+            // Python RNS exposes link.rtt in SECONDS (reticulum-kt uses millis).
+            rttSeconds = link["rtt"]?.toJava(Double::class.javaObjectType)
+                ?: link["rtt"]?.toJava(Float::class.javaObjectType)?.toDouble(),
+            expectedRateBps = runCatching {
+                link.callAttr("get_expected_rate")?.toJava(Float::class.javaObjectType)?.toLong()
+            }.getOrNull(),
+        )
+    }
+
     // ==================== Internal helpers ====================
 
     /** `RNS.Transport` — used statically by upstream RNS. */
@@ -459,8 +671,28 @@ class PythonRnsNomadnet(
     private fun linkStatus(link: PyObject): Long? =
         link["status"]?.toJava(Long::class.javaObjectType)
 
-    private fun throwIfCancelled() {
-        if (cancelled) {
+    /**
+     * True if the request owning [generation] has been cancelled. A request is
+     * cancelled only when an explicit [cancelNomadnetPageRequest] happened at or
+     * after it began: [cancelGeneration] records the latest generation at the
+     * last cancel, so any request begun at or before that moment (generation <=
+     * [cancelGeneration]) is cancelled, while a request begun *after* the cancel
+     * (a higher generation) is unaffected.
+     *
+     * This deliberately has NO "a newer request superseded me" term: the browser
+     * runs partial-page and image requests CONCURRENTLY (PartialManager +
+     * PageImageLoader), so a sibling request starting must never cancel a
+     * legitimate in-flight request. Cancellation is driven only by an explicit
+     * cancel, and a replacement request never clears it - so a cancelled request
+     * cannot be "revived" by a new one, and a stale cancel can never leak into a
+     * later, unrelated request (which owns a higher generation).
+     */
+    private fun isCancelled(generation: Int): Boolean =
+        generation <= cancelGeneration
+
+    /** [isCancelled] as a throw, called from each in-flight poll loop. */
+    private fun throwIfCancelled(generation: Int) {
+        if (isCancelled(generation)) {
             throw RnsException(RnsError.Generic("NomadNet request cancelled", null))
         }
     }

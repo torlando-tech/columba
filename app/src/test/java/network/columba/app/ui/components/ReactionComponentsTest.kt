@@ -2,14 +2,17 @@ package network.columba.app.ui.components
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
 import network.columba.app.ui.model.ReactionUi
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Ignore
 import org.junit.Rule
@@ -20,7 +23,14 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(
+    sdk = [34],
+    application = Application::class,
+    // Real modern phone (480dp x 1040dp at xxxhdpi = 1440 x 3120 px). The default
+    // Robolectric screen (320dp wide) is narrower than the ~384dp reaction bars, which
+    // clips them horizontally and defeats the on-screen bounds assertions below.
+    qualifiers = "w480dp-h1040dp-xxxhdpi",
+)
 class ReactionComponentsTest {
     private val registerActivityRule = RegisterComponentActivityRule()
     private val composeRule = createComposeRule()
@@ -601,118 +611,367 @@ class ReactionComponentsTest {
         composeTestRule.onNodeWithText("non-existent").assertDoesNotExist()
     }
 
-    // ========== calculateMessageScaleForOverlay TESTS ==========
+    // ========== calculateOverlayLayout TESTS (off-screen context menu on very long messages) ==========
 
-    // Common UI dimensions for tests (in pixels, simulating a typical phone at 3x density)
-    private val testDimensions =
+    // Realistic modern phone: 480dp x 1040dp at 3x density = 1440 x 3120 px.
+    // emojiBarHeight must match the rendered InlineReactionBar (64dp: 48dp buttons
+    // + 8dp vertical padding); actionButtonsHeight matches MessageActionButtons
+    // (56dp: 48dp icon buttons + 4dp vertical padding).
+    private val phoneDimensions =
         OverlayLayoutDimensions(
-            screenHeight = 2400f, // ~800dp at 3x density
-            emojiBarHeight = 168f, // 56dp at 3x density
-            emojiBarGap = 228f, // 76dp at 3x density
-            actionButtonsHeight = 168f, // 56dp at 3x density
-            actionButtonsGap = 36f, // 12dp at 3x density
-            topPadding = 144f, // 48dp at 3x density
-            bottomPadding = 144f, // 48dp at 3x density
+            screenHeight = 3120f, // 1040dp
+            emojiBarHeight = 192f, // 64dp
+            emojiBarGap = 228f, // 76dp
+            actionButtonsHeight = 168f, // 56dp
+            actionButtonsGap = 36f, // 12dp
+            topPadding = 144f, // 48dp
+            bottomPadding = 144f, // 48dp
         )
 
     @Test
-    fun `calculateMessageScaleForOverlay returns 1f for small message that fits on screen`() {
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = 300, // Small message
-                dimensions = testDimensions,
-            )
+    fun `overlay layout keeps a small message centered with bars adjacent`() {
+        val layout = calculateOverlayLayout(100, phoneDimensions)
 
-        assertEquals(1f, scale, 0.001f)
+        // Small message: centered, emoji bar 76dp above it, buttons 12dp below.
+        assertFalse("Small message should not use the pinned overflow layout", layout.isOverflow)
+        assertTrue(layout.fitsOnScreen(phoneDimensions))
+        assertEquals(1560f - 50f, layout.messageFinalY, 0.5f)
+        assertEquals(100f, layout.messageContainerHeight, 0.5f)
+        assertEquals(layout.messageFinalY - 228f, layout.emojiBarY, 0.5f)
+        assertEquals(layout.messageFinalY + 100f + 36f, layout.actionButtonsY, 0.5f)
+        assertFalse("Uncapped message should not need to scroll", layout.messageScrollable)
     }
 
     @Test
-    fun `calculateMessageScaleForOverlay returns scale less than 1 for large message`() {
-        // Available height = 2400 - 144 - 144 = 2112
-        // UI elements = 168 + 228 + 36 + 168 = 600
-        // Max message height = 2112 - 600 = 1512
-        // For a 2000px message, scale should be 1512/2000 = 0.756
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = 2000, // Large message
-                dimensions = testDimensions,
-            )
+    fun `overlay layout pins bars and scales the preview to fit for a long message`() {
+        // A very long text bubble, taller than the space between the bars.
+        val layout = calculateOverlayLayout(4000, phoneDimensions)
 
-        assertTrue("Scale should be less than 1 for large message", scale < 1f)
-        assertTrue("Scale should be greater than minScale", scale >= 0.3f)
-        assertEquals(0.756f, scale, 0.01f)
+        assertTrue("Extremely long message should use the pinned overflow layout", layout.isOverflow)
+        assertTrue("Emoji bar and action buttons must both be fully on screen", layout.fitsOnScreen(phoneDimensions))
+        // Pinned to the safe-area edges.
+        assertEquals(144f, layout.emojiBarY, 0.5f)
+        assertEquals(3120f - 144f - 168f, layout.actionButtonsY, 0.5f)
+        // The preview is scaled down so the whole thing fits between the bars.
+        // viewport = (3120 - 144 - 144) - 192 - 168 - 2 * 36 = 2400; 2400 / 4000 = 0.6.
+        val viewport = 2400f
+        assertTrue("Long message should be scaled to fit, not scrolled", !layout.messageScrollable)
+        assertEquals(2400f / 4000f, layout.previewScale, 0.005f)
+        assertEquals(4000f * (2400f / 4000f), layout.scaledPreviewHeight, 1.0f)
+        // The scaled preview must sit inside the viewport between the bars.
+        assertTrue("Message top must be just below the emoji bar", layout.messageFinalY >= layout.emojiBarY + 192f)
+        assertTrue("Scaled preview must fit inside the viewport", layout.scaledPreviewHeight <= viewport + 0.5f)
+        assertTrue("Action buttons must end at or above the bottom edge", layout.actionButtonsY + 168f <= 3120f)
+        assertTrue("Emoji bar must start at or below the top edge", layout.emojiBarY >= 0f)
     }
 
     @Test
-    fun `calculateMessageScaleForOverlay respects minimum scale for very large message`() {
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = 10000, // Very large message
-                dimensions = testDimensions,
-            )
+    fun `overlay layout message is scrollable only when the scaled preview still overflows`() {
+        val small = calculateOverlayLayout(100, phoneDimensions)
+        assertFalse("Uncapped message should not be scrollable", small.messageScrollable)
+        assertEquals(1f, small.previewScale, 0.001f)
 
-        assertEquals("Scale should be clamped to minScale", 0.3f, scale, 0.001f)
+        // 4000px scales to fit (0.6 > 0.35 floor) - no scroll needed.
+        val scaledToFit = calculateOverlayLayout(4000, phoneDimensions)
+        assertFalse("Message that fits after scaling should not be scrollable", scaledToFit.messageScrollable)
+
+        // 6000px: fit scale 2400/6000 = 0.4 -> still above the floor, fits.
+        val nearFloor = calculateOverlayLayout(6000, phoneDimensions)
+        assertEquals(2400f / 6000f, nearFloor.previewScale, 0.005f)
+        assertFalse(nearFloor.messageScrollable)
+
+        // 9000px: fit scale 2400/9000 = 0.267 -> clamped to the 0.35 floor, so the
+        // scaled preview (3150px) still overflows the 2400px viewport and scrolls.
+        val capped = calculateOverlayLayout(9000, phoneDimensions)
+        assertEquals(OVERLAY_MIN_PREVIEW_SCALE, capped.previewScale, 0.0001f)
+        assertTrue("Message at the scale floor should be scrollable", capped.messageScrollable)
+        assertTrue(capped.scaledPreviewHeight > capped.messageContainerHeight)
     }
 
     @Test
-    fun `calculateMessageScaleForOverlay returns 1f for zero height message`() {
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = 0,
-                dimensions = testDimensions,
-            )
-
-        assertEquals(1f, scale, 0.001f)
+    fun `overlay layout never scales below the minimum legible scale`() {
+        // Even for a message absurdly taller than any capture cap allows, the
+        // scale never drops below the legibility floor.
+        val layout = calculateOverlayLayout(100_000, phoneDimensions)
+        assertTrue(layout.isOverflow)
+        assertEquals(OVERLAY_MIN_PREVIEW_SCALE, layout.previewScale, 0.0001f)
+        assertTrue(layout.messageScrollable)
+        assertTrue(layout.fitsOnScreen(phoneDimensions))
     }
 
     @Test
-    fun `calculateMessageScaleForOverlay returns 1f for negative height message`() {
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = -100,
-                dimensions = testDimensions,
-            )
+    fun `overlay layout fits a message that is large but fits centered`() {
+        // available = 3120 - 144 - 144 = 2832; UI elements = 192 + 228 + 36 + 168 = 624
+        // -> max centered message = 2832 - 624 = 2208px
+        val layout = calculateOverlayLayout(2208, phoneDimensions)
 
-        assertEquals(1f, scale, 0.001f)
+        assertFalse("Message that exactly fits centered should not overflow", layout.isOverflow)
+        assertTrue(layout.fitsOnScreen(phoneDimensions))
+        assertFalse(layout.messageScrollable)
     }
 
     @Test
-    fun `calculateMessageScaleForOverlay with custom minScale`() {
-        val customMinScale = 0.5f
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = 10000, // Very large message
-                dimensions = testDimensions,
-                minScale = customMinScale,
-            )
+    fun `overlay layout treats zero and negative message heights as non-overflow`() {
+        val zero = calculateOverlayLayout(0, phoneDimensions)
+        assertFalse(zero.isOverflow)
+        assertTrue(zero.fitsOnScreen(phoneDimensions))
 
-        assertEquals("Scale should be clamped to custom minScale", customMinScale, scale, 0.001f)
+        val negative = calculateOverlayLayout(-50, phoneDimensions)
+        assertFalse(negative.isOverflow)
+        assertTrue(negative.fitsOnScreen(phoneDimensions))
     }
 
     @Test
-    fun `calculateMessageScaleForOverlay with message exactly at boundary`() {
-        // Available height = 2400 - 144 - 144 = 2112
-        // UI elements = 168 + 228 + 36 + 168 = 600
-        // Max message height = 2112 - 600 = 1512
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = 1512, // Exactly fits
-                dimensions = testDimensions,
+    fun `overlay layout keeps a positive preview in a compact window`() {
+        // Greptile regression: at 232dp (696px @3x) the fixed paddings, bars, and
+        // gaps consume all the vertical space, collapsing the pinned preview
+        // viewport to zero. The compact branch must re-pin the bars to the raw
+        // screen edges and leave the message a positive, scrollable viewport so
+        // the preview is never blank.
+        val compact =
+            OverlayLayoutDimensions(
+                screenHeight = 696f, // 232dp
+                emojiBarHeight = 192f, // 64dp (InlineReactionBar)
+                emojiBarGap = 228f, // 76dp
+                actionButtonsHeight = 168f, // 56dp (MessageActionButtons)
+                actionButtonsGap = 36f, // 12dp
+                topPadding = 144f, // 48dp
+                bottomPadding = 144f, // 48dp
             )
 
-        assertEquals("Message that exactly fits should have scale 1", 1f, scale, 0.001f)
+        val layout = calculateOverlayLayout(2000, compact)
+
+        assertTrue("Compact window should use the overflow layout", layout.isOverflow)
+        assertTrue("Bars must stay fully on screen in a compact window", layout.fitsOnScreen(compact))
+        // Bars re-pinned to the raw screen edges (safe-area paddings compressed).
+        assertEquals(0f, layout.emojiBarY, 0.5f)
+        assertEquals(696f - 168f, layout.actionButtonsY, 0.5f)
+        // Positive preview viewport between the bars, and it scrolls.
+        assertTrue("Compact window must leave a positive preview viewport", layout.messageContainerHeight > 0f)
+        assertTrue(layout.messageScrollable)
+        assertEquals(2000f * layout.previewScale, layout.scaledPreviewHeight, 0.5f)
     }
 
     @Test
-    fun `calculateMessageScaleForOverlay with small screen`() {
-        val smallScreenDimensions = testDimensions.copy(screenHeight = 1200f)
-        val scale =
-            calculateMessageScaleForOverlay(
-                messageHeight = 800,
-                dimensions = smallScreenDimensions,
+    fun `overlay layout keeps a non-blank preview when the window is shorter than both bars`() {
+        // Degenerate: 300px is shorter than the two bars stacked (192px reaction
+        // + 168px action = 360px), so no real viewport exists even after compressing
+        // the paddings. The preview must still be non-blank (full space between
+        // bars, scrollable) and the bars must remain as on-screen as physically
+        // possible.
+        val tiny =
+            OverlayLayoutDimensions(
+                screenHeight = 300f,
+                emojiBarHeight = 192f,
+                emojiBarGap = 228f,
+                actionButtonsHeight = 168f,
+                actionButtonsGap = 36f,
+                topPadding = 144f,
+                bottomPadding = 144f,
             )
 
-        assertTrue("Scale should be less than 1 on small screen", scale < 1f)
-        assertTrue("Scale should be greater than minScale", scale >= 0.3f)
+        val layout = calculateOverlayLayout(2000, tiny)
+
+        assertTrue("Degenerate window should use the overflow layout", layout.isOverflow)
+        assertTrue("Preview must never be blank", layout.messageContainerHeight > 0f)
+        assertTrue(layout.messageScrollable)
+        assertTrue("Emoji bar must start at or below the top edge", layout.emojiBarY >= 0f)
+        assertTrue("Emoji bar must end at or above the bottom edge", layout.emojiBarY + 192f <= 300f)
+        assertTrue("Action buttons must start at or below the top edge", layout.actionButtonsY >= 0f)
+        assertTrue("Action buttons must end at or above the bottom edge", layout.actionButtonsY + 168f <= 300f)
+
+        // Both bars are pinned fully on screen (emoji to the top edge, action to
+        // the bottom edge). In a window shorter than the two bars stacked
+        // (192 + 168 = 360px), the bars MUST overlap: keeping both fully on
+        // screen requires emojiY in [0, h - 360], which only exists when
+        // h >= 360px. The overlap is therefore forced to exactly
+        // (360 - h)px here (360 - 300 = 60px) - no position keeps both
+        // fixed-height bars on screen without intersecting. The composable draws
+        // the action buttons last, so the primary actions win that overlap.
+        // Pin the exact positions and the forced overlap so this stays an
+        // intentional contract rather than an accidental collision.
+        assertEquals(0f, layout.emojiBarY, 0.5f)
+        assertEquals(300f - 168f, layout.actionButtonsY, 0.5f)
+        val forcedOverlap = (layout.emojiBarY + 192f) - layout.actionButtonsY
+        assertEquals("Overlap is forced to exactly 360 - h px", 360f - 300f, forcedOverlap, 0.5f)
+        assertTrue("Action buttons must be drawn on top in the overlap", layout.actionButtonsY < layout.emojiBarY + 192f)
+    }
+
+    // ========== ReactionModeOverlay on-screen context menu TESTS ==========
+
+    // A message taller than the test screen: long-pressing it must still show the
+    // emoji bar and action buttons fully on screen (the reported bug: the context
+    // menu went off screen for extremely long messages).
+    private val oversizedMessageHeight = 100_000
+
+    /**
+     * Asserts the full context menu (emoji bar + every action button) is laid out
+     * completely within the screen. Bounds-based (not assertIsDisplayed) so it
+     * catches bars that exist in the tree but are offset off screen - the exact
+     * symptom of the reported bug. The screen rectangle is read from the root
+     * node's bounds so the check is independent of the test screen's density.
+     */
+    private fun assertContextMenuOnScreen() {
+        val screen =
+            composeTestRule
+                .onNode(isRoot())
+                .fetchSemanticsNode()
+                .boundsInRoot
+
+        // Emoji bar: the first quick reaction must be fully on screen.
+        val emojiBounds =
+            composeTestRule
+                .onNodeWithText("\uD83D\uDC4D")
+                .fetchSemanticsNode()
+                .boundsInRoot
+        assertTrue("Emoji bar must start at or below top (screen=$screen): $emojiBounds", emojiBounds.top >= screen.top)
+        assertTrue("Emoji bar must end at or above bottom (screen=$screen): $emojiBounds", emojiBounds.bottom <= screen.bottom)
+
+        // Every action button must be fully on screen.
+        for (label in listOf("Reply", "Copy", "Select text", "Details", "Delete")) {
+            val bounds =
+                composeTestRule
+                    .onNodeWithContentDescription(label)
+                    .fetchSemanticsNode()
+                    .boundsInRoot
+            assertTrue("$label must start at or below top (screen=$screen): $bounds", bounds.top >= screen.top)
+            assertTrue("$label must end at or above bottom (screen=$screen): $bounds", bounds.bottom <= screen.bottom)
+        }
+    }
+
+    @Test
+    fun `reaction overlay keeps the context menu on screen for an extremely long message`() {
+        // Realistic long-press path: the bubble snapshot bitmap is captured.
+        val androidBitmap = android.graphics.Bitmap.createBitmap(300, 2000, android.graphics.Bitmap.Config.ARGB_8888)
+        androidBitmap.eraseColor(0xFF112233.toInt())
+        val messageBitmap = androidBitmap.asImageBitmap()
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReactionModeOverlay(
+                    messageId = "test-message",
+                    isFromMe = true,
+                    isFailed = false,
+                    messageBitmap = messageBitmap,
+                    messageX = 100f,
+                    messageY = 400f,
+                    messageWidth = 300,
+                    messageHeight = oversizedMessageHeight,
+                    onReactionSelected = {},
+                    onShowFullPicker = {},
+                    onReply = {},
+                    onCopy = {},
+                    onSelectText = {},
+                    onViewDetails = {},
+                    onDelete = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        assertContextMenuOnScreen()
+    }
+
+    @Test
+    fun `reaction overlay keeps the context menu on screen when the snapshot bitmap is missing`() {
+        // COLUMBA-20 guard: a recycled/invalid bitmap must not make the whole
+        // context menu disappear.
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReactionModeOverlay(
+                    messageId = "test-message",
+                    isFromMe = false,
+                    isFailed = false,
+                    messageBitmap = null,
+                    messageX = 100f,
+                    messageY = 400f,
+                    messageWidth = 300,
+                    messageHeight = oversizedMessageHeight,
+                    onReactionSelected = {},
+                    onShowFullPicker = {},
+                    onReply = {},
+                    onCopy = {},
+                    onSelectText = {},
+                    onViewDetails = {},
+                    onDelete = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        assertContextMenuOnScreen()
+    }
+
+    @Test
+    fun `reaction overlay keeps the context menu on screen for a small message`() {
+        val androidBitmap = android.graphics.Bitmap.createBitmap(300, 120, android.graphics.Bitmap.Config.ARGB_8888)
+        androidBitmap.eraseColor(0xFF112233.toInt())
+        val messageBitmap = androidBitmap.asImageBitmap()
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReactionModeOverlay(
+                    messageId = "test-message",
+                    isFromMe = true,
+                    isFailed = false,
+                    messageBitmap = messageBitmap,
+                    messageX = 100f,
+                    messageY = 400f,
+                    messageWidth = 300,
+                    messageHeight = 120,
+                    onReactionSelected = {},
+                    onShowFullPicker = {},
+                    onReply = {},
+                    onCopy = {},
+                    onSelectText = {},
+                    onViewDetails = {},
+                    onDelete = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        assertContextMenuOnScreen()
+    }
+
+    @Test
+    fun `reaction overlay falls back to message text when the snapshot bitmap is missing`() {
+        // COLUMBA-20 / never-blank: when the snapshot is null the overlay must
+        // still show the message content (truncated) in the preview area instead
+        // of leaving a blank space between the bars.
+        val body = "The quick brown fox jumps over the lazy dog. " + "Repeated content to make the message tall and non-blank. "
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReactionModeOverlay(
+                    messageId = "test-message",
+                    isFromMe = false,
+                    isFailed = false,
+                    messageBitmap = null,
+                    messageX = 100f,
+                    messageY = 400f,
+                    messageWidth = 300,
+                    messageHeight = oversizedMessageHeight,
+                    messageContent = body.repeat(40).trim(),
+                    onReactionSelected = {},
+                    onShowFullPicker = {},
+                    onReply = {},
+                    onCopy = {},
+                    onSelectText = {},
+                    onViewDetails = {},
+                    onDelete = {},
+                    onDismiss = {},
+                )
+            }
+        }
+
+        // The fallback text is composed into the tree (the node holds the whole
+        // repeated string, so match on the prefix). A tall scrollable text node
+        // trips the visible-fraction check, so assertExists proves the fallback
+        // path rendered content rather than leaving the area blank.
+        composeTestRule
+            .onNodeWithText("The quick brown fox jumps over the lazy dog.", substring = true)
+            .assertExists()
+        // The context menu is still fully on screen.
+        assertContextMenuOnScreen()
     }
 }

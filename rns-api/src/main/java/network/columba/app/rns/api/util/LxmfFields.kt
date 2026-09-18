@@ -45,8 +45,34 @@ object LxmfFields {
     /** Audio payload `[mode, bytes]`. */
     const val FIELD_AUDIO = 0x07
 
+    const val AM_CODEC2_700C = 0x03
+    const val AM_CODEC2_1200 = 0x04
+    const val AM_CODEC2_1300 = 0x05
+    const val AM_CODEC2_1400 = 0x06
+    const val AM_CODEC2_1600 = 0x07
+    const val AM_CODEC2_2400 = 0x08
+    const val AM_CODEC2_3200 = 0x09
+
+    /** Canonical LXMF audio mode for Ogg/Opus voice notes. */
+    const val AM_OPUS_OGG = 0x10
+
     /** Command structures (Sideband telemetry-request RPCs). */
     const val FIELD_COMMANDS = 0x09
+
+    /** Optional hint describing how the UTF-8 message content should be rendered. */
+    const val FIELD_RENDERER = 0x0F
+
+    /** Plain-text renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_PLAIN = 0x00
+
+    /** Micron renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_MICRON = 0x01
+
+    /** Markdown renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_MARKDOWN = 0x02
+
+    /** BBCode renderer value for [FIELD_RENDERER]. */
+    const val RENDERER_BBCODE = 0x03
 
     /**
      * Canonical tap-back reaction field — `fields[0x40] = {0x00: bytes, 0x01: bytes}`

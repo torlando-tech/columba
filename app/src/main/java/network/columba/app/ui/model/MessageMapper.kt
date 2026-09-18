@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import network.columba.app.data.repository.Message
+import network.columba.app.rns.api.util.LxmfFields
 import network.columba.app.util.FileUtils
 import network.columba.app.util.ImageUtils
 import org.json.JSONArray
@@ -34,6 +35,7 @@ private const val FILE_REF_KEY = "_file_ref"
  * - Image decoding happens asynchronously via decodeAndCacheImage()
  */
 fun Message.toMessageUi(): MessageUi {
+    val renderer = parseMessageRenderer(fieldsJson)
     val hasImage = hasImageField(fieldsJson)
     val cachedImage = if (hasImage) ImageCache.get(id) else null
 
@@ -43,6 +45,7 @@ fun Message.toMessageUi(): MessageUi {
         Log.d(TAG, "Message ${id.take(16)}... has field 5, hasFiles=$hasFiles, json=${fieldsJson?.take(200)}")
     }
     val fileAttachmentsList = if (hasFiles) parseFileAttachments(fieldsJson) else emptyList()
+    val audioAttachment = parseAudioAttachment(fieldsJson)
 
     // Get reply-to message ID: prefer DB column, fallback to parsing field 16
     val replyId = replyToMessageId ?: parseReplyToFromFields(fieldsJson)
@@ -63,10 +66,12 @@ fun Message.toMessageUi(): MessageUi {
         timestamp = timestamp,
         isFromMe = isFromMe,
         status = status,
+        renderer = renderer,
         decodedImage = cachedImage,
         hasImageAttachment = hasImage,
         fileAttachments = fileAttachmentsList,
         hasFileAttachments = hasFiles,
+        audioAttachment = audioAttachment,
         fieldsJson = if (needsFieldsJson) fieldsJson else null,
         deliveryMethod = deliveryMethod,
         errorMessage = errorMessage,
@@ -80,6 +85,27 @@ fun Message.toMessageUi(): MessageUi {
         receivedAt = receivedAt,
         sentInterface = sentInterface,
     )
+}
+
+/**
+ * Parse LXMF FIELD_RENDERER without coercing strings or fractional JSON numbers.
+ * Missing, malformed, and unknown values fail closed to plain text.
+ */
+internal fun parseMessageRenderer(fieldsJson: String?): MessageRenderer {
+    val raw =
+        fieldsJson?.let {
+            runCatching {
+                JSONObject(it).opt(LxmfFields.FIELD_RENDERER.toString())
+            }.getOrNull()
+        }
+    val wireValue = (raw as? Number)?.toInt()
+    val isExactInteger = raw is Number && raw.toDouble() == wireValue?.toDouble()
+
+    return if (wireValue != null && isExactInteger) {
+        MessageRenderer.fromWireValue(wireValue) ?: MessageRenderer.PLAIN
+    } else {
+        MessageRenderer.PLAIN
+    }
 }
 
 /**
@@ -248,6 +274,100 @@ private fun hasImageField(fieldsJson: String?): Boolean {
     }
 }
 
+@Suppress("SwallowedException")
+internal fun parseAudioAttachment(fieldsJson: String?): AudioAttachmentUi? {
+    if (fieldsJson == null) return null
+    return try {
+        val fields = JSONObject(fieldsJson)
+        val field7 = fields.opt("7") ?: return null
+        when (field7) {
+            is JSONArray -> parseAudioArray(field7, fieldsJson)
+            is JSONObject -> parseAudioObject(field7, fieldsJson)
+            else -> null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun parseAudioObject(field7: JSONObject, fieldsJson: String): AudioAttachmentUi? {
+    val mode = field7.optInt("mode", -1)
+    val modeEnum = AudioAttachmentMode.fromWireValue(mode) ?: AudioAttachmentMode.UNSUPPORTED
+    val payloadRef = parseAudioPayloadRef(field7)
+    return AudioAttachmentUi(
+        mode = modeEnum,
+        fieldsJson = fieldsJson,
+        payloadRef = payloadRef,
+        isPlayable = modeEnum != AudioAttachmentMode.UNSUPPORTED,
+        sizeBytes = payloadRef?.let { estimateAudioPayloadSize(it) },
+    )
+}
+
+private fun parseAudioArray(field7: JSONArray, fieldsJson: String): AudioAttachmentUi? {
+    if (field7.length() < 2) return AudioAttachmentUi(AudioAttachmentMode.UNSUPPORTED, fieldsJson = fieldsJson)
+    val modeValue = field7.optInt(0, -1)
+    val modeEnum = AudioAttachmentMode.fromWireValue(modeValue) ?: AudioAttachmentMode.UNSUPPORTED
+    return when (val payload = field7.opt(1)) {
+        is String -> AudioAttachmentUi(
+            mode = modeEnum,
+            fieldsJson = fieldsJson,
+            payloadRef = payload.toAudioPayloadRefOrNull(),
+            isPlayable = modeEnum != AudioAttachmentMode.UNSUPPORTED,
+            sizeBytes = payload.toAudioPayloadRefOrNull()?.let { estimateAudioPayloadSize(it) },
+        )
+        is JSONObject -> {
+            val payloadRef = parseAudioPayloadRef(payload)
+            AudioAttachmentUi(
+                mode = modeEnum,
+                fieldsJson = fieldsJson,
+                payloadRef = payloadRef,
+                isPlayable = modeEnum != AudioAttachmentMode.UNSUPPORTED,
+                sizeBytes = payloadRef?.let { estimateAudioPayloadSize(it) },
+            )
+        }
+        else -> AudioAttachmentUi(mode = modeEnum, fieldsJson = fieldsJson)
+    }
+}
+
+// Fail closed at each unsupported or contradictory nested representation.
+@Suppress("ReturnCount")
+private fun parseAudioPayloadRef(
+    json: JSONObject,
+    depth: Int = 0,
+): AudioAttachmentPayloadRef? {
+    if (depth >= MAX_AUDIO_PAYLOAD_DEPTH) return null
+    json.optJSONObject("data")?.let { nested ->
+        val ref = parseAudioPayloadRef(nested, depth + 1) ?: return null
+        return AudioAttachmentPayloadRef.NestedFieldRef("data", ref)
+    }
+    json.optString("data", "").takeIf { it.isNotEmpty() }?.let {
+        return it.toAudioPayloadRefOrNull()
+    }
+    json.optString(FILE_REF_KEY, "").takeIf { it.isNotEmpty() }?.let {
+        return AudioAttachmentPayloadRef.FileRef(it)
+    }
+    json.optJSONObject("payload")?.let { nested ->
+        val ref = parseAudioPayloadRef(nested, depth + 1) ?: return null
+        return AudioAttachmentPayloadRef.NestedFieldRef("payload", ref)
+    }
+    return null
+}
+
+private const val MAX_AUDIO_PAYLOAD_DEPTH = 8
+
+private fun String.toAudioPayloadRefOrNull(): AudioAttachmentPayloadRef? {
+    if (isEmpty() || length % 2 != 0) return null
+    if (!all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return null
+    return AudioAttachmentPayloadRef.InlineHex(this)
+}
+
+private fun estimateAudioPayloadSize(ref: AudioAttachmentPayloadRef): Int? =
+    when (ref) {
+        is AudioAttachmentPayloadRef.InlineHex -> ref.hex.length / 2
+        is AudioAttachmentPayloadRef.FileRef -> null
+        is AudioAttachmentPayloadRef.NestedFieldRef -> estimateAudioPayloadSize(ref.payload)
+    }
+
 /**
  * Result of decoding image data from a message.
  *
@@ -327,7 +447,7 @@ fun decodeImageWithAnimation(
 
     return try {
         // Get raw image bytes
-        val rawBytes = extractImageBytes(fieldsJson) ?: return null
+        val rawBytes = loadImageBytes(fieldsJson) ?: return null
 
         // Check if it's an animated GIF
         val isAnimated = ImageUtils.isAnimatedGif(rawBytes)
@@ -388,7 +508,7 @@ fun decodeImageWithAnimation(
  * @return Raw image bytes, or null if not found
  */
 @Suppress("ReturnCount", "CyclomaticComplexMethod")
-private fun extractImageBytes(fieldsJson: String?): ByteArray? {
+internal fun loadImageBytes(fieldsJson: String?): ByteArray? {
     if (fieldsJson == null) return null
 
     return try {
@@ -892,7 +1012,7 @@ fun loadFileAttachmentMetadata(
  * @param fieldsJson The message's fields JSON containing image data (field 6)
  * @return Raw image bytes, or null if not found or loading fails
  */
-fun loadImageData(fieldsJson: String?): ByteArray? = extractImageBytes(fieldsJson)
+fun loadImageData(fieldsJson: String?): ByteArray? = loadImageBytes(fieldsJson)
 
 /**
  * Get image metadata for save operations.
@@ -907,7 +1027,7 @@ fun loadImageData(fieldsJson: String?): ByteArray? = extractImageBytes(fieldsJso
  * @return Pair of (mimeType, fileExtension) based on image format, or null if no image
  */
 fun getImageMetadata(fieldsJson: String?): Pair<String, String>? {
-    val bytes = extractImageBytes(fieldsJson) ?: return null
+    val bytes = loadImageBytes(fieldsJson) ?: return null
     if (bytes.size < 4) return null // Need at least 4 bytes for PNG detection
     return detectImageFormat(bytes)
 }

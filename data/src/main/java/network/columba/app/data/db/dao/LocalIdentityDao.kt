@@ -159,7 +159,7 @@ interface LocalIdentityDao {
         identityHash: String,
         encryptedKeyData: ByteArray,
         version: Int,
-    )
+    ): Int
 
     /**
      * Downgrade from password protection to device-only encryption.

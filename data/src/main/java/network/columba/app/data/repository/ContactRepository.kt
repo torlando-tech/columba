@@ -44,8 +44,7 @@ class ContactRepository
                 if (identity == null) {
                     flowOf(emptyList())
                 } else {
-                    val onlineThreshold = System.currentTimeMillis() - (5 * 60 * 1000) // 5 minutes
-                    contactDao.getEnrichedContacts(identity.identityHash, onlineThreshold)
+                    contactDao.getEnrichedContacts(identity.identityHash)
                 }
             }
 

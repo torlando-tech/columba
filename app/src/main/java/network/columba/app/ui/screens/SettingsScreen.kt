@@ -2,10 +2,13 @@ package network.columba.app.ui.screens
 
 import android.Manifest
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.PersistableBundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -59,6 +62,7 @@ import network.columba.app.util.safeOpenUrl
 import network.columba.app.ui.screens.settings.cards.AdvancedCard
 import network.columba.app.ui.screens.settings.cards.AutoAnnounceCard
 import network.columba.app.ui.screens.settings.cards.BatteryOptimizationCard
+import network.columba.app.ui.screens.settings.cards.BottomNavigationCard
 import network.columba.app.ui.screens.settings.cards.DataMigrationCard
 import network.columba.app.ui.screens.settings.cards.IdentityCard
 import network.columba.app.ui.screens.settings.cards.ImageCompressionCard
@@ -85,6 +89,7 @@ import network.columba.app.viewmodel.BlockedUsersViewModel
 import network.columba.app.viewmodel.DebugViewModel
 import network.columba.app.viewmodel.SettingsCardId
 import network.columba.app.viewmodel.SettingsViewModel
+import network.columba.app.viewmodel.SharedInstanceAccessEvent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,6 +107,7 @@ fun SettingsScreen(
     onNavigateToMigration: () -> Unit = {},
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
     onNavigateToFlasher: () -> Unit = {},
+    onNavigateToPyxisUpdater: () -> Unit = {},
     onNavigateToApkSharing: () -> Unit = {},
     onNavigateToBlockedUsers: () -> Unit = {},
 ) {
@@ -199,6 +205,31 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.sharedInstanceAccessEvents.collect { event ->
+            when (event) {
+                is SharedInstanceAccessEvent.Copy -> {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("Shared instance access configuration", event.configuration)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        clip.description.extras = PersistableBundle().apply {
+                            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                        }
+                    }
+                    clipboard.setPrimaryClip(clip)
+                    snackbarHostState.showSnackbar(
+                        message = "Access configuration copied to clipboard",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+                SharedInstanceAccessEvent.Unavailable -> snackbarHostState.showSnackbar(
+                    message = "Host access configuration is unavailable",
+                    duration = SnackbarDuration.Short,
+                )
+            }
+        }
+    }
+
     // Show Snackbar when shared instance becomes available (ephemeral notification)
     LaunchedEffect(state.sharedInstanceAvailable) {
         if (state.sharedInstanceAvailable && !state.preferOwnInstance) {
@@ -270,6 +301,7 @@ fun SettingsScreen(
                         onExpandToggle = { viewModel.toggleSharedInstanceBannerExpanded(it) },
                         onTogglePreferOwnInstance = { viewModel.togglePreferOwnInstance(it) },
                         onRpcKeyChange = { viewModel.saveRpcKey(it) },
+                        onCopyAccessConfiguration = { viewModel.copySharedInstanceAccessConfig() },
                     )
                 }
 
@@ -492,12 +524,21 @@ fun SettingsScreen(
                     onPresetChange = { viewModel.setImageCompressionPreset(it) },
                 )
 
+                BottomNavigationCard(
+                    isExpanded = state.cardExpansionStates[SettingsCardId.BOTTOM_NAVIGATION.name] ?: false,
+                    onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.BOTTOM_NAVIGATION, it) },
+                    tabs = state.bottomNavTabs,
+                    onTabsChange = { viewModel.setBottomNavTabs(it) },
+                )
+
                 ThemeSelectionCard(
                     isExpanded = state.cardExpansionStates[SettingsCardId.THEME.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.THEME, it) },
                     selectedTheme = state.selectedTheme,
                     customThemes = state.customThemes,
+                    themeMode = state.themeMode,
                     onThemeChange = { viewModel.setTheme(it) },
+                    onThemeModeChange = { viewModel.setThemeMode(it) },
                     onNavigateToCustomThemes = onNavigateToCustomThemes,
                 )
 
@@ -524,6 +565,7 @@ fun SettingsScreen(
                     isExpanded = state.cardExpansionStates[SettingsCardId.RNODE_FLASHER.name] ?: false,
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.RNODE_FLASHER, it) },
                     onOpenFlasher = onNavigateToFlasher,
+                    onOpenPyxisUpdater = onNavigateToPyxisUpdater,
                 )
 
                 AdvancedCard(

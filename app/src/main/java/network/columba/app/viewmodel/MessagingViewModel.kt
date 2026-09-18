@@ -3,6 +3,7 @@ package network.columba.app.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import org.json.JSONObject
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -14,17 +15,24 @@ import network.columba.app.data.model.EnrichedContact
 import network.columba.app.data.model.ImageCompressionPreset
 import network.columba.app.data.repository.ReceivedLocationRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.api.model.CallState
 import network.columba.app.service.ConversationLinkManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.SyncProgress
 import network.columba.app.service.SyncResult
 import network.columba.app.ui.model.CodecProfile
+import network.columba.app.audio.VoiceMessageRecorder
+import network.columba.app.audio.VoiceMessageFormat
+import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.ui.model.AudioAttachmentLoader
 import network.columba.app.ui.model.DecodedImageResult
 import network.columba.app.ui.model.ImageCache
 import network.columba.app.ui.model.LocationSharingState
@@ -34,7 +42,9 @@ import network.columba.app.ui.model.decodeImageWithAnimation
 import network.columba.app.ui.model.getImageMetadata
 import network.columba.app.ui.model.loadFileAttachmentData
 import network.columba.app.ui.model.loadFileAttachmentMetadata
+import network.columba.app.ui.model.loadImageBytes
 import network.columba.app.ui.model.loadImageData
+import network.columba.app.ui.model.parseAudioAttachment
 import network.columba.app.ui.model.toMessageUi
 import network.columba.app.util.FileAttachment
 import network.columba.app.util.FileUtils
@@ -43,9 +53,12 @@ import network.columba.app.util.streamHexToFile
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,8 +71,10 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
@@ -68,9 +83,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import network.columba.app.data.repository.Message as DataMessage
 import network.columba.app.rns.api.model.Message as ReticulumMessage
+
+data class ComposerSendResult(
+    val destinationHash: String,
+    val submittedText: String,
+    val clearComposer: Boolean,
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -94,6 +118,9 @@ class MessagingViewModel
         private val receivedLocationRepository: ReceivedLocationRepository,
         private val blockedPeerRepository: network.columba.app.data.repository.BlockedPeerRepository,
         private val identityResolutionManager: network.columba.app.service.IdentityResolutionManager,
+        private val notificationHelper: network.columba.app.notifications.NotificationHelper,
+        private val rnsTelephony: RnsTelephony,
+        private val microphoneArbiter: MicrophoneAdmissionArbiter = MicrophoneAdmissionArbiter(),
     ) : ViewModel() {
         companion object {
             private const val TAG = "MessagingViewModel"
@@ -117,6 +144,7 @@ class MessagingViewModel
 
         // Track the currently active conversation - drives reactive message loading
         private val _currentConversation = MutableStateFlow<String?>(null)
+        val currentConversationHash: StateFlow<String?> = _currentConversation.asStateFlow()
         private var currentPeerName: String = "Unknown"
 
         // Messages automatically update when conversation changes OR database changes
@@ -165,12 +193,35 @@ class MessagingViewModel
                     initialValue = null,
                 )
 
+        // Durable last verified packet received from the current peer.
+        val peerActivity: StateFlow<network.columba.app.data.db.entity.PeerActivityEntity?> =
+            _currentConversation
+                .flatMapLatest { peerHash ->
+                    if (peerHash != null) {
+                        flow<network.columba.app.data.db.entity.PeerActivityEntity?> {
+                            emit(null)
+                            conversationLinkManager.observePeerActivity(peerHash).collect { emit(it) }
+                        }
+                    } else {
+                        flowOf(null)
+                    }
+                }.stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000L),
+                    initialValue = null,
+                )
+
         // Link state for current conversation - provides real-time connectivity status
         val conversationLinkState: StateFlow<network.columba.app.service.ConversationLinkManager.LinkState?> =
             _currentConversation
                 .flatMapLatest { peerHash ->
                     if (peerHash != null) {
-                        conversationLinkManager.linkStates.map { states -> states[peerHash] }
+                        flow<network.columba.app.service.ConversationLinkManager.LinkState?> {
+                            emit(null)
+                            conversationLinkManager.linkStates
+                                .map { states -> states[peerHash] }
+                                .collect { emit(it) }
+                        }
                     } else {
                         flowOf(null)
                     }
@@ -196,6 +247,15 @@ class MessagingViewModel
         private val _selectedImageIsAnimated = MutableStateFlow(false)
         val selectedImageIsAnimated: StateFlow<Boolean> = _selectedImageIsAnimated.asStateFlow()
 
+        private val voiceMessageRecorder = VoiceMessageRecorder(applicationContext, viewModelScope)
+        private val audioAttachmentLoader by lazy { AudioAttachmentLoader(applicationContext) }
+        val voiceRecordingState = voiceMessageRecorder.state
+        val isVoiceMessageSupported: Boolean get() = voiceMessageRecorder.isSupported
+        val isVoiceRecordingBlockedByCall: StateFlow<Boolean> =
+            rnsTelephony.callState
+                .map(::callUsesMicrophone)
+                .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
         // File attachment state (LXMF Field 5)
         private val _selectedFileAttachments = MutableStateFlow<List<FileAttachment>>(emptyList())
         val selectedFileAttachments: StateFlow<List<FileAttachment>> = _selectedFileAttachments.asStateFlow()
@@ -220,6 +280,16 @@ class MessagingViewModel
         // File attachment error events for UI feedback
         private val _fileAttachmentError = MutableSharedFlow<String>()
         val fileAttachmentError: SharedFlow<String> = _fileAttachmentError.asSharedFlow()
+
+        private val composerSendResults = Channel<ComposerSendResult>(Channel.BUFFERED)
+        val composerSendResult: Flow<ComposerSendResult> = composerSendResults.receiveAsFlow()
+        private val sendInProgress = AtomicBoolean(false)
+        private val voiceRecorderOperationLock = Any()
+        internal var attachmentIoDispatcher: CoroutineDispatcher = Dispatchers.IO
+        private var voiceRecordingLease: MicrophoneAdmissionArbiter.Lease? = null
+        private var voiceRecordingStartJob: Job? = null
+        @Volatile private var voiceRecorderCleanupThread: Thread? = null
+        private val retriesInProgress = ConcurrentHashMap.newKeySet<String>()
 
         // Shared image compression error events for UI feedback
         private val _sharedImageError = MutableSharedFlow<String>()
@@ -292,6 +362,21 @@ class MessagingViewModel
 
         // Real-time sync progress for status UI
         val syncProgress: StateFlow<SyncProgress> = propagationNodeManager.syncProgress
+
+        private val _transferProgress =
+            MutableStateFlow<Map<String, network.columba.app.rns.api.model.TransferProgressUpdate>>(emptyMap())
+        val transferProgress: StateFlow<Map<String, network.columba.app.rns.api.model.TransferProgressUpdate>> =
+            _transferProgress.asStateFlow()
+
+        // Message hashes whose transfer was settled by an authoritative
+        // terminal delivery status. Progress cleanup is monotonic through
+        // this set: once a transfer is terminal, a delayed non-terminal
+        // progress event for the same message cannot resurrect its bar
+        // (the delivery-status and progress collectors run independently,
+        // so that out-of-order delivery is possible). Insertion-ordered
+        // and capped so long-lived processes don't accumulate state;
+        // accessed only from Main-dispatcher coroutines.
+        private val terminalTransferHashes = LinkedHashSet<String>()
 
         // Track which images have been decoded - used to trigger recomposition
         // when images become available. The UI observes this to know when to re-check the cache.
@@ -741,6 +826,27 @@ class MessagingViewModel
 
         init {
             viewModelScope.launch {
+                rnsTelephony.callState.collect { state ->
+                    if (callUsesMicrophone(state)) {
+                        voiceRecordingStartJob?.cancel()
+                        withContext(Dispatchers.IO) { cancelActiveVoiceRecording() }
+                    }
+                }
+            }
+
+            viewModelScope.launch {
+                voiceMessageRecorder.state.collect {
+                    synchronized(voiceRecorderOperationLock) {
+                        val current = voiceMessageRecorder.state.value
+                        val active =
+                            current.activeRecordingFile != null ||
+                                current.recorderState is tech.torlando.lxst.recording.RecorderState.Recording
+                        if (!active) releaseVoiceRecordingLeaseLocked()
+                    }
+                }
+            }
+
+            viewModelScope.launch {
                 try {
                     _isTransportEnabled.value = rnsCore.isTransportEnabled()
                 } catch (e: Exception) {
@@ -790,6 +896,28 @@ class MessagingViewModel
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error collecting delivery status updates", e)
+                }
+            }
+
+            viewModelScope.launch {
+                try {
+                    rnsLxmf.observeTransferProgress().collect { update ->
+                        val key = (update.messageHash ?: update.transferId).lowercase()
+                        // Monotonic cleanup: skip delayed non-terminal
+                        // updates for transfers already settled by a
+                        // terminal delivery status, so the bar can't
+                        // reappear after delivery finished.
+                        if (!update.isTerminal && key in terminalTransferHashes) return@collect
+                        _transferProgress.value = if (update.isTerminal) {
+                            _transferProgress.value - key
+                        } else {
+                            _transferProgress.value + (key to update)
+                        }
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error collecting Resource transfer progress", e)
                 }
             }
 
@@ -849,12 +977,42 @@ class MessagingViewModel
 
         private suspend fun handleDeliveryStatusUpdate(update: network.columba.app.rns.api.model.DeliveryStatusUpdate) {
             try {
+                val originatingIdentityHash = update.originatingIdentityHash?.takeIf { it.isNotBlank() }
+                if (originatingIdentityHash == null) {
+                    Log.w(TAG, "Ignoring delivery status without trustworthy attempt identity")
+                    return
+                }
+
+                // The terminal transfer-progress update is a one-shot emission;
+                // if it was missed (app in background, IPC gap, service
+                // restart), the in-memory progress entry would linger and the
+                // progress bar would never go away even though the delivery
+                // status already shows the final state. The delivery status is
+                // the authoritative terminal event for the same transfer, so
+                // reconcile the progress map on any terminal status - before
+                // the DB bookkeeping, so a failure there can't strand the bar.
+                if (update.status == DeliveryStatus.DELIVERED
+                    || update.status == DeliveryStatus.PROPAGATED
+                    || update.status == DeliveryStatus.FAILED
+                ) {
+                    val progressKey = update.messageHash.lowercase()
+                    _transferProgress.value = _transferProgress.value - progressKey
+                    terminalTransferHashes.add(progressKey)
+                    while (terminalTransferHashes.size > 256) {
+                        terminalTransferHashes.remove(terminalTransferHashes.first())
+                    }
+                }
                 // Retry mechanism to handle race condition where delivery proof arrives
                 // before database transaction completes
                 val maxRetries = 3
                 val retryDelays = listOf(50L, 100L, 200L) // ms
 
-                var message = conversationRepository.getMessageById(update.messageHash)
+                var message =
+                    conversationRepository.applyDeliveryStatus(
+                        update.messageHash,
+                        update.status.wireValue,
+                        originatingIdentityHash,
+                    )
                 var attempt = 0
 
                 while (message == null && attempt < maxRetries) {
@@ -865,49 +1023,19 @@ class MessagingViewModel
                         )}... not found, retrying in ${retryDelays[attempt]}ms (attempt ${attempt + 1}/$maxRetries)",
                     )
                     kotlinx.coroutines.delay(retryDelays[attempt])
-                    message = conversationRepository.getMessageById(update.messageHash)
+                    message =
+                        conversationRepository.applyDeliveryStatus(
+                            update.messageHash,
+                            update.status.wireValue,
+                            originatingIdentityHash,
+                        )
                     attempt++
                 }
 
                 if (message != null) {
-                    // Guard: 'delivered' is terminal — never regress to any other state.
-                    // LXMF may fire spurious failure/sent callbacks after delivery confirmation,
-                    // which can trigger propagation retries that overwrite 'delivered' with 'propagated'.
-                    if (message.status == "delivered" && update.status != "delivered") {
-                        Log.w(
-                            TAG,
-                            "Blocking status regression from 'delivered' to '${update.status}' " +
-                                "for message ${update.messageHash.take(16)}...",
-                        )
-                        return
-                    }
-
-                    // Guard: Don't degrade from terminal success states to failed (Issue #257 fix)
-                    // This provides defense-in-depth in case Python layer misses the spurious callback
-                    if (update.status == "failed" && isTerminalSuccessStatus(message.status)) {
-                        Log.w(
-                            TAG,
-                            "Blocking status degradation from '${message.status}' to 'failed' " +
-                                "for message ${update.messageHash.take(16)}...",
-                        )
-                        return
-                    }
-
-                    // Update status
-                    conversationRepository.updateMessageStatus(update.messageHash, update.status)
-
-                    // When retrying via propagation, also update the delivery method
-                    if (update.status == "retrying_propagated") {
-                        conversationRepository.updateMessageDeliveryDetails(
-                            update.messageHash,
-                            deliveryMethod = "propagated",
-                            errorMessage = null,
-                        )
-                    }
-
                     // Record peer activity when delivery proof is received
                     // This proves the peer was recently online and received our message
-                    if (update.status == "delivered") {
+                    if (update.status == DeliveryStatus.DELIVERED) {
                         conversationLinkManager.recordPeerActivity(message.conversationHash, update.timestamp)
                     }
 
@@ -917,14 +1045,15 @@ class MessagingViewModel
                     // PROPAGATED on "propagated" (the propagation-node-accepted
                     // analogue). Failed / retrying paths carry too much routing
                     // ambiguity to produce accurate interface data.
-                    if (update.status == "delivered" || update.status == "propagated") {
-                        enrichSentInterfaceOnDelivery(message, update.messageHash)
+                    if (update.status == DeliveryStatus.DELIVERED || update.status == DeliveryStatus.PROPAGATED) {
+                        enrichSentInterfaceOnDelivery(message)
                     }
 
-                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status}")
+                    Log.d(TAG, "Updated message ${update.messageHash.take(16)}... status to ${update.status.wireValue}")
                 } else {
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
             }
@@ -940,7 +1069,6 @@ class MessagingViewModel
          */
         private suspend fun enrichSentInterfaceOnDelivery(
             message: network.columba.app.data.db.entity.MessageEntity,
-            messageHash: String,
         ) {
             if (!message.isFromMe || message.sentInterface != null) return
             try {
@@ -960,7 +1088,11 @@ class MessagingViewModel
                     }
                 val sentInterface = rnsCore.getNextHopInterfaceName(lookupHash)
                 if (sentInterface != null) {
-                    conversationRepository.updateMessageSentInterface(messageHash, sentInterface)
+                    conversationRepository.updateMessageSentInterface(
+                        message.id,
+                        sentInterface,
+                        message.identityHash,
+                    )
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to enrich sent interface on delivery: ${e.message}")
@@ -1013,20 +1145,11 @@ class MessagingViewModel
             }
         }
 
-        /**
-         * Check if a message status represents a terminal success state.
-         * Terminal success states should never degrade to "failed" (Issue #257 fix).
-         *
-         * @param status The current message status
-         * @return true if this is a terminal success status that shouldn't be degraded
-         */
-        private fun isTerminalSuccessStatus(status: String): Boolean = status in setOf("sent", "propagated", "delivered")
-
         private suspend fun saveMessageToDatabase(
             peerHash: String,
             peerName: String,
             message: DataMessage,
-        ) {
+        ): Boolean =
             try {
                 // Look up public key before calling saveMessage to avoid nested transaction issues.
                 // Prefer the conversation row, then peer_identities keyed by destination hash,
@@ -1035,10 +1158,11 @@ class MessagingViewModel
 
                 conversationRepository.saveMessage(peerHash, peerName, message, publicKey)
                 Log.d(TAG, "Saved message to database for conversation $peerHash")
+                true
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving message to database", e)
+                false
             }
-        }
 
         private suspend fun resolvePeerPublicKey(peerHash: String): ByteArray? =
             conversationRepository.getConversation(peerHash)?.peerPublicKey
@@ -1076,26 +1200,12 @@ class MessagingViewModel
             _currentConversation.value = destinationHash
             lastDraftText = ""
 
-            // Register this conversation as active (suppresses notifications for this peer)
-            activeConversationManager.setActive(destinationHash)
-
             // Enable fast polling (1s) for active conversation
             rnsLxmf.setConversationActive(true)
 
             // Request path for this conversation peer if we don't have one
             viewModelScope.launch(Dispatchers.IO) {
                 identityResolutionManager.requestPathForContact(destinationHash)
-            }
-
-            // Mark conversation as read when opening
-            viewModelScope.launch {
-                try {
-                    Log.d(TAG, "Marking conversation $destinationHash as read...")
-                    conversationRepository.markConversationAsRead(destinationHash)
-                    Log.d(TAG, "Conversation marked as read")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error marking conversation as read", e)
-                }
             }
 
             // Restore draft for this conversation
@@ -1164,6 +1274,13 @@ class MessagingViewModel
             }
         }
 
+        /** Re-asserts user-visible conversation state on initial display and foreground return. */
+        fun onConversationVisible(destinationHash: String) {
+            activeConversationManager.setActive(destinationHash)
+            notificationHelper.cancelNotificationForConversation(destinationHash)
+            markAsRead(destinationHash)
+        }
+
         fun markAsRead(destinationHash: String) {
             viewModelScope.launch {
                 try {
@@ -1174,17 +1291,25 @@ class MessagingViewModel
             }
         }
 
-        @Suppress("LongMethod", "ComplexCondition")
+        @Suppress("LongMethod", "ComplexCondition", "CyclomaticComplexMethod")
         fun sendMessage(
             destinationHash: String,
             content: String,
         ) {
+            if (!sendInProgress.compareAndSet(false, true)) return
+            _isSending.value = true
             viewModelScope.launch {
-                _isSending.value = true
                 try {
                     val imageData = _selectedImageData.value
                     val imageFormat = _selectedImageFormat.value
                     val fileAttachments = _selectedFileAttachments.value
+                    val voiceState = voiceMessageRecorder.state.value
+                    val voiceRecording = voiceState.selectedRecording
+                    val voiceMode = voiceState.selectedFormat?.wireMode
+                    val voiceBytes =
+                        voiceRecording?.let {
+                            withContext(Dispatchers.IO) { it.file.readBytes() }
+                        }
 
                     // Reject pathologically large attachments before sending.
                     // Attachment bytes now cross to :reticulum out-of-band (a
@@ -1194,7 +1319,9 @@ class MessagingViewModel
                     // instead of sending. Surface a friendly message rather than
                     // a buried failure.
                     val totalAttachmentBytes =
-                        (imageData?.size?.toLong() ?: 0L) + fileAttachments.sumOf { it.sizeBytes.toLong() }
+                        (imageData?.size?.toLong() ?: 0L) +
+                            fileAttachments.sumOf { it.sizeBytes.toLong() } +
+                            (voiceBytes?.size?.toLong() ?: 0L)
                     if (totalAttachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
                         Log.w(
                             TAG,
@@ -1208,7 +1335,7 @@ class MessagingViewModel
                         return@launch
                     }
 
-                    val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments) ?: return@launch
+                    val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return@launch
                     val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
                     val identity =
                         loadIdentityIfNeeded() ?: run {
@@ -1218,7 +1345,14 @@ class MessagingViewModel
 
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                     val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod = determineDeliveryMethod(sanitized, imageData, fileAttachments, defaultMethod)
+                    val deliveryMethod =
+                        determineDeliveryMethod(
+                            sanitized = sanitized,
+                            imageData = imageData,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            defaultMethod = defaultMethod,
+                        )
                     val deliveryMethodString = deliveryMethod.toStorageString()
 
                     // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
@@ -1261,6 +1395,13 @@ class MessagingViewModel
                             imageData = imageData,
                             imageFormat = imageFormat,
                             fileAttachments = fileAttachmentPairs.ifEmpty { null },
+                            extraFields =
+                                voiceBytes?.let {
+                                    mapOf(
+                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                            listOf(checkNotNull(voiceMode), it),
+                                    )
+                                },
                             replyToMessageId = replyToId,
                             // MeshChatX-interop reply format ships the
                             // quoted content inline (fields[0x31]) so
@@ -1280,20 +1421,47 @@ class MessagingViewModel
 
                     result
                         .onSuccess { receipt ->
-                            // Clear pending reply and draft after successful send
-                            handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, fileAttachments, deliveryMethodString, replyToId)
-                            clearReplyTo()
-                            draftSaveJob?.cancel()
-                            lastDraftText = ""
-                            conversationRepository.clearDraft(destinationHash)
-                            _draftText.value = null
+                            val persisted =
+                                handleSendSuccess(
+                                    receipt,
+                                    sanitized,
+                                    destinationHash,
+                                    imageData,
+                                    imageFormat,
+                                    fileAttachments,
+                                    deliveryMethodString,
+                                    replyToId,
+                                    voiceRecording,
+                                    voiceBytes,
+                                    voiceMode,
+                                )
+                            if (persisted) {
+                                clearSubmittedDraft(destinationHash, content, replyToId)
+                            }
+                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
                         }.onFailure { error ->
-                            handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
+                            val persisted =
+                                handleSendFailure(
+                                    error = error,
+                                    sanitized = sanitized,
+                                    destinationHash = destinationHash,
+                                    deliveryMethodString = deliveryMethodString,
+                                    imageData = imageData,
+                                    imageFormat = imageFormat,
+                                    fileAttachments = fileAttachments,
+                                    replyToMessageId = replyToId,
+                                    voiceBytes = voiceBytes,
+                                    voiceMode = voiceMode,
+                                    voiceRecording = voiceRecording,
+                                )
+                            if (persisted) clearSubmittedDraft(destinationHash, content, replyToId)
+                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
                         }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
                 } finally {
                     _isSending.value = false
+                    sendInProgress.set(false)
                 }
             }
         }
@@ -1308,23 +1476,32 @@ class MessagingViewModel
             fileAttachments: List<FileAttachment>,
             deliveryMethodString: String,
             replyToMessageId: String? = null,
-        ) {
+            voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
+            voiceBytes: ByteArray? = null,
+            voiceMode: Int? = null,
+        ): Boolean {
             Log.d(TAG, "Message sent successfully${if (replyToMessageId != null) " (reply to ${replyToMessageId.take(16)})" else ""}")
+            var attachmentFieldsPersisted = true
             val fieldsJson =
                 try {
-                    buildFieldsJson(
-                        imageData,
-                        imageFormat,
-                        fileAttachments,
-                        replyToMessageId,
-                        cacheDir = applicationContext.cacheDir,
-                    )
+                    val buildFields: suspend () -> String? = {
+                        buildFieldsJson(
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            replyToMessageId = replyToMessageId,
+                            cacheDir = applicationContext.cacheDir,
+                        )
+                    }
+                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
                 } catch (e: java.io.IOException) {
+                    attachmentFieldsPersisted = imageData == null && fileAttachments.isEmpty() && voiceBytes == null
                     Log.e(TAG, "Failed to build fieldsJson (attachment I/O error), saving message without attachments", e)
-                    // Fall back to text-only fields so the message is still saved to the database.
-                    // The message was already delivered to the recipient — losing the local attachment
-                    // reference is acceptable vs. losing the message from conversation history entirely.
-                    buildFieldsJson(null, null, emptyList(), replyToMessageId)
+                    // Keep the delivered text in conversation history, but report incomplete local
+                    // persistence so the composer retains the original attachment for recovery.
+                    buildFieldsJson(null, null, emptyList(), null, null, replyToMessageId)
                 }
             val actualDestHash = resolveActualDestHash(receipt, destinationHash)
             Log.d(TAG, "Original dest hash: $destinationHash, Actual LXMF dest hash: $actualDestHash")
@@ -1375,19 +1552,54 @@ class MessagingViewModel
                     receivedAt = receipt.timestamp, // For sent messages, receivedAt = our timestamp
                     sentInterface = sentInterface,
                 )
-            clearSelectedImage()
-            clearFileAttachments()
-            saveMessageToDatabase(actualDestHash, currentPeerName, message)
+            val persisted = saveMessageToDatabase(actualDestHash, currentPeerName, message)
+            val composerCanClear = persisted && attachmentFieldsPersisted
+            if (composerCanClear) {
+                clearSubmittedAttachments(imageData, fileAttachments, voiceRecording)
+            }
+            return composerCanClear
         }
 
+        @Suppress("LongParameterList")
         private suspend fun handleSendFailure(
             error: Throwable,
             sanitized: String,
             destinationHash: String,
             deliveryMethodString: String,
-        ) {
+            imageData: ByteArray?,
+            imageFormat: String?,
+            fileAttachments: List<FileAttachment>,
+            replyToMessageId: String?,
+            voiceBytes: ByteArray?,
+            voiceMode: Int? = null,
+            voiceRecording: tech.torlando.lxst.recording.RecordedAudio? = null,
+        ): Boolean {
             Log.e(TAG, "Failed to send message: ${error.message}", error)
             val now = System.currentTimeMillis()
+            val fieldsJson =
+                runCatching {
+                    val buildFields: suspend () -> String? = {
+                        buildFieldsJson(
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            replyToMessageId = replyToMessageId,
+                            cacheDir = applicationContext.cacheDir,
+                        )
+                    }
+                    if (voiceBytes != null) withContext(attachmentIoDispatcher) { buildFields() } else buildFields()
+                }.getOrNull()
+            val requiresFields =
+                imageData != null ||
+                    fileAttachments.isNotEmpty() ||
+                    voiceBytes != null ||
+                    replyToMessageId != null
+            if (requiresFields && fieldsJson == null) {
+                Log.e(TAG, "Failed to serialize required fields for retry; retaining composer")
+                return false
+            }
             val message =
                 DataMessage(
                     id = UUID.randomUUID().toString(),
@@ -1396,11 +1608,50 @@ class MessagingViewModel
                     timestamp = now,
                     isFromMe = true,
                     status = "failed",
+                    fieldsJson = fieldsJson,
                     deliveryMethod = deliveryMethodString,
                     errorMessage = friendlyOutboundError(error.message),
                     receivedAt = now,
                 )
-            saveMessageToDatabase(destinationHash, currentPeerName, message)
+            val persisted = saveMessageToDatabase(destinationHash, currentPeerName, message)
+            val hasRetryableVoicePayload =
+                voiceBytes == null || parseAudioAttachment(fieldsJson) != null
+            val hasRetryableAttachmentPayload =
+                (imageData == null && fileAttachments.isEmpty() && voiceBytes == null) || fieldsJson != null
+            val composerCanClear = persisted && hasRetryableVoicePayload && hasRetryableAttachmentPayload
+            if (composerCanClear) {
+                clearSubmittedAttachments(imageData, fileAttachments, voiceRecording)
+            }
+            return composerCanClear
+        }
+
+        private suspend fun clearSubmittedDraft(
+            destinationHash: String,
+            submittedText: String,
+            replyToMessageId: String?,
+        ) {
+            if (
+                _currentConversation.value == destinationHash &&
+                lastDraftText == submittedText
+            ) {
+                draftSaveJob?.cancel()
+                lastDraftText = ""
+                conversationRepository.clearDraft(destinationHash)
+                _draftText.value = null
+            }
+            if (_pendingReplyTo.value?.messageId == replyToMessageId) clearReplyTo()
+        }
+
+        private suspend fun clearSubmittedAttachments(
+            imageData: ByteArray?,
+            fileAttachments: List<FileAttachment>,
+            voiceRecording: tech.torlando.lxst.recording.RecordedAudio?,
+        ) {
+            if (imageData != null && _selectedImageData.value === imageData) clearSelectedImage()
+            if (_selectedFileAttachments.value === fileAttachments) clearFileAttachments()
+            voiceRecording?.let { recording ->
+                withContext(attachmentIoDispatcher) { voiceMessageRecorder.removeSelected(recording) }
+            }
         }
 
         fun selectImage(
@@ -1473,6 +1724,117 @@ class MessagingViewModel
         fun clearFileAttachments() {
             Log.d(TAG, "Clearing all file attachments")
             _selectedFileAttachments.value = emptyList()
+        }
+
+        @Suppress("TooGenericExceptionCaught") // Release the microphone lease before rethrowing any start failure.
+        fun startVoiceRecording(
+            format: VoiceMessageFormat = VoiceMessageFormat.DEFAULT,
+            maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS,
+        ): File {
+            return synchronized(voiceRecorderOperationLock) {
+                check(!callUsesMicrophone(rnsTelephony.callState.value)) {
+                    "Voice recording is unavailable during a call"
+                }
+                check(voiceRecordingLease == null) { "Voice recording is already active" }
+                voiceRecordingLease =
+                    microphoneArbiter.tryAcquire(MicrophoneAdmissionArbiter.Owner.VOICE_RECORDING)
+                        ?: error("Microphone is already in use")
+                try {
+                    val output =
+                        voiceMessageRecorder.start(
+                            maxDurationMillis = maxDurationMillis,
+                            format = format,
+                        )
+                    if (callUsesMicrophone(rnsTelephony.callState.value)) {
+                        voiceMessageRecorder.cancel()
+                        error("Voice recording is unavailable during a call")
+                    }
+                    output
+                } catch (error: Throwable) {
+                    releaseVoiceRecordingLeaseLocked()
+                    throw error
+                }
+            }
+        }
+        fun stopVoiceRecording() =
+            synchronized(voiceRecorderOperationLock) {
+                try {
+                    voiceMessageRecorder.stop()
+                } finally {
+                    releaseVoiceRecordingLeaseLocked()
+                }
+            }
+        fun requestStartVoiceRecording(
+            format: VoiceMessageFormat = VoiceMessageFormat.DEFAULT,
+            maxDurationMillis: Long = VoiceMessageRecorder.MAX_DURATION_MILLIS,
+        ) {
+            voiceRecordingStartJob?.cancel()
+            voiceRecordingStartJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        startVoiceRecording(format, maxDurationMillis)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        Log.e(TAG, "Unable to start voice recording", error)
+                    } catch (error: LinkageError) {
+                        Log.e(TAG, "Unable to initialize voice recording codec", error)
+                    }
+                }
+        }
+        fun requestStopVoiceRecording() {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { stopVoiceRecording() }
+                    .onFailure { Log.e(TAG, "Unable to finalize voice recording", it) }
+            }
+        }
+        fun cancelVoiceRecording() =
+            synchronized(voiceRecorderOperationLock) {
+                try {
+                    voiceMessageRecorder.cancel()
+                } finally {
+                    releaseVoiceRecordingLeaseLocked()
+                }
+            }
+        fun requestCancelVoiceRecording() {
+            voiceRecordingStartJob?.cancel()
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { cancelVoiceRecording() }
+                    .onFailure { Log.e(TAG, "Unable to cancel voice recording", it) }
+            }
+        }
+        fun cancelActiveVoiceRecording() {
+            synchronized(voiceRecorderOperationLock) {
+                val state = voiceMessageRecorder.state.value
+                if (
+                    state.activeRecordingFile != null ||
+                    state.recorderState is tech.torlando.lxst.recording.RecorderState.Recording
+                ) {
+                    try {
+                        voiceMessageRecorder.cancel()
+                    } finally {
+                        releaseVoiceRecordingLeaseLocked()
+                    }
+                }
+            }
+        }
+        fun requestCancelActiveVoiceRecording() {
+            voiceRecordingStartJob?.cancel()
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { cancelActiveVoiceRecording() }
+                    .onFailure { Log.e(TAG, "Unable to cancel active voice recording", it) }
+            }
+        }
+
+        private fun releaseVoiceRecordingLeaseLocked() {
+            voiceRecordingLease?.let(microphoneArbiter::release)
+            voiceRecordingLease = null
+        }
+        fun requestRemoveVoiceRecording() {
+            val expectedRecording = voiceMessageRecorder.state.value.selectedRecording ?: return
+            viewModelScope.launch(attachmentIoDispatcher) {
+                voiceMessageRecorder.removeSelected(expectedRecording)
+            }
         }
 
         /**
@@ -2049,7 +2411,13 @@ class MessagingViewModel
 
                 val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                 val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                val deliveryMethod = determineDeliveryMethod(sanitized, imageData, emptyList(), defaultMethod)
+                val deliveryMethod =
+                    determineDeliveryMethod(
+                        sanitized = sanitized,
+                        imageData = imageData,
+                        fileAttachments = emptyList(),
+                        defaultMethod = defaultMethod,
+                    )
                 val deliveryMethodString = deliveryMethod.toStorageString()
 
                 val iconAppearance =
@@ -2088,7 +2456,17 @@ class MessagingViewModel
                     .onSuccess { receipt ->
                         handleSendSuccess(receipt, sanitized, destinationHash, imageData, imageFormat, emptyList(), deliveryMethodString)
                     }.onFailure { error ->
-                        handleSendFailure(error, sanitized, destinationHash, deliveryMethodString)
+                        handleSendFailure(
+                            error = error,
+                            sanitized = sanitized,
+                            destinationHash = destinationHash,
+                            deliveryMethodString = deliveryMethodString,
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = emptyList(),
+                            replyToMessageId = null,
+                            voiceBytes = null,
+                        )
                     }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending shared image message", e)
@@ -2258,6 +2636,34 @@ class MessagingViewModel
             }
         }
 
+        @Suppress("ReturnCount")
+        private fun reconstructFileAttachments(fieldsJson: String?): List<FileAttachment>? {
+            if (fieldsJson == null) return emptyList()
+            val fields = runCatching { JSONObject(fieldsJson) }.getOrNull() ?: return null
+            if (!fields.has("5")) return emptyList()
+            val attachments = fields.optJSONArray("5") ?: return null
+            return buildList {
+                for (index in 0 until attachments.length()) {
+                    val metadata = loadFileAttachmentMetadata(fieldsJson, index) ?: return null
+                    val data = loadFileAttachmentData(fieldsJson, index) ?: return null
+                    add(
+                        FileAttachment(
+                            filename = metadata.filename,
+                            data = data,
+                            mimeType = metadata.mimeType,
+                            sizeBytes = data.size,
+                        ),
+                    )
+                }
+            }
+        }
+
+        private suspend fun reconstructImageForRetry(fieldsJson: String?): Pair<Boolean, ByteArray?> {
+            val hasImage = fieldsJson?.let { runCatching { JSONObject(it).has("6") }.getOrDefault(false) } == true
+            if (!hasImage) return false to null
+            return true to withContext(Dispatchers.IO) { loadImageBytes(fieldsJson) }
+        }
+
         /**
          * Retry sending a failed message.
          * Re-sends the message with the same content and destination,
@@ -2265,7 +2671,11 @@ class MessagingViewModel
          *
          * @param messageId The ID (hash) of the failed message to retry
          */
+        // Retry reconstructs every supported persisted attachment form and deliberately
+        // keeps the lifecycle in one coroutine so status restoration cannot be skipped.
+        @Suppress("LongMethod")
         fun retryFailedMessage(messageId: String) {
+            if (!retriesInProgress.add(messageId)) return
             viewModelScope.launch {
                 try {
                     Log.d(TAG, "Retrying failed message: $messageId")
@@ -2297,19 +2707,55 @@ class MessagingViewModel
                         return@launch
                     }
 
-                    // Parse image data from fieldsJson if present
-                    val imageData = failedMessage.fieldsJson?.let { parseImageFromFieldsJson(it) }
+                    val (hasPersistedImage, imageData) = reconstructImageForRetry(failedMessage.fieldsJson)
+                    if (hasPersistedImage && imageData == null) {
+                        Log.e(TAG, "Stored image attachment is unavailable for retry")
+                        conversationRepository.updateMessageDeliveryDetails(
+                            messageId,
+                            deliveryMethod = null,
+                            errorMessage = "Image attachment is no longer available",
+                        )
+                        return@launch
+                    }
                     val imageFormat = if (imageData != null) "jpg" else null
+                    val audioAttachment = parseAudioAttachment(failedMessage.fieldsJson)
+                    val voiceMode = audioAttachment?.mode?.wireValue
+                    val voiceBytes =
+                        audioAttachment?.let { attachment ->
+                            audioAttachmentLoader.loadBytes(attachment)
+                        }
+                    if (audioAttachment != null && voiceBytes == null) {
+                        Log.e(TAG, "Stored voice attachment is unavailable for retry")
+                        conversationRepository.updateMessageDeliveryDetails(
+                            messageId,
+                            deliveryMethod = null,
+                            errorMessage = "Voice recording is no longer available",
+                        )
+                        return@launch
+                    }
 
-                    // Parse file attachments from fieldsJson if present
-                    // For retry, we need to reconstruct file attachments from stored data
-                    // TODO: Implement file attachment parsing from fieldsJson when retrying
-                    val fileAttachments = emptyList<FileAttachment>()
+                    val fileAttachments = reconstructFileAttachments(failedMessage.fieldsJson)
+                    if (fileAttachments == null) {
+                        Log.e(TAG, "Stored file attachment is unavailable for retry")
+                        conversationRepository.updateMessageDeliveryDetails(
+                            messageId,
+                            deliveryMethod = null,
+                            errorMessage = "A file attachment is no longer available",
+                        )
+                        return@launch
+                    }
 
                     // Get delivery settings
                     val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
                     val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod = determineDeliveryMethod(failedMessage.content, imageData, fileAttachments, defaultMethod)
+                    val deliveryMethod =
+                        determineDeliveryMethod(
+                            sanitized = failedMessage.content,
+                            imageData = imageData,
+                            fileAttachments = fileAttachments,
+                            voiceBytes = voiceBytes,
+                            defaultMethod = defaultMethod,
+                        )
 
                     Log.d(TAG, "Retrying message via $deliveryMethod delivery")
 
@@ -2326,6 +2772,14 @@ class MessagingViewModel
                             tryPropagationOnFail = tryPropOnFail,
                             imageData = imageData,
                             imageFormat = imageFormat,
+                            fileAttachments = fileAttachments.map { it.filename to it.data }.ifEmpty { null },
+                            extraFields =
+                                voiceBytes?.let {
+                                    mapOf(
+                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                            listOf(checkNotNull(voiceMode), it),
+                                    )
+                                },
                             // Preserve reply on retry
                             replyToMessageId = failedMessage.replyToMessageId,
                         )
@@ -2356,6 +2810,8 @@ class MessagingViewModel
                     } catch (e2: Exception) {
                         Log.e(TAG, "Error restoring failed status", e2)
                     }
+                } finally {
+                    retriesInProgress.remove(messageId)
                 }
             }
         }
@@ -2432,6 +2888,19 @@ class MessagingViewModel
             }
 
         override fun onCleared() {
+            voiceRecordingStartJob?.cancel()
+            voiceRecorderCleanupThread =
+                thread(name = "voice-recorder-cleanup", isDaemon = true) {
+                    synchronized(voiceRecorderOperationLock) {
+                        try {
+                            voiceMessageRecorder.close()
+                        } catch (error: Exception) {
+                            Log.e(TAG, "Failed to close voice message recorder", error)
+                        } finally {
+                            releaseVoiceRecordingLeaseLocked()
+                        }
+                    }
+                }
             super.onCleared()
 
             // Note: Conversation marking as read happens via loadMessages() when opening
@@ -2460,6 +2929,12 @@ class MessagingViewModel
 
 private const val HELPER_TAG = "MessagingViewModel"
 
+internal fun callUsesMicrophone(state: CallState): Boolean =
+    state is CallState.Connecting ||
+        state is CallState.Ringing ||
+        state is CallState.Incoming ||
+        state is CallState.Active
+
 /**
  * Validates and sanitizes message content for sending.
  *
@@ -2478,10 +2953,12 @@ internal fun validateAndSanitizeContent(
     content: String,
     imageData: ByteArray?,
     fileAttachments: List<FileAttachment> = emptyList(),
+    voiceBytes: ByteArray? = null,
 ): String? {
     // Sideband requires non-empty content to save messages to its database.
     // When sending attachments without text, use a single space (matching Sideband's behavior).
-    if (content.trim().isEmpty() && (imageData != null || fileAttachments.isNotEmpty())) {
+    val hasAttachment = listOf(imageData != null, fileAttachments.isNotEmpty(), voiceBytes != null).any { it }
+    if (content.trim().isEmpty() && hasAttachment) {
         return " "
     }
     val validationResult = InputValidator.validateMessageContent(content)
@@ -2550,32 +3027,45 @@ private fun determineDeliveryMethod(
     sanitized: String,
     imageData: ByteArray?,
     fileAttachments: List<FileAttachment> = emptyList(),
+    voiceBytes: ByteArray? = null,
     defaultMethod: String,
 ): DeliveryMethod {
     val contentSize = sanitized.toByteArray().size
-    val hasAttachments = imageData != null || fileAttachments.isNotEmpty()
-    return if (!hasAttachments && contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER) {
+    val hasAttachments = imageData != null || fileAttachments.isNotEmpty() || voiceBytes != null
+    val configuredMethod =
+        DeliveryMethod.entries.firstOrNull { method ->
+            method.name.equals(defaultMethod, ignoreCase = true)
+        } ?: DeliveryMethod.DIRECT
+    return if (configuredMethod != DeliveryMethod.PROPAGATED &&
+        !hasAttachments &&
+        contentSize <= OPPORTUNISTIC_MAX_BYTES_HELPER
+    ) {
         Log.d(HELPER_TAG, "Using OPPORTUNISTIC delivery (content: $contentSize bytes)")
         DeliveryMethod.OPPORTUNISTIC
+    } else if (configuredMethod == DeliveryMethod.PROPAGATED) {
+        DeliveryMethod.PROPAGATED
     } else {
-        if (defaultMethod == "propagated") DeliveryMethod.PROPAGATED else DeliveryMethod.DIRECT
+        DeliveryMethod.DIRECT
     }
 }
 
 @Suppress("LongParameterList", "CyclomaticComplexMethod")
-private suspend fun buildFieldsJson(
+internal suspend fun buildFieldsJson(
     imageData: ByteArray?,
     imageFormat: String?,
     fileAttachments: List<FileAttachment> = emptyList(),
+    voiceBytes: ByteArray? = null,
+    voiceMode: Int? = network.columba.app.rns.api.util.LxmfFields.AM_OPUS_OGG,
     replyToMessageId: String? = null,
     reactions: Map<String, List<String>>? = null,
     cacheDir: java.io.File? = null,
 ): String? {
     val hasImage = imageData != null && imageFormat != null
     val hasFiles = fileAttachments.isNotEmpty()
+    val hasVoice = voiceBytes != null
     val hasReply = replyToMessageId != null
     val hasReactions = !reactions.isNullOrEmpty()
-    val hasAnyContent = hasImage || hasFiles || hasReply || hasReactions
+    val hasAnyContent = hasImage || hasFiles || hasVoice || hasReply || hasReactions
 
     if (!hasAnyContent) return null
 
@@ -2598,6 +3088,10 @@ private suspend fun buildFieldsJson(
         // Add file attachments field (Field 5)
         if (hasFiles) {
             json.put("5", buildFileAttachmentsArray(fileAttachments, cacheDir))
+        }
+
+        if (hasVoice && voiceBytes != null) {
+            json.put("7", org.json.JSONArray().put(checkNotNull(voiceMode)).put(voiceBytes.toHexString()))
         }
 
         // Add app extensions field (Field 16) for replies, reactions, and future features
@@ -2682,24 +3176,6 @@ private fun resolveActualDestHash(
     } else {
         Log.w(HELPER_TAG, "Received empty destination hash from Python, falling back to original: $fallbackHash")
         fallbackHash
-    }
-
-/**
- * Parse image data from LXMF fields JSON.
- * Field 6 contains the image data as hex string.
- */
-private fun parseImageFromFieldsJson(fieldsJson: String): ByteArray? =
-    try {
-        val json = org.json.JSONObject(fieldsJson)
-        val hexImageData = json.optString("6", "")
-        if (hexImageData.isNotEmpty()) {
-            hexImageData.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        } else {
-            null
-        }
-    } catch (e: Exception) {
-        Log.w(HELPER_TAG, "Failed to parse image from fieldsJson: ${e.message}")
-        null
     }
 
 /**

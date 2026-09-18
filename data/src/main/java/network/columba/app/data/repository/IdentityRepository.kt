@@ -404,12 +404,16 @@ class IdentityRepository
                 if (keyData.size != 64) return
 
                 val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
-                identityDao.updateEncryptedKeyData(
+                val updatedRows = identityDao.updateEncryptedKeyData(
                     identityHash = identity.identityHash,
                     encryptedKeyData = encrypted,
                     version = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
                 )
-                Log.i(TAG, "Opportunistic key backup saved for $hashPrefix...")
+                if (updatedRows == 1) {
+                    Log.i(TAG, "Opportunistic key backup saved for $hashPrefix...")
+                } else {
+                    Log.w(TAG, "Opportunistic key backup skipped: identity $hashPrefix... no longer exists")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Opportunistic key backup failed for $hashPrefix...", e)
             }
@@ -589,11 +593,14 @@ class IdentityRepository
                         )
                     }
                     val encrypted = keyEncryptor.encryptWithDeviceKey(keyData)
-                    identityDao.updateEncryptedKeyData(
+                    val updatedRows = identityDao.updateEncryptedKeyData(
                         identityHash = identityHash,
                         encryptedKeyData = encrypted,
                         version = IdentityKeyEncryptor.VERSION_DEVICE_ONLY.toInt(),
                     )
+                    check(updatedRows == 1) {
+                        "Identity row $identityHash was not found during key recovery"
+                    }
                     Result.success(Unit)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to re-wrap key for ${identityHash.take(8)}...", e)

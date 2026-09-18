@@ -2,17 +2,22 @@ package network.columba.app.rns.host.persistence
 
 import android.content.Context
 import android.util.Log
+import androidx.room.withTransaction
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.db.entity.AnnounceInterfaceSightingEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.data.db.entity.PeerActivityType
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.util.HashUtils
 import network.columba.app.data.util.TextSanitizer
+import network.columba.app.data.model.InterfaceType
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.rns.host.util.PeerNameResolver
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -29,6 +34,7 @@ class ServicePersistenceManager(
     private val context: Context,
     private val scope: CoroutineScope,
     private val settingsAccessor: ServiceSettingsAccessor,
+    startDeliveryReconciliation: Boolean = true,
 ) {
     companion object {
         private const val TAG = "ServicePersistenceManager"
@@ -73,6 +79,14 @@ class ServicePersistenceManager(
     private val conversationDao by lazy { database.conversationDao() }
     private val localIdentityDao by lazy { database.localIdentityDao() }
     private val peerIdentityDao by lazy { database.peerIdentityDao() }
+    private val peerActivityDao by lazy { database.peerActivityDao() }
+    private val pendingDeliveryPersistence by lazy { PendingDeliveryPersistence(database) }
+
+    init {
+        if (startDeliveryReconciliation) {
+            pendingDeliveryPersistence.startReconciliation(scope)
+        }
+    }
 
     /**
      * Check if a peer is explicitly blocked.
@@ -93,12 +107,13 @@ class ServicePersistenceManager(
 
     /**
      * Persist an announce to the database.
-     * Called from EventHandler.handleAnnounceEvent() in the service process.
+     * Called from PeerActivityCollector in the service process. This suspends
+     * until the announce, activity, and derived peer identity are persisted.
      *
      * This preserves existing favorite status and icon appearance.
      */
-    @Suppress("LongParameterList") // Parameters mirror AnnounceEntity fields for direct persistence
-    fun persistAnnounce(
+    @Suppress("LongParameterList", "LongMethod") // Parameters and transaction mirror announce persistence fields.
+    suspend fun persistAnnounce(
         destinationHash: String,
         peerName: String,
         publicKey: ByteArray,
@@ -113,41 +128,94 @@ class ServicePersistenceManager(
         stampCostFlexibility: Int?,
         peeringCost: Int?,
         propagationTransferLimitKb: Int?,
-    ) {
-        scope.launch {
-            try {
-                // Preserve favorite status if announce already exists
-                // Note: Icons are stored separately in peer_icons table (from LXMF messages)
-                val existing = announceDao.getAnnounce(destinationHash)
+        announcePacketHash: String? = null,
+        isPathResponse: Boolean = false,
+    ): Boolean =
+        try {
+            val normalizedHash = destinationHash.lowercase()
+            val activeIdentity = localIdentityDao.getActiveIdentitySync()
+            if (activeIdentity != null && isBlockedPeer(normalizedHash, activeIdentity.identityHash)) {
+                Log.d(TAG, "Ignoring announce from blocked peer: ${normalizedHash.take(16)}")
+                false
+            } else {
+                database.withTransaction {
+                    // Preserve favorite status and richer metadata if a later announce
+                    // omits fields which were previously learned.
+                    val existing = announceDao.getAnnounce(normalizedHash)
+                    val persistedName =
+                        peerName.takeIf(PeerNameResolver::isValidPeerName)
+                            ?: existing?.peerName?.takeIf(PeerNameResolver::isValidPeerName)
+                            ?: PeerNameResolver.formatHashAsFallback(normalizedHash)
+                    val declaredInterfaceType = InterfaceType.fromName(receivingInterfaceType)
+                    val canonicalInterfaceType =
+                        declaredInterfaceType.takeUnless { it == InterfaceType.UNKNOWN }
+                            ?: InterfaceType.fromName(receivingInterface)
+                    val identityHash = HashUtils.computeIdentityHash(publicKey)
+                    val advancesLastSeen =
+                        !isPathResponse &&
+                            !announcePacketHash.isNullOrBlank() &&
+                            peerActivityDao.recordActivityOnce(
+                                eventId = "announce:$announcePacketHash",
+                                destinationHash = normalizedHash,
+                                receivedAt = timestamp,
+                                activityType = PeerActivityType.ANNOUNCE,
+                            )
+                    val lastSeenTimestamp =
+                        if (advancesLastSeen) timestamp else existing?.lastSeenTimestamp ?: 0L
 
-                val entity =
-                    AnnounceEntity(
-                        destinationHash = destinationHash,
-                        peerName = peerName,
-                        publicKey = publicKey,
-                        appData = appData,
-                        hops = hops,
-                        lastSeenTimestamp = timestamp,
-                        nodeType = nodeType,
-                        receivingInterface = receivingInterface,
-                        receivingInterfaceType = receivingInterfaceType,
-                        aspect = aspect,
-                        isFavorite = existing?.isFavorite ?: false,
-                        favoritedTimestamp = existing?.favoritedTimestamp,
-                        stampCost = stampCost,
-                        stampCostFlexibility = stampCostFlexibility,
-                        peeringCost = peeringCost,
-                        propagationTransferLimitKb = propagationTransferLimitKb,
-                        computedIdentityHash = HashUtils.computeIdentityHash(publicKey),
+                    val entity =
+                        AnnounceEntity(
+                            destinationHash = normalizedHash,
+                            peerName = persistedName,
+                            publicKey = publicKey,
+                            appData = appData,
+                            hops = hops,
+                            lastSeenTimestamp = lastSeenTimestamp,
+                            nodeType = nodeType,
+                            receivingInterface = receivingInterface,
+                            receivingInterfaceType = canonicalInterfaceType.storageName,
+                            aspect = aspect,
+                            isFavorite = existing?.isFavorite ?: false,
+                            favoritedTimestamp = existing?.favoritedTimestamp,
+                            stampCost = stampCost,
+                            stampCostFlexibility = stampCostFlexibility,
+                            peeringCost = peeringCost,
+                            propagationTransferLimitKb =
+                                propagationTransferLimitKb ?: existing?.propagationTransferLimitKb,
+                            computedIdentityHash = identityHash,
+                        )
+                    val sighting =
+                        AnnounceInterfaceSightingEntity(
+                            destinationHash = normalizedHash,
+                            interfaceType = canonicalInterfaceType.storageName,
+                            receivingInterface = receivingInterface,
+                            lastSeenTimestamp = lastSeenTimestamp,
+                            hops = hops,
+                        )
+
+                    announceDao.upsertAnnounce(entity)
+                    if (advancesLastSeen) {
+                        announceDao.upsertInterfaceSighting(sighting)
+                    } else {
+                        announceDao.upsertInterfaceSightingMetadata(sighting)
+                    }
+                    val existingPeerIdentity = peerIdentityDao.getPeerIdentity(identityHash)
+                    peerIdentityDao.insertPeerIdentity(
+                        PeerIdentityEntity(
+                            peerHash = identityHash,
+                            publicKey = publicKey,
+                            lastSeenTimestamp =
+                                if (advancesLastSeen) timestamp else existingPeerIdentity?.lastSeenTimestamp ?: 0L,
+                        ),
                     )
-
-                announceDao.upsertAnnounce(entity)
-                Log.d(TAG, "Service persisted announce: ${destinationHash.take(16)}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
+                }
+                Log.d(TAG, "Service persisted announce: ${normalizedHash.take(16)}")
+                true
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting announce in service: $destinationHash", e)
+            false
         }
-    }
 
     /**
      * Persist a peer's public key to the database.
@@ -220,6 +288,10 @@ class ServicePersistenceManager(
                 return false
             }
 
+            // Local wall-clock time at the protocol ingestion boundary. The
+            // sender-provided LXMF timestamp is display data, not presence.
+            val receivedAt = System.currentTimeMillis()
+
             // Check for duplicates (composite key is id + identityHash)
             val existingMessage = messageDao.getMessageById(messageHash, activeIdentity.identityHash)
             if (existingMessage != null) {
@@ -245,18 +317,13 @@ class ServicePersistenceManager(
                     peerHash = sourceHash,
                     cachedName = existingConversation?.peerName,
                     contactNicknameLookup = {
-                        activeIdentity?.let {
-                            contactDao.getContact(sourceHash, it.identityHash)?.customNickname
-                        }
+                        contactDao.getContact(sourceHash, activeIdentity.identityHash)?.customNickname
                     },
                     announcePeerNameLookup = {
                         announceDao.getAnnounce(sourceHash)?.peerName
                     },
                 )
             val peerName = TextSanitizer.sanitizePeerName(resolvedName)
-
-            // Use local reception time for conversation ordering (immune to sender clock skew)
-            val receivedAt = System.currentTimeMillis()
 
             // Insert/update conversation
             if (existingConversation != null) {
@@ -309,6 +376,7 @@ class ServicePersistenceManager(
                     receivedAt = receivedAt,
                 )
             messageDao.insertMessage(messageEntity)
+            peerActivityDao.recordActivity(sourceHash, receivedAt, PeerActivityType.MESSAGE)
 
             // Check if this message has file attachments and should supersede a pending notification
             if (hasFileAttachments) {
@@ -331,6 +399,112 @@ class ServicePersistenceManager(
             return false
         }
     }
+
+    /**
+     * Admit one fresh inbound LXMF message for presence after applying the
+     * same identity-scoped privacy policy as message persistence.
+     */
+    suspend fun persistIncomingMessageActivity(
+        messageHash: String,
+        sourceHash: String,
+        deliveryMethod: String?,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean =
+        try {
+            if (messageHash.isBlank() || sourceHash.isBlank()) return false
+            // A propagated fetch proves relay availability, not current sender activity.
+            if (deliveryMethod.equals("propagated", ignoreCase = true)) return false
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) return false
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) return false
+            peerActivityDao.recordActivityOnce(
+                eventId = "message:$messageHash",
+                destinationHash = sourceHash,
+                receivedAt = receivedAt,
+                activityType = PeerActivityType.MESSAGE,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting inbound message activity for $sourceHash", e)
+            false
+        }
+
+    /** Admit one authenticated reaction-only LXMF frame once. */
+    suspend fun persistReactionActivity(
+        eventId: String,
+        sourceHash: String,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean =
+        try {
+            if (eventId.isBlank() || sourceHash.isBlank()) return false
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) return false
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) return false
+            peerActivityDao.recordActivityOnce(
+                eventId = "reaction:$eventId",
+                destinationHash = sourceHash,
+                receivedAt = receivedAt,
+                activityType = PeerActivityType.MESSAGE,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting reaction activity for $sourceHash", e)
+            false
+        }
+
+    /** Record an activity event captured directly by the service-owned backend. */
+    suspend fun recordPeerActivity(
+        destinationHash: String,
+        activityType: String,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean =
+        try {
+            if (destinationHash.isBlank()) return false
+            peerActivityDao.recordActivity(destinationHash, receivedAt, activityType)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting peer activity for $destinationHash", e)
+            false
+        }
+
+    /** Persist a verified delivery proof received for one of our outgoing messages. */
+    suspend fun persistDeliveryProof(
+        update: DeliveryStatusUpdate,
+        receivedAt: Long = System.currentTimeMillis(),
+    ): Boolean = pendingDeliveryPersistence.persistProof(update, receivedAt)
+
+    /** Persist protocol lifecycle state in the service process, independent of UI ownership. */
+    suspend fun persistDeliveryStatus(update: DeliveryStatusUpdate): Boolean =
+        pendingDeliveryPersistence.persistStatus(update)
+
+    /** Reconcile the durable inbox after startup, Room invalidation, or a new event. */
+    @androidx.annotation.VisibleForTesting
+    internal suspend fun reconcilePendingDeliveryStatuses(): Boolean =
+        pendingDeliveryPersistence.reconcile()
+
+    /**
+     * Persist direct telemetry reception. Collector-stream entries are
+     * historical relays and must not impersonate their original authors.
+     */
+    suspend fun persistTelemetryActivity(
+        sourceHash: String,
+        eventId: String,
+        receivedAt: Long = System.currentTimeMillis(),
+        isDirect: Boolean,
+    ): Boolean =
+        try {
+            if (!isDirect || sourceHash.isBlank() || eventId.isBlank()) return false
+            val activeIdentity = localIdentityDao.getActiveIdentitySync() ?: return false
+            if (isBlockedPeer(sourceHash, activeIdentity.identityHash)) return false
+            if (shouldBlockUnknownSender(sourceHash, activeIdentity.identityHash)) return false
+            peerActivityDao.recordActivityOnce(
+                eventId = "telemetry:$eventId",
+                destinationHash = sourceHash,
+                receivedAt = receivedAt,
+                activityType = PeerActivityType.TELEMETRY,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error persisting telemetry activity for $sourceHash", e)
+            false
+        }
 
     /**
      * Check if an announce exists (for de-duplication in app process).
@@ -475,7 +649,7 @@ class ServicePersistenceManager(
             // Destination hash lookup failed — try as identity hash.
             // This path is used by LXST incoming calls which provide identity hashes.
             Log.d(TAG, "Trying identity hash lookup...")
-            val announceByIdentity = findAnnounceByIdentityHash(peerHash)
+            val announceByIdentity = announceDao.getAnnounceByIdentityHash(peerHash.lowercase())
             if (announceByIdentity != null && !announceByIdentity.peerName.isNullOrBlank()) {
                 Log.d(TAG, "Found by identity hash")
                 return announceByIdentity.peerName
@@ -490,18 +664,6 @@ class ServicePersistenceManager(
     }
 
     /**
-     * Find an announce by identity hash using indexed column lookup.
-     * Identity hash = first 16 bytes of SHA256(publicKey) as hex.
-     */
-    private suspend fun findAnnounceByIdentityHash(identityHash: String): AnnounceEntity? =
-        try {
-            announceDao.getAnnounceByIdentityHash(identityHash.lowercase())
-        } catch (e: Exception) {
-            Log.e(TAG, "Error finding announce by identity hash", e)
-            null
-        }
-
-    /**
      * Delete announces older than 30 days, preserving favorites and contacts.
      * Intended to be called once per service lifecycle (e.g., in onCreate).
      */
@@ -509,7 +671,11 @@ class ServicePersistenceManager(
         scope.launch {
             try {
                 val cutoffTime = System.currentTimeMillis() - ANNOUNCE_TTL_MS
+                val deletedSightings = announceDao.deleteStaleInterfaceSightings(cutoffTime)
                 val deleted = announceDao.deleteStaleAnnounces(cutoffTime)
+                if (deletedSightings > 0) {
+                    Log.d(TAG, "Cleaned up $deletedSightings stale interface sightings (>30 days old)")
+                }
                 if (deleted > 0) {
                     Log.d(TAG, "Cleaned up $deleted stale announces (>30 days old)")
                 }

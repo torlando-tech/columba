@@ -1,6 +1,7 @@
 package network.columba.app.notifications
 
 import android.Manifest
+import android.app.AppOpsManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Process
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ActivityCompat
@@ -33,7 +35,7 @@ class CallNotificationHelper
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-    ) {
+    ) : IncomingCallNotifier {
         companion object {
             // Notification channel IDs
             private const val CHANNEL_ID_INCOMING_CALL = "incoming_calls"
@@ -64,20 +66,50 @@ class CallNotificationHelper
          * Check if the app can use full-screen intents.
          *
          * On Android 14+ (API 34), USE_FULL_SCREEN_INTENT is a special permission
-         * that must be granted by the user in system settings. Without it, the
-         * fullScreenIntent on notifications is silently ignored and the user only
-         * sees a heads-up notification instead of the full incoming call screen.
+         * that must be granted by the user. Without it, the fullScreenIntent on
+         * notifications is silently downgraded to a heads-up notification instead
+         * of the full incoming call screen.
+         *
+         * [NotificationManager.canUseFullScreenIntent] only performs the preflight
+         * check (forDataDelivery=false). The system's actual delivery check
+         * (forDataDelivery=true) treats the MODE_DEFAULT appop as a denial, so we
+         * additionally require the USE_FULL_SCREEN_INTENT appop to be explicitly
+         * allowed. Without that, the card would show a green check while the
+         * system still silently suppresses the full-screen takeover.
          *
          * @return true if full-screen intents are available
          */
         fun canUseFullScreenIntent(): Boolean {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.canUseFullScreenIntent()
-            } else {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 // Before Android 14, all apps with USE_FULL_SCREEN_INTENT in manifest get it
-                true
+                return true
             }
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val preflight = nm.canUseFullScreenIntent()
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            // AppOpsManager.OPSTR_USE_FULL_SCREEN_INTENT is @hide, use the literal
+            val mode =
+                appOps.checkOpNoThrow(
+                    "android:use_full_screen_intent",
+                    Process.myUid(),
+                    context.packageName,
+                )
+            return isFullScreenIntentUsable(preflight, mode)
+        }
+
+        /**
+         * Decide whether full-screen intents are usable from the preflight result
+         * and the real appop mode.
+         *
+         * @param preflightAllowed result of [NotificationManager.canUseFullScreenIntent]
+         * @param appOpMode mode of the USE_FULL_SCREEN_INTENT appop
+         * @return true only when both the preflight check and the appop allow it
+         */
+        internal fun isFullScreenIntentUsable(
+            preflightAllowed: Boolean,
+            appOpMode: Int,
+        ): Boolean {
+            return preflightAllowed && appOpMode == AppOpsManager.MODE_ALLOWED
         }
 
         /**
@@ -165,7 +197,7 @@ class CallNotificationHelper
          * @param identityHash The caller's identity hash
          * @param callerName Display name of the caller
          */
-        fun showIncomingCallNotification(
+        override fun showIncomingCallNotification(
             identityHash: String,
             callerName: String?,
         ) {
@@ -334,9 +366,20 @@ class CallNotificationHelper
         /**
          * Cancel incoming call notification.
          */
-        fun cancelIncomingCallNotification() {
+        override fun cancelIncomingCallNotification() {
+            cancelTickCount.incrementAndGet()
             notificationManager.cancel(NOTIFICATION_ID_INCOMING_CALL)
         }
+
+        override val cancelTick: Long get() = cancelTickCount.get()
+
+        /**
+         * Backing counter for [IncomingCallNotifier.cancelTick]. Lives on the
+         * companion because cancel sites construct this helper directly
+         * (MainActivity, CallActionReceiver, IncomingCallActivity) rather than
+         * through DI; the tick must count every cancel process-wide.
+         */
+        private val cancelTickCount = java.util.concurrent.atomic.AtomicLong(0)
 
         /**
          * Cancel ongoing call notification.

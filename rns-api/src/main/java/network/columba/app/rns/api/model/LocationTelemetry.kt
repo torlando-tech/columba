@@ -61,6 +61,8 @@ data class LocationTelemetry(
     val approxRadius: Int = 0,
     val sourceHash: String? = null,
     val appearance: IconAppearance? = null,
+    /** True only when the telemetry payload came directly from [sourceHash]. */
+    val isDirect: Boolean = true,
 ) : Parcelable {
     companion object {
         const val TYPE_LOCATION_SHARE = "location_share"

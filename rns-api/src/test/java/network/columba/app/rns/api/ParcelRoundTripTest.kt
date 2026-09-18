@@ -3,18 +3,26 @@ package network.columba.app.rns.api
 import android.os.Parcel
 import android.os.Parcelable
 import network.columba.app.rns.api.model.AnnounceRestoreEntry
+import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.CallState
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.FileAttachment
 import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.Link
 import network.columba.app.rns.api.model.LinkEvent
 import network.columba.app.rns.api.model.LinkStatus
+import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.NetworkRestriction
+import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.model.PeerIdentityEntry
+import network.columba.app.rns.api.model.ReticulumConfig
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,6 +78,13 @@ class ParcelRoundTripTest {
     // ==================== RnsError ====================
 
     @Test
+    fun `DeliveryStatusUpdate round-trips typed lifecycle over Parcel`() {
+        val original = DeliveryStatusUpdate("message", DeliveryStatus.PROPAGATED, 123L, "identity-a")
+
+        assertEquals(original, roundTripViaFramework(original))
+    }
+
+    @Test
     fun `RnsError Generic round-trips`() {
         val original = RnsError.Generic("boom", "at foo(bar.kt:1)")
         val restored = roundTrip(original, RnsError.CREATOR)
@@ -121,6 +136,13 @@ class ParcelRoundTripTest {
     @Test
     fun `RnsError NomadnetPageNotFound round-trips`() {
         val original = RnsError.NomadnetPageNotFound("abc123", "/page/index.mu")
+        val restored = roundTrip(original, RnsError.CREATOR)
+        assertEquals(original, restored)
+    }
+
+    @Test
+    fun `RnsError NomadnetResponseTooLarge round-trips`() {
+        val original = RnsError.NomadnetResponseTooLarge("abc123", "/media/big.webp", 17_000_000L, 16_000_000L)
         val restored = roundTrip(original, RnsError.CREATOR)
         assertEquals(original, restored)
     }
@@ -234,17 +256,20 @@ class ParcelRoundTripTest {
     }
 
     @Test
-    fun `InterfaceConfig RNode round-trips with all nullables populated`() {
-        val original: InterfaceConfig = InterfaceConfig.RNode(
-            targetDeviceName = "RNode 1234",
-            usbDeviceId = 42,
-            usbVendorId = 0x1A86,
-            usbProductId = 0x7523,
-            stAlock = 1.5,
-            ltAlock = 2.0,
-        )
+    fun `InterfaceConfig RNode omits app-only address from parcel transport`() {
+        val original =
+            InterfaceConfig.RNode(
+                targetDeviceName = "RNode 1234",
+                targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
+                usbDeviceId = 42,
+                usbVendorId = 0x1A86,
+                usbProductId = 0x7523,
+                stAlock = 1.5,
+                ltAlock = 2.0,
+            )
         val restored = roundTrip(original, InterfaceConfig.CREATOR)
-        assertEquals(original, restored)
+        assertEquals(original.copy(targetDeviceAddress = null), restored)
+        assertNull((restored as InterfaceConfig.RNode).targetDeviceAddress)
     }
 
     @Test
@@ -252,6 +277,64 @@ class ParcelRoundTripTest {
         val original: InterfaceConfig = InterfaceConfig.RNode()
         val restored = roundTrip(original, InterfaceConfig.CREATOR)
         assertEquals(original, restored)
+    }
+
+    @Test
+    fun `InterfaceConfig RNode decodes legacy parcel without device address`() {
+        val parcel = Parcel.obtain()
+        try {
+            parcel.writeInt(2)
+            parcel.writeString("Legacy RNode")
+            parcel.writeInt(1)
+            parcel.writeString("RNode 1234")
+            parcel.writeString("ble")
+            parcel.writeString(null)
+            parcel.writeInt(7633)
+            repeat(3) { parcel.writeInt(0) }
+            parcel.writeLong(915000000)
+            parcel.writeInt(125000)
+            parcel.writeInt(7)
+            parcel.writeInt(7)
+            parcel.writeInt(5)
+            repeat(2) { parcel.writeInt(0) }
+            parcel.writeString("access_point")
+            parcel.writeString(null)
+            parcel.writeString(null)
+            parcel.writeInt(1)
+            parcel.writeParcelable(NetworkRestriction.ANY, 0)
+            parcel.setDataPosition(0)
+
+            val restored = InterfaceConfig.CREATOR.createFromParcel(parcel) as InterfaceConfig.RNode
+
+            assertEquals("RNode 1234", restored.targetDeviceName)
+            assertEquals("ble", restored.connectionMode)
+            assertEquals(915000000, restored.frequency)
+            assertNull(restored.targetDeviceAddress)
+        } finally {
+            parcel.recycle()
+        }
+    }
+
+    @Test
+    fun `ReticulumConfig transport omits RNode address without corrupting following interface`() {
+        val original =
+            ReticulumConfig(
+                storagePath = "/tmp/rns",
+                enabledInterfaces =
+                    listOf(
+                        InterfaceConfig.RNode(
+                            targetDeviceName = "RNode 1234",
+                            targetDeviceAddress = "AA:BB:CC:DD:EE:FF",
+                        ),
+                        InterfaceConfig.UDP(name = "Following UDP"),
+                    ),
+            )
+
+        val restored = roundTripViaFramework(original)
+
+        assertEquals(2, restored.enabledInterfaces.size)
+        assertNull((restored.enabledInterfaces[0] as InterfaceConfig.RNode).targetDeviceAddress)
+        assertEquals("Following UDP", (restored.enabledInterfaces[1] as InterfaceConfig.UDP).name)
     }
 
     @Test
@@ -297,6 +380,42 @@ class ParcelRoundTripTest {
         val original = AnnounceRestoreEntry("cafef00d", ByteArray(64) { (it * 2).toByte() })
         val restored = roundTripViaFramework(original)
         assertEquals(original, restored)
+    }
+
+    @Test
+    fun `AnnounceEvent provenance round-trips`() {
+        val original =
+            AnnounceEvent(
+                destinationHash = byteArrayOf(1, 2),
+                identity = Identity(byteArrayOf(3, 4), byteArrayOf(5, 6), null),
+                appData = byteArrayOf(7, 8),
+                hops = 2,
+                timestamp = 123L,
+                nodeType = NodeType.PEER,
+                announcePacketHash = byteArrayOf(9, 10),
+                isPathResponse = true,
+            )
+        val restored = roundTripViaFramework(original)
+
+        assertEquals(original, restored)
+        assertArrayEquals(original.announcePacketHash, restored.announcePacketHash)
+        assertTrue(restored.isPathResponse)
+    }
+
+    @Test
+    fun `LocationTelemetry preserves relayed provenance across parcel`() {
+        val original =
+            LocationTelemetry(
+                lat = 1.0,
+                lng = 2.0,
+                acc = 3f,
+                ts = 4L,
+                sourceHash = "peer",
+                isDirect = false,
+            )
+        val restored = roundTripViaFramework(original)
+        assertEquals(original, restored)
+        assertEquals(false, restored.isDirect)
     }
 
     // ==================== Helpers ====================

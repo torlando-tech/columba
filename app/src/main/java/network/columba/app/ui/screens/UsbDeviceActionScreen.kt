@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Memory
@@ -48,7 +50,10 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun UsbDeviceActionScreen(
     deviceName: String,
+    pyxisVersion: String? = null,
+    isEsp32S3Candidate: Boolean = false,
     onNavigateBack: () -> Unit,
+    onUpdatePyxis: () -> Unit,
     onFlashFirmware: () -> Unit,
     onConfigureRNode: () -> Unit,
     onConfigureTransport: () -> Unit,
@@ -149,9 +154,10 @@ fun UsbDeviceActionScreen(
                 modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(24.dp),
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.Top,
         ) {
             // USB icon
             Icon(
@@ -163,9 +169,9 @@ fun UsbDeviceActionScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Device name
+            // Device identity
             Text(
-                text = deviceName,
+                text = if (pyxisVersion != null) "Pyxis detected" else deviceName,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -174,7 +180,12 @@ fun UsbDeviceActionScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "What would you like to do?",
+                text =
+                    when {
+                        pyxisVersion != null -> "Firmware $pyxisVersion"
+                        isEsp32S3Candidate -> "ESP32-S3 device connected"
+                        else -> "What would you like to do?"
+                    },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -182,10 +193,34 @@ fun UsbDeviceActionScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Flash Firmware option
+            if (pyxisVersion != null || isEsp32S3Candidate) {
+                ActionCard(
+                    icon = Icons.Default.Memory,
+                    title = "Update Pyxis",
+                    description =
+                        if (pyxisVersion != null) {
+                            "Install a verified Pyxis firmware package on this device"
+                        } else {
+                            "Update an existing Pyxis installation on a T-Deck Plus"
+                        },
+                    onClick = onUpdatePyxis,
+                )
+
+                if (pyxisVersion != null) return@Column
+
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "RNode options",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Flash RNode Firmware option
             ActionCard(
                 icon = Icons.Default.Memory,
-                title = "Flash Firmware",
+                title = "Flash RNode Firmware",
                 description = "Update or install RNode firmware on this device",
                 onClick = onFlashFirmware,
             )

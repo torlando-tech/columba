@@ -1,16 +1,47 @@
 package network.columba.app.rns.backend.kt
 
+import android.util.Log
+import androidx.room.Room
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import network.columba.app.rns.api.model.AnnounceEvent
+import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatusEventStream
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.DestinationType
+import network.columba.app.rns.api.model.Direction
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.model.FailedInterface
 import network.columba.app.rns.api.model.IconAppearance
+import network.columba.app.rns.api.model.LinkEvent
+import network.columba.app.rns.api.model.LinkSpeedProbeResult
+import network.columba.app.rns.api.model.LinkStatus
 import network.columba.app.rns.api.model.LocationTelemetry
 import network.columba.app.rns.api.model.MessageReceipt
+import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.NodeType
+import network.columba.app.rns.api.model.PacketReceipt
+import network.columba.app.rns.api.model.PacketType
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
+import network.columba.app.rns.api.model.ReceivedPacket
+import network.columba.app.rns.api.model.ReticulumConfig
 import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.api.util.AppDataParser
 import network.columba.app.rns.api.util.Aspects
@@ -19,37 +50,7 @@ import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.isUserVisibleChatMessage
 import network.columba.app.rns.api.util.toHex
-
-import android.util.Log
-import androidx.room.Room
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import network.columba.app.rns.api.model.AnnounceEvent
-import network.columba.app.rns.api.model.BatteryProfile
-import network.columba.app.rns.api.model.DestinationType
-import network.columba.app.rns.api.model.Direction
-import network.columba.app.rns.api.model.LinkEvent
-import network.columba.app.rns.api.model.LinkSpeedProbeResult
-import network.columba.app.rns.api.model.LinkStatus
-import network.columba.app.rns.api.model.NetworkStatus
-import network.columba.app.rns.api.model.NodeType
-import network.columba.app.rns.api.model.PacketReceipt
-import network.columba.app.rns.api.model.PacketType
-import network.columba.app.rns.api.model.ReceivedPacket
-import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.backend.kt.BuildConfig
 import network.reticulum.Reticulum
 import network.reticulum.common.DestinationDirection
 import network.reticulum.lxmf.LXMRouter
@@ -57,7 +58,6 @@ import network.reticulum.lxmf.LXMessage
 import network.reticulum.transport.Transport
 import org.json.JSONObject
 import org.msgpack.core.MessagePack
-import network.columba.app.rns.backend.kt.BuildConfig
 import network.columba.app.rns.api.model.Destination as ColumbaDestination
 import network.columba.app.rns.api.model.Identity as ColumbaIdentity
 import network.columba.app.rns.api.model.Link as ColumbaLink
@@ -100,6 +100,12 @@ class NativeRnsBackendImpl(
      * allowed through (preserves the pre-feature behaviour).
      */
     private val callPrivacyBridge: CallPrivacyBridge? = null,
+    /**
+     * Service-local call lifecycle admission boundary for native telephony.
+     * Supplied by the kotlinBackend Hilt module. Null in unit-test mode →
+     * native incoming admission is unavailable (call managers not constructed).
+     */
+    private val callLifecycleRecorder: network.columba.app.rns.api.call.CallLifecycleRecorder? = null,
 ) : network.columba.app.rns.api.RnsCore,
     network.columba.app.rns.api.RnsLxmf,
     network.columba.app.rns.api.RnsTelephony,
@@ -108,6 +114,7 @@ class NativeRnsBackendImpl(
     network.columba.app.rns.api.RnsTransportAdmin {
     companion object {
         private const val TAG = "NativeReticulumProtocol"
+
         // Upstream LXMF FIELD_CUSTOM_META — see NativeTelemetryHandler /
         // LocationTelemetry.COLUMBA_META_FIELD_ID. 0xFD is the documented
         // app-extension point; 0x70 was a non-canonical invention.
@@ -250,6 +257,9 @@ class NativeRnsBackendImpl(
     private val blockedDestinations =
         java.util.concurrent.ConcurrentHashMap
             .newKeySet<String>()
+    private val blockedIdentities =
+        java.util.concurrent.ConcurrentHashMap
+            .newKeySet<String>()
     private val blackholedIdentities =
         java.util.concurrent.ConcurrentHashMap
             .newKeySet<String>()
@@ -270,7 +280,7 @@ class NativeRnsBackendImpl(
 
     private val _announces = MutableSharedFlow<AnnounceEvent>(extraBufferCapacity = 64)
     private val _messages = MutableSharedFlow<ReceivedMessage>(extraBufferCapacity = 64)
-    private val _deliveryStatus = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 64)
+    private val deliveryStatusEvents = DeliveryStatusEventStream()
     private val _locationTelemetryFlow = MutableSharedFlow<LocationTelemetry>(extraBufferCapacity = 64)
     private val _reactionReceivedFlow = MutableSharedFlow<String>(extraBufferCapacity = 64)
     private val _packets = MutableSharedFlow<ReceivedPacket>(extraBufferCapacity = 16)
@@ -310,7 +320,9 @@ class NativeRnsBackendImpl(
     override val callState: StateFlow<CallState> = _callState.asStateFlow()
 
     private val callCoordinator: tech.torlando.lxst.core.CallCoordinator
-        get() = tech.torlando.lxst.core.CallCoordinator.getInstance()
+        get() =
+            tech.torlando.lxst.core.CallCoordinator
+                .getInstance()
 
     override val remoteIdentity: StateFlow<String?>
         get() = callCoordinator.remoteIdentity
@@ -342,7 +354,7 @@ class NativeRnsBackendImpl(
             routerProvider = { router },
             deliveryIdentityProvider = { deliveryIdentity },
             deliveryDestinationProvider = { deliveryDestination },
-            deliveryStatusFlow = _deliveryStatus,
+            deliveryStatusEvents = deliveryStatusEvents,
             scopeProvider = { scope },
         )
     }
@@ -357,6 +369,8 @@ class NativeRnsBackendImpl(
                     destinationHash = destHash,
                     content = content,
                     deliveryMethod = method,
+                    originatingIdentityHash =
+                        requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
                     options = NativeMessageSender.MessageOptions(extraFields = extraFields),
                 )
             },
@@ -417,6 +431,19 @@ class NativeRnsBackendImpl(
                 storagePath = config.storagePath,
             )
 
+        // Apply the persisted incoming-message size limit to the fresh router
+        // BEFORE the delivery destination is registered, so the first DIRECT
+        // resource advertisement is evaluated against the user's configured
+        // gate rather than the router's built-in default (columba#1106
+        // startup window). null = host did not supply a limit (keep default).
+        config.incomingMessageSizeLimitKb?.let { limitKb ->
+            runCatching {
+                router!!.incomingMessageSizeLimitKb = if (limitKb > 0) limitKb.toInt() else null
+            }.onFailure {
+                Log.w(TAG, "Failed to prime incoming message size limit: ${it.message}", it)
+            }
+        }
+
         deliveryDestination =
             router!!.registerDeliveryIdentity(
                 identity = identity,
@@ -425,11 +452,6 @@ class NativeRnsBackendImpl(
 
         router!!.registerDeliveryCallback { message ->
             handleIncomingMessage(message)
-        }
-
-        router!!.registerFailedDeliveryCallback { message ->
-            val hash = message.hash?.toHex() ?: return@registerFailedDeliveryCallback
-            _deliveryStatus.tryEmit(DeliveryStatusUpdate(hash, "failed", System.currentTimeMillis()))
         }
 
         return identity
@@ -570,19 +592,7 @@ class NativeRnsBackendImpl(
                 dozeThrottleMultiplier = 1.0f
                 Log.i(TAG, "Initializing native Reticulum stack")
 
-                // Heads-up if another RNS instance is on the device.
-                // reticulum-kt does not currently speak shared-instance RPC
-                // (the python flavor does); the warning makes a future
-                // multicast collision diagnosable instead of mysterious.
-                if (network.columba.app.rns.api.util.SharedInstanceProbe.shouldShareInstance(config)) {
-                    Log.w(
-                        TAG,
-                        "Another RNS instance detected on 127.0.0.1:" +
-                            "${network.columba.app.rns.api.util.SharedInstanceProbe.DEFAULT_PORT}; " +
-                            "reticulum-kt doesn't currently speak shared-instance RPC, so native " +
-                            "interfaces may collide. Consider preferOwnInstance=true or stopping the other RNS app.",
-                    )
-                }
+                warnIfOtherRnsInstance(config)
 
                 initializePersistentStores(config.storagePath)
 
@@ -741,6 +751,25 @@ class NativeRnsBackendImpl(
             }
         }
 
+    /**
+     * Heads-up if another RNS instance is on the device. reticulum-kt does not
+     * currently speak shared-instance RPC (the python flavor does); the warning
+     * makes a future multicast collision diagnosable instead of mysterious.
+     */
+    private fun warnIfOtherRnsInstance(config: ReticulumConfig) {
+        if (network.columba.app.rns.api.util.SharedInstanceProbe
+                .shouldShareInstance(config)
+        ) {
+            Log.w(
+                TAG,
+                "Another RNS instance detected on 127.0.0.1:" +
+                    "${network.columba.app.rns.api.util.SharedInstanceProbe.DEFAULT_PORT}; " +
+                    "reticulum-kt doesn't currently speak shared-instance RPC, so native " +
+                    "interfaces may collide. Consider preferOwnInstance=true or stopping the other RNS app.",
+            )
+        }
+    }
+
     // ==================== Phase 1: Announce Handling ====================
 
     private fun registerAnnounceHandlers() {
@@ -757,9 +786,18 @@ class NativeRnsBackendImpl(
                     hops: Int,
                     receivingInterfaceName: String?,
                     matchedAspect: String?,
+                    announcePacketHash: ByteArray?,
                 ): Boolean {
                     if (matchedAspect == null) return false // unknown aspect — not an app we handle
-                    handleAnnounce(matchedAspect, destinationHash, announcedIdentity, appData, hops, receivingInterfaceName)
+                    handleAnnounce(
+                        matchedAspect,
+                        destinationHash,
+                        announcedIdentity,
+                        appData,
+                        hops,
+                        receivingInterfaceName,
+                        announcePacketHash,
+                    )
                     return true
                 }
             },
@@ -849,6 +887,7 @@ class NativeRnsBackendImpl(
         appData: ByteArray?,
         announceHops: Int = 0,
         receivingInterfaceName: String? = null,
+        announcePacketHash: ByteArray? = null,
     ) {
         val destHex = destinationHash.toHex()
         if (blockedDestinations.contains(destHex) || blackholedIdentities.contains(announcedIdentity.hexHash)) return
@@ -872,6 +911,7 @@ class NativeRnsBackendImpl(
                 stampCostFlexibility = stampMeta.second,
                 peeringCost = stampMeta.third,
                 receivingInterface = receivingInterfaceName,
+                announcePacketHash = announcePacketHash,
             )
 
         _announces.tryEmit(event)
@@ -1040,7 +1080,7 @@ class NativeRnsBackendImpl(
 
     override fun observeMessages(): Flow<ReceivedMessage> = _messages.asSharedFlow()
 
-    override fun observeDeliveryStatus(): Flow<DeliveryStatusUpdate> = _deliveryStatus.asSharedFlow()
+    override fun observeDeliveryStatus(): Flow<DeliveryStatusUpdate> = deliveryStatusEvents.events
 
     // ==================== Phase 1: Path & Transport Queries ====================
 
@@ -1210,6 +1250,8 @@ class NativeRnsBackendImpl(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = DeliveryMethod.DIRECT,
+            originatingIdentityHash =
+                requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
             options =
                 NativeMessageSender.MessageOptions(
                     imageData = imageData,
@@ -1236,6 +1278,8 @@ class NativeRnsBackendImpl(
             destinationHash = destinationHash,
             content = content,
             deliveryMethod = deliveryMethod,
+            originatingIdentityHash =
+                requireNotNull(deliveryIdentity?.hash) { "Delivery identity not initialized" }.toHex(),
             options =
                 NativeMessageSender.MessageOptions(
                     tryPropagationOnFail = tryPropagationOnFail,
@@ -1347,19 +1391,20 @@ class NativeRnsBackendImpl(
      */
     private fun startPropagationPoll() {
         propagationPollJob?.cancel()
-        propagationPollJob = scope.launch(Dispatchers.IO) {
-            val r = router ?: return@launch
-            try {
-                while (isActive) {
-                    val snap = readPropagationState(r)
-                    _propagationStateFlow.tryEmit(snap)
-                    if (snap.state >= PropagationState.STATE_COMPLETE) break
-                    kotlinx.coroutines.delay(PROPAGATION_POLL_INTERVAL_MS)
+        propagationPollJob =
+            scope.launch(Dispatchers.IO) {
+                val r = router ?: return@launch
+                try {
+                    while (isActive) {
+                        val snap = readPropagationState(r)
+                        _propagationStateFlow.tryEmit(snap)
+                        if (snap.state >= PropagationState.STATE_COMPLETE) break
+                        kotlinx.coroutines.delay(PROPAGATION_POLL_INTERVAL_MS)
+                    }
+                } finally {
+                    propagationPollJob = null
                 }
-            } finally {
-                propagationPollJob = null
             }
-        }
     }
 
     // ==================== Phase 2: Reactions & Telemetry Stubs ====================
@@ -1406,7 +1451,8 @@ class NativeRnsBackendImpl(
         // peers consume is byte-identical across both Columba backends.
         val fields = mutableMapOf<Int, Any>()
         fields[LxmfFields.FIELD_TELEMETRY] =
-            network.columba.app.rns.api.util.TelemeterCodec.packLocationTelemetry(telemetry)
+            network.columba.app.rns.api.util.TelemeterCodec
+                .packLocationTelemetry(telemetry)
         network.columba.app.rns.api.util.TelemeterCodec.packColumbaMeta(telemetry)?.let {
             fields[FIELD_COLUMBA_META] = it
         }
@@ -1432,7 +1478,8 @@ class NativeRnsBackendImpl(
         // first-request null to 0 so we never ship int(None) into the list.
         // See TelemeterCodec.telemetryRequestTimebaseSeconds. (#927)
         val timebaseSeconds =
-            network.columba.app.rns.api.util.TelemeterCodec.telemetryRequestTimebaseSeconds(timebase)
+            network.columba.app.rns.api.util.TelemeterCodec
+                .telemetryRequestTimebaseSeconds(timebase)
         val commands =
             listOf(
                 mapOf(
@@ -2022,12 +2069,17 @@ class NativeRnsBackendImpl(
 
     private fun setupNativeTelephone(identity: NativeIdentity) {
         val ctx = appContext ?: return
-        val manager = NativeCallManager(
-            context = ctx,
-            deliveryIdentity = identity,
-            transport = callTransport,
-            callPrivacyBridge = callPrivacyBridge,
-        )
+        val manager =
+            NativeCallManager(
+                context = ctx,
+                deliveryIdentity = identity,
+                transport = callTransport,
+                recorder =
+                    requireNotNull(callLifecycleRecorder) {
+                        "CallLifecycleRecorder is required when native telephony is initialized"
+                    },
+                callPrivacyBridge = callPrivacyBridge,
+            )
         manager.setup()
         callManager = manager
         // Wire the AIDL master-toggle hook now that the manager exists.
@@ -2200,6 +2252,17 @@ class NativeRnsBackendImpl(
         nomadNetHandler.requestStatusFlow.value = "cancelled"
     }
 
+    override suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+        maxBytes: Long,
+    ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> =
+        nomadNetHandler.requestNomadnetMedia(destinationHash, path, timeoutSeconds, maxBytes)
+
+    override suspend fun getNomadnetLinkStats(destinationHash: String): network.columba.app.rns.api.model.NomadnetLinkStats? =
+        nomadNetHandler.getLinkStats(destinationHash)
+
     override suspend fun getNomadnetRequestStatus(): String = nomadNetHandler.requestStatusFlow.value
 
     override suspend fun getNomadnetDownloadProgress(): Float = nomadNetHandler.downloadProgressFlow.value
@@ -2231,6 +2294,12 @@ class NativeRnsBackendImpl(
             Log.d(TAG, "Unblocked destination: ${destinationHashHex.take(16)}")
         }
 
+    override suspend fun blockIdentity(identityHashHex: String): Result<Unit> =
+        runCatching { blockedIdentities.add(identityHashHex.lowercase()); Unit }
+
+    override suspend fun unblockIdentity(identityHashHex: String): Result<Unit> =
+        runCatching { blockedIdentities.remove(identityHashHex.lowercase()); Unit }
+
     override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
         runCatching {
             blackholedIdentities.add(identityHashHex)
@@ -2253,11 +2322,9 @@ class NativeRnsBackendImpl(
     // future helpers — for now we acknowledge the call by reporting
     // `entries.size` so call sites that block on a real count don't spin.
 
-    override suspend fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> =
-        Result.success(peerIdentities.size)
+    override suspend fun restorePeerIdentities(peerIdentities: List<Pair<String, ByteArray>>): Result<Int> = Result.success(peerIdentities.size)
 
-    override suspend fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> =
-        Result.success(announces.size)
+    override suspend fun restoreAnnounceIdentities(announces: List<Pair<String, ByteArray>>): Result<Int> = Result.success(announces.size)
 
     // ==================== RnsTransportAdmin: RNode + BLE diagnostics ====================
 
@@ -2266,6 +2333,12 @@ class NativeRnsBackendImpl(
      * (matches the noise-floor sentinel today's UI assumes).
      */
     override fun getRNodeRssi(): Int = -100
+
+    /**
+     * No RNode battery read in the Kotlin backend (deferred). Returns the
+     * absent sentinel so the shared UI needs no "unsupported backend" branch.
+     */
+    override suspend fun getRNodeBattery(): Int = -1
 
     /**
      * JSON snapshot of BLE peers. Empty array when no peers are connected.
@@ -2286,4 +2359,7 @@ class NativeRnsBackendImpl(
      * counterpart, gated by `BackendCapabilities.PerformanceCaps.shareInstanceHosting`.
      */
     override suspend fun isHostingSharedInstance(): Boolean = false
+
+    /** Shared-instance hosting and its access configuration are unsupported here. */
+    override suspend fun getSharedInstanceAccessConfig(): String? = null
 }

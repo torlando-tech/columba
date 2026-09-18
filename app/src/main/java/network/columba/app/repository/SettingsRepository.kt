@@ -35,12 +35,23 @@ import network.columba.app.rns.host.persistence.ServiceSettingsAccessor
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.CustomTheme
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     name = "settings",
     corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
+
+/**
+ * The (node, path) pair of the last NomadNet page the user loaded, published as
+ * ONE consistent value so a reader can never see a node without its matching
+ * path. Both null on a fresh install (no page browsed yet).
+ */
+data class NomadNetLastPage(
+    val nodeHash: String?,
+    val viewPath: String?,
 )
 
 /**
@@ -87,6 +98,7 @@ class SettingsRepository
 
             // Theme preference
             val THEME_PREFERENCE = stringPreferencesKey("app_theme")
+            val THEME_MODE_PREFERENCE = stringPreferencesKey("theme_mode")
 
             // Shared instance preferences
             val PREFER_OWN_INSTANCE = booleanPreferencesKey("prefer_own_instance")
@@ -139,6 +151,11 @@ class SettingsRepository
             val MAP_MARKER_DECLUTTER_ENABLED = booleanPreferencesKey("map_marker_declutter_enabled")
             val MAP_STYLE_PREFERENCE = stringPreferencesKey("map_style_preference")
             val NOMADNET_RENDERING_MODE = stringPreferencesKey("nomadnet_rendering_mode")
+            val NOMADNET_IMAGE_LOADING_MODE = stringPreferencesKey("nomadnet_image_loading_mode")
+            val NOMADNET_LAST_NODE = stringPreferencesKey("nomadnet_last_node")
+            val NOMADNET_LAST_PATH = stringPreferencesKey("nomadnet_last_path")
+            val NOMADNET_AUTO_IDENTIFY_NODES = stringSetPreferencesKey("nomadnet_auto_identify_nodes")
+            val BOTTOM_NAV_TABS = stringPreferencesKey("bottom_nav_tabs")
             val HTTP_ENABLED_FOR_DOWNLOAD = booleanPreferencesKey("http_enabled_for_download")
 
             // Privacy preferences
@@ -164,7 +181,6 @@ class SettingsRepository
 
             // Update checker preferences
             val INCLUDE_PRERELEASE_UPDATES = booleanPreferencesKey("include_prerelease_updates")
-            val LAST_UPDATE_CHECK_TIME = longPreferencesKey("last_update_check_time")
 
             // Message sort order: false = received time (default), true = sent time
             val SORT_MESSAGES_BY_SENT_TIME = booleanPreferencesKey("sort_messages_by_sent_time")
@@ -760,6 +776,30 @@ class SettingsRepository
         suspend fun saveThemePreferenceByIdentifier(identifier: String) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.THEME_PREFERENCE] = identifier
+            }
+        }
+
+        // Theme mode preference
+
+        /**
+         * Flow of the selected theme mode (System/Light/Dark).
+         * Defaults to SYSTEM if not set or if the stored value is invalid,
+         * preserving the original system-following behavior.
+         */
+        val themeModeFlow: Flow<ThemeMode> =
+            context.dataStore.data
+                .map { preferences ->
+                    ThemeMode.fromIdentifier(preferences[PreferencesKeys.THEME_MODE_PREFERENCE])
+                }
+
+        /**
+         * Save the theme mode.
+         *
+         * @param mode The theme mode to apply
+         */
+        suspend fun saveThemeModePreference(mode: ThemeMode) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.THEME_MODE_PREFERENCE] = mode.name
             }
         }
 
@@ -1454,6 +1494,175 @@ class SettingsRepository
         }
 
         /**
+         * Flow of the NomadNet image loading mode ("never" | "manual" |
+         * "auto" | "always"; upstream `image_loading` mirror). Null when
+         * unset — callers default to auto.
+         */
+        val nomadNetImageLoadingModeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences -> preferences[PreferencesKeys.NOMADNET_IMAGE_LOADING_MODE] }
+                .distinctUntilChanged()
+
+        /** Persist the NomadNet image loading mode (lowercase name). */
+        suspend fun saveNomadNetImageLoadingMode(modeName: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.NOMADNET_IMAGE_LOADING_MODE] = modeName.lowercase()
+            }
+        }
+
+        /**
+         * The (node, path) pair of the last NomadNet page the user loaded, read
+         * as ONE consistent snapshot, or both null when none. The bottom-nav
+         * NomadNet tab navigates here so the tab reopens the exact page the user
+         * left on; a fresh install falls back to the caller-provided default
+         * entry node.
+         *
+         * Read from a SINGLE DataStore emission (both keys in one
+         * [Map]), not two separate mapped flows: two independent flows can
+         * publish the node and path as separate [StateFlow] updates, so a
+         * reader (the NomadNet home screen) could observe a new node with a
+         * stale or null path and start loading a mismatched pair before the
+         * corrected update lands. One combined emission guarantees the pair is
+         * always consistent. [distinctUntilChanged] suppresses duplicate
+         * emissions so the home screen only reloads when the pair genuinely
+         * changes.
+         */
+        val nomadNetLastPageFlow: Flow<NomadNetLastPage> =
+            context.dataStore.data
+                .map { preferences ->
+                    NomadNetLastPage(
+                        nodeHash = preferences[PreferencesKeys.NOMADNET_LAST_NODE],
+                        viewPath = preferences[PreferencesKeys.NOMADNET_LAST_PATH],
+                    )
+                }
+                .distinctUntilChanged()
+
+        /**
+         * Remember the destination hash and path of the most recently loaded
+         * NomadNet page. Both keys are written in a single edit so the (node,
+         * path) pair is always consistent. [whileActive] is evaluated inside the
+         * DataStore transaction (under the edit mutex), so callers can guard
+         * against a concurrent [clearNomadNetLastNodeHash] resurrecting a
+         * just-closed site: either the predicate fails and nothing is written,
+         * or the write lands before any later clear and is properly erased by it.
+         */
+        suspend fun saveNomadNetLastNodeHash(
+            nodeHash: String,
+            viewPath: String = DEFAULT_NOMADNET_PATH,
+            whileActive: () -> Boolean = { true },
+        ) {
+            if (nodeHash.isBlank()) return
+            context.dataStore.edit { preferences ->
+                if (whileActive()) {
+                    preferences[PreferencesKeys.NOMADNET_LAST_NODE] = nodeHash
+                    preferences[PreferencesKeys.NOMADNET_LAST_PATH] = viewPath
+                }
+            }
+        }
+
+        /**
+         * Forget the last-browsed NomadNet page (Close Site). The bottom-nav
+         * NomadNet tab then reopens at the address-entry prompt instead of the
+         * closed site. Both the node and path keys are cleared so a stale deep
+         * path can never resurrect the closed site.
+         */
+        suspend fun clearNomadNetLastNodeHash() {
+            context.dataStore.edit { preferences ->
+                preferences.remove(PreferencesKeys.NOMADNET_LAST_NODE)
+                preferences.remove(PreferencesKeys.NOMADNET_LAST_PATH)
+            }
+        }
+
+        /**
+         * Flow of the destination hashes of NomadNet nodes the user opted into
+         * auto-identification for ("Always identify to this node"). The browser
+         * automatically sends its identify request to these nodes on every page
+         * load, so services that require identification keep working without a
+         * tap. Only normalized 32-char hex hashes are kept.
+         */
+        val nomadNetAutoIdentifyNodesFlow: Flow<Set<String>> =
+            context.dataStore.data
+                .map { preferences ->
+                    normalizeNomadNetNodeHashes(preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] ?: emptySet())
+                }.distinctUntilChanged()
+
+        /**
+         * Get the auto-identify node set (non-flow).
+         */
+        suspend fun getNomadNetAutoIdentifyNodes(): Set<String> =
+            context.dataStore.data
+                .map { preferences ->
+                    normalizeNomadNetNodeHashes(preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] ?: emptySet())
+                }.first()
+
+        /**
+         * Persist the set of nodes to auto-identify to. Empty set removes the
+         * key so an exhausted set does not linger in backups.
+         */
+        suspend fun saveNomadNetAutoIdentifyNodes(nodeHashes: Set<String>) {
+            val normalized = normalizeNomadNetNodeHashes(nodeHashes)
+            context.dataStore.edit { preferences ->
+                if (normalized.isEmpty()) {
+                    preferences.remove(PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES)
+                } else {
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] = normalized
+                }
+            }
+        }
+
+        private fun normalizeNomadNetNodeHashes(nodeHashes: Set<String>): Set<String> {
+            val hex32 = Regex("^[0-9a-f]{32}$")
+            return nodeHashes
+                .asSequence()
+                .map { it.trim().lowercase() }
+                .filter { hex32.matches(it) }
+                .toSet()
+        }
+
+        /**
+         * Atomically add or remove [nodeHash] from the auto-identify set. The
+         * read-modify-write happens inside a single DataStore edit, so
+         * overlapping toggles from different screens (browser dialog vs the
+         * Node Details card) each observe the latest persisted set instead of
+         * clobbering each other's writes from a stale local snapshot.
+         */
+        suspend fun setNomadNetAutoIdentifyNode(nodeHash: String, enabled: Boolean) {
+            val normalized = normalizeNomadNetNodeHashes(setOf(nodeHash)).firstOrNull() ?: return
+            context.dataStore.edit { preferences ->
+                val current =
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES]
+                        ?.let { normalizeNomadNetNodeHashes(it) }
+                        ?: emptySet()
+                val next = if (enabled) current + normalized else current - normalized
+                if (next.isEmpty()) {
+                    preferences.remove(PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES)
+                } else {
+                    preferences[PreferencesKeys.NOMADNET_AUTO_IDENTIFY_NODES] = next
+                }
+            }
+        }
+
+        /**
+         * Flow of the user-configured bottom navigation tabs, stored as a
+         * comma-separated list of [network.columba.app.navigation.NavTab] ids.
+         * Emits null before first configuration; consumers map through
+         * [network.columba.app.navigation.NavTab.sanitize] for a normalized list.
+         */
+        val bottomNavTabsFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences -> preferences[PreferencesKeys.BOTTOM_NAV_TABS] }
+                .distinctUntilChanged()
+
+        /**
+         * Persist the bottom navigation tab layout as a comma-separated id list.
+         */
+        suspend fun saveBottomNavTabs(csv: String) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.BOTTOM_NAV_TABS] = csv
+            }
+        }
+
+        /**
          * Flow of the map marker declutter enabled setting.
          * When enabled (default), overlapping markers are spread to improve readability.
          */
@@ -1821,6 +2030,11 @@ class SettingsRepository
         companion object {
             /** Default incoming message size limit: 1MB */
             const val DEFAULT_INCOMING_SIZE_LIMIT_KB = 1024
+
+            /** NomadNet entry path - a node's index page. Used when a last-browsed
+             *  node has no recorded deep path (e.g. it was first reached via a deep
+             *  link or a pre-path-save session). */
+            const val DEFAULT_NOMADNET_PATH = "/page/index.mu"
 
             /** Minimum incoming message size limit: 512KB */
             const val MIN_INCOMING_SIZE_LIMIT_KB = 512
@@ -2238,14 +2452,6 @@ class SettingsRepository
         suspend fun setIncludePrereleaseUpdates(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.INCLUDE_PRERELEASE_UPDATES] = enabled
-            }
-        }
-
-        suspend fun getLastUpdateCheckTime(): Long = context.dataStore.data.first()[PreferencesKeys.LAST_UPDATE_CHECK_TIME] ?: 0L
-
-        suspend fun setLastUpdateCheckTime(time: Long) {
-            context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.LAST_UPDATE_CHECK_TIME] = time
             }
         }
 

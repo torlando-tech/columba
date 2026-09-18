@@ -2,6 +2,7 @@ package network.columba.app.rns.api
 
 import network.columba.app.rns.api.BackendCapabilities.BackendId
 import network.columba.app.rns.api.BackendCapabilities.InterfaceCaps
+import network.columba.app.rns.api.BackendCapabilities.MessagingCaps
 import network.columba.app.rns.api.BackendCapabilities.PerformanceCaps
 import network.columba.app.rns.api.BackendCapabilities.Support
 import network.columba.app.rns.api.BackendCapabilities.TelemetryCaps
@@ -19,6 +20,8 @@ class BackendCapabilitiesTest {
         assert(caps.interfaces.hotReloadInterfaces)
         assertEquals(Support.FULL, caps.performance.batteryProfileTuning)
         assertEquals(Support.FULL, caps.telemetry.collectorHostMode)
+        assertEquals(Support.UNSUPPORTED, caps.messaging.outgoingResourceProgress)
+        assertEquals(Support.UNSUPPORTED, caps.messaging.incomingDirectResourceProgress)
         assert(!caps.performance.sharedInstanceAvailabilityChecks)
         assert(!caps.performance.shareInstanceHosting)
     }
@@ -31,6 +34,8 @@ class BackendCapabilitiesTest {
         assertEquals(Support.UNSUPPORTED, caps.performance.batteryProfileTuning)
         // Telemetry collector host mode is the well-tested reference path on python.
         assertEquals(Support.FULL, caps.telemetry.collectorHostMode)
+        assertEquals(Support.FULL, caps.messaging.outgoingResourceProgress)
+        assertEquals(Support.FULL, caps.messaging.incomingDirectResourceProgress)
         assert(caps.performance.sharedInstanceAvailabilityChecks)
         assert(caps.performance.shareInstanceHosting)
     }
@@ -86,6 +91,10 @@ class BackendCapabilitiesTest {
                     storeOwnTelemetry = Support.FULL,
                     allowedRequestersFilter = Support.FULL,
                 ),
+            messaging = MessagingCaps(
+                outgoingResourceProgress = Support.UNSUPPORTED,
+                incomingDirectResourceProgress = Support.UNSUPPORTED,
+            ),
             performance =
                 PerformanceCaps(
                     batteryProfileTuning = Support.FULL,
@@ -105,6 +114,10 @@ class BackendCapabilitiesTest {
                     storeOwnTelemetry = Support.FULL,
                     allowedRequestersFilter = Support.FULL,
                 ),
+            messaging = MessagingCaps(
+                outgoingResourceProgress = Support.FULL,
+                incomingDirectResourceProgress = Support.FULL,
+            ),
             performance =
                 PerformanceCaps(
                     batteryProfileTuning = Support.UNSUPPORTED,

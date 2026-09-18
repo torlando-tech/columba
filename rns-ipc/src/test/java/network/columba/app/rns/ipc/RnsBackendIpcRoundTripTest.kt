@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import network.columba.app.rns.api.BackendCapabilities
 import network.columba.app.rns.api.RnsBackend
@@ -27,6 +28,7 @@ import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.ConversationLinkResult
 import network.columba.app.rns.api.model.DeliveryMethod
+import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
 import network.columba.app.rns.api.model.Destination
 import network.columba.app.rns.api.model.DestinationType
@@ -42,6 +44,7 @@ import network.columba.app.rns.api.model.LinkSpeedProbeResult
 import network.columba.app.rns.api.model.LinkStatus
 import network.columba.app.rns.api.model.MessageReceipt
 import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.NomadnetLinkStats
 import network.columba.app.rns.api.model.NomadnetPageResult
 import network.columba.app.rns.api.model.PacketReceipt
 import network.columba.app.rns.api.model.PacketType
@@ -49,6 +52,8 @@ import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.ReceivedPacket
 import network.columba.app.rns.api.model.ReticulumConfig
+import network.columba.app.rns.api.model.TransferPhase
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.api.model.VoiceCallState
 import kotlinx.coroutines.flow.Flow
 import org.junit.After
@@ -101,6 +106,94 @@ class RnsBackendIpcRoundTripTest {
         advanceUntilIdle()
 
         assertEquals(1, fake.telephony.hangupCount)
+    }
+
+    @Test
+    fun `nullable shared instance access config round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        val expected = "[reticulum]\n  share_instance = yes\n  rpc_key = 00ff\n"
+        fake.transportAdminFake.sharedInstanceAccessConfig = expected
+
+        assertEquals(expected, client.transportAdmin.getSharedInstanceAccessConfig())
+
+        fake.transportAdminFake.sharedInstanceAccessConfig = null
+        assertEquals(null, client.transportAdmin.getSharedInstanceAccessConfig())
+    }
+
+    @Test
+    fun `rnodeBattery round-trips a live value through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        fake.transportAdminFake.batteryResult = 82
+
+        assertEquals(82, client.transportAdmin.getRNodeBattery())
+    }
+
+    @Test
+    fun `rnodeBattery round-trips the absent sentinel through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        fake.transportAdminFake.batteryResult = -1
+
+        assertEquals(-1, client.transportAdmin.getRNodeBattery())
+    }
+
+    @Test
+    fun `delivery attempt identity round-trips through advisory IPC`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        val expected = DeliveryStatusUpdate("message", DeliveryStatus.DELIVERED, 123L, "identity-a")
+
+        client.lxmf.observeDeliveryStatus().test {
+            runCurrent()
+            fake.lxmf.deliveryStatus.emit(expected)
+            runCurrent()
+            assertEquals(expected, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `identity import success map round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        val keyData = ByteArray(64) { it.toByte() }
+        val publicKey = ByteArray(64) { (it + 1).toByte() }
+        fake.core.nextImportResult =
+            mapOf(
+                "success" to true,
+                "identity_hash" to "bab3608daf86147268c8ef9bf62c0e08",
+                "destination_hash" to "73908a7266dd03521b47f2473f38481b",
+                "display_name" to "Anonymous Peer",
+                "public_key" to publicKey,
+                "key_data" to keyData,
+                "file_path" to "",
+            )
+
+        val result = client.core.importIdentityFile(keyData, "Anonymous Peer")
+        advanceUntilIdle()
+
+        assertEquals(true, result["success"])
+        assertEquals("bab3608daf86147268c8ef9bf62c0e08", result["identity_hash"])
+        assertEquals("73908a7266dd03521b47f2473f38481b", result["destination_hash"])
+        assertArrayEquals(keyData, result["key_data"] as ByteArray)
+        assertArrayEquals(publicKey, result["public_key"] as ByteArray)
+    }
+
+    @Test
+    fun `identity import error map round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        fake.core.nextImportResult =
+            mapOf(
+                "success" to false,
+                "error" to "Invalid identity data",
+            )
+
+        val result = client.core.importIdentityFile(ByteArray(64), "Anonymous Peer")
+        advanceUntilIdle()
+
+        assertEquals(false, result["success"])
+        assertEquals("Invalid identity data", result["error"])
     }
 
     @Test
@@ -161,6 +254,45 @@ class RnsBackendIpcRoundTripTest {
             fake.lxmf.incomingMessages.emit(message)
             advanceUntilIdle()
             assertEquals(message, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `interface status published before client setup is replayed across AIDL`() = runTest {
+        val payload = """{"updates":{"Test RNode":true}}"""
+        fake.transportAdminFake.emitInterfaceStatus(payload)
+
+        val (client, _) = buildClientAndServer()
+
+        client.transportAdmin.interfaceStatusFlow.test {
+            assertEquals(payload, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `transfer progress observer round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+        val update = TransferProgressUpdate(
+            transferId = "resource-1",
+            messageHash = null,
+            sourceDestinationHash = "aabbcc",
+            direction = Direction.IN,
+            progress = 0.64f,
+            phase = TransferPhase.TRANSFERRING,
+            totalBytes = 4_800_000L,
+            deliveryMethod = DeliveryMethod.DIRECT,
+            currentAttempt = 2,
+            maxAttempts = 5,
+        )
+
+        client.lxmf.observeTransferProgress().test {
+            advanceUntilIdle()
+            fake.lxmf.transferProgress.emit(update)
+            advanceUntilIdle()
+            assertEquals(update, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -345,12 +477,13 @@ private class FakeRnsBackend : RnsBackend {
     )
 
     override val capabilities: StateFlow<BackendCapabilities> get() = capabilitiesState.asStateFlow()
-    override val core: RnsCore = FakeRnsCore()
+    override val core: FakeRnsCore = FakeRnsCore()
     override val lxmf: FakeRnsLxmf = FakeRnsLxmf()
     override val telephony: FakeRnsTelephony = FakeRnsTelephony()
     override val telemetry: RnsTelemetry = FakeRnsTelemetry()
     override val nomadnet: RnsNomadnet = FakeRnsNomadnet()
-    override val transportAdmin: RnsTransportAdmin = FakeRnsTransportAdmin()
+    val transportAdminFake = FakeRnsTransportAdmin()
+    override val transportAdmin: RnsTransportAdmin = transportAdminFake
 }
 
 private class FakeRnsTelephony : RnsTelephony {
@@ -413,7 +546,8 @@ private class FakeRnsTelephony : RnsTelephony {
 
 private class FakeRnsLxmf : RnsLxmf {
     val incomingMessages: MutableSharedFlow<ReceivedMessage> = MutableSharedFlow(extraBufferCapacity = 8)
-    private val deliveryStatus: MutableSharedFlow<DeliveryStatusUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
+    val deliveryStatus: MutableSharedFlow<DeliveryStatusUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
+    val transferProgress: MutableSharedFlow<TransferProgressUpdate> = MutableSharedFlow(extraBufferCapacity = 8)
     private val propagation: MutableSharedFlow<PropagationState> = MutableSharedFlow(extraBufferCapacity = 8)
 
     // Last-send capture so tests can assert exactly what reached the backend
@@ -475,6 +609,7 @@ private class FakeRnsLxmf : RnsLxmf {
 
     override fun observeMessages(): Flow<ReceivedMessage> = incomingMessages
     override fun observeDeliveryStatus(): Flow<DeliveryStatusUpdate> = deliveryStatus
+    override fun observeTransferProgress(): Flow<TransferProgressUpdate> = transferProgress
 
     override suspend fun getLxmfIdentity(): Result<Identity> = Result.failure(NotImplementedError())
     override suspend fun getLxmfDestination(): Result<Destination> = Result.failure(NotImplementedError())
@@ -496,6 +631,7 @@ private class FakeRnsLxmf : RnsLxmf {
 
 /** Minimal stubs for the unused-in-tests sub-interfaces. */
 private class FakeRnsCore : RnsCore {
+    var nextImportResult: Map<String, Any> = emptyMap()
     private val status = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
     override val networkStatus: StateFlow<NetworkStatus> get() = status.asStateFlow()
     override suspend fun initialize(config: ReticulumConfig) = Result.success(Unit)
@@ -505,7 +641,7 @@ private class FakeRnsCore : RnsCore {
     override suspend fun saveIdentity(identity: Identity, path: String) = Result.success(Unit)
     override suspend fun recallIdentity(hash: ByteArray): Identity? = null
     override suspend fun createIdentityWithName(displayName: String): Map<String, Any> = emptyMap()
-    override suspend fun importIdentityFile(fileData: ByteArray, displayName: String): Map<String, Any> = emptyMap()
+    override suspend fun importIdentityFile(fileData: ByteArray, displayName: String): Map<String, Any> = nextImportResult
     override suspend fun exportIdentityFile(keyData: ByteArray, filePath: String): ByteArray = ByteArray(0)
     override suspend fun getFullIdentityKey(): ByteArray? = null
     override suspend fun createDestination(
@@ -555,6 +691,8 @@ private class FakeRnsCore : RnsCore {
         Result.success(0)
     override suspend fun blockDestination(destinationHashHex: String) = Result.success(Unit)
     override suspend fun unblockDestination(destinationHashHex: String) = Result.success(Unit)
+    override suspend fun blockIdentity(identityHashHex: String) = Result.success(Unit)
+    override suspend fun unblockIdentity(identityHashHex: String) = Result.success(Unit)
     override suspend fun blackholeIdentity(identityHashHex: String) = Result.success(Unit)
     override suspend fun unblackholeIdentity(identityHashHex: String) = Result.success(Unit)
 }
@@ -591,6 +729,13 @@ private class FakeRnsNomadnet : RnsNomadnet {
         timeoutSeconds: Float,
     ): Result<NomadnetPageResult> = Result.failure(NotImplementedError())
     override suspend fun cancelNomadnetPageRequest() {}
+    override suspend fun requestNomadnetMedia(
+        destinationHash: String,
+        path: String,
+        timeoutSeconds: Float,
+        maxBytes: Long,
+    ): Result<network.columba.app.rns.api.model.NomadnetMediaResult> = Result.failure(NotImplementedError())
+    override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? = null
     override suspend fun getNomadnetRequestStatus(): String = status.value
     override suspend fun getNomadnetDownloadProgress(): Float = progress.value
     override suspend fun identifyNomadnetLink(destinationHash: String) = Result.success(true)
@@ -599,6 +744,15 @@ private class FakeRnsNomadnet : RnsNomadnet {
 }
 
 private class FakeRnsTransportAdmin : RnsTransportAdmin {
+    var sharedInstanceAccessConfig: String? = null
+    var batteryResult: Int = -1
+
+    private val interfaceStatuses = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 8)
+
+    fun emitInterfaceStatus(payload: String) {
+        check(interfaceStatuses.tryEmit(payload))
+    }
+
     override fun setBatteryProfile(profile: network.columba.app.rns.api.model.BatteryProfile) {}
     override suspend fun reloadInterfaces(configs: List<InterfaceConfig>) {}
     override suspend fun setDiscoveryEnabled(enabled: Boolean) {}
@@ -609,15 +763,17 @@ private class FakeRnsTransportAdmin : RnsTransportAdmin {
     override suspend fun getAutoconnectedEndpoints(): Set<String> = emptySet()
     override suspend fun isSharedInstanceAvailable(): Boolean = false
     override suspend fun isHostingSharedInstance(): Boolean = false
+    override suspend fun getSharedInstanceAccessConfig(): String? = sharedInstanceAccessConfig
     override suspend fun getDebugInfo(): Map<String, Any> = emptyMap()
     override suspend fun getFailedInterfaces(): List<FailedInterface> = emptyList()
     override suspend fun getInterfaceStats(interfaceName: String): Map<String, Any>? = null
     override suspend fun reconnectRNodeInterface() {}
     override fun getRNodeRssi(): Int = -100
+    override suspend fun getRNodeBattery(): Int = batteryResult
     override fun getBleConnectionDetails(): String = "[]"
     override val interfaceStatusChanged: SharedFlow<Unit> = MutableSharedFlow()
     override val bleConnectionsFlow: SharedFlow<String> = MutableSharedFlow()
     override val debugInfoFlow: SharedFlow<String> = MutableSharedFlow()
-    override val interfaceStatusFlow: SharedFlow<String> = MutableSharedFlow()
+    override val interfaceStatusFlow: SharedFlow<String> = interfaceStatuses.asSharedFlow()
     override val reactionReceivedFlow: SharedFlow<String> = MutableSharedFlow()
 }

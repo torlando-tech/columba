@@ -5,6 +5,7 @@ import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.InterfaceRepository
+import network.columba.app.repository.NomadNetLastPage
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.NetworkStatus
@@ -13,12 +14,14 @@ import network.columba.app.rns.api.RnsBackend
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
+import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
 import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.theme.PresetTheme
+import network.columba.app.ui.theme.ThemeMode
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -26,6 +29,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -88,6 +93,7 @@ class SettingsViewModelIncomingMessageLimitTest {
     private val lastAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val nextAutoAnnounceTimeFlow = MutableStateFlow<Long?>(null)
     private val themePreferenceFlow = MutableStateFlow(PresetTheme.VIBRANT)
+    private val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
     private val activeIdentityFlow = MutableStateFlow<LocalIdentityEntity?>(null)
     private val networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
     private val autoRetrieveEnabledFlow = MutableStateFlow(true)
@@ -104,6 +110,8 @@ class SettingsViewModelIncomingMessageLimitTest {
         SettingsViewModel.enableMonitors = false
 
         settingsRepository = mockk()
+        every { settingsRepository.bottomNavTabsFlow } returns flowOf(null)
+        every { settingsRepository.nomadNetLastPageFlow } returns flowOf(NomadNetLastPage(null, null))
         identityRepository = mockk()
         rnsBackend = mockk()
         rnsCore = mockk()
@@ -138,6 +146,9 @@ class SettingsViewModelIncomingMessageLimitTest {
                     }
                 every { getSharedPreferences(any(), any()) } returns mockPrefs
                 every { startForegroundService(any()) } returns null
+                // Real snapshot read-modify-write lands here (no file -> no-op)
+                every { filesDir } returns
+                    kotlin.io.path.createTempDirectory("columba-snapshot-test").toFile()
             }
 
         // Mock ContactRepository flow
@@ -172,6 +183,7 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.lastAutoAnnounceTimeFlow } returns lastAutoAnnounceTimeFlow
         every { settingsRepository.nextAutoAnnounceTimeFlow } returns nextAutoAnnounceTimeFlow
         every { settingsRepository.themePreferenceFlow } returns themePreferenceFlow
+        every { settingsRepository.themeModeFlow } returns themeModeFlow
         every { settingsRepository.getAllCustomThemes() } returns flowOf(emptyList())
         every { settingsRepository.autoRetrieveEnabledFlow } returns autoRetrieveEnabledFlow
         every { settingsRepository.retrievalIntervalSecondsFlow } returns retrievalIntervalSecondsFlow
@@ -218,7 +230,6 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { settingsRepository.includePrereleaseUpdates } returns MutableStateFlow(false)
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)
         every { settingsRepository.tryPropagationOnFailFlow } returns MutableStateFlow(true)
-        coEvery { settingsRepository.getLastUpdateCheckTime() } returns System.currentTimeMillis()
 
         // Mock PropagationNodeManager flows (StateFlows)
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
@@ -320,6 +331,28 @@ class SettingsViewModelIncomingMessageLimitTest {
             // Then
             assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
             verify { rnsLxmf.setIncomingMessageSizeLimit(25600) }
+        }
+
+    @Test
+    fun `setIncomingMessageSizeLimit refreshes restart snapshot for service-only recovery`() =
+        runTest {
+            // Given
+            mockkObject(ReticulumConfigSnapshot)
+            every { ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(any(), any()) } just Runs
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // When
+            val result = runCatching { viewModel.setIncomingMessageSizeLimit(6144) } // 6MB
+
+            advanceUntilIdle()
+
+            // Then: the on-disk restart snapshot must track the change so a
+            // :reticulum-only recovery (UI process dead) doesn't resurrect the
+            // previous delivery gate (columba#1106)
+            assertTrue("setIncomingMessageSizeLimit should complete without throwing", result.isSuccess)
+            verify { ReticulumConfigSnapshot.updateIncomingMessageSizeLimitKb(context, 6144L) }
+            unmockkObject(ReticulumConfigSnapshot)
         }
 
     @Test

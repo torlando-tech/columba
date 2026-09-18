@@ -44,6 +44,7 @@ oneway interface IRnsTransportAdmin {
 
     void isSharedInstanceAvailable(in IRnsBoolCallback cb);
     void isHostingSharedInstance(in IRnsBoolCallback cb);
+    void getSharedInstanceAccessConfig(in IRnsStringCallback cb);
 
     // ==================== Diagnostics ====================
 
@@ -59,6 +60,11 @@ oneway interface IRnsTransportAdmin {
     // AIDL exposes as oneway+IRnsIntCallback; :rns-ipc client either caches
     // the value via an observer or wraps with suspendCancellableCoroutine.
     void getRNodeRssi(in IRnsIntCallback cb);
+
+    // getRNodeBattery: live battery percent (0-100), -1 when absent.
+    // Oneway + callback, same shape as getRNodeRssi. The Kotlin contract
+    // method is `suspend` (live fetch per call), not a cached getter.
+    void getRNodeBattery(in IRnsIntCallback cb);
 
     // ==================== BLE ====================
 
@@ -79,7 +85,10 @@ oneway interface IRnsTransportAdmin {
     void registerDebugInfoObserver(in IRnsStringEventCallback cb);
     void unregisterDebugInfoObserver(in IRnsStringEventCallback cb);
 
-    void registerInterfaceStatusObserver(in IRnsStringEventCallback cb);
+    void registerInterfaceStatusObserver(
+        in IRnsStringEventCallback cb,
+        in IRnsUnitEventCallback readyCb
+    );
     void unregisterInterfaceStatusObserver(in IRnsStringEventCallback cb);
 
     void registerReactionReceivedObserver(in IRnsStringEventCallback cb);

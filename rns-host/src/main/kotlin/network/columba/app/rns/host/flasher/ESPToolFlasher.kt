@@ -11,6 +11,50 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.ZipInputStream
 
+internal fun isSuccessfulEspResponse(
+    response: ByteArray,
+    expectedCommand: Byte,
+    expectedPayloadLength: Int,
+): Boolean {
+    if (response.size < 8 || response[0] != 0x01.toByte() || response[1] != expectedCommand) return false
+    val dataLength =
+        (response[2].toInt() and 0xFF) or
+            ((response[3].toInt() and 0xFF) shl 8)
+    if (response.size != 8 + dataLength || dataLength < expectedPayloadLength + 2) return false
+    // ESP32-family ROM responses append status/error and may append two
+    // reserved bytes. Status starts immediately after the documented payload.
+    return response[8 + expectedPayloadLength].toInt() == 0
+}
+
+internal fun formatEspRomError(
+    command: Byte,
+    status: Int,
+    errorCode: Int,
+): String =
+    "ESP ROM command 0x${command.toInt().and(0xFF).toString(16).padStart(2, '0')} rejected" +
+        " (status=0x${status.and(0xFF).toString(16).padStart(2, '0')}," +
+        " error=0x${errorCode.and(0xFF).toString(16).padStart(2, '0')})"
+
+internal fun buildSpiFlashParameters(sizeBytes: Int): ByteArray {
+    require(sizeBytes > 0 && sizeBytes and (sizeBytes - 1) == 0) {
+        "Flash size must be a positive power of two"
+    }
+    val values = intArrayOf(0, sizeBytes, 64 * 1024, 4 * 1024, 256, 0xFFFF)
+    return ByteArray(values.size * 4).also { packet ->
+        values.forEachIndexed { index, value ->
+            for (byteIndex in 0 until 4) {
+                packet[index * 4 + byteIndex] = (value ushr (byteIndex * 8)).toByte()
+            }
+        }
+    }
+}
+
+internal fun parseRomFlashMd5(response: ByteArray): String? {
+    if (!isSuccessfulEspResponse(response, 0x13.toByte(), 32)) return null
+    val digest = response.copyOfRange(8, 8 + 32).toString(Charsets.US_ASCII)
+    return digest.lowercase(Locale.ROOT).takeIf { it.matches(Regex("[0-9a-f]{32}")) }
+}
+
 /**
  * ESPTool-compatible flasher for ESP32 devices.
  *
@@ -57,6 +101,8 @@ class ESPToolFlasher(
         private const val READ_TIMEOUT_MS = 100
         private const val ERASE_TIMEOUT_PER_MB_MS = 10000L // 10 seconds per MB for flash erase
         private const val MIN_ERASE_TIMEOUT_MS = 10000L // Minimum 10 seconds for any erase
+        private const val MD5_TIMEOUT_PER_MB_MS = 8000L
+        private const val MIN_MD5_TIMEOUT_MS = 3000L
 
         // ESP32 ROM commands
         private const val ESP_FLASH_BEGIN: Byte = 0x02
@@ -71,14 +117,14 @@ class ESPToolFlasher(
         private const val ESP_WRITE_REG: Byte = 0x09
         private const val ESP_READ_REG: Byte = 0x0A
 
-        // private const val ESP_SPI_SET_PARAMS: Byte = 0x0B // Reserved
+        private const val ESP_SPI_SET_PARAMS: Byte = 0x0B
         private const val ESP_SPI_ATTACH: Byte = 0x0D
         private const val ESP_CHANGE_BAUDRATE: Byte = 0x0F
         // Deflate commands (reserved - require stub loader)
         // private const val ESP_FLASH_DEFL_BEGIN: Byte = 0x10
         // private const val ESP_FLASH_DEFL_DATA: Byte = 0x11
         // private const val ESP_FLASH_DEFL_END: Byte = 0x12
-        // private const val ESP_SPI_FLASH_MD5: Byte = 0x13
+        private const val ESP_SPI_FLASH_MD5: Byte = 0x13
 
         // SLIP constants
         private const val SLIP_END: Byte = 0xC0.toByte()
@@ -147,6 +193,7 @@ class ESPToolFlasher(
     private var inBootloader = false
     private var currentBoardIsS3 = false
     private var isNativeUsb = false
+    private var lastProtocolError: String? = null
 
     /**
      * Callback interface for flash progress updates.
@@ -171,11 +218,14 @@ class ESPToolFlasher(
      * @param vendorId USB Vendor ID (used to detect native USB devices)
      * @param productId USB Product ID (used to detect native USB devices)
      * @param consoleImageStream Optional console image (SPIFFS) stream
+     * @param verifyFlashWrites Verify every written region with the ROM MD5 command
+     * @param performBackupHardReset Issue the legacy reset after FLASH_END
+     * @param flashSizeBytes Explicit ROM flash geometry; required when an erase crosses the ROM's default 2 MiB limit
      * @param progressCallback Progress callback
      * @return true if flashing succeeded
      * @throws ManualBootModeRequired if the device needs manual bootloader entry
      */
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
     suspend fun flash(
         firmwareZipStream: InputStream,
         deviceId: Int,
@@ -184,8 +234,12 @@ class ESPToolFlasher(
         productId: Int = 0,
         consoleImageStream: InputStream? = null,
         progressCallback: ProgressCallback,
+        verifyFlashWrites: Boolean = false,
+        performBackupHardReset: Boolean = true,
+        flashSizeBytes: Int? = null,
     ): Boolean =
         withContext(Dispatchers.IO) {
+            lastProtocolError = null
             val bootloaderOffset = getBootloaderOffset(board)
             val isS3 = isEsp32S3(board)
             currentBoardIsS3 = isS3
@@ -273,7 +327,25 @@ class ESPToolFlasher(
                 // SPI attach configures flash pins (required before flash operations)
                 progressCallback.onProgress(13, "Attaching SPI flash...")
                 if (!spiAttach()) {
+                    if (verifyFlashWrites) {
+                        progressCallback.onError(
+                            "Failed to attach SPI flash: " +
+                                (lastProtocolError ?: "no bootloader response"),
+                        )
+                        return@withContext false
+                    }
                     Log.w(TAG, "SPI attach failed, attempting to continue anyway")
+                }
+
+                flashSizeBytes?.let { size ->
+                    progressCallback.onProgress(14, "Configuring ${size / (1024 * 1024)} MiB flash...")
+                    if (!spiSetParameters(size)) {
+                        progressCallback.onError(
+                            "Failed to configure ${size / (1024 * 1024)} MiB SPI flash: " +
+                                (lastProtocolError ?: "no bootloader response"),
+                        )
+                        return@withContext false
+                    }
                 }
 
                 progressCallback.onProgress(15, "Flashing bootloader...")
@@ -291,6 +363,7 @@ class ESPToolFlasher(
                             "bootloader",
                             currentProgress,
                             20,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -308,6 +381,7 @@ class ESPToolFlasher(
                             "partition table",
                             currentProgress,
                             25,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -323,6 +397,7 @@ class ESPToolFlasher(
                             "boot_app0",
                             currentProgress,
                             30,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -339,6 +414,7 @@ class ESPToolFlasher(
                         "application",
                         currentProgress,
                         80,
+                        verifyFlashWrites,
                         progressCallback,
                     )
                 if (!success) return@withContext false
@@ -353,6 +429,7 @@ class ESPToolFlasher(
                             "console image",
                             80,
                             95,
+                            verifyFlashWrites,
                             progressCallback,
                         )
                     if (!success) return@withContext false
@@ -361,13 +438,18 @@ class ESPToolFlasher(
                 progressCallback.onProgress(95, "Finalizing...")
 
                 // Send FLASH_END to tell bootloader to reboot and run application
-                sendFlashEnd(reboot = true)
+                if (!sendFlashEnd(reboot = true)) {
+                    progressCallback.onError(
+                        "Failed to submit final reboot command: " +
+                            (lastProtocolError ?: "USB write failed"),
+                    )
+                    return@withContext false
+                }
 
-                // Give the device time to reboot
-                delay(500)
-
-                // Hard reset as backup (may not work on native USB but doesn't hurt)
-                hardReset()
+                if (performBackupHardReset) {
+                    delay(500)
+                    hardReset()
+                }
 
                 progressCallback.onProgress(100, "Flash complete!")
                 progressCallback.onComplete()
@@ -666,15 +748,23 @@ class ESPToolFlasher(
         }
     }
 
+    /** Configure the flash geometry used by ROM-mode erase operations. */
+    private suspend fun spiSetParameters(sizeBytes: Int): Boolean {
+        Log.d(TAG, "Configuring SPI flash geometry: $sizeBytes bytes")
+        return sendCommand(ESP_SPI_SET_PARAMS, buildSpiFlashParameters(sizeBytes), 0) != null
+    }
+
     /**
      * Flash a region of memory.
      */
+    @Suppress("ReturnCount")
     private suspend fun flashRegion(
         data: ByteArray,
         offset: Int,
         name: String,
         startProgress: Int,
         endProgress: Int,
+        verifyWrite: Boolean,
         progressCallback: ProgressCallback,
     ): Boolean {
         Log.d(TAG, "Flashing $name: ${data.size} bytes at 0x${offset.toString(16)}")
@@ -710,7 +800,10 @@ class ESPToolFlasher(
 
         val beginResponse = sendCommand(ESP_FLASH_BEGIN, beginData, 0, eraseTimeout)
         if (beginResponse == null) {
-            Log.e(TAG, "Flash begin failed for $name")
+            val detail = lastProtocolError ?: "no bootloader response"
+            val error = "Failed to start $name transfer at 0x${offset.toString(16)}: $detail"
+            Log.e(TAG, error)
+            progressCallback.onError(error)
             return false
         }
 
@@ -740,7 +833,12 @@ class ESPToolFlasher(
 
             val dataResponse = sendCommand(ESP_FLASH_DATA, packet, checksum)
             if (dataResponse == null) {
-                Log.e(TAG, "Flash data failed for $name at block $blockNum")
+                val detail = lastProtocolError ?: "no bootloader response"
+                val error =
+                    "Failed to transfer $name block ${blockNum + 1}/$numBlocks " +
+                        "at 0x${(offset + blockStart).toString(16)}: $detail"
+                Log.e(TAG, error)
+                progressCallback.onError(error)
                 return false
             }
 
@@ -754,7 +852,51 @@ class ESPToolFlasher(
             )
         }
 
-        Log.d(TAG, "Successfully flashed $name")
+        if (verifyWrite && !verifyFlashRegion(data, offset, name)) {
+            progressCallback.onError(
+                "Flash verification failed for $name at 0x${offset.toString(16)}: " +
+                    (lastProtocolError ?: "device digest did not match the package"),
+            )
+            return false
+        }
+
+        Log.d(TAG, "Successfully flashed and verified $name")
+        return true
+    }
+
+    /** Verify the bytes written by the ROM loader before allowing a successful flash. */
+    @Suppress("ReturnCount")
+    private suspend fun verifyFlashRegion(
+        data: ByteArray,
+        offset: Int,
+        name: String,
+    ): Boolean {
+        val request = ByteArray(16)
+        putUInt32LE(request, 0, offset)
+        putUInt32LE(request, 4, data.size)
+        putUInt32LE(request, 8, 0)
+        putUInt32LE(request, 12, 0)
+
+        val sizeMb = data.size.toDouble() / (1024 * 1024)
+        val timeout = maxOf(MIN_MD5_TIMEOUT_MS, (sizeMb * MD5_TIMEOUT_PER_MB_MS).toLong())
+        val response = sendCommand(ESP_SPI_FLASH_MD5, request, 0, timeout, expectedPayloadLength = 32)
+        if (response == null) {
+            Log.e(TAG, "Flash verification command failed for $name")
+            return false
+        }
+        val actual = parseRomFlashMd5(response)
+        if (actual == null) {
+            lastProtocolError = "ESP ROM returned an invalid MD5 response"
+            Log.e(TAG, "Invalid flash verification response for $name")
+            return false
+        }
+        val expected = calculateMd5(data).joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        if (actual != expected) {
+            lastProtocolError = "device MD5 $actual does not match package MD5 $expected"
+            Log.e(TAG, "Flash verification mismatch for $name")
+            return false
+        }
+        Log.d(TAG, "Verified $name MD5: $actual")
         return true
     }
 
@@ -762,7 +904,7 @@ class ESPToolFlasher(
      * Send FLASH_END command to tell bootloader we're done flashing.
      * @param reboot If true, bootloader will reset and run the application.
      */
-    private suspend fun sendFlashEnd(reboot: Boolean) {
+    private suspend fun sendFlashEnd(reboot: Boolean): Boolean {
         Log.d(TAG, "Sending FLASH_END (reboot=$reboot)")
 
         // For ESP32-S3, clear force download boot mode to avoid getting stuck
@@ -785,10 +927,15 @@ class ESPToolFlasher(
         if (reboot) {
             val packet = buildCommandPacket(ESP_FLASH_END, data, 0)
             val slipPacket = slipEncode(packet)
-            usbBridge.write(slipPacket)
+            val bytesWritten = usbBridge.write(slipPacket)
+            if (bytesWritten != slipPacket.size) {
+                Log.e(TAG, "FLASH_END short write: $bytesWritten/${slipPacket.size}")
+                return false
+            }
             Log.d(TAG, "FLASH_END sent, device should reboot")
+            return true
         } else {
-            sendCommand(ESP_FLASH_END, data, 0)
+            return sendCommand(ESP_FLASH_END, data, 0) != null
         }
     }
 
@@ -810,19 +957,15 @@ class ESPToolFlasher(
         sendCommand(ESP_WRITE_REG, data, 0)
     }
 
-    /**
-     * Hard reset the device to exit bootloader.
-     */
+    /** Legacy backup reset retained for normal RNode flashing only. */
     private suspend fun hardReset() {
         Log.d(TAG, "Hard resetting device (S3=$currentBoardIsS3)")
 
         val resetDelay = if (currentBoardIsS3) RESET_DELAY_MS_USB else RESET_DELAY_MS
-
-        usbBridge.setDtrRts(false, true) // Assert RTS (EN low - reset)
+        usbBridge.setDtrRts(false, true)
         delay(resetDelay)
-        usbBridge.setDtrRts(false, false) // Release both
+        usbBridge.setDtrRts(false, false)
         delay(resetDelay)
-
         inBootloader = false
     }
 
@@ -834,8 +977,10 @@ class ESPToolFlasher(
         data: ByteArray,
         checksum: Int,
         timeoutMs: Long = COMMAND_TIMEOUT_MS,
+        expectedPayloadLength: Int = 0,
     ): ByteArray? {
-        // Clear any pending data before sending
+        lastProtocolError = null
+        // Clear any stale response before sending the next command.
         usbBridge.drain(50)
 
         // Build command packet
@@ -850,12 +995,26 @@ class ESPToolFlasher(
         )
         val bytesWritten = usbBridge.write(slipPacket)
         Log.d(TAG, "Wrote $bytesWritten bytes")
+        if (bytesWritten != slipPacket.size) {
+            lastProtocolError =
+                "USB short write for command 0x${command.toInt().and(0xFF).toString(16)}: " +
+                    "$bytesWritten/${slipPacket.size} bytes"
+            Log.e(TAG, lastProtocolError!!)
+            return null
+        }
 
         // Give USB CDC time to transmit
         delay(10)
 
         // Wait for response
-        return readResponse(command, timeoutMs)
+        val response = readResponse(command, timeoutMs, expectedPayloadLength)
+        if (response == null && lastProtocolError == null) {
+            lastProtocolError =
+                "Timed out after ${timeoutMs}ms waiting for ESP ROM command " +
+                    "0x${command.toInt().and(0xFF).toString(16).padStart(2, '0')}"
+            Log.e(TAG, lastProtocolError!!)
+        }
+        return response
     }
 
     /**
@@ -915,6 +1074,7 @@ class ESPToolFlasher(
     private suspend fun readResponse(
         expectedCommand: Byte,
         timeoutMs: Long = COMMAND_TIMEOUT_MS,
+        expectedPayloadLength: Int = 0,
     ): ByteArray? =
         withTimeoutOrNull(timeoutMs) {
             val buffer = mutableListOf<Byte>()
@@ -953,34 +1113,21 @@ class ESPToolFlasher(
                                 inPacket = false
 
                                 // Check if this is a valid response
-                                if (response[0] == 0x01.toByte() &&
-                                    response[1] == expectedCommand
-                                ) {
-                                    // Parse response: direction(1) + cmd(1) + size(2) + val(4) + data(size)
-                                    val dataLen =
-                                        (response[2].toInt() and 0xFF) or
-                                            ((response[3].toInt() and 0xFF) shl 8)
-
-                                    // Status is in the LAST 2 bytes of the data section
-                                    // If no data, check the 'val' field instead
-                                    val status =
-                                        if (dataLen >= 2) {
-                                            // Last 2 bytes of data (data starts at byte 8)
-                                            response.getOrNull(8 + dataLen - 2)?.toInt()?.and(0xFF) ?: 1
-                                        } else {
-                                            // For empty responses, val field indicates status (byte 4)
-                                            response.getOrNull(4)?.toInt()?.and(0xFF) ?: 1
-                                        }
-
-                                    if (status == 0) {
+                                if (response[0] == 0x01.toByte() && response[1] == expectedCommand) {
+                                    if (isSuccessfulEspResponse(response, expectedCommand, expectedPayloadLength)) {
                                         return@withTimeoutOrNull response
                                     } else {
-                                        val errorCode = response.getOrNull(8 + dataLen - 1)?.toInt()?.and(0xFF) ?: 0
-                                        Log.w(
-                                            TAG,
-                                            "Command 0x${expectedCommand.toInt().and(0xFF).toString(16)} " +
-                                                "returned error: status=$status, code=$errorCode",
-                                        )
+                                        val statusIndex = 8 + expectedPayloadLength
+                                        val status = response.getOrNull(statusIndex)?.toInt()?.and(0xFF) ?: -1
+                                        val errorCode = response.getOrNull(statusIndex + 1)?.toInt()?.and(0xFF) ?: -1
+                                        lastProtocolError =
+                                            if (status >= 0 && errorCode >= 0) {
+                                                formatEspRomError(expectedCommand, status, errorCode)
+                                            } else {
+                                                "Malformed ESP ROM response for command " +
+                                                    "0x${expectedCommand.toInt().and(0xFF).toString(16).padStart(2, '0')}"
+                                            }
+                                        Log.w(TAG, lastProtocolError!!)
                                         return@withTimeoutOrNull null
                                     }
                                 }
@@ -1023,7 +1170,6 @@ class ESPToolFlasher(
     /**
      * Calculate MD5 hash for verification.
      */
-    @Suppress("unused")
     private fun calculateMd5(data: ByteArray): ByteArray = MessageDigest.getInstance("MD5").digest(data)
 
     /**

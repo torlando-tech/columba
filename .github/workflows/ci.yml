@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v6
+        uses: gradle/actions/wrapper-validation@v6.3.0
 
   lint:
     name: Code Quality (ktlint + detekt + CPD + Android Lint)
@@ -33,13 +33,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -47,7 +47,7 @@ jobs:
         # Android `lint` covers :rns-backend-py + the pythonBackend variants, which
         # trigger Chaquopy's installPythonRequirements — and Chaquopy 17 only accepts
         # buildPython 3.11 (same reason the kotlin-tests + release jobs set this up).
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -126,7 +126,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -184,19 +184,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 25
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -298,13 +298,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 25
@@ -312,12 +312,12 @@ jobs:
       - name: Set up Python 3.11
         # Required by Chaquopy's `installDebugPythonRequirements` task on
         # :rns-backend-py — Chaquopy 17 only accepts buildPython 3.11.
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -348,8 +348,8 @@ jobs:
             robolectric-4.16-
             robolectric-
 
-      - name: Run RNS, data, and micron module tests
-        run: ./gradlew :rns-api:testDebugUnitTest :rns-ipc:testDebugUnitTest :rns-host:testKotlinBackendDebugUnitTest :rns-host:testPythonBackendDebugUnitTest :rns-backend-kt:testDebugUnitTest :rns-backend-py:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
+      - name: Run RNS, stats, data, and micron module tests
+        run: ./gradlew :rns-api:testDebugUnitTest :rns-ipc:testDebugUnitTest :rns-host:testKotlinBackendDebugUnitTest :rns-host:testPythonBackendDebugUnitTest :rns-backend-kt:testDebugUnitTest :rns-backend-py:testDebugUnitTest :rns-stats:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
 
       - name: Upload unit test results
         if: always()
@@ -379,6 +379,39 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+  python-rns-contract-tests:
+    name: Python RNS Interface Contract Tests
+    # Runs the rns-backend-py python suite against the REAL pinned RNS/LXMF
+    # (installed from the exact SHAs in rns-backend-py/build.gradle.kts).
+    # The stub-based unit tests pass anywhere; the contract test drives real
+    # announce traffic through RNS's own transport (Transport.inbound +
+    # process_announce_queue) so a drift in the RNS<->adapter callback contract
+    # (e.g. the RNS 1.5.x `size=` keyword on the Interface announce callbacks)
+    # is caught here instead of on-device. No emulator, no JDK.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        # Chaquopy bundles CPython 3.11 into the APK; test against the same
+        # minor so the pinned wheels resolve the way the build does.
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install pinned RNS/LXMF and run the python suite
+        # The runner builds an isolated venv, installs the exact git+SHA pins
+        # from build.gradle.kts, then runs each test file in its own subprocess
+        # (the stub-based tests replace sys.modules["RNS"], so they cannot share
+        # a process with the contract test).
+        run: python rns-backend-py/run_python_tests.py
+
   proguard-verification:
     name: Verify Python-Kotlin Bridge (R8)
     # Builds the minified pythonBackend RELEASE APK and asserts, against R8's own
@@ -392,24 +425,24 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 25
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -449,27 +482,33 @@ jobs:
           adb kill-server || true
 
   instrumented-tests:
-    name: Instrumented Tests
+    name: Instrumented Tests (Kotlin + Identity Recovery)
     # Run in parallel with other jobs
     needs: [lint, validate-wrapper]
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 25
 
+      - name: Set up Python 3.11
+        # Required by Chaquopy when building the Python-backend recovery tests.
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-read-only: false
 
@@ -493,6 +532,8 @@ jobs:
           echo "Building APKs before starting emulator..."
           ./gradlew :app:assembleNoSentryKotlinBackendDebugAndroidTest --stacktrace --max-workers=2
           ./gradlew :app:assembleNoSentryKotlinBackendDebug --stacktrace --max-workers=2
+          ./gradlew :app:assembleNoSentryPythonBackendDebugAndroidTest :app:assembleNoSentryPythonBackendDebug --stacktrace --max-workers=2
+          ./gradlew :rns-backend-py:assembleDebugAndroidTest :rns-backend-py:assembleDebug --stacktrace --max-workers=2
           echo "APKs built successfully"
 
       - name: AVD cache
@@ -506,7 +547,7 @@ jobs:
 
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2.37.0
+        uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 34
           arch: x86_64
@@ -522,7 +563,7 @@ jobs:
             echo "Emulator ready, generating snapshot for caching."
 
       - name: Run instrumented tests
-        uses: reactivecircus/android-emulator-runner@v2.37.0
+        uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 34
           arch: x86_64
@@ -531,14 +572,18 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048
           disable-animations: true
           emulator-boot-timeout: 600
-          script: |
-            echo "Running emulator health check..."
-            adb shell getprop ro.build.version.sdk
-            adb shell pm list packages | head -5
-            echo "Emulator is responsive, starting tests..."
-            # Run smoke tests and integration tests
-            # Use test orchestrator for isolation (configured in build.gradle.kts)
-            ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest --stacktrace
+          # The emulator action executes each literal-script line as a separate shell.
+          # Fold this into one command so status is retained across all test groups.
+          script: >-
+            echo "Running emulator health check...";
+            adb shell getprop ro.build.version.sdk;
+            adb shell pm list packages | head -5;
+            echo "Emulator is responsive, starting tests...";
+            status=0;
+            ./gradlew :app:connectedNoSentryKotlinBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.smoke.SmokeTest,network.columba.app.integration.MessageDataFlowTest,network.columba.app.integration.ConversationCreationFlowTest,network.columba.app.ui.components.MicronTrueColorRenderingTest --stacktrace || status=1;
+            ./gradlew :app:connectedNoSentryPythonBackendDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.integration.IdentityRecoveryIpcInstrumentedTest,network.columba.app.integration.IdentityRecoveryPersistenceInstrumentedTest --stacktrace || status=1;
+            ./gradlew :rns-backend-py:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=network.columba.app.rns.backend.py.PythonRnsCoreIdentityRecoveryInstrumentedTest --stacktrace || status=1;
+            exit "$status"
 
       - name: Upload instrumented test results
         if: always()
@@ -575,6 +620,168 @@ jobs:
           path: artifacts/logcat.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Cleanup emulator
+        if: always()
+        run: |
+          adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+          pkill -9 qemu-system || true
+          adb kill-server || true
+
+  transfer-progress-e2e:
+    name: Real LXMF Resource Progress E2E
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-read-only: false
+
+      - name: Install E2E host dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r tests/transfer_progress_e2e/requirements.txt
+          python -m pytest -q tests/transfer_progress_e2e/test_ui_driver.py
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Python-backend E2E APK
+        run: ./gradlew :app:assembleNoSentryPythonBackendDebug --stacktrace --max-workers=2
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run real two-peer Resource progress E2E
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 3072
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: >-
+            COLUMBA_EMULATOR_SERIAL=emulator-5554
+            COLUMBA_E2E_APK=app/build/outputs/apk/noSentryPythonBackend/debug/app-noSentry-pythonBackend-x86_64-debug.apk
+            COLUMBA_E2E_ARTIFACT_DIR=artifacts/transfer-progress-e2e
+            python -m pytest -v tests/transfer_progress_e2e/test_transfer_progress_e2e.py
+            --junit-xml=artifacts/transfer-progress-e2e/results.xml;
+
+      - name: Upload Resource progress E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: transfer-progress-e2e-evidence
+          path: artifacts/transfer-progress-e2e/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Cleanup emulator
+        if: always()
+        run: |
+          adb devices | grep emulator | cut -f1 | xargs -I {} adb -s {} emu kill || true
+          pkill -9 qemu-system || true
+          adb kill-server || true
+
+  rns-recovery-e2e:
+    name: RNS Profile-Swap Recovery E2E (issue #1127)
+    needs: [lint, validate-wrapper]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669 # v6.3.0
+        with:
+          cache-read-only: false
+
+      - name: Install E2E host dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r tests/e2e_profile_swap/requirements.txt
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Python-backend E2E APK
+        run: ./gradlew :app:assembleNoSentryPythonBackendDebug --stacktrace --max-workers=2
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The suite self-onboards a fresh emulator (creates an identity + one
+      # AutoInterface via the debug ONBOARD hook), so no manual onboarding step
+      # is required. RED on unfixed code: the primary test fails because RNS
+      # stays READY-but-0-interfaces after the profile-swap restart.
+      - name: Run RNS profile-swap recovery E2E
+        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 3072
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: >-
+            COLUMBA_SERIAL=emulator-5554
+            COLUMBA_APP_ID=network.columba.app.debug
+            COLUMBA_RECOVERY_S=120
+            COLUMBA_E2E_APK=app/build/outputs/apk/noSentryPythonBackend/debug/app-noSentry-pythonBackend-x86_64-debug.apk
+            python -m pytest -s -v --tb=short tests/e2e_profile_swap/test_rns_recover.py
+            --junit-xml=artifacts/rns-recovery-e2e/results.xml;
+
+      - name: Upload RNS recovery E2E evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rns-recovery-e2e-evidence
+          path: artifacts/rns-recovery-e2e/
+          retention-days: 14
+          if-no-files-found: error
 
       - name: Cleanup emulator
         if: always()

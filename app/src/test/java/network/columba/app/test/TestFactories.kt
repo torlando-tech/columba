@@ -4,6 +4,7 @@ import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ContactStatus
 import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.model.EnrichedContact
+import network.columba.app.data.model.InterfaceType
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.Conversation
 import network.columba.app.service.RelayInfo
@@ -87,6 +88,7 @@ object TestFactories {
         val displayName: String = "Test Contact",
         val customNickname: String? = null,
         val announceName: String? = null,
+        val lastSeenTimestamp: Long? = System.currentTimeMillis(),
         val isPinned: Boolean = false,
         val isMyRelay: Boolean = false,
         val status: ContactStatus = ContactStatus.ACTIVE,
@@ -105,7 +107,7 @@ object TestFactories {
             displayName = config.displayName,
             customNickname = config.customNickname,
             announceName = config.announceName ?: config.displayName,
-            lastSeenTimestamp = System.currentTimeMillis(),
+            lastSeenTimestamp = config.lastSeenTimestamp,
             hops = config.hops,
             isOnline = config.isOnline,
             hasConversation = config.hasConversation,
@@ -149,6 +151,7 @@ object TestFactories {
         isFavorite: Boolean = false,
         receivingInterface: String? = null,
         receivingInterfaceType: String? = null,
+        recentInterfaceTypes: Set<InterfaceType> = emptySet(),
     ) = Announce(
         destinationHash = destinationHash,
         peerName = peerName,
@@ -159,6 +162,7 @@ object TestFactories {
         nodeType = nodeType,
         receivingInterface = receivingInterface,
         receivingInterfaceType = receivingInterfaceType,
+        recentInterfaceTypes = recentInterfaceTypes,
         isFavorite = isFavorite,
     )
 

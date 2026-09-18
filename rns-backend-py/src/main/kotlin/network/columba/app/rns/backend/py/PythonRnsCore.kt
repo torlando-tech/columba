@@ -75,6 +75,7 @@ class PythonRnsCore(
 
     /** Local block/blackhole sets. Enforcement is shared app-logic in `:rns-host`. */
     private val blockedDestinations = ConcurrentHashMap.newKeySet<String>()
+    private val blockedIdentities = ConcurrentHashMap.newKeySet<String>()
     private val blackholedIdentities = ConcurrentHashMap.newKeySet<String>()
 
     // ==================== Initialization & lifecycle ====================
@@ -175,11 +176,15 @@ class PythonRnsCore(
      * silently with "No identity_hash in result" surfaced only to the UI
      * dialog (no logcat).
      *
-     * `destination_hash` is the LXMF delivery destination hash for this
-     * identity — derivable purely from identity + aspect tuple, but we go
-     * through `RNS.Destination(...)` so the destination becomes a real RNS
-     * object the runtime can announce later. The kotlin backend computes the
-     * same hash via `NativeDestination.create(..., "lxmf", "delivery")`.
+     * `destination_hash` is the deterministic LXMF delivery destination hash for
+     * this identity. Identity creation/import must work before Reticulum and
+     * `RNS.Transport` are initialized, which is required by the cloud-restore
+     * unlock flow. Compute it through Reticulum's pure hash helper instead of
+     * constructing `RNS.Destination(...)`, whose constructor registers with the
+     * live Transport and fails when `Transport.owner` is absent. The runtime
+     * creates the real delivery destination later during normal initialization.
+     * The kotlin backend computes the same hash locally via
+     * `NativeDestination.create(..., "lxmf", "delivery")`.
      */
     private fun buildIdentityResult(
         pyId: PyObject,
@@ -187,15 +192,14 @@ class PythonRnsCore(
         displayName: String,
     ): Map<String, Any> {
         val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-        val pyDelivery = runtime.rnsModule.callAttr(
-            "Destination",
-            pyId,
-            destClass["IN"],
-            destClass["SINGLE"],
-            "lxmf",
-            "delivery",
-        )
-        val destinationHashHex = pyDelivery["hash"]?.toJava(ByteArray::class.java)?.toHex().orEmpty()
+        val destinationHashHex =
+            destClass
+                .callAttr(
+                    "hash_from_name_and_identity",
+                    "lxmf.delivery",
+                    pyId,
+                ).toJava(ByteArray::class.java)
+                .toHex()
         return mapOf(
             "success" to true,
             "identity_hash" to model.hash.toHex(),
@@ -1352,6 +1356,12 @@ class PythonRnsCore(
 
     override suspend fun unblockDestination(destinationHashHex: String): Result<Unit> =
         pyResult { blockedDestinations.remove(destinationHashHex); Unit }
+
+    override suspend fun blockIdentity(identityHashHex: String): Result<Unit> =
+        pyResult { blockedIdentities.add(identityHashHex.lowercase()); Unit }
+
+    override suspend fun unblockIdentity(identityHashHex: String): Result<Unit> =
+        pyResult { blockedIdentities.remove(identityHashHex.lowercase()); Unit }
 
     override suspend fun blackholeIdentity(identityHashHex: String): Result<Unit> =
         pyResult { blackholedIdentities.add(identityHashHex); Unit }

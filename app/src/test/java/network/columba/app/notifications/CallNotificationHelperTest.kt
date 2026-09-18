@@ -2,9 +2,11 @@ package network.columba.app.notifications
 
 import android.Manifest
 import android.app.Application
+import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.content.Context
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -285,6 +287,52 @@ class CallNotificationHelperTest {
         assertNull(
             "Ongoing notification should be cancelled",
             shadowNotificationManager.getNotification(CallNotificationHelper.NOTIFICATION_ID_ONGOING_CALL),
+        )
+    }
+
+    // ========== Full-Screen Intent Permission Tests ==========
+
+    @Test
+    fun `full screen intents usable when preflight and appop both allow`() {
+        assertTrue(
+            "explicitly allowed appop plus passing preflight must be usable",
+            helper.isFullScreenIntentUsable(
+                preflightAllowed = true,
+                appOpMode = AppOpsManager.MODE_ALLOWED,
+            ),
+        )
+    }
+
+    @Test
+    fun `full screen intents not usable when appop at default mode`() {
+        assertFalse(
+            "default-mode appop is denied by the data-delivery check, must be unusable",
+            helper.isFullScreenIntentUsable(
+                preflightAllowed = true,
+                appOpMode = AppOpsManager.MODE_DEFAULT,
+            ),
+        )
+    }
+
+    @Test
+    fun `full screen intents not usable when appop ignored`() {
+        assertFalse(
+            "ignored-mode appop must be unusable",
+            helper.isFullScreenIntentUsable(
+                preflightAllowed = true,
+                appOpMode = AppOpsManager.MODE_IGNORED,
+            ),
+        )
+    }
+
+    @Test
+    fun `full screen intents not usable when preflight check fails`() {
+        assertFalse(
+            "failing preflight must be unusable even with allowed appop",
+            helper.isFullScreenIntentUsable(
+                preflightAllowed = false,
+                appOpMode = AppOpsManager.MODE_ALLOWED,
+            ),
         )
     }
 

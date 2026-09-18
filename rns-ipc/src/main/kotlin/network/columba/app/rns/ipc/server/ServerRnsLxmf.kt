@@ -13,15 +13,18 @@ import network.columba.app.rns.api.model.Identity
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.model.ReceivedMessage
 import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.model.TransferProgressUpdate
 import network.columba.app.rns.ipc.AttachmentBlob
 import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.FieldsBlob
 import network.columba.app.rns.ipc.IRnsLxmf
+import network.columba.app.rns.ipc.toExtraFieldsMap
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback
 import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
 import network.columba.app.rns.ipc.callback.IRnsResultCallback
 import network.columba.app.rns.ipc.callback.IRnsStringCallback
+import network.columba.app.rns.ipc.callback.IRnsTransferProgressCallback
 import java.io.File
 import java.io.IOException
 
@@ -81,6 +84,12 @@ internal class ServerRnsLxmf(
         callbackBinder = { it.asBinder() },
         emit = { cb, value -> cb.onPropagationState(value) },
     )
+    private val transferProgressHub = ObserverHub<TransferProgressUpdate, IRnsTransferProgressCallback>(
+        scope = scope,
+        upstream = { impl.observeTransferProgress() },
+        callbackBinder = { it.asBinder() },
+        emit = { cb, value -> cb.onTransferProgress(value) },
+    )
 
     override fun sendLxmfMessage(
         destinationHash: ByteArray,
@@ -121,6 +130,11 @@ internal class ServerRnsLxmf(
         // temp-file read just staged by the client; see AttachmentBlob). Runs on
         // the dispatch coroutine, so it never blocks a Binder thread.
         val payload = withContext(Dispatchers.IO) { AttachmentBlob.readFromPfd(attachmentsBlob) }
+        val decodedExtraFields =
+            buildMap {
+                extraFields?.toExtraFieldsMap()?.let(::putAll)
+                putAll(payload.extraFields)
+            }.ifEmpty { null }
         val receipt = impl.sendLxmfMessageWithMethod(
             destinationHash,
             content,
@@ -133,7 +147,7 @@ internal class ServerRnsLxmf(
             replyToMessageId,
             replyQuotedContent,
             iconAppearance,
-            extraFields?.toExtraFieldsMap(),
+            decodedExtraFields,
         ).getOrThrow()
         Bundle().apply { putParcelable(BundleKeys.RECEIPT, receipt) }
     }
@@ -154,6 +168,11 @@ internal class ServerRnsLxmf(
 
     override fun registerDeliveryStatusObserver(cb: IRnsDeliveryStatusCallback) = deliveryHub.registerObserver(cb)
     override fun unregisterDeliveryStatusObserver(cb: IRnsDeliveryStatusCallback) = deliveryHub.unregisterObserver(cb)
+
+    override fun registerTransferProgressObserver(cb: IRnsTransferProgressCallback) =
+        transferProgressHub.registerObserver(cb)
+    override fun unregisterTransferProgressObserver(cb: IRnsTransferProgressCallback) =
+        transferProgressHub.unregisterObserver(cb)
 
     override fun getLxmfIdentity(cb: IRnsResultCallback) = dispatch(cb, scope) {
         val identity = impl.getLxmfIdentity().getOrThrow()
@@ -215,16 +234,4 @@ internal class ServerRnsLxmf(
         // far under the ~1 MB buffer at this 64 KB threshold.
         const val INLINE_FIELDS_LIMIT = 64 * 1024
     }
-}
-
-/** Inverse of `toExtraFieldsBundle` on the client side. */
-private fun Bundle.toExtraFieldsMap(): Map<Int, Any> {
-    val map = LinkedHashMap<Int, Any>(size())
-    for (key in keySet()) {
-        @Suppress("DEPRECATION")
-        val value = get(key) ?: continue
-        val field = key.toIntOrNull() ?: continue
-        map[field] = value
-    }
-    return map
 }

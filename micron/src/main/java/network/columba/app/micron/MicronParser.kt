@@ -15,7 +15,8 @@ package network.columba.app.micron
  *
  * Inline formatting uses backtick + command character:
  * - `` `! `` bold, `` `* `` italic, `` `_ `` underline
- * - `` `Fxxx `` foreground color, `` `Bxxx `` background color
+ * - `` `Fxxx `` / `` `FTxxxxxx `` foreground color
+ * - `` `Bxxx `` / `` `BTxxxxxx `` background color
  * - `` `f `` reset foreground, `` `b `` reset background
  * - `` `c `` center, `` `l `` left, `` `r `` right, `` `a `` default alignment
  * - `` ` `` (backtick + backtick or end of token) reset all formatting
@@ -196,6 +197,27 @@ object MicronParser {
                 }
             }
 
+            // Images: `(alt`w=..`h=..`a=c`:url) — block-level, own line.
+            // Mirrors upstream MicronParser.parse_image: everything up to the
+            // last ")" is the tag; fields split on backtick; first field is
+            // alt text, last is the URL, middle fields are key=value
+            // properties (w, h, a; unknown keys ignored). A malformed tag
+            // (no closing paren or fewer than two backtick-separated fields)
+            // falls through to plain inline text, exactly like upstream.
+            if (line.startsWith("`(")) {
+                val image = parseImage(line.substring(2))
+                if (image != null) {
+                    outputLines.add(
+                        MicronLine(
+                            elements = listOf(image),
+                            alignment = currentAlignment,
+                            indentLevel = sectionDepth,
+                        ),
+                    )
+                    continue
+                }
+            }
+
             // Regular content line — parse inline elements
             val (elements, updatedStyle, updatedAlignment) =
                 parseInline(
@@ -369,13 +391,21 @@ object MicronParser {
             // Reset background color
             'b' -> FormatResult(style.copy(background = MicronColor.Default), alignment, afterCmd)
 
-            // Foreground color: Fxxx (3 chars)
+            // Foreground color: Fxxx (3 chars) or FTxxxxxx (6-char true color)
             'F' -> {
-                if (afterCmd + 3 <= line.length) {
-                    val colorStr = line.substring(afterCmd, afterCmd + 3)
-                    val color = MicronColor.parse(colorStr)
+                val isTrueColor = afterCmd < line.length && line[afterCmd] == 'T'
+                val colorStart = afterCmd + if (isTrueColor) 1 else 0
+                val colorLength = if (isTrueColor) 6 else 3
+                if (colorStart + colorLength <= line.length) {
+                    val colorStr = line.substring(colorStart, colorStart + colorLength)
+                    val color =
+                        if (isTrueColor) {
+                            MicronColor.parseTrueColor(colorStr)
+                        } else {
+                            MicronColor.parse(colorStr)
+                        }
                     if (color != null) {
-                        FormatResult(style.copy(foreground = color), alignment, afterCmd + 3)
+                        FormatResult(style.copy(foreground = color), alignment, colorStart + colorLength)
                     } else {
                         null
                     }
@@ -384,13 +414,21 @@ object MicronParser {
                 }
             }
 
-            // Background color: Bxxx (3 chars)
+            // Background color: Bxxx (3 chars) or BTxxxxxx (6-char true color)
             'B' -> {
-                if (afterCmd + 3 <= line.length) {
-                    val colorStr = line.substring(afterCmd, afterCmd + 3)
-                    val color = MicronColor.parse(colorStr)
+                val isTrueColor = afterCmd < line.length && line[afterCmd] == 'T'
+                val colorStart = afterCmd + if (isTrueColor) 1 else 0
+                val colorLength = if (isTrueColor) 6 else 3
+                if (colorStart + colorLength <= line.length) {
+                    val colorStr = line.substring(colorStart, colorStart + colorLength)
+                    val color =
+                        if (isTrueColor) {
+                            MicronColor.parseTrueColor(colorStr)
+                        } else {
+                            MicronColor.parse(colorStr)
+                        }
                     if (color != null) {
-                        FormatResult(style.copy(background = color), alignment, afterCmd + 3)
+                        FormatResult(style.copy(background = color), alignment, colorStart + colorLength)
                     } else {
                         null
                     }
@@ -410,6 +448,62 @@ object MicronParser {
 
             else -> null
         }
+    }
+
+    /**
+     * Parse an image tag body (everything after the leading `` `(` ``).
+     * Mirrors upstream `MicronParser.parse_image`:
+     * `alt`w=<spec>`h=<spec>`a=<l|c|r>`:/media/foo.webp)` — the tag ends at
+     * the last ")" ; fields split on backtick; first field alt text, last
+     * field the URL (leading colon = relative to the current page's node;
+     * `<hash>:/path` for cross-node), middle fields `key=value` properties
+     * where w/h are size specs and a is alignment (l/c/r expanded to
+     * left/center/right). Unknown property keys are ignored.
+     *
+     * Returns null for structurally malformed tags (no closing paren, or
+     * fewer than two backtick-separated fields) so the line falls through to
+     * plain inline text, exactly like upstream. A well-formed tag with an
+     * empty URL still yields an Image — renderers show the alt text as an
+     * error placeholder, matching upstream's "Error loading image" line.
+     */
+    internal fun parseImage(body: String): MicronElement.Image? {
+        val endpos = body.lastIndexOf(')')
+        if (endpos <= 0) return null
+        val fields = body.substring(0, endpos).split('`')
+        if (fields.size < 2) return null
+
+        val alt = fields.first().trim()
+        val url = fields.last().trim()
+        var width: String? = null
+        var height: String? = null
+        var align: String? = null
+
+        for (prop in fields.subList(1, fields.size - 1)) {
+            val eq = prop.indexOf('=')
+            if (eq == -1) continue
+            val key = prop.substring(0, eq).trim()
+            val value = prop.substring(eq + 1).trim()
+            when (key) {
+                "w" -> width = value
+                "h" -> height = value
+                "a" ->
+                    align =
+                        when (value) {
+                            "c" -> "center"
+                            "l" -> "left"
+                            "r" -> "right"
+                            else -> value
+                        }
+            }
+        }
+
+        return MicronElement.Image(
+            alt = alt,
+            url = url,
+            width = width,
+            height = height,
+            align = align,
+        )
     }
 
     /**

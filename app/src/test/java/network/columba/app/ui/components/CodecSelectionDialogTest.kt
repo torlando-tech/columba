@@ -80,6 +80,36 @@ class CodecSelectionDialogTest {
     }
 
     @Test
+    fun `dialog can be reused for voice message quality`() {
+        var selectedProfile: CodecProfile? = null
+        val voiceMessageProfiles =
+            listOf(
+                CodecProfile.QUALITY_MEDIUM,
+                CodecProfile.QUALITY_HIGH,
+                CodecProfile.QUALITY_MAX,
+            )
+
+        composeTestRule.setContent {
+            CodecSelectionDialog(
+                title = "Select Voice Message Quality",
+                subtitle = "Choose the recording quality",
+                profiles = voiceMessageProfiles,
+                confirmButtonText = "Record",
+                onDismiss = {},
+                onProfileSelected = { selectedProfile = it },
+            )
+        }
+
+        composeTestRule.onNodeWithText("Select Voice Message Quality").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Record").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Ultra Low Bandwidth").assertDoesNotExist()
+        composeTestRule.onNodeWithText("High Quality").performClick()
+        composeTestRule.onNodeWithText("Record").performClick()
+
+        assertEquals(CodecProfile.QUALITY_HIGH, selectedProfile)
+    }
+
+    @Test
     fun `dialog displays Cancel button`() {
         composeTestRule.setContent {
             CodecSelectionDialog(

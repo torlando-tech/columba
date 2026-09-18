@@ -42,7 +42,6 @@ class MessageCollectorTest {
     private lateinit var identityRepository: IdentityRepository
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var peerIconDao: PeerIconDao
-    private lateinit var conversationLinkManager: ConversationLinkManager
     private lateinit var messageCollector: MessageCollector
 
     // Use extraBufferCapacity to ensure emissions aren't dropped before collector is ready
@@ -62,11 +61,6 @@ class MessageCollectorTest {
         identityRepository = mockk()
         notificationHelper = mockk()
         peerIconDao = mockk()
-        conversationLinkManager = mockk()
-
-        // Default behavior for conversationLinkManager
-        every { conversationLinkManager.recordPeerActivity(any(), any()) } just Runs
-        every { conversationLinkManager.recordPeerActivity(any()) } just Runs
 
         // Explicit stubs for notificationHelper (suspend function)
         coEvery { notificationHelper.notifyMessageReceived(any(), any(), any(), any()) } returns Unit
@@ -111,7 +105,6 @@ class MessageCollectorTest {
                 identityRepository = identityRepository,
                 notificationHelper = notificationHelper,
                 peerIconDao = peerIconDao,
-                conversationLinkManager = conversationLinkManager,
             )
     }
 
@@ -367,6 +360,51 @@ class MessageCollectorTest {
             kotlinx.coroutines.delay(200)
 
             // Then: Notification should be posted with isFavorite = true
+            coVerify(timeout = 2000) {
+                notificationHelper.notifyMessageReceived(
+                    destinationHash = testSourceHashHex,
+                    peerName = any(),
+                    messagePreview = any(),
+                    isFavorite = true,
+                )
+            }
+        }
+
+    @Test
+    fun `processMessage treats saved contact without favorite announce as favorite`() =
+        runBlocking {
+            // Given: A message from a peer saved via "Save to Contacts" (Chats/Messaging
+            // screens). Those flows write to the contacts table and never touch the
+            // legacy announce isFavorite flag, so the announce row reports
+            // isFavorite = false even though the peer IS a saved contact.
+            val testMessage =
+                ReceivedMessage(
+                    messageHash = "contact_msg",
+                    content = "Message from saved contact",
+                    sourceHash = testSourceHash,
+                    destinationHash = testDestHash,
+                    timestamp = System.currentTimeMillis(),
+                    fieldsJson = null,
+                    publicKey = null,
+                )
+
+            // Announce row exists but is NOT favorited (Save to Contacts never sets it)
+            coEvery { announceRepository.getAnnounce(testSourceHashHex) } returns
+                mockk {
+                    every { isFavorite } returns false
+                }
+            // But the peer IS in the contacts table
+            coEvery { contactRepository.hasContact(testSourceHashHex) } returns true
+
+            // When: Start collecting and emit
+            val startResult = runCatching { messageCollector.startCollecting() }
+            assertTrue("startCollecting should complete without throwing", startResult.isSuccess)
+            kotlinx.coroutines.delay(50)
+            messageFlow.emit(testMessage)
+            kotlinx.coroutines.delay(200)
+
+            // Then: Notification should be posted with isFavorite = true, so that
+            // "Message from Saved Peer" (with "Received Message" off) still fires.
             coVerify(timeout = 2000) {
                 notificationHelper.notifyMessageReceived(
                     destinationHash = testSourceHashHex,

@@ -4,6 +4,13 @@ import network.columba.app.data.db.entity.AnnounceEntity
 import network.columba.app.data.db.entity.ContactEntity
 import network.columba.app.data.db.entity.ConversationEntity
 import network.columba.app.data.db.entity.MessageEntity
+import network.columba.app.rns.api.model.DeliveryStatus
+import network.columba.app.rns.api.model.DeliveryStatusUpdate
+import network.columba.app.rns.api.RnsBackend
+import network.columba.app.rns.api.RnsCore
+import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTelemetry
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.di.ServiceDatabaseProvider
 import network.columba.app.test.DatabaseTest
 import io.mockk.clearAllMocks
@@ -11,11 +18,18 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -60,7 +74,7 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
         mockkObject(ServiceDatabaseProvider)
         every { ServiceDatabaseProvider.getDatabase(any()) } returns database
 
-        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor)
+        persistenceManager = ServicePersistenceManager(context, testScope, settingsAccessor, false)
     }
 
     @After
@@ -99,6 +113,8 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 stampCostFlexibility = null,
                 peeringCost = null,
                 propagationTransferLimitKb = null,
+                announcePacketHash = "00112233",
+                isPathResponse = false,
             )
             advanceUntilIdle()
             Thread.sleep(100) // Allow Room's IO dispatcher to complete
@@ -110,6 +126,129 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
             assertEquals(2, saved?.hops)
             assertEquals("LXMF_PEER", saved?.nodeType)
             assertFalse("New announce should not be favorited", saved?.isFavorite ?: true)
+            val activity = database.peerActivityDao().getActivity(destinationHash)
+            assertEquals(saved?.lastSeenTimestamp, activity?.lastReceivedAt)
+            assertEquals("ANNOUNCE", activity?.activityType)
+        }
+
+    @Test
+    fun `path response updates announce metadata without advancing peer activity`() =
+        testScope.runTest {
+            val destinationHash = "path_response_peer"
+            insertTestIdentity()
+            contactDao.insertContact(
+                ContactEntity(
+                    destinationHash = destinationHash,
+                    identityHash = TEST_IDENTITY_HASH,
+                    publicKey = testPublicKey,
+                    addedTimestamp = 500L,
+                    addedVia = "MANUAL",
+                ),
+            )
+
+            database.peerActivityDao().recordActivity(
+                destinationHash = destinationHash,
+                receivedAt = 1_000L,
+                activityType = "MESSAGE",
+            )
+
+            assertTrue(
+                persistenceManager.persistAnnounce(
+                    destinationHash = destinationHash,
+                    peerName = "Cached Peer",
+                    publicKey = testPublicKey,
+                    appData = testAppData,
+                    hops = 3,
+                    timestamp = 2_000L,
+                    nodeType = "PEER",
+                    receivingInterface = "TCP",
+                    receivingInterfaceType = "TCP",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                    announcePacketHash = "aabbccdd",
+                    isPathResponse = true,
+                ),
+            )
+
+            val announce = announceDao.getAnnounce(destinationHash)
+            assertNotNull(announce)
+            assertEquals("Cached Peer", announce?.peerName)
+            assertEquals(3, announce?.hops)
+            assertEquals(0L, announce?.lastSeenTimestamp)
+            val activity = database.peerActivityDao().getActivity(destinationHash)
+            assertEquals(1_000L, activity?.lastReceivedAt)
+            assertEquals("MESSAGE", activity?.activityType)
+            val identityHash = network.columba.app.data.util.HashUtils.computeIdentityHash(testPublicKey)
+            assertEquals(0L, peerIdentityDao.getPeerIdentity(identityHash)?.lastSeenTimestamp)
+            val contact = contactDao.getEnrichedContacts(TEST_IDENTITY_HASH, currentTime = 2_000L).first().single()
+            assertEquals(1_000L, contact.lastSeenTimestamp)
+        }
+
+    @Test
+    fun `replayed announce packet updates peer activity only once`() =
+        testScope.runTest {
+            val destinationHash = "replayed_announce_peer"
+
+            suspend fun persist(timestamp: Long) =
+                persistenceManager.persistAnnounce(
+                    destinationHash = destinationHash,
+                    peerName = "Peer",
+                    publicKey = testPublicKey,
+                    appData = testAppData,
+                    hops = 1,
+                    timestamp = timestamp,
+                    nodeType = "PEER",
+                    receivingInterface = "TCP",
+                    receivingInterfaceType = "TCP",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                    announcePacketHash = "11223344",
+                    isPathResponse = false,
+                )
+
+            assertTrue(persist(1_000L))
+            assertTrue(persist(9_000L))
+
+            val activity = database.peerActivityDao().getActivity(destinationHash)
+            assertEquals(1_000L, activity?.lastReceivedAt)
+            assertEquals("ANNOUNCE", activity?.activityType)
+            assertEquals(1_000L, announceDao.getAnnounce(destinationHash)?.lastSeenTimestamp)
+        }
+
+    @Test
+    fun `hashless announce updates metadata without advancing peer activity`() =
+        testScope.runTest {
+            val destinationHash = "hashless_announce_peer"
+
+            assertTrue(
+                persistenceManager.persistAnnounce(
+                    destinationHash = destinationHash,
+                    peerName = "Peer",
+                    publicKey = testPublicKey,
+                    appData = testAppData,
+                    hops = 1,
+                    timestamp = 4_000L,
+                    nodeType = "PEER",
+                    receivingInterface = "TCP",
+                    receivingInterfaceType = "TCP",
+                    aspect = "lxmf.delivery",
+                    stampCost = null,
+                    stampCostFlexibility = null,
+                    peeringCost = null,
+                    propagationTransferLimitKb = null,
+                    announcePacketHash = null,
+                    isPathResponse = false,
+                ),
+            )
+
+            assertNotNull(announceDao.getAnnounce(destinationHash))
+            assertNull(database.peerActivityDao().getActivity(destinationHash))
         }
 
     // Note: "persistAnnounce preserves favorite status on update" test was removed.
@@ -804,6 +943,560 @@ class ServicePersistenceManagerDatabaseTest : DatabaseTest() {
                 "Unread should not increment for duplicate",
                 6,
                 conversationDao.getConversation(TEST_PEER_HASH, TEST_IDENTITY_HASH)?.unreadCount,
+            )
+        }
+
+    @Test
+    fun `incoming message records local reception time instead of sender clock`() =
+        testScope.runTest {
+            insertTestIdentity()
+            val before = System.currentTimeMillis()
+            persistenceManager.persistMessage(
+                messageHash = "clock-skew-message",
+                content = "from the future",
+                sourceHash = TEST_PEER_HASH,
+                timestamp = Long.MAX_VALUE,
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = "direct",
+            )
+            val after = System.currentTimeMillis()
+
+            val activity = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+            assertNotNull(activity)
+            assertTrue(activity!!.lastReceivedAt in before..after)
+            assertEquals("MESSAGE", activity.activityType)
+        }
+
+    @Test
+    fun `outgoing undelivered message does not update peer activity`() =
+        testScope.runTest {
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "pending",
+                    lastMessageTimestamp = 999L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "outgoing-pending",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 999L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                ),
+            )
+
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+            assertFalse(
+                persistenceManager.persistDeliveryProof(
+                    DeliveryStatusUpdate("unknown-message", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH),
+                    1_000L,
+                ),
+            )
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+        }
+
+    @Test
+    fun `pre-row lifecycle survives service manager restart and later canonical Room load`() =
+        testScope.runTest {
+            insertTestIdentity()
+            assertTrue(
+                persistenceManager.persistDeliveryStatus(
+                    DeliveryStatusUpdate("late-outgoing", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH),
+                ),
+            )
+            assertEquals(
+                "delivered",
+                database.pendingDeliveryStatusDao().get(TEST_IDENTITY_HASH, "late-outgoing")?.status,
+            )
+
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "pending",
+                    lastMessageTimestamp = 999L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "late-outgoing",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 999L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                    deliveryMethod = "direct",
+                ),
+            )
+
+            ServicePersistenceManager(context, backgroundScope, settingsAccessor, true)
+
+            // A later UI subscriber/rebind reads canonical Room state; no IPC replay is required.
+            val canonical =
+                withContext(Dispatchers.Default) {
+                    withTimeout(5_000L) {
+                        messageDao.observeMessageById("late-outgoing").first { it?.status == "delivered" }
+                    }
+                }
+            assertEquals("delivered", canonical?.status)
+            assertNull(database.pendingDeliveryStatusDao().get(TEST_IDENTITY_HASH, "late-outgoing"))
+        }
+
+    @Test
+    fun `pre-row propagated retry then delivered reloads delivered with propagated method`() =
+        testScope.runTest {
+            insertTestIdentity()
+            assertTrue(
+                persistenceManager.persistDeliveryStatus(
+                    DeliveryStatusUpdate(
+                        "late-fallback",
+                        DeliveryStatus.RETRYING_PROPAGATED,
+                        1L,
+                        TEST_IDENTITY_HASH,
+                    ),
+                ),
+            )
+            assertTrue(
+                persistenceManager.persistDeliveryStatus(
+                    DeliveryStatusUpdate("late-fallback", DeliveryStatus.DELIVERED, 2L, TEST_IDENTITY_HASH),
+                ),
+            )
+
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "pending",
+                    lastMessageTimestamp = 999L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "late-fallback",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 999L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                    deliveryMethod = "direct",
+                ),
+            )
+
+            ServicePersistenceManager(context, backgroundScope, settingsAccessor, true)
+            val canonical =
+                withContext(Dispatchers.Default) {
+                    withTimeout(5_000L) {
+                        messageDao.observeMessageById("late-fallback").first { it?.status == "delivered" }
+                    }
+                }
+            assertEquals("delivered", canonical?.status)
+            assertEquals("propagated", canonical?.deliveryMethod)
+            assertNull(database.pendingDeliveryStatusDao().get(TEST_IDENTITY_HASH, "late-fallback"))
+        }
+
+    @Test
+    fun `delayed callback uses attempt identity after switch with duplicate hashes`() =
+        testScope.runTest {
+            val identityA = TEST_IDENTITY_HASH
+            val identityB = "other-identity"
+            val duplicateHash = "duplicate-outgoing"
+            insertTestIdentity(identityHash = identityA, isActive = true)
+            insertTestIdentity(identityHash = identityB, displayName = "Other", isActive = false)
+            listOf(identityA to "Peer A", identityB to "Peer B").forEachIndexed { index, (identity, name) ->
+                conversationDao.insertConversation(
+                    ConversationEntity(
+                        peerHash = TEST_PEER_HASH,
+                        identityHash = identity,
+                        peerName = name,
+                        lastMessage = "pending",
+                        lastMessageTimestamp = 1_000L + index,
+                    ),
+                )
+                messageDao.insertMessage(
+                    MessageEntity(
+                        id = duplicateHash,
+                        conversationHash = TEST_PEER_HASH,
+                        identityHash = identity,
+                        content = "from $name",
+                        timestamp = 1_000L + index,
+                        isFromMe = true,
+                        status = "pending",
+                        isRead = true,
+                    ),
+                )
+            }
+
+            // Attempt A already owns its immutable event provenance when B becomes active.
+            localIdentityDao.setActive(identityB)
+            val delayedFromA =
+                DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 2_000L, identityA)
+            assertTrue(persistenceManager.persistDeliveryStatus(delayedFromA))
+
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertNull(database.pendingDeliveryStatusDao().get(identityA, duplicateHash))
+
+            // A legacy/untrusted callback cannot borrow mutable active identity B.
+            val missingOrigin = DeliveryStatusUpdate(duplicateHash, DeliveryStatus.FAILED, 3_000L)
+            assertFalse(persistenceManager.persistDeliveryStatus(missingOrigin))
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertNull(database.pendingDeliveryStatusDao().get(identityB, duplicateHash))
+        }
+
+    @Test
+    fun `collector scopes duplicate-hash delivery proof to originating identity peer`() =
+        testScope.runTest {
+            val identityA = TEST_IDENTITY_HASH
+            val identityB = "collector-identity-b"
+            val duplicateHash = "collector-duplicate-outgoing"
+            val peerA = "collector-peer-a"
+            val peerB = "collector-peer-b"
+            insertTestIdentity(identityHash = identityA, isActive = true)
+            insertTestIdentity(identityHash = identityB, displayName = "Other", isActive = false)
+            listOf(identityA to peerA, identityB to peerB).forEachIndexed { index, (identity, peer) ->
+                insertCollectorOutgoing(duplicateHash, identity, peer, index.toLong())
+            }
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "collector-barrier",
+                    conversationHash = peerA,
+                    identityHash = identityA,
+                    content = "barrier",
+                    timestamp = 10L,
+                    isFromMe = true,
+                    status = "pending",
+                    isRead = true,
+                ),
+            )
+            localIdentityDao.setActive(identityB)
+
+            val statuses = MutableSharedFlow<DeliveryStatusUpdate>(extraBufferCapacity = 4)
+            val telemetryEvents = MutableSharedFlow<network.columba.app.rns.api.model.LocationTelemetry>()
+            val reactions = MutableSharedFlow<String>()
+            val backend = mockk<RnsBackend>()
+            val core = mockk<RnsCore>()
+            val lxmf = mockk<RnsLxmf>()
+            val telemetry = mockk<RnsTelemetry>()
+            val transportAdmin = mockk<RnsTransportAdmin>()
+            every { backend.core } returns core
+            every { backend.lxmf } returns lxmf
+            every { backend.telemetry } returns telemetry
+            every { backend.transportAdmin } returns transportAdmin
+            every { lxmf.observeMessages() } returns emptyFlow()
+            every { lxmf.observeDeliveryStatus() } returns statuses
+            every { core.observeAnnounces() } returns emptyFlow()
+            every { core.observeLinks() } returns emptyFlow()
+            every { telemetry.locationTelemetryFlow } returns telemetryEvents
+            every { transportAdmin.reactionReceivedFlow } returns reactions
+            val collector = PeerActivityCollector(backend, persistenceManager) { 2_000L }
+            val collectorJob = collector.start(this)
+            runCurrent()
+
+            // Delayed A callback arrives while B is active. Both rows share the hash.
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 1L, identityA))
+            awaitMessageStatus(duplicateHash, identityA, "delivered")
+            awaitPeerActivity(peerA)
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityA)?.status)
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertEquals(2_000L, database.peerActivityDao().getActivity(peerA)?.lastReceivedAt)
+            assertNull(database.peerActivityDao().getActivity(peerB))
+
+            // Missing or blank provenance fails closed for both lifecycle and peer activity.
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 2L, null))
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 2L, "   "))
+            statuses.emit(DeliveryStatusUpdate("collector-barrier", DeliveryStatus.DELIVERED, 2L, identityA))
+            awaitMessageStatus("collector-barrier", identityA, "delivered")
+            assertEquals("pending", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertNull(database.peerActivityDao().getActivity(peerB))
+
+            // The same hash under B remains a distinct proof event, not a dedup collision with A.
+            statuses.emit(DeliveryStatusUpdate(duplicateHash, DeliveryStatus.DELIVERED, 3L, identityB))
+            awaitMessageStatus(duplicateHash, identityB, "delivered")
+            awaitPeerActivity(peerB)
+            assertEquals("delivered", messageDao.getMessageById(duplicateHash, identityB)?.status)
+            assertEquals(2_000L, database.peerActivityDao().getActivity(peerB)?.lastReceivedAt)
+
+            collectorJob.cancel()
+        }
+
+    private suspend fun insertCollectorOutgoing(
+        messageHash: String,
+        identityHash: String,
+        peerHash: String,
+        timestamp: Long,
+    ) {
+        conversationDao.insertConversation(
+            ConversationEntity(
+                peerHash = peerHash,
+                identityHash = identityHash,
+                peerName = peerHash,
+                lastMessage = "pending",
+                lastMessageTimestamp = timestamp,
+            ),
+        )
+        messageDao.insertMessage(
+            MessageEntity(
+                id = messageHash,
+                conversationHash = peerHash,
+                identityHash = identityHash,
+                content = identityHash,
+                timestamp = timestamp,
+                isFromMe = true,
+                status = "pending",
+                isRead = true,
+            ),
+        )
+    }
+
+    private suspend fun awaitMessageStatus(
+        messageHash: String,
+        identityHash: String,
+        expectedStatus: String,
+    ) = withContext(Dispatchers.Default) {
+        withTimeout(5_000L) {
+            while (messageDao.getMessageById(messageHash, identityHash)?.status != expectedStatus) {
+                kotlinx.coroutines.delay(10L)
+            }
+        }
+    }
+
+    private suspend fun awaitPeerActivity(peerHash: String) =
+        withContext(Dispatchers.Default) {
+            withTimeout(5_000L) {
+                while (database.peerActivityDao().getActivity(peerHash) == null) {
+                    kotlinx.coroutines.delay(10L)
+                }
+            }
+        }
+
+    @Test
+    fun `incoming activity admission rejects replay blocked unknown and propagated messages`() =
+        testScope.runTest {
+            insertTestIdentity()
+
+            assertTrue(persistenceManager.persistIncomingMessageActivity("fresh", TEST_PEER_HASH, "direct", 100L))
+            assertFalse(persistenceManager.persistIncomingMessageActivity("fresh", TEST_PEER_HASH, "direct", 200L))
+            assertEquals(100L, database.peerActivityDao().getActivity(TEST_PEER_HASH)?.lastReceivedAt)
+
+            database.blockedPeerDao().insertBlockedPeer(
+                network.columba.app.data.db.entity.BlockedPeerEntity(
+                    peerHash = "blocked-peer",
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerIdentityHash = null,
+                    displayName = "Blocked",
+                    blockedTimestamp = 1L,
+                    isBlackholeEnabled = false,
+                ),
+            )
+            assertFalse(persistenceManager.persistIncomingMessageActivity("blocked", "blocked-peer", "direct", 300L))
+            assertNull(database.peerActivityDao().getActivity("blocked-peer"))
+
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            assertFalse(persistenceManager.persistIncomingMessageActivity("unknown", "unknown-peer", "direct", 400L))
+            assertNull(database.peerActivityDao().getActivity("unknown-peer"))
+
+            every { settingsAccessor.getBlockUnknownSenders() } returns false
+            assertFalse(persistenceManager.persistIncomingMessageActivity("propagated", "relay-peer", "propagated", 500L))
+            assertNull(database.peerActivityDao().getActivity("relay-peer"))
+        }
+
+    @Test
+    fun `incoming activity admission requires active identity`() =
+        testScope.runTest {
+            assertFalse(persistenceManager.persistIncomingMessageActivity("message", TEST_PEER_HASH, "direct", 100L))
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+        }
+
+    @Test
+    fun `verified delivery proof updates outgoing recipient activity`() =
+        testScope.runTest {
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "sent",
+                    lastMessageTimestamp = 10L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "outgoing-delivered",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 10L,
+                    isFromMe = true,
+                    status = "sent",
+                    isRead = true,
+                ),
+            )
+
+            val proof =
+                DeliveryStatusUpdate("outgoing-delivered", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH)
+            assertTrue(persistenceManager.persistDeliveryProof(proof, 500L))
+            assertFalse(persistenceManager.persistDeliveryProof(proof, 900L))
+            val activity = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+            assertEquals(500L, activity?.lastReceivedAt)
+            assertEquals("PROOF", activity?.activityType)
+        }
+
+    @Test
+    fun `incoming message cannot be mistaken for outgoing proof`() =
+        testScope.runTest {
+            insertTestIdentity()
+            persistenceManager.persistMessage(
+                messageHash = "incoming-proof-candidate",
+                content = "hello",
+                sourceHash = TEST_PEER_HASH,
+                timestamp = 1L,
+                fieldsJson = null,
+                publicKey = null,
+                replyToMessageId = null,
+                deliveryMethod = "direct",
+            )
+            val original = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+
+            assertFalse(
+                persistenceManager.persistDeliveryProof(
+                    DeliveryStatusUpdate(
+                        "incoming-proof-candidate",
+                        DeliveryStatus.DELIVERED,
+                        1L,
+                        TEST_IDENTITY_HASH,
+                    ),
+                    original!!.lastReceivedAt + 100L,
+                ),
+            )
+            assertEquals(original, database.peerActivityDao().getActivity(TEST_PEER_HASH))
+        }
+
+    @Test
+    fun `delivery proof resolves message after active identity changes`() =
+        testScope.runTest {
+            insertTestIdentity()
+            conversationDao.insertConversation(
+                ConversationEntity(
+                    peerHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerName = "Peer",
+                    lastMessage = "sent",
+                    lastMessageTimestamp = 10L,
+                ),
+            )
+            messageDao.insertMessage(
+                MessageEntity(
+                    id = "proof-after-switch",
+                    conversationHash = TEST_PEER_HASH,
+                    identityHash = TEST_IDENTITY_HASH,
+                    content = "hello",
+                    timestamp = 10L,
+                    isFromMe = true,
+                    status = "sent",
+                    isRead = true,
+                ),
+            )
+            database.localIdentityDao().insert(
+                network.columba.app.data.db.entity.LocalIdentityEntity(
+                    identityHash = "other-identity",
+                    displayName = "Other",
+                    destinationHash = "other-destination",
+                    filePath = "/other",
+                    createdTimestamp = 2L,
+                    lastUsedTimestamp = 2L,
+                    isActive = false,
+                ),
+            )
+            database.localIdentityDao().setActive("other-identity")
+
+            assertTrue(
+                persistenceManager.persistDeliveryProof(
+                    DeliveryStatusUpdate("proof-after-switch", DeliveryStatus.DELIVERED, 1L, TEST_IDENTITY_HASH),
+                    700L,
+                ),
+            )
+            assertEquals(700L, database.peerActivityDao().getActivity(TEST_PEER_HASH)?.lastReceivedAt)
+        }
+
+    @Test
+    fun `direct telemetry applies provenance replay and privacy admission`() =
+        testScope.runTest {
+            insertTestIdentity()
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    TEST_PEER_HASH,
+                    eventId = "frame-1",
+                    receivedAt = 100L,
+                    isDirect = false,
+                ),
+            )
+            assertNull(database.peerActivityDao().getActivity(TEST_PEER_HASH))
+
+            assertTrue(
+                persistenceManager.persistTelemetryActivity(
+                    TEST_PEER_HASH,
+                    eventId = "frame-1",
+                    receivedAt = 200L,
+                    isDirect = true,
+                ),
+            )
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    TEST_PEER_HASH,
+                    eventId = "frame-1",
+                    receivedAt = 300L,
+                    isDirect = true,
+                ),
+            )
+            val activity = database.peerActivityDao().getActivity(TEST_PEER_HASH)
+            assertEquals(200L, activity?.lastReceivedAt)
+            assertEquals("TELEMETRY", activity?.activityType)
+
+            database.blockedPeerDao().insertBlockedPeer(
+                network.columba.app.data.db.entity.BlockedPeerEntity(
+                    peerHash = "blocked-telemetry",
+                    identityHash = TEST_IDENTITY_HASH,
+                    peerIdentityHash = null,
+                    displayName = "Blocked",
+                    blockedTimestamp = 1L,
+                    isBlackholeEnabled = false,
+                ),
+            )
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    "blocked-telemetry",
+                    eventId = "blocked-frame",
+                    receivedAt = 400L,
+                    isDirect = true,
+                ),
+            )
+
+            every { settingsAccessor.getBlockUnknownSenders() } returns true
+            assertFalse(
+                persistenceManager.persistTelemetryActivity(
+                    "unknown-telemetry",
+                    eventId = "unknown-frame",
+                    receivedAt = 500L,
+                    isDirect = true,
+                ),
             )
         }
 }

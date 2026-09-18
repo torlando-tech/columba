@@ -19,9 +19,11 @@ import network.columba.app.rns.api.model.LogLevel
 import network.columba.app.rns.api.model.ReticulumConfig
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.MessageCollector
 import network.columba.app.service.PropagationNodeManager
+import network.columba.app.service.SharedInstanceStatus
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.startup.ConfigApplyFlagManager
 import network.columba.app.startup.ServiceIdentityVerifier
@@ -53,6 +55,9 @@ class ColumbaApplication : Application() {
     @Inject
     lateinit var rnsTelephony: network.columba.app.rns.api.RnsTelephony
 
+    @Inject
+    lateinit var rnsTransportAdmin: RnsTransportAdmin
+
     // Cross-process SharedPreferences wrapper shared with the :reticulum process.
     // Constructed lazily rather than via Hilt because it only needs a Context and has
     // no other dependencies — this avoids adding a module binding for a single call site.
@@ -72,6 +77,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var messageCollector: MessageCollector
+
+    @Inject
+    lateinit var incomingCallPresenter: network.columba.app.service.IncomingCallPresenter
 
     @Inject
     lateinit var conversationRepository: ConversationRepository
@@ -108,6 +116,9 @@ class ColumbaApplication : Application() {
 
     @Inject
     lateinit var interfaceTransportObserver: network.columba.app.service.manager.InterfaceTransportObserver
+
+    @Inject
+    lateinit var rnsTransportRecoveryManager: network.columba.app.service.manager.RnsTransportRecoveryManager
 
     // Application-level coroutine scope for app-wide operations
     // Uses Dispatchers.Default for background initialization (no main-thread work needed)
@@ -166,6 +177,13 @@ class ColumbaApplication : Application() {
         }
 
         android.util.Log.d("ColumbaApplication", "Main app process detected ($processName) - proceeding with auto-initialization")
+
+        // Present incoming calls even when the app is backgrounded or the device is
+        // locked: the presenter posts the full-screen-intent notification on
+        // CallState.Incoming (issue #1079). Started before backend init because the
+        // bound callState flow is safe to observe before the service is ready - it
+        // just stays Idle until the service connection syncs state.
+        incomingCallPresenter.start()
 
         // Preload theme preference into DataStore's in-memory cache
         // This eliminates theme flash on app startup by ensuring the theme is cached
@@ -399,6 +417,7 @@ class ColumbaApplication : Application() {
                         identityResolutionManager.start(applicationScope)
                         propagationNodeManager.start()
                         telemetryCollectorManager.start()
+                        applySavedIncomingMessageSizeLimit()
                         android.util.Log.d(
                             "ColumbaApplication",
                             "MessageCollector, AutoAnnounceManager, IdentityResolutionManager, PropagationNodeManager, TelemetryCollectorManager started",
@@ -498,12 +517,23 @@ class ColumbaApplication : Application() {
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
+                        // Prime the backend's delivery gate with the persisted
+                        // limit at startup, before any delivery is possible
+                        // (columba#1106 startup window)
+                        incomingMessageSizeLimitKb =
+                            settingsRepository.getIncomingMessageSizeLimitKb().toLong(),
                     )
 
                 rnsCore
                     .initialize(config)
                     .onSuccess {
                         android.util.Log.i("ColumbaApplication", "Reticulum initialized successfully")
+
+                        // Belt-and-braces: the config already primed the backend's
+                        // delivery gate at startup (columba#1106); re-pushing the
+                        // persisted value covers the reconnect-to-running-backend
+                        // path where the backend outlived a settings change.
+                        applySavedIncomingMessageSizeLimit()
 
                         // A.10 follow-up: persist a sanitized snapshot so :reticulum can
                         // self-init after OOM/force-stop restart when UI isn't around to
@@ -514,6 +544,19 @@ class ColumbaApplication : Application() {
                             config = config,
                             identityHashHex = activeIdentity?.identityHash,
                         )
+
+                        // Persist shared instance status so the Settings UI banner reflects
+                        // the actual transport mode. Without this write the
+                        // `isSharedInstance` DataStore flag is only ever touched by unit
+                        // tests, so the banner always shows "Using Columba's Own Instance"
+                        // even when connected to a shared instance (e.g. reticulum-android
+                        // or Sideband on 127.0.0.1:37428) - and after a toggle-off restart
+                        // the banner/toggle snap back to "own instance" and look stuck.
+                        // This is the cold-start counterpart of the same check in
+                        // InterfaceConfigManager.applyInterfaceChanges(); both call
+                        // SharedInstanceStatus.persist() so they cannot drift apart.
+                        // Best-effort: a failure here must not fail app startup.
+                        SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
 
                         // networkStatus.collect (set up earlier) already pushes
                         // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no
@@ -595,6 +638,12 @@ class ColumbaApplication : Application() {
         // the filtered enabled set into the native stack. Safe to start before Reticulum is ready
         // (early `reloadInterfaces` calls just log a failure and the next transport change wins).
         interfaceTransportObserver.start(applicationScope)
+
+        // Auto-recovery for #1127: on restart-gated (python) backends, re-apply the
+        // interface set if the stack comes up READY but missing enabled interfaces
+        // after a transport transition (profile-swap / network-gap restart). No-op
+        // on hot-reload (kotlin) backends and while the stack is healthy.
+        rnsTransportRecoveryManager.start()
     }
 
     override fun onTerminate() {
@@ -605,6 +654,7 @@ class ColumbaApplication : Application() {
         messageCollector.stopCollecting()
         identityResolutionManager.stop()
         interfaceTransportObserver.stop()
+        rnsTransportRecoveryManager.stop()
 
         // Shutdown and unbind from service when app terminates
         applicationScope.launch {
@@ -614,6 +664,30 @@ class ColumbaApplication : Application() {
                 android.util.Log.e("ColumbaApplication", "Error shutting down Reticulum", e)
             }
             // unbindService() was a legacy no-op on the kotlin backend
+        }
+    }
+
+    /**
+     * Push the persisted incoming-message size limit to the protocol stack.
+     *
+     * Primary startup coverage comes from [ReticulumConfig.incomingMessageSizeLimitKb]
+     * (primed by the backend before its delivery destination becomes reachable);
+     * this push covers the reconnect-to-running-backend path and any drift
+     * between the backend's startup value and the current persisted setting.
+     * Called on both backend-ready paths: fresh init and reconnect.
+     */
+    private fun applySavedIncomingMessageSizeLimit() {
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching {
+                val limitKb = settingsRepository.getIncomingMessageSizeLimitKb()
+                rnsLxmf.setIncomingMessageSizeLimit(limitKb)
+                android.util.Log.d(
+                    "ColumbaApplication",
+                    "Applied saved incoming message size limit: ${limitKb}KB",
+                )
+            }.onFailure { e ->
+                android.util.Log.w("ColumbaApplication", "Failed to apply saved incoming message size limit", e)
+            }
         }
     }
 

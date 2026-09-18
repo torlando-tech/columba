@@ -108,6 +108,9 @@ data class RNodeWizardState(
     // Edit mode
     val editingInterfaceId: Long? = null,
     val isEditMode: Boolean = false,
+    val isPairingRepairMode: Boolean = false,
+    val pairingRepairDeviceName: String? = null,
+    val pairingRepairDeviceAddress: String? = null,
     // Transport mode - sends TNC KISS commands instead of saving interface config
     val transportMode: Boolean = false,
     val transportConfiguring: Boolean = false,
@@ -241,6 +244,9 @@ data class RNodeWizardState(
         } else {
             interfaceName
         }
+
+    fun interfaceNameAfterSelecting(device: DiscoveredRNode): String =
+        if (isPairingRepairMode) interfaceName else defaultInterfaceNameFor(device)
 }
 
 /**
@@ -345,7 +351,22 @@ class RNodeWizardViewModel
          * Initialize wizard for editing an existing RNode interface.
          */
         @Suppress("LongMethod", "CyclomaticComplexMethod") // Complex config mapping is inherent
-        fun loadExistingConfig(interfaceId: Long) {
+        fun loadExistingConfig(
+            interfaceId: Long,
+            repairPairing: Boolean = false,
+        ) {
+            if (repairPairing) {
+                _state.update {
+                    it.copy(
+                        editingInterfaceId = interfaceId,
+                        isEditMode = true,
+                        isPairingRepairMode = true,
+                        currentStep = WizardStep.DEVICE_DISCOVERY,
+                        selectedDevice = null,
+                        showManualEntry = false,
+                    )
+                }
+            }
             viewModelScope.launch {
                 try {
                     val entity = interfaceRepository.getInterfaceById(interfaceId).first()
@@ -371,6 +392,21 @@ class RNodeWizardViewModel
                     val isTcp = config.connectionMode == "tcp"
                     val isBle = config.connectionMode == "ble"
                     val isUsb = config.connectionMode == "usb"
+                    val repairDeviceAddress =
+                        config.targetDeviceAddress
+                            ?: if (repairPairing && !isTcp && !isUsb) {
+                                findUniqueBondedAddress(config.targetDeviceName)
+                            } else {
+                                null
+                            }
+                    val shouldPreselectBluetoothDevice =
+                        when {
+                            isTcp || isUsb -> false
+                            repairPairing -> false
+                            else -> !config.targetDeviceAddress.isNullOrBlank()
+                        }
+                    val requiresExplicitBluetoothSelection =
+                        !isTcp && !isUsb && !repairPairing && !shouldPreselectBluetoothDevice
 
                     // Determine connection type
                     val connectionType =
@@ -405,8 +441,16 @@ class RNodeWizardViewModel
                         state.copy(
                             editingInterfaceId = interfaceId,
                             isEditMode = true,
-                            // Skip straight to review — user doesn't need to re-walk the wizard
-                            currentStep = WizardStep.REVIEW_CONFIGURE,
+                            isPairingRepairMode = repairPairing,
+                            pairingRepairDeviceName = config.targetDeviceName.takeIf { repairPairing },
+                            pairingRepairDeviceAddress = repairDeviceAddress.takeIf { repairPairing },
+                            // Editing skips to review. Pairing repair must begin at device discovery.
+                            currentStep =
+                                if (repairPairing || requiresExplicitBluetoothSelection) {
+                                    WizardStep.DEVICE_DISCOVERY
+                                } else {
+                                    WizardStep.REVIEW_CONFIGURE
+                                },
                             showAdvancedSettings = true,
                             // Connection type
                             connectionType = connectionType,
@@ -417,12 +461,12 @@ class RNodeWizardViewModel
                             selectedUsbDevice = usbDevice,
                             // Pre-populate Bluetooth device (for Bluetooth mode)
                             selectedDevice =
-                                if (isTcp || isUsb) {
+                                if (!shouldPreselectBluetoothDevice) {
                                     null
                                 } else {
                                     DiscoveredRNode(
                                         name = config.targetDeviceName,
-                                        address = "",
+                                        address = config.targetDeviceAddress.orEmpty(),
                                         type = if (isBle) BluetoothType.BLE else BluetoothType.CLASSIC,
                                         rssi = null,
                                         isPaired = true,
@@ -450,7 +494,7 @@ class RNodeWizardViewModel
                     }
 
                     // Start RSSI polling for BLE devices (not TCP)
-                    if (isBle && !isTcp) {
+                    if (isBle && shouldPreselectBluetoothDevice) {
                         startRssiPolling()
                     }
 
@@ -566,13 +610,19 @@ class RNodeWizardViewModel
 
         fun goToNextStep() {
             val currentState = _state.value
+            if (pairingRepairCannotAdvance(currentState)) {
+                return
+            }
             val nextStep =
                 when (currentState.currentStep) {
                     WizardStep.DEVICE_DISCOVERY -> {
                         // Stop RSSI polling when leaving device discovery to prevent memory leaks
                         stopRssiPolling()
-                        // If we have pending LoRa params from discovered interface, skip to review
-                        if (currentState.hasPendingParams) {
+                        // Repair and ordinary edits preserve the loaded radio profile.
+                        if (currentState.isPairingRepairMode || currentState.isEditMode) {
+                            _state.update { it.copy(skippedRegionSelection = true) }
+                            WizardStep.REVIEW_CONFIGURE
+                        } else if (currentState.hasPendingParams) {
                             _state.update { it.copy(skippedRegionSelection = true) }
                             WizardStep.REVIEW_CONFIGURE
                         } else {
@@ -627,7 +677,9 @@ class RNodeWizardViewModel
                     WizardStep.MODEM_PRESET -> WizardStep.REGION_SELECTION
                     WizardStep.FREQUENCY_SLOT -> WizardStep.MODEM_PRESET
                     WizardStep.REVIEW_CONFIGURE ->
-                        if (currentState.skippedRegionSelection) {
+                        if (currentState.isPairingRepairMode) {
+                            WizardStep.DEVICE_DISCOVERY
+                        } else if (currentState.skippedRegionSelection) {
                             // Came from discovered interface params: go back to device selection
                             WizardStep.DEVICE_DISCOVERY
                         } else if (currentState.isCustomMode || currentState.selectedPreset != null) {
@@ -645,37 +697,66 @@ class RNodeWizardViewModel
             }
         }
 
+        /** Consumes the one-shot save completion before navigation removes this screen. */
+        fun consumeSaveSuccess() {
+            _state.update { it.copy(saveSuccess = false) }
+        }
+
         fun canProceed(): Boolean {
             val state = _state.value
             return when (state.currentStep) {
-                WizardStep.DEVICE_DISCOVERY ->
-                    when (state.connectionType) {
-                        RNodeConnectionType.TCP_WIFI ->
-                            state.tcpHost.isNotBlank()
-                        RNodeConnectionType.BLUETOOTH ->
-                            state.selectedDevice != null ||
-                                (
-                                    state.showManualEntry &&
-                                        state.manualDeviceName.isNotBlank() &&
-                                        state.manualDeviceNameError == null
-                                )
-                        RNodeConnectionType.USB_SERIAL ->
-                            state.selectedUsbDevice != null && state.selectedUsbDevice.hasPermission
-                    }
+                WizardStep.DEVICE_DISCOVERY -> canProceedFromDeviceDiscovery(state)
                 WizardStep.REGION_SELECTION ->
                     state.selectedFrequencyRegion != null || state.isCustomMode || state.selectedPreset != null
                 WizardStep.MODEM_PRESET ->
                     true // Default preset is pre-selected, user can always proceed
                 WizardStep.FREQUENCY_SLOT ->
                     true // Slot always has a valid selection
-                WizardStep.REVIEW_CONFIGURE ->
-                    if (state.transportMode) {
-                        validateConfigurationSilent()
-                    } else {
-                        state.interfaceName.isNotBlank() && validateConfigurationSilent()
-                    }
+                WizardStep.REVIEW_CONFIGURE -> {
+                    val fieldsValid =
+                        if (state.transportMode) {
+                            validateConfigurationSilent()
+                        } else {
+                            state.interfaceName.isNotBlank() && validateConfigurationSilent()
+                        }
+                    fieldsValid && hasRequiredBluetoothEditIdentity(state)
+                }
             }
         }
+
+        private fun pairingRepairCannotAdvance(state: RNodeWizardState): Boolean {
+            if (state.currentStep != WizardStep.DEVICE_DISCOVERY || !state.isPairingRepairMode) {
+                return false
+            }
+            val device = state.selectedDevice
+            return state.isPairingInProgress || device?.isPaired != true || !hasCurrentAndroidBond(device)
+        }
+
+        private fun canProceedFromDeviceDiscovery(state: RNodeWizardState): Boolean =
+            when (state.connectionType) {
+                RNodeConnectionType.TCP_WIFI -> state.tcpHost.isNotBlank()
+                RNodeConnectionType.BLUETOOTH -> canProceedWithBluetooth(state)
+                RNodeConnectionType.USB_SERIAL ->
+                    state.selectedUsbDevice != null && state.selectedUsbDevice.hasPermission
+            }
+
+        private fun canProceedWithBluetooth(state: RNodeWizardState): Boolean {
+            if (state.isPairingRepairMode) {
+                val device = state.selectedDevice
+                return !state.isPairingInProgress && device?.isPaired == true && hasCurrentAndroidBond(device)
+            }
+            return state.selectedDevice != null ||
+                (
+                    state.showManualEntry &&
+                        state.manualDeviceName.isNotBlank() &&
+                        state.manualDeviceNameError == null
+                )
+        }
+
+        private fun hasRequiredBluetoothEditIdentity(state: RNodeWizardState): Boolean =
+            !state.isEditMode ||
+                state.connectionType != RNodeConnectionType.BLUETOOTH ||
+                !state.selectedDevice?.address.isNullOrBlank()
 
         private fun applyFrequencyRegionSettings() {
             val region = _state.value.selectedFrequencyRegion ?: return
@@ -1012,11 +1093,12 @@ class RNodeWizardViewModel
 
         /**
          * Update selected device from scan results.
-         * Handles edit mode where device was loaded from config without RSSI/address.
+         * Handles edit mode where an exact device address was loaded without RSSI.
          */
         private fun updateSelectedFromScan(devices: Collection<DiscoveredRNode>): DiscoveredRNode? {
             val currentSelected = _state.value.selectedDevice ?: return null
-            return devices.find { it.name == currentSelected.name }?.also { foundDevice ->
+            if (currentSelected.address.isBlank()) return currentSelected
+            return devices.find { it.address.equals(currentSelected.address, ignoreCase = true) }?.also { foundDevice ->
                 Log.d(TAG, "Updating selected device from scan: rssi=${foundDevice.rssi}")
             } ?: currentSelected
         }
@@ -1252,14 +1334,68 @@ class RNodeWizardViewModel
         }
 
         fun selectDevice(device: DiscoveredRNode) {
+            if (!isEligibleRepairDevice(device)) return
             _state.update {
                 it.copy(
                     selectedDevice = device,
                     showManualEntry = false,
-                    interfaceName = it.defaultInterfaceNameFor(device),
+                    interfaceName = it.interfaceNameAfterSelecting(device),
+                    pairingRepairDeviceAddress =
+                        if (it.isPairingRepairMode) {
+                            it.pairingRepairDeviceAddress ?: device.address
+                        } else {
+                            it.pairingRepairDeviceAddress
+                        },
                 )
             }
         }
+
+        private fun isEligibleRepairDevice(device: DiscoveredRNode): Boolean {
+            val state = _state.value
+            val expectedAddress = state.pairingRepairDeviceAddress
+            return when {
+                !state.isPairingRepairMode -> true
+                device.name != state.pairingRepairDeviceName -> false
+                expectedAddress != null -> expectedAddress.equals(device.address, ignoreCase = true)
+                else -> false
+            }
+        }
+
+        private fun lockRepairDeviceAddress(device: DiscoveredRNode) {
+            _state.update {
+                if (it.isPairingRepairMode && it.pairingRepairDeviceAddress == null) {
+                    it.copy(pairingRepairDeviceAddress = device.address)
+                } else {
+                    it
+                }
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        private fun findUniqueBondedAddress(deviceName: String): String? =
+            try {
+                bluetoothAdapter
+                    ?.bondedDevices
+                    ?.filter { it.name == deviceName }
+                    ?.map { it.address }
+                    ?.distinct()
+                    ?.singleOrNull()
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Unable to read bonded devices while loading repair identity", e)
+                null
+            }
+
+        @SuppressLint("MissingPermission")
+        private fun hasCurrentAndroidBond(device: DiscoveredRNode): Boolean =
+            try {
+                device.bluetoothDevice?.bondState == BluetoothDevice.BOND_BONDED ||
+                    bluetoothAdapter
+                        ?.bondedDevices
+                        ?.any { it.address.equals(device.address, ignoreCase = true) } == true
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Unable to verify Android bond for ${device.address}", e)
+                false
+            }
 
         /**
          * Update RSSI for an already-discovered device (throttled to every 3 seconds).
@@ -1318,6 +1454,8 @@ class RNodeWizardViewModel
             device: DiscoveredRNode,
             onFallback: () -> Unit,
         ) {
+            if (!isEligibleRepairDevice(device)) return
+            lockRepairDeviceAddress(device)
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || companionDeviceManager == null) {
                 // Fall back to direct selection on older Android
                 onFallback()
@@ -1388,7 +1526,7 @@ class RNodeWizardViewModel
                                     isAssociating = false,
                                     pendingAssociationIntent = null,
                                     showManualEntry = false,
-                                    interfaceName = it.defaultInterfaceNameFor(device),
+                                    interfaceName = it.interfaceNameAfterSelecting(device),
                                 )
                             }
                             // Cache the device type since it's now confirmed
@@ -1485,6 +1623,7 @@ class RNodeWizardViewModel
         }
 
         fun showManualEntry() {
+            if (_state.value.isPairingRepairMode) return
             _state.update {
                 it.copy(
                     showManualEntry = true,
@@ -1534,6 +1673,7 @@ class RNodeWizardViewModel
          * Clears device selection when switching modes.
          */
         fun setConnectionType(type: RNodeConnectionType) {
+            if (_state.value.isPairingRepairMode) return
             _state.update {
                 // Auto-generate interface name based on connection type if not manually customized
                 // Update if it's the default or matches an auto-generated pattern
@@ -1728,6 +1868,7 @@ class RNodeWizardViewModel
          * If permission is needed, requests it first.
          */
         fun selectUsbDevice(device: network.columba.app.data.model.DiscoveredUsbDevice) {
+            if (_state.value.isPairingRepairMode) return
             if (device.hasPermission) {
                 _state.update {
                     // Auto-generate interface name if user hasn't customized it
@@ -1802,6 +1943,7 @@ class RNodeWizardViewModel
             productId: Int,
             deviceName: String,
         ) {
+            if (_state.value.isPairingRepairMode) return
             Log.d(TAG, "Pre-selecting USB device: $deviceId ($deviceName)")
 
             // Switch to USB connection type
@@ -2874,6 +3016,11 @@ class RNodeWizardViewModel
          * just auto-discovers and selects the USB device first.
          */
         fun startUsbAssistedPairing() {
+            if (_state.value.isPairingRepairMode) return
+            launchUsbAssistedPairing()
+        }
+
+        private fun launchUsbAssistedPairing() =
             viewModelScope.launch {
                 Log.d(TAG, "USB-assisted pairing from Bluetooth tab: scanning for USB devices")
 
@@ -2962,7 +3109,6 @@ class RNodeWizardViewModel
                         )
                     }
                 }
-            }
         }
 
         // Pairing handler to auto-confirm Just Works pairing
@@ -2971,10 +3117,13 @@ class RNodeWizardViewModel
         @SuppressLint("MissingPermission")
         @Suppress("LongMethod", "CyclomaticComplexMethod")
         fun initiateBluetoothPairing(device: DiscoveredRNode) {
+            if (!isEligibleRepairDevice(device)) return
+            lockRepairDeviceAddress(device)
             viewModelScope.launch {
                 _state.update {
                     it.copy(
                         isPairingInProgress = true,
+                        selectedDevice = null,
                         pairingError = null,
                         pairingTimeRemaining = 0,
                         lastPairingDeviceAddress = device.address,
@@ -3089,7 +3238,7 @@ class RNodeWizardViewModel
                                             state.discoveredDevices.map {
                                                 if (it.address == device.address) updatedDevice else it
                                             },
-                                        interfaceName = state.defaultInterfaceNameFor(updatedDevice),
+                                        interfaceName = state.interfaceNameAfterSelecting(updatedDevice),
                                     )
                                 }
                                 Log.d(TAG, "Pairing successful for ${device.name}")
@@ -3162,6 +3311,8 @@ class RNodeWizardViewModel
         }
 
         fun selectPreset(preset: RNodeRegionalPreset) {
+            val ltAlock = preset.longTermAirtimeLimit?.toString()
+            val presetTx = preset.txPower?.toString()
             _state.update {
                 it.copy(
                     selectedPreset = preset,
@@ -3175,8 +3326,15 @@ class RNodeWizardViewModel
                     spreadingFactorError = null,
                     codingRate = preset.codingRate.toString(),
                     codingRateError = null,
-                    txPower = preset.txPower.toString(),
-                    txPowerError = null,
+                    // Presets without an explicit TX power keep the current value
+                    // (the region default), since most RNode radios top out at
+                    // 17-22 dBm and only the Heltec v4 reaches the higher
+                    // EU868 sub-band-P ceiling.
+                    txPower = presetTx ?: it.txPower,
+                    txPowerError = if (presetTx != null) null else it.txPowerError,
+                    // Apply the preset's long-term airtime limit if it defines one
+                    ltAlock = ltAlock ?: it.ltAlock,
+                    ltAlockError = if (ltAlock != null) null else it.ltAlockError,
                 )
             }
         }
@@ -3432,12 +3590,33 @@ class RNodeWizardViewModel
         @Suppress("CyclomaticComplexMethod", "LongMethod")
         fun saveConfiguration() {
             if (!validateConfiguration()) return
+            if (!hasRequiredBluetoothEditIdentity(_state.value)) {
+                _state.update {
+                    it.copy(saveError = "Select the original RNode before updating this interface.")
+                }
+                return
+            }
 
             viewModelScope.launch {
                 _state.update { it.copy(isSaving = true, saveError = null) }
 
                 try {
                     val state = _state.value
+
+                    if (state.isPairingRepairMode) {
+                        val selectedDevice = state.selectedDevice
+                        if (selectedDevice == null || !hasCurrentAndroidBond(selectedDevice)) {
+                            _state.update {
+                                it.copy(
+                                    isSaving = false,
+                                    selectedDevice = selectedDevice?.copy(isPaired = false),
+                                    pairingError = "Android pairing was lost. Pair the configured RNode again.",
+                                    saveError = "Android pairing was lost before the repair could be saved.",
+                                )
+                            }
+                            return@launch
+                        }
+                    }
 
                     // Check for duplicate interface names before saving
                     var existingNames = interfaceRepository.allInterfaces.first().map { it.name }
@@ -3476,6 +3655,7 @@ class RNodeWizardViewModel
                     val usbDeviceId: Int?
                     val usbVendorId: Int?
                     val usbProductId: Int?
+                    val targetDeviceAddress: String?
 
                     when (state.connectionType) {
                         RNodeConnectionType.TCP_WIFI -> {
@@ -3487,6 +3667,7 @@ class RNodeWizardViewModel
                             usbDeviceId = null
                             usbVendorId = null
                             usbProductId = null
+                            targetDeviceAddress = null
                         }
                         RNodeConnectionType.USB_SERIAL -> {
                             // USB Serial mode
@@ -3497,6 +3678,7 @@ class RNodeWizardViewModel
                             usbDeviceId = state.selectedUsbDevice?.deviceId
                             usbVendorId = state.selectedUsbDevice?.vendorId
                             usbProductId = state.selectedUsbDevice?.productId
+                            targetDeviceAddress = null
                         }
                         RNodeConnectionType.BLUETOOTH -> {
                             // Bluetooth mode
@@ -3523,6 +3705,7 @@ class RNodeWizardViewModel
                             usbDeviceId = null
                             usbVendorId = null
                             usbProductId = null
+                            targetDeviceAddress = state.selectedDevice?.address?.ifBlank { null }
                         }
                     }
 
@@ -3531,6 +3714,7 @@ class RNodeWizardViewModel
                             name = state.interfaceName.trim(),
                             enabled = true,
                             targetDeviceName = deviceName,
+                            targetDeviceAddress = targetDeviceAddress,
                             connectionMode = connectionMode,
                             tcpHost = tcpHost,
                             tcpPort = tcpPort,
@@ -3553,6 +3737,18 @@ class RNodeWizardViewModel
                                     ?: NetworkRestriction.ANY,
                         )
 
+                    if (state.isPairingRepairMode && !hasCurrentAndroidBond(state.selectedDevice!!)) {
+                        _state.update {
+                            it.copy(
+                                isSaving = false,
+                                selectedDevice = state.selectedDevice.copy(isPaired = false),
+                                pairingError = "Android pairing was lost. Pair the configured RNode again.",
+                                saveError = "Android pairing was lost before the repair could be saved.",
+                            )
+                        }
+                        return@launch
+                    }
+
                     if (state.editingInterfaceId != null) {
                         // Update existing interface
                         interfaceRepository.updateInterface(state.editingInterfaceId, config)
@@ -3563,8 +3759,10 @@ class RNodeWizardViewModel
                         Log.d(TAG, "Created new RNode interface")
                     }
 
-                    // Mark pending changes for InterfaceManagementScreen to show "Apply" button
-                    configManager.setPendingChanges(true)
+                    // Mark pending changes for InterfaceManagementScreen to show "Apply" button.
+                    // Preserve the edited interface ID so only its pre-update runtime
+                    // diagnostic is considered stale before Apply & Restart.
+                    configManager.setPendingChanges(true, state.editingInterfaceId)
 
                     _state.update { it.copy(saveSuccess = true, isSaving = false) }
                 } catch (e: Exception) {

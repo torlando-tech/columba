@@ -32,7 +32,9 @@ The Kotlin sub-impls attach them at the point they create those objects.
 """
 
 import json
+import queue
 import signal
+import threading
 
 import LXMF
 import RNS
@@ -477,6 +479,34 @@ _rns_transport = None
 _lxmf_router = None
 _announce_handler = None
 
+_fallback_queue = queue.Queue(maxsize=64)
+
+
+def _fallback_worker():
+    while True:
+        task = _fallback_queue.get()
+        try:
+            task()
+        except Exception as e:  # noqa: BLE001 — worker must survive one bad task
+            RNS.log(f"event_bridge: fallback worker task failed: {e}", RNS.LOG_ERROR)
+        finally:
+            _fallback_queue.task_done()
+
+
+threading.Thread(
+    target=_fallback_worker,
+    name="columba-lxmf-fallback",
+    daemon=True,
+).start()
+
+
+def _enqueue_fallback(task):
+    try:
+        _fallback_queue.put_nowait(task)
+        return True
+    except queue.Full:
+        return False
+
 
 def _hex(b):
     """bytes / Chaquopy jarray -> lowercase hex str. None passes through."""
@@ -625,7 +655,14 @@ class _AnnounceHandler:
     aspect_filter = None
     receive_path_responses = True
 
-    def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None):
+    def received_announce(
+        self,
+        destination_hash,
+        announced_identity,
+        app_data,
+        announce_packet_hash=None,
+        is_path_response=False,
+    ):
         enrichment = _announce_enrichment(destination_hash, announced_identity, app_data)
         # Only surface announces for aspects Columba tracks. This matches the
         # kotlin backend's RichAnnounceHandler, which returns False (drops the
@@ -663,6 +700,7 @@ class _AnnounceHandler:
             "public_key": _hex(announced_identity.get_public_key()) if announced_identity is not None else None,
             "app_data": _hex(app_data),
             "announce_packet_hash": _hex(announce_packet_hash),
+            "is_path_response": bool(is_path_response),
             "receiving_interface": recv_iface_name,
         }
         payload.update(enrichment)
@@ -670,28 +708,133 @@ class _AnnounceHandler:
 
 
 # Inbound LXMF message-size cap (KB; 0 = unlimited). Set from Kotlin via
-# set_incoming_message_size_limit(); enforced post-reassembly in
-# _lxmf_delivery_callback().
+# set_incoming_message_size_limit(); enforced in two places:
+#   1. Pre-transfer, on link-based (DIRECT) delivery: LXMF's own gate
+#      `LXMRouter.delivery_per_transfer_limit` (see _apply_incoming_limit_to_router()).
+#      Without it, LXMF's built-in default (LXMRouter.DELIVERY_LIMIT = 1000,
+#      i.e. 1,000,000 bytes) rejects every inbound direct-delivery resource
+#      above ~1 MB at resource-advertisement time (before a single byte is
+#      transferred) no matter what the user configured (columba#1106).
+#   2. Post-reassembly, for all delivery methods (incl. opportunistic, which
+#      has no pre-transfer hook): the drop in _lxmf_delivery_callback().
+#
+# `_incoming_message_size_limit_configured` tracks whether the host has pushed
+# a cap in this process. Until it has, the pre-transfer gate keeps LXMF's
+# built-in conservative default (1000 decimal KB) instead of the "unlimited"
+# sentinel: the host pushes the persisted cap asynchronously after backend
+# init, and in that window an oversized direct delivery must be refused at
+# advertisement time, not transferred and dropped after reassembly.
 _incoming_message_size_limit_kb = 0
+_incoming_message_size_limit_configured = False
+
+# Sentinel for "unlimited" on LXMF's delivery_per_transfer_limit (decimal KB,
+# ~= 1 TB). Upstream LXMF's delivery_resource_advertised() multiplies the
+# limit by 1000 *before* its `limit != None` check, so assigning None at
+# runtime crashes the callback with TypeError — a large finite value is the
+# only safe way to express "no cap" against the pinned LXMF.
+_UNLIMITED_DELIVERY_LIMIT_KB = 1024 * 1024 * 1024
+
+
+def _delivery_limit_decimal_kb(limit_kb):
+    """Convert the app's binary-KB cap to LXMF's decimal-KB gate value.
+
+    0 (unlimited) maps to the large finite sentinel (see
+    _UNLIMITED_DELIVERY_LIMIT_KB); positive values are converted with a
+    ceiling so the pre-transfer gate never rejects a message the cap
+    allows.
+    """
+    if limit_kb <= 0:
+        return _UNLIMITED_DELIVERY_LIMIT_KB
+    return -(-(limit_kb * 1024) // 1000)
+
+
+def prime_incoming_message_size_limit(router, limit_kb):
+    """Store the cap and apply it to a freshly constructed router.
+
+    Called by the backend runtime right after LXMRouter construction -
+    before register_callbacks() has wired the module-level router and
+    before the delivery destination can receive traffic - so the first
+    DIRECT resource advertisement is already evaluated against the
+    user's configured gate instead of LXMF's built-in 1000 KB default
+    (columba#1106 startup window). 0 = unlimited (sentinel).
+    """
+    global _incoming_message_size_limit_kb, _incoming_message_size_limit_configured
+    _incoming_message_size_limit_kb = max(0, int(limit_kb))
+    _incoming_message_size_limit_configured = True
+    if router is not None:
+        try:
+            router.delivery_per_transfer_limit = _delivery_limit_decimal_kb(
+                _incoming_message_size_limit_kb,
+            )
+            RNS.log(
+                "event_bridge: LXMF delivery_per_transfer_limit primed to "
+                f"{router.delivery_per_transfer_limit} KB (decimal)",
+                RNS.LOG_DEBUG,
+            )
+        except Exception as e:  # noqa: BLE001 - never fatal; host push re-applies later
+            RNS.log(
+                f"event_bridge: failed to prime incoming limit: {e}",
+                RNS.LOG_WARNING,
+            )
+    RNS.log(
+        "event_bridge: incoming message size limit primed to "
+        f"{_incoming_message_size_limit_kb or 'unlimited'} KB",
+        RNS.LOG_DEBUG,
+    )
+
+
+def _apply_incoming_limit_to_router():
+    """Mirror _incoming_message_size_limit_kb onto LXMF's pre-transfer gate.
+
+    `LXMRouter.delivery_per_transfer_limit` is checked in
+    `delivery_resource_advertised()` when a peer starts a link-based (DIRECT)
+    resource transfer: if the advertised size exceeds
+    `delivery_per_transfer_limit * 1000` bytes, the transfer is refused before
+    any data moves. LXMF's constructor default is DELIVERY_LIMIT (1000 KB
+    decimal), and nothing in Columba's Python stack updated it, so the user's
+    "incoming message size" setting was silently ignored for direct delivery
+    (columba#1106).
+
+    Unit note: Columba's setting is binary KB (the post-reassembly drop
+    compares against `limit_kb * 1024`), while LXMF compares against
+    `limit_kb * 1000` - convert with a ceiling so the pre-transfer gate
+    never rejects a message the user's cap would allow; the post-reassembly
+    drop remains the strict gate.
+
+    While the host has not pushed a cap yet (fresh process, pre-init window),
+    this is a no-op on purpose: the router keeps LXMF's built-in conservative
+    1000 decimal KB default instead of being widened to the "unlimited"
+    sentinel (see _incoming_message_size_limit_configured).
+    """
+    if _lxmf_router is None:
+        return
+    if not _incoming_message_size_limit_configured:
+        return
+    try:
+        _lxmf_router.delivery_per_transfer_limit = _delivery_limit_decimal_kb(
+            _incoming_message_size_limit_kb,
+        )
+        RNS.log(
+            "event_bridge: LXMF delivery_per_transfer_limit set to "
+            f"{_lxmf_router.delivery_per_transfer_limit} KB (decimal)",
+            RNS.LOG_DEBUG,
+        )
+    except Exception as e:  # noqa: BLE001 — never fatal; post-reassembly drop still applies
+        RNS.log(f"event_bridge: failed to apply incoming limit to LXMF router: {e}", RNS.LOG_WARNING)
 
 
 def set_incoming_message_size_limit(limit_kb):
     """Set the inbound LXMF message-size cap (KB; 0 = unlimited).
 
-    Upstream LXMF has no inbound size limit of its own — `message_storage_limit`
-    bounds a propagation *node's* served store, not inbound delivery, so calling
-    it for this would be wrong. The lxmf-kt port (kotlin backend) has a real
-    `incomingMessageSizeLimitKb`; this is the Python-backend equivalent.
-
-    Enforcement is a *post-reassembly* drop in `_lxmf_delivery_callback`: LXMF
-    fully reassembles a message before invoking its delivery callback, so an
-    oversized message is rejected before it reaches the Columba UI / storage,
-    but the bandwidth + CPU of receiving it cannot be saved — upstream LXMF
-    exposes no pre-reassembly hook. This degradation-vs-kotlin is recorded in
-    the RNS dual-build handoff doc.
+    The lxmf-kt port (kotlin backend) has a real `incomingMessageSizeLimitKb`;
+    this is the Python-backend equivalent, enforced both pre-transfer
+    (delivery_per_transfer_limit, link-based delivery) and post-reassembly
+    (all methods - see _lxmf_delivery_callback()).
     """
-    global _incoming_message_size_limit_kb
+    global _incoming_message_size_limit_kb, _incoming_message_size_limit_configured
     _incoming_message_size_limit_kb = max(0, int(limit_kb))
+    _incoming_message_size_limit_configured = True
+    _apply_incoming_limit_to_router()
     RNS.log(
         "event_bridge: incoming message size limit set to "
         f"{_incoming_message_size_limit_kb or 'unlimited'} KB",
@@ -1071,7 +1214,7 @@ def _lxmf_delivery_callback(message):
             )
         # Receiving-interface annotation + signal metrics. Two sources, in
         # priority order (mirrors release/v0.10.x's _on_lxmf_delivery):
-        #   1. torlando-tech LXMF fork (branch feature/receiving-interface-capture)
+        #   1. torlando-tech LXMF fork (branch feature/receiving-interface-capture-1.1.0)
         #      sets `message.receiving_interface` (RNS.Interface) +
         #      `message.receiving_hops` on inbound opportunistic messages.
         #      Upstream LXMF leaves these off entirely, so getattr-guard.
@@ -1162,6 +1305,12 @@ def register_callbacks(
 
     if lxmf_router is not None:
         lxmf_router.register_delivery_callback(_lxmf_delivery_callback)
+        # If the host already pushed a cap in this process (in-process
+        # backend restart / reconnect), re-apply it to the fresh router so
+        # the built-in 1000 KB default doesn't silently return (columba#1106).
+        # In a fresh process this is a no-op: the router keeps LXMF's
+        # conservative default until the host pushes the persisted cap.
+        _apply_incoming_limit_to_router()
 
     RNS.log("event_bridge: callbacks registered", RNS.LOG_DEBUG)
 
@@ -1224,8 +1373,9 @@ def install_external_stamp_generator(java_callback):
     helper processes, the Manager deadlocks waiting on the dead worker).
     The torlando-tech LXMF fork exposes `LXStamper.set_external_generator`
     for exactly this — when set, `LXStamper.generate_stamp` calls
-    `external_generator(workblock, stamp_cost)` and gets `(stamp_bytes, rounds)`
-    back.
+    `external_generator(workblock, stamp_cost, cancellation_token)` and gets
+    `(stamp_bytes, rounds)` back. The token lets the native search stop promptly
+    when LXMF cancels the deferred-stamp job.
 
     Why this wrapper instead of registering the Kotlin callback directly:
     Chaquopy's `JavaObject.__call__` dispatcher on `BiFunction.apply`
@@ -1239,7 +1389,7 @@ def install_external_stamp_generator(java_callback):
     conversion before dispatching.
 
     Kotlin contract: `java_callback` exposes a method named `generate`
-    with signature `(workblock: byte[], stampCost: int) -> List` where
+    with signature `(workblock: byte[], stampCost: int, token: PyObject) -> List` where
     the returned list is `[stamp_bytes, rounds]`. See
     `PythonRnsRuntime.kt` `StampGeneratorCallback` for the implementation.
     """
@@ -1253,8 +1403,8 @@ def install_external_stamp_generator(java_callback):
         )
         return
 
-    def _wrapper(workblock, stamp_cost):
-        result = java_callback.generate(workblock, stamp_cost)
+    def _wrapper(workblock, stamp_cost, cancellation_token):
+        result = java_callback.generate(workblock, stamp_cost, cancellation_token)
         # `result` is a Java List exposed as a Python sequence; index access
         # returns Python bytes for index 0 and Python int for index 1
         # (Chaquopy auto-converts via the typed method's return signature).
@@ -1262,7 +1412,12 @@ def install_external_stamp_generator(java_callback):
         rounds = result[1]
         return stamp, rounds
 
-    LXStamper.set_external_generator(_wrapper)
+    LXStamper.set_external_generator(_wrapper, None, True)
+
+
+def uninstall_external_stamp_generator():
+    """Cancel active external stamp work and clear LXMF's global callback."""
+    LXMF.LXStamper.set_external_generator(None)
 
 
 # --- Per-Link packet bridge ------------------------------------------------
@@ -1294,6 +1449,7 @@ def attach_lxmessage_callbacks(
     on_failed,
     on_retrying_propagated=None,
     try_propagation_on_fail=False,
+    originating_identity_hash=None,
 ):
     """Wire per-LXMessage delivery + failure callbacks for an outbound message.
 
@@ -1307,7 +1463,9 @@ def attach_lxmessage_callbacks(
     message it sends — without it the Kotlin side never learns a sent message
     was delivered or failed, so the delivery-status flow stays silent (no
     delivery proofs surface in the UI). Success vs failure is implied by which
-    Kotlin `PyEventCallback` fires; the payload is a flat `{hash}` dict.
+    Kotlin `PyEventCallback` fires; delivery payloads include the message hash,
+    LXMF state, effective method, and desired method so recipient proof remains
+    authoritative after fallback repacks the shared message object.
 
     **try_propagation_on_fail (Sideband pattern)** — when set, the LXMessage
     is tagged so the failed-callback rebuilds it as PROPAGATED and re-routes
@@ -1321,71 +1479,111 @@ def attach_lxmessage_callbacks(
     behaviour. Requires a configured outbound propagation node; falls through
     to plain failure when none is set.
     """
+    attempt_lock = threading.RLock()
+    attempt_state = {"value": "primary"}
+
+    def _attempt_payload(msg, **values):
+        return {
+            "hash": _hex(getattr(msg, "hash", None)),
+            "originating_identity_hash": originating_identity_hash,
+            **values,
+        }
+
     def _delivered(msg):
         msg_hash_hex = _hex(getattr(msg, "hash", None))
-        # Carry method + desired_method through so the Kotlin side can
-        # distinguish PROPAGATED (success means "stored on the relay")
-        # from DIRECT/OPPORTUNISTIC (success means "ack from recipient").
-        # NativeMessageSender on the kotlin backend does the same split via
-        # NativeDeliveryMethod; the python flavor must surface enough state
-        # for PythonEventBridge.handleLxmfDelivered to make the same call.
-        # Without these fields a PROPAGATED success gets stamped "delivered"
-        # in the UI (✓✓) instead of "propagated" (✓).
+        state = getattr(msg, "state", None)
         method = getattr(msg, "method", None)
         desired = getattr(msg, "desired_method", None)
-        payload = {
-            "hash": msg_hash_hex,
-            "method": method if method is not None else -1,
-            "desired_method": desired if desired is not None else -1,
-        }
-        RNS.log(
-            f"event_bridge: _delivered fired for {msg_hash_hex} "
-            f"(method={method}, desired={desired})",
-            RNS.LOG_DEBUG,
+        payload = _attempt_payload(
+            msg,
+            state=state if state is not None else -1,
+            method=method if method is not None else -1,
+            desired_method=desired if desired is not None else -1,
         )
-        _emit(on_delivered, payload)
+        with attempt_lock:
+            is_delivered = state == LXMF.LXMessage.DELIVERED
+            is_propagated = not is_delivered and (
+                method == LXMF.LXMessage.PROPAGATED
+                or (method is None and desired == LXMF.LXMessage.PROPAGATED)
+            )
+            if attempt_state["value"] == "delivered" or (
+                is_propagated and attempt_state["value"] == "propagated"
+            ):
+                return
+            attempt_state["value"] = "propagated" if is_propagated else "delivered"
+            RNS.log(
+                f"event_bridge: _delivered fired for {msg_hash_hex} "
+                f"(state={state}, method={method}, desired={desired})",
+                RNS.LOG_DEBUG,
+            )
+            _emit(on_delivered, payload)
+
+    def _fallback_failed(msg):
+        with attempt_lock:
+            if attempt_state["value"] not in ("delivered", "failed"):
+                attempt_state["value"] = "failed"
+                _emit(on_failed, _attempt_payload(msg))
 
     def _failed(msg):
-        # Sideband pattern: if try_propagation_on_fail was set on the message
-        # AND we haven't already retried AND a propagation node is configured,
-        # rebuild as PROPAGATED and re-submit through the router. Otherwise
-        # report failure to Kotlin.
-        if (
-            getattr(msg, "try_propagation_on_fail", False)
-            and not getattr(msg, "_columba_propagation_retry_attempted", False)
-            and _lxmf_router is not None
-            and getattr(_lxmf_router, "outbound_propagation_node", None) is not None
-            and getattr(msg, "desired_method", None) != LXMF.LXMessage.PROPAGATED
-        ):
-            msg._columba_propagation_retry_attempted = True
-            # Clear retry flag so a second failure doesn't loop.
-            msg.try_propagation_on_fail = False
-            # Sideband resets the upstream-LXMF send-state for a fresh try as
-            # PROPAGATED. Skipping any of these wedges the send: stale packed
-            # bytes, stale propagation stamp, or a non-zero delivery_attempts
-            # count would short-circuit upstream's outbound state machine.
-            msg.delivery_attempts = 0
-            msg.packed = None
-            msg.propagation_packed = None
-            msg.propagation_stamp = None
-            msg.defer_propagation_stamp = True
-            msg.desired_method = LXMF.LXMessage.PROPAGATED
-            try:
-                _lxmf_router.handle_outbound(msg)
-                _emit(on_retrying_propagated, {"hash": _hex(getattr(msg, "hash", None))})
-                RNS.log(
-                    "event_bridge: DIRECT delivery failed, retrying via propagation node",
-                    RNS.LOG_DEBUG,
-                )
+        captured_router = _lxmf_router
+        with attempt_lock:
+            state = attempt_state["value"]
+            if state in ("delivered", "failed", "scheduled", "admitted"):
                 return
+            if state in ("submitted", "propagated"):
+                attempt_state["value"] = "failed"
+                _emit(on_failed, _attempt_payload(msg))
+                return
+            if not (
+                getattr(msg, "try_propagation_on_fail", False)
+                and captured_router is not None
+                and getattr(captured_router, "outbound_propagation_node", None) is not None
+                and getattr(msg, "desired_method", None) != LXMF.LXMessage.PROPAGATED
+            ):
+                attempt_state["value"] = "failed"
+                _emit(on_failed, _attempt_payload(msg))
+                return
+            attempt_state["value"] = "scheduled"
+
+        def _submit_propagated():
+            with attempt_lock:
+                if attempt_state["value"] != "scheduled" or _lxmf_router is not captured_router:
+                    return
+                msg._columba_propagation_retry_attempted = True
+                msg.try_propagation_on_fail = False
+                msg.delivery_attempts = 0
+                msg.packed = None
+                msg.propagation_packed = None
+                msg.propagation_stamp = None
+                msg.defer_propagation_stamp = True
+                msg.desired_method = LXMF.LXMessage.PROPAGATED
+                msg.register_failed_callback(_fallback_failed)
+                attempt_state["value"] = "admitted"
+                _emit(on_retrying_propagated, _attempt_payload(msg))
+
+            try:
+                captured_router.handle_outbound(msg)
             except Exception as e:  # noqa: BLE001
                 RNS.log(
                     f"event_bridge: propagation retry failed: {e}",
                     RNS.LOG_ERROR,
                 )
-                # Fall through to plain failure reporting.
+                with attempt_lock:
+                    _fallback_failed(msg)
+            else:
+                with attempt_lock:
+                    if attempt_state["value"] == "admitted":
+                        attempt_state["value"] = "submitted"
+                RNS.log(
+                    "event_bridge: DIRECT delivery failed, retrying via propagation node",
+                    RNS.LOG_DEBUG,
+                )
 
-        _emit(on_failed, {"hash": _hex(getattr(msg, "hash", None))})
+        if not _enqueue_fallback(_submit_propagated):
+            with attempt_lock:
+                if attempt_state["value"] == "scheduled":
+                    attempt_state["value"] = "failed"
+                    _emit(on_failed, _attempt_payload(msg))
 
     # Tag the LXMessage so the failed callback can see the intent. Upstream
     # Sideband uses this same attribute; LXMF does not read it itself, so the
@@ -1457,13 +1655,21 @@ def make_nomadnet_response_capture():
         # unnecessary work. The Kotlin consumer
         # (`PythonRnsNomadnet.buildPageResult`) only ever needed the name.
         metadata_name_bytes=b"",
+        # True iff the server's response value was exactly `False` — the
+        # explicit deny signal upstream NomadNet nodes send for gated
+        # requests (Node.py serve_media returning False, 3028301). Kept
+        # separate from response_bytes so the deny never reaches Kotlin as
+        # the mangled literal b"False".
+        denied=False,
         error=None,
     )
 
     def _on_response(receipt):
         try:
             r = getattr(receipt, "response", None)
-            if hasattr(r, "read"):
+            if r is False:
+                cap.denied = True
+            elif hasattr(r, "read"):
                 cap.response_bytes = r.read()
             elif isinstance(r, (bytes, bytearray)):
                 cap.response_bytes = bytes(r)

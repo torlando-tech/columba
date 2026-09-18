@@ -124,13 +124,12 @@ object ReactionWireCodec {
         // matching parseCanonical — otherwise an empty "" reaction reaches the UI map.
         val emoji = dict.optString("emoji").takeIf { it.isNotBlank() }
         if (reactionTo == null || emoji == null) return null
-        // Legacy carried the reactor explicitly; fall back to the source hash
-        // if an old peer ever omitted it.
-        val sender = dict.optString("sender").takeIf { it.isNotBlank() } ?: sourceHashHex
+        // Legacy's explicit sender is untrusted wire data. Attribute the
+        // reaction only to the authenticated LXMF envelope source.
         return normalized(
             reactionTo = reactionTo,
             emoji = emoji,
-            sender = sender,
+            sender = sourceHashHex,
             sourceHashHex = sourceHashHex,
             timestamp = timestamp,
         )

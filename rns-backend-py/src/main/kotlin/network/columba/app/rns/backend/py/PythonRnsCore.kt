@@ -253,15 +253,48 @@ class PythonRnsCore(
                 add(appName)
                 addAll(aspects)
             }
-            val pyDest = runtime.rnsModule.callAttr("Destination", *args.toTypedArray())
+            val pyDest = resolveCreatedDestination(
+                direction,
+                type,
+                appName,
+                aspects,
+                pyIdentity,
+            ) {
+                runtime.rnsModule.callAttr("Destination", *args.toTypedArray())
+            }
             val model = pyDest.toModelDestination(identity, direction, type, appName, aspects)
-            runtime.destinations[model.hexHash] = pyDest
+            runtime.cacheDestination(model.hexHash, pyDest)
             model
         }
 
+    internal fun resolveCreatedDestination(
+        direction: Direction,
+        type: DestinationType,
+        appName: String,
+        aspects: List<String>,
+        identity: PyObject,
+        create: () -> PyObject,
+    ): PyObject = if (isOutboundLxmfDelivery(direction, type, appName, aspects)) {
+        runtime.resolveDestination("lxmf.delivery", identity, create)
+    } else {
+        create()
+    }
+
+    @Suppress("ComplexCondition")
+    private fun isOutboundLxmfDelivery(
+        direction: Direction,
+        type: DestinationType,
+        appName: String,
+        aspects: List<String>,
+    ): Boolean =
+        direction == Direction.OUT &&
+            type == DestinationType.SINGLE &&
+            appName == "lxmf" &&
+            aspects == listOf("delivery")
+
     override suspend fun announceDestination(destination: Destination, appData: ByteArray?): Result<Unit> =
         pyResult {
-            val pyDest = runtime.destinations[destination.hexHash]
+            val pyDest = runtime.cachedDestination(destination.hexHash)
                 ?: throw RnsException(RnsError.IdentityNotFound(destination.hexHash))
             if (appData != null) {
                 pyDest.callAttr("announce", appData.toPyBytes())
@@ -293,7 +326,7 @@ class PythonRnsCore(
         packetType: PacketType,
     ): Result<PacketReceipt> =
         pyResult {
-            val pyDest = runtime.destinations[destination.hexHash]
+            val pyDest = runtime.cachedDestination(destination.hexHash)
                 ?: throw RnsException(RnsError.IdentityNotFound(destination.hexHash))
             val pyPacket = runtime.rnsModule.callAttr("Packet", pyDest, data.toPyBytes())
             val receipt = pyPacket.callAttr("send")
@@ -311,7 +344,7 @@ class PythonRnsCore(
 
     override suspend fun establishLink(destination: Destination): Result<Link> =
         pyResult {
-            val pyDest = runtime.destinations[destination.hexHash]
+            val pyDest = runtime.cachedDestination(destination.hexHash)
                 ?: throw RnsException(RnsError.IdentityNotFound(destination.hexHash))
             val pyLink = runtime.rnsModule.callAttr("Link", pyDest)
             val handle = linkHandleSeq.getAndIncrement()
@@ -724,6 +757,20 @@ class PythonRnsCore(
      * `establishLink` because that method (a) doesn't run a callback and
      * (b) doesn't wait for ACTIVE state.
      */
+    internal fun resolveConversationDestination(
+        recipientIdentity: PyObject,
+        destClass: PyObject,
+    ): PyObject = runtime.resolveDestination("lxmf.delivery", recipientIdentity) {
+        runtime.rnsModule.callAttr(
+            "Destination",
+            recipientIdentity,
+            destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
+            destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
+            "lxmf",
+            "delivery",
+        ) ?: throw RnsException(RnsError.Generic("RNS.Destination returned None", null))
+    }
+
     @Suppress(
         "LongMethod",
         "ReturnCount",
@@ -760,14 +807,7 @@ class PythonRnsCore(
         // Build the LXMF delivery destination (links go to the lxmf/delivery
         // app destination, same as direct LXMF sends).
         val recipientDest = try {
-            runtime.rnsModule.callAttr(
-                "Destination",
-                recipientIdentity,
-                destClass["OUT"] ?: error("Destination.OUT missing"),
-                destClass["SINGLE"] ?: error("Destination.SINGLE missing"),
-                "lxmf",
-                "delivery",
-            )
+            resolveConversationDestination(recipientIdentity, destClass)
         } catch (e: Throwable) {
             return null to "Destination construction failed: ${e.message}"
         }
@@ -933,14 +973,7 @@ class PythonRnsCore(
             // dest hash may differ from input dest_hash, so re-check
             // reuse against the new hash.
             val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-            val recipientDest = runtime.rnsModule.callAttr(
-                "Destination",
-                recipientIdentity,
-                destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
-                destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
-                "lxmf",
-                "delivery",
-            ) ?: throw RnsException(RnsError.Generic("RNS.Destination returned None", null))
+            val recipientDest = resolveConversationDestination(recipientIdentity, destClass)
             val createdHashPy = recipientDest["hash"] ?: error("recipient_dest.hash missing")
             val createdHash = createdHashPy.toJava(ByteArray::class.java)
             val createdHashHex = createdHash.toHex()
@@ -1063,22 +1096,16 @@ class PythonRnsCore(
                 val identity = recallIdentity(identityClass, destHashPy, destHashHex)
                 if (identity != null) {
                     val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-                    val recipientDest = runtime.rnsModule.callAttr(
-                        "Destination",
-                        identity,
-                        destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
-                        destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
-                        "lxmf",
-                        "delivery",
-                    )
-                    if (recipientDest != null) {
-                        val createdHashPy = recipientDest["hash"]
-                        if (createdHashPy != null) {
-                            keyBytesPy = createdHashPy
-                            keyHex = createdHashPy.toJava(ByteArray::class.java).toHex()
-                            link = findExistingLink(router, createdHashPy, keyHex)
+                    runCatching { resolveConversationDestination(identity, destClass) }
+                        .onSuccess { recipientDest ->
+                            val createdHashPy = recipientDest["hash"]
+                            if (createdHashPy != null) {
+                                keyBytesPy = createdHashPy
+                                keyHex = createdHashPy.toJava(ByteArray::class.java).toHex()
+                                link = findExistingLink(router, createdHashPy, keyHex)
+                            }
                         }
-                    }
+                        .onFailure { Log.d(TAG, "closeConversationLink: fallback rebuild skipped: ${it.message}") }
                 }
             }
 
@@ -1115,22 +1142,16 @@ class PythonRnsCore(
                 val identity = recallIdentity(identityClass, destHashPy, destHashHex)
                 if (identity != null) {
                     val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-                    val recipientDest = runtime.rnsModule.callAttr(
-                        "Destination",
-                        identity,
-                        destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
-                        destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
-                        "lxmf",
-                        "delivery",
-                    )
-                    if (recipientDest != null) {
-                        val createdHashPy = recipientDest["hash"]
-                        if (createdHashPy != null) {
-                            val createdHex = createdHashPy.toJava(ByteArray::class.java).toHex()
-                            link = findExistingLink(router, createdHashPy, createdHex)
-                            if (link != null) hashForPath = createdHashPy
+                    runCatching { resolveConversationDestination(identity, destClass) }
+                        .onSuccess { recipientDest ->
+                            val createdHashPy = recipientDest["hash"]
+                            if (createdHashPy != null) {
+                                val createdHex = createdHashPy.toJava(ByteArray::class.java).toHex()
+                                link = findExistingLink(router, createdHashPy, createdHex)
+                                if (link != null) hashForPath = createdHashPy
+                            }
                         }
-                    }
+                        .onFailure { Log.d(TAG, "getConversationLinkStatus: fallback rebuild skipped: ${it.message}") }
                 }
             }
 
@@ -1175,8 +1196,6 @@ class PythonRnsCore(
             val activeConst = runtime.rnsModule["Link"]?.get("ACTIVE")
                 ?.toJava(Int::class.javaObjectType) ?: return@runCatching
             val destClass = runtime.rnsModule["Destination"] ?: return@runCatching
-            val outConst = destClass["OUT"] ?: return@runCatching
-            val singleConst = destClass["SINGLE"] ?: return@runCatching
             val hashBytes = hashPy.toJava(ByteArray::class.java)
             for (active in activeLinks.asList()) {
                 val status = active["status"]?.toJava(Int::class.javaObjectType) ?: continue
@@ -1184,14 +1203,7 @@ class PythonRnsCore(
                 val remoteIdentity = runCatching { active.callAttr("get_remote_identity") }
                     .getOrNull()?.takeIfNotNone() ?: continue
                 val remoteDest = runCatching {
-                    runtime.rnsModule.callAttr(
-                        "Destination",
-                        remoteIdentity,
-                        outConst,
-                        singleConst,
-                        "lxmf",
-                        "delivery",
-                    )
+                    resolveConversationDestination(remoteIdentity, destClass)
                 }.getOrNull() ?: continue
                 val remoteHash = remoteDest["hash"]?.toJava(ByteArray::class.java) ?: continue
                 if (remoteHash.contentEquals(hashBytes)) {

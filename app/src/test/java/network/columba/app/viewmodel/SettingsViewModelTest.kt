@@ -2640,6 +2640,18 @@ class SettingsViewModelTest {
                 .let { (it.get(viewModel) as? Job)?.cancel() }
             advanceUntilIdle()
 
+            // The probe runs on Dispatchers.IO (a real thread pool), so its
+            // resumption can reach the test scheduler a beat after the
+            // virtual time advances. Settle with a bounded real-time wait so
+            // the cancellation is fully applied before tearDown clears the
+            // mocks (otherwise the next tick hits a cleared MockK stub and
+            // leaks an UncaughtException into the following test).
+            val deadline = System.currentTimeMillis() + 1_000
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(20)
+                testScheduler.runCurrent()
+            }
+
             assertFalse(
                 "With no reachable master and no shared mode, the instance must not report online",
                 viewModel.state.value.sharedInstanceOnline,
@@ -2680,6 +2692,15 @@ class SettingsViewModelTest {
                 .apply { isAccessible = true }
                 .let { (it.get(viewModel) as? Job)?.cancel() }
             advanceUntilIdle()
+
+            // Drain the in-flight IO resumption (same rationale as the
+            // own-mode probe tests) so the cancellation is fully applied
+            // before tearDown clears the mocks.
+            val deadline = System.currentTimeMillis() + 1_000
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(20)
+                testScheduler.runCurrent()
+            }
 
             assertTrue("shared mode must report the instance online", viewModel.state.value.sharedInstanceOnline)
             assertEquals("probe must be skipped when the daemon is already in a shared mode", 0, probeCalls)

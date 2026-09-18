@@ -1076,13 +1076,13 @@ def _send_telemetry_stream_response(requester_hash_bytes, requester_identity, ti
             RNS.LOG_DEBUG,
         )
 
-        destination = RNS.Destination(
-            requester_identity,
-            RNS.Destination.OUT,
-            RNS.Destination.SINGLE,
-            "lxmf",
-            "delivery",
-        )
+        if _destination_resolver is None:
+            RNS.log(
+                "event_bridge: telemetry stream response skipped — destination resolver unavailable",
+                RNS.LOG_WARNING,
+            )
+            return
+        destination = _destination_resolver.resolve(requester_identity)
         fields = {LXMF.FIELD_TELEMETRY_STREAM: entries}
         lxmessage = LXMF.LXMessage(
             destination,
@@ -1361,6 +1361,21 @@ def make_link_closed_handler(on_closed):
         except Exception as e:  # noqa: BLE001 — must not escape onto the RNS thread
             RNS.log(f"event_bridge: link-closed dispatch failed: {e}", RNS.LOG_ERROR)
     return _handler
+
+
+_destination_resolver = None
+
+
+def install_destination_resolver(java_resolver):
+    """Install the Kotlin-owned coordinator for outbound delivery destinations."""
+    global _destination_resolver
+    _destination_resolver = java_resolver
+
+
+def uninstall_destination_resolver():
+    """Release the Kotlin destination resolver during runtime shutdown."""
+    global _destination_resolver
+    _destination_resolver = None
 
 
 # --- LXMF external stamp generator bridge ----------------------------------

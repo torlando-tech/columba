@@ -276,25 +276,23 @@ class PythonRnsTelemetry(
      * from a recalled identity the way upstream LXMRouter does:
      * `RNS.Destination(identity, OUT, SINGLE, "lxmf", "delivery")`.
      */
-    private fun resolveDeliveryDestination(destinationHash: ByteArray): PyObject {
+    internal fun resolveDeliveryDestination(destinationHash: ByteArray): PyObject {
         val hex = destinationHash.toHex()
-        runtime.destinations[hex]?.let { return it }
+        return runtime.resolveDestination(hex) {
+            val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
+            val recalled = identityClass.callAttr("recall", destinationHash.toPyBytes())
+                ?: throw RnsException(RnsError.IdentityNotFound(hex))
 
-        val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
-        val recalled = identityClass.callAttr("recall", destinationHash.toPyBytes())
-            ?: throw RnsException(RnsError.IdentityNotFound(hex))
-
-        val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-        val pyDest = runtime.rnsModule.callAttr(
-            "Destination",
-            recalled,
-            destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
-            destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
-            LxmfFields.APP_NAME,
-            LxmfFields.DELIVERY_ASPECT,
-        )
-        runtime.destinations[hex] = pyDest
-        return pyDest
+            val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+            runtime.rnsModule.callAttr(
+                "Destination",
+                recalled,
+                destClass["OUT"] ?: error("RNS.Destination.OUT missing"),
+                destClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
+                LxmfFields.APP_NAME,
+                LxmfFields.DELIVERY_ASPECT,
+            ) ?: throw RnsException(RnsError.IdentityNotFound(hex))
+        }
     }
 
     /** `IconAppearance` -> the LXMF Field 4 value (a `[name, fg, bg]` list upstream). */

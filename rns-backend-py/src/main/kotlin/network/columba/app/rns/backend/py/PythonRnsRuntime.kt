@@ -86,7 +86,45 @@ class PythonRnsRuntime(
     val identities = ConcurrentHashMap<String, PyObject>()
 
     /** hex destination hash -> live `RNS.Destination`. */
-    val destinations = ConcurrentHashMap<String, PyObject>()
+    private val destinations = ConcurrentHashMap<String, PyObject>()
+
+    /** Serializes first construction for each destination hash across backend surfaces. */
+    private val destinationResolution = DestinationResolutionCoordinator<PyObject>()
+
+    internal var testDestinationFactory: ((String) -> PyObject)? = null
+    internal var testDestinationHashResolver: ((String, PyObject) -> String)? = null
+    internal var testDestinationJoinObserver: ((String) -> Unit)?
+        get() = destinationResolution.onJoinInFlight
+        set(value) {
+            destinationResolution.onJoinInFlight = value
+        }
+
+    internal fun cachedDestination(hexHash: String): PyObject? = destinations[hexHash]
+
+    internal fun cacheDestination(
+        hexHash: String,
+        destination: PyObject,
+    ): PyObject = destinations.putIfAbsent(hexHash, destination) ?: destination
+
+    internal fun resolveDestination(
+        hexHash: String,
+        create: () -> PyObject,
+    ): PyObject = destinationResolution.resolve(hexHash, destinations) {
+        testDestinationFactory?.invoke(hexHash) ?: create()
+    }
+
+    internal fun resolveDestination(
+        name: String,
+        identity: PyObject,
+        create: () -> PyObject,
+    ): PyObject {
+        val hexHash = testDestinationHashResolver?.invoke(name, identity)
+            ?: (rnsModule["Destination"] ?: error("RNS.Destination missing"))
+                .callAttr("hash_from_name_and_identity", name, identity)
+                .toJava(ByteArray::class.java)
+                .toHex()
+        return resolveDestination(hexHash, create)
+    }
 
     /** opaque handle id -> live `RNS.Link`. Keyed to mirror `:rns-ipc`'s HandleRegistry. */
     val links = ConcurrentHashMap<Long, PyObject>()
@@ -328,6 +366,10 @@ class PythonRnsRuntime(
             identity,
             config.displayName ?: "",
         )
+        eventBridge.callAttr(
+            "install_destination_resolver",
+            KotlinDestinationResolverBridge(this),
+        )
 
         // Bypass upstream LXMF's multiprocessing-based stamp generation,
         // which hangs on Android (Chaquopy lacks `sem_open` and the
@@ -414,6 +456,8 @@ class PythonRnsRuntime(
         if (!running.get()) return
         runCatching { eventBridge.callAttr("uninstall_external_stamp_generator") }
             .onFailure { Log.w(TAG, "External stamp generator unregister failed", it) }
+        runCatching { eventBridge.callAttr("uninstall_destination_resolver") }
+            .onFailure { Log.w(TAG, "Destination resolver unregister failed", it) }
         runCatching { eventBridge.callAttr("deregister_callbacks") }
             .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
         runCatching {
@@ -484,6 +528,23 @@ class PythonRnsRuntime(
             skipAutoInterface -> "own-instance (AutoInterface disabled — port held by another app)"
             else -> "own-instance"
         }
+}
+
+@ReflectivelyKept
+internal class KotlinDestinationResolverBridge(
+    private val runtime: PythonRnsRuntime,
+) {
+    fun resolve(identity: PyObject): PyObject = runtime.resolveDestination("lxmf.delivery", identity) {
+        val destinationClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
+        runtime.rnsModule.callAttr(
+            "Destination",
+            identity,
+            destinationClass["OUT"] ?: error("RNS.Destination.OUT missing"),
+            destinationClass["SINGLE"] ?: error("RNS.Destination.SINGLE missing"),
+            "lxmf",
+            "delivery",
+        ) ?: error("RNS.Destination returned None")
+    }
 }
 
 /**

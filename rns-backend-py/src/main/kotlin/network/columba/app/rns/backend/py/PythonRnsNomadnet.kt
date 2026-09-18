@@ -135,15 +135,27 @@ class PythonRnsNomadnet(
             val generation = beginRequest()
             _nomadnetRequestStatusFlow.value = "requesting"
             _nomadnetDownloadProgressFlow.value = 0f
+            // One request-level deadline shared by every phase (identity,
+            // link establishment incl. the route retry, and the response
+            // wait). Each phase caps its own budget by the time left, so the
+            // whole request is bounded by `timeoutSeconds` - the documented
+            // hard round-trip deadline - rather than the sum of per-phase
+            // budgets (which a cold-start route retry could otherwise push to
+            // ~2.3x `timeoutSeconds`).
+            val requestDeadlineMs = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
 
             val safePath = if (path.isBlank() || !path.startsWith("/")) DEFAULT_PATH else path
             val destBytes = destinationHash.hexToBytes()
 
             try {
-                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes, timeoutSeconds, generation)
-                val link = establishLink(destinationHash, nodeIdentity, timeoutSeconds, generation)
+                val nodeIdentity = resolveNodeIdentity(
+                    destinationHash, destBytes, timeoutSeconds, generation, requestDeadlineMs,
+                )
+                val link = establishLink(
+                    destinationHash, nodeIdentity, timeoutSeconds, generation, requestDeadlineMs,
+                )
                 val handle = sendPageRequest(link, safePath, formDataJson, timeoutSeconds)
-                val result = awaitResponse(handle, safePath, timeoutSeconds, generation)
+                val result = awaitResponse(handle, safePath, timeoutSeconds, generation, requestDeadlineMs)
                 _nomadnetRequestStatusFlow.value = "complete"
                 _nomadnetDownloadProgressFlow.value = 1f
                 result
@@ -163,6 +175,7 @@ class PythonRnsNomadnet(
         destBytes: ByteArray,
         timeoutSeconds: Float,
         generation: Int,
+        requestDeadlineMs: Long,
     ): PyObject {
         val identityClass = runtime.rnsModule["Identity"] ?: error("RNS.Identity missing")
         identityClass.callAttr("recall", destBytes.toPyBytes())?.let { return it }
@@ -172,9 +185,11 @@ class PythonRnsNomadnet(
         transport().callAttr("request_path", destBytes.toPyBytes())
 
         // Path lookup gets up to a third of the budget (min 15s), mirroring
-        // NativeNomadNetHandler.
-        val deadline = System.currentTimeMillis() +
-            (timeoutSeconds * 1000 / 3).toLong().coerceAtLeast(15_000L)
+        // NativeNomadNetHandler, and is further capped by the request-level
+        // deadline so the whole request stays within `timeoutSeconds`.
+        val deadline = (System.currentTimeMillis() +
+            (timeoutSeconds * 1000 / 3).toLong().coerceAtLeast(15_000L))
+            .coerceAtMost(requestDeadlineMs)
         while (System.currentTimeMillis() < deadline) {
             throwIfCancelled(generation)
             delay(POLL_INTERVAL_MS)
@@ -207,6 +222,7 @@ class PythonRnsNomadnet(
         nodeIdentity: PyObject,
         timeoutSeconds: Float,
         generation: Int,
+        requestDeadlineMs: Long,
     ): PyObject {
         nomadnetLinks[destinationHash]?.let { existing ->
             if (readLinkStatus(existing) == LINK_ACTIVE) {
@@ -218,12 +234,10 @@ class PythonRnsNomadnet(
 
         _nomadnetRequestStatusFlow.value = "requesting"
         val destBytes = destinationHash.hexToBytes()
-        // One request-level deadline for the whole link-establishment phase.
-        // Each phase's budget is derived from the remaining time, so the route
-        // retry can never extend the request past its `timeoutSeconds` hard
-        // deadline (the response phase carries its own separate budget, as
-        // before the retry existed).
-        val phaseDeadlineMs = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
+        // All link-establishment phases (first attempt, route wait, retry) cap
+        // their budgets by the time left against the request-level deadline,
+        // so the route retry can never extend the request past
+        // `timeoutSeconds` even after identity resolution consumed time.
         val linkBudgetMs = testLinkBudgetMs?.toLong()
             ?: (timeoutSeconds * 1000 / 3).toLong().coerceAtLeast(5_000L)
         val routeWaitMs = testPathWaitBudgetMs?.toLong() ?: 20_000L
@@ -232,7 +246,7 @@ class PythonRnsNomadnet(
         val firstLink = createNodeLink(nodeIdentity)
         val firstResult = awaitLinkActive(
             firstLink,
-            linkBudgetMs.coerceAtMost(phaseDeadlineMs - System.currentTimeMillis()),
+            linkBudgetMs.coerceAtMost(requestDeadlineMs - System.currentTimeMillis()),
             generation,
         )
         if (firstResult != null) {
@@ -245,7 +259,7 @@ class PythonRnsNomadnet(
         Log.i(TAG, "NomadNet: expiring stale path, requesting fresh path and retrying...")
         val routeAppeared = waitForRouteAppears(
             destBytes,
-            routeWaitMs.coerceAtMost(phaseDeadlineMs - System.currentTimeMillis()),
+            routeWaitMs.coerceAtMost(requestDeadlineMs - System.currentTimeMillis()),
             generation,
         )
         val failure = RnsException(
@@ -258,7 +272,7 @@ class PythonRnsNomadnet(
         val retryLink = createNodeLink(nodeIdentity)
         val retryResult = awaitLinkActive(
             retryLink,
-            linkBudgetMs.coerceAtMost(phaseDeadlineMs - System.currentTimeMillis()),
+            linkBudgetMs.coerceAtMost(requestDeadlineMs - System.currentTimeMillis()),
             generation,
         )
         if (retryResult != null) {
@@ -339,27 +353,32 @@ class PythonRnsNomadnet(
     /**
      * Poll a link until it goes ACTIVE or the budget expires.
      * Returns the link if ACTIVE; otherwise tears the link down and returns
-     * null. A cancellation during the poll also tears the link down before
-     * rethrowing, so no orphaned link is left behind.
+     * null. The `finally` tears the link down on every non-success exit -
+     * budget exhaustion, a generation `RnsException`, and a coroutine
+     * `CancellationException` thrown out of `delay` when the owning scope is
+     * cancelled (the ViewModel-cleared path) - so no orphaned link keeps
+     * handshaking after the request has ended.
      */
     private suspend fun awaitLinkActive(
         link: PyObject,
         budgetMs: Long,
         generation: Int,
     ): PyObject? {
-        val deadline = System.currentTimeMillis() + budgetMs
-        while (System.currentTimeMillis() < deadline) {
-            try {
+        var established: PyObject? = null
+        try {
+            val deadline = System.currentTimeMillis() + budgetMs
+            while (System.currentTimeMillis() < deadline) {
                 throwIfCancelled(generation)
-            } catch (e: RnsException) {
-                teardownLink(link)
-                throw e
+                if (readLinkStatus(link) == LINK_ACTIVE) {
+                    established = link
+                    return link
+                }
+                delay(POLL_INTERVAL_MS)
             }
-            if (readLinkStatus(link) == LINK_ACTIVE) return link
-            delay(POLL_INTERVAL_MS)
+            return null
+        } finally {
+            if (established === null) teardownLink(link)
         }
-        teardownLink(link)
-        return null
     }
 
     // Test seams: override in unit tests to avoid the native RNS runtime.
@@ -439,10 +458,12 @@ class PythonRnsNomadnet(
         safePath: String,
         timeoutSeconds: Float,
         generation: Int,
+        requestDeadlineMs: Long,
     ): NomadnetPageResult {
         val (receipt, capture) = handle
         _nomadnetRequestStatusFlow.value = "receiving"
-        val deadline = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
+        val deadline = (System.currentTimeMillis() + (timeoutSeconds * 1000).toLong())
+            .coerceAtMost(requestDeadlineMs)
         while (System.currentTimeMillis() < deadline) {
             throwIfCancelled(generation)
 
@@ -601,17 +622,27 @@ class PythonRnsNomadnet(
             val generation = beginRequest()
             _nomadnetRequestStatusFlow.value = "requesting"
             _nomadnetDownloadProgressFlow.value = 0f
+            // One request-level deadline shared by every phase, mirroring
+            // requestNomadnetPage - bounds the whole request by
+            // `timeoutSeconds` rather than the sum of per-phase budgets.
+            val requestDeadlineMs = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
 
             try {
                 val destBytes = destinationHash.hexToBytes()
-                val nodeIdentity = resolveNodeIdentity(destinationHash, destBytes, timeoutSeconds, generation)
-                val link = establishLink(destinationHash, nodeIdentity, timeoutSeconds, generation)
+                val nodeIdentity = resolveNodeIdentity(
+                    destinationHash, destBytes, timeoutSeconds, generation, requestDeadlineMs,
+                )
+                val link = establishLink(
+                    destinationHash, nodeIdentity, timeoutSeconds, generation, requestDeadlineMs,
+                )
 
                 // Upstream serve_media requires {"path", "key"}; "path"
                 // carries the full "/media/..." path, "key" is Python None
                 // (toPyDict's __setitem__ passthrough maps Kotlin null).
                 val requestData = mapOf("path" to path, "key" to null).toPyDict()
-                val response = sendMediaRequest(link, requestData, timeoutSeconds, destinationHash, generation)
+                val response = sendMediaRequest(
+                    link, requestData, timeoutSeconds, destinationHash, generation, requestDeadlineMs,
+                )
 
                 // Enforce the transfer cap at the response boundary, before the
                 // payload is written to the staging file. RNS/LXMF deliver the
@@ -674,6 +705,7 @@ class PythonRnsNomadnet(
         timeoutSeconds: Float,
         destinationHash: String,
         generation: Int,
+        requestDeadlineMs: Long,
     ): ByteArray {
         val capture = runtime.eventBridge.callAttr("make_nomadnet_response_capture")
         val receipt = link.callAttr(
@@ -692,7 +724,8 @@ class PythonRnsNomadnet(
         }
 
         _nomadnetRequestStatusFlow.value = "receiving"
-        val deadline = System.currentTimeMillis() + (timeoutSeconds * 1000).toLong()
+        val deadline = (System.currentTimeMillis() + (timeoutSeconds * 1000).toLong())
+            .coerceAtMost(requestDeadlineMs)
         while (System.currentTimeMillis() < deadline) {
             throwIfCancelled(generation)
             val progress = receipt["progress"]?.toJava(Float::class.javaObjectType) ?: 0f

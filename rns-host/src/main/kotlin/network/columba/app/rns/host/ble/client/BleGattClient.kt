@@ -306,8 +306,7 @@ class BleGattClient(
             if (connData != null) {
                 withContext(Dispatchers.Main) {
                     connData.connectionJob?.cancel()
-                    connData.gatt.disconnect()
-                    connData.gatt.close()
+                    safeGattTeardown(connData.gatt, "manual disconnect $address")
                 }
                 Log.d(TAG, "Disconnected from $address (manual)")
                 onDisconnected?.invoke(address, null)
@@ -1090,12 +1089,9 @@ class BleGattClient(
     }
 
     /**
-     * Check if BLUETOOTH_CONNECT permission is granted.
-     */
-    /**
      * Safely disconnects and closes a BluetoothGatt instance, guarding against
      * SecurityException thrown by certain OEM Bluetooth stacks (e.g. vivo on Android 12)
-     * that require BLUETOOTH_PRIVILEGED for the internal clientDisconnect binder call —
+     * that require BLUETOOTH_PRIVILEGED for the internal clientDisconnect binder call -
      * a permission third-party apps can never hold. close() is always attempted even if
      * disconnect() throws, so the GATT client slot is not leaked.
      */
@@ -1115,6 +1111,9 @@ class BleGattClient(
         }
     }
 
+    /**
+     * Check if BLUETOOTH_CONNECT permission is granted.
+     */
     private fun hasConnectPermission(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(

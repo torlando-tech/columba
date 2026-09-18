@@ -456,10 +456,14 @@ class PythonRnsRuntime(
         if (!running.get()) return
         runCatching { eventBridge.callAttr("uninstall_external_stamp_generator") }
             .onFailure { Log.w(TAG, "External stamp generator unregister failed", it) }
-        runCatching { eventBridge.callAttr("uninstall_destination_resolver") }
-            .onFailure { Log.w(TAG, "Destination resolver unregister failed", it) }
         runCatching { eventBridge.callAttr("deregister_callbacks") }
             .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
+        // The destination resolver must outlive the callbacks: the telemetry
+        // stream response resolves its outbound destination through it. Clear
+        // it only after callbacks can no longer dispatch, so a request arriving
+        // during deregistration is not dropped for a missing resolver.
+        runCatching { eventBridge.callAttr("uninstall_destination_resolver") }
+            .onFailure { Log.w(TAG, "Destination resolver unregister failed", it) }
         runCatching {
             // RNS.Reticulum.exit_handler() flushes path tables + closes
             // interfaces without the os._exit() that RNS.exit() would do.

@@ -306,8 +306,7 @@ class BleGattClient(
             if (connData != null) {
                 withContext(Dispatchers.Main) {
                     connData.connectionJob?.cancel()
-                    connData.gatt.disconnect()
-                    connData.gatt.close()
+                    safeGattTeardown(connData.gatt, "manual disconnect $address")
                 }
                 Log.d(TAG, "Disconnected from $address (manual)")
                 onDisconnected?.invoke(address, null)
@@ -525,8 +524,7 @@ class BleGattClient(
                 connections.remove(address)
             }
             withContext(Dispatchers.Main) {
-                gatt.disconnect()
-                gatt.close()
+                safeGattTeardown(gatt, "service discovery failed status=$status")
             }
 
             onConnectionFailed?.invoke(address, "Service discovery failed (status: $status)")
@@ -547,8 +545,7 @@ class BleGattClient(
                 connections.remove(address)
             }
             withContext(Dispatchers.Main) {
-                gatt.disconnect()
-                gatt.close()
+                safeGattTeardown(gatt, "Reticulum service not found")
             }
 
             onConnectionFailed?.invoke(address, "Reticulum service not found")
@@ -572,8 +569,7 @@ class BleGattClient(
                 connections.remove(address)
             }
             withContext(Dispatchers.Main) {
-                gatt.disconnect()
-                gatt.close()
+                safeGattTeardown(gatt, "required characteristics not found")
             }
 
             onConnectionFailed?.invoke(address, "Required characteristics not found")
@@ -858,8 +854,7 @@ class BleGattClient(
 
             if (connData != null) {
                 withContext(Dispatchers.Main) {
-                    connData.gatt.disconnect()
-                    connData.gatt.close()
+                    safeGattTeardown(connData.gatt, "failed to enable notifications")
                 }
             }
 
@@ -1087,10 +1082,32 @@ class BleGattClient(
         val connData = connectionsMutex.withLock { connections.remove(address) }
         if (connData != null) {
             withContext(Dispatchers.Main) {
-                connData.gatt.disconnect()
-                connData.gatt.close()
+                safeGattTeardown(connData.gatt, "connection timeout")
             }
             onConnectionFailed?.invoke(address, "Connection timeout")
+        }
+    }
+
+    /**
+     * Safely disconnects and closes a BluetoothGatt instance, guarding against
+     * SecurityException thrown by certain OEM Bluetooth stacks (e.g. vivo on Android 12)
+     * that require BLUETOOTH_PRIVILEGED for the internal clientDisconnect binder call -
+     * a permission third-party apps can never hold. close() is always attempted even if
+     * disconnect() throws, so the GATT client slot is not leaked.
+     */
+    private fun safeGattTeardown(gatt: BluetoothGatt, context: String) {
+        try {
+            gatt.disconnect()
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException in gatt.disconnect() [$context]: ${e.message}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in gatt.disconnect() [$context]: ${e.message}")
+        } finally {
+            try {
+                gatt.close()
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception in gatt.close() [$context]: ${e.message}")
+            }
         }
     }
 
@@ -1239,15 +1256,8 @@ class BleGattClient(
             }
 
         snapshot.values.forEach { connData ->
-            try {
-                connData.keepaliveJob?.cancel()
-                connData.gatt.disconnect()
-                connData.gatt.close()
-            } catch (e: SecurityException) {
-                Log.e(TAG, "Permission denied closing GATT to ${connData.gatt.device?.address}", e)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error closing GATT to ${connData.gatt.device?.address}", e)
-            }
+            connData.keepaliveJob?.cancel()
+            safeGattTeardown(connData.gatt, "closeImmediate ${connData.gatt.device?.address}")
         }
         Log.d(TAG, "GATT client closed immediately (${snapshot.size} connections)")
     }

@@ -94,6 +94,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.R
 import network.columba.app.nomadnet.ImageLoadingMode
+import network.columba.app.nomadnet.buildNomadNetPersistPath
 import network.columba.app.ui.components.MicronPageContent
 import network.columba.app.viewmodel.NomadNetAutoIdentifyViewModel
 import network.columba.app.viewmodel.NomadNetBrowserViewModel
@@ -319,7 +320,7 @@ fun NomadNetBrowserScreen(
                     // so Compose tracks the dependency and recomposes the title
                     val currentUrl =
                         (browserState as? BrowserState.PageLoaded)?.let {
-                            "${it.nodeHash}:${it.path}"
+                            "${it.nodeHash}:${buildNomadNetPersistPath(it.path, it.fieldTokens)}"
                         }
                     if (currentUrl != null || isEditingUrl) {
                         // Address bar — rounded container with contrasting background
@@ -439,7 +440,7 @@ fun NomadNetBrowserScreen(
                             // Copy URL — derive from compose state
                             val shareableUrl =
                                 (browserState as? BrowserState.PageLoaded)?.let {
-                                    "nomadnetwork://${it.nodeHash}:${it.path}"
+                                    "nomadnetwork://${it.nodeHash}:${buildNomadNetPersistPath(it.path, it.fieldTokens)}"
                                 }
                             if (shareableUrl != null) {
                                 DropdownMenuItem(
@@ -708,9 +709,9 @@ fun NomadNetBrowserScreen(
 
             is BrowserState.PageLoaded -> {
                 // Update URL field when page changes (only if not editing)
-                LaunchedEffect(state.nodeHash, state.path) {
+                LaunchedEffect(state.nodeHash, state.path, state.fieldTokens) {
                     if (!isEditingUrl) {
-                        val url = "${state.nodeHash}:${state.path}"
+                        val url = "${state.nodeHash}:${buildNomadNetPersistPath(state.path, state.fieldTokens)}"
                         urlFieldValue = TextFieldValue(url)
                     }
                 }

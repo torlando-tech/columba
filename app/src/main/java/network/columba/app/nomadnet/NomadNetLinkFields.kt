@@ -3,6 +3,22 @@ package network.columba.app.nomadnet
 import org.json.JSONObject
 
 /**
+ * Reconstruct the persist path for a loaded page from its bare [path] and the
+ * [fieldTokens] it was requested with (the trailing backtick block, e.g.
+ * `cat=general|thread=a-gentle-look-at-prns`). Restoring this full path
+ * re-submits the same request variables, so a persisted deep page (a forum
+ * thread, etc.) reopens correctly instead of a bare-path fetch the node
+ * rejects. With no tokens the bare path is returned unchanged.
+ *
+ * Inverse of [splitNomadNetPathFields]: `buildNomadNetPersistPath(path, fields)`
+ * round-trips back to `(path, fields)`.
+ */
+fun buildNomadNetPersistPath(path: String, fieldTokens: List<String>): String {
+    if (fieldTokens.isEmpty()) return path
+    return "$path`" + fieldTokens.joinToString("|")
+}
+
+/**
  * Split [rawPath] on the first backtick into its clean page path and the
  * pipe-separated link-field tokens that follow, returned as
  * `(path, fieldNames)`.

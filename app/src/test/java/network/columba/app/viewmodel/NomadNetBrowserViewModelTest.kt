@@ -146,6 +146,200 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `a var-bearing page persists the full path with its backtick field block`() =
+        runTest(testDispatcher) {
+            // A forum thread is opened with request variables (the backtick
+            // block). Restoring it later must re-submit those variables, so the
+            // persisted path must carry the full block, not just the bare path.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            // In-page link to the thread with var fields (the reported repro).
+            viewModel.navigateToLink(
+                "/page/forum/thread.mu",
+                listOf("cat=general", "thread=a-gentle-look-at-prns"),
+            )
+            advanceUntilIdle()
+            Thread.sleep(100) // Wait for the Dispatchers.IO fetch
+
+            val state = viewModel.browserState.value
+            assertTrue(
+                "Should be PageLoaded, was $state",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+
+            // The persisted path must be the FULL path with the backtick block,
+            // so restoring it re-submits the same request variables.
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(
+                    nodeHash,
+                    "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns",
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    fun `refresh on a var-bearing page re-submits the request data, not a bare fetch`() =
+        runTest(testDispatcher) {
+            // Pull-to-refresh (and any re-fetch) of a page that was loaded with
+            // request variables must re-submit those variables. A bare fetch
+            // (null data) drops them and the node rejects the page with
+            // "Invalid thread" - the same failure this whole change targets.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+            coEvery {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", null, any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.navigateToLink(
+                "/page/forum/thread.mu",
+                listOf("cat=general", "thread=a-gentle-look-at-prns"),
+            )
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "Thread page should be loaded",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+
+            viewModel.refresh()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            // The refresh must NOT issue a bare (null-data) fetch for the
+            // var-bearing path - the initial link tap already covered that.
+            coVerify(exactly = 0) {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", null, any())
+            }
+        }
+
+    @Test
+    fun `refresh after goBack re-submits the displayed page's own vars, not a later page's`() =
+        runTest(testDispatcher) {
+            // Regression for the (node, path) match in refresh(): back-navigating
+            // to an earlier page that shares the node+path but uses different
+            // request vars must refresh with THAT page's vars (the displayed
+            // state), not a later page's vars left in lastFetch* state. Refresh
+            // rebuilds data from the displayed page's fieldTokens, so it can't
+            // resurrect a later page's data over the restored one.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            coEvery {
+                protocol.requestNomadnetPage(nodeHash, "/page/forum/thread.mu", match { it != null }, any())
+            } returns Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            // Forward page 1: thread=a
+            viewModel.navigateToLink("/page/forum/thread.mu", listOf("thread=a"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+            // Forward page 2 (same node+path, different var): thread=b
+            viewModel.navigateToLink("/page/forum/thread.mu", listOf("thread=b"))
+            advanceUntilIdle()
+            Thread.sleep(100)
+            // Go BACK to thread=a (same node+path, different var). lastFetch*
+            // still points at thread=b (the later page) after this.
+            viewModel.goBack()
+            advanceUntilIdle()
+
+            val state = viewModel.browserState.value as NomadNetBrowserViewModel.BrowserState.PageLoaded
+            assertTrue(
+                "Displayed page after goBack must be the earlier (thread=a) page",
+                state.fieldTokens == listOf("thread=a"),
+            )
+
+            viewModel.refresh()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            // Refresh must re-submit thread=a (the displayed page's vars), not
+            // thread=b (the later page's vars still in lastFetch*). The inline
+            // var token "thread=a" is sent as var_thread=a in the request data.
+            coVerify {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it?.contains("\"var_thread\":\"a\"") == true },
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    fun `retry on a failed var-bearing page preserves the field tokens for persist`() =
+        runTest(testDispatcher) {
+            // A var-bearing page that fails on first request, then succeeds on
+            // retry, must persist its FULL path (with the backtick block) so a
+            // later restore re-submits the same request variables - not a bare
+            // path the node would reject.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
+            var threadCalls = 0
+            coEvery {
+                protocol.requestNomadnetPage(
+                    nodeHash,
+                    "/page/forum/thread.mu",
+                    match { it != null },
+                    any(),
+                )
+            } coAnswers {
+                threadCalls++
+                if (threadCalls == 1) {
+                    Result.failure(RuntimeException("NomadNet timeout"))
+                } else {
+                    Result.success(NomadnetPageResult(simplePage, "/page/forum/thread.mu"))
+                }
+            }
+
+            viewModel.loadPage(nodeHash)
+            advanceUntilIdle()
+            viewModel.navigateToLink(
+                "/page/forum/thread.mu",
+                listOf("cat=general", "thread=a-gentle-look-at-prns"),
+            )
+            advanceUntilIdle()
+            Thread.sleep(100)
+            assertTrue(
+                "First request should fail",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.Error,
+            )
+
+            viewModel.retry()
+            advanceUntilIdle()
+            Thread.sleep(100)
+
+            assertTrue(
+                "Retry should recover the page",
+                viewModel.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded,
+            )
+            coVerify {
+                settingsRepository.saveNomadNetLastNodeHash(
+                    nodeHash,
+                    "/page/forum/thread.mu`cat=general|thread=a-gentle-look-at-prns",
+                    any(),
+                )
+            }
+        }
+
+    @Test
     fun `loadPage with cache miss fetches from network`() =
         runTest(testDispatcher) {
             every { pageCache.get(nodeHash, "/page/index.mu") } returns null

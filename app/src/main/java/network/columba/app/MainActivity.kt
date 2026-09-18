@@ -89,6 +89,7 @@ import network.columba.app.navigation.completeCurrentFlow
 import network.columba.app.navigation.navigateToAnsweredCall
 import network.columba.app.navigation.navigateToEntity
 import network.columba.app.navigation.navigateToIncomingCall
+import network.columba.app.navigation.navigateToTab
 import network.columba.app.navigation.shouldPresentIncomingCall
 import network.columba.app.navigation.NavTab
 import network.columba.app.notifications.CallNotificationHelper
@@ -1331,32 +1332,7 @@ fun ColumbaNavigation(
                                     label = { Text(tab.label) },
                                     selected = tab.matchesRoute(currentRoute),
                                     onClick = {
-                                        if (currentRoute?.startsWith("nomadnet") == true) {
-                                            if (tab == NavTab.NOMADNET) {
-                                                // Already browsing; the site session ends via
-                                                // Close Site or Back, not by re-tapping the tab.
-                                                return@NavigationBarItem
-                                            }
-                                            // Browsing is modal over the tab tree: collapse
-                                            // the NomadNet stack first, then switch tabs
-                                            // normally. Popping (rather than saving state)
-                                            // guarantees a single browser view, so tab taps
-                                            // can never stack duplicates or fight over
-                                            // scroll position.
-                                            while (
-                                                navController.currentDestination?.route
-                                                    ?.startsWith("nomadnet") == true
-                                            ) {
-                                                if (!navController.popBackStack()) break
-                                            }
-                                        }
-                                        navController.navigate(tab.tabRoute) {
-                                            popUpTo(navController.graph.startDestinationId) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                                        navController.navigateToTab(tab)
                                     },
                                 )
                             }

@@ -2634,23 +2634,31 @@ class SettingsViewModelTest {
             testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
             testScheduler.runCurrent()
 
-            SettingsViewModel::class.java
+            val job = SettingsViewModel::class.java
                 .getDeclaredField("sharedInstanceAvailabilityJob")
                 .apply { isAccessible = true }
-                .let { (it.get(viewModel) as? Job)?.cancel() }
+                .let { it.get(viewModel) as? Job }
+                ?: throw AssertionError("the availability monitor job must exist")
+            job.cancel()
             advanceUntilIdle()
 
-            // The probe runs on Dispatchers.IO (a real thread pool), so its
-            // resumption can reach the test scheduler a beat after the
-            // virtual time advances. Settle with a bounded real-time wait so
-            // the cancellation is fully applied before tearDown clears the
-            // mocks (otherwise the next tick hits a cleared MockK stub and
-            // leaks an UncaughtException into the following test).
-            val deadline = System.currentTimeMillis() + 1_000
-            while (System.currentTimeMillis() < deadline) {
+            // The probe is a structured withContext(Dispatchers.IO) child of
+            // the job, so joining it is a deterministic completion barrier:
+            // the job cannot complete until the in-flight probe resumption
+            // has been processed. Pump the scheduler in the join loop so that
+            // resumption lands before tearDown clears the mocks (otherwise the
+            // next tick hits a cleared MockK stub and leaks an
+            // UncaughtException into the following test). A fixed-time loop
+            // would not guarantee this on a loaded runner.
+            val joinDeadline = System.currentTimeMillis() + 5_000
+            while (System.currentTimeMillis() < joinDeadline && !job.isCompleted) {
                 Thread.sleep(20)
                 testScheduler.runCurrent()
             }
+            assertTrue(
+                "the availability monitor job must complete after cancellation",
+                job.isCompleted,
+            )
 
             assertFalse(
                 "With no reachable master and no shared mode, the instance must not report online",
@@ -2687,20 +2695,27 @@ class SettingsViewModelTest {
             testScheduler.advanceTimeBy(2_000L + 5_000L * 2)
             testScheduler.runCurrent()
 
-            SettingsViewModel::class.java
+            val job = SettingsViewModel::class.java
                 .getDeclaredField("sharedInstanceAvailabilityJob")
                 .apply { isAccessible = true }
-                .let { (it.get(viewModel) as? Job)?.cancel() }
+                .let { it.get(viewModel) as? Job }
+                ?: throw AssertionError("the availability monitor job must exist")
+            job.cancel()
             advanceUntilIdle()
 
-            // Drain the in-flight IO resumption (same rationale as the
-            // own-mode probe tests) so the cancellation is fully applied
-            // before tearDown clears the mocks.
-            val deadline = System.currentTimeMillis() + 1_000
-            while (System.currentTimeMillis() < deadline) {
+            // Join the job for a deterministic completion barrier (matches the
+            // own-mode probe tests). This test short-circuits before the
+            // Dispatchers.IO probe, so the job completes on the first pump -
+            // no fixed-time settle needed.
+            val joinDeadline = System.currentTimeMillis() + 5_000
+            while (System.currentTimeMillis() < joinDeadline && !job.isCompleted) {
                 Thread.sleep(20)
                 testScheduler.runCurrent()
             }
+            assertTrue(
+                "the availability monitor job must complete after cancellation",
+                job.isCompleted,
+            )
 
             assertTrue("shared mode must report the instance online", viewModel.state.value.sharedInstanceOnline)
             assertEquals("probe must be skipped when the daemon is already in a shared mode", 0, probeCalls)

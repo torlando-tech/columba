@@ -191,15 +191,25 @@ class PythonRnsNomadnet(
     /**
      * Reuse a cached ACTIVE link, else build the `nomadnetwork.node`
      * destination, construct an `RNS.Link`, and poll until it goes ACTIVE.
+     *
+     * If the first link budget exhausts without the link going ACTIVE, the
+     * destination may not have a route in `RNS.Transport.path_table` yet
+     * (cold start: the identity is known from the stored destinations, so
+     * `resolveNodeIdentity` returned without requesting a path). The route
+     * will arrive via peer announces over the backbone, but only after the
+     * link budget has expired. This mirrors the kotlin backend's
+     * `NativeNomadNetHandler.retryLinkEstablishment`: expire the (absent)
+     * path, request a fresh one, poll `Transport.has_path`, then rebuild
+     * the link.
      */
-    private suspend fun establishLink(
+    internal suspend fun establishLink(
         destinationHash: String,
         nodeIdentity: PyObject,
         timeoutSeconds: Float,
         generation: Int,
     ): PyObject {
         nomadnetLinks[destinationHash]?.let { existing ->
-            if (linkStatus(existing) == LINK_ACTIVE) {
+            if (readLinkStatus(existing) == LINK_ACTIVE) {
                 Log.i(TAG, "NomadNet: reusing active link to $destinationHash")
                 return existing
             }
@@ -207,8 +217,55 @@ class PythonRnsNomadnet(
         }
 
         _nomadnetRequestStatusFlow.value = "requesting"
+        val destBytes = destinationHash.hexToBytes()
+        val linkBudgetMs = testLinkBudgetMs?.toLong()
+            ?: (timeoutSeconds * 1000 / 3).toLong().coerceAtLeast(5_000L)
+
+        // --- first attempt ---
+        val firstLink = createNodeLink(nodeIdentity)
+        val firstResult = awaitLinkActive(firstLink, linkBudgetMs, generation)
+        if (firstResult != null) {
+            nomadnetLinks[destinationHash] = firstResult
+            Log.i(TAG, "NomadNet: link established to $destinationHash")
+            return firstResult
+        }
+        teardownLink(firstLink)
+        val pathWaitBudgetMs = testPathWaitBudgetMs?.toLong()
+            ?: maxOf(20_000L, (timeoutSeconds * 1000).toLong())
+        Log.i(TAG, "NomadNet: expiring stale path, requesting fresh path and retrying...")
+        val routeAppeared = waitForRouteAppears(destBytes, pathWaitBudgetMs, generation)
+        if (!routeAppeared) {
+            throw RnsException(
+                RnsError.Generic(
+                    "Failed to establish link to NomadNet node ${destinationHash.take(16)}",
+                    null,
+                ),
+            )
+        }
+
+        val retryLink = createNodeLink(nodeIdentity)
+        val retryResult = awaitLinkActive(retryLink, linkBudgetMs, generation)
+        if (retryResult != null) {
+            nomadnetLinks[destinationHash] = retryResult
+            Log.i(TAG, "NomadNet: link established on retry to $destinationHash")
+            return retryResult
+        }
+        teardownLink(retryLink)
+        throw RnsException(
+            RnsError.Generic(
+                "Failed to establish link to NomadNet node ${destinationHash.take(16)}",
+                null,
+            ),
+        )
+    }
+
+    /**
+     * Build the `nomadnetwork.node` destination and construct an `RNS.Link`.
+     * Overridable via [testCreateNodeLink] for unit tests.
+     */
+    private fun createNodeLink(nodeIdentity: PyObject): PyObject {
+        testCreateNodeLink?.let { return it(nodeIdentity) }
         val destClass = runtime.rnsModule["Destination"] ?: error("RNS.Destination missing")
-        // RNS.Destination(identity, OUT, SINGLE, "nomadnetwork", "node")
         val nodeDest = runtime.rnsModule.callAttr(
             "Destination",
             nodeIdentity,
@@ -217,26 +274,76 @@ class PythonRnsNomadnet(
             "nomadnetwork",
             "node",
         )
+        return runtime.rnsModule.callAttr("Link", nodeDest)
+    }
 
-        val link = runtime.rnsModule.callAttr("Link", nodeDest)
+    /** Read `link.status` via the test seam or the real `PyObject` accessor. */
+    private fun readLinkStatus(link: PyObject): Long? =
+        testLinkStatus?.invoke(link) ?: linkStatus(link)
 
-        // Link establishment gets up to a third of the budget (min 5s).
-        val deadline = System.currentTimeMillis() +
-            (timeoutSeconds * 1000 / 3).toLong().coerceAtLeast(5_000L)
+    /** Tear down a link via the test seam or the real `RNS.Link.teardown`. */
+    private fun teardownLink(link: PyObject) {
+        val seam = testTeardownLink
+        if (seam != null) seam(link) else runCatching { link.callAttr("teardown") }
+    }
+
+    /**
+     * Poll `RNS.Transport.has_path(dest)` until it returns true or the
+     * budget expires. Sends `expire_path` + `request_path` first to kick
+     * off route discovery. Overridable via [testRouteWaiter] for tests.
+     *
+     * Mirrors `NativeNomadNetHandler.retryLinkEstablishment`'s path-wait.
+     */
+    private suspend fun waitForRouteAppears(
+        destBytes: ByteArray,
+        budgetMs: Long,
+        generation: Int,
+    ): Boolean {
+        testRouteWaiter?.let { return it(destBytes, budgetMs, generation) }
+        val t = transport()
+        runCatching { t.callAttr("expire_path", destBytes.toPyBytes()) }
+        runCatching { t.callAttr("request_path", destBytes.toPyBytes()) }
+        val pathKnown = {
+            runCatching {
+                t.callAttr("has_path", destBytes.toPyBytes())
+                    ?.toJava(Boolean::class.javaObjectType)
+            }.getOrNull() ?: false
+        }
+        val deadline = System.currentTimeMillis() + budgetMs
         while (System.currentTimeMillis() < deadline) {
             throwIfCancelled(generation)
-            if (linkStatus(link) == LINK_ACTIVE) {
-                nomadnetLinks[destinationHash] = link
-                Log.i(TAG, "NomadNet: link established to $destinationHash")
-                return link
-            }
+            if (pathKnown()) return true
             delay(POLL_INTERVAL_MS)
         }
-        runCatching { link.callAttr("teardown") }
-        throw RnsException(
-            RnsError.Generic("Failed to establish link to NomadNet node ${destinationHash.take(16)}", null),
-        )
+        return pathKnown()
     }
+
+    /**
+     * Poll a link until it goes ACTIVE or the budget expires.
+     * Returns the link if ACTIVE, null if the budget was exhausted.
+     */
+    private suspend fun awaitLinkActive(
+        link: PyObject,
+        budgetMs: Long,
+        generation: Int,
+    ): PyObject? {
+        val deadline = System.currentTimeMillis() + budgetMs
+        while (System.currentTimeMillis() < deadline) {
+            throwIfCancelled(generation)
+            if (readLinkStatus(link) == LINK_ACTIVE) return link
+            delay(POLL_INTERVAL_MS)
+        }
+        return null
+    }
+
+    // Test seams: override in unit tests to avoid the native RNS runtime.
+    // Each is `null` in production (the real RNS code path is used).
+    internal var testLinkBudgetMs: Int? = null
+    internal var testPathWaitBudgetMs: Int? = null
+    internal var testCreateNodeLink: ((PyObject) -> PyObject)? = null
+    internal var testLinkStatus: ((PyObject) -> Long?)? = null
+    internal var testRouteWaiter: ((ByteArray, Long, Int) -> Boolean)? = null
+    internal var testTeardownLink: ((PyObject) -> Unit)? = null
 
     /**
      * Issue `link.request(path, data, ...)` and wire a Python-side capture

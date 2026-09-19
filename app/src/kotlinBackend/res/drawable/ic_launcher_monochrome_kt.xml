@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Monochrome silhouette for the kotlinBackend flavor's API 33+ themable
+  launcher icon: the mesh (same enlarged geometry as ic_notification_stat so
+  it reads at themed size) plus the "WIP" wrench badge as a single-color
+  template. Android 13+ tints the whole thing to the launcher theme color,
+  so the badge loses its amber disc but keeps its wrench-on-ring outline.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <group
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:pivotX="256"
+        android:pivotY="256"
+        android:translateX="6"
+        android:translateY="-10">
+
+        <!-- Connecting lines -->
+        <path
+            android:pathData="M93.53,128.431 C94.162,128.471 271.37,194.336 271.29,193.077"
+            android:strokeWidth="9"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M270.75,193.487 C270.902,226.855 231.12,378.151 216.617,402.841"
+            android:strokeWidth="9"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M270.923,193.326 C281.938,183.739 347.714,144.654 356.069,139.108"
+            android:strokeWidth="9"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M405.781,182.043 C381.14,160.276 371.817,147.932 356.85,138.219"
+            android:strokeWidth="9"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- Solid node centers -->
+        <path
+            android:pathData="M406.658,182.257 m-16,0 a16,16 0,1 1,32 0 a16,16 0,1 1,-32 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M356.658,138.257 m-18,0 a18,18 0,1 1,36 0 a18,18 0,1 1,-36 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M270.658,193.257 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M214.658,403.257 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M93.506,128.312 m-11,0 a11,11 0,1 1,22 0 a11,11 0,1 1,-22 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M230.655,178.527 m-12,0 a12,12 0,1 1,24 0 a12,12 0,1 1,-24 0"
+            android:fillColor="#FFFFFF" />
+    </group>
+
+    <!--
+      WIP badge silhouette, moved toward center and shrunk so its outermost
+      point stays inside the adaptive-icon safe region (radius ~156 units in
+      the 512 viewport; the ring here reaches ~147 from center, inside).
+      Same wrench-on-ring mark as ic_launcher_kt_badge, scaled down for the
+      monochrome template.
+    -->
+    <path
+        android:pathData="M320,320 m-50,0 a50,50 0,1 1,100 0 a50,50 0,1 1,-100 0"
+        android:strokeWidth="12"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="#00000000" />
+    <group
+        android:pivotX="12"
+        android:pivotY="12"
+        android:scaleX="2.4"
+        android:scaleY="2.4"
+        android:translateX="308"
+        android:translateY="308">
+        <path
+            android:pathData="M22.7,19l-9.1,-9.1c0.9,-2.3 0.4,-5 -1.5,-6.9 -2,-2 -5,-2.4 -7.4,-1.3L9,6 6,9 1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1c1.9,1.9 4.6,2.4 6.9,1.5l9.1,9.1c0.4,0.4 1,0.4 1.4,0l2.3,-2.3c0.5,-0.4 0.5,-1.1 0.1,-1.4z"
+            android:fillColor="#FFFFFF" />
+    </group>
+</vector>

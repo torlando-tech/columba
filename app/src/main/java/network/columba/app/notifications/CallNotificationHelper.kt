@@ -264,7 +264,7 @@ class CallNotificationHelper
             val notification =
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_INCOMING_CALL)
-                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setSmallIcon(R.drawable.ic_notification_stat)
                     .setContentTitle("Incoming Voice Call")
                     .setContentText(displayName)
                     .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -340,7 +340,7 @@ class CallNotificationHelper
             val notification =
                 NotificationCompat
                     .Builder(context, CHANNEL_ID_ONGOING_CALL)
-                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setSmallIcon(R.drawable.ic_notification_stat)
                     .setContentTitle("Voice Call")
                     .setContentText("$displayName - $durationText")
                     .setPriority(NotificationCompat.PRIORITY_LOW)

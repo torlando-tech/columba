@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Notification small icon (status bar / heads-up) for the Reticulum
+  foreground-service notification in the :reticulum process. A pure-white
+  single-color silhouette of the Columba mesh, scaled to fill the 24dp
+  canvas. Same geometry as the :app ic_notification_stat (kept in sync
+  across the module boundary since :rns-host cannot see :app resources).
+
+  Notification small icons must be a single opaque color (the system tints
+  them) and render at ~24dp, so this drops the launcher's translucent glows,
+  uses a 0.75 scale (not the launcher's 0.65 safe-zone transform) so the mesh
+  fills the status-bar space, and keeps the same relative node/link geometry
+  as ic_launcher_foreground so it reads as the identical mark.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <group
+        android:scaleX="0.75"
+        android:scaleY="0.75"
+        android:pivotX="256"
+        android:pivotY="256">
+
+        <!-- Connecting lines -->
+        <path
+            android:pathData="M93.53,128.431 C94.162,128.471 271.37,194.336 271.29,193.077"
+            android:strokeWidth="12"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M270.75,193.487 C270.902,226.855 231.12,378.151 216.617,402.841"
+            android:strokeWidth="12"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M270.923,193.326 C281.938,183.739 347.714,144.654 356.069,139.108"
+            android:strokeWidth="12"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M405.781,182.043 C381.14,160.276 371.817,147.932 356.85,138.219"
+            android:strokeWidth="12"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- Solid node centers (bumped from the launcher sizes so the nodes read at 24dp) -->
+        <path
+            android:pathData="M406.658,182.257 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M356.658,138.257 m-15,0 a15,15 0,1 1,30 0 a15,15 0,1 1,-30 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M270.658,193.257 m-9,0 a9,9 0,1 1,18 0 a9,9 0,1 1,-18 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M214.658,403.257 m-9,0 a9,9 0,1 1,18 0 a9,9 0,1 1,-18 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M93.506,128.312 m-7,0 a7,7 0,1 1,14 0 a7,7 0,1 1,-14 0"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M230.655,178.527 m-7.5,0 a7.5,8 0,1 1,15 0 a7.5,8 0,1 1,-15 0"
+            android:fillColor="#FFFFFF" />
+    </group>
+</vector>

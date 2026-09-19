@@ -24,50 +24,53 @@
         android:pivotX="256"
         android:pivotY="256">
 
-        <!-- Connecting lines -->
+        <!-- Connecting lines (3x heavier than the first pass so the mesh reads
+             at a glance in the status bar) -->
         <path
             android:pathData="M93.53,128.431 C94.162,128.471 271.37,194.336 271.29,193.077"
-            android:strokeWidth="15"
+            android:strokeWidth="45"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
         <path
             android:pathData="M270.75,193.487 C270.902,226.855 231.12,378.151 216.617,402.841"
-            android:strokeWidth="15"
+            android:strokeWidth="45"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
         <path
             android:pathData="M270.923,193.326 C281.938,183.739 347.714,144.654 356.069,139.108"
-            android:strokeWidth="15"
+            android:strokeWidth="45"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
         <path
             android:pathData="M405.781,182.043 C381.14,160.276 371.817,147.932 356.85,138.219"
-            android:strokeWidth="15"
+            android:strokeWidth="45"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
 
-        <!-- Solid node centers -->
+        <!-- Solid node centers (3x the previous pass so they match the 45-wide
+             strokes - a node smaller than the stroke half-width (22.5) is
+             invisible) -->
         <path
-            android:pathData="M406.658,182.257 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
+            android:pathData="M406.658,182.257 m-39,0 a39,39 0,1 1,78 0 a39,39 0,1 1,-78 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M356.658,138.257 m-15,0 a15,15 0,1 1,30 0 a15,15 0,1 1,-30 0"
+            android:pathData="M356.658,138.257 m-45,0 a45,45 0,1 1,90 0 a45,45 0,1 1,-90 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M270.658,193.257 m-9,0 a9,9 0,1 1,18 0 a9,9 0,1 1,-18 0"
+            android:pathData="M270.658,193.257 m-27,0 a27,27 0,1 1,54 0 a27,27 0,1 1,-54 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M214.658,403.257 m-9,0 a9,9 0,1 1,18 0 a9,9 0,1 1,-18 0"
+            android:pathData="M214.658,403.257 m-27,0 a27,27 0,1 1,54 0 a27,27 0,1 1,-54 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M93.506,128.312 m-7,0 a7,7 0,1 1,14 0 a7,7 0,1 1,-14 0"
+            android:pathData="M93.506,128.312 m-21,0 a21,21 0,1 1,42 0 a21,21 0,1 1,-42 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M230.655,178.527 m-7.5,0 a7.5,8 0,1 1,15 0 a7.5,8 0,1 1,-15 0"
+            android:pathData="M230.655,178.527 m-23,0 a23,23 0,1 1,46 0 a23,23 0,1 1,-46 0"
             android:fillColor="#FFFFFF" />
     </group>
 </vector>

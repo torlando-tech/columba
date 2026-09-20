@@ -404,11 +404,18 @@ class ServiceNotificationManager(
             val notification = createNotification(state.networkStatus.get())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+ requires explicit foreground service type
-                service.startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                )
+                try {
+                    service.startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                    )
+                } catch (e: IllegalArgumentException) {
+                    // Defensive fallback: if the OS rejects the typed form (e.g. a device
+                    // whose manifest parser zeroed the type mask), promote without a type.
+                    Log.w(TAG, "3-arg startForeground rejected (${e.message}), falling back to 2-arg form")
+                    service.startForeground(NOTIFICATION_ID, notification)
+                }
             } else {
                 // Android 9 and below
                 service.startForeground(NOTIFICATION_ID, notification)
@@ -444,11 +451,18 @@ class ServiceNotificationManager(
         if (svc != null) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    svc.startForeground(
-                        NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                    )
+                    try {
+                        svc.startForeground(
+                            NOTIFICATION_ID,
+                            notification,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        // Defensive fallback: if the OS rejects the typed form (e.g. a device
+                        // whose manifest parser zeroed the type mask), promote without a type.
+                        Log.w(TAG, "3-arg startForeground rejected in repost (${e.message}), falling back to 2-arg form")
+                        svc.startForeground(NOTIFICATION_ID, notification)
+                    }
                 } else {
                     svc.startForeground(NOTIFICATION_ID, notification)
                 }

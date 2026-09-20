@@ -24,51 +24,50 @@
         android:pivotX="256"
         android:pivotY="256">
 
-        <!-- Connecting lines (10% thinner than the 45-wide pass per user
-             feedback - "close but a touch heavy") -->
+        <!-- Connecting lines (final: strokeWidth 16, tuned in columba-icon-editor.html) -->
         <path
             android:pathData="M93.53,128.431 C94.162,128.471 271.37,194.336 271.29,193.077"
-            android:strokeWidth="40"
+            android:strokeWidth="16"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
         <path
             android:pathData="M270.75,193.487 C270.902,226.855 231.12,378.151 216.617,402.841"
-            android:strokeWidth="40"
+            android:strokeWidth="16"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
         <path
             android:pathData="M270.923,193.326 C281.938,183.739 347.714,144.654 356.069,139.108"
-            android:strokeWidth="40"
+            android:strokeWidth="16"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
         <path
             android:pathData="M405.781,182.043 C381.14,160.276 371.817,147.932 356.85,138.219"
-            android:strokeWidth="40"
+            android:strokeWidth="16"
             android:strokeColor="#FFFFFF"
             android:strokeLineCap="round"
             android:fillColor="#00000000" />
 
-        <!-- Solid node centers (10% larger than the 3x pass per user feedback) -->
+        <!-- Solid node centers (radius multiplier 1.44, tuned in columba-icon-editor.html) -->
         <path
-            android:pathData="M406.658,182.257 m-43,0 a43,43 0,1 1,86 0 a43,43 0,1 1,-86 0"
+            android:pathData="M406.658,182.257 m-18.7,0 a18.7,18.7 0,1 1,37.4 0 a18.7,18.7 0,1 1,-37.4 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M356.658,138.257 m-50,0 a50,50 0,1 1,100 0 a50,50 0,1 1,-100 0"
+            android:pathData="M356.658,138.257 m-21.6,0 a21.6,21.6 0,1 1,43.2 0 a21.6,21.6 0,1 1,-43.2 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M270.658,193.257 m-30,0 a30,30 0,1 1,60 0 a30,30 0,1 1,-60 0"
+            android:pathData="M270.658,193.257 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M214.658,403.257 m-30,0 a30,30 0,1 1,60 0 a30,30 0,1 1,-60 0"
+            android:pathData="M214.658,403.257 m-13,0 a13,13 0,1 1,26 0 a13,13 0,1 1,-26 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M93.506,128.312 m-23,0 a23,23 0,1 1,46 0 a23,23 0,1 1,-46 0"
+            android:pathData="M93.506,128.312 m-10.1,0 a10.1,10.1 0,1 1,20.2 0 a10.1,10.1 0,1 1,-20.2 0"
             android:fillColor="#FFFFFF" />
         <path
-            android:pathData="M230.655,178.527 m-25,0 a25,25 0,1 1,50 0 a25,25 0,1 1,-50 0"
+            android:pathData="M230.655,178.527 m-10.8,0 a10.8,10.8 0,1 1,21.6 0 a10.8,10.8 0,1 1,-21.6 0"
             android:fillColor="#FFFFFF" />
     </group>
 </vector>

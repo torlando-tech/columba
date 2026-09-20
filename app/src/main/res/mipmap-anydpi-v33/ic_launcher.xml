@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 33+ (Android 13) themable launcher icon. Adds the <monochrome> layer
+  launchers use to recolor the icon to the user's theme/wallpaper color.
+  The shared foreground vector is already a single-color white template
+  (lines + node dots, alpha-only glows), so the launcher tints it as-is.
+  Pre-33 devices use the v26 color icon.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>

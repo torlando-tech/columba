@@ -14,6 +14,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import network.columba.app.rns.api.model.PropagationState
+import network.columba.app.rns.host.R
 import network.columba.app.rns.host.state.ServiceState
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -136,7 +137,7 @@ class ServiceNotificationManager(
                 NotificationCompat
                     .BigTextStyle()
                     .bigText(detailText),
-            ).setSmallIcon(context.applicationInfo.icon)
+            ).setSmallIcon(R.drawable.ic_notification_stat)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -241,7 +242,7 @@ class ServiceNotificationManager(
                 val alert =
                     NotificationCompat
                         .Builder(context, CHANNEL_ID_RNODE)
-                        .setSmallIcon(context.applicationInfo.icon)
+                        .setSmallIcon(R.drawable.ic_notification_stat)
                         .setContentTitle("RNode Disconnected")
                         .setContentText("$names lost connection. Attempting to reconnect...")
                         .setContentIntent(pendingIntent)
@@ -346,7 +347,7 @@ class ServiceNotificationManager(
                 .Builder(context, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(subtitle)
-                .setSmallIcon(context.applicationInfo.icon)
+                .setSmallIcon(R.drawable.ic_notification_stat)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)

@@ -11,7 +11,9 @@ import kotlinx.coroutines.launch
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import network.columba.app.rns.api.model.VoiceCallState
+import network.columba.app.rns.api.util.PeriodicStateObserver
 import tech.torlando.lxst.core.CallCoordinator
+import tech.torlando.lxst.telephone.Profile
 
 /**
  * `RnsTelephony` for the Python-Chaquopy backend.
@@ -86,6 +88,39 @@ class PythonRnsTelephony(
     override val isPttActive: StateFlow<Boolean>
         get() = callCoordinator.isPttActive
 
+    /**
+     * Bounded poller that mirrors the active LXST codec-profile abbreviation
+     * while a call is in progress. Backed by [activeProfileReadHook] which
+     * [PythonCallManager] wires to its `telephone` (the coordinator on this
+     * backend holds no `telephone` field of its own). Emits `null` when no
+     * call is active.
+     */
+    private val activeProfileObserver =
+        PeriodicStateObserver(
+            scope = telephonyRelayScope,
+            pollIntervalMs = 500L,
+            isCallInProgress = { callCoordinator.hasActiveCall() },
+            readProfile = { activeProfileReadHook?.invoke() },
+        )
+    override val activeProfile: StateFlow<String?>
+        get() = activeProfileObserver.activeProfile
+
+    /**
+     * Wired by [PythonCallManager]'s init block to read the current active
+     * profile abbreviation from its `telephone`. Null-safe: returns `null`
+     * until the manager has been set up (telephone is `lateinit`).
+     */
+    @Volatile
+    var activeProfileReadHook: (() -> String?)? = null
+
+    /**
+     * Wired by [PythonCallManager]'s init block to cycle to the next LXST
+     * audio profile and signal it to the remote peer. Null-safe: a null hook
+     * (before setup) is a logged no-op, matching the other `*Hook`s here.
+     */
+    @Volatile
+    var cycleCallProfileHook: (() -> Unit)? = null
+
     init {
         // Translate LXST-kt's CallState → :rns-api CallState into the StateFlow
         // we expose. Lives on telephonyRelayScope so init/shutdown cycles don't
@@ -153,6 +188,17 @@ class PythonRnsTelephony(
             callCoordinator.setSpeaker(speakerOn)
         } catch (e: Exception) {
             Log.w(TAG, "Ignored error setting speaker=$speakerOn: $e")
+        }
+    }
+
+    override suspend fun cycleCallProfile() {
+        val hook = cycleCallProfileHook
+        if (hook == null) {
+            Log.w(TAG, "cycleCallProfile() before PythonCallManager wired hook")
+        } else {
+            runCatching { hook() }.onFailure {
+                Log.w(TAG, "Ignored error cycling LXST profile: $it")
+            }
         }
     }
 
@@ -247,10 +293,9 @@ class PythonRnsTelephony(
                         isActive = true,
                         isMuted = isMuted,
                         remoteIdentity = remoteIdentity,
-                        // No NativeCallManager.telephone on this backend, so the
-                        // active LXST codec profile abbreviation is unavailable
-                        // from the seam — the profile lives transport-side.
-                        profile = null,
+                        // Active codec profile via the read hook PythonCallManager
+                        // wires to its Telephone (the shared LXST audio stack).
+                        profile = activeProfileReadHook?.invoke(),
                     )
             }
         }

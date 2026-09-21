@@ -119,6 +119,30 @@ interface RnsTelephony {
     val isPttActive: StateFlow<Boolean>
 
     /**
+     * Abbreviation of the active LXST codec profile for the current call
+     * (LXST Profile Negotiation). Null when no call is active.
+     *
+     * Updated reactively on local-initiated and remote-initiated profile
+     * changes mid-call. Backends populate this by polling the shared
+     * LXST-kt `Telephone.activeProfile` at a bounded interval while a call
+     * is in progress (see `PeriodicStateObserver` in `:rns-api`); the
+     * poll-based approach keeps the observable honest across both backends
+     * without requiring a library bump.
+     */
+    val activeProfile: StateFlow<String?>
+
+    /**
+     * Cycle to the next LXST audio profile and signal it to the remote
+     * peer (LXST Profile Negotiation). No-op unless a call is established.
+     *
+     * The backend picks the next profile from the current `Telephone`
+     * active profile (via `Profile.next`) and routes the switch through
+     * the LXST-kt stack, which sends the `PREFERRED_PROFILE` signalling
+     * frame and reconfigures the transmit pipeline.
+     */
+    suspend fun cycleCallProfile()
+
+    /**
      * Update host-side `callState` to [CallState.Connecting] for the
      * given destination. UI calls this before issuing [initiateCall] so
      * the connecting UI renders immediately rather than waiting for the

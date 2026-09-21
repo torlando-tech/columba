@@ -63,6 +63,12 @@ internal class ServerRnsTelephony(
         callbackBinder = { it.asBinder() },
         emit = { cb, value -> cb.onBool(value) },
     )
+    private val activeProfileHub = ObserverHub<String?, IRnsNullableStringEventCallback>(
+        scope = scope,
+        upstream = { impl.activeProfile },
+        callbackBinder = { it.asBinder() },
+        emit = { cb, value -> cb.onString(value) },
+    )
 
     // ==================== Call control (IPC actions) ====================
 
@@ -96,6 +102,11 @@ internal class ServerRnsTelephony(
 
     override fun setCallSpeaker(speakerOn: Boolean, cb: IRnsResultCallback) = dispatch(cb, scope) {
         impl.setCallSpeaker(speakerOn)
+        Bundle.EMPTY
+    }
+
+    override fun cycleCallProfile(cb: IRnsResultCallback) = dispatch(cb, scope) {
+        impl.cycleCallProfile()
         Bundle.EMPTY
     }
 
@@ -159,6 +170,15 @@ internal class ServerRnsTelephony(
         isPttActiveHub.registerObserver(cb)
     override fun unregisterIsPttActiveObserver(cb: IRnsBoolEventCallback) =
         isPttActiveHub.unregisterObserver(cb)
+
+    override fun getCurrentActiveProfile(cb: IRnsNullableStringEventCallback) {
+        try { cb.onString(impl.activeProfile.value) } catch (_: RemoteException) { /* client dead */ }
+    }
+
+    override fun registerActiveProfileObserver(cb: IRnsNullableStringEventCallback) =
+        activeProfileHub.registerObserver(cb)
+    override fun unregisterActiveProfileObserver(cb: IRnsNullableStringEventCallback) =
+        activeProfileHub.unregisterObserver(cb)
 
     // ==================== Local-state mutators ====================
 

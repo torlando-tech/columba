@@ -32,6 +32,10 @@ oneway interface IRnsTelephony {
     void setCallMuted(boolean muted, in IRnsResultCallback cb);
     void setCallSpeaker(boolean speakerOn, in IRnsResultCallback cb);
 
+    // Cycle to the next LXST audio profile and signal it to the remote peer
+    // (LXST Profile Negotiation). No-op unless a call is established.
+    void cycleCallProfile(in IRnsResultCallback cb);
+
     // One-shot snapshot of the legacy VoiceCallState shape (Result<VoiceCallState>).
     void getCallState(in IRnsResultCallback cb);
 
@@ -66,6 +70,12 @@ oneway interface IRnsTelephony {
     void getCurrentIsPttActive(in IRnsBoolEventCallback cb);
     void registerIsPttActiveObserver(in IRnsBoolEventCallback cb);
     void unregisterIsPttActiveObserver(in IRnsBoolEventCallback cb);
+
+    // StateFlow<String?> activeProfile — LXST codec profile abbreviation,
+    // null when no call is active.
+    void getCurrentActiveProfile(in IRnsNullableStringEventCallback cb);
+    void registerActiveProfileObserver(in IRnsNullableStringEventCallback cb);
+    void unregisterActiveProfileObserver(in IRnsNullableStringEventCallback cb);
 
     // ==================== Local-state mutators ====================
     //

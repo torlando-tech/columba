@@ -548,6 +548,69 @@ def _jsonable(v):
         return str(v)
 
 
+# --- Discovered-interface snapshot ----------------------------------------
+# The Python flavor's discovery surface (PythonRnsTransportAdmin.
+# getDiscoveredInterfaces) is called on every Discovered Interfaces screen
+# open. RNS persists every interface it has ever heard as its own msgpack
+# file under <storage>/discovery/interfaces/ - a long-running node accumulates
+# hundreds. The Kotlin side previously pulled the list back as a Python list
+# and read ~28 keys off each per-interface dict through Chaquopy: with ~500
+# discovered interfaces that is ~15,000 JNI crossings, which dominated the
+# screen's load time (a 10s+ spinner).
+#
+# This function collapses the whole snapshot into a single JSON string on the
+# Python side - the same "flatten before crossing JNI" rule as the event
+# fan-out - so the Kotlin side makes one callAttr and one string crossing
+# regardless of how many interfaces exist. The key remaps (value ->
+# stamp_value, sf -> spreading_factor, cr -> coding_rate) are applied here so
+# the JSON already matches the shape DiscoveredInterface.parseFromJson
+# expects. (The old Kotlin-side reader looked for spreading_factor /
+# coding_rate, but upstream RNS stores those as sf / cr - so the LoRa params
+# were silently always null before this.) `config_entry` is dropped: it is a
+# multi-line config blob no Columba UI reads, and it dominated the payload
+# size.
+
+def serialize_discovered_interfaces(handler):
+    """Return the live discovered-interface list as a JSON array string.
+
+    `handler` is the `RNS.Discovery.InterfaceDiscovery` instance (transport's
+    `discovery_handler` attribute). Returns "[]" when discovery is not active.
+    A serialization failure (corrupt/absent files, GIL trouble) also returns
+    "[]" rather than raising - an empty list is a valid screen state and is
+    far better than an exception that would surface as a load failure.
+    """
+    if handler is None:
+        return "[]"
+    try:
+        infos = handler.list_discovered_interfaces()
+    except Exception as e:
+        RNS.log(
+            f"event_bridge: list_discovered_interfaces failed: {e}",
+            RNS.LOG_ERROR,
+        )
+        return "[]"
+    try:
+        payload = []
+        for info in infos:
+            item = {k: _jsonable(v) for k, v in info.items() if k != "config_entry"}
+            # Upstream key -> parser key. Popping the original avoids the
+            # JSON carrying the field twice.
+            if "value" in item:
+                item["stamp_value"] = item.pop("value")
+            if "sf" in item:
+                item["spreading_factor"] = item.pop("sf")
+            if "cr" in item:
+                item["coding_rate"] = item.pop("cr")
+            payload.append(item)
+        return json.dumps(payload)
+    except Exception as e:
+        RNS.log(
+            f"event_bridge: discovered-interface serialization failed: {e}",
+            RNS.LOG_ERROR,
+        )
+        return "[]"
+
+
 def _emit(callback, payload):
     """Invoke a Kotlin onEvent callback, swallowing exceptions.
 
@@ -1720,3 +1783,4 @@ def make_nomadnet_response_capture():
     cap.on_response = _on_response
     cap.on_failed = _on_failed
     return cap
+

@@ -11,7 +11,6 @@ import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.DiscoveredInterface
 import network.columba.app.rns.api.model.FailedInterface
 import network.columba.app.rns.api.model.InterfaceConfig
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -179,19 +178,26 @@ class PythonRnsTransportAdmin(
     override suspend fun getDiscoveredInterfaces(): List<DiscoveredInterface> =
         pyCall {
             // RNS.Transport.discovery_handler is a class attribute, None until
-            // RNS brings up discovery (config `discover_interfaces = yes`). When
-            // present it exposes list_discovered_interfaces() -> list[dict].
-            val handler = transport()["discovery_handler"] ?: return@pyCall emptyList()
-            val infos = handler.callAttr("list_discovered_interfaces")
-                ?: return@pyCall emptyList()
-            // Materialise the python list, then map each `info` dict to the
-            // JSON shape DiscoveredInterface.parseFromJson() consumes — reusing
-            // the contract's own parser keeps key handling in one place.
-            val jsonArray = JSONArray()
-            runtime.python.builtins.callAttr("list", infos).asList().forEach { info ->
-                jsonArray.put(discoveredInfoToJson(info))
-            }
-            DiscoveredInterface.parseFromJson(jsonArray.toString())
+            // RNS brings up discovery (config `discover_interfaces = yes`).
+            // When present it exposes list_discovered_interfaces() ->
+            // list[dict].
+            //
+            // The whole snapshot is serialized to a JSON string PYTHON-side
+            // (event_bridge.serialize_discovered_interfaces) and crossed as a
+            // single string. The old path read ~28 keys off each per-interface
+            // dict through Chaquopy; with a few hundred discovered interfaces
+            // that was ~15,000 JNI crossings and dominated the screen's load
+            // time (a 10s+ spinner). One callAttr + one string crossing is
+            // O(1) in the interface count. The serializer also applies the
+            // value -> stamp_value and sf/cr -> spreading_factor/coding_rate
+            // remaps, so the JSON already matches DiscoveredInterface
+            // .parseFromJson's expected shape.
+            val handler = transport()["discovery_handler"]
+            val json = runtime.eventBridge
+                .callAttr("serialize_discovered_interfaces", handler)
+                ?.toJava(String::class.javaObjectType)
+                ?: "[]"
+            DiscoveredInterface.parseFromJson(json)
         }
 
     override suspend fun isDiscoveryEnabled(): Boolean =
@@ -516,62 +522,6 @@ class PythonRnsTransportAdmin(
             targetPort = runCatching { iface["target_port"]?.toString() }.getOrNull(),
             rawName = rawName,
         )
-
-    /**
-     * Map one `RNS.Discovery` `info` dict to the JSON object shape that
-     * [DiscoveredInterface.parseFromJson] consumes. Upstream's dict uses `value`
-     * for the stamp value and carries `received` / `discovered` timestamps; the
-     * rest of the keys line up 1:1 with the parser.
-     */
-    private fun discoveredInfoToJson(info: PyObject): JSONObject {
-        val obj = JSONObject()
-        fun putStr(jsonKey: String, dictKey: String = jsonKey) {
-            info.dictStr(dictKey)?.let { obj.put(jsonKey, it) }
-        }
-        fun putInt(jsonKey: String, dictKey: String = jsonKey) {
-            info.dictInt(dictKey)?.let { obj.put(jsonKey, it) }
-        }
-        fun putLong(jsonKey: String, dictKey: String = jsonKey) {
-            info.dictLong(dictKey)?.let { obj.put(jsonKey, it) }
-        }
-        fun putDouble(jsonKey: String, dictKey: String = jsonKey) {
-            info.dictDouble(dictKey)?.let { obj.put(jsonKey, it) }
-        }
-        putStr("name")
-        putStr("type")
-        putStr("transport_id")
-        putStr("network_id")
-        putStr("status")
-        putInt("status_code")
-        putLong("last_heard")
-        putInt("heard_count")
-        putInt("hops")
-        // Upstream calls the stamp value `value`; the parser expects `stamp_value`.
-        info.dictInt("value")?.let { obj.put("stamp_value", it) }
-        putStr("reachable_on")
-        putInt("port")
-        putLong("frequency")
-        putInt("bandwidth")
-        putInt("spreading_factor")
-        putInt("coding_rate")
-        putStr("modulation")
-        putInt("channel")
-        // Discovery location: upstream RNS stores `latitude` / `longitude` /
-        // `height` as floats (or None) in the announce dict. Without these,
-        // `DiscoveredInterface.hasLocation` is false and the Map screen's
-        // marker layer + the layers-sheet "Show on map" chip row stay empty
-        // for every Python-flavor interface.
-        putDouble("latitude")
-        putDouble("longitude")
-        putDouble("height")
-        putStr("ifac_netname")
-        putStr("ifac_netkey")
-        info.dictGet("transport")?.let { obj.put("transport", it.toJava(Boolean::class.javaObjectType)) }
-        putStr("discovery_hash")
-        putLong("received")
-        putLong("discovered")
-        return obj
-    }
 }
 
 /** Build an access config only from the live instance which actually owns the shared server. */

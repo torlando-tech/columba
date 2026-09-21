@@ -49,6 +49,15 @@ internal class ClientRnsTelephony(
     private val isPttActiveState = MutableStateFlow(false)
     private val activeProfileState = MutableStateFlow<String?>(null)
 
+    // The init snapshot races the activeProfile observer's first emission.
+    // The profile can transition to null when the call ends, so a snapshot
+    // captured mid-call must not restore a stale non-null profile after the
+    // observer has already reported the newer value. Set to true on the
+    // observer's first emission; the snapshot only assigns while this is
+    // still false (observer always wins once it has fired).
+    @Volatile
+    private var activeProfileObserverStarted = false
+
     init {
         // CallState observer + snapshot.
         callbackFlow<CallState> {
@@ -81,7 +90,10 @@ internal class ClientRnsTelephony(
             }
             if (!registerObserverOrClose { remote.registerActiveProfileObserver(cb) }) return@callbackFlow
             awaitClose { runCatching { remote.unregisterActiveProfileObserver(cb) } }
-        }.onEach { activeProfileState.value = it }.launchIn(scope)
+        }.onEach {
+            activeProfileObserverStarted = true
+            activeProfileState.value = it
+        }.launchIn(scope)
 
         // Snapshot fetches race the observers' first emissions. Observer wins
         // on contention; snapshot just covers the case where the observer
@@ -99,9 +111,20 @@ internal class ClientRnsTelephony(
             isSpeakerOnState.value = runCatching { awaitBoolEvent { cb -> remote.getCurrentIsSpeakerOn(cb) } }.getOrDefault(false)
             isPttModeState.value = runCatching { awaitBoolEvent { cb -> remote.getCurrentIsPttMode(cb) } }.getOrDefault(false)
             isPttActiveState.value = runCatching { awaitBoolEvent { cb -> remote.getCurrentIsPttActive(cb) } }.getOrDefault(false)
-            runCatching {
-                awaitNullableStringEvent { cb -> remote.getCurrentActiveProfile(cb) }
-                    ?.let { activeProfileState.value = it }
+            // Snapshot only seeds the initial value while the observer has not
+            // yet emitted; once the observer has fired it is authoritative (the
+            // profile can transition to null on call-end, so a late snapshot
+            // must not restore a stale non-null profile).
+            if (!activeProfileObserverStarted) {
+                val snapshot =
+                    runCatching { awaitNullableStringEvent { cb -> remote.getCurrentActiveProfile(cb) } }
+                        .getOrNull()
+                // Re-check after the async fetch: the observer may have started
+                // while the binder call was in flight, in which case it is now
+                // authoritative and must win.
+                if (!activeProfileObserverStarted) {
+                    snapshot?.let { activeProfileState.value = it }
+                }
             }
         }
     }

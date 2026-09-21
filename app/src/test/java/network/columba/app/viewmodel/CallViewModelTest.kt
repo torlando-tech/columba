@@ -62,6 +62,7 @@ class CallViewModelTest {
     private lateinit var isPttModeFlow: MutableStateFlow<Boolean>
     private lateinit var isPttActiveFlow: MutableStateFlow<Boolean>
     private lateinit var remoteIdentityFlow: MutableStateFlow<String?>
+    private lateinit var activeProfileFlow: MutableStateFlow<String?>
 
     // Slots to capture arguments passed to mocks
     private val connectingHashSlot = slot<String>()
@@ -84,6 +85,7 @@ class CallViewModelTest {
         isPttModeFlow = MutableStateFlow(false)
         isPttActiveFlow = MutableStateFlow(false)
         remoteIdentityFlow = MutableStateFlow<String?>(null)
+        activeProfileFlow = MutableStateFlow<String?>(null)
 
         // RnsTelephony surface
         every { mockTelephony.callState } returns callStateFlow
@@ -92,6 +94,7 @@ class CallViewModelTest {
         every { mockTelephony.isPttMode } returns isPttModeFlow
         every { mockTelephony.isPttActive } returns isPttActiveFlow
         every { mockTelephony.remoteIdentity } returns remoteIdentityFlow
+        every { mockTelephony.activeProfile } returns activeProfileFlow
         every { mockTelephony.hasActiveCall() } answers {
             when (callStateFlow.value) {
                 is CallState.Connecting,
@@ -132,6 +135,7 @@ class CallViewModelTest {
         coEvery { mockTelephony.declineCall() } answers { }
         coEvery { mockTelephony.setCallMuted(any()) } answers { }
         coEvery { mockTelephony.setCallSpeaker(any()) } answers { }
+        coEvery { mockTelephony.cycleCallProfile() } answers { }
 
         // Stub repository methods
         coEvery { mockContactRepository.getContact(any()) } returns null
@@ -308,6 +312,36 @@ class CallViewModelTest {
             assertTrue(speakerSlot.isCaptured)
             // Should toggle from false to true
             assertEquals(true, speakerSlot.captured)
+        }
+
+    // ========== LXST Profile Cycling Tests ==========
+
+    @Test
+    fun `cycleProfile invokes telephony when call is active`() =
+        runTest {
+            callStateFlow.value = CallState.Active("abc123")
+            activeProfileFlow.value = "MQ"
+
+            viewModel.cycleProfile()
+            // Bounded advance: the Active duration timer reschedules forever,
+            // so advanceUntilIdle() would never settle - one tick is enough to
+            // flush the launched telephony call on the unconfined dispatcher.
+            testDispatcher.scheduler.advanceTimeBy(1000L)
+
+            coVerify(exactly = 1) { mockTelephony.cycleCallProfile() }
+            callStateFlow.value = CallState.Idle // Stop duration timer
+        }
+
+    @Test
+    fun `cycleProfile is a no-op when no call is active`() =
+        runTest {
+            // Initial state is Idle; nothing established to switch on.
+            callStateFlow.value = CallState.Idle
+
+            viewModel.cycleProfile()
+            testDispatcher.scheduler.advanceTimeBy(1000L)
+
+            coVerify(exactly = 0) { mockTelephony.cycleCallProfile() }
         }
 
     // ========== hasActiveCall Tests ==========

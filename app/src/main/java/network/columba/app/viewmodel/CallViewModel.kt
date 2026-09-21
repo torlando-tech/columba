@@ -72,6 +72,7 @@ class CallViewModel
         val isPttMode: StateFlow<Boolean> = telephony.isPttMode
         val isPttActive: StateFlow<Boolean> = telephony.isPttActive
         val remoteIdentity: StateFlow<String?> = telephony.remoteIdentity
+        val activeProfile: StateFlow<String?> = telephony.activeProfile
 
         // Call duration (updated every second during active call)
         private val _callDuration = MutableStateFlow(0L)
@@ -314,6 +315,23 @@ class CallViewModel
             viewModelScope.launch {
                 telephony.setSpeakerLocally(newSpeaker)
                 telephony.setCallSpeaker(newSpeaker)
+            }
+        }
+
+        /**
+         * Cycle to the next LXST audio profile and signal it to the remote
+         * peer (LXST Profile Negotiation).
+         *
+         * Only meaningful while a call is established: the backend's
+         * `Telephone.switchProfile` is a no-op otherwise. The next profile is
+         * chosen by the backend from the current active one (via
+         * `Profile.next`); the UI reads the result back through [activeProfile].
+         */
+        fun cycleProfile() {
+            if (callState.value !is CallState.Active) return
+            Log.d(TAG, "Cycling LXST profile (current=${activeProfile.value})")
+            viewModelScope.launch {
+                telephony.cycleCallProfile()
             }
         }
 

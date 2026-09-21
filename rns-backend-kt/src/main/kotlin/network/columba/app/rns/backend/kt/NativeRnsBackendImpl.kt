@@ -46,6 +46,7 @@ import network.columba.app.rns.api.model.VoiceCallState
 import network.columba.app.rns.api.util.AppDataParser
 import network.columba.app.rns.api.util.Aspects
 import network.columba.app.rns.api.util.LxmfFields
+import network.columba.app.rns.api.util.PeriodicStateObserver
 import network.columba.app.rns.api.util.ReactionWireCodec
 import network.columba.app.rns.api.util.hexToBytes
 import network.columba.app.rns.api.util.isUserVisibleChatMessage
@@ -334,6 +335,23 @@ class NativeRnsBackendImpl(
         get() = callCoordinator.isPttMode
     override val isPttActive: StateFlow<Boolean>
         get() = callCoordinator.isPttActive
+
+    /**
+     * Bounded poller mirroring the active LXST codec-profile abbreviation
+     * while a call is in progress. Reads [NativeCallManager.telephone]'s
+     * `activeProfile` (guarding `lateinit` and the null manager window), so it
+     * tracks both local-initiated and remote-initiated `PREFERRED_PROFILE`
+     * switches. Emits `null` when no call is active or the manager is absent.
+     */
+    private val activeProfileObserver =
+        PeriodicStateObserver(
+            scope = telephonyRelayScope,
+            pollIntervalMs = 500L,
+            isCallInProgress = { callCoordinator.hasActiveCall() },
+            readProfile = { callManager?.activeProfileAbbreviation() },
+        )
+    override val activeProfile: StateFlow<String?>
+        get() = activeProfileObserver.activeProfile
 
     init {
         // Translate lxst-kt's CallState → :rns-api CallState into the StateFlow
@@ -2140,6 +2158,16 @@ class NativeRnsBackendImpl(
                 callManager?.setSpeaker(speakerOn)
             } catch (e: Exception) {
                 Log.w(TAG, "Ignored error setting speaker=$speakerOn: $e")
+            }
+        }
+    }
+
+    override suspend fun cycleCallProfile() {
+        withContext(Dispatchers.IO) {
+            try {
+                callManager?.cycleProfile()
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error cycling LXST profile: $e")
             }
         }
     }

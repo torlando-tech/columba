@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
@@ -83,6 +84,7 @@ fun VoiceCallScreen(
     val isPttActive by viewModel.isPttActive.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
     val peerName by viewModel.peerName.collectAsStateWithLifecycle()
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
 
     // PTT MediaSession for Bluetooth headset button capture
     val pttManager =
@@ -307,6 +309,21 @@ fun VoiceCallScreen(
                         onClick = { viewModel.toggleSpeaker() },
                         enabled = callState is CallState.Active,
                         testTag = "speakerButton",
+                    )
+
+                    // LXST profile cycle button (Profile Negotiation).
+                    // Shows the active codec profile abbreviation; tapping
+                    // cycles to the next profile and signals it to the peer.
+                    // Disabled until a call is established (switchProfile is a
+                    // no-op otherwise); the label falls back to "Audio" when
+                    // the backend hasn't reported a profile yet.
+                    CallControlButton(
+                        icon = Icons.Default.AudioFile,
+                        label = (activeProfile ?: "Audio").uppercase(),
+                        isActive = false,
+                        onClick = { viewModel.cycleProfile() },
+                        enabled = callState is CallState.Active,
+                        testTag = "profileCycleButton",
                     )
                 }
 

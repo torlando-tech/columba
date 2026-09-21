@@ -47,6 +47,7 @@ internal class ClientRnsTelephony(
     private val isSpeakerOnState = MutableStateFlow(false)
     private val isPttModeState = MutableStateFlow(false)
     private val isPttActiveState = MutableStateFlow(false)
+    private val activeProfileState = MutableStateFlow<String?>(null)
 
     init {
         // CallState observer + snapshot.
@@ -73,6 +74,15 @@ internal class ClientRnsTelephony(
             awaitClose { runCatching { remote.unregisterRemoteIdentityObserver(cb) } }
         }.onEach { remoteIdentityState.value = it }.launchIn(scope)
 
+        // Nullable-string observer: activeProfile (null when no call active).
+        callbackFlow<String?> {
+            val cb = object : IRnsNullableStringEventCallback.Stub() {
+                override fun onString(value: String?) { trySend(value) }
+            }
+            if (!registerObserverOrClose { remote.registerActiveProfileObserver(cb) }) return@callbackFlow
+            awaitClose { runCatching { remote.unregisterActiveProfileObserver(cb) } }
+        }.onEach { activeProfileState.value = it }.launchIn(scope)
+
         // Snapshot fetches race the observers' first emissions. Observer wins
         // on contention; snapshot just covers the case where the observer
         // hasn't fired yet.
@@ -89,6 +99,10 @@ internal class ClientRnsTelephony(
             isSpeakerOnState.value = runCatching { awaitBoolEvent { cb -> remote.getCurrentIsSpeakerOn(cb) } }.getOrDefault(false)
             isPttModeState.value = runCatching { awaitBoolEvent { cb -> remote.getCurrentIsPttMode(cb) } }.getOrDefault(false)
             isPttActiveState.value = runCatching { awaitBoolEvent { cb -> remote.getCurrentIsPttActive(cb) } }.getOrDefault(false)
+            runCatching {
+                awaitNullableStringEvent { cb -> remote.getCurrentActiveProfile(cb) }
+                    ?.let { activeProfileState.value = it }
+            }
         }
     }
 
@@ -98,6 +112,7 @@ internal class ClientRnsTelephony(
     override val isSpeakerOn: StateFlow<Boolean> get() = isSpeakerOnState.asStateFlow()
     override val isPttMode: StateFlow<Boolean> get() = isPttModeState.asStateFlow()
     override val isPttActive: StateFlow<Boolean> get() = isPttActiveState.asStateFlow()
+    override val activeProfile: StateFlow<String?> get() = activeProfileState.asStateFlow()
 
     private fun registerBoolObserver(
         state: MutableStateFlow<Boolean>,
@@ -149,6 +164,10 @@ internal class ClientRnsTelephony(
 
     override suspend fun setCallSpeaker(speakerOn: Boolean) {
         awaitResult { cb -> remote.setCallSpeaker(speakerOn, cb) }
+    }
+
+    override suspend fun cycleCallProfile() {
+        awaitResult { cb -> remote.cycleCallProfile(cb) }
     }
 
     override suspend fun getCallState(): Result<VoiceCallState> = runCatching {

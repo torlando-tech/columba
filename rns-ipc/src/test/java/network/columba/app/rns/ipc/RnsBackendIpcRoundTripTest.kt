@@ -344,6 +344,38 @@ class RnsBackendIpcRoundTripTest {
     }
 
     @Test
+    fun `cycleCallProfile round-trips through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        client.telephony.cycleCallProfile()
+        advanceUntilIdle()
+
+        assertEquals(1, fake.telephony.cycleCallProfileCount)
+    }
+
+    @Test
+    fun `activeProfile observable round-trips a profile value through the stub`() = runTest {
+        val (client, _) = buildClientAndServer()
+        advanceUntilIdle()
+
+        client.telephony.activeProfile.test {
+            // Initial null snapshot (no call active).
+            assertEquals(null, awaitItem())
+
+            fake.telephony.emitActiveProfile("HQ")
+            advanceUntilIdle()
+            assertEquals("HQ", awaitItem())
+
+            fake.telephony.emitActiveProfile(null)
+            advanceUntilIdle()
+            assertEquals(null, awaitItem())
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `setIncomingEnabled round-trips both true and false through the stub`() = runTest {
         val (client, _) = buildClientAndServer()
         advanceUntilIdle()
@@ -506,6 +538,7 @@ private class FakeRnsTelephony : RnsTelephony {
     private val _isSpeakerOn = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val _isPttMode = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val _isPttActive = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private val _activeProfile = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     override val callState: kotlinx.coroutines.flow.StateFlow<network.columba.app.rns.api.model.CallState>
         get() = _callState
@@ -514,9 +547,14 @@ private class FakeRnsTelephony : RnsTelephony {
     override val isSpeakerOn: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isSpeakerOn
     override val isPttMode: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isPttMode
     override val isPttActive: kotlinx.coroutines.flow.StateFlow<Boolean> get() = _isPttActive
+    override val activeProfile: kotlinx.coroutines.flow.StateFlow<String?> get() = _activeProfile
 
     fun emitCallState(state: network.columba.app.rns.api.model.CallState) {
         _callState.value = state
+    }
+
+    fun emitActiveProfile(profile: String?) {
+        _activeProfile.value = profile
     }
 
     override suspend fun initiateCall(destinationHash: String, profileCode: Int?) = nextInitiateResult
@@ -525,6 +563,8 @@ private class FakeRnsTelephony : RnsTelephony {
     override suspend fun declineCall() { declineCount++ }
     override suspend fun setCallMuted(muted: Boolean) { _isMuted.value = muted }
     override suspend fun setCallSpeaker(speakerOn: Boolean) { _isSpeakerOn.value = speakerOn }
+    var cycleCallProfileCount = 0
+    override suspend fun cycleCallProfile() { cycleCallProfileCount++ }
     override suspend fun getCallState(): Result<VoiceCallState> = nextCallState
 
     override suspend fun setConnecting(destinationHash: String) {

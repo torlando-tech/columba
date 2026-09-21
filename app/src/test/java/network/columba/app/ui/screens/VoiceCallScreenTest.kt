@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
@@ -1198,6 +1199,116 @@ class VoiceCallScreenTest {
 
         composeTestRule.onNodeWithContentDescription("PTT").assertIsNotEnabled()
     }
+
+    // ========== LXST Profile Cycle Button Tests ==========
+
+    @Test
+    fun `profile button shows Audio label when no profile reported`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "Profile User",
+                callStatus = "Connected",
+                callDuration = "00:30",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                activeProfile = null,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onCycleProfile = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("AUDIO").assertIsDisplayed()
+    }
+
+    @Test
+    fun `profile button shows the active profile abbreviation`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "Profile User",
+                callStatus = "Connected",
+                callDuration = "00:30",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                activeProfile = "HQ",
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onCycleProfile = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("HQ").assertIsDisplayed()
+    }
+
+    @Test
+    fun `profile button calls callback when clicked`() {
+        var profileCycled = false
+
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "Profile User",
+                callStatus = "Connected",
+                callDuration = "00:30",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                activeProfile = "MQ",
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onCycleProfile = { profileCycled = true },
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("MQ").performClick()
+        assertTrue(profileCycled)
+    }
+
+    @Test
+    fun `profile button is disabled when call not active`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "Profile User",
+                callStatus = "Connecting...",
+                callDuration = "",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = false,
+                activeProfile = null,
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onCycleProfile = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("AUDIO").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `profile button is enabled when call is active`() {
+        composeTestRule.setContent {
+            TestVoiceCallScreen(
+                peerName = "Profile User",
+                callStatus = "00:20",
+                callDuration = "00:20",
+                isMuted = false,
+                isSpeakerOn = false,
+                isCallActive = true,
+                activeProfile = "SHQ",
+                onToggleMute = {},
+                onToggleSpeaker = {},
+                onCycleProfile = {},
+                onEndCall = {},
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("SHQ").assertIsEnabled()
+    }
 }
 
 // ========== Test Composables ==========
@@ -1218,9 +1329,11 @@ private fun TestVoiceCallScreen(
     isCallActive: Boolean,
     isPttMode: Boolean = false,
     isPttActive: Boolean = false,
+    activeProfile: String? = null,
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onTogglePtt: () -> Unit = {},
+    onCycleProfile: () -> Unit = {},
     onEndCall: () -> Unit,
 ) {
     MaterialTheme {
@@ -1329,6 +1442,15 @@ private fun TestVoiceCallScreen(
                     label = if (isSpeakerOn) "Earpiece" else "Speaker",
                     isActive = isSpeakerOn,
                     onClick = onToggleSpeaker,
+                    enabled = isCallActive,
+                )
+
+                // LXST profile cycle button
+                TestCallControlButton(
+                    icon = Icons.Default.AudioFile,
+                    label = (activeProfile ?: "Audio").uppercase(),
+                    isActive = false,
+                    onClick = onCycleProfile,
                     enabled = isCallActive,
                 )
             }

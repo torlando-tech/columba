@@ -128,6 +128,14 @@ class PythonCallManager(
                 call(destHex, profileCode)
             }
             backend.telephonyImpl.setIncomingEnabledHook = ::setIncomingEnabled
+            // LXST Profile Negotiation: let PythonRnsTelephony read the active
+            // codec profile and cycle it via this manager's Telephone. The
+            // telephone is lateinit, so the read hook guards initialization
+            // (returns null before setup has run).
+            backend.telephonyImpl.activeProfileReadHook = {
+                if (::telephone.isInitialized) telephone.activeProfile.abbreviation else null
+            }
+            backend.telephonyImpl.cycleCallProfileHook = ::cycleProfile
         }
     }
 
@@ -331,6 +339,28 @@ class PythonCallManager(
 
     override fun setSpeaker(enabled: Boolean) {
         audioBridge.setSpeakerphoneOn(enabled)
+    }
+
+    /**
+     * Cycle to the next LXST audio profile and signal it to the remote peer
+     * (LXST Profile Negotiation). Invoked by [PythonRnsTelephony]'s
+     * `cycleCallProfileHook`.
+     *
+     * `Telephone.switchProfile` is a no-op when there is no active call (the
+     * pipeline is not configured), so this is safe to call any time. It picks
+     * the next profile from the current active one via [Profile.next] and
+     * routes the switch through the LXST-kt stack, which sends the
+     * `PREFERRED_PROFILE` signalling frame and reconfigures the transmit
+     * pipeline.
+     */
+    fun cycleProfile() {
+        if (!::telephone.isInitialized || !telephone.isCallActive()) {
+            Log.w(TAG, "cycleProfile() before telephone is active — ignoring")
+            return
+        }
+        val next = Profile.next(telephone.activeProfile)
+        telephone.switchProfile(next)
+        Log.i(TAG, "Cycled LXST profile to ${next.abbreviation}")
     }
 
     // ===== Master incoming-calls toggle =====

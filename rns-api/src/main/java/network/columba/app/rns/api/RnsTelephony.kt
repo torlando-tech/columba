@@ -143,6 +143,47 @@ interface RnsTelephony {
     suspend fun cycleCallProfile()
 
     /**
+     * Abbreviation of the active LXST call mode for the current call
+     * (LXST Call Mode Negotiation). "FDX" for full duplex, "HDX" for half
+     * duplex. Null when no call is active.
+     *
+     * Updated reactively on local-initiated and remote-initiated mode
+     * changes mid-call. Backends populate this by polling the shared
+     * LXST-kt `Telephone.activeMode` at a bounded interval while a call is
+     * in progress (see `PeriodicStateObserver` in `:rns-api`).
+     */
+    val callMode: StateFlow<String?>
+
+    /**
+     * Cycle to the next LXST call mode (FDX to HDX, HDX to FDX) and signal
+     * it to the remote peer (LXST Call Mode Negotiation). No-op unless a
+     * call is established.
+     *
+     * Half duplex squelches transmit (no TX packets on the wire, AGC
+     * paused) and makes the PTT button the transport. Full duplex is
+     * continuous both directions. The backend picks the next mode from the
+     * current `Telephone` active mode (via `Mode.next`) and routes the
+     * switch through the LXST-kt stack, which sends the `PREFERRED_MODE`
+     * signalling frame and applies the transmit gate.
+     */
+    suspend fun cycleCallMode()
+
+    /**
+     * Set the PTT transmit state (wire-level squelch, not mixer mute).
+     *
+     * In half duplex, press (active=true) unsquelches the wire and resumes
+     * AGC (transmitting); release (active=false) squelches the wire and
+     * pauses AGC (listening). In full duplex this is a no-op (the wire is
+     * always open).
+     *
+     * This is distinct from [setPttActiveLocally], which only updates
+     * host-side state without invoking the audio controller.
+     *
+     * @param active true when PTT is held (transmitting), false when released
+     */
+    suspend fun setPttActive(active: Boolean)
+
+    /**
      * Update host-side `callState` to [CallState.Connecting] for the
      * given destination. UI calls this before issuing [initiateCall] so
      * the connecting UI renders immediately rather than waiting for the

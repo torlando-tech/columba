@@ -12,8 +12,8 @@ import org.junit.Test
 
 /**
  * Coverage for [PeriodicStateObserver] — the bounded poller that mirrors a
- * plain LXST-kt `Telephone.activeProfile` field (no reactive hook in the
- * pinned v0.0.8) as a [kotlinx.coroutines.flow.StateFlow] while a call is in
+ * plain LXST-kt `Telephone` field (activeProfile / activeMode) with no
+ * reactive hook as a [kotlinx.coroutines.flow.StateFlow] while a call is in
  * progress.
  *
  * The poller is a `while (true)` loop that reads + `delay`s, so it never
@@ -37,16 +37,16 @@ class PeriodicStateObserverTest {
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         try {
             val observer =
-                PeriodicStateObserver(
+                PeriodicStateObserver<String?>(
                     scope = scope,
                     pollIntervalMs = 500L,
                     isCallInProgress = { callInProgress },
-                    readProfile = { profile },
+                    reader = { profile },
                 )
 
             // One poll tick with no active call -> parked at null.
             advanceTimeBy(500L)
-            assertNull(observer.activeProfile.value)
+            assertNull(observer.state.value)
         } finally {
             scope.cancel()
         }
@@ -60,48 +60,48 @@ class PeriodicStateObserverTest {
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         try {
             val observer =
-                PeriodicStateObserver(
+                PeriodicStateObserver<String?>(
                     scope = scope,
                     pollIntervalMs = 500L,
                     isCallInProgress = { callInProgress },
-                    readProfile = { profile },
+                    reader = { profile },
                 )
 
             advanceTimeBy(500L)
-            assertEquals("MQ", observer.activeProfile.value)
+            assertEquals("MQ", observer.state.value)
         } finally {
             scope.cancel()
         }
     }
 
     @Test
-    fun `tracks a profile change and parks to null when the call ends`() = runTest {
+    fun `tracks a value change and parks to null when the call ends`() = runTest {
         var callInProgress = true
         var profile = "MQ"
 
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         try {
             val observer =
-                PeriodicStateObserver(
+                PeriodicStateObserver<String?>(
                     scope = scope,
                     pollIntervalMs = 500L,
                     isCallInProgress = { callInProgress },
-                    readProfile = { profile },
+                    reader = { profile },
                 )
 
             // First poll: call active, profile MQ.
             advanceTimeBy(500L)
-            assertEquals("MQ", observer.activeProfile.value)
+            assertEquals("MQ", observer.state.value)
 
-            // Local (or remote) profile switch mid-call: next poll sees SHQ.
+            // Local (or remote) value switch mid-call: next poll sees SHQ.
             profile = "SHQ"
             advanceTimeBy(500L)
-            assertEquals("SHQ", observer.activeProfile.value)
+            assertEquals("SHQ", observer.state.value)
 
             // Call ends: next poll parks the observable at null.
             callInProgress = false
             advanceTimeBy(500L)
-            assertNull(observer.activeProfile.value)
+            assertNull(observer.state.value)
         } finally {
             scope.cancel()
         }

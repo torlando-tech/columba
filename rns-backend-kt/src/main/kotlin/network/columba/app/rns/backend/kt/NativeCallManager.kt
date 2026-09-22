@@ -30,6 +30,7 @@ import tech.torlando.lxst.core.AudioPacketHandler
 import tech.torlando.lxst.core.CallController
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.PacketRouter
+import tech.torlando.lxst.telephone.Mode
 import tech.torlando.lxst.telephone.Profile
 import tech.torlando.lxst.telephone.Telephone
 
@@ -356,6 +357,59 @@ class NativeCallManager(
         val next = Profile.next(telephone.activeProfile)
         telephone.switchProfile(next)
         Log.i(TAG, "Cycled LXST profile to ${next.abbreviation}")
+    }
+
+    // ===== LXST Call Mode Negotiation (full/half duplex) =====
+
+    /**
+     * The active LXST call-mode abbreviation ("FDX"/"HDX"), or `null` when the
+     * [telephone] hasn't been constructed yet (before `setup()` runs).
+     *
+     * The `lateinit` backing field is only referenceable inside this class, so
+     * the backend's mode poller reads through this accessor (mirrors
+     * [activeProfileAbbreviation]).
+     */
+    fun callModeAbbreviation(): String? {
+        if (!::telephone.isInitialized) return null
+        return telephone.activeMode.abbreviation
+    }
+
+    /**
+     * Cycle to the next LXST call mode (FDX to HDX, HDX to FDX) and signal it
+     * to the remote peer (LXST Call Mode Negotiation). Invoked by
+     * [NativeRnsBackendImpl]'s `cycleCallMode`.
+     *
+     * `Telephone.switchMode` is a no-op when there is no established call, so
+     * this is safe to call any time. It picks the next mode from the current
+     * active one via [Mode.next] and routes the switch through the LXST-kt
+     * stack, which sends the `PREFERRED_MODE` signalling frame and applies the
+     * transmit gate (HDX squelches the wire + pauses AGC; FDX unsquelches +
+     * resumes).
+     */
+    fun cycleMode() {
+        if (!::telephone.isInitialized || !telephone.isCallActive()) {
+            Log.w(TAG, "cycleMode() before telephone is active — ignoring")
+            return
+        }
+        val next = Mode.next(telephone.activeMode)
+        telephone.switchMode(next)
+        Log.i(TAG, "Cycled LXST call mode to ${next.abbreviation}")
+    }
+
+    /**
+     * Set the wire-level PTT transmit state (squelch, not mixer mute). Invoked
+     * by [NativeRnsBackendImpl]'s `setPttActive`.
+     *
+     * In half duplex, press (active=true) unsquelches the wire and resumes AGC;
+     * release (active=false) squelches the wire and pauses AGC. In full duplex
+     * this is a no-op (the gate computes open regardless).
+     */
+    fun setPttActive(active: Boolean) {
+        if (!::telephone.isInitialized) {
+            Log.w(TAG, "setPttActive() before telephone is active — ignoring")
+            return
+        }
+        telephone.setPttActive(active)
     }
 
     // ===== Master incoming-calls toggle =====

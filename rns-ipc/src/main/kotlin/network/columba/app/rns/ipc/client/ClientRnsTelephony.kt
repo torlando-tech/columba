@@ -48,6 +48,7 @@ internal class ClientRnsTelephony(
     private val isPttModeState = MutableStateFlow(false)
     private val isPttActiveState = MutableStateFlow(false)
     private val activeProfileState = MutableStateFlow<String?>(null)
+    private val callModeState = MutableStateFlow<String?>(null)
 
     // The init snapshot races the activeProfile observer's first emission.
     // The profile can transition to null when the call ends, so a snapshot
@@ -57,6 +58,12 @@ internal class ClientRnsTelephony(
     // still false (observer always wins once it has fired).
     @Volatile
     private var activeProfileObserverStarted = false
+
+    // Same snapshot-vs-observer race for callMode (transitions to null on
+    // call-end). Set to true on the callMode observer's first emission; the
+    // snapshot only assigns while this is still false.
+    @Volatile
+    private var callModeObserverStarted = false
 
     init {
         // CallState observer + snapshot.
@@ -95,6 +102,18 @@ internal class ClientRnsTelephony(
             activeProfileState.value = it
         }.launchIn(scope)
 
+        // Nullable-string observer: callMode (null when no call active).
+        callbackFlow<String?> {
+            val cb = object : IRnsNullableStringEventCallback.Stub() {
+                override fun onString(value: String?) { trySend(value) }
+            }
+            if (!registerObserverOrClose { remote.registerCallModeObserver(cb) }) return@callbackFlow
+            awaitClose { runCatching { remote.unregisterCallModeObserver(cb) } }
+        }.onEach {
+            callModeObserverStarted = true
+            callModeState.value = it
+        }.launchIn(scope)
+
         // Snapshot fetches race the observers' first emissions. Observer wins
         // on contention; snapshot just covers the case where the observer
         // hasn't fired yet.
@@ -126,6 +145,17 @@ internal class ClientRnsTelephony(
                     snapshot?.let { activeProfileState.value = it }
                 }
             }
+            // callMode snapshot: same observer-started guard (the mode can
+            // transition to null on call-end, so a late snapshot must not
+            // restore a stale non-null mode).
+            if (!callModeObserverStarted) {
+                val snapshot =
+                    runCatching { awaitNullableStringEvent { cb -> remote.getCurrentCallMode(cb) } }
+                        .getOrNull()
+                if (!callModeObserverStarted) {
+                    snapshot?.let { callModeState.value = it }
+                }
+            }
         }
     }
 
@@ -136,6 +166,7 @@ internal class ClientRnsTelephony(
     override val isPttMode: StateFlow<Boolean> get() = isPttModeState.asStateFlow()
     override val isPttActive: StateFlow<Boolean> get() = isPttActiveState.asStateFlow()
     override val activeProfile: StateFlow<String?> get() = activeProfileState.asStateFlow()
+    override val callMode: StateFlow<String?> get() = callModeState.asStateFlow()
 
     private fun registerBoolObserver(
         state: MutableStateFlow<Boolean>,
@@ -191,6 +222,14 @@ internal class ClientRnsTelephony(
 
     override suspend fun cycleCallProfile() {
         awaitResult { cb -> remote.cycleCallProfile(cb) }
+    }
+
+    override suspend fun cycleCallMode() {
+        awaitResult { cb -> remote.cycleCallMode(cb) }
+    }
+
+    override suspend fun setPttActive(active: Boolean) {
+        awaitResult { cb -> remote.setPttActive(active, cb) }
     }
 
     override suspend fun getCallState(): Result<VoiceCallState> = runCatching {

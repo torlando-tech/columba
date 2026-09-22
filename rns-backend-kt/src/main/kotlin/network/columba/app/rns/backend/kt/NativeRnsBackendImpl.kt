@@ -344,14 +344,31 @@ class NativeRnsBackendImpl(
      * switches. Emits `null` when no call is active or the manager is absent.
      */
     private val activeProfileObserver =
-        PeriodicStateObserver(
+        PeriodicStateObserver<String?>(
             scope = telephonyRelayScope,
             pollIntervalMs = 500L,
             isCallInProgress = { callCoordinator.hasActiveCall() },
-            readProfile = { callManager?.activeProfileAbbreviation() },
+            reader = { callManager?.activeProfileAbbreviation() },
         )
     override val activeProfile: StateFlow<String?>
-        get() = activeProfileObserver.activeProfile
+        get() = activeProfileObserver.state
+
+    /**
+     * Bounded poller mirroring the active LXST call-mode abbreviation (FDX/HDX)
+     * while a call is in progress. Reads [NativeCallManager.telephone]'s
+     * `activeMode` (guarding `lateinit` and the null manager window), so it
+     * tracks both local-initiated and remote-initiated `PREFERRED_MODE`
+     * switches. Emits `null` when no call is active or the manager is absent.
+     */
+    private val callModeObserver =
+        PeriodicStateObserver<String?>(
+            scope = telephonyRelayScope,
+            pollIntervalMs = 500L,
+            isCallInProgress = { callCoordinator.hasActiveCall() },
+            reader = { callManager?.callModeAbbreviation() },
+        )
+    override val callMode: StateFlow<String?>
+        get() = callModeObserver.state
 
     init {
         // Translate lxst-kt's CallState → :rns-api CallState into the StateFlow
@@ -2168,6 +2185,26 @@ class NativeRnsBackendImpl(
                 callManager?.cycleProfile()
             } catch (e: Exception) {
                 Log.w(TAG, "Ignored error cycling LXST profile: $e")
+            }
+        }
+    }
+
+    override suspend fun cycleCallMode() {
+        withContext(Dispatchers.IO) {
+            try {
+                callManager?.cycleMode()
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error cycling LXST call mode: $e")
+            }
+        }
+    }
+
+    override suspend fun setPttActive(active: Boolean) {
+        withContext(Dispatchers.IO) {
+            try {
+                callManager?.setPttActive(active)
+            } catch (e: Exception) {
+                Log.w(TAG, "Ignored error setting PTT active: $e")
             }
         }
     }

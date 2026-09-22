@@ -73,6 +73,7 @@ class CallViewModel
         val isPttActive: StateFlow<Boolean> = telephony.isPttActive
         val remoteIdentity: StateFlow<String?> = telephony.remoteIdentity
         val activeProfile: StateFlow<String?> = telephony.activeProfile
+        val callMode: StateFlow<String?> = telephony.callMode
 
         // Call duration (updated every second during active call)
         private val _callDuration = MutableStateFlow(0L)
@@ -336,41 +337,39 @@ class CallViewModel
         }
 
         /**
-         * Toggle push-to-talk mode.
+         * Cycle the LXST call mode (FDX to HDX, HDX to FDX) and signal it to the
+         * remote peer (LXST Call Mode Negotiation).
          *
-         * When enabled, transmit is muted by default. The user must press
-         * and hold the PTT button (on-screen or Bluetooth headset) to transmit.
+         * Only meaningful while a call is established: the backend's
+         * `Telephone.switchMode` is a no-op otherwise. The next mode is chosen by
+         * the backend from the current active one (via `Mode.next`); the UI reads
+         * the result back through [callMode]. In half duplex the transmit is
+         * squelched and the PTT button becomes the transport; in full duplex it is
+         * continuous both directions.
          */
-        fun togglePttMode() {
-            val newMode = !telephony.isPttMode.value
+        fun cycleMode() {
+            if (callState.value !is CallState.Active) return
+            Log.d(TAG, "Cycling LXST call mode (current=${callMode.value})")
             viewModelScope.launch {
-                telephony.setPttModeLocally(newMode)
-                if (newMode) {
-                    // Entering PTT: mute transmit
-                    telephony.setMutedLocally(true)
-                    telephony.setPttActiveLocally(false)
-                    muteMutex.withLock { telephony.setCallMuted(true) }
-                } else {
-                    // Leaving PTT: unmute transmit (full duplex)
-                    telephony.setMutedLocally(false)
-                    telephony.setPttActiveLocally(false)
-                    muteMutex.withLock { telephony.setCallMuted(false) }
-                }
+                telephony.cycleCallMode()
             }
         }
 
         /**
-         * Set PTT transmit state (press/release).
+         * Set the PTT transmit state (wire-level squelch, not mixer mute).
          *
-         * @param active true when pressed (transmitting), false when released (listening)
+         * In half duplex, press (active=true) unsquelches the wire and resumes AGC
+         * (transmitting); release (active=false) squelches the wire and pauses AGC
+         * (listening). In full duplex the backend's gate computes open regardless,
+         * so this is a no-op there.
+         *
+         * @param active true when PTT is held (transmitting), false when released
          */
         fun setPttActive(active: Boolean) {
-            if (!telephony.isPttMode.value) return
             if (callState.value !is CallState.Active) return
             viewModelScope.launch {
                 telephony.setPttActiveLocally(active)
-                telephony.setMutedLocally(!active)
-                muteMutex.withLock { telephony.setCallMuted(!active) }
+                telephony.setPttActive(active)
             }
         }
 

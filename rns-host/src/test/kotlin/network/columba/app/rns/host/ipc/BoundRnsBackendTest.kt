@@ -326,6 +326,10 @@ class BoundRnsBackendTest {
         override suspend fun setCallSpeaker(speakerOn: Boolean) {}
         var cycleCallProfileCount = 0
         override suspend fun cycleCallProfile() { cycleCallProfileCount++ }
+        var cycleCallModeCount = 0
+        override suspend fun cycleCallMode() { cycleCallModeCount++ }
+        var pttActiveCalls: MutableList<Boolean> = mutableListOf()
+        override suspend fun setPttActive(active: Boolean) { pttActiveCalls.add(active) }
         override suspend fun getCallState(): Result<VoiceCallState> = error("not used")
         override val callState: StateFlow<CallState> = callStateEmitter.asStateFlow()
         override val remoteIdentity: StateFlow<String?> = MutableStateFlow(null).asStateFlow()
@@ -334,6 +338,7 @@ class BoundRnsBackendTest {
         override val isPttMode: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
         override val isPttActive: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
         override val activeProfile: StateFlow<String?> = MutableStateFlow(null).asStateFlow()
+        override val callMode: StateFlow<String?> = MutableStateFlow(null).asStateFlow()
         override suspend fun setConnecting(destinationHash: String) {}
         override suspend fun setEnded() {}
         override suspend fun setMutedLocally(muted: Boolean) {}

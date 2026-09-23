@@ -270,6 +270,20 @@ fun VoiceCallScreen(
 
             // Center: PTT hold-to-talk button (only in half duplex during active call)
             if (isHalfDuplex && callState is CallState.Active) {
+                // The PTT button's release is signalled by the press handler's
+                // onPttStateChanged(false) *after* tryAwaitRelease() returns. If a
+                // remote mode negotiation flips HDX→FDX while PTT is held, this
+                // branch removes the button and cancels the in-flight press
+                // coroutine in tryAwaitRelease(), so that trailing release call is
+                // skipped and the local/wire PTT transmit state stays latched
+                // (returning to HDX would then show "Transmitting" with no live
+                // press). Clear PTT on disposal so release is guaranteed however
+                // the button leaves composition. Harmless on the normal path (the
+                // press handler already released, or the call is ending) and in
+                // full duplex (setPttActive is a no-op there).
+                DisposableEffect(Unit) {
+                    onDispose { viewModel.setPttActive(false) }
+                }
                 PttButton(
                     isActive = isPttActive,
                     onPttStateChanged = { active -> viewModel.setPttActive(active) },

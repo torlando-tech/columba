@@ -52,6 +52,14 @@ internal class BoundRnsTelephony(
         awaitBound().telephony.cycleCallProfile()
     }
 
+    override suspend fun cycleCallMode() {
+        awaitBound().telephony.cycleCallMode()
+    }
+
+    override suspend fun setPttActive(active: Boolean) {
+        awaitBound().telephony.setPttActive(active)
+    }
+
     override suspend fun getCallState(): Result<VoiceCallState> =
         awaitBound().telephony.getCallState()
 
@@ -102,6 +110,13 @@ internal class BoundRnsTelephony(
         backendFlow
             .filterNotNull()
             .flatMapLatest { it.telephony.activeProfile }
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val callMode: StateFlow<String?> =
+        backendFlow
+            .filterNotNull()
+            .flatMapLatest { it.telephony.callMode }
             .stateIn(scope, SharingStarted.Eagerly, null)
 
     override suspend fun setConnecting(destinationHash: String) {

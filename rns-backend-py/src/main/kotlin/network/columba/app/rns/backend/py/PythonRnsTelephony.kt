@@ -96,14 +96,30 @@ class PythonRnsTelephony(
      * call is active.
      */
     private val activeProfileObserver =
-        PeriodicStateObserver(
+        PeriodicStateObserver<String?>(
             scope = telephonyRelayScope,
             pollIntervalMs = 500L,
             isCallInProgress = { callCoordinator.hasActiveCall() },
-            readProfile = { activeProfileReadHook?.invoke() },
+            reader = { activeProfileReadHook?.invoke() },
         )
     override val activeProfile: StateFlow<String?>
-        get() = activeProfileObserver.activeProfile
+        get() = activeProfileObserver.state
+
+    /**
+     * Bounded poller mirroring the active LXST call-mode abbreviation (FDX/HDX)
+     * while a call is in progress. Backed by [callModeReadHook] which
+     * [PythonCallManager] wires to its `telephone`. Emits `null` when no call
+     * is active.
+     */
+    private val callModeObserver =
+        PeriodicStateObserver<String?>(
+            scope = telephonyRelayScope,
+            pollIntervalMs = 500L,
+            isCallInProgress = { callCoordinator.hasActiveCall() },
+            reader = { callModeReadHook?.invoke() },
+        )
+    override val callMode: StateFlow<String?>
+        get() = callModeObserver.state
 
     /**
      * Wired by [PythonCallManager]'s init block to read the current active
@@ -120,6 +136,31 @@ class PythonRnsTelephony(
      */
     @Volatile
     var cycleCallProfileHook: (() -> Unit)? = null
+
+    /**
+     * Wired by [PythonCallManager]'s init block to read the current active
+     * call-mode abbreviation (FDX/HDX) from its `telephone`. Null-safe:
+     * returns `null` until the manager has been set up (telephone is
+     * `lateinit`).
+     */
+    @Volatile
+    var callModeReadHook: (() -> String?)? = null
+
+    /**
+     * Wired by [PythonCallManager]'s init block to cycle to the next LXST call
+     * mode and signal it to the remote peer (LXST Call Mode Negotiation).
+     * Null-safe: a null hook (before setup) is a logged no-op.
+     */
+    @Volatile
+    var cycleCallModeHook: (() -> Unit)? = null
+
+    /**
+     * Wired by [PythonCallManager]'s init block to set the wire-level PTT
+     * transmit state (squelch, not mixer mute). Null-safe: a null hook (before
+     * setup) is a logged no-op.
+     */
+    @Volatile
+    var setPttActiveHook: ((Boolean) -> Unit)? = null
 
     init {
         // Translate LXST-kt's CallState → :rns-api CallState into the StateFlow
@@ -198,6 +239,28 @@ class PythonRnsTelephony(
         } else {
             runCatching { hook() }.onFailure {
                 Log.w(TAG, "Ignored error cycling LXST profile: $it")
+            }
+        }
+    }
+
+    override suspend fun cycleCallMode() {
+        val hook = cycleCallModeHook
+        if (hook == null) {
+            Log.w(TAG, "cycleCallMode() before PythonCallManager wired hook")
+        } else {
+            runCatching { hook() }.onFailure {
+                Log.w(TAG, "Ignored error cycling LXST call mode: $it")
+            }
+        }
+    }
+
+    override suspend fun setPttActive(active: Boolean) {
+        val hook = setPttActiveHook
+        if (hook == null) {
+            Log.w(TAG, "setPttActive() before PythonCallManager wired hook")
+        } else {
+            runCatching { hook(active) }.onFailure {
+                Log.w(TAG, "Ignored error setting PTT active: $it")
             }
         }
     }

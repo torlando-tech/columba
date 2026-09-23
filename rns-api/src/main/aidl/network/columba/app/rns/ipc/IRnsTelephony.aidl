@@ -36,6 +36,16 @@ oneway interface IRnsTelephony {
     // (LXST Profile Negotiation). No-op unless a call is established.
     void cycleCallProfile(in IRnsResultCallback cb);
 
+    // Cycle to the next LXST call mode (FDX<->HDX) and signal it to the remote
+    // peer (LXST Call Mode Negotiation). No-op unless a call is established.
+    void cycleCallMode(in IRnsResultCallback cb);
+
+    // Set the PTT transmit state at the wire level (squelch, not mixer mute).
+    // In half duplex: press=unsquelch+AGC resume, release=squelch+AGC pause.
+    // In full duplex this is a no-op. Distinct from setPttActiveLocally, which
+    // only updates host-side state.
+    void setPttActive(boolean active, in IRnsResultCallback cb);
+
     // One-shot snapshot of the legacy VoiceCallState shape (Result<VoiceCallState>).
     void getCallState(in IRnsResultCallback cb);
 
@@ -76,6 +86,12 @@ oneway interface IRnsTelephony {
     void getCurrentActiveProfile(in IRnsNullableStringEventCallback cb);
     void registerActiveProfileObserver(in IRnsNullableStringEventCallback cb);
     void unregisterActiveProfileObserver(in IRnsNullableStringEventCallback cb);
+
+    // StateFlow<String?> callMode — LXST call-mode abbreviation (FDX/HDX),
+    // null when no call is active.
+    void getCurrentCallMode(in IRnsNullableStringEventCallback cb);
+    void registerCallModeObserver(in IRnsNullableStringEventCallback cb);
+    void unregisterCallModeObserver(in IRnsNullableStringEventCallback cb);
 
     // ==================== Local-state mutators ====================
     //

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.FilledIconButton
@@ -80,11 +81,16 @@ fun VoiceCallScreen(
     val callState by viewModel.callState.collectAsStateWithLifecycle()
     val isMuted by viewModel.isMuted.collectAsStateWithLifecycle()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsStateWithLifecycle()
-    val isPttMode by viewModel.isPttMode.collectAsStateWithLifecycle()
     val isPttActive by viewModel.isPttActive.collectAsStateWithLifecycle()
     val callDuration by viewModel.callDuration.collectAsStateWithLifecycle()
     val peerName by viewModel.peerName.collectAsStateWithLifecycle()
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+    val callMode by viewModel.callMode.collectAsStateWithLifecycle()
+
+    // Half duplex (the PTT transport mode). The PTT hold button and the
+    // Bluetooth-headset PTT capture are active only in HDX; in FDX the call is
+    // continuous both directions and the PTT button is hidden.
+    val isHalfDuplex = callMode == "HDX"
 
     // PTT MediaSession for Bluetooth headset button capture
     val pttManager =
@@ -94,9 +100,9 @@ fun VoiceCallScreen(
             }
         }
 
-    // Activate/deactivate MediaSession based on PTT mode and call state
-    LaunchedEffect(isPttMode, callState) {
-        if (isPttMode && callState is CallState.Active) {
+    // Activate/deactivate MediaSession based on half-duplex mode and call state
+    LaunchedEffect(isHalfDuplex, callState) {
+        if (isHalfDuplex && callState is CallState.Active) {
             pttManager.activate()
         } else {
             pttManager.deactivate()
@@ -233,7 +239,7 @@ fun VoiceCallScreen(
                             is CallState.Connecting -> "Connecting..."
                             is CallState.Ringing -> "Ringing..."
                             is CallState.Active ->
-                                if (isPttMode) {
+                                if (isHalfDuplex) {
                                     if (isPttActive) "Transmitting" else "Listening"
                                 } else {
                                     viewModel.formatDuration(callDuration)
@@ -245,15 +251,15 @@ fun VoiceCallScreen(
                         },
                     style = MaterialTheme.typography.bodyLarge,
                     color =
-                        if (isPttMode && isPttActive && callState is CallState.Active) {
+                        if (isHalfDuplex && isPttActive && callState is CallState.Active) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
                 )
 
-                // Show duration below PTT status when in PTT mode
-                if (isPttMode && callState is CallState.Active) {
+                // Show duration below PTT status when in half duplex
+                if (isHalfDuplex && callState is CallState.Active) {
                     Text(
                         text = viewModel.formatDuration(callDuration),
                         style = MaterialTheme.typography.bodySmall,
@@ -262,8 +268,22 @@ fun VoiceCallScreen(
                 }
             }
 
-            // Center: PTT hold-to-talk button (only in PTT mode during active call)
-            if (isPttMode && callState is CallState.Active) {
+            // Center: PTT hold-to-talk button (only in half duplex during active call)
+            if (isHalfDuplex && callState is CallState.Active) {
+                // The PTT button's release is signalled by the press handler's
+                // onPttStateChanged(false) *after* tryAwaitRelease() returns. If a
+                // remote mode negotiation flips HDX→FDX while PTT is held, this
+                // branch removes the button and cancels the in-flight press
+                // coroutine in tryAwaitRelease(), so that trailing release call is
+                // skipped and the local/wire PTT transmit state stays latched
+                // (returning to HDX would then show "Transmitting" with no live
+                // press). Clear PTT on disposal so release is guaranteed however
+                // the button leaves composition. Harmless on the normal path (the
+                // press handler already released, or the call is ending) and in
+                // full duplex (setPttActive is a no-op there).
+                DisposableEffect(Unit) {
+                    onDispose { viewModel.setPttActive(false) }
+                }
                 PttButton(
                     isActive = isPttActive,
                     onPttStateChanged = { active -> viewModel.setPttActive(active) },
@@ -281,24 +301,29 @@ fun VoiceCallScreen(
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                     modifier = Modifier.padding(bottom = 32.dp),
                 ) {
-                    // Mute button (disabled in PTT mode since PTT controls transmit)
+                    // Mute button (disabled in half duplex since PTT controls transmit)
                     CallControlButton(
                         icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                         label = if (isMuted) "Unmute" else "Mute",
                         isActive = isMuted,
                         onClick = { viewModel.toggleMute() },
-                        enabled = callState is CallState.Active && !isPttMode,
+                        enabled = callState is CallState.Active && !isHalfDuplex,
                         testTag = "muteButton",
                     )
 
-                    // PTT mode toggle
+                    // LXST call-mode cycle button (Call Mode Negotiation).
+                    // Shows the active duplex mode abbreviation (FDX/HDX); tapping
+                    // cycles to the other mode and signals it to the peer. In HDX
+                    // the transmit is squelched and the PTT button becomes the
+                    // transport. Disabled until a call is established
+                    // (switchMode is a no-op otherwise).
                     CallControlButton(
-                        icon = Icons.Default.Mic,
-                        label = if (isPttMode) "PTT On" else "PTT",
-                        isActive = isPttMode,
-                        onClick = { viewModel.togglePttMode() },
+                        icon = Icons.Default.SwapVert,
+                        label = (callMode ?: "FDX").uppercase(),
+                        isActive = isHalfDuplex,
+                        onClick = { viewModel.cycleMode() },
                         enabled = callState is CallState.Active,
-                        testTag = "pttToggle",
+                        testTag = "modeCycleButton",
                     )
 
                     // Speaker button

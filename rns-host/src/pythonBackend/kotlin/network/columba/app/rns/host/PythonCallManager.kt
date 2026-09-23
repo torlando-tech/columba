@@ -30,6 +30,7 @@ import tech.torlando.lxst.core.AudioPacketHandler
 import tech.torlando.lxst.core.CallController
 import tech.torlando.lxst.core.CallCoordinator
 import tech.torlando.lxst.core.PacketRouter
+import tech.torlando.lxst.telephone.Mode
 import tech.torlando.lxst.telephone.Profile
 import tech.torlando.lxst.telephone.Telephone
 
@@ -136,6 +137,15 @@ class PythonCallManager(
                 if (::telephone.isInitialized) telephone.activeProfile.abbreviation else null
             }
             backend.telephonyImpl.cycleCallProfileHook = ::cycleProfile
+            // LXST Call Mode Negotiation: let PythonRnsTelephony read the active
+            // call mode, cycle it, and set the wire-level PTT state via this
+            // manager's Telephone. The telephone is lateinit, so the read hook
+            // guards initialization (returns null before setup has run).
+            backend.telephonyImpl.callModeReadHook = {
+                if (::telephone.isInitialized) telephone.activeMode.abbreviation else null
+            }
+            backend.telephonyImpl.cycleCallModeHook = ::cycleMode
+            backend.telephonyImpl.setPttActiveHook = ::setPttActive
         }
     }
 
@@ -361,6 +371,45 @@ class PythonCallManager(
         val next = Profile.next(telephone.activeProfile)
         telephone.switchProfile(next)
         Log.i(TAG, "Cycled LXST profile to ${next.abbreviation}")
+    }
+
+    // ===== LXST Call Mode Negotiation (full/half duplex) =====
+
+    /**
+     * Cycle to the next LXST call mode (FDX to HDX, HDX to FDX) and signal it
+     * to the remote peer (LXST Call Mode Negotiation). Invoked by
+     * [PythonRnsTelephony]'s `cycleCallModeHook`.
+     *
+     * `Telephone.switchMode` is a no-op when there is no active call, so this
+     * is safe to call any time. It picks the next mode from the current active
+     * one via [Mode.next] and routes the switch through the LXST-kt stack,
+     * which sends the `PREFERRED_MODE` signalling frame and applies the
+     * transmit gate.
+     */
+    fun cycleMode() {
+        if (!::telephone.isInitialized || !telephone.isCallActive()) {
+            Log.w(TAG, "cycleMode() before telephone is active — ignoring")
+            return
+        }
+        val next = Mode.next(telephone.activeMode)
+        telephone.switchMode(next)
+        Log.i(TAG, "Cycled LXST call mode to ${next.abbreviation}")
+    }
+
+    /**
+     * Set the wire-level PTT transmit state (squelch, not mixer mute). Invoked
+     * by [PythonRnsTelephony]'s `setPttActiveHook`.
+     *
+     * In half duplex, press (active=true) unsquelches the wire and resumes AGC;
+     * release (active=false) squelches the wire and pauses AGC. In full duplex
+     * this is a no-op (the gate computes open regardless).
+     */
+    fun setPttActive(active: Boolean) {
+        if (!::telephone.isInitialized) {
+            Log.w(TAG, "setPttActive() before telephone is active — ignoring")
+            return
+        }
+        telephone.setPttActive(active)
     }
 
     // ===== Master incoming-calls toggle =====

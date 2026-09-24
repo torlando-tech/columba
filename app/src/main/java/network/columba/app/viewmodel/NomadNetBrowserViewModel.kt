@@ -234,33 +234,51 @@ class NomadNetBrowserViewModel
                     //     flag was set (possibly anonymous). The refresh
                     //     re-fetches with identified content.
                     //
-                    // If the flagged node's page is still LOADING, we can't
-                    // refresh yet - arm pendingIdentifyRefreshFor so
-                    // emitPageLoaded re-fetches post-identification content
-                    // once it lands (the in-flight fetch may predate the flag
-                    // if the link was reused, so the content could still be
-                    // anonymous). Navigation clears the pending flag and a
-                    // return re-derives it via the cache bypass, so arming is
-                    // lossless either way.
+                    // A form result must NOT be re-fetched by an identify
+                    // refresh: a form submission's fetch already establishes the
+                    // link and identifies at establishment, so there is no
+                    // separate identify refresh to do - and the only way
+                    // refresh() would "update" a form page is to re-submit the
+                    // form (refresh consults lastFetchFormDataJson), which
+                    // double-fires the form's side effects.
                     //
-                    // Skip form-bearing pages entirely: a form submission's
-                    // fetch already establishes the link and identifies at
-                    // establishment, so there is no separate identify refresh
-                    // to do - and the only way refresh() would "update" a form
-                    // page is to re-submit the form (refresh re-submits when
-                    // lastFetchFormDataJson is set), which double-fires the
-                    // form's side effects. A user who wants identified content
-                    // on a form page re-submits it manually.
+                    // The check is path-checked (the fetched page matches the
+                    // last form's node + path), not just "form data present":
+                    // lastFetchFormDataJson is only cleared by a plain
+                    // fetchPage, so after a form submit the user can go Back to
+                    // an ordinary page on the same node, and a stale "form data
+                    // present" check would wrongly skip a legitimate identify
+                    // refresh of that ordinary page (Greptile round 3).
+                    //
+                    // When the flagged node's page is LOADING, arm
+                    // pendingIdentifyRefreshFor (unless it's a form result,
+                    // guarded above) so emitPageLoaded re-fetches
+                    // post-identification content once it lands (the in-flight
+                    // fetch may predate the flag if the link was reused, so the
+                    // content could still be anonymous). Navigation clears the
+                    // pending flag and a return re-derives it via the cache
+                    // bypass, so arming is lossless either way.
                     val newlyFlagged = nodes - previous
-                    val formPageInFlight = lastFetchFormDataJson != null &&
-                        lastFetchNodeHash == currentNodeHash
-                    if (newlyFlagged.isNotEmpty() &&
-                        currentNodeHash in newlyFlagged &&
-                        !formPageInFlight
-                    ) {
-                        if (_browserState.value is BrowserState.PageLoaded) {
-                            refresh()
-                        } else {
+                    if (newlyFlagged.isNotEmpty() && currentNodeHash in newlyFlagged) {
+                        val displayedPage = _browserState.value
+                        val pageLoaded = displayedPage is BrowserState.PageLoaded
+                        // The flagged node's page is a form result iff a form
+                        // fetch is the last fetch for this node AND (while
+                        // loaded) the displayed page is that form's path. While
+                        // loading we can't see the fetched path, so a form load
+                        // for this node is conservatively treated as a form
+                        // result (the no-refresh choice, matching the loaded
+                        // case).
+                        val isFormResult = lastFetchFormDataJson != null &&
+                            lastFetchNodeHash == currentNodeHash &&
+                            (if (pageLoaded) {
+                                displayedPage.path == lastFetchPath
+                            } else {
+                                true
+                            })
+                        if (pageLoaded) {
+                            if (!isFormResult) refresh()
+                        } else if (!isFormResult) {
                             pendingIdentifyRefreshFor = currentNodeHash
                         }
                     }

@@ -547,7 +547,16 @@ internal class NativeNomadNetHandler(
                 return@runCatching true
             }
 
-            link.identify(identity)
+            // Remove the key if the proof send fails, so a failed proof doesn't
+            // poison the shared dedup set (same rationale as the python backend):
+            // a retry or the at-establishment auto-identify must be able to send
+            // the proof again instead of being told it is already identified.
+            try {
+                link.identify(identity)
+            } catch (e: Exception) {
+                identifiedNomadnetLinks.remove(linkIdHex)
+                throw e
+            }
             false
         }
 }

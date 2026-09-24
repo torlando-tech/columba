@@ -436,6 +436,14 @@ class PythonRnsNomadnet(
     // link.callAttr("identify", identity) so the flag/dedup contract can be
     // probed without a native RNS runtime.
     internal var testIdentifyOnLink: ((String, PyObject) -> Unit)? = null
+    // Seam for the link-identity dedup key. linkIdHex reads link.link_id via a
+    // native call (unavailable on the JVM unit-test classpath, where a raw
+    // handle throws UnsatisfiedLinkError - an Error, not an Exception, so
+    // runCatching wouldn't catch it). When set, it returns a stable key derived
+    // from the handle's identityHashCode so the link-id-keyed dedup can be
+    // probed: same link -> same key (no re-identify), distinct links -> distinct
+    // keys (re-identify), exactly like a real link_id.
+    internal var testLinkIdHex: ((PyObject) -> String)? = null
 
     /**
      * Issue `link.request(path, data, ...)` and wire a Python-side capture
@@ -842,7 +850,7 @@ class PythonRnsNomadnet(
                 ?: throw RnsException(
                     RnsError.Generic("No active link to $destinationHash — load a page first", null),
                 )
-            if (linkStatus(link) != LINK_ACTIVE) {
+            if ((testLinkStatus?.invoke(link) ?: linkStatus(link)) != LINK_ACTIVE) {
                 nomadnetLinks.remove(destinationHash)
                 throw RnsException(
                     RnsError.Generic("Link to $destinationHash is not active — load a page first", null),
@@ -860,11 +868,25 @@ class PythonRnsNomadnet(
             // auto-identify (or a concurrent caller) already sent the proof
             // on this link, add() returns false and we report already-identified
             // instead of double-sending. The link-id key matches identifyIfFlagged.
-            val dedupKey = linkIdHex(link, destinationHash)
+            val dedupKey = linkIdHex(link, destinationHash, testLinkIdHex)
             if (!identifiedLinks.add(dedupKey)) {
                 return@pyResult true
             }
-            link.callAttr("identify", identity)
+            // Remove the key if the proof send fails, so a failed proof doesn't
+            // poison the shared dedup set: a retry on the active link (or the
+            // at-establishment auto-identify path, which shares this set) must
+            // be able to send the proof again instead of being told it is
+            // already identified.
+            try {
+                // testIdentifyOnLink stands in for the native callAttr in JVM
+                // unit tests (a raw handle can't call native methods); it is
+                // null in production, which takes the real path.
+                testIdentifyOnLink?.invoke(destinationHash, link)
+                    ?: link.callAttr("identify", identity)
+            } catch (e: Exception) {
+                identifiedLinks.remove(dedupKey)
+                throw e
+            }
             Log.i(TAG, "NomadNet: sent identify proof on link to $destinationHash")
             false
         }
@@ -876,11 +898,13 @@ class PythonRnsNomadnet(
      * Best-effort: a missing local identity or a link that closed just before
      * we got here must not fail the page load, so failures are logged and
      * swallowed. `identifiedLinks` (link-id keyed) dedups so a reused link
-     * doesn't resend the proof, but a rebuilt link re-identifies.
+     * doesn't resend the proof, but a rebuilt link re-identifies. Internal (not
+     * private) so the at-establishment contract can be probed directly in unit
+     * tests without driving a full native link establishment.
      */
-    private fun identifyIfFlagged(destinationHash: String, link: PyObject) {
+    internal fun identifyIfFlagged(destinationHash: String, link: PyObject) {
         if (destinationHash !in identifyOnConnectNodes) return
-        val linkId = linkIdHex(link, destinationHash)
+        val linkId = linkIdHex(link, destinationHash, testLinkIdHex)
         if (!identifiedLinks.add(linkId)) return
         runCatching {
             val identity = runtime.localIdentity
@@ -959,7 +983,8 @@ class PythonRnsNomadnet(
  * don't double-send on reuse) still holds. File-level (not a member) so the
  * class stays under detekt's TooManyFunctions threshold.
  */
-private fun linkIdHex(link: PyObject, destinationHash: String): String =
-    runCatching { link["link_id"]?.toJava(ByteArray::class.java)?.toHex() }
-        .getOrNull()
+private fun linkIdHex(link: PyObject, destinationHash: String, seam: ((PyObject) -> String)?): String =
+    seam?.invoke(link)
+        ?: runCatching { link["link_id"]?.toJava(ByteArray::class.java)?.toHex() }
+            .getOrNull()
         ?: destinationHash

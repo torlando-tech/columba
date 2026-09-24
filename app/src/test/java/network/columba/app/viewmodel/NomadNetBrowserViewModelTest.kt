@@ -19,6 +19,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -26,7 +27,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.NomadnetPageResult
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -51,6 +54,7 @@ class NomadNetBrowserViewModelTest {
     private lateinit var pageCache: NomadNetPageCache
     private lateinit var imageCache: network.columba.app.nomadnet.NomadNetImageCache
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var rnsCore: RnsCore
     private lateinit var viewModel: NomadNetBrowserViewModel
 
     private val nodeHash = "abcdef01234567890abcdef012345678"
@@ -63,6 +67,10 @@ class NomadNetBrowserViewModelTest {
         pageCache = mockk()
         imageCache = mockk()
         settingsRepository = mockk()
+        rnsCore = mockk()
+        // RNS is already READY in these tests; the re-READY sync collector sees
+        // no transition and does nothing, so a static flow is enough.
+        every { rnsCore.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
         every { pageCache.put(any(), any(), any(), any()) } just Runs
         // Page-image cache: only the explicit clear (clearImageCache) and the
         // loader's miss-path get() are reachable from these tests; stub both
@@ -88,7 +96,7 @@ class NomadNetBrowserViewModelTest {
         coEvery { settingsRepository.saveNomadNetImageLoadingMode(any()) } just Runs
         coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any(), any()) } just Runs
         coEvery { settingsRepository.clearNomadNetLastNodeHash() } just Runs
-        viewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+        viewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
     }
 
     @Suppress("SleepInsteadOfDelay")
@@ -870,7 +878,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf("PROPORTIONAL_WRAP")
 
-            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
 
             assertEquals(
@@ -899,7 +907,7 @@ class NomadNetBrowserViewModelTest {
             every { settingsRepository.nomadNetRenderingModeFlow } returns controllableFlow
 
             // init launches and suspends on first() because nothing has been emitted yet.
-            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
 
             // User picks a mode before the persisted value has been read back.
             racingViewModel.setRenderingMode(NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM)
@@ -1001,7 +1009,7 @@ class NomadNetBrowserViewModelTest {
             // A cache entry exists for this node+path; it must NOT be used.
             every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
 
-            val autoViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val autoViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
             autoViewModel.loadPage(nodeHash)
             advanceUntilIdle()
@@ -1098,13 +1106,17 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
-    fun `auto-identify destination is retried when a stale identify was in flight`() =
+    fun `navigating to a flagged node while a stale identify is in flight fetches fresh`() =
         runTest(testDispatcher) {
-            // Regression (Greptile 4/5 finding): with node A's identify in
-            // flight, navigating to auto-identify node B returns from
-            // identifyToNode because the in-progress flag still belongs to A.
-            // When A's stale result is discarded, its completion must retry B's
-            // identify, or B stays anonymous until some unrelated action fires.
+            // In the old model, loadPage fired a racy identifyToNode and a
+            // finally-block retried the current node when a stale identify
+            // completed. That mechanism is gone: the backend now identifies a
+            // flagged node's link AT LINK ESTABLISHMENT, which requires a fresh
+            // fetch (cache bypass). So the regression to assert here is that
+            // navigating to flagged node B - even while an unrelated manual
+            // identify for A is still in flight - fetches B fresh (bypassing
+            // the cache), which is what lets the backend identify B at link
+            // establishment instead of serving cached anonymous content.
             //
             // A fresh ViewModel is constructed AFTER the set stub so the reactive
             // collector populates _autoIdentifyNodes with nodeB (a finite flowOf
@@ -1119,11 +1131,11 @@ class NomadNetBrowserViewModelTest {
                 identifyGate.first()
                 Result.success(true)
             }
-            // B's identify returns already-identified (no page refresh needed).
-            coEvery { protocol.identifyNomadnetLink(nodeB) } returns Result.success(true)
 
-            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
+            // The flagged set reached the backend when this VM initialised.
+            coVerify(exactly = 1) { protocol.setIdentifyOnConnectNodes(setOf(nodeB)) }
 
             vm.loadPage(nodeHash)
             advanceUntilIdle()
@@ -1132,30 +1144,23 @@ class NomadNetBrowserViewModelTest {
             // A's IO coroutine is now suspended at identifyNomadnetLink(nodeHash).
             advanceUntilIdle()
 
-            // Navigate to auto-identify node B while A's identify is in flight.
-            // B's own identifyToNode returns early (in-progress flag belongs to A).
+            // Navigate to flagged node B while A's identify is in flight.
+            // B must be fetched fresh (cache bypassed) so the backend can
+            // identify B at link establishment - this is the fix for "B stays
+            // anonymous".
             vm.loadPage(nodeB)
             advanceUntilIdle()
-            assertFalse(vm.isIdentified.value)
-            // B's blocked identify was never issued while A held the flag.
-            coVerify(exactly = 0) { protocol.identifyNomadnetLink(nodeB) }
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeB, "/page/index.mu", any(), any()) }
+            coVerify(exactly = 0) { pageCache.get(nodeB, "/page/index.mu") }
 
-            // A's identify completes; its stale result is discarded and its
-            // finally block retries B's identify.
+            // A's identify completes; its stale result is discarded (the staleness
+            // guard) and must not mark the current node B as identified.
             identifyGate.tryEmit(Unit)
-
-            // Poll for B's identify to complete on the real Dispatchers.IO.
-            var identified = false
-            var waitedMs = 0
-            while (!identified && waitedMs < 2000) {
-                identified = vm.isIdentified.value
-                if (!identified) {
-                    Thread.sleep(25)
-                    waitedMs += 25
-                }
-            }
-            // B must end up identified (retried by A's completion), not left anonymous.
-            assertTrue("B should be retried and identified once A's stale identify completes", identified)
+            waitUntilIdentifySettled()
+            val state = vm.browserState.value
+            assertTrue(state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeB, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
+            assertFalse("A's stale identify must not mark B identified", vm.isIdentified.value)
         }
 
     @Test

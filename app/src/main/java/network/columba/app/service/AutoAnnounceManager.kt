@@ -5,6 +5,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.di.ApplicationScope
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -82,12 +83,18 @@ class AutoAnnounceManager
                         settingsRepository.autoAnnounceIntervalHoursFlow,
                         identityRepository.activeIdentity,
                     ) { enabled, intervalHours, activeIdentity ->
-                        Triple(enabled, intervalHours, activeIdentity?.displayName)
-                    }.collect { (enabled, intervalHours, displayName) ->
+                        Triple(
+                            enabled,
+                            intervalHours,
+                            activeIdentity?.let { it.identityHash to it.displayName },
+                        )
+                    }.collect { (enabled, intervalHours, namePair) ->
+                        val displayName = namePair?.second
+                        val identityHash = namePair?.first
                         Log.d(TAG, "Settings changed: enabled=$enabled, interval=${intervalHours}h")
 
                         if (enabled) {
-                            startAnnounceLoop(intervalHours, displayName)
+                            startAnnounceLoop(intervalHours, displayName, identityHash)
                         } else {
                             Log.d(TAG, "Auto-announce disabled, stopping loop")
                             // Clear the next announce time when disabled
@@ -117,6 +124,7 @@ class AutoAnnounceManager
         private suspend fun startAnnounceLoop(
             intervalHours: Int,
             displayName: String?,
+            identityHash: String?,
         ) {
             val baseIntervalMinutes = intervalHours * 60
             Log.d(TAG, "Starting announce loop with base interval ${intervalHours}h (±${RANDOMIZATION_RANGE_MINUTES}min randomization)")
@@ -124,26 +132,16 @@ class AutoAnnounceManager
             // The loop will be cancelled and restarted if settings change
             while (true) {
                 try {
-                    // Perform announce. Re-read the active identity's display
+                    // Perform announce. Re-read the bound identity's display
                     // name each tick rather than reusing [displayName] (captured
                     // once when the loop started): a display-name *edit* does
                     // not restart this loop, so without a fresh read every
                     // subsequent automatic tick would re-announce the stale
-                    // name. The captured value is the fallback for the rare
-                    // case the active identity momentarily disappears.
-                    val effectiveDisplayName = resolveCurrentDisplayName(displayName)
-                    Log.d(TAG, "Triggering auto-announce...")
-
-                    val result = rnsCore.triggerAutoAnnounce(effectiveDisplayName)
-
-                    if (result.isSuccess) {
-                        // Update last announce timestamp
-                        val timestamp = System.currentTimeMillis()
-                        settingsRepository.saveLastAutoAnnounceTime(timestamp)
-                        Log.d(TAG, "Auto-announce successful")
-                    } else {
-                        Log.e(TAG, "Auto-announce failed: ${result.exceptionOrNull()?.message}")
-                    }
+                    // name. The name is resolved for the identity this loop is
+                    // bound to ([identityHash], captured when the loop started)
+                    // so a rename lands on the correct destination and an
+                    // identity switch can't mix a fresh name onto a stale one.
+                    performAnnounceTick(identityHash, displayName)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error during auto-announce", e)
                 }
@@ -179,25 +177,72 @@ class AutoAnnounceManager
         }
 
         /**
+         * Perform a single announce tick: resolve the bound identity's current
+         * name and hand it to [RnsCore.triggerAutoAnnounce].
+         *
+         * Extracted from [startAnnounceLoop] so the name-resolution step is
+         * directly testable - a regression that made the loop stop using the
+         * fresh-name resolver would change what this method passes to
+         * triggerAutoAnnounce.
+         */
+        internal suspend fun performAnnounceTick(
+            identityHash: String?,
+            fallback: String?,
+        ) {
+            val effectiveDisplayName = resolveCurrentDisplayName(
+                identityHash = identityHash,
+                fallback = fallback,
+            )
+            Log.d(TAG, "Triggering auto-announce...")
+
+            val result = rnsCore.triggerAutoAnnounce(effectiveDisplayName)
+
+            if (result.isSuccess) {
+                // Update last announce timestamp
+                val timestamp = System.currentTimeMillis()
+                settingsRepository.saveLastAutoAnnounceTime(timestamp)
+                Log.d(TAG, "Auto-announce successful")
+            } else {
+                Log.e(TAG, "Auto-announce failed: ${result.exceptionOrNull()?.message}")
+            }
+        }
+
+        /**
          * Resolve the display name for the next auto-announce.
          *
-         * Re-reads the active identity's current name from the repository so a
+         * Re-reads the *bound* identity's current name from the repository so a
          * display-name edit (which does not restart the loop) is picked up on
-         * the next automatic tick. Falls back to the loop-start [displayName]
-         * and finally "Anonymous Peer" so an announce always has a name.
+         * the next automatic tick. The name is looked up by [identityHash] -
+         * the identity this loop was started for - rather than "the current
+         * active identity": an identity switch rewrites the active row *before*
+         * the old loop's service restart lands, and a tick inside that window
+         * must not hand the old destination the new persona's name.
+         *
+         * Fallbacks, in order: the loop-start [fallback] name, then
+         * "Anonymous Peer", so an announce always carries a name. A stored
+         * blank name (the edit path stores a trimmed, possibly empty string
+         * when the user clears it) is treated as "cleared": it degrades to the
+         * fallback rather than re-announcing a removed name.
          *
          * Reading is best-effort: a transient repository failure must not abort
-         * the announce, so it degrades to the fallback rather than throwing.
+         * the announce, so it degrades to the fallback. Coroutine cancellation
+         * is rethrown (not swallowed by the failure path) so stopping the
+         * manager during the read ends the loop immediately instead of logging
+         * a spurious "read failure" and continuing with the fallback.
          */
-        internal suspend fun resolveCurrentDisplayName(fallback: String?): String {
-            return try {
-                val active = identityRepository.getActiveIdentitySync()
-                active?.displayName?.takeIf { it.isNotBlank() }
-                    ?: fallback
-                    ?: "Anonymous Peer"
+        internal suspend fun resolveCurrentDisplayName(
+            identityHash: String?,
+            fallback: String?,
+        ): String {
+            val entity = try {
+                if (identityHash == null) null else identityRepository.getIdentity(identityHash)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to re-read display name; using fallback", e)
-                fallback ?: "Anonymous Peer"
+                null
             }
+            val freshName = entity?.displayName?.takeIf { it.isNotBlank() }
+            return freshName ?: fallback ?: "Anonymous Peer"
         }
     }

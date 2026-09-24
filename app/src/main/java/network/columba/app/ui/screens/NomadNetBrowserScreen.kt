@@ -312,7 +312,19 @@ fun NomadNetBrowserScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // The outer Scaffold in MainActivity ignores innerPadding, so the NavHost
+        // (and this screen) extends behind the app's bottom NavigationBar.
+        // 80dp = Material3 NavigationBar height with labeled items, matching the
+        // padding convention used elsewhere in the codebase.
+        snackbarHost = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 80.dp),
+            ) {
+                SnackbarHost(snackbarHostState)
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {

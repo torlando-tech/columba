@@ -353,11 +353,12 @@ jobs:
 
       - name: Run rns-backend-py Python unit tests
         # The event-bridge / RNS Python unit tests (rns-backend-py/src/test/
-        # python/) are self-contained - they stub the RNS + LXMF modules - and
-        # run under plain pytest. The Gradle unit-test tasks above do not pick
-        # them up, so a later regression there would otherwise pass CI silently;
-        # run them explicitly.
-        run: python -m pytest -q rns-backend-py/src/test/python/
+        # python/) are self-contained unittest.TestCase modules - they stub the
+        # RNS + LXMF modules and need no third-party deps - so they run under
+        # the stdlib unittest runner. The Gradle unit-test tasks above do not
+        # pick them up, so a later regression there would otherwise pass CI
+        # silently; run them explicitly.
+        run: python -m unittest discover -s rns-backend-py/src/test/python -p "test_*.py" -v
 
       - name: Upload unit test results
         if: always()

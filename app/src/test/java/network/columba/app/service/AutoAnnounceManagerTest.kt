@@ -452,14 +452,17 @@ class AutoAnnounceManagerTest {
             // spurious "read failure" and continue with the fallback.
             coEvery { mockIdentityRepository.getIdentity("hash") } throws kotlinx.coroutines.CancellationException()
 
-            val threw = try {
+            var thrown: Exception? = null
+            try {
                 manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
-                false
             } catch (e: kotlinx.coroutines.CancellationException) {
-                true
+                thrown = e
             }
 
-            assertTrue("Cancellation must be rethrown, not swallowed", threw)
+            assertTrue(
+                "Cancellation must be rethrown, not swallowed, but was: $thrown",
+                thrown is kotlinx.coroutines.CancellationException,
+            )
         }
 
     @Test

@@ -205,20 +205,27 @@ class NomadNetBrowserViewModel
             // flagged node - even a fast cached first page (which is why the
             // sync lives here and not just in loadPage).
             //
-            // The collector does NOT re-fetch a page when a node is flagged:
-            // the backend already identifies the link (at establishment, and
-            // for an already-active link via setIdentifyOnConnectNodes), which
-            // is what matters - and a reactive re-fetch of the displayed page
-            // is unsafe for form/var-bearing pages (refresh would re-POST the
-            // form, double-firing its side effects; this was the subject of
-            // three successive review rounds). Identified content is delivered
-            // on the flagged node's next fetch, which the cache bypass in
-            // loadPage/navigateToLink forces: the fresh fetch establishes the
-            // link (or reuses it) so the backend identifies at link
-            // establishment, and the node serves identified content. This
-            // matches upstream Browser.link_established, which calls
-            // link.identify(...) without re-fetching the page.
+            // When a node is newly flagged, re-fetch its page for identified
+            // content, but ONLY as a safe GET:
+            //
+            //  - LOADED page: re-fetch via refresh() when the page's own field
+            //    tokens do NOT resolve to request data (a plain page). If the
+            //    tokens DO resolve to data, the page is a form/var-bearing page
+            //    and refresh() would re-POST it (double-firing its side
+            //    effects) - skip it. The form's own fetch already established
+            //    the link and identified at establishment. Keying off the
+            //    page's own field tokens (not stale lastFetch* state) makes
+            //    this correct for Back-restored pages at any path.
+            //  - LOADING page: arm pendingIdentifyRefreshFor so emitPageLoaded
+            //    re-fetches once it lands - unless the in-flight request is a
+            //    form submission (accurately signalled by lastFetch* while
+            //    loading), which already identifies at establishment.
+            //
+            // This matches the upstream model: the backend identifies the link
+            // (Browser.link_established), and the page content is fetched GET
+            // to reflect identification - it is never re-POSTed.
             viewModelScope.launch {
+                var previous: Set<String> = emptySet()
                 settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
                     _autoIdentifyNodes.value = nodes
                     runCatching {
@@ -226,6 +233,26 @@ class NomadNetBrowserViewModel
                     }.onFailure {
                         Log.w(TAG, "Failed to sync auto-identify set to backend", it)
                     }
+                    val newlyFlagged = nodes - previous
+                    if (newlyFlagged.isNotEmpty() && currentNodeHash in newlyFlagged) {
+                        val displayedPage = _browserState.value
+                        if (displayedPage is BrowserState.PageLoaded) {
+                            // Re-fetch as a safe GET for identified content.
+                            // identifyRefresh skips form/var-bearing pages (a
+                            // re-fetch would re-POST them) and re-fetches plain
+                            // pages; it keys off the page's own field tokens, so
+                            // it's correct for Back-restored pages at any path.
+                            identifyRefresh()
+                        } else {
+                            // Still loading: arm the post-load re-fetch. The
+                            // actual re-fetch happens in emitPageLoaded via
+                            // identifyRefresh, which token-checks the
+                            // just-loaded page (definitive there) and skips
+                            // form pages, so arming unconditionally is safe.
+                            pendingIdentifyRefreshFor = currentNodeHash
+                        }
+                    }
+                    previous = nodes
                 }
             }
 
@@ -787,6 +814,31 @@ class NomadNetBrowserViewModel
             }
         }
 
+        /**
+         * Re-fetch the displayed page as a safe GET to pick up
+         * post-identification content (used when a node is flagged, "always
+         * identify"). NEVER re-submits a form: if the page's own field tokens
+         * resolve to request data, the page is a form/var-bearing page and a
+         * re-fetch would re-submit it (double-firing its side effects), so it
+         * is skipped - its own fetch already established the link and
+         * identified at establishment. A plain page (no resolvable tokens) is
+         * re-fetched via fetchPage, which does a bare GET and never re-POSTs
+         * (unlike [refresh], which has re-POST paths driven by lastFetch*).
+         * Keying off the page's OWN field tokens (not stale lastFetch* state)
+         * makes this correct for Back-restored pages at any path.
+         */
+        private fun identifyRefresh() {
+            val currentState = _browserState.value
+            if (currentState !is BrowserState.PageLoaded) return
+            if (buildNomadNetRequestData(currentState.fieldTokens, _formFields.value) != null) {
+                // Form/var-bearing page: a re-fetch would re-submit it. Skip.
+                return
+            }
+            _isPullRefreshing.value = true
+            partialManager.clear()
+            fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
+        }
+
         /** Retry the last failed network fetch, preserving form data if applicable. */
         fun retry() {
             if (lastFetchNodeHash.isNotEmpty()) {
@@ -999,10 +1051,13 @@ class NomadNetBrowserViewModel
             // If identification for this node completed while its page was still
             // loading, the just-displayed page is pre-identification content.
             // Re-fetch it now (identified) so an access-gated service doesn't
-            // show anonymous/denied content on the first visit.
+            // show anonymous/denied content on the first visit. identifyRefresh
+            // does a safe GET and skips form/var-bearing pages (a re-fetch would
+            // re-submit them); _browserState is already the just-loaded page
+            // above, so its field tokens are definitive.
             if (pendingIdentifyRefreshFor == nodeHash) {
                 pendingIdentifyRefreshFor = null
-                refresh()
+                identifyRefresh()
             }
         }
 

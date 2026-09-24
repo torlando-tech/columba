@@ -6,6 +6,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
 import io.mockk.clearAllMocks
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Ignore
@@ -346,5 +348,80 @@ class AutoAnnounceManagerTest {
             }
 
             manager.stop()
+        }
+
+    // ========== Display-name freshness (stale re-announce regression) ==========
+    // A display-name edit does NOT restart the auto-announce loop, so the loop
+    // must re-read the active identity's name each tick. These pin the decision
+    // in resolveCurrentDisplayName: a fresh name from the DB wins over the
+    // value captured when the loop started, with graceful fallbacks.
+    //
+    // (Driving the full infinite while(true) loop under StandardTestDispatcher
+    // is the flaky SharedFlow-timing path already @Ignore'd above, so the
+    // decision is tested directly at this seam.)
+
+    private fun identity(
+        displayName: String,
+        isActive: Boolean = true,
+    ): network.columba.app.data.db.entity.LocalIdentityEntity =
+        network.columba.app.data.db.entity.LocalIdentityEntity(
+            identityHash = "hash",
+            displayName = displayName,
+            destinationHash = "dest",
+            filePath = "",
+            createdTimestamp = 0,
+            lastUsedTimestamp = 0,
+            isActive = isActive,
+        )
+
+    @Test
+    fun resolveCurrentDisplayName_prefersFreshDbNameOverStaleCaptured() =
+        runTest {
+            // Loop started with the old name; the user has since renamed.
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns identity("New Name")
+
+            val resolved = manager.resolveCurrentDisplayName("Old Name")
+
+            assertEquals("New Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_fallsBackToCapturedWhenNoActiveIdentity() =
+        runTest {
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
+
+            val resolved = manager.resolveCurrentDisplayName("Captured Name")
+
+            assertEquals("Captured Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_fallsBackToAnonymousWhenNoActiveOrCaptured() =
+        runTest {
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
+
+            val resolved = manager.resolveCurrentDisplayName(null)
+
+            assertEquals("Anonymous Peer", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_ignoresBlankDbName() =
+        runTest {
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns identity("   ")
+
+            val resolved = manager.resolveCurrentDisplayName("Captured Name")
+
+            assertEquals("Captured Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_degradesToFallbackWhenRepositoryFails() =
+        runTest {
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } throws IllegalStateException("db down")
+
+            val resolved = manager.resolveCurrentDisplayName("Captured Name")
+
+            assertEquals("Captured Name", resolved)
         }
 }

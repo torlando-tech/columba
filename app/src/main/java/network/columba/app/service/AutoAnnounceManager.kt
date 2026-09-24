@@ -124,8 +124,14 @@ class AutoAnnounceManager
             // The loop will be cancelled and restarted if settings change
             while (true) {
                 try {
-                    // Perform announce
-                    val effectiveDisplayName = displayName ?: "Anonymous Peer"
+                    // Perform announce. Re-read the active identity's display
+                    // name each tick rather than reusing [displayName] (captured
+                    // once when the loop started): a display-name *edit* does
+                    // not restart this loop, so without a fresh read every
+                    // subsequent automatic tick would re-announce the stale
+                    // name. The captured value is the fallback for the rare
+                    // case the active identity momentarily disappears.
+                    val effectiveDisplayName = resolveCurrentDisplayName(displayName)
                     Log.d(TAG, "Triggering auto-announce...")
 
                     val result = rnsCore.triggerAutoAnnounce(effectiveDisplayName)
@@ -169,6 +175,29 @@ class AutoAnnounceManager
                     Log.d(TAG, "Timer was reset by network change, restarting delay loop")
                     continue // Skip announce, network change already triggered one
                 }
+            }
+        }
+
+        /**
+         * Resolve the display name for the next auto-announce.
+         *
+         * Re-reads the active identity's current name from the repository so a
+         * display-name edit (which does not restart the loop) is picked up on
+         * the next automatic tick. Falls back to the loop-start [displayName]
+         * and finally "Anonymous Peer" so an announce always has a name.
+         *
+         * Reading is best-effort: a transient repository failure must not abort
+         * the announce, so it degrades to the fallback rather than throwing.
+         */
+        internal suspend fun resolveCurrentDisplayName(fallback: String?): String {
+            return try {
+                val active = identityRepository.getActiveIdentitySync()
+                active?.displayName?.takeIf { it.isNotBlank() }
+                    ?: fallback
+                    ?: "Anonymous Peer"
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to re-read display name; using fallback", e)
+                fallback ?: "Anonymous Peer"
             }
         }
     }

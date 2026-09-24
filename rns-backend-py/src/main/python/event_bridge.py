@@ -935,6 +935,32 @@ def _local_lxmf_destination():
         return None
 
 
+def set_display_name(display_name):
+    """Update the local delivery destination's display name.
+
+    Called by `PythonRnsCore.triggerAutoAnnounce` immediately before it
+    re-announces. LXMF's `LXMRouter.get_announce_app_data` reads
+    `display_name` off the delivery destination live when it builds the
+    announce app_data, so updating this attribute is enough for the *next*
+    announce to carry the fresh name - no re-registration required.
+
+    Returns True when the name was applied, False when there is no router or
+    no registered delivery destination yet (early-init race / registration
+    failure). Fail closed: never throw into the announce path.
+    """
+    destination = _local_lxmf_destination()
+    if destination is None:
+        RNS.log("event_bridge: set_display_name - no delivery destination yet",
+                RNS.LOG_DEBUG)
+        return False
+    try:
+        destination.display_name = display_name
+        return True
+    except Exception as e:  # noqa: BLE001 - defensive; never wedge the announce path
+        RNS.log(f"event_bridge: set_display_name failed: {e}", RNS.LOG_DEBUG)
+        return False
+
+
 def set_collector_enabled(enabled):
     """Toggle telemetry-host mode. Called by `PythonRnsTelemetry.setTelemetryCollectorMode`.
 

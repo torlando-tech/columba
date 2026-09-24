@@ -117,9 +117,48 @@ class DisplayNameBridgeTests(unittest.TestCase):
         # registration failed). Must fail closed.
         self.router.delivery_destinations = {}
 
-        result = self.module.set_display_name("Whatever")
+        result = self.module.set_display_name("Whatever", self.router)
 
         self.assertFalse(result)
+
+    def test_set_display_name_updates_passed_router_destination(self):
+        # The announce path passes the router it is about to use. The name
+        # must land on that router's delivery destination, not the module's.
+        announce_router = self.router
+
+        result = self.module.set_display_name("New Name", announce_router)
+
+        self.assertTrue(result)
+        self.assertEqual("New Name", self.destination.display_name)
+
+    def test_set_display_name_uses_passed_router_not_stale_module_router(self):
+        # The module-level router can lag the live router (start->wire window
+        # or in-process restart). When the announce path hands us the router it
+        # is about to use, we must update THAT destination and leave the stale
+        # module router's destination untouched.
+        stale_destination = FakeDestination(display_name="Stale Name")
+        self.module._lxmf_router = FakeRouter(stale_destination)
+        fresh_router = FakeRouter(self.destination)
+
+        result = self.module.set_display_name("Fresh Name", fresh_router)
+
+        self.assertTrue(result)
+        self.assertEqual("Fresh Name", self.destination.display_name)
+        self.assertEqual("Stale Name", stale_destination.display_name)
+
+    def test_set_display_name_passed_router_without_destination_fails_closed(self):
+        # A router is passed but it has no registered delivery destination.
+        # Must fail closed (False), and must not fall back to the module
+        # router's destination.
+        stale_destination = FakeDestination(display_name="Stale Name")
+        self.module._lxmf_router = FakeRouter(stale_destination)
+        empty_router = FakeRouter(FakeDestination("x"))
+        empty_router.delivery_destinations = {}
+
+        result = self.module.set_display_name("New Name", empty_router)
+
+        self.assertFalse(result)
+        self.assertEqual("Stale Name", stale_destination.display_name)
 
 
 if __name__ == "__main__":

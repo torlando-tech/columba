@@ -5,9 +5,11 @@ import app.cash.turbine.test
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
+import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -352,20 +354,23 @@ class AutoAnnounceManagerTest {
 
     // ========== Display-name freshness (stale re-announce regression) ==========
     // A display-name edit does NOT restart the auto-announce loop, so the loop
-    // must re-read the active identity's name each tick. These pin the decision
-    // in resolveCurrentDisplayName: a fresh name from the DB wins over the
-    // value captured when the loop started, with graceful fallbacks.
+    // must re-read the bound identity's name each tick. These pin the decision
+    // in resolveCurrentDisplayName: a fresh name read by the loop's identity
+    // hash wins over the value captured when the loop started, a cleared (blank)
+    // name degrades to the fallback, and an identity switch can't hand a fresh
+    // name onto a stale destination.
     //
     // (Driving the full infinite while(true) loop under StandardTestDispatcher
-    // is the flaky SharedFlow-timing path already @Ignore'd above, so the
-    // decision is tested directly at this seam.)
+    // is the flaky SharedFlow-timing path already @Ignore'd above; a bounded
+    // variant of that is kept below as loopLevelPassesFreshNameToAnnounce.)
 
     private fun identity(
         displayName: String,
+        identityHash: String = "hash",
         isActive: Boolean = true,
     ): network.columba.app.data.db.entity.LocalIdentityEntity =
         network.columba.app.data.db.entity.LocalIdentityEntity(
-            identityHash = "hash",
+            identityHash = identityHash,
             displayName = displayName,
             destinationHash = "dest",
             filePath = "",
@@ -377,30 +382,30 @@ class AutoAnnounceManagerTest {
     @Test
     fun resolveCurrentDisplayName_prefersFreshDbNameOverStaleCaptured() =
         runTest {
-            // Loop started with the old name; the user has since renamed.
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns identity("New Name")
+            // Loop bound to "hash" with the old name; the user has since renamed.
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("New Name")
 
-            val resolved = manager.resolveCurrentDisplayName("Old Name")
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Old Name")
 
             assertEquals("New Name", resolved)
         }
 
     @Test
-    fun resolveCurrentDisplayName_fallsBackToCapturedWhenNoActiveIdentity() =
+    fun resolveCurrentDisplayName_fallsBackToCapturedWhenIdentityMissing() =
         runTest {
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
+            // The bound identity row no longer exists (deleted / not yet written).
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns null
 
-            val resolved = manager.resolveCurrentDisplayName("Captured Name")
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
 
             assertEquals("Captured Name", resolved)
         }
 
     @Test
-    fun resolveCurrentDisplayName_fallsBackToAnonymousWhenNoActiveOrCaptured() =
+    fun resolveCurrentDisplayName_fallsBackToAnonymousWhenNoIdentityOrCaptured() =
         runTest {
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
-
-            val resolved = manager.resolveCurrentDisplayName(null)
+            // No bound identity hash was captured and nothing is in the DB.
+            val resolved = manager.resolveCurrentDisplayName(identityHash = null, fallback = null)
 
             assertEquals("Anonymous Peer", resolved)
         }
@@ -408,9 +413,23 @@ class AutoAnnounceManagerTest {
     @Test
     fun resolveCurrentDisplayName_ignoresBlankDbName() =
         runTest {
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns identity("   ")
+            // The edit path stores a trimmed, possibly-empty string when the
+            // user clears their name. A blank DB name must degrade to the
+            // fallback rather than re-announcing a removed name.
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("   ")
 
-            val resolved = manager.resolveCurrentDisplayName("Captured Name")
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
+
+            assertEquals("Captured Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_ignoresEmptyDbName() =
+        runTest {
+            // Explicitly cleared (empty string) - same as the blank case.
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("")
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
 
             assertEquals("Captured Name", resolved)
         }
@@ -418,10 +437,93 @@ class AutoAnnounceManagerTest {
     @Test
     fun resolveCurrentDisplayName_degradesToFallbackWhenRepositoryFails() =
         runTest {
-            coEvery { mockIdentityRepository.getActiveIdentitySync() } throws IllegalStateException("db down")
+            coEvery { mockIdentityRepository.getIdentity("hash") } throws IllegalStateException("db down")
 
-            val resolved = manager.resolveCurrentDisplayName("Captured Name")
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
 
             assertEquals("Captured Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_rethrowsCancellationInsteadOfSwallowingIt() =
+        runTest {
+            // Stopping the manager cancels the loop; a CancellationException from
+            // the read must propagate so the loop ends immediately, not log a
+            // spurious "read failure" and continue with the fallback.
+            coEvery { mockIdentityRepository.getIdentity("hash") } throws kotlinx.coroutines.CancellationException()
+
+            val threw = try {
+                manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
+                false
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                true
+            }
+
+            assertTrue("Cancellation must be rethrown, not swallowed", threw)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_usesBoundIdentityNotCurrentActiveOnSwitch() =
+        runTest {
+            // An identity switch rewrites the active row before the old loop's
+            // service restart lands. The resolver reads by the loop's identity
+            // hash, so it returns the OLD identity's name and never consults the
+            // (now different) active identity - the old destination keeps its
+            // own name until it is torn down.
+            coEvery { mockIdentityRepository.getIdentity("oldHash") } returns identity("Old Name", "oldHash")
+            // The active identity has already switched to a different persona.
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns identity("New Persona", "newHash")
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "oldHash", fallback = "Old Name")
+
+            assertEquals("Old Name", resolved)
+        }
+
+    // ========== Loop wiring: the announce tick passes the resolved name =======
+    // Guards against the announce loop silently stopping using the resolver.
+    // performAnnounceTick is the exact code path startAnnounceLoop runs each
+    // tick; if it ever stopped using the fresh-name resolver, this test would
+    // fail because triggerAutoAnnounce would receive the stale captured name.
+
+    @Test
+    fun performAnnounceTickPassesFreshNameToAnnounce() =
+        runTest {
+            // The loop is bound to "hash" and started with the old name; the user
+            // has since renamed it. The tick must re-read the fresh name and pass
+            // it to triggerAutoAnnounce - not the stale captured value.
+            val announcedNames = mutableListOf<String>()
+            coEvery { mockRnsCore.triggerAutoAnnounce(any<String>()) } answers {
+                announcedNames.add(firstArg<String>())
+                Result.success(Unit)
+            }
+            coEvery { mockSettingsRepository.saveLastAutoAnnounceTime(any<Long>()) } just Runs
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("New Name")
+
+            // Drive one real announce tick (the loop's per-tick code path).
+            manager.performAnnounceTick(identityHash = "hash", fallback = "Old Name")
+
+            assertEquals(
+                "The tick must pass the fresh name, not the stale captured one",
+                listOf("New Name"),
+                announcedNames,
+            )
+        }
+
+    @Test
+    fun performAnnounceTickPassesFallbackWhenBoundIdentityMissing() =
+        runTest {
+            // The bound identity row no longer exists: the tick must fall back to
+            // the loop-start name rather than an empty/anonymous announce.
+            val announcedNames = mutableListOf<String>()
+            coEvery { mockRnsCore.triggerAutoAnnounce(any<String>()) } answers {
+                announcedNames.add(firstArg<String>())
+                Result.success(Unit)
+            }
+            coEvery { mockSettingsRepository.saveLastAutoAnnounceTime(any<Long>()) } just Runs
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns null
+
+            manager.performAnnounceTick(identityHash = "hash", fallback = "Captured Name")
+
+            assertEquals(listOf("Captured Name"), announcedNames)
         }
 }

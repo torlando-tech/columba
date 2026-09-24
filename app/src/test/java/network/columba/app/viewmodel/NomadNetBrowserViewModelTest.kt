@@ -1154,13 +1154,60 @@ class NomadNetBrowserViewModelTest {
             coVerify(exactly = 0) { pageCache.get(nodeB, "/page/index.mu") }
 
             // A's identify completes; its stale result is discarded (the staleness
-            // guard) and must not mark the current node B as identified.
+            // guard) and must not surface as an error for the current node B.
             identifyGate.tryEmit(Unit)
             waitUntilIdentifySettled()
             val state = vm.browserState.value
             assertTrue(state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
             assertEquals(nodeB, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
-            assertFalse("A's stale identify must not mark B identified", vm.isIdentified.value)
+            assertNull("A's stale identify must not surface an error for B", vm.identifyError.value)
+            // B is a flagged node, so emitPageLoaded reflects the saved choice as
+            // identified (manage mode). The identification itself is the backend's
+            // responsibility at link establishment, not A's stale result.
+            assertTrue("flagged node B is shown as identified via its saved flag", vm.isIdentified.value)
+        }
+
+    @Test
+    fun `flagging a node after a form page loads does not re-submit the form`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile round 2, P1): a form page's request data stays
+            // in lastFetch* after it loads (only fetchPage clears it). If the
+            // node is flagged while the form page is loaded, the reactive
+            // collector re-emits and - without the form guard - calls refresh(),
+            // which re-submits the form (refresh re-submits when
+            // lastFetchFormDataJson is set), double-firing the form's side
+            // effects. Form submissions are never cached, so an identify refresh
+            // has no benefit there: the form's own fetch already establishes the
+            // link and identifies at establishment. The guard must skip the
+            // identify refresh for form pages so the form submits exactly once.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(NomadnetPageResult(simplePage, "/page/checkout.mu"))
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            // Load a form-bearing page (no flag yet). The form is submitted once.
+            vm.loadPage(nodeHash, "/page/checkout.mu`item=42")
+            advanceUntilIdle()
+            Thread.sleep(100) // let the Dispatchers.IO form response land
+            advanceUntilIdle()
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+
+            // Now flag the node while the form page is loaded. The collector
+            // re-emits; without the form guard it would refresh() and re-submit
+            // the form (a second request). With the guard, no refresh.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            // The form page is still the loaded page (not re-submitted into a new
+            // in-flight state by the identify refresh).
+            val state = vm.browserState.value
+            assertTrue("the form page should remain loaded after the flag",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeHash, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
         }
 
     @Test

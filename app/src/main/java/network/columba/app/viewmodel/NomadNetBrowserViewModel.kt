@@ -242,8 +242,22 @@ class NomadNetBrowserViewModel
                     // anonymous). Navigation clears the pending flag and a
                     // return re-derives it via the cache bypass, so arming is
                     // lossless either way.
+                    //
+                    // Skip form-bearing pages entirely: a form submission's
+                    // fetch already establishes the link and identifies at
+                    // establishment, so there is no separate identify refresh
+                    // to do - and the only way refresh() would "update" a form
+                    // page is to re-submit the form (refresh re-submits when
+                    // lastFetchFormDataJson is set), which double-fires the
+                    // form's side effects. A user who wants identified content
+                    // on a form page re-submits it manually.
                     val newlyFlagged = nodes - previous
-                    if (newlyFlagged.isNotEmpty() && currentNodeHash in newlyFlagged) {
+                    val formPageInFlight = lastFetchFormDataJson != null &&
+                        lastFetchNodeHash == currentNodeHash
+                    if (newlyFlagged.isNotEmpty() &&
+                        currentNodeHash in newlyFlagged &&
+                        !formPageInFlight
+                    ) {
                         if (_browserState.value is BrowserState.PageLoaded) {
                             refresh()
                         } else {
@@ -976,15 +990,25 @@ class NomadNetBrowserViewModel
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
-            // Do NOT claim `_isIdentified = true` here from the auto-identify
-            // flag. The flag only says the node *should* be identified; it is
-            // not proof the backend's link-establishment identify actually
-            // succeeded (that send is best-effort and can swallow errors).
-            // Claiming identified would block identifyToNode's manual retry
-            // (it early-returns when _isIdentified is true), leaving the user
-            // stuck if the proof failed. Leave the dialog in identify mode so
-            // the user can trigger a (dedup-guarded, idempotent) retry; the
-            // "Always identify" toggle in the dialog still reflects the flag.
+            // A flagged node ("Always identify to this node") is identified by
+            // the backend at link establishment, so reflect that in the
+            // dialog's mode: manage/turn-off view, not the "identify to this
+            // node?" confirm view.
+            //
+            // Tradeoff (Greptile round 1 + round 2 tension): the flag is not
+            // proof the proof-send succeeded (that send is best-effort and can
+            // swallow errors). Claiming "identified" misrepresents the rare
+            // failed-proof case. But NOT claiming it misrepresents the COMMON
+            // success case and presents a node the user explicitly saved as
+            // "always identify" as unidentified - the more confusing outcome.
+            // The failed-proof case is recoverable either way: the dialog's
+            // "Always identify" toggle is always visible, and toggling it off
+            // then on re-syncs the set to the backend, which re-identifies the
+            // active link (setIdentifyOnConnectNodes handles newly-active
+            // links). So claiming identified does not strand the user.
+            if (nodeHash in _autoIdentifyNodes.value) {
+                _isIdentified.value = true
+            }
             _browserState.value =
                 BrowserState.PageLoaded(
                     document = document,

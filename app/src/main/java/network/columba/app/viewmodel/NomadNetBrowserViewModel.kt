@@ -204,8 +204,21 @@ class NomadNetBrowserViewModel
             // value, so the backend is synced before any page load for a
             // flagged node - even a fast cached first page (which is why the
             // sync lives here and not just in loadPage).
+            //
+            // The collector does NOT re-fetch a page when a node is flagged:
+            // the backend already identifies the link (at establishment, and
+            // for an already-active link via setIdentifyOnConnectNodes), which
+            // is what matters - and a reactive re-fetch of the displayed page
+            // is unsafe for form/var-bearing pages (refresh would re-POST the
+            // form, double-firing its side effects; this was the subject of
+            // three successive review rounds). Identified content is delivered
+            // on the flagged node's next fetch, which the cache bypass in
+            // loadPage/navigateToLink forces: the fresh fetch establishes the
+            // link (or reuses it) so the backend identifies at link
+            // establishment, and the node serves identified content. This
+            // matches upstream Browser.link_established, which calls
+            // link.identify(...) without re-fetching the page.
             viewModelScope.launch {
-                var previous: Set<String> = emptySet()
                 settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
                     _autoIdentifyNodes.value = nodes
                     runCatching {
@@ -213,76 +226,6 @@ class NomadNetBrowserViewModel
                     }.onFailure {
                         Log.w(TAG, "Failed to sync auto-identify set to backend", it)
                     }
-                    // If the current node was just flagged (added to the set)
-                    // and its page is on screen, fetch identified content. This
-                    // covers two cases the backend-side identify at link
-                    // establishment doesn't reach:
-                    //
-                    // (a) The narrow first-launch window where a flagged node's
-                    //     page was served from cache before the DataStore set
-                    //     arrived. loadPage saw an empty set, took the cache
-                    //     fast-path (no link, no identify). The backend's
-                    //     setIdentifyOnConnectNodes identified the link (if
-                    //     one is active) but the displayed content is still
-                    //     anonymous. The refresh re-fetches with identified
-                    //     content.
-                    //
-                    // (b) The user toggling "Always identify to this node" in
-                    //     Node Details while that node's page is open in the
-                    //     browser. The backend identified the already-active
-                    //     link, but the displayed page was fetched before the
-                    //     flag was set (possibly anonymous). The refresh
-                    //     re-fetches with identified content.
-                    //
-                    // A form result must NOT be re-fetched by an identify
-                    // refresh: a form submission's fetch already establishes the
-                    // link and identifies at establishment, so there is no
-                    // separate identify refresh to do - and the only way
-                    // refresh() would "update" a form page is to re-submit the
-                    // form (refresh consults lastFetchFormDataJson), which
-                    // double-fires the form's side effects.
-                    //
-                    // The check is path-checked (the fetched page matches the
-                    // last form's node + path), not just "form data present":
-                    // lastFetchFormDataJson is only cleared by a plain
-                    // fetchPage, so after a form submit the user can go Back to
-                    // an ordinary page on the same node, and a stale "form data
-                    // present" check would wrongly skip a legitimate identify
-                    // refresh of that ordinary page (Greptile round 3).
-                    //
-                    // When the flagged node's page is LOADING, arm
-                    // pendingIdentifyRefreshFor (unless it's a form result,
-                    // guarded above) so emitPageLoaded re-fetches
-                    // post-identification content once it lands (the in-flight
-                    // fetch may predate the flag if the link was reused, so the
-                    // content could still be anonymous). Navigation clears the
-                    // pending flag and a return re-derives it via the cache
-                    // bypass, so arming is lossless either way.
-                    val newlyFlagged = nodes - previous
-                    if (newlyFlagged.isNotEmpty() && currentNodeHash in newlyFlagged) {
-                        val displayedPage = _browserState.value
-                        val pageLoaded = displayedPage is BrowserState.PageLoaded
-                        // The flagged node's page is a form result iff a form
-                        // fetch is the last fetch for this node AND (while
-                        // loaded) the displayed page is that form's path. While
-                        // loading we can't see the fetched path, so a form load
-                        // for this node is conservatively treated as a form
-                        // result (the no-refresh choice, matching the loaded
-                        // case).
-                        val isFormResult = lastFetchFormDataJson != null &&
-                            lastFetchNodeHash == currentNodeHash &&
-                            (if (pageLoaded) {
-                                displayedPage.path == lastFetchPath
-                            } else {
-                                true
-                            })
-                        if (pageLoaded) {
-                            if (!isFormResult) refresh()
-                        } else if (!isFormResult) {
-                            pendingIdentifyRefreshFor = currentNodeHash
-                        }
-                    }
-                    previous = nodes
                 }
             }
 

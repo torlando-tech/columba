@@ -91,6 +91,15 @@ interface RnsNomadnet {
     suspend fun identifyNomadnetLink(destinationHash: String): Result<Boolean>
 
     /**
+     * Set the per-node auto-identify flags in the backend. The backend
+     * identifies a node's link at establishment time (upstream
+     * `link_established` + `should_identify_on_connect`) when the node is
+     * in this set, so no separate UI identify call is needed for flagged
+     * nodes. Called by the ViewModel when the persisted set changes.
+     */
+    suspend fun setIdentifyOnConnectNodes(nodes: Set<String>)
+
+    /**
      * Observable status of the current NomadNet request — `"idle"`,
      * `"requesting"`, `"receiving"`, `"complete"`, etc. Drives the UI's
      * busy indicator state.

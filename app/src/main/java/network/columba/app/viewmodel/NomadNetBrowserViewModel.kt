@@ -183,23 +183,66 @@ class NomadNetBrowserViewModel
         private var lastFetchFieldTokens: List<String> = emptyList()
 
         init {
-            // Observe the auto-identify node set reactively so flagged nodes
-            // keep being identified on every page load, and the browser dialog
-            // stays in sync with toggles made elsewhere (e.g. the Node Details
-            // card). DataStore is the source of truth; this mirrors it.
+            // Observe the auto-identify node set reactively. Two responsibilities:
             //
-            // The auto-trigger fires from this collector (not just on page
-            // load) so a fast cached first page that loads before DataStore's
-            // first emission is still identified once the set arrives.
-            // (Lives after the currentNodeHash declaration because Kotlin runs
-            // property initializers and init blocks in source order, and the
-            // collector reads currentNodeHash on the first emission.)
+            // 1. Mirror it into the UI state flow so the browser dialog and the
+            //    Node Details card stay in sync with toggles made elsewhere.
+            //    DataStore is the source of truth.
+            //
+            // 2. Push the set to the RNS backend so it can auto-identify a
+            //    flagged node's link AT LINK-ESTABLISHMENT TIME - the Python
+            //    equivalent of upstream Browser.link_established calling
+            //    link.identify(...) when should_identify_on_connect(hash). The
+            //    backend owns the timing, so there is no "identify before the
+            //    link exists" window (the old ViewModel-side trigger raced the
+            //    link and surfaced "No active link to this node" as a snackbar).
+            //
+            // The collector's first emission delivers the current DataStore
+            // value, so the backend is synced before any page load for a
+            // flagged node - even a fast cached first page (which is why the
+            // sync lives here and not just in loadPage).
             viewModelScope.launch {
+                var previous: Set<String> = emptySet()
                 settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
                     _autoIdentifyNodes.value = nodes
-                    if (currentNodeHash.isNotEmpty() && currentNodeHash in nodes) {
-                        identifyToNode()
+                    runCatching {
+                        nomadnet.setIdentifyOnConnectNodes(nodes)
+                    }.onFailure {
+                        Log.w(TAG, "Failed to sync auto-identify set to backend", it)
                     }
+                    // If the current node was just flagged (added to the set)
+                    // and a page is displayed, refresh to fetch identified
+                    // content. This covers two cases the backend-side identify
+                    // at link establishment doesn't reach:
+                    //
+                    // (a) The narrow first-launch window where a flagged node's
+                    //     page was served from cache before the DataStore set
+                    //     arrived. loadPage saw an empty set, took the cache
+                    //     fast-path (no link, no identify). The backend's
+                    //     setIdentifyOnConnectNodes identified the link (if
+                    //     one is active) but the displayed content is still
+                    //     anonymous. The refresh re-fetches with identified
+                    //     content.
+                    //
+                    // (b) The user toggling "Always identify to this node" in
+                    //     Node Details while that node's page is open in the
+                    //     browser. The backend identified the already-active
+                    //     link, but the displayed page was fetched before the
+                    //     flag was set (possibly anonymous). The refresh
+                    //     re-fetches with identified content.
+                    //
+                    // Gated on newlyFlagged (nodes added since the last
+                    // emission) so it doesn't re-refresh on every set change
+                    // (e.g. the initial empty emission, or a node being
+                    // un-flagged).
+                    val newlyFlagged = nodes - previous
+                    if (newlyFlagged.isNotEmpty() &&
+                        currentNodeHash in newlyFlagged &&
+                        _browserState.value is BrowserState.PageLoaded
+                    ) {
+                        refresh()
+                    }
+                    previous = nodes
                 }
             }
         }
@@ -418,8 +461,24 @@ class NomadNetBrowserViewModel
                 return
             }
 
-            // Check cache before showing loading spinner
-            val cached = pageCache.get(destinationHash, requestPath)
+            // Check cache before showing loading spinner.
+            //
+            // Flagged nodes ("Always identify to this node") bypass the cache:
+            // the cached content may be anonymous (from a prior unflagged
+            // visit), and "always identify" means the node should always see
+            // the user's identity. A fresh fetch establishes the link (or
+            // reuses it) so the backend identifies at link establishment time
+            // - the Python equivalent of upstream Browser.link_established -
+            // and the node serves identified content.
+            //
+            // The set is synced from DataStore via the reactive collector's
+            // first emission. In the narrow first-launch window where loadPage
+            // runs before that emission, _autoIdentifyNodes is still empty and
+            // the cache is served (possibly anonymous); the backend's
+            // identifyIfFlagged fires on the next fetch (any navigation or
+            // refresh), which is immediate for a user interacting with the page.
+            val bypassCache = destinationHash in _autoIdentifyNodes.value
+            val cached = if (bypassCache) null else pageCache.get(destinationHash, requestPath)
             if (cached != null) {
                 fetchEpoch++ // Invalidate any in-flight request
                 stopStatusCollection()
@@ -820,40 +879,7 @@ class NomadNetBrowserViewModel
                     }
                 } finally {
                     _identifyInProgress.value = false
-                    // If this request was for a node the user has already left, its
-                    // stale result was discarded above, but its completion is what
-                    // frees the in-progress flag that blocked the CURRENT node's own
-                    // identify. Retry the current node's identify now if it is still
-                    // pending: the flag guard skipped it while this older request was
-                    // in flight, and no later event would re-trigger it (the reactive
-                    // collector and emitPageLoaded both already ran). The helper
-                    // validates and captures the target in one pass, so navigation
-                    // between the check and the request start cannot make the retry
-                    // identify a different node.
-                    pendingRetryTarget(nodeHash)?.let { identifyToNode(it) }
                 }
-            }
-        }
-
-        /**
-         * Returns the node whose auto-identify should be retried now that the
-         * identify for [completedNodeHash] has completed and was discarded as
-         * stale, or null when no retry is due. Non-null only when the current node
-         * differs from the completed one, is flagged for auto-identify, and is not
-         * yet identified. Re-reads currentNodeHash against the captured target so a
-         * navigation that lands between the two reads aborts the retry. One-shot
-         * per completion, so it cannot loop.
-         */
-        private fun pendingRetryTarget(completedNodeHash: String): String? {
-            val target = currentNodeHash
-            return if (target.isEmpty() || target == completedNodeHash) {
-                null
-            } else if (target !in _autoIdentifyNodes.value) {
-                null
-            } else if (currentNodeHash != target || _isIdentified.value) {
-                null
-            } else {
-                target
             }
         }
 
@@ -911,6 +937,16 @@ class NomadNetBrowserViewModel
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
+            // A flagged node ("Always identify to this node") is identified by
+            // the backend at link establishment, so the page content is
+            // already identified. Reflect that in the dialog's mode: the
+            // overflow menu shows the manage/turn-off view for an identified
+            // node, not the "identify to this node?" confirm view. loadPage
+            // reset _isIdentified for a new node, so set it back here now that
+            // the flagged node's page has loaded.
+            if (nodeHash in _autoIdentifyNodes.value) {
+                _isIdentified.value = true
+            }
             _browserState.value =
                 BrowserState.PageLoaded(
                     document = document,
@@ -944,14 +980,6 @@ class NomadNetBrowserViewModel
             if (pendingIdentifyRefreshFor == nodeHash) {
                 pendingIdentifyRefreshFor = null
                 refresh()
-            }
-            // Auto-identify to a node the user flagged ("Always identify to
-            // this node"). Covers navigation to a node that is already in the
-            // set (the set itself hasn't changed, so the reactive collector
-            // won't re-emit for it). identifyToNode is a no-op when already
-            // identified or in progress, so this is safe on every page load.
-            if (nodeHash in _autoIdentifyNodes.value) {
-                identifyToNode()
             }
         }
 

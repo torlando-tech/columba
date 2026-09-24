@@ -3,6 +3,7 @@ package network.columba.app.rns.backend.py
 import android.util.Log
 import com.chaquo.python.PyObject
 import network.columba.app.rns.api.util.hexToBytes
+import network.columba.app.rns.api.util.toHex
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -74,6 +75,47 @@ class PythonRnsNomadnet(
     // can seed/inspect the cached-link contract with a raw
     // `PyObject.getInstance(...)` handle (no native RNS runtime needed).
     internal val nomadnetLinks = ConcurrentHashMap<String, PyObject>()
+
+    /**
+     * Per-node auto-identify flags, mirroring upstream
+     * `Directory.should_identify_on_connect`. The backend identifies a
+     * node's link at establishment time (the equivalent of upstream's
+     * `link_established` callback) when the destination is in this set,
+     * so no separate UI identify call is needed for flagged nodes.
+     * Updated by the ViewModel via [setIdentifyOnConnectNodes].
+     */
+    @Volatile
+    internal var identifyOnConnectNodes: Set<String> = emptySet()
+
+    override suspend fun setIdentifyOnConnectNodes(nodes: Set<String>) {
+        val previous = identifyOnConnectNodes
+        identifyOnConnectNodes = nodes
+        // Identify newly-flagged nodes whose link is ALREADY active. Covers:
+        // (a) the user toggling "Always identify to this node" in Node Details
+        // while that node's page is open in the browser (the link was
+        // established before the flag was set), and (b) the narrow first-launch
+        // window where a flagged node's page was served from cache before the
+        // DataStore set arrived. identifyIfFlagged is a no-op for nodes that
+        // are not in the set or whose link is not active, and dedups via
+        // identifiedLinks, so calling it for every newly-added node is safe.
+        (nodes - previous).forEach { hash ->
+            nomadnetLinks[hash]?.let { link ->
+                if ((testLinkStatus?.invoke(link) ?: linkStatus(link)) == LINK_ACTIVE) {
+                    identifyIfFlagged(hash, link)
+                }
+            }
+        }
+    }
+
+    /**
+     * Link identities already identified, keyed by the RNS link's `link_id`
+     * hex. Keyed by link (not destination) so a reused link doesn't
+     * re-send the proof, but a rebuilt link for the same destination does
+     * (a fresh link = fresh handshake = fresh identification). Mirrors the
+     * Kotlin backend's `identifiedNomadnetLinks` (also link-id keyed).
+     */
+    internal val identifiedLinks: MutableSet<String> =
+        java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     /**
      * Request-scoped cancellation. Each page/media request claims the next
@@ -225,8 +267,9 @@ class PythonRnsNomadnet(
         requestDeadlineMs: Long,
     ): PyObject {
         nomadnetLinks[destinationHash]?.let { existing ->
-            if (readLinkStatus(existing) == LINK_ACTIVE) {
+            if ((testLinkStatus?.invoke(existing) ?: linkStatus(existing)) == LINK_ACTIVE) {
                 Log.i(TAG, "NomadNet: reusing active link to $destinationHash")
+                identifyIfFlagged(destinationHash, existing)
                 return existing
             }
             nomadnetLinks.remove(destinationHash)
@@ -252,6 +295,7 @@ class PythonRnsNomadnet(
         if (firstResult != null) {
             nomadnetLinks[destinationHash] = firstResult
             Log.i(TAG, "NomadNet: link established to $destinationHash")
+            identifyIfFlagged(destinationHash, firstResult)
             return firstResult
         }
 
@@ -278,6 +322,7 @@ class PythonRnsNomadnet(
         if (retryResult != null) {
             nomadnetLinks[destinationHash] = retryResult
             Log.i(TAG, "NomadNet: link established on retry to $destinationHash")
+            identifyIfFlagged(destinationHash, retryResult)
             return retryResult
         }
         throw failure
@@ -300,10 +345,6 @@ class PythonRnsNomadnet(
         )
         return runtime.rnsModule.callAttr("Link", nodeDest)
     }
-
-    /** Read `link.status` via the test seam or the real `PyObject` accessor. */
-    private fun readLinkStatus(link: PyObject): Long? =
-        testLinkStatus?.invoke(link) ?: linkStatus(link)
 
     /** Tear down a link via the test seam or the real `RNS.Link.teardown`. */
     private fun teardownLink(link: PyObject) {
@@ -369,7 +410,7 @@ class PythonRnsNomadnet(
             val deadline = System.currentTimeMillis() + budgetMs
             while (System.currentTimeMillis() < deadline) {
                 throwIfCancelled(generation)
-                if (readLinkStatus(link) == LINK_ACTIVE) {
+                if ((testLinkStatus?.invoke(link) ?: linkStatus(link)) == LINK_ACTIVE) {
                     established = link
                     return link
                 }
@@ -390,6 +431,11 @@ class PythonRnsNomadnet(
     internal var testTransportInvoke: ((String, ByteArray) -> Unit)? = null
     internal var testHasPath: ((ByteArray) -> Boolean)? = null
     internal var testTeardownLink: ((PyObject) -> Unit)? = null
+    // Seam for the at-establishment auto-identify (upstream link_established).
+    // When set, identifyIfFlagged calls it instead of the real
+    // link.callAttr("identify", identity) so the flag/dedup contract can be
+    // probed without a native RNS runtime.
+    internal var testIdentifyOnLink: ((String, PyObject) -> Unit)? = null
 
     /**
      * Issue `link.request(path, data, ...)` and wire a Python-side capture
@@ -809,10 +855,48 @@ class PythonRnsNomadnet(
             // the proof can only be confirmed by a subsequent gated request,
             // so we report false ("proof sent, not yet confirmed"), matching
             // the kotlin backend's first-identify return.
+            //
+            // add() is the atomic check-then-act: if the at-establishment
+            // auto-identify (or a concurrent caller) already sent the proof
+            // on this link, add() returns false and we report already-identified
+            // instead of double-sending. The link-id key matches identifyIfFlagged.
+            val dedupKey = linkIdHex(link, destinationHash)
+            if (!identifiedLinks.add(dedupKey)) {
+                return@pyResult true
+            }
             link.callAttr("identify", identity)
             Log.i(TAG, "NomadNet: sent identify proof on link to $destinationHash")
             false
         }
+
+    /**
+     * Auto-identify a flagged node's link at establishment time — the
+     * Python equivalent of upstream `Browser.link_established` calling
+     * `self.link.identify(...)` when `should_identify_on_connect(hash)`.
+     * Best-effort: a missing local identity or a link that closed just before
+     * we got here must not fail the page load, so failures are logged and
+     * swallowed. `identifiedLinks` (link-id keyed) dedups so a reused link
+     * doesn't resend the proof, but a rebuilt link re-identifies.
+     */
+    private fun identifyIfFlagged(destinationHash: String, link: PyObject) {
+        if (destinationHash !in identifyOnConnectNodes) return
+        val linkId = linkIdHex(link, destinationHash)
+        if (!identifiedLinks.add(linkId)) return
+        runCatching {
+            val identity = runtime.localIdentity
+            if (identity == null) {
+                identifiedLinks.remove(linkId)
+                Log.w(TAG, "NomadNet: auto-identify skipped, no local identity")
+                return
+            }
+            testIdentifyOnLink?.invoke(destinationHash, link)
+                ?: link.callAttr("identify", identity)
+            Log.i(TAG, "NomadNet: auto-identified to $destinationHash on link establishment")
+        }.onFailure {
+            identifiedLinks.remove(linkId)
+            Log.w(TAG, "NomadNet: auto-identify to $destinationHash failed: ${it.message}")
+        }
+    }
 
     /** Live stats of the cached link, mirroring the kotlin backend's gate data. */
     override suspend fun getNomadnetLinkStats(destinationHash: String): NomadnetLinkStats? {
@@ -864,3 +948,18 @@ class PythonRnsNomadnet(
         }
     }
 }
+
+/**
+ * Stable id of an RNS link for the auto-identify dedup set. Reads the
+ * link's `link_id` bytes (set by RNS on establishment, the same value the
+ * Kotlin backend reads as `link.linkId`). A rebuilt link gets a new
+ * link_id so it re-identifies; a reused link keeps its link_id so it
+ * doesn't. Falls back to the destination hash when the attribute is
+ * unreadable - stable across calls, so the common case (identify once,
+ * don't double-send on reuse) still holds. File-level (not a member) so the
+ * class stays under detekt's TooManyFunctions threshold.
+ */
+private fun linkIdHex(link: PyObject, destinationHash: String): String =
+    runCatching { link["link_id"]?.toJava(ByteArray::class.java)?.toHex() }
+        .getOrNull()
+        ?: destinationHash

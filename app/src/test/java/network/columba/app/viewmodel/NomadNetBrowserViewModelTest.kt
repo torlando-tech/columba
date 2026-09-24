@@ -72,6 +72,14 @@ class NomadNetBrowserViewModelTest {
         coEvery { protocol.cancelNomadnetPageRequest() } just Runs
         coEvery { protocol.getNomadnetRequestStatus() } returns ""
         coEvery { protocol.getNomadnetLinkStats(any()) } returns null
+        // Auto-identify: the ViewModel syncs the flagged set to the backend;
+        // the backend identifies at link establishment (not the ViewModel).
+        coEvery { protocol.setIdentifyOnConnectNodes(any()) } just Runs
+        // Flagged nodes bypass the page cache and fetch fresh, so the fetch
+        // path must be stubbed for any test that loads a flagged node's page.
+        coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+            Result.success(NomadnetPageResult(simplePage, "/page/index.mu"))
+        coEvery { protocol.getNomadnetDownloadProgress() } returns 0f
         // No persisted rendering mode by default; individual tests can override.
         every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
         every { settingsRepository.nomadNetImageLoadingModeFlow } returns flowOf(null)
@@ -980,52 +988,51 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
-    fun `loadPage auto-identifies to a flagged node`() =
+    fun `loadPage to a flagged node syncs the set, bypasses the cache, and fetches fresh`() =
         runTest(testDispatcher) {
-            // The persisted set already contains this node, so loading its page
-            // must fire the identify request without a user tap.
+            // The persisted set already contains this node. Loading its page
+            // must (a) sync the flagged set to the backend and (b) bypass the
+            // page cache so a fresh fetch establishes the link - the backend
+            // identifies the flagged node at link establishment time, not the
+            // ViewModel. This is what removes the old "identify before the link
+            // exists" race that surfaced "No active link to this node" as a
+            // snackbar.
             every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(setOf(nodeHash))
-            every { pageCache.get(any(), any()) } returns simplePage
-            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+            // A cache entry exists for this node+path; it must NOT be used.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
 
             val autoViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
             advanceUntilIdle()
             autoViewModel.loadPage(nodeHash)
             advanceUntilIdle()
 
-            // identifyToNode runs on the real Dispatchers.IO, so poll for the
-            // call with a bound rather than an arbitrary sleep.
-            var identified = false
-            var waitedMs = 0
-            while (!identified && waitedMs < 2000) {
-                identified = runCatching {
-                    coVerify(exactly = 1) { protocol.identifyNomadnetLink(nodeHash) }
-                    true
-                }.getOrDefault(false)
-                if (!identified) {
-                    Thread.sleep(25)
-                    waitedMs += 25
-                }
-            }
-            assertTrue(identified)
+            // The flagged set reached the backend (the backend owns the identify).
+            coVerify(exactly = 1) { protocol.setIdentifyOnConnectNodes(setOf(nodeHash)) }
+            // The cache was bypassed and a fresh fetch went out (link
+            // establishment + backend identify happen inside that fetch).
+            coVerify(exactly = 0) { pageCache.get(nodeHash, "/page/index.mu") }
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            // No identify-error snackbar was raised (the old race's symptom).
+            assertNull("flagged-node load must not surface an identify error", autoViewModel.identifyError.value)
         }
 
     @Test
-    fun `loadPage does not auto-identify to an unflagged node`() =
+    fun `loadPage to an unflagged node uses the cache and does not fetch`() =
         runTest(testDispatcher) {
             // Default setUp stub: the persisted set is empty, so a plain page
-            // load must NOT fire the identify request.
-            every { pageCache.get(any(), any()) } returns simplePage
-            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+            // load takes the cache fast-path (no fetch, no link establishment,
+            // no identify). The old behavior also fired a racy identify here;
+            // it must not.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
 
-            // Give any (erroneous) IO coroutine time to run, then assert the
-            // identify request never happened.
-            Thread.sleep(150)
+            coVerify(exactly = 1) { pageCache.get(nodeHash, "/page/index.mu") }
+            coVerify(exactly = 0) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
             coVerify(exactly = 0) { protocol.identifyNomadnetLink(any()) }
             assertFalse(viewModel.isIdentified.value)
+            assertNull(viewModel.identifyError.value)
         }
 
     @Test

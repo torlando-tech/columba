@@ -432,6 +432,7 @@ class BoundRnsBackendTest {
         override suspend fun getNomadnetRequestStatus(): String = "idle"
         override suspend fun getNomadnetDownloadProgress(): Float = 0f
         override suspend fun identifyNomadnetLink(destinationHash: String) = Result.success(false)
+        override suspend fun setIdentifyOnConnectNodes(nodes: Set<String>) {}
         override val nomadnetRequestStatusFlow: StateFlow<String> = MutableStateFlow("idle").asStateFlow()
         override val nomadnetDownloadProgressFlow: StateFlow<Float> = MutableStateFlow(0f).asStateFlow()
     }

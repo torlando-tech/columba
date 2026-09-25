@@ -7,8 +7,12 @@
         into :app at assembly time; :app's own manifest no longer declares
         the service.
 
-        foregroundServiceType=connectedDevice|microphone covers BLE / USB
-        peripherals (connectedDevice) and LXST voice calls (microphone).
+        foregroundServiceType=connectedDevice covers BLE / USB peripherals.
+        Do NOT add microphone here: FOREGROUND_SERVICE_TYPE_MICROPHONE was
+        introduced in API 30 (Android 11). On API 29 the OS silently zeroes
+        the entire type mask when it encounters the unknown token, causing
+        startForeground(id, n, CONNECTED_DEVICE) to throw IAE (requested
+        type 16 not a subset of mask 0) and the service to be killed.
     -->
     <application>
         <service
@@ -16,6 +20,6 @@
             android:enabled="true"
             android:exported="false"
             android:process=":reticulum"
-            android:foregroundServiceType="connectedDevice|microphone" />
+            android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>

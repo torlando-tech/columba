@@ -1268,6 +1268,87 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `flagging a node while a plain page is loaded re-fetches it`() =
+        runTest(testDispatcher) {
+            // Rule: flagging a previously-unflagged node must immediately identify
+            // and re-fetch the displayed page (identified content). The backend
+            // identifies at link establishment (the fresh fetch establishes/reuses
+            // the link); the ViewModel's re-fetch delivers the identified page.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+
+            // Flag the node: the collector detects newlyFlagged and re-fetches.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            waitForPageLoaded(vm)
+            // The page landed as PageLoaded on the flagged node.
+            val state = vm.browserState.value
+            assertTrue("flag re-fetch lands on a loaded page",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeHash, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
+        }
+
+    @Test
+    fun `unflagging a node does not re-fetch the loaded page`() =
+        runTest(testDispatcher) {
+            // Rule: removing the flag (unflagging) must NOT trigger a re-fetch.
+            // The user's manual refresh button is the path to get new content;
+            // an unflagged node's page stays as-is until re-navigated or
+            // explicitly refreshed.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+
+            // Flag ON: re-fetch fires (2 total requests).
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            waitForPageLoaded(vm)
+
+            // Flag OFF: no re-fetch (still 2 total requests, not 3). The
+            // collector's newlyFlagged is empty, so no coroutine is launched -
+            // advanceUntilIdle fully settles the state.
+            nodesFlow.value = emptySet()
+            advanceUntilIdle()
+            coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            // The page remains loaded and unchanged after unflagging.
+            val state = vm.browserState.value
+            assertTrue("page stays loaded after unflag",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals("/page/index.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+        }
+
+    @Test
     fun `goBack to a flagged node's stored plain page re-fetches identified content`() =
         runTest(testDispatcher) {
             // Regression (stale Greptile round-1 thread: "Back can still display

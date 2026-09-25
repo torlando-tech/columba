@@ -1316,9 +1316,12 @@ class NomadNetBrowserViewModelTest {
     fun `unflagging a node does not re-fetch the loaded page`() =
         runTest(testDispatcher) {
             // Rule: removing the flag (unflagging) must NOT trigger a re-fetch.
-            // The user's manual refresh button is the path to get new content;
-            // an unflagged node's page stays as-is until re-navigated or
-            // explicitly refreshed.
+            // The backend tears down the node's identified link (so the next
+            // refresh/navigation establishes a fresh, anonymous link and the
+            // user stops browsing as identified); the ViewModel's manual
+            // refresh button is the path to get new content, and an unflagged
+            // node's page stays as-is until re-navigated or explicitly
+            // refreshed.
             val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
             every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
             every { pageCache.get(any(), any()) } returns null

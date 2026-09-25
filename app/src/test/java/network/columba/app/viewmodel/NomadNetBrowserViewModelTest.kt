@@ -727,6 +727,31 @@ class NomadNetBrowserViewModelTest {
         }
     }
 
+    /**
+     * Bounded poll for a condition the test dispatcher cannot synchronize with
+     * the real Dispatchers.IO fetch (e.g. browserState reaching PageLoaded after
+     * a refresh/fetch). Preferred over a fixed sleep, which still flakes under CI
+     * load; the bound makes a regression fail rather than hang.
+     */
+    private fun waitFor(
+        timeoutMs: Int = 2000,
+        condition: () -> Boolean,
+    ) {
+        var waitedMs = 0
+        while (!condition() && waitedMs < timeoutMs) {
+            Thread.sleep(25)
+            waitedMs += 25
+        }
+    }
+
+    /** Bounded wait for [vm]'s browserState to be a PageLoaded. */
+    private fun waitForPageLoaded(
+        vm: NomadNetBrowserViewModel,
+        timeoutMs: Int = 2000,
+    ) {
+        waitFor(timeoutMs) { vm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded }
+    }
+
     @Test
     fun `multiple goBack pops stack correctly`() =
         runTest(testDispatcher) {
@@ -802,6 +827,11 @@ class NomadNetBrowserViewModelTest {
 
             viewModel.refresh()
             advanceUntilIdle()
+            // The refresh fetch runs on the real Dispatchers.IO; advanceUntilIdle
+            // only drains the test dispatcher, so the state can still be Loading
+            // when the assertions run. Poll for PageLoaded (bounded) instead of a
+            // fixed sleep, which flakes under CI load.
+            waitForPageLoaded(viewModel)
 
             // requestNomadnetPage called for the refresh (cache bypassed)
             coVerify(atLeast = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", null, any()) }

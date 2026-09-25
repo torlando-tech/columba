@@ -1692,6 +1692,64 @@ class SettingsViewModelTest {
         }
 
     @Test
+    fun `triggerManualAnnounce clearedName announces as Anonymous Peer`() =
+        runTest {
+            // Given: an active identity whose display name has been cleared
+            // (the edit path stores a trimmed, empty string).
+            val clearedIdentity = createTestIdentity(displayName = "")
+            activeIdentityFlow.value = clearedIdentity
+            coEvery { identityRepository.getActiveIdentitySync() } returns clearedIdentity
+
+            val serviceRnsCore =
+                mockk<RnsCore>(relaxed = true) {
+                    every { networkStatus } returns networkStatusFlow
+                    coEvery { triggerAutoAnnounce(any()) } returns Result.success(Unit)
+                }
+
+            viewModel =
+                SettingsViewModel(
+                    context = context,
+                    settingsRepository = settingsRepository,
+                    identityRepository = identityRepository,
+                    rnsBackend = rnsBackend,
+                    rnsCore = serviceRnsCore,
+                    rnsLxmf = rnsLxmf,
+                    rnsTransportAdmin = rnsTransportAdmin,
+                    rnsTelephony = rnsTelephony,
+                    interfaceConfigManager = interfaceConfigManager,
+                    propagationNodeManager = propagationNodeManager,
+                    locationSharingManager = locationSharingManager,
+                    interfaceRepository = interfaceRepository,
+                    mapTileSourceManager = mapTileSourceManager,
+                    telemetryCollectorManager = telemetryCollectorManager,
+                    contactRepository = contactRepository,
+                    updateChecker = updateChecker,
+                    crashReportManager = crashReportManager,
+                )
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                viewModel.triggerManualAnnounce()
+                expectMostRecentItem()
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // The cleared (blank) name must be announced as the canonical
+            // "Anonymous Peer" - the same value the automatic-announce path
+            // sends - so a peer's visible name does not depend on whether the
+            // announce was manual or an automatic tick.
+            coVerify(exactly = 1) {
+                serviceRnsCore.triggerAutoAnnounce("Anonymous Peer")
+            }
+        }
+
+    @Test
     fun `triggerManualAnnounce failure with NativeReticulumProtocol`() =
         runTest {
             // Given: NativeReticulumProtocol that returns failure

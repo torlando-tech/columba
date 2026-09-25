@@ -210,6 +210,15 @@
     <string name="enable_precise_location">Enable Precise Location</string>
     <string name="precise_location_settings_hint">Open Permissions → Location and turn on \"Use precise location\".</string>
 
+    <!-- Interface mode selector (RNS config "mode" key) -->
+    <string name="interface_mode_label">Interface Mode</string>
+    <string name="interface_mode_full">Full (all features enabled)</string>
+    <string name="interface_mode_gateway">Gateway (path discovery for others)</string>
+    <string name="interface_mode_access_point">Access Point (quiet unless active)</string>
+    <string name="interface_mode_roaming">Roaming (mobile relative to others)</string>
+    <string name="interface_mode_boundary">Boundary</string>
+    <string name="interface_mode_internal">Internal (don’t re-broadcast announces)</string>
+
     <!-- Network restriction indicator on interface cards (issue #897) -->
     <string name="interface_restriction_wifi_only">Wi-Fi only</string>
     <string name="interface_restriction_cellular_only">Cellular only</string>

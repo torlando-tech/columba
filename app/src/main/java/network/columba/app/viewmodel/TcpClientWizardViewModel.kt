@@ -7,6 +7,7 @@ import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.data.model.TcpCommunityServers
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.util.validation.InputValidator
@@ -52,6 +53,8 @@ data class TcpClientWizardState(
     val passphraseVisible: Boolean = false,
     // RNS 1.1.x Bootstrap Interface option
     val bootstrapOnly: Boolean = false,
+    // Interface mode (RNS config "mode" key); one of InterfaceMode.value
+    val interfaceMode: String = InterfaceMode.FULL.value,
     // SOCKS5 proxy (Tor/Orbot) settings
     val socksProxyEnabled: Boolean = false,
     val socksProxyHost: String = "127.0.0.1",
@@ -114,6 +117,9 @@ class TcpClientWizardViewModel
                             networkName = config.networkName.orEmpty(),
                             passphrase = config.passphrase.orEmpty(),
                             bootstrapOnly = config.bootstrapOnly,
+                            interfaceMode =
+                                InterfaceMode.fromValue(config.mode)?.value
+                                    ?: InterfaceMode.FULL.value,
                             socksProxyEnabled = config.socksProxyEnabled,
                             socksProxyHost = config.socksProxyHost,
                             socksProxyPort = config.socksProxyPort.toString(),
@@ -302,6 +308,15 @@ class TcpClientWizardViewModel
         }
 
         /**
+         * Update the interface mode selection (one of [InterfaceMode.value]).
+         */
+        fun updateInterfaceMode(value: String) {
+            // Validate against the enum so the UI can't persist a mode RNS won't parse.
+            if (InterfaceMode.fromValue(value) == null) return
+            _state.update { it.copy(interfaceMode = value) }
+        }
+
+        /**
          * Check if the user can proceed to the next step.
          */
         fun canProceed(): Boolean {
@@ -390,7 +405,7 @@ class TcpClientWizardViewModel
                             targetHost = currentState.targetHost.trim(),
                             targetPort = currentState.targetPort.toIntOrNull() ?: 4242,
                             kissFraming = false,
-                            mode = "full",
+                            mode = currentState.interfaceMode,
                             networkName = currentState.networkName.trim().ifEmpty { null },
                             passphrase = currentState.passphrase.trim().ifEmpty { null },
                             bootstrapOnly = currentState.bootstrapOnly,

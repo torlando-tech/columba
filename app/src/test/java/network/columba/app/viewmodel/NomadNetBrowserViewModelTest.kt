@@ -1252,6 +1252,10 @@ class NomadNetBrowserViewModelTest {
             waitForVerify {
                 coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
             }
+            // Wait for the form page to actually be loaded (not just that the
+            // request fired): pushCurrentPageToHistory only runs on PageLoaded,
+            // and the flag change below must see the settled page.
+            waitForPageLoaded(vm)
 
             // Now flag the node while the form page is loaded. The collector
             // re-emits; without the form guard it would refresh() and re-submit
@@ -1289,6 +1293,10 @@ class NomadNetBrowserViewModelTest {
             waitForVerify {
                 coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
             }
+            // Wait for the page to be PageLoaded before flagging: the collector's
+            // identifyRefresh only fires on PageLoaded (it arms pendingIdentifyRefreshFor
+            // otherwise), and we want to test the direct re-fetch path.
+            waitForPageLoaded(vm)
 
             // Flag the node: the collector detects newlyFlagged and re-fetches.
             nodesFlow.value = setOf(nodeHash)
@@ -1326,6 +1334,9 @@ class NomadNetBrowserViewModelTest {
             waitForVerify {
                 coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
             }
+            // Settle the page before mutating the flag set, so the flag-ON re-fetch
+            // exercises the PageLoaded path deterministically.
+            waitForPageLoaded(vm)
 
             // Flag ON: re-fetch fires (2 total requests).
             nodesFlow.value = setOf(nodeHash)
@@ -1377,6 +1388,9 @@ class NomadNetBrowserViewModelTest {
             waitForVerify {
                 coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
             }
+            // Wait for page A to be PageLoaded before navigating to B:
+            // pushCurrentPageToHistory only pushes on PageLoaded.
+            waitForPageLoaded(vm)
             vm.navigateToLink("/page/second.mu", emptyList())
             advanceUntilIdle()
             waitForPageLoaded(vm)
@@ -1430,6 +1444,11 @@ class NomadNetBrowserViewModelTest {
             waitForVerify {
                 coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
             }
+            // Wait for the form page to actually be PageLoaded before navigating
+            // away: pushCurrentPageToHistory only pushes on PageLoaded, so a
+            // still-Loading checkout page would not be saved to history and the
+            // later goBack would restore the wrong page.
+            waitForPageLoaded(vm)
 
             // Navigate to a plain page so the form page is pushed to history.
             // The mock echoes the requested path back in the result, so this is a

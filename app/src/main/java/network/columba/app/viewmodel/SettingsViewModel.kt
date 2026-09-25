@@ -32,6 +32,7 @@ import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.map.MapTileSourceManager
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.util.displayNameForAnnounce
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.RnsBackend
@@ -932,8 +933,12 @@ class SettingsViewModel
                         )
                     Log.d(TAG, "Triggering manual announce...")
 
-                    // Get display name
-                    val displayName = state.value.displayName
+                    // Get display name. A cleared (blank) name is announced as
+                    // the canonical "Anonymous Peer" (displayNameForAnnounce) so
+                    // the peer's visible name matches the automatic-announce
+                    // path and the app's own UI, rather than degrading to a
+                    // hash-based "Peer XXXX" fallback on the receiver.
+                    val displayName = displayNameForAnnounce(state.value.displayName)
 
                     val result = rnsCore.triggerAutoAnnounce(displayName)
 

@@ -12,6 +12,7 @@ import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.util.displayNameForAnnounce
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.IdentityResolutionManager
@@ -463,8 +464,16 @@ class AnnounceStreamViewModel
                     _announceError.value = null
                     Log.d(TAG, "Triggering manual announce...")
 
-                    // Get display name from active identity
-                    val displayName = identityRepository.getActiveIdentitySync()?.displayName ?: "Unknown"
+                    // Get display name from active identity. A cleared (blank)
+                    // name is announced as the canonical "Anonymous Peer"
+                    // (displayNameForAnnounce) so the peer's visible name matches
+                    // the automatic-announce path rather than degrading to a
+                    // hash-based "Peer XXXX" fallback on the receiver. The
+                    // existing "Unknown" fallback for a *missing* active identity
+                    // is preserved: it is nonblank, so it passes through.
+                    val displayName = displayNameForAnnounce(
+                        identityRepository.getActiveIdentitySync()?.displayName ?: "Unknown"
+                    )
 
                     val result = rnsCore.triggerAutoAnnounce(displayName)
 

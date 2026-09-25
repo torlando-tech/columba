@@ -86,7 +86,7 @@ class PythonRnsNomadnetIdentifyOnConnectTest {
         }
 
     @Test
-    fun `re-flagging the same active link does not re-send the proof`() =
+    fun `re-flagging after an unflag re-identifies only after a fresh link`() =
         runTest {
             wireSeams()
             val link = rawLinkHandle(1L)
@@ -96,15 +96,109 @@ class PythonRnsNomadnetIdentifyOnConnectTest {
             var identifyCount = 0
             subject.testIdentifyOnLink = { _, _ -> identifyCount++ }
 
-            // First flag: sends the proof.
+            // First flag: sends the proof on the existing active link.
             subject.setIdentifyOnConnectNodes(setOf("nodeA"))
             assertEquals("first flag sends the proof", 1, identifyCount)
 
-            // The user toggles it off and back on (or a re-sync of the same
-            // set arrives): the link is the SAME active link, so no re-send.
+            // The user toggles it off: the active identified link is torn down
+            // so subsequent browsing is anonymous (see unflag tests below).
+            // Re-flagging with no active link present must not send a proof -
+            // the fresh, anonymous link that the next page action establishes
+            // is what gets identified (identifyIfFlagged at establishment).
             subject.setIdentifyOnConnectNodes(emptySet())
             subject.setIdentifyOnConnectNodes(setOf("nodeA"))
-            assertEquals("re-flagging the same active link must not re-send", 1, identifyCount)
+            assertEquals("re-flagging without an active link must not re-send", 1, identifyCount)
+        }
+
+    // ── unflag: tear down the identified link so further browsing is anonymous ─
+
+    @Test
+    fun `unflagging a node with an active link tears the link down`() =
+        runTest {
+            wireSeams()
+            val link = rawLinkHandle(1L)
+            subject.nomadnetLinks["nodeA"] = link
+            subject.testLinkStatus = { linkActive }
+
+            // Establish the identified state: flag the node while its link is
+            // active, which sends the proof and records the dedup key.
+            var identifyCount = 0
+            subject.testIdentifyOnLink = { _, _ -> identifyCount++ }
+            subject.setIdentifyOnConnectNodes(setOf("nodeA"))
+            assertEquals("flag sends the proof", 1, identifyCount)
+            assertTrue("the link's identity is recorded", subject.identifiedLinks.isNotEmpty())
+
+            var teardownCount = 0
+            subject.testTeardownLink = { teardownCount++ }
+
+            // Unflag: the active identified link must be torn down so the user
+            // stops browsing as identified.
+            subject.setIdentifyOnConnectNodes(emptySet())
+            assertEquals("unflag must tear down the active link once", 1, teardownCount)
+            assertEquals(
+                "the link must be removed from the map so the next action establishes a fresh one",
+                null, subject.nomadnetLinks["nodeA"]
+            )
+            assertEquals(
+                "the dedup key must be dropped so the fresh link can re-identify",
+                0, subject.identifiedLinks.size
+            )
+        }
+
+    @Test
+    fun `unflagging a node with a non-active link leaves the link alone`() =
+        runTest {
+            wireSeams()
+            val link = rawLinkHandle(1L)
+            subject.nomadnetLinks["nodeA"] = link
+            // Not yet ACTIVE (still establishing): tearing it down here would
+            // abort a legitimate in-flight establishment. Only ACTIVE links are
+            // torn down on unflag.
+            subject.testLinkStatus = { 1L } // LINK_PENDING
+
+            var teardownCount = 0
+            subject.testTeardownLink = { teardownCount++ }
+            // Flag it (no identify because not active), then unflag.
+            subject.setIdentifyOnConnectNodes(setOf("nodeA"))
+            subject.setIdentifyOnConnectNodes(emptySet())
+
+            assertEquals("a non-active link must not be torn down on unflag", 0, teardownCount)
+            assertTrue(
+                "the non-active link must stay in the map",
+                subject.nomadnetLinks["nodeA"] === link
+            )
+        }
+
+    @Test
+    fun `a fresh link established after unflag re-identifies at establishment`() =
+        runTest {
+            wireSeams()
+            subject.testLinkStatus = { linkActive }
+            var identifyCount = 0
+            subject.testIdentifyOnLink = { _, _ -> identifyCount++ }
+
+            // First flag + active link: identified.
+            val link1 = rawLinkHandle(1L)
+            subject.nomadnetLinks["nodeA"] = link1
+            subject.setIdentifyOnConnectNodes(setOf("nodeA"))
+            assertEquals("first link identified", 1, identifyCount)
+
+            // Unflag: torn down.
+            subject.testTeardownLink = { /* no-op */ }
+            subject.setIdentifyOnConnectNodes(emptySet())
+            assertEquals("unflag tears down the identified link", null, subject.nomadnetLinks["nodeA"])
+
+            // The user's next page action establishes a fresh anonymous link
+            // (handle 2 = new link_id). The node is unflagged, so this fresh
+            // link must NOT be identified at establishment.
+            val link2 = rawLinkHandle(2L)
+            subject.nomadnetLinks["nodeA"] = link2
+            subject.identifyIfFlagged("nodeA", link2)
+            assertEquals("an unflagged node's fresh link must not be identified", 1, identifyCount)
+
+            // Now the user re-flags: the fresh active link gets identified.
+            subject.setIdentifyOnConnectNodes(setOf("nodeA"))
+            assertEquals("re-flagging identifies the fresh active link", 2, identifyCount)
         }
 
     @Test

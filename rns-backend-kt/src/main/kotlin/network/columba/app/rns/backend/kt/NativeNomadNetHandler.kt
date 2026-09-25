@@ -57,6 +57,28 @@ internal class NativeNomadNetHandler(
                 }
             }
         }
+        // Tear down newly-unflagged nodes' ACTIVE links. An identified link
+        // carries its proof for the link's lifetime, so unflagging without
+        // tearing it down would keep the user browsing as identified - the
+        // natural expectation is that further actions are NOT associated with
+        // the identity. Drop the link (and its dedup key) so the next
+        // refresh/navigation establishes a fresh, anonymous link. Deliberately
+        // does NOT re-establish: the re-establishment happens lazily on the
+        // user's next page action, paying a fresh handshake only when needed.
+        // This is the inverse of the newly-flagged path above and intentionally
+        // goes beyond upstream (whose ident_change is a no-op) for intuitive UX.
+        (previous - nodes).forEach { hash ->
+            nomadnetLinks[hash]?.let { link ->
+                if (link.status == network.reticulum.link.LinkConstants.ACTIVE) {
+                    identifiedNomadnetLinks.remove(
+                        runCatching { link.linkId.toHex() }.getOrDefault(hash)
+                    )
+                    link.teardown()
+                    nomadnetLinks.remove(hash)
+                    Log.i(TAG, "NomadNet: tore down link to $hash on unflag (anonymous on next visit)")
+                }
+            }
+        }
     }
 
     @Volatile var nomadnetCancelled = false

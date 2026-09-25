@@ -273,10 +273,36 @@ class PythonRnsCore(
 
     override suspend fun triggerAutoAnnounce(displayName: String): Result<Unit> =
         pyResult {
-            // The LXMF delivery destination is the one that carries displayName
-            // in its app data. Re-announce it through the router.
+            // Resolve the router first: the delivery destination we rename
+            // must be the one THIS router announces, so the name lands on the
+            // exact destination about to broadcast it (not a stale module-level
+            // router copy).
             val router = runtime.lxmRouter
                 ?: throw RnsException(RnsError.BackendNotReady)
+            // The LXMF delivery destination is the one that carries displayName
+            // in its app data. `get_announce_app_data` reads the destination's
+            // `display_name` attribute live when it builds app data, so apply
+            // the fresh name first, then re-announce - otherwise a re-announce
+            // re-broadcasts the name frozen at registration (backend start).
+            // An identity switch restarts the service (re-registering with the
+            // new name), but a display-name *edit* only reaches this path, so
+            // honouring the parameter is what makes the next announce current.
+            val applied = runCatching {
+                runtime.eventBridge
+                    .callAttr("set_display_name", displayName, router)
+                    .toJava(Boolean::class.javaObjectType) == true
+            }.onFailure {
+                Log.w(TAG, "Failed to apply display name before re-announce: ${it.message}")
+            }.getOrDefault(false)
+            if (!applied) {
+                // Fail closed: without the fresh name we'd re-announce stale,
+                // which is exactly the bug. Surface an error instead.
+                throw RnsException(RnsError.Generic(
+                    message = "No delivery destination to apply display name to",
+                    stackTraceText = null,
+                ))
+            }
+            // Re-announce it through the router.
             router.callAttr("announce", runtime.localDestination?.get("hash"))
             // Keep lxst.telephony announced on the same cadence as
             // lxmf.delivery so inbound callers can resolve a fresh path

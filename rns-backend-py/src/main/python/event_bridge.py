@@ -907,7 +907,7 @@ _collected_telemetry = {}
 _collector_allowed_requesters = set()
 
 
-def _local_lxmf_destination():
+def _local_lxmf_destination(router=None):
     """Return the host's local LXMF delivery `RNS.Destination`, or None.
 
     `LXMRouter` exposes registered delivery destinations as a
@@ -918,11 +918,17 @@ def _local_lxmf_destination():
     key (its `hexhash`) for storing the host's own telemetry. Returns the
     first registered destination, or None when the router hasn't built
     one yet (early-init race).
+
+    Pass [router] to look up the destination on a specific router (the one
+    an announce is about to use). When omitted, the bridge's module-level
+    `_lxmf_router` is used, which is the right default for event callbacks
+    but can lag the live router across the start->wire and restart windows.
     """
-    if _lxmf_router is None:
+    target = router if router is not None else _lxmf_router
+    if target is None:
         return None
     try:
-        dests = getattr(_lxmf_router, "delivery_destinations", None)
+        dests = getattr(target, "delivery_destinations", None)
         if not dests:
             return None
         # `delivery_destinations` is a dict — values() handles both
@@ -933,6 +939,38 @@ def _local_lxmf_destination():
     except Exception as e:  # noqa: BLE001 — defensive; never wedge on a missing attr
         RNS.log(f"event_bridge: _local_lxmf_destination failed: {e}", RNS.LOG_DEBUG)
         return None
+
+
+def set_display_name(display_name, router=None):
+    """Update the local delivery destination's display name.
+
+    Called by `PythonRnsCore.triggerAutoAnnounce` immediately before it
+    re-announces. LXMF's `LXMRouter.get_announce_app_data` reads
+    `display_name` off the delivery destination live when it builds the
+    announce app_data, so updating this attribute is enough for the *next*
+    announce to carry the fresh name - no re-registration required.
+
+    The destination is looked up on [router] when supplied (the router the
+    announce is about to use), so the name always lands on the exact
+    destination that will broadcast it - never on a stale router's copy that
+    can linger across the start->wire window or an in-process restart. When
+    [router] is None the module-level `_lxmf_router` is used.
+
+    Returns True when the name was applied, False when there is no router or
+    no registered delivery destination yet (early-init race / registration
+    failure). Fail closed: never throw into the announce path.
+    """
+    destination = _local_lxmf_destination(router)
+    if destination is None:
+        RNS.log("event_bridge: set_display_name - no delivery destination yet",
+                RNS.LOG_DEBUG)
+        return False
+    try:
+        destination.display_name = display_name
+        return True
+    except Exception as e:  # noqa: BLE001 - defensive; never wedge the announce path
+        RNS.log(f"event_bridge: set_display_name failed: {e}", RNS.LOG_DEBUG)
+        return False
 
 
 def set_collector_enabled(enabled):

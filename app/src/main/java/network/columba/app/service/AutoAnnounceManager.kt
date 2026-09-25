@@ -142,6 +142,12 @@ class AutoAnnounceManager
                     // so a rename lands on the correct destination and an
                     // identity switch can't mix a fresh name onto a stale one.
                     performAnnounceTick(identityHash, displayName)
+                } catch (e: CancellationException) {
+                    // Stopping the manager cancels this loop (e.g. a CancellationException
+                    // from the per-tick identity read in performAnnounceTick). Propagate it
+                    // so the coroutine ends cleanly instead of logging a spurious
+                    // "Error during auto-announce" and continuing past cancellation.
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error during auto-announce", e)
                 }
@@ -218,11 +224,16 @@ class AutoAnnounceManager
          * the old loop's service restart lands, and a tick inside that window
          * must not hand the old destination the new persona's name.
          *
-         * Fallbacks, in order: the loop-start [fallback] name, then
-         * "Anonymous Peer", so an announce always carries a name. A stored
-         * blank name (the edit path stores a trimmed, possibly empty string
-         * when the user clears it) is treated as "cleared": it degrades to the
-         * fallback rather than re-announcing a removed name.
+         * Resolution order:
+         *  1. A nonblank name read from the bound identity row - the current
+         *     value, so a rename is picked up on the next tick.
+         *  2. "Anonymous Peer" when the bound row exists but its name is blank:
+         *     the edit path stores a trimmed, possibly-empty string when the
+         *     user clears their name, and re-announcing the loop-start
+         *     [fallback] would re-broadcast the name the user just removed.
+         *  3. The loop-start [fallback] name, then "Anonymous Peer", only when
+         *     the bound row is missing (deleted / not yet written / no bound
+         *     hash), so an announce always carries a name.
          *
          * Reading is best-effort: a transient repository failure must not abort
          * the announce, so it degrades to the fallback. Coroutine cancellation
@@ -243,6 +254,20 @@ class AutoAnnounceManager
                 null
             }
             val freshName = entity?.displayName?.takeIf { it.isNotBlank() }
-            return freshName ?: fallback ?: "Anonymous Peer"
+            return when {
+                // A fresh, nonblank name from the bound row wins: a rename is
+                // picked up on the next tick.
+                freshName != null -> freshName
+                // The bound row exists but its name is blank: the user cleared
+                // a previously nonblank name (the edit path stores a trimmed,
+                // possibly-empty string). Re-announcing the loop-start
+                // [fallback] would re-broadcast the name the user just removed,
+                // so an explicit clear is announced as anonymous.
+                entity != null -> "Anonymous Peer"
+                // The bound row is missing (deleted / not yet written / no bound
+                // hash): the loop-start name is the best available, then
+                // anonymous, so an announce always carries a name.
+                else -> fallback ?: "Anonymous Peer"
+            }
         }
     }

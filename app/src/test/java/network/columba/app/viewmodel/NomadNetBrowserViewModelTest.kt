@@ -1211,6 +1211,112 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `goBack to a flagged node's stored plain page re-fetches identified content`() =
+        runTest(testDispatcher) {
+            // Regression (stale Greptile round-1 thread: "Back can still display
+            // a stored document"): goBack shows the stored history document
+            // directly. A page visited while UNflagged (anonymous content) can
+            // sit in history; once the node is flagged, Back must re-fetch it
+            // identified, not display the stale anonymous document. This is the
+            // flagged-node cache-bypass invariant applied to the Back path, which
+            // otherwise never fetches. Unflagged nodes keep instant-back.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            // Echo the requested path back in the result so each fetch yields a
+            // page for the path actually requested (a hardcoded path would label
+            // every page "index" and confuse the flagged-node re-fetch logic).
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            // Visit page A (unflagged) then page B on the same node; A is pushed to history.
+            vm.loadPage(nodeHash, "/page/index.mu")
+            advanceUntilIdle()
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            vm.navigateToLink("/page/second.mu", emptyList())
+            advanceUntilIdle()
+            Thread.sleep(100); advanceUntilIdle()
+
+            // Flag the node (re-fetches the current page B identified), then Back
+            // to A: A is flagged and plain, so identifyRefresh re-fetches it
+            // (identified) instead of the stale anonymous document.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100); advanceUntilIdle()
+
+            assertTrue(vm.goBack())
+            advanceUntilIdle()
+            Thread.sleep(100); advanceUntilIdle()
+
+            // A was re-fetched identified (the Back re-fetch) - 1 original load +
+            // 1 identify refresh. The collector does NOT re-fetch A on the flag
+            // (it re-fetches the then-current page B), so exactly 2 for A.
+            coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            val state = vm.browserState.value
+            assertTrue("back navigation lands on the restored plain page",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals("/page/index.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+        }
+
+    @Test
+    fun `goBack to a flagged node's stored form page does not re-submit the form`() =
+        runTest(testDispatcher) {
+            // Regression: the Back reuse of identifyRefresh must honor the form
+            // guard. A form page's stored history entry carries its field tokens;
+            // re-fetching it would re-submit the form (double side effects).
+            // identifyRefresh keys off the page's OWN tokens and skips form pages.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            // Echo the requested path back in the result so navigating to a plain
+            // page yields that page (not a checkout-labeled one).
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            // Submit a form page (unflagged): submitted exactly once.
+            vm.loadPage(nodeHash, "/page/checkout.mu`item=42")
+            advanceUntilIdle()
+            Thread.sleep(100); advanceUntilIdle()
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+
+            // Navigate to a plain page so the form page is pushed to history.
+            // The mock echoes the requested path back in the result, so this is a
+            // genuine index page (not a checkout-named one), keeping the collector
+            // honest when the node is flagged below.
+            vm.navigateToLink("/page/index.mu", emptyList())
+            advanceUntilIdle()
+            Thread.sleep(100); advanceUntilIdle()
+
+            // Flag the node (re-fetches the current index page identified), then
+            // Back to the form page.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            Thread.sleep(100); advanceUntilIdle()
+            vm.goBack()
+            advanceUntilIdle()
+            Thread.sleep(100); advanceUntilIdle()
+
+            // The form was NOT re-submitted by the Back re-fetch: identifyRefresh
+            // keys off the restored form page's OWN field tokens ([item=42]) and
+            // skips it - a re-fetch would double-fire the form.
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            // The restored form page is still displayed (not replaced by a
+            // re-fetch attempt).
+            val state = vm.browserState.value
+            assertTrue("back navigation lands on the restored form page",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals("/page/checkout.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+        }
+
+    @Test
     fun `clearIdentifyError resets error`() {
         // Access private state indirectly — identifyToNode failure sets error
         viewModel.clearIdentifyError()

@@ -752,6 +752,31 @@ class NomadNetBrowserViewModelTest {
         waitFor(timeoutMs) { vm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded }
     }
 
+    /**
+     * Bounded poll until [verify] (typically a coVerify on a request that fired
+     * on the real Dispatchers.IO) holds. advanceUntilIdle does not advance the IO
+     * dispatcher, so a request issued by a fetch/fetchPage may not have fired yet
+     * when an assertion runs; polling until the recorded call appears makes the
+     * assertion deterministic instead of racing.
+     */
+    private fun waitForVerify(
+        timeoutMs: Int = 2000,
+        verify: () -> Unit,
+    ) {
+        var waitedMs = 0
+        var ok = false
+        while (!ok && waitedMs <= timeoutMs) {
+            try {
+                verify()
+                ok = true
+            } catch (_: AssertionError) {
+                Thread.sleep(25)
+                waitedMs += 25
+            }
+        }
+        if (!ok) verify() // rethrow for a clean failure message
+    }
+
     @Test
     fun `multiple goBack pops stack correctly`() =
         runTest(testDispatcher) {
@@ -1222,9 +1247,11 @@ class NomadNetBrowserViewModelTest {
             // Load a form-bearing page (no flag yet). The form is submitted once.
             vm.loadPage(nodeHash, "/page/checkout.mu`item=42")
             advanceUntilIdle()
-            Thread.sleep(100) // let the Dispatchers.IO form response land
-            advanceUntilIdle()
-            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            // The form fetch runs on Dispatchers.IO (advanceUntilIdle does not
+            // advance it), so poll until it has fired before asserting.
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            }
 
             // Now flag the node while the form page is loaded. The collector
             // re-emits; without the form guard it would refresh() and re-submit
@@ -1266,26 +1293,30 @@ class NomadNetBrowserViewModelTest {
             // Visit page A (unflagged) then page B on the same node; A is pushed to history.
             vm.loadPage(nodeHash, "/page/index.mu")
             advanceUntilIdle()
-            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
             vm.navigateToLink("/page/second.mu", emptyList())
             advanceUntilIdle()
-            Thread.sleep(100); advanceUntilIdle()
+            waitForPageLoaded(vm)
 
             // Flag the node (re-fetches the current page B identified), then Back
             // to A: A is flagged and plain, so identifyRefresh re-fetches it
             // (identified) instead of the stale anonymous document.
             nodesFlow.value = setOf(nodeHash)
             advanceUntilIdle()
-            Thread.sleep(100); advanceUntilIdle()
+            waitForPageLoaded(vm)
 
             assertTrue(vm.goBack())
             advanceUntilIdle()
-            Thread.sleep(100); advanceUntilIdle()
+            waitForPageLoaded(vm)
 
             // A was re-fetched identified (the Back re-fetch) - 1 original load +
             // 1 identify refresh. The collector does NOT re-fetch A on the flag
             // (it re-fetches the then-current page B), so exactly 2 for A.
-            coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            waitForVerify {
+                coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
             val state = vm.browserState.value
             assertTrue("back navigation lands on the restored plain page",
                 state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
@@ -1311,11 +1342,13 @@ class NomadNetBrowserViewModelTest {
             val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
 
-            // Submit a form page (unflagged): submitted exactly once.
+            // Submit a form page (unflagged): submitted exactly once. The form
+            // fetch runs on Dispatchers.IO, so poll until it has fired.
             vm.loadPage(nodeHash, "/page/checkout.mu`item=42")
             advanceUntilIdle()
-            Thread.sleep(100); advanceUntilIdle()
-            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            }
 
             // Navigate to a plain page so the form page is pushed to history.
             // The mock echoes the requested path back in the result, so this is a
@@ -1323,20 +1356,24 @@ class NomadNetBrowserViewModelTest {
             // honest when the node is flagged below.
             vm.navigateToLink("/page/index.mu", emptyList())
             advanceUntilIdle()
-            Thread.sleep(100); advanceUntilIdle()
+            waitForPageLoaded(vm)
 
             // Flag the node (re-fetches the current index page identified), then
             // Back to the form page.
             nodesFlow.value = setOf(nodeHash)
             advanceUntilIdle()
-            Thread.sleep(100); advanceUntilIdle()
+            waitForPageLoaded(vm)
             vm.goBack()
             advanceUntilIdle()
-            Thread.sleep(100); advanceUntilIdle()
+            // Back re-displays the stored form page synchronously (no re-fetch,
+            // see below); wait until it is the loaded page before asserting.
+            waitForPageLoaded(vm)
 
             // The form was NOT re-submitted by the Back re-fetch: identifyRefresh
             // keys off the restored form page's OWN field tokens ([item=42]) and
-            // skips it - a re-fetch would double-fire the form.
+            // skips it - a re-fetch would double-fire the form. Direct (not
+            // retried) assertion: a spurious re-fetch is the regression we are
+            // guarding against, so it must fail, not be retried away.
             coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
             // The restored form page is still displayed (not replaced by a
             // re-fetch attempt).

@@ -5,8 +5,11 @@ import app.cash.turbine.test
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.RnsCore
+import io.mockk.Runs
 import io.mockk.clearAllMocks
+import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,6 +23,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Ignore
@@ -346,5 +350,208 @@ class AutoAnnounceManagerTest {
             }
 
             manager.stop()
+        }
+
+    // ========== Display-name freshness (stale re-announce regression) ==========
+    // A display-name edit does NOT restart the auto-announce loop, so the loop
+    // must re-read the bound identity's name each tick. These pin the decision
+    // in resolveCurrentDisplayName: a fresh name read by the loop's identity
+    // hash wins over the value captured when the loop started, a cleared (blank)
+    // name degrades to the fallback, and an identity switch can't hand a fresh
+    // name onto a stale destination.
+    //
+    // (Driving the full infinite while(true) loop under StandardTestDispatcher
+    // is the flaky SharedFlow-timing path already @Ignore'd above; a bounded
+    // variant of that is kept below as loopLevelPassesFreshNameToAnnounce.)
+
+    private fun identity(
+        displayName: String,
+        identityHash: String = "hash",
+        isActive: Boolean = true,
+    ): network.columba.app.data.db.entity.LocalIdentityEntity =
+        network.columba.app.data.db.entity.LocalIdentityEntity(
+            identityHash = identityHash,
+            displayName = displayName,
+            destinationHash = "dest",
+            filePath = "",
+            createdTimestamp = 0,
+            lastUsedTimestamp = 0,
+            isActive = isActive,
+        )
+
+    @Test
+    fun resolveCurrentDisplayName_prefersFreshDbNameOverStaleCaptured() =
+        runTest {
+            // Loop bound to "hash" with the old name; the user has since renamed.
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("New Name")
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Old Name")
+
+            assertEquals("New Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_fallsBackToCapturedWhenIdentityMissing() =
+        runTest {
+            // The bound identity row no longer exists (deleted / not yet written).
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns null
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
+
+            assertEquals("Captured Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_fallsBackToAnonymousWhenNoIdentityOrCaptured() =
+        runTest {
+            // No bound identity hash was captured and nothing is in the DB.
+            val resolved = manager.resolveCurrentDisplayName(identityHash = null, fallback = null)
+
+            assertEquals("Anonymous Peer", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_clearedNameAnnouncesAsAnonymous() =
+        runTest {
+            // The bound row exists but its name is blank: the user cleared a
+            // previously nonblank name. Must announce as anonymous, NOT re-broadcast
+            // the loop-start fallback (the removed name).
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("   ")
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
+
+            assertEquals("Anonymous Peer", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_clearedEmptyNameAnnouncesAsAnonymous() =
+        runTest {
+            // Explicitly cleared (empty string) - same as the blank case: the
+            // removed name must not be re-announced.
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("")
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
+
+            assertEquals("Anonymous Peer", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_degradesToFallbackWhenRepositoryFails() =
+        runTest {
+            coEvery { mockIdentityRepository.getIdentity("hash") } throws IllegalStateException("db down")
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
+
+            assertEquals("Captured Name", resolved)
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_rethrowsCancellationInsteadOfSwallowingIt() =
+        runTest {
+            // Stopping the manager cancels the loop; a CancellationException from
+            // the read must propagate so the loop ends immediately, not log a
+            // spurious "read failure" and continue with the fallback.
+            coEvery { mockIdentityRepository.getIdentity("hash") } throws kotlinx.coroutines.CancellationException()
+
+            var thrown: Exception? = null
+            try {
+                manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                thrown = e
+            }
+
+            assertTrue(
+                "Cancellation must be rethrown, not swallowed, but was: $thrown",
+                thrown is kotlinx.coroutines.CancellationException,
+            )
+        }
+
+    @Test
+    fun resolveCurrentDisplayName_usesBoundIdentityNotCurrentActiveOnSwitch() =
+        runTest {
+            // An identity switch rewrites the active row before the old loop's
+            // service restart lands. The resolver reads by the loop's identity
+            // hash, so it returns the OLD identity's name and never consults the
+            // (now different) active identity - the old destination keeps its
+            // own name until it is torn down.
+            coEvery { mockIdentityRepository.getIdentity("oldHash") } returns identity("Old Name", "oldHash")
+            // The active identity has already switched to a different persona.
+            coEvery { mockIdentityRepository.getActiveIdentitySync() } returns identity("New Persona", "newHash")
+
+            val resolved = manager.resolveCurrentDisplayName(identityHash = "oldHash", fallback = "Old Name")
+
+            assertEquals("Old Name", resolved)
+        }
+
+    // ========== Loop wiring: the announce tick passes the resolved name =======
+    // Guards against the announce loop silently stopping using the resolver.
+    // performAnnounceTick is the exact code path startAnnounceLoop runs each
+    // tick; if it ever stopped using the fresh-name resolver, this test would
+    // fail because triggerAutoAnnounce would receive the stale captured name.
+
+    @Test
+    fun performAnnounceTickPassesFreshNameToAnnounce() =
+        runTest {
+            // The loop is bound to "hash" and started with the old name; the user
+            // has since renamed it. The tick must re-read the fresh name and pass
+            // it to triggerAutoAnnounce - not the stale captured value.
+            val announcedNames = mutableListOf<String>()
+            coEvery { mockRnsCore.triggerAutoAnnounce(any<String>()) } answers {
+                announcedNames.add(firstArg<String>())
+                Result.success(Unit)
+            }
+            coEvery { mockSettingsRepository.saveLastAutoAnnounceTime(any<Long>()) } just Runs
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("New Name")
+
+            // Drive one real announce tick (the loop's per-tick code path).
+            manager.performAnnounceTick(identityHash = "hash", fallback = "Old Name")
+
+            assertEquals(
+                "The tick must pass the fresh name, not the stale captured one",
+                listOf("New Name"),
+                announcedNames,
+            )
+        }
+
+    @Test
+    fun performAnnounceTickPassesFallbackWhenBoundIdentityMissing() =
+        runTest {
+            // The bound identity row no longer exists: the tick must fall back to
+            // the loop-start name rather than an empty/anonymous announce.
+            val announcedNames = mutableListOf<String>()
+            coEvery { mockRnsCore.triggerAutoAnnounce(any<String>()) } answers {
+                announcedNames.add(firstArg<String>())
+                Result.success(Unit)
+            }
+            coEvery { mockSettingsRepository.saveLastAutoAnnounceTime(any<Long>()) } just Runs
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns null
+
+            manager.performAnnounceTick(identityHash = "hash", fallback = "Captured Name")
+
+            assertEquals(listOf("Captured Name"), announcedNames)
+        }
+
+    @Test
+    fun performAnnounceTickAnnouncesAnonymousWhenNameCleared() =
+        runTest {
+            // The loop was bound to "hash" and started with "Old Name"; the user
+            // has since CLEARED the name (the DB row now holds a blank string).
+            // The tick must announce as anonymous, NOT re-broadcast the removed
+            // "Old Name" captured when the loop started.
+            val announcedNames = mutableListOf<String>()
+            coEvery { mockRnsCore.triggerAutoAnnounce(any<String>()) } answers {
+                announcedNames.add(firstArg<String>())
+                Result.success(Unit)
+            }
+            coEvery { mockSettingsRepository.saveLastAutoAnnounceTime(any<Long>()) } just Runs
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("")
+
+            manager.performAnnounceTick(identityHash = "hash", fallback = "Old Name")
+
+            assertEquals(
+                "A cleared name must announce as anonymous, not the removed name",
+                listOf("Anonymous Peer"),
+                announcedNames,
+            )
         }
 }

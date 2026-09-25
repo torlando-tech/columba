@@ -748,6 +748,17 @@ class NomadNetBrowserViewModel
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
             emitPageLoaded(entry.document, entry.path, entry.nodeHash, entry.fieldTokens)
+            // A flagged node must never display content fetched while unflagged
+            // (that content is anonymous). The stored history document can be
+            // exactly that: a page visited before the node was flagged, then
+            // pushed to history. Re-fetch it identified - the same reasoning as
+            // loadPage/navigateToLink's flagged-node cache bypass, which this
+            // otherwise-bypass-free path must also uphold. identifyRefresh does
+            // a safe GET and skips form/var-bearing pages (a re-fetch would
+            // re-submit them); unflagged nodes keep the instant-back path.
+            if (entry.nodeHash in _autoIdentifyNodes.value) {
+                identifyRefresh()
+            }
             return true
         }
 

@@ -6,6 +6,7 @@ import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -547,6 +548,38 @@ class TcpClientWizardViewModelTest {
             assertTrue(tcpConfig.enabled)
             assertFalse(tcpConfig.kissFraming)
             assertEquals("full", tcpConfig.mode)
+        }
+
+    @Test
+    fun `updateInterfaceMode with valid mode persists through save`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.selectServer(testServer)
+            viewModel.updateInterfaceMode(InterfaceMode.INTERNAL.value)
+            advanceUntilIdle()
+            assertEquals(
+                InterfaceMode.INTERNAL.value,
+                viewModel.state.value.interfaceMode,
+            )
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val tcpConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertEquals(InterfaceMode.INTERNAL.value, tcpConfig.mode)
+        }
+
+    @Test
+    fun `updateInterfaceMode with unknown value is ignored`() =
+        runTest {
+            viewModel.updateInterfaceMode("pointtopoint")
+            advanceUntilIdle()
+            assertEquals(
+                InterfaceMode.FULL.value,
+                viewModel.state.value.interfaceMode,
+            )
         }
 
     @Test

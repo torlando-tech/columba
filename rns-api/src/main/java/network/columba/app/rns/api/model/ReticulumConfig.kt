@@ -278,7 +278,8 @@ sealed class InterfaceConfig : Parcelable {
      * @param targetHost IP address or hostname of the remote server
      * @param targetPort TCP port number of the remote server
      * @param kissFraming Whether to use KISS framing (for connecting to TNCs/modems)
-     * @param mode Interface mode: "full", "gateway", "access_point", "roaming", "boundary"
+     * @param mode Interface mode: one of [InterfaceMode.value] — "full", "gateway",
+     *   "access_point", "roaming", "boundary", or "internal" (RNS 1.4+)
      * @param networkName Optional IFAC network name for cryptographic authentication
      * @param passphrase Optional IFAC passphrase for cryptographic authentication
      * @param bootstrapOnly When true, this interface auto-detaches once sufficient discovered
@@ -721,6 +722,14 @@ enum class InterfaceMode(
     ACCESS_POINT("access_point"), // Access point mode (quiet unless active)
     ROAMING("roaming"), // Roaming mode
     BOUNDARY("boundary"), // Boundary mode
+    INTERNAL("internal"), // Internal mode (RNS 1.4+): announces are not re-broadcast out
+    // this interface unless the originating interface explicitly targets internal
+    // (interface.announces_to_internal) or is a boundary-mode next hop.
+    ;
+
+    companion object {
+        fun fromValue(raw: String?): InterfaceMode? = entries.firstOrNull { it.value == raw }
+    }
 }
 
 /**

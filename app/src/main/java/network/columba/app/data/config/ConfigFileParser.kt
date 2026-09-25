@@ -2,6 +2,7 @@ package network.columba.app.data.config
 
 import android.util.Log
 import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.util.validation.ValidationResult
@@ -220,7 +221,7 @@ object ConfigFileParser {
             discoveryScope = params["discovery_scope"] ?: "link",
             discoveryPort = params["discovery_port"]?.toIntOrNull(),
             dataPort = params["data_port"]?.toIntOrNull(),
-            mode = params["mode"] ?: "full",
+            mode = params["mode"] ?: InterfaceMode.FULL.value,
         )
     }
 
@@ -236,7 +237,7 @@ object ConfigFileParser {
             enabled = true,
             targetHost = targetHost,
             targetPort = targetPort,
-            mode = params["mode"] ?: "full",
+            mode = params["mode"] ?: InterfaceMode.FULL.value,
         )
     }
 
@@ -259,7 +260,7 @@ object ConfigFileParser {
             codingRate = params["codingrate"]?.toIntOrNull() ?: 5,
             stAlock = params["st_alock"]?.toDoubleOrNull(),
             ltAlock = params["lt_alock"]?.toDoubleOrNull(),
-            mode = params["mode"] ?: "full",
+            mode = params["mode"] ?: InterfaceMode.FULL.value,
         )
     }
 

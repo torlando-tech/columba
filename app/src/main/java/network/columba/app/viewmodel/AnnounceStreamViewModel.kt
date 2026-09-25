@@ -12,11 +12,11 @@ import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.rns.api.model.NetworkStatus
-import network.columba.app.util.displayNameForAnnounce
 import network.columba.app.rns.api.model.NodeType
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.service.IdentityResolutionManager
 import network.columba.app.service.PropagationNodeManager
+import network.columba.app.util.displayNameForAnnounce
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers

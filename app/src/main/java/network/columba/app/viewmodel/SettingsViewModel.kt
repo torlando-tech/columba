@@ -35,7 +35,6 @@ import network.columba.app.map.MapTileSourceManager
 import network.columba.app.navigation.NavTab
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.repository.SettingsRepository
-import network.columba.app.util.displayNameForAnnounce
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.RnsBackend
@@ -52,6 +51,7 @@ import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.PresetTheme
 import network.columba.app.ui.theme.ThemeMode
+import network.columba.app.util.displayNameForAnnounce
 import javax.inject.Inject
 
 /**

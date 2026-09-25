@@ -411,27 +411,28 @@ class AutoAnnounceManagerTest {
         }
 
     @Test
-    fun resolveCurrentDisplayName_ignoresBlankDbName() =
+    fun resolveCurrentDisplayName_clearedNameAnnouncesAsAnonymous() =
         runTest {
-            // The edit path stores a trimmed, possibly-empty string when the
-            // user clears their name. A blank DB name must degrade to the
-            // fallback rather than re-announcing a removed name.
+            // The bound row exists but its name is blank: the user cleared a
+            // previously nonblank name. Must announce as anonymous, NOT re-broadcast
+            // the loop-start fallback (the removed name).
             coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("   ")
 
             val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
 
-            assertEquals("Captured Name", resolved)
+            assertEquals("Anonymous Peer", resolved)
         }
 
     @Test
-    fun resolveCurrentDisplayName_ignoresEmptyDbName() =
+    fun resolveCurrentDisplayName_clearedEmptyNameAnnouncesAsAnonymous() =
         runTest {
-            // Explicitly cleared (empty string) - same as the blank case.
+            // Explicitly cleared (empty string) - same as the blank case: the
+            // removed name must not be re-announced.
             coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("")
 
             val resolved = manager.resolveCurrentDisplayName(identityHash = "hash", fallback = "Captured Name")
 
-            assertEquals("Captured Name", resolved)
+            assertEquals("Anonymous Peer", resolved)
         }
 
     @Test
@@ -528,5 +529,29 @@ class AutoAnnounceManagerTest {
             manager.performAnnounceTick(identityHash = "hash", fallback = "Captured Name")
 
             assertEquals(listOf("Captured Name"), announcedNames)
+        }
+
+    @Test
+    fun performAnnounceTickAnnouncesAnonymousWhenNameCleared() =
+        runTest {
+            // The loop was bound to "hash" and started with "Old Name"; the user
+            // has since CLEARED the name (the DB row now holds a blank string).
+            // The tick must announce as anonymous, NOT re-broadcast the removed
+            // "Old Name" captured when the loop started.
+            val announcedNames = mutableListOf<String>()
+            coEvery { mockRnsCore.triggerAutoAnnounce(any<String>()) } answers {
+                announcedNames.add(firstArg<String>())
+                Result.success(Unit)
+            }
+            coEvery { mockSettingsRepository.saveLastAutoAnnounceTime(any<Long>()) } just Runs
+            coEvery { mockIdentityRepository.getIdentity("hash") } returns identity("")
+
+            manager.performAnnounceTick(identityHash = "hash", fallback = "Old Name")
+
+            assertEquals(
+                "A cleared name must announce as anonymous, not the removed name",
+                listOf("Anonymous Peer"),
+                announcedNames,
+            )
         }
 }

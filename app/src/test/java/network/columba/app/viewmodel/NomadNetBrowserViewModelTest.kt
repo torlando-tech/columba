@@ -1363,6 +1363,49 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
+    fun `unflagging the displayed node resets isIdentified`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile P1): _isIdentified is set true when a
+            // flagged node's page loads (emitPageLoaded reflects the saved
+            // "always identify" flag) and only reset on navigation/load. If the
+            // user unflags the node they're currently on, the backend tears down
+            // the identified link, but _isIdentified would stay true - the node
+            // dialog keeps showing "identified / Done" for a link that no longer
+            // carries our identity, and identifyToNode() refuses the action.
+            val nodesFlow = MutableStateFlow<Set<String>>(setOf(nodeHash))
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.setIdentifyOnConnectNodes(setOf(nodeHash)) }
+            }
+
+            // Load the flagged node's page: emitPageLoaded reflects the saved
+            // flag as identified.
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            waitForPageLoaded(vm)
+            assertTrue("flagged node's loaded page is shown as identified", vm.isIdentified.value)
+
+            // Unflag the displayed node: the link is torn down (backend) and the
+            // identified state must be cleared. (Don't assert the exact
+            // setIdentifyOnConnectNodes count: the collector also re-pushes the
+            // set on RNS-READY re-sync, so the count is init-dependent. The
+            // behavior that matters is isIdentified being cleared.)
+            nodesFlow.value = emptySet()
+            advanceUntilIdle()
+            assertFalse("unflagging the displayed node must clear isIdentified", vm.isIdentified.value)
+        }
+
+    @Test
     fun `goBack to a flagged node's stored plain page re-fetches identified content`() =
         runTest(testDispatcher) {
             // Regression (stale Greptile round-1 thread: "Back can still display

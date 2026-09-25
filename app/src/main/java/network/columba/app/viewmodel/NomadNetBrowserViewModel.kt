@@ -252,6 +252,17 @@ class NomadNetBrowserViewModel
                             pendingIdentifyRefreshFor = currentNodeHash
                         }
                     }
+                    // Unflagging the node we're currently on tears down its
+                    // identified link (backend, see setIdentifyOnConnectNodes),
+                    // so we're now anonymous again. Reset _isIdentified so the
+                    // node dialog doesn't keep showing "identified / Done" for a
+                    // link that no longer carries our identity - otherwise
+                    // identifyToNode() would refuse the action until the user
+                    // navigated away and back.
+                    val newlyUnflagged = previous - nodes
+                    if (newlyUnflagged.isNotEmpty() && currentNodeHash in newlyUnflagged) {
+                        _isIdentified.value = false
+                    }
                     previous = nodes
                 }
             }

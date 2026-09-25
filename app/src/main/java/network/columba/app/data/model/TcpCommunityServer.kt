@@ -24,7 +24,7 @@ object TcpCommunityServers {
     val servers: List<TcpCommunityServer> =
         listOf(
             TcpCommunityServer("rns.kin.earth", "rns.kin.earth", 4242),
-            TcpCommunityServer("RNS Sofia", "193.193.182.147:4242", 4242),
+            TcpCommunityServer("RNS Sofia", "193.193.182.147", 4242),
             TcpCommunityServer("noDNS1", "202.61.243.41", 4965),
             TcpCommunityServer("noDNS2", "193.26.158.230", 4965),
             TcpCommunityServer("interloper node", "intr.cx", 4242),

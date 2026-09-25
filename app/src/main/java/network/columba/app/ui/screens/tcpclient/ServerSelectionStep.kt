@@ -65,6 +65,16 @@ fun ServerSelectionStep(viewModel: TcpClientWizardViewModel) {
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Custom option
+            item {
+                CustomSettingsCard(
+                    title = "Custom",
+                    description = "Enter server details manually",
+                    isSelected = state.isCustomMode,
+                    onClick = { viewModel.enableCustomMode() },
+                )
+            }
+
             // Community server cards
             items(
                 items = viewModel.getCommunityServers(),
@@ -74,16 +84,6 @@ fun ServerSelectionStep(viewModel: TcpClientWizardViewModel) {
                     server = server,
                     isSelected = state.selectedServer == server,
                     onClick = { viewModel.selectServer(server) },
-                )
-            }
-
-            // Custom option
-            item {
-                CustomSettingsCard(
-                    title = "Custom",
-                    description = "Enter server details manually",
-                    isSelected = state.isCustomMode,
-                    onClick = { viewModel.enableCustomMode() },
                 )
             }
 

@@ -9,7 +9,7 @@ lifecycle = "2.10.0"
 navigation = "2.8.4"
 
 msgpack = "0.9.10"
-dataStore = "1.1.1"
+dataStore = "1.2.1"
 paging = "3.3.6"
 zxing = "3.5.3"
 cameraX = "1.5.3"

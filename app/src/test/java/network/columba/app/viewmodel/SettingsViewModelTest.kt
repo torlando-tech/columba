@@ -1735,7 +1735,9 @@ class SettingsViewModelTest {
                 }
 
                 viewModel.triggerManualAnnounce()
-                expectMostRecentItem()
+                val finalState = expectMostRecentItem()
+                assertTrue("Manual announce should report success", finalState.showManualAnnounceSuccess)
+                assertFalse("Manual announce should finish", finalState.isManualAnnouncing)
 
                 cancelAndConsumeRemainingEvents()
             }

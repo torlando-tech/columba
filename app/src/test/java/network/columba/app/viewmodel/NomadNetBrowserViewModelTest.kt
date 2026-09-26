@@ -1073,8 +1073,12 @@ class NomadNetBrowserViewModelTest {
             coVerify(exactly = 1) { protocol.setIdentifyOnConnectNodes(setOf(nodeHash)) }
             // The cache was bypassed and a fresh fetch went out (link
             // establishment + backend identify happen inside that fetch).
+            // fetchPage runs on Dispatchers.IO, which advanceUntilIdle does not
+            // advance, so poll until the request call lands.
             coVerify(exactly = 0) { pageCache.get(nodeHash, "/page/index.mu") }
-            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
             // No identify-error snackbar was raised (the old race's symptom).
             assertNull("flagged-node load must not surface an identify error", autoViewModel.identifyError.value)
         }
@@ -1202,10 +1206,14 @@ class NomadNetBrowserViewModelTest {
             // Navigate to flagged node B while A's identify is in flight.
             // B must be fetched fresh (cache bypassed) so the backend can
             // identify B at link establishment - this is the fix for "B stays
-            // anonymous".
+            // anonymous". fetchPage runs on Dispatchers.IO, which
+            // advanceUntilIdle does not advance, so poll until the request
+            // call lands.
             vm.loadPage(nodeB)
             advanceUntilIdle()
-            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeB, "/page/index.mu", any(), any()) }
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeB, "/page/index.mu", any(), any()) }
+            }
             coVerify(exactly = 0) { pageCache.get(nodeB, "/page/index.mu") }
 
             // A's identify completes; its stale result is discarded (the staleness

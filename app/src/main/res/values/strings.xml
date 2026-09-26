@@ -210,6 +210,23 @@
     <string name="enable_precise_location">Enable Precise Location</string>
     <string name="precise_location_settings_hint">Open Permissions → Location and turn on \"Use precise location\".</string>
 
+    <!-- Interface mode selector (RNS config "mode" key) -->
+    <string name="interface_mode_label">Interface Mode</string>
+    <string name="interface_mode_full">Full (all features enabled)</string>
+    <string name="interface_mode_gateway">Gateway (path discovery for others)</string>
+    <string name="interface_mode_access_point">Access Point (quiet unless active)</string>
+    <string name="interface_mode_roaming">Roaming (mobile relative to others)</string>
+    <string name="interface_mode_boundary">Boundary</string>
+    <string name="interface_mode_internal">Internal (don’t re-broadcast announces)</string>
+    <!-- Per-mode explanations shown beneath the selector for user guidance -->
+    <string name="interface_mode_desc_full">Default mode with all interface features enabled.</string>
+    <string name="interface_mode_desc_gateway">Enables path discovery for other devices on the network.</string>
+    <string name="interface_mode_desc_access_point">Stays quiet unless a client is actively connected.</string>
+    <string name="interface_mode_desc_roaming">For mobile devices moving relative to the network.</string>
+    <string name="interface_mode_desc_boundary">For devices at the edge of the network.</string>
+    <string name="interface_mode_desc_internal">Announces are not re-broadcast out this interface unless explicitly targeted to internal.</string>
+    <string name="interface_mode_desc_unknown">Imported mode not recognized by this version. It will be saved unchanged; select a mode above to switch.</string>
+
     <!-- Network restriction indicator on interface cards (issue #897) -->
     <string name="interface_restriction_wifi_only">Wi-Fi only</string>
     <string name="interface_restriction_cellular_only">Cellular only</string>

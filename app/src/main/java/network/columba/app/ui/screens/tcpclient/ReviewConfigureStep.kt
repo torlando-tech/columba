@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import network.columba.app.ui.components.IfacConfigCard
+import network.columba.app.ui.components.InterfaceModeSelector
 import network.columba.app.ui.components.NetworkRestrictionSelector
 import network.columba.app.viewmodel.TcpClientWizardViewModel
 
@@ -145,6 +146,24 @@ fun ReviewConfigureStep(viewModel: TcpClientWizardViewModel) {
                 NetworkRestrictionSelector(
                     selectedRestriction = state.networkRestriction,
                     onRestrictionChange = { viewModel.updateNetworkRestriction(it) },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Interface mode (RNS config "mode" key); one of InterfaceMode.value.
+        Card(
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                InterfaceModeSelector(
+                    selectedMode = state.interfaceMode,
+                    onModeChange = { viewModel.updateInterfaceMode(it) },
                 )
             }
         }

@@ -307,10 +307,84 @@ class ReviewConfigStepTest {
         // Scroll to and click on the interface mode dropdown
         composeTestRule.onNode(hasText("Full (all features enabled)")).performScrollTo().performClick()
 
-        // Then - dropdown menu items should be visible
+        // Then - dropdown menu items should be visible (options derive from the
+        // shared InterfaceMode enum, so the RNode wizard now offers every mode,
+        // including `internal`, via the same component as the interface dialog).
         composeTestRule.onNodeWithText("Gateway (path discovery for others)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Access Point (quiet unless active)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Roaming (mobile relative to others)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Boundary (network edge)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Boundary").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Internal (don\u2019t re-broadcast announces)")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun interfaceModeSelector_showsPerModeDescription() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.BLUETOOTH,
+                selectedDevice = testDevice,
+                showAdvancedSettings = true,
+                interfaceMode = "full",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
+        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getRegionLimits() } returns null
+
+        // When
+        composeTestRule.setContent {
+            ReviewConfigStep(viewModel = mockViewModel)
+        }
+
+        // Then - the shared selector shows a per-mode explanation beneath the field,
+        // restoring the guidance the RNode wizard had before reusing the shared component.
+        composeTestRule
+            .onNodeWithText("Default mode with all interface features enabled.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun interfaceModeSelector_showsUnknownImportedModeVerbatim() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.BLUETOOTH,
+                selectedDevice = testDevice,
+                showAdvancedSettings = true,
+                interfaceMode = "pointtopoint",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
+        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getRegionLimits() } returns null
+
+        // When
+        composeTestRule.setContent {
+            ReviewConfigStep(viewModel = mockViewModel)
+        }
+
+        // Then - an imported mode outside InterfaceMode is shown verbatim (matching what
+        // will be saved) and paired with a description that distinguishes it from "Full",
+        // so a user is not misled into thinking the interface uses full mode.
+        composeTestRule
+            .onNodeWithText("pointtopoint")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Imported mode not recognized by this version.", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 }

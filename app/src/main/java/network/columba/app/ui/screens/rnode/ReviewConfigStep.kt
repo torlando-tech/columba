@@ -27,13 +27,9 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -41,8 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import network.columba.app.data.model.FrequencySlotCalculator
 import network.columba.app.ui.components.IfacConfigCard
+import network.columba.app.ui.components.InterfaceModeSelector
 import network.columba.app.ui.components.NetworkRestrictionSelector
 import network.columba.app.viewmodel.RNodeWizardViewModel
 
@@ -583,80 +578,5 @@ fun ReviewConfigStep(viewModel: RNodeWizardViewModel) {
 
         // Bottom spacing for navigation bar
         Spacer(Modifier.height(100.dp))
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun InterfaceModeSelector(
-    selectedMode: String,
-    onModeChange: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    val modes =
-        listOf(
-            "full" to "Full (all features enabled)",
-            "gateway" to "Gateway (path discovery for others)",
-            "access_point" to "Access Point (quiet unless active)",
-            "roaming" to "Roaming (mobile relative to others)",
-            "boundary" to "Boundary (network edge)",
-        )
-
-    val selectedLabel = modes.find { it.first == selectedMode }?.second ?: "Full"
-
-    Column {
-        Text(
-            "Interface Mode",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-        ) {
-            OutlinedTextField(
-                value = selectedLabel,
-                onValueChange = { },
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-            )
-
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                modes.forEach { (mode, label) ->
-                    DropdownMenuItem(
-                        text = { Text(label) },
-                        onClick = {
-                            onModeChange(mode)
-                            expanded = false
-                        },
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(4.dp))
-
-        Text(
-            when (selectedMode) {
-                "full" -> "Default mode with all interface features enabled."
-                "gateway" -> "Enables path discovery for other devices on the network."
-                "access_point" -> "Stays quiet unless a client is actively connected."
-                "roaming" -> "For mobile devices moving relative to the network."
-                "boundary" -> "For devices at the edge of the network."
-                else -> ""
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

@@ -350,4 +350,41 @@ class ReviewConfigStepTest {
             .performScrollTo()
             .assertIsDisplayed()
     }
+
+    @Test
+    fun interfaceModeSelector_showsUnknownImportedModeVerbatim() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.BLUETOOTH,
+                selectedDevice = testDevice,
+                showAdvancedSettings = true,
+                interfaceMode = "pointtopoint",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
+        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getRegionLimits() } returns null
+
+        // When
+        composeTestRule.setContent {
+            ReviewConfigStep(viewModel = mockViewModel)
+        }
+
+        // Then - an imported mode outside InterfaceMode is shown verbatim (matching what
+        // will be saved) and paired with a description that distinguishes it from "Full",
+        // so a user is not misled into thinking the interface uses full mode.
+        composeTestRule
+            .onNodeWithText("pointtopoint")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Imported mode not recognized by this version.", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
 }

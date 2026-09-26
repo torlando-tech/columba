@@ -225,6 +225,7 @@
     <string name="interface_mode_desc_roaming">For mobile devices moving relative to the network.</string>
     <string name="interface_mode_desc_boundary">For devices at the edge of the network.</string>
     <string name="interface_mode_desc_internal">Announces are not re-broadcast out this interface unless explicitly targeted to internal.</string>
+    <string name="interface_mode_desc_unknown">Imported mode not recognized by this version. It will be saved unchanged; select a mode above to switch.</string>
 
     <!-- Network restriction indicator on interface cards (issue #897) -->
     <string name="interface_restriction_wifi_only">Wi-Fi only</string>

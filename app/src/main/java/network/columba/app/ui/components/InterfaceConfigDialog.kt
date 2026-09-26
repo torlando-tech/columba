@@ -515,20 +515,28 @@ fun InterfaceModeSelector(
                     },
                 )
         }
-    val displayValue = modes.find { it.first == selectedMode }?.second ?: modes.first().second
+    val knownMode = InterfaceMode.fromValue(selectedMode)
+    val displayValue =
+        when {
+            knownMode != null -> modes.first { it.first == selectedMode }.second
+            // An imported mode outside InterfaceMode is shown verbatim so the displayed
+            // value always matches what will be saved, instead of silently showing "Full".
+            selectedMode.isNotBlank() -> selectedMode
+            else -> modes.first().second
+        }
 
     // Per-mode explanation shown beneath the field, so users get guidance about
     // what each mode changes (restored when the RNode wizard reused this selector).
     val description =
         stringResource(
-            when (InterfaceMode.fromValue(selectedMode)) {
+            when (knownMode) {
                 InterfaceMode.FULL -> R.string.interface_mode_desc_full
                 InterfaceMode.GATEWAY -> R.string.interface_mode_desc_gateway
                 InterfaceMode.ACCESS_POINT -> R.string.interface_mode_desc_access_point
                 InterfaceMode.ROAMING -> R.string.interface_mode_desc_roaming
                 InterfaceMode.BOUNDARY -> R.string.interface_mode_desc_boundary
                 InterfaceMode.INTERNAL -> R.string.interface_mode_desc_internal
-                null -> R.string.interface_mode_desc_full
+                null -> R.string.interface_mode_desc_unknown
             },
         )
 

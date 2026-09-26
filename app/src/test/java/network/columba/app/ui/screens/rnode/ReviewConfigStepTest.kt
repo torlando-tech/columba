@@ -318,4 +318,36 @@ class ReviewConfigStepTest {
             .onNodeWithText("Internal (don\u2019t re-broadcast announces)")
             .assertIsDisplayed()
     }
+
+    @Test
+    fun interfaceModeSelector_showsPerModeDescription() {
+        // Given
+        val mockViewModel = mockk<RNodeWizardViewModel>()
+        val state =
+            RNodeWizardState(
+                connectionType = RNodeConnectionType.BLUETOOTH,
+                selectedDevice = testDevice,
+                showAdvancedSettings = true,
+                interfaceMode = "full",
+            )
+        every { mockViewModel.state } returns MutableStateFlow(state)
+        every { mockViewModel.isTcpMode() } returns false
+        every { mockViewModel.isUsbMode() } returns false
+        every { mockViewModel.getEffectiveDeviceName() } returns "RNode 1234"
+        every { mockViewModel.getEffectiveBluetoothType() } returns BluetoothType.BLE
+        every { mockViewModel.getConnectionTypeString() } returns "Bluetooth LE"
+        every { mockViewModel.getRegionLimits() } returns null
+
+        // When
+        composeTestRule.setContent {
+            ReviewConfigStep(viewModel = mockViewModel)
+        }
+
+        // Then - the shared selector shows a per-mode explanation beneath the field,
+        // restoring the guidance the RNode wizard had before reusing the shared component.
+        composeTestRule
+            .onNodeWithText("Default mode with all interface features enabled.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
 }

@@ -517,36 +517,61 @@ fun InterfaceModeSelector(
         }
     val displayValue = modes.find { it.first == selectedMode }?.second ?: modes.first().second
 
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-    ) {
-        OutlinedTextField(
-            value = displayValue,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(R.string.interface_mode_label)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
+    // Per-mode explanation shown beneath the field, so users get guidance about
+    // what each mode changes (restored when the RNode wizard reused this selector).
+    val description =
+        stringResource(
+            when (InterfaceMode.fromValue(selectedMode)) {
+                InterfaceMode.FULL -> R.string.interface_mode_desc_full
+                InterfaceMode.GATEWAY -> R.string.interface_mode_desc_gateway
+                InterfaceMode.ACCESS_POINT -> R.string.interface_mode_desc_access_point
+                InterfaceMode.ROAMING -> R.string.interface_mode_desc_roaming
+                InterfaceMode.BOUNDARY -> R.string.interface_mode_desc_boundary
+                InterfaceMode.INTERNAL -> R.string.interface_mode_desc_internal
+                null -> R.string.interface_mode_desc_full
+            },
         )
 
-        ExposedDropdownMenu(
+    Column {
+        ExposedDropdownMenuBox(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onExpandedChange = { expanded = it },
         ) {
-            modes.forEach { (mode, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onModeChange(mode)
-                        expanded = false
-                    },
-                )
+            OutlinedTextField(
+                value = displayValue,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(stringResource(R.string.interface_mode_label)) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                modes.forEach { (mode, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onModeChange(mode)
+                            expanded = false
+                        },
+                    )
+                }
             }
         }
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

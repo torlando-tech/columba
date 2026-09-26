@@ -1142,6 +1142,50 @@ class TcpClientWizardViewModelTest {
         }
 
     @Test
+    fun `loadExistingInterface preserves unknown imported mode instead of replacing with full`() =
+        runTest {
+            // A config imported with a mode that is not in InterfaceMode (e.g. from a
+            // hand-edited or older config) must keep its original value on load so that
+            // saving an unrelated change does not silently overwrite it with "full".
+            val existingEntity =
+                InterfaceEntity(
+                    id = 42L,
+                    name = "Imported Server",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson =
+                        """{"targetHost":"imported.com","targetPort":5000,"bootstrapOnly":false}""",
+                )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns
+                InterfaceConfig.TCPClient(
+                    name = "Imported Server",
+                    enabled = true,
+                    targetHost = "imported.com",
+                    targetPort = 5000,
+                    kissFraming = false,
+                    mode = "pointtopoint",
+                    bootstrapOnly = false,
+                )
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.updateInterface(any(), capture(configSlot)) } returns Unit
+
+            viewModel.loadExistingInterface(42L)
+            advanceUntilIdle()
+            assertEquals("pointtopoint", viewModel.state.value.interfaceMode)
+
+            // Save an unrelated change: the unknown mode must be written back verbatim,
+            // not coerced to "full".
+            viewModel.updateInterfaceName("Imported Server")
+            advanceUntilIdle()
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertEquals("pointtopoint", savedConfig.mode)
+        }
+
+    @Test
     fun `loadExistingInterface matches community server when host and port match`() =
         runTest {
             // Use a known community server's host/port

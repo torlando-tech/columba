@@ -117,9 +117,14 @@ class TcpClientWizardViewModel
                             networkName = config.networkName.orEmpty(),
                             passphrase = config.passphrase.orEmpty(),
                             bootstrapOnly = config.bootstrapOnly,
-                            interfaceMode =
-                                InterfaceMode.fromValue(config.mode)?.value
-                                    ?: InterfaceMode.FULL.value,
+                            // Preserve the imported mode verbatim (including any value
+                            // outside InterfaceMode, e.g. from a hand-edited or older
+                            // config) so that saving an unrelated change never silently
+                            // overwrites it with "full". The user can still pick any
+                            // known mode from the selector, which validates against the
+                            // enum. The selector falls back to the first option label
+                            // when the stored value is unrecognized.
+                            interfaceMode = config.mode,
                             socksProxyEnabled = config.socksProxyEnabled,
                             socksProxyHost = config.socksProxyHost,
                             socksProxyPort = config.socksProxyPort.toString(),

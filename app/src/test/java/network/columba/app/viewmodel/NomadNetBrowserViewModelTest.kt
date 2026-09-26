@@ -19,6 +19,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -26,7 +27,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.NomadnetPageResult
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -51,6 +54,7 @@ class NomadNetBrowserViewModelTest {
     private lateinit var pageCache: NomadNetPageCache
     private lateinit var imageCache: network.columba.app.nomadnet.NomadNetImageCache
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var rnsCore: RnsCore
     private lateinit var viewModel: NomadNetBrowserViewModel
 
     private val nodeHash = "abcdef01234567890abcdef012345678"
@@ -63,6 +67,10 @@ class NomadNetBrowserViewModelTest {
         pageCache = mockk()
         imageCache = mockk()
         settingsRepository = mockk()
+        rnsCore = mockk()
+        // RNS is already READY in these tests; the re-READY sync collector sees
+        // no transition and does nothing, so a static flow is enough.
+        every { rnsCore.networkStatus } returns MutableStateFlow(NetworkStatus.READY)
         every { pageCache.put(any(), any(), any(), any()) } just Runs
         // Page-image cache: only the explicit clear (clearImageCache) and the
         // loader's miss-path get() are reachable from these tests; stub both
@@ -72,6 +80,14 @@ class NomadNetBrowserViewModelTest {
         coEvery { protocol.cancelNomadnetPageRequest() } just Runs
         coEvery { protocol.getNomadnetRequestStatus() } returns ""
         coEvery { protocol.getNomadnetLinkStats(any()) } returns null
+        // Auto-identify: the ViewModel syncs the flagged set to the backend;
+        // the backend identifies at link establishment (not the ViewModel).
+        coEvery { protocol.setIdentifyOnConnectNodes(any()) } just Runs
+        // Flagged nodes bypass the page cache and fetch fresh, so the fetch
+        // path must be stubbed for any test that loads a flagged node's page.
+        coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+            Result.success(NomadnetPageResult(simplePage, "/page/index.mu"))
+        coEvery { protocol.getNomadnetDownloadProgress() } returns 0f
         // No persisted rendering mode by default; individual tests can override.
         every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf(null)
         every { settingsRepository.nomadNetImageLoadingModeFlow } returns flowOf(null)
@@ -80,7 +96,7 @@ class NomadNetBrowserViewModelTest {
         coEvery { settingsRepository.saveNomadNetImageLoadingMode(any()) } just Runs
         coEvery { settingsRepository.saveNomadNetLastNodeHash(any(), any(), any()) } just Runs
         coEvery { settingsRepository.clearNomadNetLastNodeHash() } just Runs
-        viewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+        viewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
     }
 
     @Suppress("SleepInsteadOfDelay")
@@ -711,6 +727,56 @@ class NomadNetBrowserViewModelTest {
         }
     }
 
+    /**
+     * Bounded poll for a condition the test dispatcher cannot synchronize with
+     * the real Dispatchers.IO fetch (e.g. browserState reaching PageLoaded after
+     * a refresh/fetch). Preferred over a fixed sleep, which still flakes under CI
+     * load; the bound makes a regression fail rather than hang.
+     */
+    private fun waitFor(
+        timeoutMs: Int = 2000,
+        condition: () -> Boolean,
+    ) {
+        var waitedMs = 0
+        while (!condition() && waitedMs < timeoutMs) {
+            Thread.sleep(25)
+            waitedMs += 25
+        }
+    }
+
+    /** Bounded wait for [vm]'s browserState to be a PageLoaded. */
+    private fun waitForPageLoaded(
+        vm: NomadNetBrowserViewModel,
+        timeoutMs: Int = 2000,
+    ) {
+        waitFor(timeoutMs) { vm.browserState.value is NomadNetBrowserViewModel.BrowserState.PageLoaded }
+    }
+
+    /**
+     * Bounded poll until [verify] (typically a coVerify on a request that fired
+     * on the real Dispatchers.IO) holds. advanceUntilIdle does not advance the IO
+     * dispatcher, so a request issued by a fetch/fetchPage may not have fired yet
+     * when an assertion runs; polling until the recorded call appears makes the
+     * assertion deterministic instead of racing.
+     */
+    private fun waitForVerify(
+        timeoutMs: Int = 2000,
+        verify: () -> Unit,
+    ) {
+        var waitedMs = 0
+        var ok = false
+        while (!ok && waitedMs <= timeoutMs) {
+            try {
+                verify()
+                ok = true
+            } catch (_: AssertionError) {
+                Thread.sleep(25)
+                waitedMs += 25
+            }
+        }
+        if (!ok) verify() // rethrow for a clean failure message
+    }
+
     @Test
     fun `multiple goBack pops stack correctly`() =
         runTest(testDispatcher) {
@@ -786,6 +852,11 @@ class NomadNetBrowserViewModelTest {
 
             viewModel.refresh()
             advanceUntilIdle()
+            // The refresh fetch runs on the real Dispatchers.IO; advanceUntilIdle
+            // only drains the test dispatcher, so the state can still be Loading
+            // when the assertions run. Poll for PageLoaded (bounded) instead of a
+            // fixed sleep, which flakes under CI load.
+            waitForPageLoaded(viewModel)
 
             // requestNomadnetPage called for the refresh (cache bypassed)
             coVerify(atLeast = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", null, any()) }
@@ -862,7 +933,7 @@ class NomadNetBrowserViewModelTest {
         runTest(testDispatcher) {
             every { settingsRepository.nomadNetRenderingModeFlow } returns flowOf("PROPORTIONAL_WRAP")
 
-            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val restoredViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
 
             assertEquals(
@@ -891,7 +962,7 @@ class NomadNetBrowserViewModelTest {
             every { settingsRepository.nomadNetRenderingModeFlow } returns controllableFlow
 
             // init launches and suspends on first() because nothing has been emitted yet.
-            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val racingViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
 
             // User picks a mode before the persisted value has been read back.
             racingViewModel.setRenderingMode(NomadNetBrowserViewModel.RenderingMode.MONOSPACE_ZOOM)
@@ -980,52 +1051,55 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
-    fun `loadPage auto-identifies to a flagged node`() =
+    fun `loadPage to a flagged node syncs the set, bypasses the cache, and fetches fresh`() =
         runTest(testDispatcher) {
-            // The persisted set already contains this node, so loading its page
-            // must fire the identify request without a user tap.
+            // The persisted set already contains this node. Loading its page
+            // must (a) sync the flagged set to the backend and (b) bypass the
+            // page cache so a fresh fetch establishes the link - the backend
+            // identifies the flagged node at link establishment time, not the
+            // ViewModel. This is what removes the old "identify before the link
+            // exists" race that surfaced "No active link to this node" as a
+            // snackbar.
             every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns flowOf(setOf(nodeHash))
-            every { pageCache.get(any(), any()) } returns simplePage
-            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+            // A cache entry exists for this node+path; it must NOT be used.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
 
-            val autoViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val autoViewModel = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
             autoViewModel.loadPage(nodeHash)
             advanceUntilIdle()
 
-            // identifyToNode runs on the real Dispatchers.IO, so poll for the
-            // call with a bound rather than an arbitrary sleep.
-            var identified = false
-            var waitedMs = 0
-            while (!identified && waitedMs < 2000) {
-                identified = runCatching {
-                    coVerify(exactly = 1) { protocol.identifyNomadnetLink(nodeHash) }
-                    true
-                }.getOrDefault(false)
-                if (!identified) {
-                    Thread.sleep(25)
-                    waitedMs += 25
-                }
+            // The flagged set reached the backend (the backend owns the identify).
+            coVerify(exactly = 1) { protocol.setIdentifyOnConnectNodes(setOf(nodeHash)) }
+            // The cache was bypassed and a fresh fetch went out (link
+            // establishment + backend identify happen inside that fetch).
+            // fetchPage runs on Dispatchers.IO, which advanceUntilIdle does not
+            // advance, so poll until the request call lands.
+            coVerify(exactly = 0) { pageCache.get(nodeHash, "/page/index.mu") }
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
             }
-            assertTrue(identified)
+            // No identify-error snackbar was raised (the old race's symptom).
+            assertNull("flagged-node load must not surface an identify error", autoViewModel.identifyError.value)
         }
 
     @Test
-    fun `loadPage does not auto-identify to an unflagged node`() =
+    fun `loadPage to an unflagged node uses the cache and does not fetch`() =
         runTest(testDispatcher) {
             // Default setUp stub: the persisted set is empty, so a plain page
-            // load must NOT fire the identify request.
-            every { pageCache.get(any(), any()) } returns simplePage
-            coEvery { protocol.identifyNomadnetLink(nodeHash) } returns Result.success(true)
+            // load takes the cache fast-path (no fetch, no link establishment,
+            // no identify). The old behavior also fired a racy identify here;
+            // it must not.
+            every { pageCache.get(nodeHash, "/page/index.mu") } returns simplePage
 
             viewModel.loadPage(nodeHash)
             advanceUntilIdle()
 
-            // Give any (erroneous) IO coroutine time to run, then assert the
-            // identify request never happened.
-            Thread.sleep(150)
+            coVerify(exactly = 1) { pageCache.get(nodeHash, "/page/index.mu") }
+            coVerify(exactly = 0) { protocol.requestNomadnetPage(any(), any(), any(), any()) }
             coVerify(exactly = 0) { protocol.identifyNomadnetLink(any()) }
             assertFalse(viewModel.isIdentified.value)
+            assertNull(viewModel.identifyError.value)
         }
 
     @Test
@@ -1091,13 +1165,17 @@ class NomadNetBrowserViewModelTest {
         }
 
     @Test
-    fun `auto-identify destination is retried when a stale identify was in flight`() =
+    fun `navigating to a flagged node while a stale identify is in flight fetches fresh`() =
         runTest(testDispatcher) {
-            // Regression (Greptile 4/5 finding): with node A's identify in
-            // flight, navigating to auto-identify node B returns from
-            // identifyToNode because the in-progress flag still belongs to A.
-            // When A's stale result is discarded, its completion must retry B's
-            // identify, or B stays anonymous until some unrelated action fires.
+            // In the old model, loadPage fired a racy identifyToNode and a
+            // finally-block retried the current node when a stale identify
+            // completed. That mechanism is gone: the backend now identifies a
+            // flagged node's link AT LINK ESTABLISHMENT, which requires a fresh
+            // fetch (cache bypass). So the regression to assert here is that
+            // navigating to flagged node B - even while an unrelated manual
+            // identify for A is still in flight - fetches B fresh (bypassing
+            // the cache), which is what lets the backend identify B at link
+            // establishment instead of serving cached anonymous content.
             //
             // A fresh ViewModel is constructed AFTER the set stub so the reactive
             // collector populates _autoIdentifyNodes with nodeB (a finite flowOf
@@ -1112,11 +1190,11 @@ class NomadNetBrowserViewModelTest {
                 identifyGate.first()
                 Result.success(true)
             }
-            // B's identify returns already-identified (no page refresh needed).
-            coEvery { protocol.identifyNomadnetLink(nodeB) } returns Result.success(true)
 
-            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository)
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
             advanceUntilIdle()
+            // The flagged set reached the backend when this VM initialised.
+            coVerify(exactly = 1) { protocol.setIdentifyOnConnectNodes(setOf(nodeB)) }
 
             vm.loadPage(nodeHash)
             advanceUntilIdle()
@@ -1125,30 +1203,338 @@ class NomadNetBrowserViewModelTest {
             // A's IO coroutine is now suspended at identifyNomadnetLink(nodeHash).
             advanceUntilIdle()
 
-            // Navigate to auto-identify node B while A's identify is in flight.
-            // B's own identifyToNode returns early (in-progress flag belongs to A).
+            // Navigate to flagged node B while A's identify is in flight.
+            // B must be fetched fresh (cache bypassed) so the backend can
+            // identify B at link establishment - this is the fix for "B stays
+            // anonymous". fetchPage runs on Dispatchers.IO, which
+            // advanceUntilIdle does not advance, so poll until the request
+            // call lands.
             vm.loadPage(nodeB)
             advanceUntilIdle()
-            assertFalse(vm.isIdentified.value)
-            // B's blocked identify was never issued while A held the flag.
-            coVerify(exactly = 0) { protocol.identifyNomadnetLink(nodeB) }
-
-            // A's identify completes; its stale result is discarded and its
-            // finally block retries B's identify.
-            identifyGate.tryEmit(Unit)
-
-            // Poll for B's identify to complete on the real Dispatchers.IO.
-            var identified = false
-            var waitedMs = 0
-            while (!identified && waitedMs < 2000) {
-                identified = vm.isIdentified.value
-                if (!identified) {
-                    Thread.sleep(25)
-                    waitedMs += 25
-                }
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeB, "/page/index.mu", any(), any()) }
             }
-            // B must end up identified (retried by A's completion), not left anonymous.
-            assertTrue("B should be retried and identified once A's stale identify completes", identified)
+            coVerify(exactly = 0) { pageCache.get(nodeB, "/page/index.mu") }
+
+            // A's identify completes; its stale result is discarded (the staleness
+            // guard) and must not surface as an error for the current node B.
+            identifyGate.tryEmit(Unit)
+            waitUntilIdentifySettled()
+            val state = vm.browserState.value
+            assertTrue(state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeB, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
+            assertNull("A's stale identify must not surface an error for B", vm.identifyError.value)
+            // B is a flagged node, so emitPageLoaded reflects the saved choice as
+            // identified (manage mode). The identification itself is the backend's
+            // responsibility at link establishment, not A's stale result.
+            assertTrue("flagged node B is shown as identified via its saved flag", vm.isIdentified.value)
+        }
+
+    @Test
+    fun `flagging a node after a form page loads does not re-submit the form`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile round 2, P1): a form page's request data stays
+            // in lastFetch* after it loads (only fetchPage clears it). If the
+            // node is flagged while the form page is loaded, the reactive
+            // collector re-emits and - without the form guard - calls refresh(),
+            // which re-submits the form (refresh re-submits when
+            // lastFetchFormDataJson is set), double-firing the form's side
+            // effects. Form submissions are never cached, so an identify refresh
+            // has no benefit there: the form's own fetch already establishes the
+            // link and identifies at establishment. The guard must skip the
+            // identify refresh for form pages so the form submits exactly once.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } returns
+                Result.success(NomadnetPageResult(simplePage, "/page/checkout.mu"))
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            // Load a form-bearing page (no flag yet). The form is submitted once.
+            vm.loadPage(nodeHash, "/page/checkout.mu`item=42")
+            advanceUntilIdle()
+            // The form fetch runs on Dispatchers.IO (advanceUntilIdle does not
+            // advance it), so poll until it has fired before asserting.
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            }
+            // Wait for the form page to actually be loaded (not just that the
+            // request fired): pushCurrentPageToHistory only runs on PageLoaded,
+            // and the flag change below must see the settled page.
+            waitForPageLoaded(vm)
+
+            // Now flag the node while the form page is loaded. The collector
+            // re-emits; without the form guard it would refresh() and re-submit
+            // the form (a second request). With the guard, no refresh.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            // The form page is still the loaded page (not re-submitted into a new
+            // in-flight state by the identify refresh).
+            val state = vm.browserState.value
+            assertTrue("the form page should remain loaded after the flag",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeHash, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
+        }
+
+    @Test
+    fun `flagging a node while a plain page is loaded re-fetches it`() =
+        runTest(testDispatcher) {
+            // Rule: flagging a previously-unflagged node must immediately identify
+            // and re-fetch the displayed page (identified content). The backend
+            // identifies at link establishment (the fresh fetch establishes/reuses
+            // the link); the ViewModel's re-fetch delivers the identified page.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            // Wait for the page to be PageLoaded before flagging: the collector's
+            // identifyRefresh only fires on PageLoaded (it arms pendingIdentifyRefreshFor
+            // otherwise), and we want to test the direct re-fetch path.
+            waitForPageLoaded(vm)
+
+            // Flag the node: the collector detects newlyFlagged and re-fetches.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            waitForPageLoaded(vm)
+            // The page landed as PageLoaded on the flagged node.
+            val state = vm.browserState.value
+            assertTrue("flag re-fetch lands on a loaded page",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals(nodeHash, (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).nodeHash)
+        }
+
+    @Test
+    fun `unflagging a node does not re-fetch the loaded page`() =
+        runTest(testDispatcher) {
+            // Rule: removing the flag (unflagging) must NOT trigger a re-fetch.
+            // The backend tears down the node's identified link (so the next
+            // refresh/navigation establishes a fresh, anonymous link and the
+            // user stops browsing as identified); the ViewModel's manual
+            // refresh button is the path to get new content, and an unflagged
+            // node's page stays as-is until re-navigated or explicitly
+            // refreshed.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            // Settle the page before mutating the flag set, so the flag-ON re-fetch
+            // exercises the PageLoaded path deterministically.
+            waitForPageLoaded(vm)
+
+            // Flag ON: re-fetch fires (2 total requests).
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            waitForPageLoaded(vm)
+
+            // Flag OFF: no re-fetch (still 2 total requests, not 3). The
+            // collector's newlyFlagged is empty, so no coroutine is launched -
+            // advanceUntilIdle fully settles the state.
+            nodesFlow.value = emptySet()
+            advanceUntilIdle()
+            coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            // The page remains loaded and unchanged after unflagging.
+            val state = vm.browserState.value
+            assertTrue("page stays loaded after unflag",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals("/page/index.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+        }
+
+    @Test
+    fun `unflagging the displayed node resets isIdentified`() =
+        runTest(testDispatcher) {
+            // Regression (Greptile P1): _isIdentified is set true when a
+            // flagged node's page loads (emitPageLoaded reflects the saved
+            // "always identify" flag) and only reset on navigation/load. If the
+            // user unflags the node they're currently on, the backend tears down
+            // the identified link, but _isIdentified would stay true - the node
+            // dialog keeps showing "identified / Done" for a link that no longer
+            // carries our identity, and identifyToNode() refuses the action.
+            val nodesFlow = MutableStateFlow<Set<String>>(setOf(nodeHash))
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.setIdentifyOnConnectNodes(setOf(nodeHash)) }
+            }
+
+            // Load the flagged node's page: emitPageLoaded reflects the saved
+            // flag as identified.
+            vm.loadPage(nodeHash)
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            waitForPageLoaded(vm)
+            assertTrue("flagged node's loaded page is shown as identified", vm.isIdentified.value)
+
+            // Unflag the displayed node: the link is torn down (backend) and the
+            // identified state must be cleared. (Don't assert the exact
+            // setIdentifyOnConnectNodes count: the collector also re-pushes the
+            // set on RNS-READY re-sync, so the count is init-dependent. The
+            // behavior that matters is isIdentified being cleared.)
+            nodesFlow.value = emptySet()
+            advanceUntilIdle()
+            assertFalse("unflagging the displayed node must clear isIdentified", vm.isIdentified.value)
+        }
+
+    @Test
+    fun `goBack to a flagged node's stored plain page re-fetches identified content`() =
+        runTest(testDispatcher) {
+            // Regression (stale Greptile round-1 thread: "Back can still display
+            // a stored document"): goBack shows the stored history document
+            // directly. A page visited while UNflagged (anonymous content) can
+            // sit in history; once the node is flagged, Back must re-fetch it
+            // identified, not display the stale anonymous document. This is the
+            // flagged-node cache-bypass invariant applied to the Back path, which
+            // otherwise never fetches. Unflagged nodes keep instant-back.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            // Echo the requested path back in the result so each fetch yields a
+            // page for the path actually requested (a hardcoded path would label
+            // every page "index" and confuse the flagged-node re-fetch logic).
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            // Visit page A (unflagged) then page B on the same node; A is pushed to history.
+            vm.loadPage(nodeHash, "/page/index.mu")
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            // Wait for page A to be PageLoaded before navigating to B:
+            // pushCurrentPageToHistory only pushes on PageLoaded.
+            waitForPageLoaded(vm)
+            vm.navigateToLink("/page/second.mu", emptyList())
+            advanceUntilIdle()
+            waitForPageLoaded(vm)
+
+            // Flag the node (re-fetches the current page B identified), then Back
+            // to A: A is flagged and plain, so identifyRefresh re-fetches it
+            // (identified) instead of the stale anonymous document.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            waitForPageLoaded(vm)
+
+            assertTrue(vm.goBack())
+            advanceUntilIdle()
+            waitForPageLoaded(vm)
+
+            // A was re-fetched identified (the Back re-fetch) - 1 original load +
+            // 1 identify refresh. The collector does NOT re-fetch A on the flag
+            // (it re-fetches the then-current page B), so exactly 2 for A.
+            waitForVerify {
+                coVerify(exactly = 2) { protocol.requestNomadnetPage(nodeHash, "/page/index.mu", any(), any()) }
+            }
+            val state = vm.browserState.value
+            assertTrue("back navigation lands on the restored plain page",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals("/page/index.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
+        }
+
+    @Test
+    fun `goBack to a flagged node's stored form page does not re-submit the form`() =
+        runTest(testDispatcher) {
+            // Regression: the Back reuse of identifyRefresh must honor the form
+            // guard. A form page's stored history entry carries its field tokens;
+            // re-fetching it would re-submit the form (double side effects).
+            // identifyRefresh keys off the page's OWN tokens and skips form pages.
+            val nodesFlow = MutableStateFlow<Set<String>>(emptySet())
+            every { settingsRepository.nomadNetAutoIdentifyNodesFlow } returns nodesFlow
+            every { pageCache.get(any(), any()) } returns null
+            // Echo the requested path back in the result so navigating to a plain
+            // page yields that page (not a checkout-labeled one).
+            coEvery { protocol.requestNomadnetPage(any(), any(), any(), any()) } answers {
+                Result.success(NomadnetPageResult(simplePage, secondArg<String>()))
+            }
+
+            val vm = NomadNetBrowserViewModel(protocol, pageCache, imageCache, settingsRepository, rnsCore)
+            advanceUntilIdle()
+
+            // Submit a form page (unflagged): submitted exactly once. The form
+            // fetch runs on Dispatchers.IO, so poll until it has fired.
+            vm.loadPage(nodeHash, "/page/checkout.mu`item=42")
+            advanceUntilIdle()
+            waitForVerify {
+                coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            }
+            // Wait for the form page to actually be PageLoaded before navigating
+            // away: pushCurrentPageToHistory only pushes on PageLoaded, so a
+            // still-Loading checkout page would not be saved to history and the
+            // later goBack would restore the wrong page.
+            waitForPageLoaded(vm)
+
+            // Navigate to a plain page so the form page is pushed to history.
+            // The mock echoes the requested path back in the result, so this is a
+            // genuine index page (not a checkout-named one), keeping the collector
+            // honest when the node is flagged below.
+            vm.navigateToLink("/page/index.mu", emptyList())
+            advanceUntilIdle()
+            waitForPageLoaded(vm)
+
+            // Flag the node (re-fetches the current index page identified), then
+            // Back to the form page.
+            nodesFlow.value = setOf(nodeHash)
+            advanceUntilIdle()
+            waitForPageLoaded(vm)
+            vm.goBack()
+            advanceUntilIdle()
+            // Back re-displays the stored form page synchronously (no re-fetch,
+            // see below); wait until it is the loaded page before asserting.
+            waitForPageLoaded(vm)
+
+            // The form was NOT re-submitted by the Back re-fetch: identifyRefresh
+            // keys off the restored form page's OWN field tokens ([item=42]) and
+            // skips it - a re-fetch would double-fire the form. Direct (not
+            // retried) assertion: a spurious re-fetch is the regression we are
+            // guarding against, so it must fail, not be retried away.
+            coVerify(exactly = 1) { protocol.requestNomadnetPage(nodeHash, "/page/checkout.mu", any(), any()) }
+            // The restored form page is still displayed (not replaced by a
+            // re-fetch attempt).
+            val state = vm.browserState.value
+            assertTrue("back navigation lands on the restored form page",
+                state is NomadNetBrowserViewModel.BrowserState.PageLoaded)
+            assertEquals("/page/checkout.mu", (state as NomadNetBrowserViewModel.BrowserState.PageLoaded).path)
         }
 
     @Test

@@ -30,7 +30,9 @@ import network.columba.app.nomadnet.buildNomadNetRequestData
 import network.columba.app.nomadnet.pageImageKey
 import network.columba.app.nomadnet.splitNomadNetPathFields
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsNomadnet
+import network.columba.app.rns.api.model.NetworkStatus
 import javax.inject.Inject
 
 @Suppress("TooManyFunctions") // ViewModel has 15 UI-interaction methods at the threshold
@@ -42,6 +44,7 @@ class NomadNetBrowserViewModel
         private val pageCache: NomadNetPageCache,
         private val imageCache: NomadNetImageCache,
         private val settingsRepository: SettingsRepository,
+        private val rnsCore: RnsCore,
     ) : ViewModel() {
         companion object {
             private const val TAG = "NomadNetBrowserVM"
@@ -183,23 +186,109 @@ class NomadNetBrowserViewModel
         private var lastFetchFieldTokens: List<String> = emptyList()
 
         init {
-            // Observe the auto-identify node set reactively so flagged nodes
-            // keep being identified on every page load, and the browser dialog
-            // stays in sync with toggles made elsewhere (e.g. the Node Details
-            // card). DataStore is the source of truth; this mirrors it.
+            // Observe the auto-identify node set reactively. Two responsibilities:
             //
-            // The auto-trigger fires from this collector (not just on page
-            // load) so a fast cached first page that loads before DataStore's
-            // first emission is still identified once the set arrives.
-            // (Lives after the currentNodeHash declaration because Kotlin runs
-            // property initializers and init blocks in source order, and the
-            // collector reads currentNodeHash on the first emission.)
+            // 1. Mirror it into the UI state flow so the browser dialog and the
+            //    Node Details card stay in sync with toggles made elsewhere.
+            //    DataStore is the source of truth.
+            //
+            // 2. Push the set to the RNS backend so it can auto-identify a
+            //    flagged node's link AT LINK-ESTABLISHMENT TIME - the Python
+            //    equivalent of upstream Browser.link_established calling
+            //    link.identify(...) when should_identify_on_connect(hash). The
+            //    backend owns the timing, so there is no "identify before the
+            //    link exists" window (the old ViewModel-side trigger raced the
+            //    link and surfaced "No active link to this node" as a snackbar).
+            //
+            // The collector's first emission delivers the current DataStore
+            // value, so the backend is synced before any page load for a
+            // flagged node - even a fast cached first page (which is why the
+            // sync lives here and not just in loadPage).
+            //
+            // When a node is newly flagged, re-fetch its page for identified
+            // content, but ONLY as a safe GET:
+            //
+            //  - LOADED page: re-fetch via refresh() when the page's own field
+            //    tokens do NOT resolve to request data (a plain page). If the
+            //    tokens DO resolve to data, the page is a form/var-bearing page
+            //    and refresh() would re-POST it (double-firing its side
+            //    effects) - skip it. The form's own fetch already established
+            //    the link and identified at establishment. Keying off the
+            //    page's own field tokens (not stale lastFetch* state) makes
+            //    this correct for Back-restored pages at any path.
+            //  - LOADING page: arm pendingIdentifyRefreshFor so emitPageLoaded
+            //    re-fetches once it lands - unless the in-flight request is a
+            //    form submission (accurately signalled by lastFetch* while
+            //    loading), which already identifies at establishment.
+            //
+            // This matches the upstream model: the backend identifies the link
+            // (Browser.link_established), and the page content is fetched GET
+            // to reflect identification - it is never re-POSTed.
             viewModelScope.launch {
+                var previous: Set<String> = emptySet()
                 settingsRepository.nomadNetAutoIdentifyNodesFlow.collect { nodes ->
                     _autoIdentifyNodes.value = nodes
-                    if (currentNodeHash.isNotEmpty() && currentNodeHash in nodes) {
-                        identifyToNode()
+                    runCatching {
+                        nomadnet.setIdentifyOnConnectNodes(nodes)
+                    }.onFailure {
+                        Log.w(TAG, "Failed to sync auto-identify set to backend", it)
                     }
+                    val newlyFlagged = nodes - previous
+                    if (newlyFlagged.isNotEmpty() && currentNodeHash in newlyFlagged) {
+                        val displayedPage = _browserState.value
+                        if (displayedPage is BrowserState.PageLoaded) {
+                            // Re-fetch as a safe GET for identified content.
+                            // identifyRefresh skips form/var-bearing pages (a
+                            // re-fetch would re-POST them) and re-fetches plain
+                            // pages; it keys off the page's own field tokens, so
+                            // it's correct for Back-restored pages at any path.
+                            identifyRefresh()
+                        } else {
+                            // Still loading: arm the post-load re-fetch. The
+                            // actual re-fetch happens in emitPageLoaded via
+                            // identifyRefresh, which token-checks the
+                            // just-loaded page (definitive there) and skips
+                            // form pages, so arming unconditionally is safe.
+                            pendingIdentifyRefreshFor = currentNodeHash
+                        }
+                    }
+                    // Unflagging the node we're currently on tears down its
+                    // identified link (backend, see setIdentifyOnConnectNodes),
+                    // so we're now anonymous again. Reset _isIdentified so the
+                    // node dialog doesn't keep showing "identified / Done" for a
+                    // link that no longer carries our identity - otherwise
+                    // identifyToNode() would refuse the action until the user
+                    // navigated away and back.
+                    val newlyUnflagged = previous - nodes
+                    if (newlyUnflagged.isNotEmpty() && currentNodeHash in newlyUnflagged) {
+                        _isIdentified.value = false
+                    }
+                    previous = nodes
+                }
+            }
+
+            // Re-push the auto-identify set to the backend whenever RNS (re)becomes
+            // READY. The :rns-host service can restart (e.g. the RNS transport-drop
+            // regression, or a process restart); a fresh backend starts with an
+            // EMPTY identifyOnConnectNodes set, and the DataStore collector above
+            // only re-emits when the set CHANGES. So without this, a restart while
+            // on a flagged node's page would lose the flag until the user
+            // toggles it (or reloads) - the backend would no longer identify at
+            // link establishment. Re-pushing the current set on READY is cheap
+            // (the backend is idempotent: identifyIfFlagged dedups by link id) and
+            // covers the restart without depending on a DataStore change.
+            viewModelScope.launch {
+                var wasReady = rnsCore.networkStatus.value is NetworkStatus.READY
+                rnsCore.networkStatus.collect { status ->
+                    val isReady = status is NetworkStatus.READY
+                    if (isReady && !wasReady) {
+                        runCatching {
+                            nomadnet.setIdentifyOnConnectNodes(_autoIdentifyNodes.value)
+                        }.onFailure {
+                            Log.w(TAG, "Failed to re-sync auto-identify set after READY", it)
+                        }
+                    }
+                    wasReady = isReady
                 }
             }
         }
@@ -418,8 +507,24 @@ class NomadNetBrowserViewModel
                 return
             }
 
-            // Check cache before showing loading spinner
-            val cached = pageCache.get(destinationHash, requestPath)
+            // Check cache before showing loading spinner.
+            //
+            // Flagged nodes ("Always identify to this node") bypass the cache:
+            // the cached content may be anonymous (from a prior unflagged
+            // visit), and "always identify" means the node should always see
+            // the user's identity. A fresh fetch establishes the link (or
+            // reuses it) so the backend identifies at link establishment time
+            // - the Python equivalent of upstream Browser.link_established -
+            // and the node serves identified content.
+            //
+            // The set is synced from DataStore via the reactive collector's
+            // first emission. In the narrow first-launch window where loadPage
+            // runs before that emission, _autoIdentifyNodes is still empty and
+            // the cache is served (possibly anonymous); the backend's
+            // identifyIfFlagged fires on the next fetch (any navigation or
+            // refresh), which is immediate for a user interacting with the page.
+            val bypassCache = destinationHash in _autoIdentifyNodes.value
+            val cached = if (bypassCache) null else pageCache.get(destinationHash, requestPath)
             if (cached != null) {
                 fetchEpoch++ // Invalidate any in-flight request
                 stopStatusCollection()
@@ -479,8 +584,14 @@ class NomadNetBrowserViewModel
             } else if (formDataJson != null) {
                 submitFormAndNavigate(nodeHash, path, formDataJson, fieldNames)
             } else {
-                // Non-form link: check cache first
-                val cached = pageCache.get(nodeHash, path)
+                // Non-form link: check cache first. A flagged target node
+                // ("Always identify to this node") bypasses the cache, for the
+                // same reason as loadPage: the cached content may be anonymous,
+                // and the fresh fetch establishes/reuses the link so the backend
+                // identifies at link establishment and the node serves identified
+                // content.
+                val bypassCache = nodeHash in _autoIdentifyNodes.value
+                val cached = if (bypassCache) null else pageCache.get(nodeHash, path)
                 if (cached != null) {
                     fetchEpoch++ // Invalidate any in-flight request
                     stopStatusCollection()
@@ -648,6 +759,17 @@ class NomadNetBrowserViewModel
             _formFields.value = entry.formFields
             // Instant back-navigation using the stored document
             emitPageLoaded(entry.document, entry.path, entry.nodeHash, entry.fieldTokens)
+            // A flagged node must never display content fetched while unflagged
+            // (that content is anonymous). The stored history document can be
+            // exactly that: a page visited before the node was flagged, then
+            // pushed to history. Re-fetch it identified - the same reasoning as
+            // loadPage/navigateToLink's flagged-node cache bypass, which this
+            // otherwise-bypass-free path must also uphold. identifyRefresh does
+            // a safe GET and skips form/var-bearing pages (a re-fetch would
+            // re-submit them); unflagged nodes keep the instant-back path.
+            if (entry.nodeHash in _autoIdentifyNodes.value) {
+                identifyRefresh()
+            }
             return true
         }
 
@@ -712,6 +834,31 @@ class NomadNetBrowserViewModel
                     fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
                 }
             }
+        }
+
+        /**
+         * Re-fetch the displayed page as a safe GET to pick up
+         * post-identification content (used when a node is flagged, "always
+         * identify"). NEVER re-submits a form: if the page's own field tokens
+         * resolve to request data, the page is a form/var-bearing page and a
+         * re-fetch would re-submit it (double-firing its side effects), so it
+         * is skipped - its own fetch already established the link and
+         * identified at establishment. A plain page (no resolvable tokens) is
+         * re-fetched via fetchPage, which does a bare GET and never re-POSTs
+         * (unlike [refresh], which has re-POST paths driven by lastFetch*).
+         * Keying off the page's OWN field tokens (not stale lastFetch* state)
+         * makes this correct for Back-restored pages at any path.
+         */
+        private fun identifyRefresh() {
+            val currentState = _browserState.value
+            if (currentState !is BrowserState.PageLoaded) return
+            if (buildNomadNetRequestData(currentState.fieldTokens, _formFields.value) != null) {
+                // Form/var-bearing page: a re-fetch would re-submit it. Skip.
+                return
+            }
+            _isPullRefreshing.value = true
+            partialManager.clear()
+            fetchPage(currentState.nodeHash, currentState.path, cacheResponse = true)
         }
 
         /** Retry the last failed network fetch, preserving form data if applicable. */
@@ -820,40 +967,7 @@ class NomadNetBrowserViewModel
                     }
                 } finally {
                     _identifyInProgress.value = false
-                    // If this request was for a node the user has already left, its
-                    // stale result was discarded above, but its completion is what
-                    // frees the in-progress flag that blocked the CURRENT node's own
-                    // identify. Retry the current node's identify now if it is still
-                    // pending: the flag guard skipped it while this older request was
-                    // in flight, and no later event would re-trigger it (the reactive
-                    // collector and emitPageLoaded both already ran). The helper
-                    // validates and captures the target in one pass, so navigation
-                    // between the check and the request start cannot make the retry
-                    // identify a different node.
-                    pendingRetryTarget(nodeHash)?.let { identifyToNode(it) }
                 }
-            }
-        }
-
-        /**
-         * Returns the node whose auto-identify should be retried now that the
-         * identify for [completedNodeHash] has completed and was discarded as
-         * stale, or null when no retry is due. Non-null only when the current node
-         * differs from the completed one, is flagged for auto-identify, and is not
-         * yet identified. Re-reads currentNodeHash against the captured target so a
-         * navigation that lands between the two reads aborts the retry. One-shot
-         * per completion, so it cannot loop.
-         */
-        private fun pendingRetryTarget(completedNodeHash: String): String? {
-            val target = currentNodeHash
-            return if (target.isEmpty() || target == completedNodeHash) {
-                null
-            } else if (target !in _autoIdentifyNodes.value) {
-                null
-            } else if (currentNodeHash != target || _isIdentified.value) {
-                null
-            } else {
-                target
             }
         }
 
@@ -911,6 +1025,25 @@ class NomadNetBrowserViewModel
         ) {
             _isPullRefreshing.value = false
             _formFields.update { current -> seedFieldDefaults(document, current) }
+            // A flagged node ("Always identify to this node") is identified by
+            // the backend at link establishment, so reflect that in the
+            // dialog's mode: manage/turn-off view, not the "identify to this
+            // node?" confirm view.
+            //
+            // Tradeoff (Greptile round 1 + round 2 tension): the flag is not
+            // proof the proof-send succeeded (that send is best-effort and can
+            // swallow errors). Claiming "identified" misrepresents the rare
+            // failed-proof case. But NOT claiming it misrepresents the COMMON
+            // success case and presents a node the user explicitly saved as
+            // "always identify" as unidentified - the more confusing outcome.
+            // The failed-proof case is recoverable either way: the dialog's
+            // "Always identify" toggle is always visible, and toggling it off
+            // then on re-syncs the set to the backend, which re-identifies the
+            // active link (setIdentifyOnConnectNodes handles newly-active
+            // links). So claiming identified does not strand the user.
+            if (nodeHash in _autoIdentifyNodes.value) {
+                _isIdentified.value = true
+            }
             _browserState.value =
                 BrowserState.PageLoaded(
                     document = document,
@@ -940,18 +1073,13 @@ class NomadNetBrowserViewModel
             // If identification for this node completed while its page was still
             // loading, the just-displayed page is pre-identification content.
             // Re-fetch it now (identified) so an access-gated service doesn't
-            // show anonymous/denied content on the first visit.
+            // show anonymous/denied content on the first visit. identifyRefresh
+            // does a safe GET and skips form/var-bearing pages (a re-fetch would
+            // re-submit them); _browserState is already the just-loaded page
+            // above, so its field tokens are definitive.
             if (pendingIdentifyRefreshFor == nodeHash) {
                 pendingIdentifyRefreshFor = null
-                refresh()
-            }
-            // Auto-identify to a node the user flagged ("Always identify to
-            // this node"). Covers navigation to a node that is already in the
-            // set (the set itself hasn't changed, so the reactive collector
-            // won't re-emit for it). identifyToNode is a no-op when already
-            // identified or in progress, so this is safe on every page load.
-            if (nodeHash in _autoIdentifyNodes.value) {
-                identifyToNode()
+                identifyRefresh()
             }
         }
 

@@ -42,6 +42,11 @@ oneway interface IRnsNomadnet {
     // Result<Boolean>: use IRnsBoolCallback (carries onError for the suspend boundary).
     void identifyNomadnetLink(String destinationHash, in IRnsBoolCallback cb);
 
+    // Set the per-node auto-identify flags. The backend identifies a node's
+    // link at establishment time (upstream link_established +
+    // should_identify_on_connect) when the node is in the set.
+    void setIdentifyOnConnectNodes(in String[] nodes, in IRnsResultCallback cb);
+
     // StateFlow<String> status: observer register/unregister.
     void registerRequestStatusObserver(in IRnsStringEventCallback cb);
     void unregisterRequestStatusObserver(in IRnsStringEventCallback cb);

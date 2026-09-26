@@ -77,6 +77,10 @@ internal class ClientRnsNomadnet(
         awaitBool { cb -> remote.identifyNomadnetLink(destinationHash, cb) }
     }
 
+    override suspend fun setIdentifyOnConnectNodes(nodes: Set<String>) {
+        awaitResult { cb -> remote.setIdentifyOnConnectNodes(nodes.toTypedArray(), cb) }
+    }
+
     private val statusState = MutableStateFlow("")
     private val progressState = MutableStateFlow(0f)
 

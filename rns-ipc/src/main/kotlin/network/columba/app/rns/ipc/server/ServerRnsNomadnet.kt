@@ -77,6 +77,12 @@ internal class ServerRnsNomadnet(
             impl.identifyNomadnetLink(destinationHash).getOrThrow()
         }
 
+    override fun setIdentifyOnConnectNodes(nodes: Array<out String>, cb: IRnsResultCallback) =
+        dispatch(cb, scope) {
+            impl.setIdentifyOnConnectNodes(nodes.toSet())
+            Bundle.EMPTY
+        }
+
     override fun registerRequestStatusObserver(cb: IRnsStringEventCallback) = statusHub.registerObserver(cb)
     override fun unregisterRequestStatusObserver(cb: IRnsStringEventCallback) = statusHub.unregisterObserver(cb)
 

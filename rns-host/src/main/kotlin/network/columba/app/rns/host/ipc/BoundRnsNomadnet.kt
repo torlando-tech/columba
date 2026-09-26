@@ -61,6 +61,10 @@ internal class BoundRnsNomadnet(
     override suspend fun identifyNomadnetLink(destinationHash: String): Result<Boolean> =
         awaitBound().nomadnet.identifyNomadnetLink(destinationHash)
 
+    override suspend fun setIdentifyOnConnectNodes(nodes: Set<String>) {
+        awaitBound().nomadnet.setIdentifyOnConnectNodes(nodes)
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override val nomadnetRequestStatusFlow: StateFlow<String> =
         backendFlow

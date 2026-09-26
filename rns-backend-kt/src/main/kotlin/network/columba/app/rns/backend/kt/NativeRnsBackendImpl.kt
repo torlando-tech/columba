@@ -2334,6 +2334,9 @@ class NativeRnsBackendImpl(
 
     override suspend fun identifyNomadnetLink(destinationHash: String): Result<Boolean> = nomadNetHandler.identifyNomadnetLink(destinationHash)
 
+    override suspend fun setIdentifyOnConnectNodes(nodes: Set<String>) =
+        nomadNetHandler.setIdentifyOnConnectNodes(nodes)
+
     // ==================== Version Info ====================
 
     /** Version helpers retained for the legacy facade until A.10 swaps to [BackendCapabilities.Versions]. */

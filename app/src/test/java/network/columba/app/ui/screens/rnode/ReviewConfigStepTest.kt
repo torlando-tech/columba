@@ -307,10 +307,15 @@ class ReviewConfigStepTest {
         // Scroll to and click on the interface mode dropdown
         composeTestRule.onNode(hasText("Full (all features enabled)")).performScrollTo().performClick()
 
-        // Then - dropdown menu items should be visible
+        // Then - dropdown menu items should be visible (options derive from the
+        // shared InterfaceMode enum, so the RNode wizard now offers every mode,
+        // including `internal`, via the same component as the interface dialog).
         composeTestRule.onNodeWithText("Gateway (path discovery for others)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Access Point (quiet unless active)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Roaming (mobile relative to others)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Boundary (network edge)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Boundary").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Internal (don\u2019t re-broadcast announces)")
+            .assertIsDisplayed()
     }
 }

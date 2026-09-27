@@ -1754,4 +1754,87 @@ class SettingsRepositoryTest {
             assertNull(page.nodeHash)
             assertNull(page.viewPath)
         }
+
+    // ── Pending discovery restart (atomic compare-and-clear) ──
+    //
+    // These exercise the REAL comparison in
+    // SettingsRepository.clearPendingDiscoveryRestartIfUnchanged (the VM tests
+    // only stub it as a black box). The lost-update fix depends on this
+    // compare-then-clear being correct AND atomic, so a regression here must
+    // fail a test.
+
+    @Test
+    fun `clearPendingDiscoveryRestartIfUnchanged clears the flag and returns true when values are unchanged`() =
+        runTest {
+            // Baseline the (re)start was built from: count=2, mode=full, pending.
+            repository.saveAutoconnectDiscoveredCountAndPending(2, true)
+            repository.saveAutoconnectInterfaceModeAndPending("full", true)
+
+            val cleared = repository.clearPendingDiscoveryRestartIfUnchanged(2, "full")
+
+            assertTrue(cleared)
+            assertFalse(repository.getPendingDiscoveryRestart())
+
+            // Order-independent: restore the shared DataStore to a clean mode
+            // (a pre-existing flow test in this class asserts a null initial).
+            repository.saveAutoconnectInterfaceModeAndPending(null, false)
+        }
+
+    @Test
+    fun `clearPendingDiscoveryRestartIfUnchanged keeps the flag and returns false when a newer count was saved`() =
+        runTest {
+            // Baseline the restart was built from: count=2, mode=full, pending.
+            repository.saveAutoconnectDiscoveredCountAndPending(2, true)
+            repository.saveAutoconnectInterfaceModeAndPending("full", true)
+
+            // A newer edit lands while the restart is in flight (count 2 -> 5),
+            // saved atomically with pending=true.
+            repository.saveAutoconnectDiscoveredCountAndPending(5, true)
+
+            val cleared = repository.clearPendingDiscoveryRestartIfUnchanged(2, "full")
+
+            // The on-disk count no longer matches the baseline: do NOT clear.
+            assertFalse(cleared)
+            assertTrue(repository.getPendingDiscoveryRestart())
+
+            // Order-independent: restore the shared DataStore to a clean mode.
+            repository.saveAutoconnectInterfaceModeAndPending(null, false)
+        }
+
+    @Test
+    fun `clearPendingDiscoveryRestartIfUnchanged keeps the flag and returns false when a newer mode was saved`() =
+        runTest {
+            // Baseline the restart was built from: count=3, mode unset, pending.
+            repository.saveAutoconnectDiscoveredCountAndPending(3, true)
+            repository.saveAutoconnectInterfaceModeAndPending(null, true)
+
+            // A newer edit lands while the restart is in flight (mode null -> boundary).
+            repository.saveAutoconnectInterfaceModeAndPending("boundary", true)
+
+            val cleared = repository.clearPendingDiscoveryRestartIfUnchanged(3, null)
+
+            // The on-disk mode no longer matches the baseline: do NOT clear.
+            assertFalse(cleared)
+            assertTrue(repository.getPendingDiscoveryRestart())
+
+            // Order-independent: restore the shared DataStore to a clean mode.
+            repository.saveAutoconnectInterfaceModeAndPending(null, false)
+        }
+
+    @Test
+    fun `saveAutoconnectDiscoveredCountAndPending writes value and flag in one atomic edit`() =
+        runTest {
+            // A pending restart is in flight; a newer count arrives and must
+            // carry pending=true in the same edit as the value (no stranded
+            // "saved choice with no Apply action" window).
+            repository.saveAutoconnectDiscoveredCountAndPending(7, true)
+
+            assertEquals(7, repository.getAutoconnectDiscoveredCount())
+            assertTrue(repository.getPendingDiscoveryRestart())
+
+            // Clearing it atomically also clears the flag.
+            repository.saveAutoconnectDiscoveredCountAndPending(0, false)
+            assertEquals(0, repository.getAutoconnectDiscoveredCount())
+            assertFalse(repository.getPendingDiscoveryRestart())
+        }
 }

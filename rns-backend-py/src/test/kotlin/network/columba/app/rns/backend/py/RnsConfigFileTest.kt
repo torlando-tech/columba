@@ -169,6 +169,18 @@ class RnsConfigFileTest {
     }
 
     @Test
+    fun `autoconnect_interface_mode omits unknown values restored from backup`() {
+        // A restored preferences backup can carry a value the selector never
+        // produced. Rather than emit a token RNS rejects (or that leaves RNS
+        // on its default while the UI shows "Default"), omit the line so RNS
+        // falls back to its own MODE_GATEWAY/MODE_FULL default.
+        for (mode in listOf("bogus", "", "UPPER", "full gateway", "full\nmode")) {
+            val out = RnsConfigFile.build(cfg().copy(autoconnectInterfaceMode = mode))
+            assertFalse("unknown mode '$mode' must not be emitted", out.contains("autoconnect_interface_mode"))
+        }
+    }
+
+    @Test
     fun `skipAutoInterface omits AutoInterface data_port and group_id`() {
         val customAuto = InterfaceConfig.AutoInterface(
             groupId = "test-group",

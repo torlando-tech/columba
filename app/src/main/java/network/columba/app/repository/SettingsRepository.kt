@@ -1404,6 +1404,39 @@ class SettingsRepository
                 }.first()
 
         /**
+         * Clear the pending-discovery-restart flag ONLY if the on-disk autoconnect
+         * count and mode still match the given baseline (the values the most recent
+         * restart / cold start was built from).
+         *
+         * The compare and the clear happen inside ONE DataStore `edit` so the
+         * operation is atomic: a setter that saves a newer value with
+         * `pending=true` in between a separate read and a separate clear write
+         * would otherwise be clobbered (Reticulum keeps the older value, and the
+         * newer change loses its Apply action).
+         *
+         * @param countAtStart Baseline autoconnect count the restart/start used.
+         * @param modeAtStart Baseline autoconnect mode the restart/start used.
+         * @return true if the values were unchanged and the flag was cleared,
+         *   false if a newer change was pending and the flag was left in place.
+         */
+        suspend fun clearPendingDiscoveryRestartIfUnchanged(
+            countAtStart: Int,
+            modeAtStart: String?,
+        ): Boolean {
+            var cleared = false
+            context.dataStore.edit { preferences ->
+                val currentCount =
+                    preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: -1
+                val currentMode = preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE]
+                if (currentCount == countAtStart && currentMode == modeAtStart) {
+                    preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = false
+                    cleared = true
+                }
+            }
+            return cleared
+        }
+
+        /**
          * Save the pending-discovery-restart flag. Persisted so the Apply action
          * survives ViewModel recreation; clear it once a restart has applied it.
          */

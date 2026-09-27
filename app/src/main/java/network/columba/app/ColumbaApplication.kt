@@ -575,19 +575,20 @@ class ColumbaApplication : Application() {
                         // that would needlessly restart Reticulum and drop
                         // connections.
                         //
-                        // Guard against a lost-update: the user can change count/mode
-                        // while the (suspended) initialize call runs. Those edits are
-                        // saved AFTER startup read the values the config was built
-                        // from, so RNS is NOT actually running them. Only clear the
-                        // flag when the on-disk values still match what we started
-                        // with; otherwise keep it so the newer change still has an
-                        // Apply action. Best-effort: must not fail startup.
+                        // The compare and the clear happen in ONE atomic DataStore
+                        // edit: a setter that saves a newer value (with
+                        // pending=true) while the (suspended) initialize call ran must
+                        // keep its Apply action, and a separate read-then-clear would
+                        // race it. The baseline is the raw DataStore values startup
+                        // read BEFORE initialize (the values the config was built
+                        // from). Best-effort: must not fail startup.
                         runCatching {
-                            val countNow = settingsRepository.getAutoconnectDiscoveredCount()
-                            val modeNow = settingsRepository.getAutoconnectInterfaceMode()
-                            if (countNow == autoconnectCountAtStart && modeNow == autoconnectModeAtStart) {
-                                settingsRepository.savePendingDiscoveryRestart(false)
-                            } else {
+                            val stillUnchanged = settingsRepository
+                                .clearPendingDiscoveryRestartIfUnchanged(
+                                    countAtStart = autoconnectCountAtStart,
+                                    modeAtStart = autoconnectModeAtStart,
+                                )
+                            if (!stillUnchanged) {
                                 android.util.Log.d(
                                     "ColumbaApplication",
                                     "Cold-start init applied but a newer discovery change is pending; keeping Apply visible",

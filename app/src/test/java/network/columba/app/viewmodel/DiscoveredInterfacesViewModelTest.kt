@@ -1493,6 +1493,8 @@ class DiscoveredInterfacesViewModelTest {
         runTest {
             useRestartOnlyBackend()
             mockApplyInterfaceChangesSuccess()
+            // Values unchanged by the restart, so the atomic clear succeeds.
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(any(), any()) } returns true
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -1560,6 +1562,8 @@ class DiscoveredInterfacesViewModelTest {
             useRestartOnlyBackend()
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
             mockApplyInterfaceChangesSuccess()
+            // Values unchanged by the toggle restart, so the atomic clear succeeds.
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(any(), any()) } returns true
             viewModel = createViewModel()
             advanceUntilIdle()
 

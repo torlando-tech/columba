@@ -216,10 +216,12 @@ fun DiscoveredInterfacesScreen(
                                 autoconnectInterfaceMode = state.autoconnectInterfaceMode,
                                 bootstrapInterfaceNames = state.bootstrapInterfaceNames,
                                 isRestarting = state.isRestarting,
+                                pendingRestart = state.pendingDiscoveryRestart,
                                 onToggleDiscovery = { viewModel.toggleDiscovery() },
                                 onAutoconnectCountChange = { viewModel.setAutoconnectCount(it) },
                                 onAutoconnectInterfaceModeChange = { viewModel.setAutoconnectInterfaceMode(it) },
                                 onToggleAutoconnectIfacOnly = { viewModel.toggleAutoconnectIfacOnly() },
+                                onApplyDiscoveryChanges = { viewModel.applyPendingDiscoveryRestart() },
                             )
                         }
 
@@ -366,10 +368,12 @@ internal fun DiscoverySettingsCard(
     autoconnectInterfaceMode: String? = null,
     bootstrapInterfaceNames: List<String> = emptyList(),
     isRestarting: Boolean = false,
+    pendingRestart: Boolean = false,
     onToggleDiscovery: () -> Unit = {},
     onAutoconnectCountChange: (Int) -> Unit = {},
     onAutoconnectInterfaceModeChange: (String?) -> Unit = {},
     onToggleAutoconnectIfacOnly: () -> Unit = {},
+    onApplyDiscoveryChanges: () -> Unit = {},
 ) {
     val isEnabled = isRuntimeEnabled || isSettingEnabled
 
@@ -540,15 +544,16 @@ internal fun DiscoverySettingsCard(
                         enabled = !isRestarting,
                     )
 
-                    // Auto-connected interface mode selector. Visible only when
-                    // (a) auto-connect is on AND (b) the backend honours the
-                    // `autoconnect_interface_mode` config key — slim Python RNS
-                    // 1.4+ does, reticulum-kt does not. Hiding it on the Kotlin
-                    // flavor avoids a UI lie (mirrors the IFAC-only gate above).
+                    // Auto-connected interface mode selector. Visible whenever the
+                    // backend honours the `autoconnect_interface_mode` config key -
+                    // slim Python RNS 1.4+ does, reticulum-kt does not. Hiding it on
+                    // the Kotlin flavor avoids a UI lie (mirrors the IFAC-only gate
+                    // below). Shown regardless of the auto-connect count so the user
+                    // can choose a mode even while auto-connect is at 0 (observe-only).
                     // "Default" (null) lets RNS pick its own mode (gateway when
                     // transport is enabled, full otherwise).
                     val modeSelectorSupported = LocalCapabilities.current.interfaces.autoconnectInterfaceMode
-                    if (autoconnectCount > 0 && modeSelectorSupported) {
+                    if (modeSelectorSupported) {
                         Spacer(modifier = Modifier.height(8.dp))
                         AutoconnectModeSelector(
                             selectedMode = autoconnectInterfaceMode,
@@ -660,6 +665,25 @@ internal fun DiscoverySettingsCard(
                         },
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+
+            // Apply button: shown when a discovery-settings change (autoconnect
+            // count and/or interface mode) needs a Reticulum restart to take
+            // effect. One tap restarts once and applies both at once.
+            if (pendingRestart) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onApplyDiscoveryChanges,
+                    enabled = !isRestarting,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                ) {
+                    Text(stringResource(R.string.discovery_apply_changes))
+                }
             }
         }
     }

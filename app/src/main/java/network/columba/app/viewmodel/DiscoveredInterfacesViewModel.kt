@@ -88,6 +88,11 @@ data class DiscoveredInterfacesState(
     val bootstrapInterfaceNames: List<String> = emptyList(),
     // Service is currently restarting
     val isRestarting: Boolean = false,
+    // A discovery-settings change (autoconnect count and/or interface mode)
+    // has been made that requires a Reticulum restart to take effect, but the
+    // user has not yet tapped Apply. Only ever true on the restart-only
+    // (Python) backend; the hot-reload backend applies these changes live.
+    val pendingDiscoveryRestart: Boolean = false,
     // Currently auto-connected interface endpoints (e.g., "host:port")
     val autoconnectedEndpoints: Set<String> = emptySet(),
     // Free-form search filter, matched against interface name + reachableOn + type.
@@ -273,12 +278,16 @@ class DiscoveredInterfacesViewModel
                             0
                         }
 
-                    // Update UI immediately to show restarting state
+                    // Update UI immediately to show restarting state. The toggle's
+                    // restart rebuilds the config from DataStore, so any pending
+                    // autoconnect count / mode change is applied here too - clear
+                    // the pending flag so a stale Apply button doesn't linger.
                     _state.update {
                         it.copy(
                             discoverInterfacesEnabled = newEnabled,
                             autoconnectCount = newAutoconnect,
                             isRestarting = true,
+                            pendingDiscoveryRestart = false,
                         )
                     }
 
@@ -314,7 +323,11 @@ class DiscoveredInterfacesViewModel
          * connect to when discovery is enabled. Set to 0 to disable auto-connect
          * while keeping discovery active (useful for debugging).
          *
-         * Automatically restarts the Reticulum service to apply changes.
+         * The new value is persisted to DataStore immediately. On the hot-reload
+         * backend it is also applied live (no restart). On the restart-only
+         * (Python) backend the value is NOT applied until the user taps Apply,
+         * which triggers a single [applyPendingDiscoveryRestart] that picks up
+         * both the count and the interface mode from DataStore in one restart.
          */
         fun setAutoconnectCount(count: Int) {
             viewModelScope.launch(ioDispatcher) {
@@ -327,10 +340,16 @@ class DiscoveredInterfacesViewModel
                     settingsRepository.saveAutoconnectDiscoveredCount(clampedCount)
                     Log.d(TAG, "Autoconnect count saved: $clampedCount")
 
-                    applyDiscoverySettingsChange {
+                    if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                        // Live-apply on the hot-reload backend.
                         transportAdmin.setAutoconnectLimit(clampedCount)
+                        loadDiscoveredInterfaces()
+                    } else {
+                        // Restart-only backend: defer the restart until Apply so
+                        // the user can batch a count + mode change into one.
+                        _state.update { it.copy(pendingDiscoveryRestart = true) }
+                        Log.d(TAG, "Autoconnect count pending restart: $clampedCount")
                     }
-                    loadDiscoveredInterfaces()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set autoconnect count", e)
                     _state.update {
@@ -348,10 +367,12 @@ class DiscoveredInterfacesViewModel
          * null restores the RNS default (MODE_GATEWAY when transport is
          * enabled, MODE_FULL otherwise).
          *
-         * Applies via the same restart path as [setAutoconnectCount]: on the
-         * Python backend the value is written to the config file and picked
-         * up on the next restart; on the Kotlin backend it is a no-op
-         * (reticulum-kt autoconnect has no mode knob).
+         * The value is persisted to DataStore immediately. On the restart-only
+         * (Python) backend it is NOT applied until the user taps Apply, which
+         * triggers a single [applyPendingDiscoveryRestart] that picks up both
+         * the count and the mode from DataStore in one restart. On the Kotlin
+         * backend the value is a no-op (reticulum-kt autoconnect has no mode
+         * knob) and the UI hides the selector, so this path is never reached.
          */
         fun setAutoconnectInterfaceMode(mode: String?) {
             viewModelScope.launch(ioDispatcher) {
@@ -361,17 +382,60 @@ class DiscoveredInterfacesViewModel
                     settingsRepository.saveAutoconnectInterfaceMode(mode)
                     Log.d(TAG, "Autoconnect interface mode saved: $mode")
 
-                    applyDiscoverySettingsChange {
-                        // No live setter; the config-file restart path picks
-                        // the value up from DataStore.
+                    if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                        // Hot-reload backend: no live setter for the mode and
+                        // the selector is hidden there, so nothing to apply.
+                        loadDiscoveredInterfaces()
+                    } else {
+                        // Restart-only backend: defer the restart until Apply so
+                        // the user can batch a count + mode change into one.
+                        _state.update { it.copy(pendingDiscoveryRestart = true) }
+                        Log.d(TAG, "Autoconnect interface mode pending restart: $mode")
                     }
-                    loadDiscoveredInterfaces()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set autoconnect interface mode", e)
                     _state.update {
                         it.copy(
                             isRestarting = false,
                             errorMessage = "Failed to update autoconnect interface mode: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Apply pending discovery-settings changes (autoconnect count and/or
+         * interface mode) with a single Reticulum restart.
+         *
+         * Both values are already persisted to DataStore by
+         * [setAutoconnectCount] / [setAutoconnectInterfaceMode], and on the
+         * restart-only backend [InterfaceConfigManager.applyInterfaceChanges]
+         * rebuilds the RNS config from DataStore, so one restart applies both
+         * at once. Only valid on the restart-only backend; on the hot-reload
+         * backend there is nothing pending (changes apply live) and this is a
+         * no-op that just clears any stale flag.
+         */
+        fun applyPendingDiscoveryRestart() {
+            if (!_state.value.pendingDiscoveryRestart) return
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    // Keep pendingDiscoveryRestart set while restarting so that if
+                    // the restart fails the Apply button stays visible for retry.
+                    _state.update { it.copy(isRestarting = true) }
+                    val result =
+                        configManager.applyInterfaceChanges(
+                            onServiceReady = { _state.update { it.copy(isRestarting = false) } },
+                        )
+                    result.getOrThrow()
+                    _state.update { it.copy(pendingDiscoveryRestart = false) }
+                    loadDiscoveredInterfaces()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to apply discovery settings", e)
+                    _state.update {
+                        it.copy(
+                            isRestarting = false,
+                            errorMessage = "Failed to apply discovery settings: ${e.message}",
                         )
                     }
                 }

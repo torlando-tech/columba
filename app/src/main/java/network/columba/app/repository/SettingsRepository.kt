@@ -1354,6 +1354,46 @@ class SettingsRepository
         }
 
         /**
+         * Save the autoconnect discovered interfaces count and the
+         * pending-discovery-restart flag in a SINGLE DataStore edit.
+         *
+         * The value and the flag must be written atomically: a separate
+         * save-then-flag sequence leaves a window where a ViewModel cleared
+         * after the value lands but before the flag does would show the saved
+         * choice with no Apply action, stranding the change on the restart-only
+         * backend.
+         *
+         * @param pending Set true when a restart is required to apply the value
+         *   (restart-only backend), false otherwise (hot-reload applies it live,
+         *   so nothing is pending and any stale flag is cleared).
+         */
+        suspend fun saveAutoconnectDiscoveredCountAndPending(count: Int, pending: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] = count
+                preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = pending
+            }
+        }
+
+        /**
+         * Save the auto-connected interface mode and the pending-discovery-restart
+         * flag in a SINGLE DataStore edit (atomicity rationale identical to
+         * [saveAutoconnectDiscoveredCountAndPending]).
+         *
+         * @param pending Set true when a restart is required to apply the mode
+         *   (restart-only backend), false otherwise.
+         */
+        suspend fun saveAutoconnectInterfaceModeAndPending(mode: String?, pending: Boolean) {
+            context.dataStore.edit { preferences ->
+                if (mode == null) {
+                    preferences.remove(PreferencesKeys.AUTOCONNECT_INTERFACE_MODE)
+                } else {
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE] = mode
+                }
+                preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = pending
+            }
+        }
+
+        /**
          * Get whether a discovery setting is pending a Reticulum restart
          * (changed on the restart-only backend but not yet applied).
          */

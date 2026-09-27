@@ -307,16 +307,32 @@ class DiscoveredInterfacesViewModel
                     }
                     Log.d(TAG, "Discovery settings saved: enabled=$newEnabled, autoconnect=$newAutoconnect")
 
+                    // Capture the values the restart is about to apply so we can
+                    // detect a newer change saved while the restart is in flight
+                    // (onServiceReady re-enables the controls before this restart
+                    // call returns, leaving a window to change count/mode).
+                    val countBefore = settingsRepository.getAutoconnectDiscoveredCount()
+                    val modeBefore = settingsRepository.getAutoconnectInterfaceMode()
+
                     Log.d(TAG, "Applying discovery setting: enabled=$newEnabled")
                     applyDiscoverySettingsChange {
                         transportAdmin.setDiscoveryEnabled(newEnabled)
                     }
-                    // Restart succeeded, so the config was rebuilt from DataStore
-                    // and any pending count/mode change is now applied. Clear the
-                    // pending flag (in-memory + persisted) so Apply disappears and
-                    // a fresh ViewModel won't resurrect a stale Apply action.
-                    settingsRepository.savePendingDiscoveryRestart(false)
-                    _state.update { it.copy(pendingDiscoveryRestart = false) }
+                    // The restart reads the config from DataStore before
+                    // onServiceReady re-enables controls, so a change saved while
+                    // the restart ran was NOT picked up. Only clear the pending
+                    // flag when the on-disk values still match what the restart
+                    // applied; otherwise a newer change is pending and Apply must
+                    // stay visible (clearing unconditionally used to swallow it).
+                    val countAfter = settingsRepository.getAutoconnectDiscoveredCount()
+                    val modeAfter = settingsRepository.getAutoconnectInterfaceMode()
+                    if (countAfter == countBefore && modeAfter == modeBefore) {
+                        settingsRepository.savePendingDiscoveryRestart(false)
+                        _state.update { it.copy(pendingDiscoveryRestart = false) }
+                    } else {
+                        Log.d(TAG, "Discovery toggle restart applied but a newer change is pending; keeping Apply visible")
+                        _state.update { it.copy(pendingDiscoveryRestart = true) }
+                    }
                     Log.d(TAG, "Discovery setting applied successfully")
                     loadDiscoveredInterfaces()
                 } catch (e: Exception) {
@@ -350,22 +366,27 @@ class DiscoveredInterfacesViewModel
 
                     _state.update { it.copy(autoconnectCount = clampedCount) }
 
-                    // Save settings to DataStore
-                    settingsRepository.saveAutoconnectDiscoveredCount(clampedCount)
-                    Log.d(TAG, "Autoconnect count saved: $clampedCount")
+                    val isRestartOnly = !rnsBackend.capabilities.value.interfaces.hotReloadInterfaces
+                    // Save the count and the pending flag atomically (single edit) so
+                    // a ViewModel cleared in between can't strand the saved value
+                    // without an Apply action.
+                    settingsRepository.saveAutoconnectDiscoveredCountAndPending(
+                        count = clampedCount,
+                        pending = isRestartOnly,
+                    )
+                    Log.d(TAG, "Autoconnect count saved: $clampedCount (pendingRestart=$isRestartOnly)")
 
-                    if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                    if (isRestartOnly) {
+                        // Restart-only backend: defer the restart until Apply so
+                        // the user can batch a count + mode change into one.
+                        // Persisting the flag above keeps Apply visible across
+                        // ViewModel recreation (a fresh VM otherwise would drop it).
+                        _state.update { it.copy(pendingDiscoveryRestart = true) }
+                        Log.d(TAG, "Autoconnect count pending restart: $clampedCount")
+                    } else {
                         // Live-apply on the hot-reload backend.
                         transportAdmin.setAutoconnectLimit(clampedCount)
                         loadDiscoveredInterfaces()
-                    } else {
-                        // Restart-only backend: defer the restart until Apply so
-                        // the user can batch a count + mode change into one.
-                        // Persist the flag so the Apply action survives ViewModel
-                        // recreation (a fresh ViewModel otherwise would drop it).
-                        settingsRepository.savePendingDiscoveryRestart(true)
-                        _state.update { it.copy(pendingDiscoveryRestart = true) }
-                        Log.d(TAG, "Autoconnect count pending restart: $clampedCount")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set autoconnect count", e)
@@ -396,21 +417,27 @@ class DiscoveredInterfacesViewModel
                 try {
                     _state.update { it.copy(autoconnectInterfaceMode = mode) }
 
-                    settingsRepository.saveAutoconnectInterfaceMode(mode)
-                    Log.d(TAG, "Autoconnect interface mode saved: $mode")
+                    val isRestartOnly = !rnsBackend.capabilities.value.interfaces.hotReloadInterfaces
+                    // Save the mode and the pending flag atomically (single edit) so
+                    // a ViewModel cleared in between can't strand the saved value
+                    // without an Apply action.
+                    settingsRepository.saveAutoconnectInterfaceModeAndPending(
+                        mode = mode,
+                        pending = isRestartOnly,
+                    )
+                    Log.d(TAG, "Autoconnect interface mode saved: $mode (pendingRestart=$isRestartOnly)")
 
-                    if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+                    if (isRestartOnly) {
+                        // Restart-only backend: defer the restart until Apply so
+                        // the user can batch a count + mode change into one.
+                        // Persisting the flag above keeps Apply visible across
+                        // ViewModel recreation (a fresh VM otherwise would drop it).
+                        _state.update { it.copy(pendingDiscoveryRestart = true) }
+                        Log.d(TAG, "Autoconnect interface mode pending restart: $mode")
+                    } else {
                         // Hot-reload backend: no live setter for the mode and
                         // the selector is hidden there, so nothing to apply.
                         loadDiscoveredInterfaces()
-                    } else {
-                        // Restart-only backend: defer the restart until Apply so
-                        // the user can batch a count + mode change into one.
-                        // Persist the flag so the Apply action survives ViewModel
-                        // recreation (a fresh ViewModel otherwise would drop it).
-                        settingsRepository.savePendingDiscoveryRestart(true)
-                        _state.update { it.copy(pendingDiscoveryRestart = true) }
-                        Log.d(TAG, "Autoconnect interface mode pending restart: $mode")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to set autoconnect interface mode", e)
@@ -440,6 +467,10 @@ class DiscoveredInterfacesViewModel
             if (!_state.value.pendingDiscoveryRestart) return
             viewModelScope.launch(ioDispatcher) {
                 try {
+                    // Capture the values about to be applied so we can detect if the
+                    // user makes a *newer* change while the restart is in flight.
+                    val countBefore = settingsRepository.getAutoconnectDiscoveredCount()
+                    val modeBefore = settingsRepository.getAutoconnectInterfaceMode()
                     // Keep pendingDiscoveryRestart set while restarting so that if
                     // the restart fails the Apply button stays visible for retry.
                     _state.update { it.copy(isRestarting = true) }
@@ -448,11 +479,22 @@ class DiscoveredInterfacesViewModel
                             onServiceReady = { _state.update { it.copy(isRestarting = false) } },
                         )
                     result.getOrThrow()
-                    // Restart succeeded: clear the pending flag (in-memory +
-                    // persisted) so Apply disappears and a fresh ViewModel won't
-                    // resurrect a stale Apply action.
-                    settingsRepository.savePendingDiscoveryRestart(false)
-                    _state.update { it.copy(pendingDiscoveryRestart = false) }
+                    // The restart reads the config from DataStore *before*
+                    // onServiceReady re-enables the controls, so a change saved
+                    // while the restart was running was NOT picked up by it. Only
+                    // clear the pending flag when the on-disk values still match
+                    // what the restart applied; otherwise a newer change is pending
+                    // and Apply must stay visible (clearing unconditionally used to
+                    // swallow it).
+                    val countAfter = settingsRepository.getAutoconnectDiscoveredCount()
+                    val modeAfter = settingsRepository.getAutoconnectInterfaceMode()
+                    if (countAfter == countBefore && modeAfter == modeBefore) {
+                        settingsRepository.savePendingDiscoveryRestart(false)
+                        _state.update { it.copy(pendingDiscoveryRestart = false) }
+                    } else {
+                        Log.d(TAG, "Apply completed but a newer change is pending; keeping Apply visible")
+                        _state.update { it.copy(pendingDiscoveryRestart = true) }
+                    }
                     loadDiscoveredInterfaces()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to apply discovery settings", e)

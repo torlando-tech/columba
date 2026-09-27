@@ -560,6 +560,15 @@ class ColumbaApplication : Application() {
                         // Best-effort: a failure here must not fail app startup.
                         SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
 
+                        // A successful cold start rebuilds the Reticulum config from
+                        // the saved autoconnect count + mode (see config above), so
+                        // any deferred discovery change left pending before this
+                        // start is now in effect. Clear the persisted pending-restart
+                        // flag so reopening the discovery screen doesn't offer a
+                        // stale Apply that would needlessly restart Reticulum and
+                        // drop connections. Best-effort: must not fail startup.
+                        runCatching { settingsRepository.savePendingDiscoveryRestart(false) }
+
                         // networkStatus.collect (set up earlier) already pushes
                         // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no
                         // explicit call is needed here.

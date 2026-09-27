@@ -133,6 +133,12 @@ class SettingsRepository
             val AUTOCONNECT_DISCOVERED_COUNT = intPreferencesKey("autoconnect_discovered_count")
             val AUTOCONNECT_IFAC_ONLY = booleanPreferencesKey("autoconnect_ifac_only")
             val AUTOCONNECT_INTERFACE_MODE = stringPreferencesKey("autoconnect_interface_mode")
+            // True while a discovery setting (autoconnect count and/or interface
+            // mode) changed on the restart-only (Python) backend has been persisted
+            // to DataStore but not yet applied via a Reticulum restart. Persisted so
+            // the Apply action survives ViewModel recreation; cleared on the next
+            // successful restart (which rebuilds the config from DataStore).
+            val PENDING_DISCOVERY_RESTART = booleanPreferencesKey("pending_discovery_restart")
 
             // Location sharing preferences
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
@@ -1344,6 +1350,26 @@ class SettingsRepository
                 } else {
                     preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE] = mode
                 }
+            }
+        }
+
+        /**
+         * Get whether a discovery setting is pending a Reticulum restart
+         * (changed on the restart-only backend but not yet applied).
+         */
+        suspend fun getPendingDiscoveryRestart(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] ?: false
+                }.first()
+
+        /**
+         * Save the pending-discovery-restart flag. Persisted so the Apply action
+         * survives ViewModel recreation; clear it once a restart has applied it.
+         */
+        suspend fun savePendingDiscoveryRestart(pending: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = pending
             }
         }
 

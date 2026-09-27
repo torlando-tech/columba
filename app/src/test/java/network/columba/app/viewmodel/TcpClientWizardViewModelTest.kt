@@ -6,6 +6,7 @@ import network.columba.app.data.database.entity.InterfaceEntity
 import network.columba.app.data.model.TcpCommunityServer
 import network.columba.app.repository.InterfaceRepository
 import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.service.InterfaceConfigManager
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -547,6 +548,38 @@ class TcpClientWizardViewModelTest {
             assertTrue(tcpConfig.enabled)
             assertFalse(tcpConfig.kissFraming)
             assertEquals("full", tcpConfig.mode)
+        }
+
+    @Test
+    fun `updateInterfaceMode with valid mode persists through save`() =
+        runTest {
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.insertInterface(capture(configSlot)) } returns 1L
+
+            viewModel.selectServer(testServer)
+            viewModel.updateInterfaceMode(InterfaceMode.INTERNAL.value)
+            advanceUntilIdle()
+            assertEquals(
+                InterfaceMode.INTERNAL.value,
+                viewModel.state.value.interfaceMode,
+            )
+
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val tcpConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertEquals(InterfaceMode.INTERNAL.value, tcpConfig.mode)
+        }
+
+    @Test
+    fun `updateInterfaceMode with unknown value is ignored`() =
+        runTest {
+            viewModel.updateInterfaceMode("pointtopoint")
+            advanceUntilIdle()
+            assertEquals(
+                InterfaceMode.FULL.value,
+                viewModel.state.value.interfaceMode,
+            )
         }
 
     @Test
@@ -1106,6 +1139,50 @@ class TcpClientWizardViewModelTest {
                 assertEquals("5000", state.targetPort)
                 assertTrue(state.bootstrapOnly)
             }
+        }
+
+    @Test
+    fun `loadExistingInterface preserves unknown imported mode instead of replacing with full`() =
+        runTest {
+            // A config imported with a mode that is not in InterfaceMode (e.g. from a
+            // hand-edited or older config) must keep its original value on load so that
+            // saving an unrelated change does not silently overwrite it with "full".
+            val existingEntity =
+                InterfaceEntity(
+                    id = 42L,
+                    name = "Imported Server",
+                    type = "TCPClient",
+                    enabled = true,
+                    configJson =
+                        """{"targetHost":"imported.com","targetPort":5000,"bootstrapOnly":false}""",
+                )
+            coEvery { interfaceRepository.getInterfaceByIdOnce(42L) } returns existingEntity
+            every { interfaceRepository.entityToConfig(existingEntity) } returns
+                InterfaceConfig.TCPClient(
+                    name = "Imported Server",
+                    enabled = true,
+                    targetHost = "imported.com",
+                    targetPort = 5000,
+                    kissFraming = false,
+                    mode = "pointtopoint",
+                    bootstrapOnly = false,
+                )
+            val configSlot = slot<InterfaceConfig>()
+            coEvery { interfaceRepository.updateInterface(any(), capture(configSlot)) } returns Unit
+
+            viewModel.loadExistingInterface(42L)
+            advanceUntilIdle()
+            assertEquals("pointtopoint", viewModel.state.value.interfaceMode)
+
+            // Save an unrelated change: the unknown mode must be written back verbatim,
+            // not coerced to "full".
+            viewModel.updateInterfaceName("Imported Server")
+            advanceUntilIdle()
+            viewModel.saveConfiguration()
+            advanceUntilIdle()
+
+            val savedConfig = configSlot.captured as InterfaceConfig.TCPClient
+            assertEquals("pointtopoint", savedConfig.mode)
         }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.rememberScrollState
@@ -43,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import network.columba.app.R
+import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.rns.host.ble.model.BlePowerPreset
 import network.columba.app.util.validation.ValidationConstants
 import network.columba.app.viewmodel.InterfaceConfigState
@@ -496,45 +499,87 @@ fun InterfaceModeSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
+    // Options derive from the InterfaceMode enum (single source of truth);
+    // display labels are a UI concern and live in strings.xml.
     val modes =
-        listOf(
-            "full" to "Full (all features enabled)",
-            "gateway" to "Gateway (path discovery for others)",
-            "access_point" to "Access Point (quiet unless active)",
-            "roaming" to "Roaming (mobile relative to others)",
-            "boundary" to "Boundary",
-        )
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-    ) {
-        OutlinedTextField(
-            value = modes.find { it.first == selectedMode }?.second ?: "Roaming (mobile relative to others)",
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Interface Mode") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            modes.forEach { (mode, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onModeChange(mode)
-                        expanded = false
+        InterfaceMode.entries.map { mode ->
+            mode.value to
+                stringResource(
+                    when (mode) {
+                        InterfaceMode.FULL -> R.string.interface_mode_full
+                        InterfaceMode.GATEWAY -> R.string.interface_mode_gateway
+                        InterfaceMode.ACCESS_POINT -> R.string.interface_mode_access_point
+                        InterfaceMode.ROAMING -> R.string.interface_mode_roaming
+                        InterfaceMode.BOUNDARY -> R.string.interface_mode_boundary
+                        InterfaceMode.INTERNAL -> R.string.interface_mode_internal
                     },
                 )
+        }
+    val knownMode = InterfaceMode.fromValue(selectedMode)
+    val displayValue =
+        when {
+            knownMode != null -> modes.first { it.first == selectedMode }.second
+            // An imported mode outside InterfaceMode is shown verbatim so the displayed
+            // value always matches what will be saved, instead of silently showing "Full".
+            selectedMode.isNotBlank() -> selectedMode
+            else -> modes.first().second
+        }
+
+    // Per-mode explanation shown beneath the field, so users get guidance about
+    // what each mode changes (restored when the RNode wizard reused this selector).
+    val description =
+        stringResource(
+            when (knownMode) {
+                InterfaceMode.FULL -> R.string.interface_mode_desc_full
+                InterfaceMode.GATEWAY -> R.string.interface_mode_desc_gateway
+                InterfaceMode.ACCESS_POINT -> R.string.interface_mode_desc_access_point
+                InterfaceMode.ROAMING -> R.string.interface_mode_desc_roaming
+                InterfaceMode.BOUNDARY -> R.string.interface_mode_desc_boundary
+                InterfaceMode.INTERNAL -> R.string.interface_mode_desc_internal
+                null -> R.string.interface_mode_desc_unknown
+            },
+        )
+
+    Column {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
+        ) {
+            OutlinedTextField(
+                value = displayValue,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(stringResource(R.string.interface_mode_label)) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                modes.forEach { (mode, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onModeChange(mode)
+                            expanded = false
+                        },
+                    )
+                }
             }
         }
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

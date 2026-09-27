@@ -470,6 +470,13 @@ class ColumbaApplication : Application() {
                 val discoverInterfaces = startupConfig.discoverInterfaces
                 val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
                 val autoconnectInterfaceMode = startupConfig.autoconnectInterfaceMode
+                // Capture the raw DataStore values the config above was built from,
+                // so after init succeeds we can tell whether the user made a NEWER
+                // change during the (suspended) initialize call. Startup reads these
+                // before initialize, so a change saved mid-init is not what RNS
+                // started with.
+                val autoconnectCountAtStart = settingsRepository.getAutoconnectDiscoveredCount()
+                val autoconnectModeAtStart = settingsRepository.getAutoconnectInterfaceMode()
                 android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
                 android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
@@ -561,13 +568,32 @@ class ColumbaApplication : Application() {
                         SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
 
                         // A successful cold start rebuilds the Reticulum config from
-                        // the saved autoconnect count + mode (see config above), so
-                        // any deferred discovery change left pending before this
-                        // start is now in effect. Clear the persisted pending-restart
-                        // flag so reopening the discovery screen doesn't offer a
-                        // stale Apply that would needlessly restart Reticulum and
-                        // drop connections. Best-effort: must not fail startup.
-                        runCatching { settingsRepository.savePendingDiscoveryRestart(false) }
+                        // the saved autoconnect count + mode (see config above), so a
+                        // deferred discovery change left pending before this start is
+                        // now in effect. Clear the persisted pending-restart flag so
+                        // reopening the discovery screen doesn't offer a stale Apply
+                        // that would needlessly restart Reticulum and drop
+                        // connections.
+                        //
+                        // Guard against a lost-update: the user can change count/mode
+                        // while the (suspended) initialize call runs. Those edits are
+                        // saved AFTER startup read the values the config was built
+                        // from, so RNS is NOT actually running them. Only clear the
+                        // flag when the on-disk values still match what we started
+                        // with; otherwise keep it so the newer change still has an
+                        // Apply action. Best-effort: must not fail startup.
+                        runCatching {
+                            val countNow = settingsRepository.getAutoconnectDiscoveredCount()
+                            val modeNow = settingsRepository.getAutoconnectInterfaceMode()
+                            if (countNow == autoconnectCountAtStart && modeNow == autoconnectModeAtStart) {
+                                settingsRepository.savePendingDiscoveryRestart(false)
+                            } else {
+                                android.util.Log.d(
+                                    "ColumbaApplication",
+                                    "Cold-start init applied but a newer discovery change is pending; keeping Apply visible",
+                                )
+                            }
+                        }
 
                         // networkStatus.collect (set up earlier) already pushes
                         // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no

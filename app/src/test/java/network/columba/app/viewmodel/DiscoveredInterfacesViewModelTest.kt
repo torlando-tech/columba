@@ -644,8 +644,9 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // Then: State reflects the new count AND repository was called
+            // (hot-reload backend: value applied live, so pending=false)
             assertEquals(7, viewModel.state.value.autoconnectCount)
-            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(7) }
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCountAndPending(7, pending = false) }
         }
 
     @Test
@@ -1363,7 +1364,7 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             assertEquals("gateway", viewModel.state.value.autoconnectInterfaceMode)
-            coVerify { settingsRepository.saveAutoconnectInterfaceMode("gateway") }
+            coVerify { settingsRepository.saveAutoconnectInterfaceModeAndPending("gateway", pending = false) }
         }
 
     @Test
@@ -1377,7 +1378,7 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             assertNull(viewModel.state.value.autoconnectInterfaceMode)
-            coVerify { settingsRepository.saveAutoconnectInterfaceMode(null) }
+            coVerify { settingsRepository.saveAutoconnectInterfaceModeAndPending(null, pending = false) }
         }
 
     @Test
@@ -1391,7 +1392,7 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             assertEquals("roaming", viewModel.state.value.autoconnectInterfaceMode)
-            coVerify { settingsRepository.saveAutoconnectInterfaceMode("roaming") }
+            coVerify { settingsRepository.saveAutoconnectInterfaceModeAndPending("roaming", pending = true) }
             // Deferred: no immediate restart, pending flag set for Apply.
             coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
             assertTrue(viewModel.state.value.pendingDiscoveryRestart)
@@ -1437,7 +1438,7 @@ class DiscoveredInterfacesViewModelTest {
             // Persisted immediately, but NOT applied until Apply is tapped: the
             // restart is deferred so a count + mode change batch into one restart.
             assertEquals(7, viewModel.state.value.autoconnectCount)
-            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(7) }
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCountAndPending(7, pending = true) }
             coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
             assertTrue(viewModel.state.value.pendingDiscoveryRestart)
             assertFalse(viewModel.state.value.isRestarting)

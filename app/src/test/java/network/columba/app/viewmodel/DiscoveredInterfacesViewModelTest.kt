@@ -1493,8 +1493,13 @@ class DiscoveredInterfacesViewModelTest {
         runTest {
             useRestartOnlyBackend()
             mockApplyInterfaceChangesSuccess()
-            // Values unchanged by the restart, so the atomic clear succeeds.
-            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(any(), any()) } returns true
+            // The restart reads count=0 / mode=null (mock defaults) before it runs,
+            // so the VM must hand that exact baseline to the atomic clear. Stubbing
+            // only that baseline (and verifying it) proves the VM passes the right
+            // values - a wrong baseline would return false and fail this test.
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) } returns true
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -1510,7 +1515,34 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            // The VM passed the baseline it read before the restart to the clear.
+            coVerify { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) }
             assertFalse(viewModel.state.value.pendingDiscoveryRestart)
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `applyPendingDiscoveryRestart keeps Apply visible when a newer change was saved during the restart`() =
+        runTest {
+            useRestartOnlyBackend()
+            mockApplyInterfaceChangesSuccess()
+            // The atomic compare-and-clear detects that the on-disk value changed
+            // while the restart was in flight (a newer edit), so it does NOT clear
+            // the flag and reports that.
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(any(), any()) } returns false
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectCount(3)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+
+            viewModel.applyPendingDiscoveryRestart()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            // Restart succeeded but a newer change is pending: Apply must stay.
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
             assertFalse(viewModel.state.value.isRestarting)
         }
 
@@ -1561,9 +1593,13 @@ class DiscoveredInterfacesViewModelTest {
         runTest {
             useRestartOnlyBackend()
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
             mockApplyInterfaceChangesSuccess()
-            // Values unchanged by the toggle restart, so the atomic clear succeeds.
-            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(any(), any()) } returns true
+            // The toggle reads count=0 / mode=null (mock defaults) before its
+            // restart, so the VM must hand that exact baseline to the atomic
+            // clear. Stubbing only that baseline proves the VM passes the right
+            // values - a wrong one would return false and fail the test.
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) } returns true
             viewModel = createViewModel()
             advanceUntilIdle()
 
@@ -1577,6 +1613,7 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) }
             assertFalse(viewModel.state.value.pendingDiscoveryRestart)
         }
 

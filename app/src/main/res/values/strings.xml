@@ -212,6 +212,8 @@
 
     <!-- Interface mode selector (RNS config "mode" key) -->
     <string name="interface_mode_label">Interface Mode</string>
+    <string name="autoconnect_mode_label">Auto-connect interface mode</string>
+    <string name="autoconnect_mode_default">Default (let RNS decide)</string>
     <string name="interface_mode_full">Full (all features enabled)</string>
     <string name="interface_mode_gateway">Gateway (path discovery for others)</string>
     <string name="interface_mode_access_point">Access Point (quiet unless active)</string>

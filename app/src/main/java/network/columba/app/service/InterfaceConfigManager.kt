@@ -349,6 +349,7 @@ class InterfaceConfigManager
                     // Coerce -1 (never configured sentinel) to 0
                     val autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0
                     val autoconnectIfacOnly = settingsRepository.getAutoconnectIfacOnly()
+                    val autoconnectInterfaceMode = settingsRepository.getAutoconnectInterfaceMode()
                     val shareInstanceHosting = settingsRepository.getShareInstanceHostingEnabled()
                     Log.d(
                         TAG,
@@ -373,6 +374,7 @@ class InterfaceConfigManager
                             discoverInterfaces = discoverInterfaces,
                             autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                             autoconnectIfacOnly = autoconnectIfacOnly,
+                            autoconnectInterfaceMode = autoconnectInterfaceMode,
                             incomingMessageSizeLimitKb = incomingMessageSizeLimitKb,
                         )
 

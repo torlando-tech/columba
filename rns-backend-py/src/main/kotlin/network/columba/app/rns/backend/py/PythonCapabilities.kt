@@ -61,6 +61,9 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
     interfaces = InterfaceCaps(
         hotReloadInterfaces = false,
         autoconnectIfacOnlyFilter = false,
+        // Slim RNS 1.4+ parses `autoconnect_interface_mode` in the [reticulum]
+        // block and uses it for all auto-connected discovered interfaces.
+        autoconnectInterfaceMode = true,
         degradationHint =
             "The Python backend cannot hot-reload interfaces — applying changes " +
                 "restarts Reticulum (briefly disconnecting from peers).",

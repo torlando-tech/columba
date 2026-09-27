@@ -40,6 +40,7 @@ class StartupConfigLoader
             val discoverInterfaces: Boolean,
             val autoconnectDiscoveredCount: Int,
             val autoconnectIfacOnly: Boolean,
+            val autoconnectInterfaceMode: String? = null,
             val shareInstanceHosting: Boolean,
         )
 
@@ -60,6 +61,7 @@ class StartupConfigLoader
                 val discoverInterfacesDeferred = async { settingsRepository.getDiscoverInterfacesEnabled() }
                 val autoconnectCountDeferred = async { settingsRepository.getAutoconnectDiscoveredCount() }
                 val autoconnectIfacOnlyDeferred = async { settingsRepository.getAutoconnectIfacOnly() }
+                val autoconnectInterfaceModeDeferred = async { settingsRepository.getAutoconnectInterfaceMode() }
                 val shareInstanceHostingDeferred =
                     async { settingsRepository.getShareInstanceHostingEnabled() }
 
@@ -81,6 +83,7 @@ class StartupConfigLoader
                     // Coerce -1 (never configured sentinel) to 0 for the native stack
                     autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0,
                     autoconnectIfacOnly = autoconnectIfacOnlyDeferred.await(),
+                    autoconnectInterfaceMode = autoconnectInterfaceModeDeferred.await(),
                     shareInstanceHosting = shareInstanceHostingDeferred.await(),
                 )
             }

@@ -1330,6 +1330,73 @@ class DiscoveredInterfacesViewModelTest {
             coVerify { reticulumProtocol.setAutoconnectIfacOnly(false) }
         }
 
+    // ========== Autoconnect interface mode ==========
+
+    @Test
+    fun `loadDiscoverySettings pushes persisted autoconnect interface mode to state`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns "full"
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals("full", viewModel.state.value.autoconnectInterfaceMode)
+        }
+
+    @Test
+    fun `autoconnectInterfaceMode defaults to null when nothing persisted`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Explicit null stub: nothing persisted means RNS default.
+            assertNull(viewModel.state.value.autoconnectInterfaceMode)
+        }
+
+    @Test
+    fun `setAutoconnectInterfaceMode updates state and persists`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectInterfaceMode("gateway")
+            advanceUntilIdle()
+
+            assertEquals("gateway", viewModel.state.value.autoconnectInterfaceMode)
+            coVerify { settingsRepository.saveAutoconnectInterfaceMode("gateway") }
+        }
+
+    @Test
+    fun `setAutoconnectInterfaceMode null clears persisted value`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns "full"
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectInterfaceMode(null)
+            advanceUntilIdle()
+
+            assertNull(viewModel.state.value.autoconnectInterfaceMode)
+            coVerify { settingsRepository.saveAutoconnectInterfaceMode(null) }
+        }
+
+    @Test
+    fun `setAutoconnectInterfaceMode on restart-only backend triggers applyInterfaceChanges`() =
+        runTest {
+            useRestartOnlyBackend()
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectInterfaceMode("roaming")
+            advanceUntilIdle()
+
+            assertEquals("roaming", viewModel.state.value.autoconnectInterfaceMode)
+            coVerify { settingsRepository.saveAutoconnectInterfaceMode("roaming") }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
     // ========== Python-backend (restart-only) routing ==========
     // When `BackendCapabilities.interfaces.hotReloadInterfaces` is false, the
     // discovery toggle, autoconnect slider and IFAC-only switch must route

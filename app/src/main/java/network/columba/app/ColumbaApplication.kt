@@ -469,6 +469,7 @@ class ColumbaApplication : Application() {
                 val transportNodeEnabled = startupConfig.transport
                 val discoverInterfaces = startupConfig.discoverInterfaces
                 val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
+                val autoconnectInterfaceMode = startupConfig.autoconnectInterfaceMode
                 android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
                 android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
@@ -517,6 +518,7 @@ class ColumbaApplication : Application() {
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
+                        autoconnectInterfaceMode = autoconnectInterfaceMode,
                         // Prime the backend's delivery gate with the persisted
                         // limit at startup, before any delivery is possible
                         // (columba#1106 startup window)

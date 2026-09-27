@@ -86,6 +86,9 @@ internal object RnsConfigFile {
         // and `autoconnect = 0` mirrors upstream's own off-by-default.
         sb.appendLine("  discover_interfaces = ${yesNo(config.discoverInterfaces)}")
         sb.appendLine("  autoconnect_discovered_interfaces = ${config.autoconnectDiscoveredInterfaces}")
+        config.autoconnectInterfaceMode?.let { mode ->
+            sb.appendLine("  autoconnect_interface_mode = $mode")
+        }
         sb.appendLine()
         sb.appendLine("[logging]")
         sb.appendLine("  loglevel = ${logLevel(config.logLevel)}")

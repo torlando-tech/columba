@@ -1630,6 +1630,45 @@ class SettingsRepositoryTest {
             }
         }
 
+    // ========== Autoconnect interface mode ==========
+
+    @Test
+    fun autoconnectInterfaceMode_defaultsToNull() =
+        runTest {
+            assertNull(repository.getAutoconnectInterfaceMode())
+        }
+
+    @Test
+    fun autoconnectInterfaceMode_persistsValue() =
+        runTest {
+            repository.saveAutoconnectInterfaceMode("full")
+            assertEquals("full", repository.getAutoconnectInterfaceMode())
+            repository.saveAutoconnectInterfaceMode("roaming")
+            assertEquals("roaming", repository.getAutoconnectInterfaceMode())
+        }
+
+    @Test
+    fun autoconnectInterfaceMode_nullRemovesKey() =
+        runTest {
+            repository.saveAutoconnectInterfaceMode("gateway")
+            assertEquals("gateway", repository.getAutoconnectInterfaceMode())
+            // null clears the preference (restores RNS default).
+            repository.saveAutoconnectInterfaceMode(null)
+            assertNull(repository.getAutoconnectInterfaceMode())
+        }
+
+    @Test
+    fun autoconnectInterfaceModeFlow_emitsOnChange() =
+        runTest {
+            repository.autoconnectInterfaceModeFlow.test(timeout = 5.seconds) {
+                val initial = awaitItem()
+                assertNull(initial)
+                repository.saveAutoconnectInterfaceMode("full")
+                assertEquals("full", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     @Test
     fun saveLocationPrecisionRadius_transitionIntoPrecise_reArmsDismissedPrompt() =
         runTest {

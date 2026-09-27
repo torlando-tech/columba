@@ -132,6 +132,7 @@ class SettingsRepository
             val DISCOVER_INTERFACES_ENABLED = booleanPreferencesKey("discover_interfaces_enabled")
             val AUTOCONNECT_DISCOVERED_COUNT = intPreferencesKey("autoconnect_discovered_count")
             val AUTOCONNECT_IFAC_ONLY = booleanPreferencesKey("autoconnect_ifac_only")
+            val AUTOCONNECT_INTERFACE_MODE = stringPreferencesKey("autoconnect_interface_mode")
 
             // Location sharing preferences
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
@@ -1309,6 +1310,40 @@ class SettingsRepository
         suspend fun saveAutoconnectIfacOnly(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.AUTOCONNECT_IFAC_ONLY] = enabled
+            }
+        }
+
+        /**
+         * Flow of the auto-connected discovered interface mode.
+         * null = never set (use RNS default: MODE_GATEWAY when transport
+         * enabled, MODE_FULL otherwise). When set to a known mode string
+         * ("full", "gateway", "access_point", "roaming", "boundary",
+         * "internal"), it is written as `autoconnect_interface_mode` in the
+         * [reticulum] config block and picked up on the next RNS restart.
+         */
+        val autoconnectInterfaceModeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE]
+                }.distinctUntilChanged()
+
+        suspend fun getAutoconnectInterfaceMode(): String? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE]
+                }.first()
+
+        /**
+         * Save the auto-connected discovered interface mode.
+         * Pass null to clear the override and restore the RNS default.
+         */
+        suspend fun saveAutoconnectInterfaceMode(mode: String?) {
+            context.dataStore.edit { preferences ->
+                if (mode == null) {
+                    preferences.remove(PreferencesKeys.AUTOCONNECT_INTERFACE_MODE)
+                } else {
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE] = mode
+                }
             }
         }
 

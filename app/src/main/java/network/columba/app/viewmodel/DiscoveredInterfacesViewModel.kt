@@ -80,6 +80,8 @@ data class DiscoveredInterfacesState(
     val autoconnectCount: Int = 0,
     /** When true, auto-connect only accepts interfaces that announced IFAC. */
     val autoconnectIfacOnly: Boolean = false,
+    /** Interface mode for auto-connected discovered interfaces. null = RNS default. */
+    val autoconnectInterfaceMode: String? = null,
     // Runtime status (from RNS - current state)
     val isDiscoveryEnabled: Boolean = false,
     // Bootstrap interfaces that enable discovery
@@ -100,6 +102,7 @@ data class DiscoveredInterfacesState(
  * ViewModel for displaying discovered interfaces from RNS 1.1.x discovery system.
  */
 @HiltViewModel
+@Suppress("TooManyFunctions") // ViewModel with many user interaction methods is expected
 class DiscoveredInterfacesViewModel
     @Inject
     constructor(
@@ -218,6 +221,7 @@ class DiscoveredInterfacesViewModel
                     val discoverEnabled = settingsRepository.getDiscoverInterfacesEnabled()
                     val savedAutoconnect = settingsRepository.getAutoconnectDiscoveredCount()
                     val ifacOnly = settingsRepository.getAutoconnectIfacOnly()
+                    val autoconnectInterfaceMode = settingsRepository.getAutoconnectInterfaceMode()
                     val bootstrapNames = interfaceRepository.bootstrapInterfaceNames.first()
 
                     // Coerce -1 (never configured) to 0 for UI display
@@ -233,6 +237,7 @@ class DiscoveredInterfacesViewModel
                             discoverInterfacesEnabled = discoverEnabled,
                             autoconnectCount = autoconnectCount,
                             autoconnectIfacOnly = ifacOnly,
+                            autoconnectInterfaceMode = autoconnectInterfaceMode,
                             bootstrapInterfaceNames = bootstrapNames,
                         )
                     }
@@ -332,6 +337,41 @@ class DiscoveredInterfacesViewModel
                         it.copy(
                             isRestarting = false,
                             errorMessage = "Failed to update autoconnect count: ${e.message}",
+                        )
+                    }
+                }
+            }
+        }
+
+        /**
+         * Set the interface mode for auto-connected discovered interfaces.
+         * null restores the RNS default (MODE_GATEWAY when transport is
+         * enabled, MODE_FULL otherwise).
+         *
+         * Applies via the same restart path as [setAutoconnectCount]: on the
+         * Python backend the value is written to the config file and picked
+         * up on the next restart; on the Kotlin backend it is a no-op
+         * (reticulum-kt autoconnect has no mode knob).
+         */
+        fun setAutoconnectInterfaceMode(mode: String?) {
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    _state.update { it.copy(autoconnectInterfaceMode = mode) }
+
+                    settingsRepository.saveAutoconnectInterfaceMode(mode)
+                    Log.d(TAG, "Autoconnect interface mode saved: $mode")
+
+                    applyDiscoverySettingsChange {
+                        // No live setter; the config-file restart path picks
+                        // the value up from DataStore.
+                    }
+                    loadDiscoveredInterfaces()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to set autoconnect interface mode", e)
+                    _state.update {
+                        it.copy(
+                            isRestarting = false,
+                            errorMessage = "Failed to update autoconnect interface mode: ${e.message}",
                         )
                     }
                 }

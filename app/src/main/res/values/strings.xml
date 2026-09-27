@@ -217,7 +217,7 @@
     <string name="interface_mode_access_point">Access Point (quiet unless active)</string>
     <string name="interface_mode_roaming">Roaming (mobile relative to others)</string>
     <string name="interface_mode_boundary">Boundary</string>
-    <string name="interface_mode_internal">Internal (don’t re-broadcast announces)</string>
+    <string name="interface_mode_internal">Internal (don\u2019t re-broadcast announces from boundaries)</string>
     <!-- Per-mode explanations shown beneath the selector for user guidance -->
     <string name="interface_mode_desc_full">Default mode with all interface features enabled.</string>
     <string name="interface_mode_desc_gateway">Enables path discovery for other devices on the network.</string>

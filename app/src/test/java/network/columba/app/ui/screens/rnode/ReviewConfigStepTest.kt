@@ -315,7 +315,7 @@ class ReviewConfigStepTest {
         composeTestRule.onNodeWithText("Roaming (mobile relative to others)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Boundary").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("Internal (don\u2019t re-broadcast announces)")
+            .onNodeWithText("Internal (don\u2019t re-broadcast announces from boundaries)")
             .assertIsDisplayed()
     }
 

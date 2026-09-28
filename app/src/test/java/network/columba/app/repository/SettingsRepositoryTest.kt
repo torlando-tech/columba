@@ -58,6 +58,12 @@ class SettingsRepositoryTest {
         every { mockCustomThemeRepository.getThemeByIdFlow(any()) } returns flowOf(null)
 
         repository = SettingsRepository(context, mockCustomThemeRepository)
+
+        // Robolectric's DataStore singleton persists across test methods in this
+        // class. Reset the autoconnect-interface-mode key to null (its default)
+        // so tests that assert a null initial value don't depend on test order -
+        // the mode persistence/flow tests leave "full"/"roaming" stored.
+        kotlinx.coroutines.runBlocking { repository.saveAutoconnectInterfaceMode(null) }
     }
 
     @After

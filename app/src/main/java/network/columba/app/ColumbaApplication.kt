@@ -438,6 +438,18 @@ class ColumbaApplication : Application() {
 
                 // Load all configuration from database in parallel for faster startup
                 android.util.Log.d("ColumbaApplication", "Loading configuration from database (parallel)...")
+
+                // Capture the autoconnect count + mode the startup config will be
+                // built from, BEFORE loadConfig() reads them. The compare-and-clear
+                // after init uses these as its baseline, so it must reflect the
+                // values the config actually used. If we read them AFTER loadConfig()
+                // (the config-build) instead, a change saved during the (suspended)
+                // loadConfig() call would be captured into the baseline and its
+                // pending flag would be wrongly cleared - the new value would then
+                // show no Apply action even though Reticulum started with the old one.
+                val autoconnectCountAtStart = settingsRepository.getAutoconnectDiscoveredCount()
+                val autoconnectModeAtStart = settingsRepository.getAutoconnectInterfaceMode()
+
                 val startupConfig = startupConfigLoader.loadConfig()
                 val enabledInterfaces = startupConfig.interfaces
                 val activeIdentity = startupConfig.identity
@@ -470,13 +482,9 @@ class ColumbaApplication : Application() {
                 val discoverInterfaces = startupConfig.discoverInterfaces
                 val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
                 val autoconnectInterfaceMode = startupConfig.autoconnectInterfaceMode
-                // Capture the raw DataStore values the config above was built from,
-                // so after init succeeds we can tell whether the user made a NEWER
-                // change during the (suspended) initialize call. Startup reads these
-                // before initialize, so a change saved mid-init is not what RNS
-                // started with.
-                val autoconnectCountAtStart = settingsRepository.getAutoconnectDiscoveredCount()
-                val autoconnectModeAtStart = settingsRepository.getAutoconnectInterfaceMode()
+                // (autoconnectCountAtStart / autoconnectModeAtStart are captured
+                // above, before loadConfig(), so the post-init compare-and-clear
+                // baseline matches the values the config was built from.)
                 android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
                 android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")

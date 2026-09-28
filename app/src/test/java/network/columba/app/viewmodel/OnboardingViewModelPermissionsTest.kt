@@ -82,7 +82,7 @@ class OnboardingViewModelPermissionsTest {
         coEvery { mockIdentityRepository.getActiveIdentitySync() } returns null
         every { mockInterfaceRepository.allInterfaceEntities } returns MutableStateFlow(emptyList())
         every { mockInterfaceRepository.allInterfaces } returns MutableStateFlow(emptyList())
-        coEvery { mockInterfaceConfigManager.applyInterfaceChanges() } returns kotlin.Result.success(Unit)
+        coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any(), any()) } returns kotlin.Result.success(Unit)
 
         mockkObject(BatteryOptimizationManager)
         mockkStatic(ContextCompat::class)

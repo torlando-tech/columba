@@ -307,28 +307,31 @@ class DiscoveredInterfacesViewModel
                     }
                     Log.d(TAG, "Discovery settings saved: enabled=$newEnabled, autoconnect=$newAutoconnect")
 
-                    // Capture the values the restart is about to apply so we can
-                    // detect a newer change saved while the restart is in flight
-                    // (onServiceReady re-enables the controls before this restart
-                    // call returns, leaving a window to change count/mode).
-                    val countBefore = settingsRepository.getAutoconnectDiscoveredCount()
-                    val modeBefore = settingsRepository.getAutoconnectInterfaceMode()
+                    // Baseline = the EXACT count + mode the restart reads from
+                    // DataStore (reported via onAppliedConfig). A pre-read would be a
+                    // stale baseline: a setter can save a newer value between our read
+                    // and the restart's own read, and the restart would apply that newer
+                    // value while we compared against the old one. The pre-reads below
+                    // are only a fallback if the restart throws before it reports.
+                    var countAtStart = settingsRepository.getAutoconnectDiscoveredCount()
+                    var modeAtStart = settingsRepository.getAutoconnectInterfaceMode()
 
                     Log.d(TAG, "Applying discovery setting: enabled=$newEnabled")
-                    applyDiscoverySettingsChange {
-                        transportAdmin.setDiscoveryEnabled(newEnabled)
-                    }
-                    // The restart reads the config from DataStore before
-                    // onServiceReady re-enables controls, so a change saved while
-                    // the restart ran was NOT picked up. Clear the pending flag
-                    // ONLY when the on-disk values still match what the restart
-                    // applied - in one atomic DataStore edit so a newer setter
-                    // can't sneak in between the compare and the clear (clearing
-                    // unconditionally used to swallow such a change).
+                    applyDiscoverySettingsChange(
+                        hotApply = { transportAdmin.setDiscoveryEnabled(newEnabled) },
+                        onAppliedConfig = { count, mode ->
+                            countAtStart = count
+                            modeAtStart = mode
+                        },
+                    )
+                    // Clear the pending flag ONLY when the on-disk values still match
+                    // what the restart applied - in one atomic DataStore edit so a
+                    // newer setter can't sneak in between the compare and the clear
+                    // (clearing unconditionally used to swallow such a change).
                     val cleared =
                         settingsRepository.clearPendingDiscoveryRestartIfUnchanged(
-                            countAtStart = countBefore,
-                            modeAtStart = modeBefore,
+                            countAtStart = countAtStart,
+                            modeAtStart = modeAtStart,
                         )
                     if (cleared) {
                         _state.update { it.copy(pendingDiscoveryRestart = false) }
@@ -470,29 +473,36 @@ class DiscoveredInterfacesViewModel
             if (!_state.value.pendingDiscoveryRestart) return
             viewModelScope.launch(ioDispatcher) {
                 try {
-                    // Capture the values about to be applied so we can detect if the
-                    // user makes a *newer* change while the restart is in flight.
-                    val countBefore = settingsRepository.getAutoconnectDiscoveredCount()
-                    val modeBefore = settingsRepository.getAutoconnectInterfaceMode()
+                    // Baseline = the EXACT count + mode the restart reads from
+                    // DataStore, reported back via onAppliedConfig (InterfaceConfigManager
+                    // reads them internally, just before it applies the config). A pre-read
+                    // here would be a stale baseline: a setter can save a newer value
+                    // between our read and the restart's own read, and the restart would
+                    // apply that newer value while we compared against the old one -
+                    // leaving Apply visible for a change already in effect. The pre-reads
+                    // below are only a fallback if the restart throws before it reports.
+                    var countAtStart = settingsRepository.getAutoconnectDiscoveredCount()
+                    var modeAtStart = settingsRepository.getAutoconnectInterfaceMode()
                     // Keep pendingDiscoveryRestart set while restarting so that if
                     // the restart fails the Apply button stays visible for retry.
                     _state.update { it.copy(isRestarting = true) }
                     val result =
                         configManager.applyInterfaceChanges(
                             onServiceReady = { _state.update { it.copy(isRestarting = false) } },
+                            onAppliedConfig = { count, mode ->
+                                countAtStart = count
+                                modeAtStart = mode
+                            },
                         )
                     result.getOrThrow()
-                    // The restart reads the config from DataStore *before*
-                    // onServiceReady re-enables the controls, so a change saved
-                    // while the restart was running was NOT picked up by it. Clear
-                    // the pending flag ONLY when the on-disk values still match
+                    // Clear the pending flag ONLY when the on-disk values still match
                     // what the restart applied - in one atomic DataStore edit so a
                     // newer setter can't sneak in between the compare and the clear
                     // (clearing unconditionally used to swallow such a change).
                     val cleared =
                         settingsRepository.clearPendingDiscoveryRestartIfUnchanged(
-                            countAtStart = countBefore,
-                            modeAtStart = modeBefore,
+                            countAtStart = countAtStart,
+                            modeAtStart = modeAtStart,
                         )
                     if (cleared) {
                         _state.update { it.copy(pendingDiscoveryRestart = false) }
@@ -525,9 +535,9 @@ class DiscoveredInterfacesViewModel
                     val newValue = !_state.value.autoconnectIfacOnly
                     _state.update { it.copy(autoconnectIfacOnly = newValue) }
                     settingsRepository.saveAutoconnectIfacOnly(newValue)
-                    applyDiscoverySettingsChange {
-                        transportAdmin.setAutoconnectIfacOnly(newValue)
-                    }
+                    applyDiscoverySettingsChange(
+                        hotApply = { transportAdmin.setAutoconnectIfacOnly(newValue) },
+                    )
                     Log.d(TAG, "Autoconnect IFAC-only: $newValue")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to toggle autoconnect IFAC-only", e)
@@ -561,7 +571,10 @@ class DiscoveredInterfacesViewModel
          * DataStore (`InterfaceConfigManager.kt` step 9) when rebuilding the
          * RNS config, so DataStore is the source of truth at restart time.
          */
-        private suspend fun applyDiscoverySettingsChange(hotApply: suspend () -> Unit) {
+        private suspend fun applyDiscoverySettingsChange(
+            hotApply: suspend () -> Unit,
+            onAppliedConfig: ((count: Int, mode: String?) -> Unit)? = null,
+        ) {
             if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
                 hotApply()
                 _state.update { it.copy(isRestarting = false) }
@@ -573,6 +586,7 @@ class DiscoveredInterfacesViewModel
             val result =
                 configManager.applyInterfaceChanges(
                     onServiceReady = { _state.update { it.copy(isRestarting = false) } },
+                    onAppliedConfig = onAppliedConfig,
                 )
             // Rethrow so the caller's catch block sets a method-appropriate
             // error message and skips the post-success `loadDiscoveredInterfaces()`

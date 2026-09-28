@@ -85,10 +85,20 @@ class InterfaceConfigManager
          * @param onServiceReady Called after Reticulum is initialized (Step 9) but before
          *   post-init bookkeeping (identity restore, manager restart). Callers can use this
          *   to clear UI loading state early since the service is usable at this point.
+         * @param onAppliedConfig Called right after the discovery settings are read from
+         *   DataStore (and coerced) and just before the config is applied. Reports the
+         *   EXACT autoconnect count + mode this restart will apply. Callers that need to
+         *   detect a newer change saved while the restart was in flight (the discovery
+         *   Apply / toggle paths) should use these values - not a read they took before
+         *   invoking this method - as the baseline for their compare-and-clear, since a
+         *   setter can save a newer value between that earlier read and this one.
          * @return Result indicating success or failure with error details
          */
         @Suppress("CyclomaticComplexMethod", "LongMethod") // Complex but necessary service restart orchestration
-        suspend fun applyInterfaceChanges(onServiceReady: (() -> Unit)? = null): Result<Unit> {
+        suspend fun applyInterfaceChanges(
+            onServiceReady: (() -> Unit)? = null,
+            onAppliedConfig: ((count: Int, mode: String?) -> Unit)? = null,
+        ): Result<Unit> {
             // Apply flag lifecycle: set in Step 3, cleared HERE in finally. Keeping
             // the flag set across the whole apply (not just until initialize returns)
             // matters for two cross-process races:
@@ -357,6 +367,15 @@ class InterfaceConfigManager
                             "(saved=$savedAutoconnect), ifacOnly=$autoconnectIfacOnly, " +
                             "shareInstanceHosting=$shareInstanceHosting",
                     )
+
+                    // Report the exact discovery values this restart read from
+                    // DataStore so callers can use them as the baseline for their
+                    // compare-and-clear. The raw saved count (not the coerced -1->0
+                    // value) is reported because clearPendingDiscoveryRestartIfUnchanged
+                    // compares against the raw DataStore state. A change saved AFTER
+                    // this point is NOT what RNS ends up running, and must keep its
+                    // Apply action.
+                    onAppliedConfig?.invoke(savedAutoconnect, autoconnectInterfaceMode)
 
                     val config =
                         ReticulumConfig(

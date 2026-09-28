@@ -438,18 +438,6 @@ class ColumbaApplication : Application() {
 
                 // Load all configuration from database in parallel for faster startup
                 android.util.Log.d("ColumbaApplication", "Loading configuration from database (parallel)...")
-
-                // Capture the autoconnect count + mode the startup config will be
-                // built from, BEFORE loadConfig() reads them. The compare-and-clear
-                // after init uses these as its baseline, so it must reflect the
-                // values the config actually used. If we read them AFTER loadConfig()
-                // (the config-build) instead, a change saved during the (suspended)
-                // loadConfig() call would be captured into the baseline and its
-                // pending flag would be wrongly cleared - the new value would then
-                // show no Apply action even though Reticulum started with the old one.
-                val autoconnectCountAtStart = settingsRepository.getAutoconnectDiscoveredCount()
-                val autoconnectModeAtStart = settingsRepository.getAutoconnectInterfaceMode()
-
                 val startupConfig = startupConfigLoader.loadConfig()
                 val enabledInterfaces = startupConfig.interfaces
                 val activeIdentity = startupConfig.identity
@@ -482,9 +470,16 @@ class ColumbaApplication : Application() {
                 val discoverInterfaces = startupConfig.discoverInterfaces
                 val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
                 val autoconnectInterfaceMode = startupConfig.autoconnectInterfaceMode
-                // (autoconnectCountAtStart / autoconnectModeAtStart are captured
-                // above, before loadConfig(), so the post-init compare-and-clear
-                // baseline matches the values the config was built from.)
+                // The compare-and-clear baseline MUST be the exact values the config
+                // above was built from (read inside loadConfig()), not a separate
+                // DataStore read. A separate read - whether before or after loadConfig()
+                // - leaves a window where a setter saves a newer value: a read AFTER
+                // captures it (wrongly clearing the pending flag), a read BEFORE misses
+                // it (wrongly keeping Apply visible for a change Reticulum already
+                // started with). Sourcing the baseline from startupConfig eliminates
+                // both windows.
+                val autoconnectCountAtStart = startupConfig.autoconnectDiscoveredCountRaw
+                val autoconnectModeAtStart = startupConfig.autoconnectInterfaceMode
                 android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
                 android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")

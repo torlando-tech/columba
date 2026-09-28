@@ -39,6 +39,11 @@ class StartupConfigLoader
             val batteryProfile: BatteryProfile,
             val discoverInterfaces: Boolean,
             val autoconnectDiscoveredCount: Int,
+            // Raw saved count as read from DataStore (the -1 "never configured"
+            // sentinel preserved), NOT coerced to 0. The cold-start compare-and-clear
+            // uses this as its baseline and must compare against the same raw DataStore
+            // state, so the coercion is applied separately for the native stack.
+            val autoconnectDiscoveredCountRaw: Int = 0,
             val autoconnectIfacOnly: Boolean,
             val autoconnectInterfaceMode: String? = null,
             val shareInstanceHosting: Boolean,
@@ -82,6 +87,8 @@ class StartupConfigLoader
                     discoverInterfaces = discoverInterfacesDeferred.await(),
                     // Coerce -1 (never configured sentinel) to 0 for the native stack
                     autoconnectDiscoveredCount = if (savedAutoconnect >= 0) savedAutoconnect else 0,
+                    // Raw (un-coerced) count, preserved for the cold-start compare-and-clear baseline.
+                    autoconnectDiscoveredCountRaw = savedAutoconnect,
                     autoconnectIfacOnly = autoconnectIfacOnlyDeferred.await(),
                     autoconnectInterfaceMode = autoconnectInterfaceModeDeferred.await(),
                     shareInstanceHosting = shareInstanceHostingDeferred.await(),

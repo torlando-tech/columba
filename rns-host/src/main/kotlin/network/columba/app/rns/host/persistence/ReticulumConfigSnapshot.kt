@@ -36,13 +36,15 @@ import network.columba.app.rns.api.model.ReticulumConfig
 object ReticulumConfigSnapshot {
     private const val TAG = "ReticulumConfigSnapshot"
     private const val FILE_NAME = "rns_config_snapshot.bin"
-    // Bumped to 3 when ReticulumConfig.incomingMessageSizeLimitKb was
-    // added. Older snapshots don't include the new field and would
-    // unmarshal with a torn parcel layout from this version onward, so we
-    // explicitly discard them; the UI re-initialises on next launch and
-    // writes V3. (V2 -> V1 discard for shareInstanceHosting: see git
-    // history of this constant.)
-    private const val VERSION = 3
+    // Bumped to 4 when ReticulumConfig.autoconnectInterfaceMode was added.
+    // The field sits mid-layout (before interfaceDiscoverySources /
+    // requiredDiscoveryValue / incomingMessageSizeLimitKb), so V3 snapshots
+    // predate it and would unmarshal with a torn parcel layout from this
+    // version onward. We explicitly discard them; the UI re-initialises on
+    // next launch and writes V4. (V3 bumped for incomingMessageSizeLimitKb;
+    // V2 -> V1 discard for shareInstanceHosting: see git history of this
+    // constant.)
+    private const val VERSION = 4
 
     /**
      * The deserialized snapshot: a config without an identity key plus the

@@ -146,7 +146,7 @@ class DiscoveredInterfacesViewModelTest {
      * the VM treats the restart as successful and invokes `onServiceReady`.
      */
     private fun mockApplyInterfaceChangesSuccess() {
-        coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } coAnswers {
             firstArg<(() -> Unit)?>()?.invoke()
             Result.success(Unit)
         }
@@ -644,8 +644,9 @@ class DiscoveredInterfacesViewModelTest {
             advanceUntilIdle()
 
             // Then: State reflects the new count AND repository was called
+            // (hot-reload backend: value applied live, so pending=false)
             assertEquals(7, viewModel.state.value.autoconnectCount)
-            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(7) }
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCountAndPending(7, pending = false) }
         }
 
     @Test
@@ -662,7 +663,7 @@ class DiscoveredInterfacesViewModelTest {
             // Then
             assertFalse(viewModel.state.value.isRestarting)
             coVerify { reticulumProtocol.setAutoconnectLimit(5) }
-            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -860,7 +861,7 @@ class DiscoveredInterfacesViewModelTest {
             // Then
             assertFalse(viewModel.state.value.isRestarting)
             coVerify { reticulumProtocol.setDiscoveryEnabled(true) }
-            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -1330,6 +1331,74 @@ class DiscoveredInterfacesViewModelTest {
             coVerify { reticulumProtocol.setAutoconnectIfacOnly(false) }
         }
 
+    // ========== Autoconnect interface mode ==========
+
+    @Test
+    fun `loadDiscoverySettings pushes persisted autoconnect interface mode to state`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns "full"
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals("full", viewModel.state.value.autoconnectInterfaceMode)
+        }
+
+    @Test
+    fun `autoconnectInterfaceMode defaults to null when nothing persisted`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Explicit null stub: nothing persisted means RNS default.
+            assertNull(viewModel.state.value.autoconnectInterfaceMode)
+        }
+
+    @Test
+    fun `setAutoconnectInterfaceMode updates state and persists`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectInterfaceMode("gateway")
+            advanceUntilIdle()
+
+            assertEquals("gateway", viewModel.state.value.autoconnectInterfaceMode)
+            coVerify { settingsRepository.saveAutoconnectInterfaceModeAndPending("gateway", pending = false) }
+        }
+
+    @Test
+    fun `setAutoconnectInterfaceMode null clears persisted value`() =
+        runTest {
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns "full"
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectInterfaceMode(null)
+            advanceUntilIdle()
+
+            assertNull(viewModel.state.value.autoconnectInterfaceMode)
+            coVerify { settingsRepository.saveAutoconnectInterfaceModeAndPending(null, pending = false) }
+        }
+
+    @Test
+    fun `setAutoconnectInterfaceMode on restart-only backend defers restart and marks pending`() =
+        runTest {
+            useRestartOnlyBackend()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectInterfaceMode("roaming")
+            advanceUntilIdle()
+
+            assertEquals("roaming", viewModel.state.value.autoconnectInterfaceMode)
+            coVerify { settingsRepository.saveAutoconnectInterfaceModeAndPending("roaming", pending = true) }
+            // Deferred: no immediate restart, pending flag set for Apply.
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
     // ========== Python-backend (restart-only) routing ==========
     // When `BackendCapabilities.interfaces.hotReloadInterfaces` is false, the
     // discovery toggle, autoconnect slider and IFAC-only switch must route
@@ -1352,24 +1421,26 @@ class DiscoveredInterfacesViewModelTest {
 
             assertTrue(viewModel.state.value.discoverInterfacesEnabled)
             coVerify { settingsRepository.saveDiscoverInterfacesEnabled(true) }
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
             assertFalse(viewModel.state.value.isRestarting)
         }
 
     @Test
-    fun `setAutoconnectCount on restart-only backend triggers applyInterfaceChanges`() =
+    fun `setAutoconnectCount on restart-only backend defers restart and marks pending`() =
         runTest {
             useRestartOnlyBackend()
-            mockApplyInterfaceChangesSuccess()
             viewModel = createViewModel()
             advanceUntilIdle()
 
             viewModel.setAutoconnectCount(7)
             advanceUntilIdle()
 
+            // Persisted immediately, but NOT applied until Apply is tapped: the
+            // restart is deferred so a count + mode change batch into one restart.
             assertEquals(7, viewModel.state.value.autoconnectCount)
-            coVerify { settingsRepository.saveAutoconnectDiscoveredCount(7) }
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { settingsRepository.saveAutoconnectDiscoveredCountAndPending(7, pending = true) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
             assertFalse(viewModel.state.value.isRestarting)
         }
 
@@ -1387,7 +1458,7 @@ class DiscoveredInterfacesViewModelTest {
 
             assertTrue(viewModel.state.value.autoconnectIfacOnly)
             coVerify { settingsRepository.saveAutoconnectIfacOnly(true) }
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
             assertFalse(viewModel.state.value.isRestarting)
         }
 
@@ -1396,7 +1467,7 @@ class DiscoveredInterfacesViewModelTest {
         runTest {
             useRestartOnlyBackend()
             coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
-            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns
+            coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } returns
                 Result.failure(RuntimeException("Restart blew up"))
             viewModel = createViewModel()
             advanceUntilIdle()
@@ -1413,6 +1484,175 @@ class DiscoveredInterfacesViewModelTest {
                     ?.contains("Failed to update discovery settings") == true,
             )
             assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    // ========== applyPendingDiscoveryRestart ==========
+
+    @Test
+    fun `applyPendingDiscoveryRestart performs one restart and clears pending`() =
+        runTest {
+            useRestartOnlyBackend()
+            mockApplyInterfaceChangesSuccess()
+            // The restart reads count=0 / mode=null (mock defaults) before it runs,
+            // so the VM must hand that exact baseline to the atomic clear. Stubbing
+            // only that baseline (and verifying it) proves the VM passes the right
+            // values - a wrong baseline would return false and fail this test.
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) } returns true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            // Batch a count + mode change: neither restarts immediately.
+            viewModel.setAutoconnectCount(3)
+            viewModel.setAutoconnectInterfaceMode("full")
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
+
+            // One tap applies both via a single restart.
+            viewModel.applyPendingDiscoveryRestart()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
+            // The VM passed the baseline it read before the restart to the clear.
+            coVerify { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) }
+            assertFalse(viewModel.state.value.pendingDiscoveryRestart)
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `applyPendingDiscoveryRestart keeps Apply visible when a newer change was saved during the restart`() =
+        runTest {
+            useRestartOnlyBackend()
+            mockApplyInterfaceChangesSuccess()
+            // The atomic compare-and-clear detects that the on-disk value changed
+            // while the restart was in flight (a newer edit), so it does NOT clear
+            // the flag and reports that.
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(any(), any()) } returns false
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectCount(3)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+
+            viewModel.applyPendingDiscoveryRestart()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
+            // Restart succeeded but a newer change is pending: Apply must stay.
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `applyPendingDiscoveryRestart uses the restart's own read as its baseline`() =
+        runTest {
+            useRestartOnlyBackend()
+            // The restart's own DataStore read (reported via onAppliedConfig) is the
+            // authoritative baseline - NOT the VM's earlier pre-read. A setter that
+            // saves a newer value between the pre-read and the restart's read would
+            // otherwise be applied by the restart yet compared against the stale
+            // baseline, wrongly keeping Apply visible.
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
+            // Simulate the restart reading a NEWER count (7) + mode ("full") than the
+            // VM's pre-read (0, null) - e.g. a change saved in between.
+            coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } coAnswers {
+                firstArg<(() -> Unit)?>()?.invoke()
+                secondArg<((Int, String?) -> Unit)?>()?.invoke(7, "full")
+                Result.success(Unit)
+            }
+            // The clear must be issued with the callback values (7, "full"). Stubbing
+            // that baseline true - and NOT the stale (0, null) - proves the VM
+            // forwarded the restart's own read; a stale-baseline comparison would
+            // request (0, null), which is not stubbed, and would fail this test.
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(7, "full") } returns true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectCount(7)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+
+            viewModel.applyPendingDiscoveryRestart()
+            advanceUntilIdle()
+
+            coVerify { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(7, "full") }
+            assertFalse(viewModel.state.value.pendingDiscoveryRestart)
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `applyPendingDiscoveryRestart is a no-op when nothing is pending`() =
+        runTest {
+            useRestartOnlyBackend()
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.applyPendingDiscoveryRestart()
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
+            assertFalse(viewModel.state.value.isRestarting)
+        }
+
+    @Test
+    fun `applyPendingDiscoveryRestart keeps pending on failure for retry`() =
+        runTest {
+            useRestartOnlyBackend()
+            coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
+            mockApplyInterfaceChangesSuccess()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.setAutoconnectCount(4)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+
+            // Force the restart to fail.
+            coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } returns
+                Result.failure(RuntimeException("Restart blew up"))
+            viewModel.applyPendingDiscoveryRestart()
+            advanceUntilIdle()
+
+            // Failed: pending stays so the Apply button remains for retry.
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+            assertFalse(viewModel.state.value.isRestarting)
+            assertTrue(
+                viewModel.state.value.errorMessage
+                    ?.contains("Failed to apply discovery settings") == true,
+            )
+        }
+
+    @Test
+    fun `toggleDiscovery clears a pending autoconnect change since its restart applies it`() =
+        runTest {
+            useRestartOnlyBackend()
+            coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
+            coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
+            mockApplyInterfaceChangesSuccess()
+            // The toggle reads count=0 / mode=null (mock defaults) before its
+            // restart, so the VM must hand that exact baseline to the atomic
+            // clear. Stubbing only that baseline proves the VM passes the right
+            // values - a wrong one would return false and fail the test.
+            coEvery { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) } returns true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.setAutoconnectCount(5)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.pendingDiscoveryRestart)
+
+            // Toggling discovery restarts (rebuilding config from DataStore), so it
+            // applies the pending count and clears the flag - no stale Apply button.
+            viewModel.toggleDiscovery()
+            advanceUntilIdle()
+
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
+            coVerify { settingsRepository.clearPendingDiscoveryRestartIfUnchanged(0, null) }
+            assertFalse(viewModel.state.value.pendingDiscoveryRestart)
         }
 
     // ========== Helper Functions ==========

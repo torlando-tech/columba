@@ -87,6 +87,14 @@ data class ReticulumConfig(
      */
     val autoconnectIfacOnly: Boolean = false,
     /**
+     * Interface mode for auto-connected discovered interfaces.
+     * null = use RNS default (MODE_GATEWAY when transport is enabled,
+     *       MODE_FULL otherwise).
+     * When set, written as `autoconnect_interface_mode` in the [reticulum]
+     * config block. Accepted values match InterfaceMode.value strings.
+     */
+    val autoconnectInterfaceMode: String? = null,
+    /**
      * List of identity hashes (hex) of trusted discovery sources.
      * If null or empty, all discovered interfaces are considered.
      * If set, only interfaces from these sources will be auto-connected.
@@ -133,6 +141,7 @@ data class ReticulumConfig(
             discoverInterfaces == other.discoverInterfaces &&
             autoconnectDiscoveredInterfaces == other.autoconnectDiscoveredInterfaces &&
             autoconnectIfacOnly == other.autoconnectIfacOnly &&
+            autoconnectInterfaceMode == other.autoconnectInterfaceMode &&
             interfaceDiscoverySources == other.interfaceDiscoverySources &&
             requiredDiscoveryValue == other.requiredDiscoveryValue &&
             incomingMessageSizeLimitKb == other.incomingMessageSizeLimitKb
@@ -154,6 +163,7 @@ data class ReticulumConfig(
         result = 31 * result + discoverInterfaces.hashCode()
         result = 31 * result + autoconnectDiscoveredInterfaces
         result = 31 * result + autoconnectIfacOnly.hashCode()
+        result = 31 * result + (autoconnectInterfaceMode?.hashCode() ?: 0)
         result = 31 * result + (interfaceDiscoverySources?.hashCode() ?: 0)
         result = 31 * result + requiredDiscoveryValue
         result = 31 * result + (incomingMessageSizeLimitKb?.hashCode() ?: 0)
@@ -187,6 +197,7 @@ data class ReticulumConfig(
             "discoverInterfaces=$discoverInterfaces, " +
             "autoconnectDiscoveredInterfaces=$autoconnectDiscoveredInterfaces, " +
             "autoconnectIfacOnly=$autoconnectIfacOnly, " +
+            "autoconnectInterfaceMode=$autoconnectInterfaceMode, " +
             "interfaceDiscoverySources=$interfaceDiscoverySources, " +
             "requiredDiscoveryValue=$requiredDiscoveryValue, " +
             "incomingMessageSizeLimitKb=$incomingMessageSizeLimitKb" +

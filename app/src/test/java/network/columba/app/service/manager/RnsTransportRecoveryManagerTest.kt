@@ -118,7 +118,7 @@ class RnsTransportRecoveryManagerTest {
         every { configApplyFlagManager.isApplyingConfig() } answers { applyingConfig }
         every { interfaceRepository.enabledInterfaces } answers { flowOf(enabledInterfaces) }
         coEvery { rnsTransportAdmin.getDebugInfo() } answers { debugInfo }
-        coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } returns Result.success(Unit)
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } returns Result.success(Unit)
 
         manager =
             RnsTransportRecoveryManager(
@@ -148,7 +148,7 @@ class RnsTransportRecoveryManagerTest {
         debugInfo = mapOf("interfaces" to emptyList<Any>()) // dead state
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     // --- maybeRecover: RNS status gate ---
@@ -159,7 +159,7 @@ class RnsTransportRecoveryManagerTest {
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     @Test
@@ -168,7 +168,7 @@ class RnsTransportRecoveryManagerTest {
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     // --- maybeRecover: in-apply flag gate ---
@@ -179,7 +179,7 @@ class RnsTransportRecoveryManagerTest {
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     // --- maybeRecover: transport gate ---
@@ -190,7 +190,7 @@ class RnsTransportRecoveryManagerTest {
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     // --- maybeRecover: healthy state ---
@@ -207,7 +207,7 @@ class RnsTransportRecoveryManagerTest {
                 )
             val recovered = manager.maybeRecover()
             assertFalse(recovered)
-            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -219,7 +219,7 @@ class RnsTransportRecoveryManagerTest {
             mapOf("interfaces" to listOf(mapOf("name" to "Bluetooth LE", "online" to true)))
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     @Test
@@ -228,7 +228,7 @@ class RnsTransportRecoveryManagerTest {
         debugInfo = mapOf("interfaces" to emptyList<Any>())
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     // --- maybeRecover: the #1127 dead state (the fix path) ---
@@ -240,7 +240,7 @@ class RnsTransportRecoveryManagerTest {
             debugInfo = mapOf("interfaces" to emptyList<Any>())
             val recovered = manager.maybeRecover()
             assertTrue(recovered)
-            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -255,7 +255,7 @@ class RnsTransportRecoveryManagerTest {
             )
         val recovered = manager.maybeRecover()
         assertTrue(recovered)
-        coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     @Test
@@ -270,7 +270,7 @@ class RnsTransportRecoveryManagerTest {
             )
         val recovered = manager.maybeRecover()
         assertFalse(recovered)
-        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     // --- maybeRecover: cooldown ---
@@ -282,12 +282,12 @@ class RnsTransportRecoveryManagerTest {
         // Immediately after (same clock tick): cooldown active, live set still empty.
         val second = manager.maybeRecover()
         assertFalse(second)
-        coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         // Once the cooldown elapses the manager may recover again (live set still empty).
         clockMs += RnsTransportRecoveryManager.RECOVERY_COOLDOWN_MS + 1
         val third = manager.maybeRecover()
         assertTrue(third)
-        coVerify(exactly = 2) { interfaceConfigManager.applyInterfaceChanges(any()) }
+        coVerify(exactly = 2) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
     }
 
     // --- isIntactNow invariant ---

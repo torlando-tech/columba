@@ -83,12 +83,14 @@ def build_venv():
             [str(py), "-m", "pip", "install", "-q",
              f"git+https://github.com/torlando-tech/Reticulum@{shas['rns']}",
              f"git+https://github.com/torlando-tech/LXMF@{shas['lxmf']}",
+             f"git+https://github.com/torlando-tech/ble-reticulum@{shas['ble']}",
+             "bleak",
              "cryptography>=42.0.0"],
             capture_output=True, text=True,
         )
         if r.returncode != 0:
             sys.stderr.write(r.stdout + "\n" + r.stderr + "\n")
-            raise SystemExit("pinned RNS/LXMF install failed")
+            raise SystemExit("pinned RNS/LXMF/ble-reticulum install failed")
     except BaseException:
         shutil.rmtree(venv, ignore_errors=True)
         raise

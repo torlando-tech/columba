@@ -17,9 +17,13 @@ a future pin that regresses the fix, even though the one-line change lives in
 the ble-reticulum wheel. It is contract-agnostic: it names no RNS version and
 no specific RNS read site, so it stays valid across RNS upgrades.
 
-Requires the real pinned RNS + ble-reticulum to be importable (the runner
-installs the exact SHAs). In an environment without them it skips rather than
-fails, matching the stub-based unit suite's portability.
+Skip semantics: the class is skipped only when the real pinned RNS is not
+importable (so the stub-based unit suite keeps running anywhere, exactly like
+``test_rns_interface_contract.py``). When real RNS IS present - i.e. this is
+the pinned-dependency runner, which always installs the pinned ble-reticulum
+wheel - a ``BLEPeerInterface`` import failure raises in ``setUpClass`` and
+errors the tests rather than skipping, so a pin that installs but breaks the
+import is caught loudly instead of passing silently.
 """
 
 import shutil
@@ -29,25 +33,33 @@ import unittest
 from unittest.mock import Mock
 
 
-def _real_ble_available():
-    """True when the real (non-stub) RNS and ble_reticulum packages import.
+def _real_rns_available():
+    """True when the real (non-stub) RNS package is importable.
 
-    Matches the import style of ``test_rns_interface_contract.py``: a stubbed
-    RNS (used by the unit tests) has no ``_version`` submodule, so its presence
-    is the reliable "real RNS" signal.
+    Matches ``test_rns_interface_contract.py`` exactly: a stubbed RNS (used by
+    the unit tests) has no ``_version`` submodule, so its presence is the
+    reliable "real RNS" signal. The class is skipped on this alone, for
+    portability with the stub-based unit suite.
+
+    NOTE: the ``ble_reticulum`` import is deliberately NOT part of this gate.
+    It happens in ``setUpClass`` so that, when the real RNS is present (i.e.
+    this is the pinned-dependency runner, which always installs the pinned
+    ble-reticulum wheel), a ``BLEPeerInterface`` that can no longer be
+    imported RAISES and errors the tests instead of silently skipping. A
+    future pin that installs but breaks the import is exactly the regression
+    this test exists to catch, so it must fail loudly, not pass.
     """
     try:
         import RNS  # noqa: F401
         import RNS._version  # noqa: F401  (a stubbed RNS has no _version)
-        from ble_reticulum.BLEInterface import BLEPeerInterface  # noqa: F401
         return True
     except Exception:
         return False
 
 
 @unittest.skipUnless(
-    _real_ble_available(),
-    "real pinned RNS/ble-reticulum not importable in this environment",
+    _real_rns_available(),
+    "real pinned RNS not importable in this environment",
 )
 class BlePeerIfacSizeTests(unittest.TestCase):
     """The pinned BLEPeerInterface must inherit ifac_size from its parent."""

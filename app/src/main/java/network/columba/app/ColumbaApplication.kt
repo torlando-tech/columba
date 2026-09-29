@@ -469,6 +469,17 @@ class ColumbaApplication : Application() {
                 val transportNodeEnabled = startupConfig.transport
                 val discoverInterfaces = startupConfig.discoverInterfaces
                 val autoconnectDiscoveredCount = startupConfig.autoconnectDiscoveredCount
+                val autoconnectInterfaceMode = startupConfig.autoconnectInterfaceMode
+                // The compare-and-clear baseline MUST be the exact values the config
+                // above was built from (read inside loadConfig()), not a separate
+                // DataStore read. A separate read - whether before or after loadConfig()
+                // - leaves a window where a setter saves a newer value: a read AFTER
+                // captures it (wrongly clearing the pending flag), a read BEFORE misses
+                // it (wrongly keeping Apply visible for a change Reticulum already
+                // started with). Sourcing the baseline from startupConfig eliminates
+                // both windows.
+                val autoconnectCountAtStart = startupConfig.autoconnectDiscoveredCountRaw
+                val autoconnectModeAtStart = startupConfig.autoconnectInterfaceMode
                 android.util.Log.d("ColumbaApplication", "Loaded ${enabledInterfaces.size} enabled interface(s)")
                 android.util.Log.d("ColumbaApplication", "Prefer own instance: $preferOwnInstance")
                 android.util.Log.d("ColumbaApplication", "Transport node enabled: $transportNodeEnabled")
@@ -517,6 +528,7 @@ class ColumbaApplication : Application() {
                         discoverInterfaces = discoverInterfaces,
                         autoconnectDiscoveredInterfaces = autoconnectDiscoveredCount,
                         autoconnectIfacOnly = startupConfig.autoconnectIfacOnly,
+                        autoconnectInterfaceMode = autoconnectInterfaceMode,
                         // Prime the backend's delivery gate with the persisted
                         // limit at startup, before any delivery is possible
                         // (columba#1106 startup window)
@@ -557,6 +569,35 @@ class ColumbaApplication : Application() {
                         // SharedInstanceStatus.persist() so they cannot drift apart.
                         // Best-effort: a failure here must not fail app startup.
                         SharedInstanceStatus.persist(rnsTransportAdmin, settingsRepository)
+
+                        // A successful cold start rebuilds the Reticulum config from
+                        // the saved autoconnect count + mode (see config above), so a
+                        // deferred discovery change left pending before this start is
+                        // now in effect. Clear the persisted pending-restart flag so
+                        // reopening the discovery screen doesn't offer a stale Apply
+                        // that would needlessly restart Reticulum and drop
+                        // connections.
+                        //
+                        // The compare and the clear happen in ONE atomic DataStore
+                        // edit: a setter that saves a newer value (with
+                        // pending=true) while the (suspended) initialize call ran must
+                        // keep its Apply action, and a separate read-then-clear would
+                        // race it. The baseline is the raw DataStore values startup
+                        // read BEFORE initialize (the values the config was built
+                        // from). Best-effort: must not fail startup.
+                        runCatching {
+                            val stillUnchanged = settingsRepository
+                                .clearPendingDiscoveryRestartIfUnchanged(
+                                    countAtStart = autoconnectCountAtStart,
+                                    modeAtStart = autoconnectModeAtStart,
+                                )
+                            if (!stillUnchanged) {
+                                android.util.Log.d(
+                                    "ColumbaApplication",
+                                    "Cold-start init applied but a newer discovery change is pending; keeping Apply visible",
+                                )
+                            }
+                        }
 
                         // networkStatus.collect (set up earlier) already pushes
                         // ACTION_UPDATE_NOTIFICATION when status transitions to READY, so no

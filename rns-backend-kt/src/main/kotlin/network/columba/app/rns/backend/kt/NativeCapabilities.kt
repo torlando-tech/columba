@@ -33,6 +33,9 @@ val NATIVE_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         // `autoconnectIfacOnly` is set and a discovered interface didn't
         // advertise an IFAC netname, the factory returns null and skips it.
         autoconnectIfacOnlyFilter = true,
+        // reticulum-kt's autoconnect path hardcodes its own mode logic
+        // (AC_TRANSPORT_MODE) with no config knob.
+        autoconnectInterfaceMode = false,
     ),
     telemetry = TelemetryCaps(
         collectorHostMode = Support.EXPERIMENTAL,

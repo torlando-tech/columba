@@ -317,7 +317,7 @@ class DebugViewModelEventDrivenTest {
     fun `restartService sets isRestarting state correctly`() =
         runTest(testDispatcher) {
             // Given
-            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any(), any()) } coAnswers {
                 firstArg<(() -> Unit)?>()?.invoke()
                 Result.success(Unit)
             }
@@ -340,7 +340,7 @@ class DebugViewModelEventDrivenTest {
     fun `restartService handles exception and resets isRestarting`() =
         runTest(testDispatcher) {
             // Given - make applyInterfaceChanges throw
-            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } throws RuntimeException("Restart failed")
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any(), any()) } throws RuntimeException("Restart failed")
 
             val viewModel = buildViewModel()
             advanceUntilIdle()

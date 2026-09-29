@@ -61,11 +61,18 @@ data class BackendCapabilities(
      * ignores any `autoconnect_ifac_only` config option. UI hides the
      * IFAC-only Switch on backends that report `false` so the toggle
      * doesn't silently lie about its effect.
+     *
+     * `autoconnectInterfaceMode` reports whether the backend supports
+     * setting the interface mode for auto-connected discovered interfaces
+     * via the `autoconnect_interface_mode` config key. The Python backend
+     * (slim RNS 1.4+) honours it; reticulum-kt autoconnect has no mode
+     * knob. UI hides the mode selector on backends that report `false`.
      */
     @Parcelize
     data class InterfaceCaps(
         val hotReloadInterfaces: Boolean,
         val autoconnectIfacOnlyFilter: Boolean = false,
+        val autoconnectInterfaceMode: Boolean = false,
         val degradationHint: String? = null,
     ) : Parcelable
 

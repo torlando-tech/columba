@@ -240,7 +240,7 @@ class SettingsViewModelIncomingMessageLimitTest {
 
         // Mock other required methods
         coEvery { identityRepository.getActiveIdentitySync() } returns null
-        coEvery { interfaceConfigManager.applyInterfaceChanges() } returns Result.success(Unit)
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } returns Result.success(Unit)
 
         // Mock RNS seam sub-interfaces
         every { rnsCore.networkStatus } returns networkStatusFlow

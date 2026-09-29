@@ -1,6 +1,7 @@
 package network.columba.app.rns.backend.py
 
 import network.columba.app.rns.api.model.InterfaceConfig
+import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.rns.api.model.LogLevel
 import network.columba.app.rns.api.model.ReticulumConfig
 
@@ -86,6 +87,19 @@ internal object RnsConfigFile {
         // and `autoconnect = 0` mirrors upstream's own off-by-default.
         sb.appendLine("  discover_interfaces = ${yesNo(config.discoverInterfaces)}")
         sb.appendLine("  autoconnect_discovered_interfaces = ${config.autoconnectDiscoveredInterfaces}")
+        // Validate before writing: a restored preferences backup (or a
+        // hand-edited value) can carry an unknown or multiline mode. The UI
+        // selector only emits InterfaceMode.value strings, but an
+        // unvalidated write here would either corrupt the RNS config (a
+        // multiline value breaks the `key = value` grammar) or leave RNS on
+        // its default while the UI still shows the "Default" label. Omit the
+        // line for anything that isn't a known mode so RNS falls back to its
+        // own MODE_GATEWAY/MODE_FULL default instead of a bad value.
+        config.autoconnectInterfaceMode
+            ?.takeIf { InterfaceMode.fromValue(it) != null }
+            ?.let { mode ->
+                sb.appendLine("  autoconnect_interface_mode = $mode")
+            }
         sb.appendLine()
         sb.appendLine("[logging]")
         sb.appendLine("  loglevel = ${logLevel(config.logLevel)}")

@@ -41,7 +41,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -70,6 +73,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -88,6 +92,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import network.columba.app.R
 import network.columba.app.rns.api.model.DiscoveredInterface
+import network.columba.app.rns.api.model.InterfaceMode
 import network.columba.app.ui.components.LocalCapabilities
 import network.columba.app.ui.components.ServiceRestartBanner
 import network.columba.app.ui.components.SortModeSelector
@@ -208,11 +213,15 @@ fun DiscoveredInterfacesScreen(
                                 isSettingEnabled = state.discoverInterfacesEnabled,
                                 autoconnectCount = state.autoconnectCount,
                                 autoconnectIfacOnly = state.autoconnectIfacOnly,
+                                autoconnectInterfaceMode = state.autoconnectInterfaceMode,
                                 bootstrapInterfaceNames = state.bootstrapInterfaceNames,
                                 isRestarting = state.isRestarting,
+                                pendingRestart = state.pendingDiscoveryRestart,
                                 onToggleDiscovery = { viewModel.toggleDiscovery() },
                                 onAutoconnectCountChange = { viewModel.setAutoconnectCount(it) },
+                                onAutoconnectInterfaceModeChange = { viewModel.setAutoconnectInterfaceMode(it) },
                                 onToggleAutoconnectIfacOnly = { viewModel.toggleAutoconnectIfacOnly() },
+                                onApplyDiscoveryChanges = { viewModel.applyPendingDiscoveryRestart() },
                             )
                         }
 
@@ -356,11 +365,15 @@ internal fun DiscoverySettingsCard(
     isSettingEnabled: Boolean,
     autoconnectCount: Int = 0,
     autoconnectIfacOnly: Boolean = false,
+    autoconnectInterfaceMode: String? = null,
     bootstrapInterfaceNames: List<String> = emptyList(),
     isRestarting: Boolean = false,
+    pendingRestart: Boolean = false,
     onToggleDiscovery: () -> Unit = {},
     onAutoconnectCountChange: (Int) -> Unit = {},
+    onAutoconnectInterfaceModeChange: (String?) -> Unit = {},
     onToggleAutoconnectIfacOnly: () -> Unit = {},
+    onApplyDiscoveryChanges: () -> Unit = {},
 ) {
     val isEnabled = isRuntimeEnabled || isSettingEnabled
 
@@ -531,6 +544,24 @@ internal fun DiscoverySettingsCard(
                         enabled = !isRestarting,
                     )
 
+                    // Auto-connected interface mode selector. Visible whenever the
+                    // backend honours the `autoconnect_interface_mode` config key -
+                    // slim Python RNS 1.4+ does, reticulum-kt does not. Hiding it on
+                    // the Kotlin flavor avoids a UI lie (mirrors the IFAC-only gate
+                    // below). Shown regardless of the auto-connect count so the user
+                    // can choose a mode even while auto-connect is at 0 (observe-only).
+                    // "Default" (null) lets RNS pick its own mode (gateway when
+                    // transport is enabled, full otherwise).
+                    val modeSelectorSupported = LocalCapabilities.current.interfaces.autoconnectInterfaceMode
+                    if (modeSelectorSupported) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        AutoconnectModeSelector(
+                            selectedMode = autoconnectInterfaceMode,
+                            onModeChange = onAutoconnectInterfaceModeChange,
+                            enabled = !isRestarting,
+                        )
+                    }
+
                     // IFAC-only sub-toggle. Visible only when (a) auto-connect
                     // is on AND (b) the backend actually enforces the IFAC
                     // filter — reticulum-kt does (NativeRnsBackendImpl
@@ -633,6 +664,92 @@ internal fun DiscoverySettingsCard(
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         },
                     modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            // Apply button: shown when a discovery-settings change (autoconnect
+            // count and/or interface mode) needs a Reticulum restart to take
+            // effect. One tap restarts once and applies both at once.
+            if (pendingRestart) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onApplyDiscoveryChanges,
+                    enabled = !isRestarting,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                ) {
+                    Text(stringResource(R.string.discovery_apply_changes))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Dropdown for the interface mode of auto-connected discovered interfaces.
+ * "Default" (null) lets RNS use its own mode (gateway when transport enabled,
+ * full otherwise). The remaining options come from the [InterfaceMode] enum.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AutoconnectModeSelector(
+    selectedMode: String?,
+    onModeChange: (String?) -> Unit,
+    enabled: Boolean = true,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    // "Default" + every InterfaceMode entry. null = let RNS decide.
+    val options: List<Pair<String?, String>> =
+        listOf(null to stringResource(R.string.autoconnect_mode_default)) +
+            InterfaceMode.entries.map { mode ->
+                mode.value to
+                    stringResource(
+                        when (mode) {
+                            InterfaceMode.FULL -> R.string.interface_mode_full
+                            InterfaceMode.GATEWAY -> R.string.interface_mode_gateway
+                            InterfaceMode.ACCESS_POINT -> R.string.interface_mode_access_point
+                            InterfaceMode.ROAMING -> R.string.interface_mode_roaming
+                            InterfaceMode.BOUNDARY -> R.string.interface_mode_boundary
+                            InterfaceMode.INTERNAL -> R.string.interface_mode_internal
+                        },
+                    )
+            }
+
+    val displayValue = options.find { it.first == selectedMode }?.second
+        ?: options.first().second
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = it },
+    ) {
+        OutlinedTextField(
+            value = displayValue,
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text(stringResource(R.string.autoconnect_mode_label)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { (value, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        onModeChange(value)
+                        expanded = false
+                    },
                 )
             }
         }

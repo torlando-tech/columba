@@ -135,6 +135,52 @@ class RnsConfigFileTest {
     }
 
     @Test
+    fun `autoconnect_interface_mode omitted when null (RNS default)`() {
+        // null means "let RNS decide" — no line emitted so RNS falls back
+        // to its own MODE_GATEWAY/MODE_FULL default.
+        val out = RnsConfigFile.build(cfg().copy(autoconnectInterfaceMode = null))
+        assertFalse(out.contains("autoconnect_interface_mode"))
+    }
+
+    @Test
+    fun `autoconnect_interface_mode emitted under reticulum section when set`() {
+        val out = RnsConfigFile.build(
+            cfg().copy(
+                autoconnectDiscoveredInterfaces = 5,
+                autoconnectInterfaceMode = "full",
+            ),
+        )
+        assertTrue(out.contains("autoconnect_interface_mode = full"))
+        // Must sit between [reticulum] and [interfaces], same as the count.
+        val reticulumIdx = out.indexOf("[reticulum]")
+        val interfacesIdx = out.indexOf("[interfaces]")
+        val modeIdx = out.indexOf("autoconnect_interface_mode")
+        assertTrue(reticulumIdx >= 0 && modeIdx > reticulumIdx && modeIdx < interfacesIdx)
+    }
+
+    @Test
+    fun `autoconnect_interface_mode accepts each valid RNS mode token`() {
+        // Slim RNS 1.4+ Reticulum.py validates the token; these are the exact
+        // strings the config parser accepts (see InterfaceMode.value mapping).
+        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary", "internal")) {
+            val out = RnsConfigFile.build(cfg().copy(autoconnectInterfaceMode = mode))
+            assertTrue("expected autoconnect_interface_mode = $mode", out.contains("autoconnect_interface_mode = $mode"))
+        }
+    }
+
+    @Test
+    fun `autoconnect_interface_mode omits unknown values restored from backup`() {
+        // A restored preferences backup can carry a value the selector never
+        // produced. Rather than emit a token RNS rejects (or that leaves RNS
+        // on its default while the UI shows "Default"), omit the line so RNS
+        // falls back to its own MODE_GATEWAY/MODE_FULL default.
+        for (mode in listOf("bogus", "", "UPPER", "full gateway", "full\nmode")) {
+            val out = RnsConfigFile.build(cfg().copy(autoconnectInterfaceMode = mode))
+            assertFalse("unknown mode '$mode' must not be emitted", out.contains("autoconnect_interface_mode"))
+        }
+    }
+
+    @Test
     fun `skipAutoInterface omits AutoInterface data_port and group_id`() {
         val customAuto = InterfaceConfig.AutoInterface(
             groupId = "test-group",

@@ -271,7 +271,7 @@ class SettingsViewModelTest {
         coEvery { identityRepository.updateDisplayName(any(), any()) } returns Result.success(Unit)
         coEvery { identityRepository.updateIconAppearance(any(), any(), any(), any()) } returns Result.success(Unit)
 
-        coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } coAnswers {
             firstArg<(() -> Unit)?>()?.invoke()
             Result.success(Unit)
         }
@@ -549,7 +549,7 @@ class SettingsViewModelTest {
 
             assertTrue("togglePreferOwnInstance should complete successfully", result.isSuccess)
             coVerify { settingsRepository.savePreferOwnInstance(true) }
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -581,7 +581,7 @@ class SettingsViewModelTest {
 
             assertTrue("switchToOwnInstanceAfterLoss should complete successfully", result.isSuccess)
             coVerify { settingsRepository.savePreferOwnInstance(true) }
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -594,7 +594,7 @@ class SettingsViewModelTest {
 
             assertTrue("switchToSharedInstance should complete successfully", result.isSuccess)
             coVerify { settingsRepository.savePreferOwnInstance(false) }
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -667,7 +667,7 @@ class SettingsViewModelTest {
             val result = runCatching { viewModel.saveRpcKey("abc123") }
 
             assertTrue("saveRpcKey should complete successfully", result.isSuccess)
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -680,7 +680,7 @@ class SettingsViewModelTest {
 
             assertTrue("saveRpcKey should complete successfully", result.isSuccess)
             // Should not call applyInterfaceChanges since not using shared instance
-            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify(exactly = 0) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     // endregion
@@ -754,7 +754,7 @@ class SettingsViewModelTest {
 
             assertTrue("restartService should complete successfully", result.isSuccess)
             // Verify the restart was triggered via interfaceConfigManager
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     // endregion
@@ -965,7 +965,7 @@ class SettingsViewModelTest {
             val result = runCatching { viewModel.restartService() }
 
             assertTrue("restartService should complete successfully", result.isSuccess)
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -1134,7 +1134,7 @@ class SettingsViewModelTest {
             assertTrue("switchToOwnInstanceAfterLoss should complete successfully", result.isSuccess)
             // Verify both preference save and restart are triggered
             coVerify { settingsRepository.savePreferOwnInstance(true) }
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
@@ -1708,6 +1708,66 @@ class SettingsViewModelTest {
         }
 
     @Test
+    fun `triggerManualAnnounce clearedName announces as Anonymous Peer`() =
+        runTest {
+            // Given: an active identity whose display name has been cleared
+            // (the edit path stores a trimmed, empty string).
+            val clearedIdentity = createTestIdentity(displayName = "")
+            activeIdentityFlow.value = clearedIdentity
+            coEvery { identityRepository.getActiveIdentitySync() } returns clearedIdentity
+
+            val serviceRnsCore =
+                mockk<RnsCore>(relaxed = true) {
+                    every { networkStatus } returns networkStatusFlow
+                    coEvery { triggerAutoAnnounce(any()) } returns Result.success(Unit)
+                }
+
+            viewModel =
+                SettingsViewModel(
+                    context = context,
+                    settingsRepository = settingsRepository,
+                    identityRepository = identityRepository,
+                    rnsBackend = rnsBackend,
+                    rnsCore = serviceRnsCore,
+                    rnsLxmf = rnsLxmf,
+                    rnsTransportAdmin = rnsTransportAdmin,
+                    rnsTelephony = rnsTelephony,
+                    interfaceConfigManager = interfaceConfigManager,
+                    propagationNodeManager = propagationNodeManager,
+                    locationSharingManager = locationSharingManager,
+                    interfaceRepository = interfaceRepository,
+                    mapTileSourceManager = mapTileSourceManager,
+                    telemetryCollectorManager = telemetryCollectorManager,
+                    contactRepository = contactRepository,
+                    updateChecker = updateChecker,
+                    crashReportManager = crashReportManager,
+                )
+
+            viewModel.state.test {
+                var state = awaitItem()
+                var loadAttempts = 0
+                while (state.isLoading && loadAttempts++ < 50) {
+                    state = awaitItem()
+                }
+
+                viewModel.triggerManualAnnounce()
+                val finalState = expectMostRecentItem()
+                assertTrue("Manual announce should report success", finalState.showManualAnnounceSuccess)
+                assertFalse("Manual announce should finish", finalState.isManualAnnouncing)
+
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // The cleared (blank) name must be announced as the canonical
+            // "Anonymous Peer" - the same value the automatic-announce path
+            // sends - so a peer's visible name does not depend on whether the
+            // announce was manual or an automatic tick.
+            coVerify(exactly = 1) {
+                serviceRnsCore.triggerAutoAnnounce("Anonymous Peer")
+            }
+        }
+
+    @Test
     fun `triggerManualAnnounce failure with NativeReticulumProtocol`() =
         runTest {
             // Given: NativeReticulumProtocol that returns failure
@@ -2184,14 +2244,14 @@ class SettingsViewModelTest {
             val result = runCatching { viewModel.setTransportNodeEnabled(false) }
 
             assertTrue("setTransportNodeEnabled should complete successfully", result.isSuccess)
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test
     fun `setTransportNodeEnabled does not restart if already restarting`() =
         runTest {
             // Make applyInterfaceChanges suspend indefinitely so isRestarting stays true
-            coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } coAnswers {
+            coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } coAnswers {
                 kotlinx.coroutines.delay(Long.MAX_VALUE)
                 Result.success(Unit)
             }
@@ -2216,7 +2276,7 @@ class SettingsViewModelTest {
             viewModel.setTransportNodeEnabled(true)
 
             // Should only have called applyInterfaceChanges once (from the first call)
-            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify(exactly = 1) { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
         }
 
     @Test

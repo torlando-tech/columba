@@ -132,6 +132,13 @@ class SettingsRepository
             val DISCOVER_INTERFACES_ENABLED = booleanPreferencesKey("discover_interfaces_enabled")
             val AUTOCONNECT_DISCOVERED_COUNT = intPreferencesKey("autoconnect_discovered_count")
             val AUTOCONNECT_IFAC_ONLY = booleanPreferencesKey("autoconnect_ifac_only")
+            val AUTOCONNECT_INTERFACE_MODE = stringPreferencesKey("autoconnect_interface_mode")
+            // True while a discovery setting (autoconnect count and/or interface
+            // mode) changed on the restart-only (Python) backend has been persisted
+            // to DataStore but not yet applied via a Reticulum restart. Persisted so
+            // the Apply action survives ViewModel recreation; cleared on the next
+            // successful restart (which rebuilds the config from DataStore).
+            val PENDING_DISCOVERY_RESTART = booleanPreferencesKey("pending_discovery_restart")
 
             // Location sharing preferences
             val LOCATION_SHARING_ENABLED = booleanPreferencesKey("location_sharing_enabled")
@@ -1309,6 +1316,133 @@ class SettingsRepository
         suspend fun saveAutoconnectIfacOnly(enabled: Boolean) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.AUTOCONNECT_IFAC_ONLY] = enabled
+            }
+        }
+
+        /**
+         * Flow of the auto-connected discovered interface mode.
+         * null = never set (use RNS default: MODE_GATEWAY when transport
+         * enabled, MODE_FULL otherwise). When set to a known mode string
+         * ("full", "gateway", "access_point", "roaming", "boundary",
+         * "internal"), it is written as `autoconnect_interface_mode` in the
+         * [reticulum] config block and picked up on the next RNS restart.
+         */
+        val autoconnectInterfaceModeFlow: Flow<String?> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE]
+                }.distinctUntilChanged()
+
+        suspend fun getAutoconnectInterfaceMode(): String? =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE]
+                }.first()
+
+        /**
+         * Save the auto-connected discovered interface mode.
+         * Pass null to clear the override and restore the RNS default.
+         */
+        suspend fun saveAutoconnectInterfaceMode(mode: String?) {
+            context.dataStore.edit { preferences ->
+                if (mode == null) {
+                    preferences.remove(PreferencesKeys.AUTOCONNECT_INTERFACE_MODE)
+                } else {
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE] = mode
+                }
+            }
+        }
+
+        /**
+         * Save the autoconnect discovered interfaces count and the
+         * pending-discovery-restart flag in a SINGLE DataStore edit.
+         *
+         * The value and the flag must be written atomically: a separate
+         * save-then-flag sequence leaves a window where a ViewModel cleared
+         * after the value lands but before the flag does would show the saved
+         * choice with no Apply action, stranding the change on the restart-only
+         * backend.
+         *
+         * @param pending Set true when a restart is required to apply the value
+         *   (restart-only backend), false otherwise (hot-reload applies it live,
+         *   so nothing is pending and any stale flag is cleared).
+         */
+        suspend fun saveAutoconnectDiscoveredCountAndPending(count: Int, pending: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] = count
+                preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = pending
+            }
+        }
+
+        /**
+         * Save the auto-connected interface mode and the pending-discovery-restart
+         * flag in a SINGLE DataStore edit (atomicity rationale identical to
+         * [saveAutoconnectDiscoveredCountAndPending]).
+         *
+         * @param pending Set true when a restart is required to apply the mode
+         *   (restart-only backend), false otherwise.
+         */
+        suspend fun saveAutoconnectInterfaceModeAndPending(mode: String?, pending: Boolean) {
+            context.dataStore.edit { preferences ->
+                if (mode == null) {
+                    preferences.remove(PreferencesKeys.AUTOCONNECT_INTERFACE_MODE)
+                } else {
+                    preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE] = mode
+                }
+                preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = pending
+            }
+        }
+
+        /**
+         * Get whether a discovery setting is pending a Reticulum restart
+         * (changed on the restart-only backend but not yet applied).
+         */
+        suspend fun getPendingDiscoveryRestart(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] ?: false
+                }.first()
+
+        /**
+         * Clear the pending-discovery-restart flag ONLY if the on-disk autoconnect
+         * count and mode still match the given baseline (the values the most recent
+         * restart / cold start was built from).
+         *
+         * The compare and the clear happen inside ONE DataStore `edit` so the
+         * operation is atomic: a setter that saves a newer value with
+         * `pending=true` in between a separate read and a separate clear write
+         * would otherwise be clobbered (Reticulum keeps the older value, and the
+         * newer change loses its Apply action).
+         *
+         * @param countAtStart Baseline autoconnect count the restart/start used.
+         * @param modeAtStart Baseline autoconnect mode the restart/start used.
+         * @return true if the values were unchanged and the flag was cleared,
+         *   false if a newer change was pending and the flag was left in place.
+         */
+        suspend fun clearPendingDiscoveryRestartIfUnchanged(
+            countAtStart: Int,
+            modeAtStart: String?,
+        ): Boolean {
+            var cleared = false
+            context.dataStore.edit { preferences ->
+                val currentCount =
+                    preferences[PreferencesKeys.AUTOCONNECT_DISCOVERED_COUNT] ?: -1
+                val currentMode = preferences[PreferencesKeys.AUTOCONNECT_INTERFACE_MODE]
+                if (currentCount == countAtStart && currentMode == modeAtStart) {
+                    preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = false
+                    cleared = true
+                }
+            }
+            return cleared
+        }
+
+        /**
+         * Save the pending-discovery-restart flag. Persisted so the Apply action
+         * survives ViewModel recreation; clear it once a restart has applied it.
+         */
+        suspend fun savePendingDiscoveryRestart(pending: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PENDING_DISCOVERY_RESTART] = pending
             }
         }
 

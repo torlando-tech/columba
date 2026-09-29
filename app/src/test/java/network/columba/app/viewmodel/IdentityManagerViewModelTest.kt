@@ -67,7 +67,7 @@ class IdentityManagerViewModelTest {
 
         // Default stub for InterfaceConfigManager. The new signature takes an
         // `onServiceReady` callback the VM relies on to transition to Success.
-        coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } answers {
+        coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any(), any()) } answers {
             firstArg<() -> Unit>().invoke()
             Result.success(Unit)
         }
@@ -311,7 +311,7 @@ class IdentityManagerViewModelTest {
             // Given
             coEvery { mockRepository.getIdentity("id2") } returns null
             coEvery { mockRepository.switchActiveIdentity("id2") } returns Result.success(Unit)
-            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any()) } answers {
+            coEvery { mockInterfaceConfigManager.applyInterfaceChanges(any(), any()) } answers {
                 firstArg<() -> Unit>().invoke()
                 Result.success(Unit)
             }

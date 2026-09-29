@@ -108,7 +108,7 @@ class MigrationViewModelTest {
 
         // Mock service restart to succeed. The new signature takes an
         // `onServiceReady` callback that flips RestartingService -> ImportComplete.
-        coEvery { interfaceConfigManager.applyInterfaceChanges(any()) } answers {
+        coEvery { interfaceConfigManager.applyInterfaceChanges(any(), any()) } answers {
             firstArg<() -> Unit>().invoke()
             Result.success(Unit)
         }
@@ -285,7 +285,7 @@ class MigrationViewModelTest {
             advanceUntilIdle()
 
             // Verify service restart was called
-            coVerify { interfaceConfigManager.applyInterfaceChanges(any()) }
+            coVerify { interfaceConfigManager.applyInterfaceChanges(any(), any()) }
 
             // Final state should be ImportComplete (after restart)
             viewModel.uiState.test {

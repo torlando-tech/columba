@@ -129,6 +129,7 @@ class InterfaceConfigManagerTest {
         coEvery { settingsRepository.getDiscoverInterfacesEnabled() } returns false
         coEvery { settingsRepository.getAutoconnectDiscoveredCount() } returns 0
         coEvery { settingsRepository.getAutoconnectIfacOnly() } returns false
+        coEvery { settingsRepository.getAutoconnectInterfaceMode() } returns null
         coEvery { settingsRepository.getShareInstanceHostingEnabled() } returns false
         coEvery { settingsRepository.getIncomingMessageSizeLimitKb() } returns 1024
         every { settingsRepository.sortMessagesBySentTime } returns flowOf(false)

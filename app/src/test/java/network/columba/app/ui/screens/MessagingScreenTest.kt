@@ -672,7 +672,7 @@ class MessagingScreenTest {
     }
 
     @Test
-    fun inputBar_sendClick_keepsComposerAboveVisibleKeyboard() {
+    fun inputBar_sendClick_keepsComposerVisibleWithIme() {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalMessagingImeBottomInsetOverride provides 900) {
                 MessagingScreen(
@@ -684,9 +684,10 @@ class MessagingScreenTest {
             }
         }
 
+        val composer = composeTestRule.onNodeWithTag("messageComposer")
+        composer.assertExists()
+
         composeTestRule.onNodeWithText("Type a message...").performTextInput("Keep composer visible")
-        val spacerBeforeSend = composeTestRule.onNodeWithTag("messageKeyboardSpacer").fetchSemanticsNode()
-        assertTrue(spacerBeforeSend.layoutInfo.coordinates.isAttached)
 
         composeTestRule.onNodeWithContentDescription("Send message").performClick()
 
@@ -696,8 +697,12 @@ class MessagingScreenTest {
                 "Keep composer visible",
             )
         }
-        val spacerAfterSend = composeTestRule.onNodeWithTag("messageKeyboardSpacer").fetchSemanticsNode()
-        assertTrue(spacerAfterSend.layoutInfo.coordinates.isAttached)
+        // The composer (with its .imePadding()) must stay attached after send
+        // while the IME inset is still reported - no reliance on a spacer.
+        assertTrue(
+            "Composer still attached after send with IME visible",
+            composer.fetchSemanticsNode().layoutInfo.coordinates.isAttached,
+        )
     }
 
     @Test

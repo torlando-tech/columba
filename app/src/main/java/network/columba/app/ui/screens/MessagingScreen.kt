@@ -48,6 +48,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -740,8 +742,15 @@ fun MessagingScreen(
 
     // Fallback panel height when keyboard was never opened (300dp ~ typical keyboard)
     val fallbackPanelHeightPx = with(density) { 300.dp.roundToPx() }
-    val panelHeightPx = if (lastKnownKeyboardHeightPx > 0) lastKnownKeyboardHeightPx else fallbackPanelHeightPx
-    val panelHeightDp = with(density) { panelHeightPx.toDp() }
+    // The IME height includes the nav-bar strip it covers. In PANEL mode the
+    // nav bar is visible again and the panel's navigationBarsPadding() adds
+    // that strip below, so subtract it here or the panel ends up
+    // keyboard+navbar tall (the PANEL-mode double-count).
+    val navBarBottomPx = WindowInsets.navigationBars.getBottom(density)
+    val panelHeightPx =
+        (if (lastKnownKeyboardHeightPx > 0) lastKnownKeyboardHeightPx else fallbackPanelHeightPx) -
+            navBarBottomPx
+    val panelHeightDp = with(density) { panelHeightPx.coerceAtLeast(fallbackPanelHeightPx / 2).toDp() }
 
     // Recent photos for attachment panel
     val recentPhotos by viewModel.recentPhotos.collectAsStateWithLifecycle()
@@ -1498,11 +1507,25 @@ fun MessagingScreen(
                         },
                     )
                 } else {
-                    // Message Input Bar - at bottom of Column
+                    // Message Input Bar - at bottom of Column.
+                    // The bar owns its bottom inset: .imePadding() puts the
+                    // inset INSIDE the composer Surface so the surface color
+                    // fills down to the keyboard's top edge. The old manual
+                    // Spacer left that region as bare window background,
+                    // which rendered as a black band on OEM keyboards
+                    // without a transparent top margin (Samsung).
                     MessageInputBar(
                     modifier =
                         Modifier
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .testTag("messageComposer")
+                            .then(
+                                if (inputPanelMode == InputPanelMode.KEYBOARD) {
+                                    Modifier.imePadding()
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     messageText = messageText,
                     onMessageTextChange = {
                         messageText = it
@@ -1614,14 +1637,10 @@ fun MessagingScreen(
                     )
                 }
                     InputPanelMode.KEYBOARD -> {
-                        // Manual IME spacer replaces .imePadding()
-                        val imeHeightDp = with(density) { imeBottomInset.toDp() }
-                        Spacer(
-                            modifier =
-                                Modifier
-                                    .height(imeHeightDp)
-                                    .testTag("messageKeyboardSpacer"),
-                        )
+                        // No spacer: the composer's .imePadding() (applied at
+                        // its call site) fills the IME region inside the
+                        // composer Surface, so no bare window background can
+                        // show between the bar and the keyboard.
                     }
                     InputPanelMode.NONE -> {
                         // Nav bar padding only when nothing else is showing

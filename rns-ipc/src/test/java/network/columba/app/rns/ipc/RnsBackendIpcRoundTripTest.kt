@@ -833,6 +833,7 @@ private class FakeRnsNomadnet : RnsNomadnet {
     override suspend fun getNomadnetRequestStatus(): String = status.value
     override suspend fun getNomadnetDownloadProgress(): Float = progress.value
     override suspend fun identifyNomadnetLink(destinationHash: String) = Result.success(true)
+    override suspend fun setIdentifyOnConnectNodes(nodes: Set<String>) {}
     override val nomadnetRequestStatusFlow: StateFlow<String> get() = status.asStateFlow()
     override val nomadnetDownloadProgressFlow: StateFlow<Float> get() = progress.asStateFlow()
 }

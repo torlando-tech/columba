@@ -22,9 +22,84 @@ internal class NativeNomadNetHandler(
 
     // Concurrent callers can race through identifyNomadnetLink; use a set backed by a
     // ConcurrentHashMap and atomic add() so we never double-identify the same link.
+    // Also dedups the at-establishment auto-identify (a rebuilt/reused link for an
+    // already-identified destination must not resend the proof).
     val identifiedNomadnetLinks: MutableSet<String> =
         java.util.concurrent.ConcurrentHashMap
             .newKeySet()
+
+    /**
+     * Per-node auto-identify flags, mirroring upstream
+     * `Directory.should_identify_on_connect` and the Python backend's
+     * [PythonRnsNomadnet.identifyOnConnectNodes]. The handler identifies a
+     * node's link at establishment time when the destination is in this set.
+     * Updated by the ViewModel via [setIdentifyOnConnectNodes].
+     */
+    @Volatile
+    internal var identifyOnConnectNodes: Set<String> = emptySet()
+
+    /**
+     * Serializes flag-set updates so the read `previous` -> write
+     * `identifyOnConnectNodes` -> reconcile-links (identify/teardown) window is
+     * atomic. Two callers can overlap: the DataStore collector (sequential
+     * emissions) and the RNS-READY re-sync (a separate coroutine that re-pushes
+     * the current set). Without the lock, an unflag's `previous` snapshot can be
+     * read before a concurrent flag update lands, so the unflag tears down (or
+     * fails to tear down) the wrong link set and an identified link can survive
+     * an unflag. The lock body has no suspension points (identifyIfFlagged and
+     * teardown are non-suspend here), so a JVM monitor is the right tool and the
+     * last writer's reconcile always runs against a consistent snapshot.
+     */
+    private val identifySetLock = Any()
+
+    suspend fun setIdentifyOnConnectNodes(nodes: Set<String>) {
+        synchronized(identifySetLock) {
+            val previous = identifyOnConnectNodes
+            identifyOnConnectNodes = nodes
+            // Identify newly-flagged nodes whose link is ALREADY active. Covers:
+            // (a) the user toggling "Always identify to this node" in Node
+            // Details while that node's page is open in the browser (the link
+            // was established before the flag was set), and (b) the narrow
+            // first-launch window where a flagged node's page was served from
+            // cache before the DataStore set arrived. identifyIfFlagged is a
+            // no-op for nodes that are not in the set or whose link is not
+            // active, and dedups via identifiedNomadnetLinks, so calling it for
+            // every newly-added node is safe.
+            (nodes - previous).forEach { hash ->
+                nomadnetLinks[hash]?.let { link ->
+                    if (link.status == network.reticulum.link.LinkConstants.ACTIVE) {
+                        identifyIfFlaggedLocked(hash, link)
+                    }
+                }
+            }
+            // Tear down newly-unflagged nodes' ACTIVE links. An identified link
+            // carries its proof for the link's lifetime, so unflagging without
+            // tearing it down would keep the user browsing as identified - the
+            // natural expectation is that further actions are NOT associated
+            // with the identity. Drop the link (and its dedup key) so the next
+            // refresh/navigation establishes a fresh, anonymous link. Only
+            // flagged->unflagged links are touched (previous - nodes): an
+            // anonymous link that was never flagged is not in `previous`, so it
+            // is never torn down by a change to a different node's flag.
+            // Deliberately does NOT re-establish: the re-establishment happens
+            // lazily on the user's next page action, paying a fresh handshake
+            // only when needed. This is the inverse of the newly-flagged path
+            // above and intentionally goes beyond upstream (whose ident_change
+            // is a no-op) for intuitive UX.
+            (previous - nodes).forEach { hash ->
+                nomadnetLinks[hash]?.let { link ->
+                    if (link.status == network.reticulum.link.LinkConstants.ACTIVE) {
+                        identifiedNomadnetLinks.remove(
+                            runCatching { link.linkId.toHex() }.getOrDefault(hash)
+                        )
+                        link.teardown()
+                        nomadnetLinks.remove(hash)
+                        Log.i(TAG, "NomadNet: tore down link to $hash on unflag (anonymous on next visit)")
+                    }
+                }
+            }
+        }
+    }
 
     @Volatile var nomadnetCancelled = false
 
@@ -234,7 +309,45 @@ internal class NativeNomadNetHandler(
             nomadnetLinks[destinationHash] = link
             Log.i(TAG, "NomadNet: link established, RTT=${link.rtt}ms")
         }
+        // Auto-identify flagged nodes the moment the link is active - mirrors
+        // upstream Browser.link_established and the Python backend's
+        // identifyIfFlagged. The link is ACTIVE by construction here, so there
+        // is no "no active link" window. Idempotent via the link-id-keyed
+        // identifiedNomadnetLinks dedup (a reused link doesn't re-send, a
+        // rebuilt link re-identifies, a flag set after establishment is
+        // honoured on the next reuse).
+        identifyIfFlagged(destinationHash, link)
         return Pair(link, reusedActiveLink)
+    }
+
+    /**
+     * Auto-identify a flagged node's link at establishment time, using the
+     * local identity. Best-effort: a missing local identity must not fail the
+     * page load, so failures are logged and swallowed. The link-id-keyed
+     * [identifiedNomadnetLinks] set dedups (a reused link doesn't re-send, a
+     * rebuilt link re-identifies). Suspend wrapper for the establishLink call
+     * sites; the actual work is non-suspending ([identifyIfFlaggedLocked]) so
+     * [setIdentifyOnConnectNodes] can run it inside its flag-set lock.
+     */
+    private suspend fun identifyIfFlagged(destinationHash: String, link: network.reticulum.link.Link) {
+        identifyIfFlaggedLocked(destinationHash, link)
+    }
+
+    private fun identifyIfFlaggedLocked(destinationHash: String, link: network.reticulum.link.Link) {
+        if (destinationHash !in identifyOnConnectNodes) return
+        val dedupKey =
+            runCatching { link.linkId.toHex() }.getOrDefault(destinationHash)
+        if (!identifiedNomadnetLinks.add(dedupKey)) return
+        runCatching {
+            val identity =
+                deliveryIdentityProvider()
+                    ?: error("no local identity")
+            link.identify(identity)
+            Log.i(TAG, "NomadNet: auto-identified to $destinationHash on link establishment")
+        }.onFailure {
+            identifiedNomadnetLinks.remove(dedupKey)
+            Log.w(TAG, "NomadNet: auto-identify to $destinationHash failed: ${it.message}")
+        }
     }
 
     private suspend fun establishNomadnetLink(
@@ -482,7 +595,16 @@ internal class NativeNomadNetHandler(
                 return@runCatching true
             }
 
-            link.identify(identity)
+            // Remove the key if the proof send fails, so a failed proof doesn't
+            // poison the shared dedup set (same rationale as the python backend):
+            // a retry or the at-establishment auto-identify must be able to send
+            // the proof again instead of being told it is already identified.
+            try {
+                link.identify(identity)
+            } catch (e: Exception) {
+                identifiedNomadnetLinks.remove(linkIdHex)
+                throw e
+            }
             false
         }
 }

@@ -372,7 +372,13 @@ class DiscoveredInterfacesViewModel
 
                     _state.update { it.copy(autoconnectCount = clampedCount) }
 
-                    val isRestartOnly = !rnsBackend.capabilities.value.interfaces.hotReloadInterfaces
+                    // Discovery / autoconnect settings apply live only on backends
+                    // that report liveDiscoveryManagement (kotlin). The python
+                    // backend reads these from its config at construction, so it
+                    // defers to a restart (Apply). Note: this is independent of
+                    // hotReloadInterfaces, which the python backend now supports
+                    // for user interfaces but not for discovery settings.
+                    val isRestartOnly = !rnsBackend.capabilities.value.interfaces.liveDiscoveryManagement
                     // Save the count and the pending flag atomically (single edit) so
                     // a ViewModel cleared in between can't strand the saved value
                     // without an Apply action.
@@ -423,7 +429,7 @@ class DiscoveredInterfacesViewModel
                 try {
                     _state.update { it.copy(autoconnectInterfaceMode = mode) }
 
-                    val isRestartOnly = !rnsBackend.capabilities.value.interfaces.hotReloadInterfaces
+                    val isRestartOnly = !rnsBackend.capabilities.value.interfaces.liveDiscoveryManagement
                     // Save the mode and the pending flag atomically (single edit) so
                     // a ViewModel cleared in between can't strand the saved value
                     // without an Apply action.
@@ -575,7 +581,7 @@ class DiscoveredInterfacesViewModel
             hotApply: suspend () -> Unit,
             onAppliedConfig: ((count: Int, mode: String?) -> Unit)? = null,
         ) {
-            if (rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
+            if (rnsBackend.capabilities.value.interfaces.liveDiscoveryManagement) {
                 hotApply()
                 _state.update { it.copy(isRestarting = false) }
                 return

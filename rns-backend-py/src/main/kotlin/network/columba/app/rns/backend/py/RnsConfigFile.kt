@@ -78,6 +78,14 @@ internal object RnsConfigFile {
             }
         }
         sb.appendLine("  panic_on_interface_error = No")
+        // Live interface management (RNS 1.5.5). Gates the
+        // Reticulum.attach_interface / detach_interface / reload_interface API
+        // that PythonRnsTransportAdmin.reloadInterfaces() drives. Upstream
+        // defaults this on; emit it explicitly so a hot-reload works even if a
+        // future upstream default flip changes, and to document the dependency.
+        // (When we're an RPC client of a shared master these calls route to the
+        // master, whose own flag governs — harmless here either way.)
+        sb.appendLine("  enable_interface_management = Yes")
         // Interface-discovery settings (RNS 1.1.x). Upstream `RNS.Reticulum`
         // reads these from `[reticulum]` at construction (Reticulum.py:551,584)
         // — there is no live-update path, which is why the VM routes discovery

@@ -63,13 +63,17 @@ class DiscoveredInterfacesViewModelTest {
 
     private val bootstrapNamesFlow = MutableStateFlow<List<String>>(emptyList())
 
-    // Default = kotlin backend (hotReloadInterfaces = true). Individual tests
-    // that exercise the python-backend restart path replace this StateFlow's
-    // value before constructing the VM.
+    // Default = kotlin backend (hotReloadInterfaces = true, live discovery
+    // management = true). Individual tests that exercise the python-backend
+    // discovery-restart path replace this StateFlow's value before constructing
+    // the VM (see useRestartOnlyBackend).
     private val capabilitiesFlow =
         MutableStateFlow(
             BackendCapabilities.UNKNOWN.copy(
-                interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = true),
+                interfaces = BackendCapabilities.InterfaceCaps(
+                    hotReloadInterfaces = true,
+                    liveDiscoveryManagement = true,
+                ),
             ),
         )
 
@@ -133,11 +137,21 @@ class DiscoveredInterfacesViewModelTest {
             interfaceConfigManager,
         )
 
-    /** Switch capability snapshot to the python-backend profile (hot-reload off). */
+    /**
+     * Switch capability snapshot to the python-backend profile. Since RNS 1.5.5 the
+     * python backend hot-reloads user interfaces (`hotReloadInterfaces = true`) but
+     * still applies discovery / autoconnect / IFAC-only settings only via a restart
+     * (`liveDiscoveryManagement = false`) — discovery is config-file-gated at
+     * `Reticulum()` construction. This is the profile the discovery-restart tests
+     * exercise.
+     */
     private fun useRestartOnlyBackend() {
         capabilitiesFlow.value =
             BackendCapabilities.UNKNOWN.copy(
-                interfaces = BackendCapabilities.InterfaceCaps(hotReloadInterfaces = false),
+                interfaces = BackendCapabilities.InterfaceCaps(
+                    hotReloadInterfaces = true,
+                    liveDiscoveryManagement = false,
+                ),
             )
     }
 
@@ -1399,13 +1413,17 @@ class DiscoveredInterfacesViewModelTest {
             assertFalse(viewModel.state.value.isRestarting)
         }
 
-    // ========== Python-backend (restart-only) routing ==========
-    // When `BackendCapabilities.interfaces.hotReloadInterfaces` is false, the
-    // discovery toggle, autoconnect slider and IFAC-only switch must route
-    // through `InterfaceConfigManager.applyInterfaceChanges()` so the
-    // RNS config file is rebuilt from DataStore and Reticulum() is reconstructed
-    // (upstream RNS only reads discovery settings at startup). Punch-list items
-    // 3 / 4 / 5 in pre-python-dual-backend-release.md, v0.10.x parity.
+    // ========== Python-backend (discovery-restart-only) routing ==========
+    // The python backend still applies discovery / autoconnect / IFAC-only
+    // settings only via a restart (`liveDiscoveryManagement = false`): upstream
+    // RNS reads those values from the config file at `Reticulum()` construction
+    // with no live-update path. So the discovery toggle, autoconnect slider and
+    // IFAC-only switch must route through `InterfaceConfigManager.
+    // applyInterfaceChanges()` so the RNS config file is rebuilt from DataStore
+    // and Reticulum() is reconstructed. This is independent of
+    // `hotReloadInterfaces` (user interfaces DO hot-reload on python now, via
+    // RNS 1.5.5). Punch-list items 3 / 4 / 5 in pre-python-dual-backend-release.md,
+    // v0.10.x parity.
 
     @Test
     fun `toggleDiscovery on restart-only backend triggers applyInterfaceChanges`() =

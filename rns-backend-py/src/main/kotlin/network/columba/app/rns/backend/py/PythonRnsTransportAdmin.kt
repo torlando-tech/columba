@@ -17,25 +17,26 @@ import org.json.JSONObject
  * `RnsTransportAdmin` over upstream Python RNS, driven through Chaquopy.
  *
  * Per the dual-build plan this sub-impl is **mostly no-op + `UNSUPPORTED`
- * capability** for two surfaces, and that is plan-sanctioned, not a cop-out:
+ * capability** for one surface, and that is plan-sanctioned, not a cop-out:
  *
- *  - **Hot-reload** ([reloadInterfaces], [setDiscoveryEnabled],
- *    [setAutoconnectLimit], [setAutoconnectIfacOnly]) — upstream Python RNS has
- *    no live interface-reload path; interface/discovery settings are read from
- *    the RNS `config` file at `Reticulum()` construction. The UI's
- *    "Apply & Restart" flow drives `RnsCore.shutdown()` + `RnsCore.initialize()`
- *    directly, which rewrites the config and reconstructs the stack.
- *    [PythonCapabilities] declares `hotReloadInterfaces = false` for exactly
- *    this reason.
  *  - **Battery profile tuning** ([setBatteryProfile]) — the BLE-scan /
  *    multicast-lock / AutoInterface aggressiveness knobs live in reticulum-kt;
  *    Python RNS has no equivalent. `batteryProfileTuning = UNSUPPORTED`, and the
  *    UI capability-gate keeps [setBatteryProfile] from being called at all.
  *
+ * **Hot-reload** ([reloadInterfaces]) is a real implementation on RNS 1.5.5+:
+ * the live `attach_interface` / `detach_interface` / `reload_interface` API
+ * applies a name-based diff against `RNS.Transport.interfaces` (mirroring the
+ * kotlin backend's `syncInterfaces`), after rewriting `<configdir>/config` with
+ * the new interface set. [setDiscoveryEnabled], [setAutoconnectLimit] and
+ * [setAutoconnectIfacOnly] remain config-restart-gated — those discovery
+ * settings are read from the RNS `config` file at `Reticulum()` construction
+ * with no live-update path, so they take effect on the next Apply & Restart.
+ *
  * The *read* surfaces ([getDiscoveredInterfaces], [isDiscoveryEnabled],
  * [getAutoconnectedEndpoints], [isSharedInstanceAvailable], [getDebugInfo],
  * [getInterfaceStats]) are real best-effort calls into `RNS.Transport` /
- * `RNS.Reticulum` — upstream 1.2.5 exposes all of them. Where the upstream
+ * `RNS.Reticulum` — upstream 1.5.5 exposes all of them. Where the upstream
  * shape genuinely needs on-device iteration the method is an honest stub with a
  * `TODO(on-device)` marker — never a silent fake.
  */
@@ -136,11 +137,55 @@ class PythonRnsTransportAdmin(
     // ==================== Hot-reload Interfaces ====================
 
     override suspend fun reloadInterfaces(configs: List<InterfaceConfig>) {
-        // Documented no-op. Python RNS cannot hot-reload interfaces; the UI's
-        // "Apply & Restart" flow calls RnsCore.shutdown() + RnsCore.initialize()
-        // directly, which rewrites the RNS config file and reconstructs the
-        // Reticulum() instance. Nothing to do here.
-        Log.i(TAG, "reloadInterfaces(${configs.size} configs): no-op — python uses shutdown()+initialize() restart")
+        // RNS 1.5.5 live interface management — replaces the documented no-op that
+        // used to short-circuit this path to a full service restart.
+        //
+        // The 1.5.5 API (attach_interface / detach_interface / reload_interface) is
+        // keyed by the config [[section]] name and re-reads <configdir>/config on
+        // every call. So: rewrite the config with the new interface set (same
+        // instance-mode flags — see PythonRnsRuntime.rewriteConfigForLiveReload),
+        // then apply the name-based diff against the live interfaces in RNS.Transport.
+        //
+        // The diff mirrors the kotlin backend's syncInterfaces exactly: detach the
+        // interfaces that are live but no longer desired, attach the ones that are
+        // desired but not yet live, and leave changed-but-present interfaces alone
+        // (a parameter edit still routes through the full-restart "Apply" path, same
+        // as on the kotlin backend). This keeps the two backends behaviourally
+        // identical for the live path.
+        pyCall {
+            runtime.requireRunning()
+
+            val reticulum = runtime.reticulumInstance
+                ?: error("reloadInterfaces: reticulumInstance is null (start() not run)")
+
+            val desired = configs.filter { it.enabled }.map { it.name }.toSet()
+            val running = liveUserInterfaceNames()
+
+            // Rewrite the config BEFORE any attach/detach so the live API reads the
+            // new [interfaces] block (the API re-reads <configdir>/config per call).
+            runtime.rewriteConfigForLiveReload(configs)
+
+            val toDetach = running - desired
+            val toAttach = desired - running
+
+            for (name in toDetach) {
+                val ok = reticulum.callAttr("detach_interface", name)
+                    ?.toJava(Boolean::class.javaObjectType) ?: false
+                Log.i(TAG, "Hot-reload: detach_interface(\"$name\") -> $ok")
+            }
+            for (name in toAttach) {
+                val ok = reticulum.callAttr("attach_interface", name)
+                    ?.toJava(Boolean::class.javaObjectType) ?: false
+                Log.i(TAG, "Hot-reload: attach_interface(\"$name\") -> $ok")
+            }
+
+            Log.i(
+                TAG,
+                "Hot-reload complete: ${configs.size} desired -> detached $toDetach, " +
+                    "attached $toAttach, untouched ${running.size - toDetach.size}",
+            )
+            Unit
+        }
     }
 
     override suspend fun setDiscoveryEnabled(enabled: Boolean) =
@@ -394,6 +439,53 @@ class PythonRnsTransportAdmin(
     /** `RNS.Transport` — used statically by upstream RNS. */
     private fun transport(): PyObject =
         runtime.rnsModule["Transport"] ?: error("RNS.Transport not resolvable")
+
+    /**
+     * The set of names of user-managed interfaces currently live in
+     * `RNS.Transport.interfaces`.
+     *
+     * `RNS.Transport.interfaces` is keyed by `iface.name`, which for
+     * user-declared interfaces is the config `[[section]]` name — the same key
+     * the 1.5.5 `attach_interface` / `detach_interface` API takes. So this set
+     * is directly comparable to the config-derived desired set in
+     * [reloadInterfaces].
+     *
+     * We filter out RNS's internal `LocalServerInterface` / `LocalClientInterface`
+     * (spawned when `share_instance = yes`) because:
+     *  - the API hard-refuses to detach them (`_detach_interface` returns False
+     *    for `LocalClientInterface` / `LocalServerInterface`), so they would only
+     *    produce a spurious "detach -> False" log line;
+     *  - they are not user interfaces and never appear in the config `[interfaces]`
+     *    block, so including them would make `running - desired` carry names that
+     *    are not real config sections.
+     *
+     * A failed read returns an empty set (the caller then attaches everything
+     * desired, which is the safe outcome on a cold transport).
+     */
+    private fun liveUserInterfaceNames(): Set<String> =
+        runCatching {
+            val interfaces = transport()["interfaces"] ?: return@runCatching emptySet()
+            runtime.python.builtins.callAttr("list", interfaces).asList()
+                .mapNotNull { iface ->
+                    val pyClassName = runCatching {
+                        runtime.python.builtins.callAttr("type", iface)["__name__"]?.toString()
+                    }.getOrNull()
+                    // The Local interfaces are RNS-internal; the attach/detach API
+                    // cannot manage them. Everything else is a user interface keyed
+                    // by its config section name.
+                    if (pyClassName == "LocalServerInterface" || pyClassName == "LocalClientInterface") {
+                        null
+                    } else {
+                        iface["name"]?.toString()
+                    }
+                }
+                .filter { it.isNotBlank() && it != "None" }
+                .toSet()
+        }.getOrElse {
+            Log.w(TAG, "liveUserInterfaceNames: enumeration failed, treating as empty", it)
+            emptySet()
+        }
+
 
     /** `len(pyObj)` as Int — 0 on null/failure. */
     private fun pyLen(pyObj: PyObject?): Int =

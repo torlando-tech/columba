@@ -186,11 +186,11 @@ fun InterfaceManagementScreen(
                 },
                 actions = {
                     // Show the apply action when there are pending changes. On a
-                    // hot-reload backend (kotlin) changes mostly apply live, so
-                    // this only surfaces on a sync failure and applies directly.
-                    // On the Python backend it's the normal path — applying
-                    // restarts Reticulum — so it reads "Apply & Restart" and is
-                    // gated behind a confirmation dialog.
+                    // hot-reload backend (both kotlin and, since RNS 1.5.5, python)
+                    // changes mostly apply live, so this only surfaces after a sync
+                    // failure and applies directly (a full restart — the safe
+                    // superset, which also covers any parameter edits that the
+                    // live path doesn't reload).
                     if (state.hasPendingChanges) {
                         val hotReload = LocalCapabilities.current.interfaces.hotReloadInterfaces
                         Button(

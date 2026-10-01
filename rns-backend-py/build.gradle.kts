@@ -57,7 +57,7 @@ android {
         // in PINNED_VERSIONS.md, not the user-facing version line). RNS and LXMF
         // ARE torlando-tech forks of markqvist's upstream; ble-reticulum is
         // torlando-tech's own project, so it carries no "fork" label.
-        buildConfigField("String", "PY_RNS_VERSION", "\"1.4.2 (torlando-tech fork)\"")
+        buildConfigField("String", "PY_RNS_VERSION", "\"1.5.5 (torlando-tech fork)\"")
         buildConfigField("String", "PY_LXMF_VERSION", "\"1.1.0 (torlando-tech fork)\"")
         buildConfigField("String", "PY_BLE_RETICULUM_VERSION", "\"0.2.2\"")
     }
@@ -99,12 +99,15 @@ chaquopy {
         version = "3.11"
 
         pip {
-            // Upstream RNS 1.5.2 — torlando-tech fork pinned to commit SHA
-            // (patches/columba-ios-1.5.2, identical hardening patch set to the
-            // former 1.4.2 pin: socket cleanup, PHY-stats RPC backoff, ratchet
-            // file-handle fixes, deterministic AutoInterface/teardown
-            // hardening, lifecycle-race fixes).
-            install("git+https://github.com/torlando-tech/Reticulum@754654fe8cbca180c784e9274d033cb3ce229312")
+            // Upstream RNS 1.5.5 — torlando-tech fork pinned to commit SHA
+            // (rebase/columba-1.5.5, the 6-commit hardening patch set rebased on
+            // top of upstream 1.5.5: socket cleanup, PHY-stats RPC backoff,
+            // ratchet file-handle fixes, deterministic AutoInterface/teardown
+            // hardening, lifecycle-race fixes). 1.5.5 adds the live interface
+            // attach/detach/reload API (Reticulum.attach_interface /
+            // detach_interface / reload_interface) that the Python backend now
+            // uses for hot-reload instead of a full restart.
+            install("git+https://github.com/torlando-tech/Reticulum@3759488eba880489562268d9a1a993f443d1b8bd")
 
             // Upstream LXMF 1.1.0 — torlando-tech fork (external stamp generator
             // plus validated/cancellable native stamping and opportunistic

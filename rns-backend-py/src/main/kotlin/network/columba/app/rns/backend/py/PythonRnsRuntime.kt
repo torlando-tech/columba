@@ -10,6 +10,7 @@ import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import network.columba.app.rns.api.model.InterfaceConfig
 import network.columba.app.rns.api.model.ReticulumConfig
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -81,6 +82,34 @@ class PythonRnsRuntime(
     @Volatile
     var storagePath: String? = null
         private set
+
+    /**
+     * The full [ReticulumConfig] handed to [start]; null before/after. Held so the
+     * live-reload path ([PythonRnsTransportAdmin.reloadInterfaces]) can re-render the
+     * RNS `config` file with the new interface list but the same instance-mode
+     * settings (shared-instance, logging, transport-node, discovery) that `start()`
+     * resolved at boot. The 1.5.5 `attach_interface` / `detach_interface` /
+     * `reload_interface` API re-reads `<configdir>/config` on every call, so the file
+     * on disk must carry the new `[interfaces]` block before those calls are made.
+     */
+    @Volatile
+    var lastConfig: ReticulumConfig? = null
+        private set
+
+    /**
+     * Instance-mode flags resolved by [start] via [network.columba.app.rns.api.util.SharedInstanceProbe].
+     * Stored so [rewriteConfigForLiveReload] re-emits the config with the SAME
+     * mode decisions as `start()` — re-deriving them here would be wrong, because
+     * the UDP probe (`isAutoInterfaceUsable`) test-binds the multicast data port,
+     * which OUR own live AutoInterface holds, so a fresh probe would falsely report
+     * "unusable" and disable the interface we just started. `start()` is the only
+     * correct place to probe (the stack is down, the port is free).
+     *
+     * All three default false (the `start()` own-instance / no-skip case).
+     */
+    @Volatile private var bootJoinShareInstance = false
+    @Volatile private var bootHostShareInstance = false
+    @Volatile private var bootSkipAutoInterface = false
 
     /** hex identity hash -> live `RNS.Identity`. Seeded by restore + announce events. */
     val identities = ConcurrentHashMap<String, PyObject>()
@@ -290,6 +319,10 @@ class PythonRnsRuntime(
             ),
         )
         storagePath = configDir.absolutePath
+        lastConfig = config
+        bootJoinShareInstance = joinShareInstance
+        bootHostShareInstance = hostShareInstance
+        bootSkipAutoInterface = skipAutoInterface
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
 
         // RNS.Transport.find_interfaces() scans <configdir>/interfaces/ for
@@ -488,6 +521,10 @@ class PythonRnsRuntime(
         localDestination = null
         localIdentity = null
         storagePath = null
+        lastConfig = null
+        bootJoinShareInstance = false
+        bootHostShareInstance = false
+        bootSkipAutoInterface = false
         lxmRouter = null
         reticulumInstance = null
         running.set(false)
@@ -511,6 +548,49 @@ class PythonRnsRuntime(
             )
         }
     }
+
+    /**
+     * Re-render and write the on-disk RNS `config` file with [desiredInterfaces],
+     * keeping the instance-mode settings resolved at [start] (shared-instance,
+     * logging, transport-node, discovery). Returns the absolute path of the written
+     * file.
+     *
+     * This is the config-rewrite half of the live-reload path. RNS 1.5.5's
+     * `Reticulum.attach_interface` / `detach_interface` / `reload_interface` re-read
+     * `<configdir>/config` on every call, so the file must carry the new `[interfaces]`
+     * block BEFORE those calls are made. The caller ([PythonRnsTransportAdmin.
+     * reloadInterfaces]) then applies the per-interface diff.
+     *
+     * The mode flags are the `boot*` values captured by [start], NOT a fresh probe:
+     * re-probing here would be wrong (see the field doc on [bootSkipAutoInterface])
+     * because our own live AutoInterface holds the multicast data port.
+     *
+     * Only the `[interfaces]` block differs from what [start] wrote; every other
+     * `[reticulum]` / `[logging]` line is identical because it is re-rendered from the
+     * same [ReticulumConfig] with the same mode flags. This is deliberate: the live
+     * API only looks at `[interfaces]`, and keeping the rest byte-stable means a
+     * failed reload leaves the file in a state the next full restart still accepts.
+     */
+    internal fun rewriteConfigForLiveReload(desiredInterfaces: List<InterfaceConfig>): String {
+        requireRunning()
+        val config = lastConfig ?: error("rewriteConfigForLiveReload: no stored config (start() not run)")
+        val configDir = storagePath ?: error("rewriteConfigForLiveReload: no storage path (start() not run)")
+        val newConfig = config.copy(enabledInterfaces = desiredInterfaces)
+        val rendered = RnsConfigFile.build(
+            config = newConfig,
+            joinShareInstance = bootJoinShareInstance,
+            hostShareInstance = bootHostShareInstance,
+            skipAutoInterface = bootSkipAutoInterface,
+        )
+        val configFile = File(configDir, "config")
+        configFile.writeText(rendered)
+        Log.i(
+            TAG,
+            "Live-reload: rewrote RNS config (${desiredInterfaces.size} interface(s)) to ${configFile.absolutePath}",
+        )
+        return configFile.absolutePath
+    }
+
 
     /**
      * Human-readable mode string for the boot-time log line. Pulled out

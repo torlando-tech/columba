@@ -114,13 +114,15 @@ chaquopy {
 
             // ble-reticulum — RNS.Interface subclass for the Android BLE bridge.
             // Pinned to the commit SHA at the tip of main for reproducibility.
-            // 271b4ab (main) carries the BLEPeerInterface ifac_size fix (PR
-            // torlando-tech/ble-reticulum#45): RNS 1.5.2 reads
-            // interface.ifac_size on every inbound packet, and the spawned BLE
-            // peer interface previously did not inherit it, so every inbound
-            // packet raised AttributeError and no peer announce was ingested
-            // ("peer interfaces spawn but neither sees the other's announces").
-            install("git+https://github.com/torlando-tech/ble-reticulum.git@271b4ab8ba45a8c6a7864aef5919e77f07227fe7")
+            // ed164a8 (main, PR torlando-tech/ble-reticulum#49) carries the
+            // BLEPeerInterface.ifac_size fix (#45) plus the BLE data-path
+            // fixes: peer-announce-rate attributes for the stats RPC (#47),
+            // same-address duplicate-identity normalization so a fixed-MAC
+            // peer reconnecting via the other BLE mode is not misread as MAC
+            // rotation (#48), and the scanner-wedge health check that
+            // disambiguates a quiet room from a genuinely wedged adapter
+            // without a false "reboot required" (#49).
+            install("git+https://github.com/torlando-tech/ble-reticulum.git@ed164a8d5d9eea6e73d16d6c8459bc7ff09e2c0b")
 
             install("cryptography>=42.0.0")
 

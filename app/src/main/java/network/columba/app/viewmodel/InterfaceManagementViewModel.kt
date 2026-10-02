@@ -1227,15 +1227,15 @@ class InterfaceManagementViewModel
         private var syncJob: kotlinx.coroutines.Job? = null
 
         private fun syncNativeInterfaces() {
-            // The Python backend can't hot-reload interfaces — upstream RNS reads
-            // them from its config file at construction
-            // (capabilities.interfaces.hotReloadInterfaces = false), so
-            // RnsTransportAdmin.reloadInterfaces() is a documented no-op there.
-            // Calling it would silently do nothing and leave no Apply button.
-            // Instead, mark the change pending: the UI surfaces an
-            // "Apply & Restart" action that drives applyChanges() (config rewrite
-            // + shutdown + reinitialise). On the kotlin backend hotReloadInterfaces
-            // is true and the change applies live below.
+            // On backends that can't hot-reload interfaces (capabilities.
+            // interfaces.hotReloadInterfaces = false) RnsTransportAdmin.
+            // reloadInterfaces() is a documented no-op. Calling it would
+            // silently do nothing and leave no Apply button. Instead, mark
+            // the change pending: the UI surfaces an "Apply & Restart"
+            // action that drives applyChanges() (config rewrite + shutdown
+            // + reinitialise). On backends with hotReloadInterfaces = true
+            // (kotlin backend, and the Python backend since RNS 1.5.5) the
+            // change applies live below.
             if (!rnsBackend.capabilities.value.interfaces.hotReloadInterfaces) {
                 _state.update { it.copy(hasPendingChanges = true) }
                 return

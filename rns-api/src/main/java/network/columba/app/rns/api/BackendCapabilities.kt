@@ -43,11 +43,12 @@ data class BackendCapabilities(
     ) : Parcelable
 
     /**
-     * Interface management capabilities. The kotlin backend can hot-reload
-     * RNS interface configs without restarting the protocol stack; the
-     * python backend needs a full restart (~5–10s outage), so the UI
-     * surfaces an explicit "Apply & Restart" button instead of applying
-     * silently.
+     * Interface management capabilities. Both backends can hot-reload RNS
+     * interface configs without restarting the protocol stack: the kotlin
+     * backend re-drives its native interface factory, and the python backend
+     * drives RNS 1.5.5's live `Reticulum.attach_interface` / `detach_interface`
+     * / `reload_interface` API. A failed live reload on the python backend
+     * falls back to a full restart as a safety net.
      *
      * `hotReloadInterfaces` is a single boolean rather than a tri-state
      * because every realistic implementation either applies live or
@@ -73,6 +74,24 @@ data class BackendCapabilities(
         val hotReloadInterfaces: Boolean,
         val autoconnectIfacOnlyFilter: Boolean = false,
         val autoconnectInterfaceMode: Boolean = false,
+        /**
+         * Whether the backend can apply discovery / autoconnect / IFAC-only
+         * settings live (no restart). This is deliberately SEPARATE from
+         * [hotReloadInterfaces]: a backend can hot-reload user interfaces
+         * (kotlin native factory, or python RNS 1.5.5's attach/detach/reload API)
+         * while still reading the RNS discovery / autoconnect config values only
+         * at `Reticulum()` construction, with no live-update path.
+         *
+         * - kotlin backend: `true` — `Transport.disableDiscovery()` /
+         *   `setMaxAutoConnected` apply live.
+         * - python backend: `false` — the discovery / autoconnect knobs are
+         *   config-file-gated (read at `Reticulum()` construction); the UI must
+         *   route them through a full restart (Apply) rather than a live setter.
+         *
+         * Default `false` is the safe sentinel: a backend that doesn't advertise
+         * live discovery management keeps the Apply/restart path for those knobs.
+         */
+        val liveDiscoveryManagement: Boolean = false,
         val degradationHint: String? = null,
     ) : Parcelable
 

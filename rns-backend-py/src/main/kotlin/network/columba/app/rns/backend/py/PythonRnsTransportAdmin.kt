@@ -6,6 +6,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.DiscoveredInterface
@@ -17,25 +19,26 @@ import org.json.JSONObject
  * `RnsTransportAdmin` over upstream Python RNS, driven through Chaquopy.
  *
  * Per the dual-build plan this sub-impl is **mostly no-op + `UNSUPPORTED`
- * capability** for two surfaces, and that is plan-sanctioned, not a cop-out:
+ * capability** for one surface, and that is plan-sanctioned, not a cop-out:
  *
- *  - **Hot-reload** ([reloadInterfaces], [setDiscoveryEnabled],
- *    [setAutoconnectLimit], [setAutoconnectIfacOnly]) — upstream Python RNS has
- *    no live interface-reload path; interface/discovery settings are read from
- *    the RNS `config` file at `Reticulum()` construction. The UI's
- *    "Apply & Restart" flow drives `RnsCore.shutdown()` + `RnsCore.initialize()`
- *    directly, which rewrites the config and reconstructs the stack.
- *    [PythonCapabilities] declares `hotReloadInterfaces = false` for exactly
- *    this reason.
  *  - **Battery profile tuning** ([setBatteryProfile]) — the BLE-scan /
  *    multicast-lock / AutoInterface aggressiveness knobs live in reticulum-kt;
  *    Python RNS has no equivalent. `batteryProfileTuning = UNSUPPORTED`, and the
  *    UI capability-gate keeps [setBatteryProfile] from being called at all.
  *
+ * **Hot-reload** ([reloadInterfaces]) is a real implementation on RNS 1.5.5+:
+ * the live `attach_interface` / `detach_interface` / `reload_interface` API
+ * applies a name-based diff against `RNS.Transport.interfaces` (mirroring the
+ * kotlin backend's `syncInterfaces`), after rewriting `<configdir>/config` with
+ * the new interface set. [setDiscoveryEnabled], [setAutoconnectLimit] and
+ * [setAutoconnectIfacOnly] remain config-restart-gated — those discovery
+ * settings are read from the RNS `config` file at `Reticulum()` construction
+ * with no live-update path, so they take effect on the next Apply & Restart.
+ *
  * The *read* surfaces ([getDiscoveredInterfaces], [isDiscoveryEnabled],
  * [getAutoconnectedEndpoints], [isSharedInstanceAvailable], [getDebugInfo],
  * [getInterfaceStats]) are real best-effort calls into `RNS.Transport` /
- * `RNS.Reticulum` — upstream 1.2.5 exposes all of them. Where the upstream
+ * `RNS.Reticulum` — upstream 1.5.5 exposes all of them. Where the upstream
  * shape genuinely needs on-device iteration the method is an honest stub with a
  * `TODO(on-device)` marker — never a silent fake.
  */
@@ -75,6 +78,23 @@ class PythonRnsTransportAdmin(
     override val bleConnectionsFlow: SharedFlow<String> = _bleConnectionsFlow.asSharedFlow()
     override val debugInfoFlow: SharedFlow<String> = _debugInfoFlow.asSharedFlow()
     override val interfaceStatusFlow: SharedFlow<String> = _interfaceStatusFlow.asSharedFlow()
+
+    /**
+     * Serializes the whole live-reload sequence (read baseline -> rewrite config ->
+     * apply the detach/reload/attach ops -> record the baseline). The reload is a
+     * multi-step read-modify-write of shared state: `PythonRnsRuntime.lastAppliedInterfaces`,
+     * the on-disk config, and `RNS.Transport.interfaces`. Two callers can reach it
+     * concurrently - the interface screen (syncNativeInterfaces) and the
+     * transport-change observer (InterfaceTransportObserver), each with its own
+     * cancel-once job - so without this lock a transport-change reload could switch
+     * to cellular interfaces while a stale screen reload records its Wi-Fi baseline
+     * afterwards, leaving a connection live that the saved settings no longer allow.
+     * Held across the entire body of [reloadInterfaces]; a caller cancelled while
+     * waiting throws CancellationException (not a reload failure), and a mid-body
+     * cancellation is caught by [reloadInterfaces] and rethrown, so the lock is
+     * always released.
+     */
+    private val liveReloadMutex = Mutex()
 
     /** Publish one replayable RNode status delta without re-entering Python. */
     fun publishRNodeOnlineStatus(
@@ -136,11 +156,111 @@ class PythonRnsTransportAdmin(
     // ==================== Hot-reload Interfaces ====================
 
     override suspend fun reloadInterfaces(configs: List<InterfaceConfig>) {
-        // Documented no-op. Python RNS cannot hot-reload interfaces; the UI's
-        // "Apply & Restart" flow calls RnsCore.shutdown() + RnsCore.initialize()
-        // directly, which rewrites the RNS config file and reconstructs the
-        // Reticulum() instance. Nothing to do here.
-        Log.i(TAG, "reloadInterfaces(${configs.size} configs): no-op — python uses shutdown()+initialize() restart")
+        // RNS 1.5.5 live interface management — replaces the documented no-op that
+        // used to short-circuit this path to a full service restart.
+        //
+        // The 1.5.5 API (attach_interface / detach_interface / reload_interface) is
+        // keyed by the config [[section]] name and re-reads <configdir>/config on
+        // every call. So: rewrite the config with the new interface set (same
+        // instance-mode flags — see PythonRnsRuntime.rewriteConfigForLiveReload),
+        // then apply the diff against the live interfaces in RNS.Transport.
+        //
+        // The diff has three buckets (see LiveReloadPlan.compute):
+        //   - detach:  live but no longer desired
+        //   - attach:  desired but not yet live
+        //   - reload:  present in both, but the parameters changed since the last
+        //              successful apply (a host/port/passphrase edit). RNS 1.5.5's
+        //              reload_interface (detach + re-attach) applies these live —
+        //              before 1.5.5 this path silently left them untouched and the
+        //              caller had no way to surface a restart for the edit.
+        //
+        // Every live operation is tri-state (True / False / None); because each
+        // bucket is computed against the live set, the outcome is unambiguous, and
+        // a genuine failure throws so the caller falls back to Apply & Restart
+        // instead of reporting a silent success.
+        //
+        // The whole sequence (read baseline -> rewrite config -> apply ops ->
+        // record baseline) is one read-modify-write of shared state, so it is
+        // serialized under [liveReloadMutex]: the interface screen and the
+        // transport-change observer each call this with their own jobs, and an
+        // interleaved pair could otherwise leave a connection live that the saved
+        // settings no longer allow.
+        liveReloadMutex.withLock {
+            pyCall {
+                runtime.requireRunning()
+
+                val reticulum = runtime.reticulumInstance
+                    ?: error("reloadInterfaces: reticulumInstance is null (start() not run)")
+
+                val desired = configs.filter { it.enabled }.associateBy { it.name }
+                val running = liveUserInterfaceNames()  // throws on read failure
+                val baseline = runtime.lastAppliedInterfaces
+
+                val plan = LiveReloadPlan.compute(running, desired, baseline)
+
+                // Rewrite the config BEFORE any attach/detach/reload so the live API
+                // reads the new [interfaces] block (the API re-reads
+                // <configdir>/config per call).
+                runtime.rewriteConfigForLiveReload(configs)
+
+                // Apply the diff, advancing the baseline per successful operation. A
+                // partial failure (one op succeeds, a later one fails and throws) must
+                // still have recorded the interfaces that DID apply - otherwise a
+                // later delete of one of them would have no name to detach and it
+                // would stay live invisibly. The throw on failure still surfaces
+                // Apply & Restart.
+                for (name in plan.toDetach) {
+                    if (callInterfaceOp(reticulum, "detach_interface", name)) {
+                        runtime.forgetAppliedInterface(name)
+                    } else {
+                        error("Hot-reload: detach_interface(\"$name\") failed; needs a restart to apply")
+                    }
+                }
+                for (name in plan.toReload) {
+                    if (callInterfaceOp(reticulum, "reload_interface", name)) {
+                        runtime.upsertAppliedInterface(name, desired.getValue(name))
+                    } else {
+                        error("Hot-reload: reload_interface(\"$name\") failed; needs a restart to apply")
+                    }
+                }
+                for (name in plan.toAttach) {
+                    if (callInterfaceOp(reticulum, "attach_interface", name)) {
+                        runtime.upsertAppliedInterface(name, desired.getValue(name))
+                    } else {
+                        error("Hot-reload: attach_interface(\"$name\") failed; needs a restart to apply")
+                    }
+                }
+
+                val untouched = (desired.keys intersect running) - plan.toReload
+                Log.i(
+                    TAG,
+                    "Hot-reload complete: detached ${plan.toDetach}, reloaded ${plan.toReload}, " +
+                        "attached ${plan.toAttach}, untouched $untouched",
+                )
+                Unit
+            }
+        }
+    }
+
+    /**
+     * Call a 1.5.5 live-interface method by name and interpret its tri-state
+     * return as "did the operation succeed".
+     *
+     * Upstream returns `True` on success, `False` on a genuine failure, and `None`
+     * for the "nothing to do / can't be done here" case (e.g. attach on a name
+     * already live, detach on a name not live). Because each operation is only
+     * issued for a name in the correct set (see [LiveReloadPlan.compute]), `True`
+     * is the only success and anything else means the live stack did not end up
+     * where we want it — so report `false` and let the caller surface a restart.
+     *
+     * `takeIfNotNone()` folds Python `None` into Kotlin null; a Python boolean is
+     * a non-null `PyObject` that converts cleanly to `Boolean`.
+     */
+    private fun callInterfaceOp(reticulum: PyObject, method: String, name: String): Boolean {
+        val result = reticulum.callAttr(method, name)
+        val ok = result.takeIfNotNone()?.toJava(Boolean::class.javaObjectType) ?: false
+        Log.i(TAG, "Hot-reload: $method(\"$name\") -> ${result.takeIfNotNone()?.toString() ?: "None"} (ok=$ok)")
+        return ok
     }
 
     override suspend fun setDiscoveryEnabled(enabled: Boolean) =
@@ -395,6 +515,54 @@ class PythonRnsTransportAdmin(
     private fun transport(): PyObject =
         runtime.rnsModule["Transport"] ?: error("RNS.Transport not resolvable")
 
+    /**
+     * The set of names of user-managed interfaces currently live in
+     * `RNS.Transport.interfaces`.
+     *
+     * `RNS.Transport.interfaces` is keyed by `iface.name`, which for
+     * user-declared interfaces is the config `[[section]]` name — the same key
+     * the 1.5.5 `attach_interface` / `detach_interface` API takes. So this set
+     * is directly comparable to the config-derived desired set in
+     * [reloadInterfaces].
+     *
+     * We filter out RNS's internal `LocalServerInterface` / `LocalClientInterface`
+     * (spawned when `share_instance = yes`) because:
+     *  - the API hard-refuses to detach them (`_detach_interface` returns False
+     *    for `LocalClientInterface` / `LocalServerInterface`), so they would only
+     *    produce a spurious "detach -> False" log line;
+     *  - they are not user interfaces and never appear in the config `[interfaces]`
+     *    block, so including them would make `running - desired` carry names that
+     *    are not real config sections.
+     *
+     * A failed read **propagates to the caller** rather than returning an empty
+     * set. Treating an unknown live set as empty would be wrong: it would make
+     * `running - desired` come out empty, so a disable/delete (whose config file
+     * has already been rewritten without the interface) would have no name to
+     * detach and would be silently skipped. Letting the error surface lets
+     * [reloadInterfaces] turn it into an apply-failure, which the caller turns
+     * into the "Apply & Restart" path.
+     */
+    private fun liveUserInterfaceNames(): Set<String> {
+        val interfaces = transport()["interfaces"] ?: return emptySet()
+        return runtime.python.builtins.callAttr("list", interfaces).asList()
+            .mapNotNull { iface ->
+                val pyClassName = runCatching {
+                    runtime.python.builtins.callAttr("type", iface)["__name__"]?.toString()
+                }.getOrNull()
+                // The Local interfaces are RNS-internal; the attach/detach API
+                // cannot manage them. Everything else is a user interface keyed
+                // by its config section name.
+                if (pyClassName == "LocalServerInterface" || pyClassName == "LocalClientInterface") {
+                    null
+                } else {
+                    iface["name"]?.toString()
+                }
+            }
+            .filter { it.isNotBlank() && it != "None" }
+            .toSet()
+    }
+
+
     /** `len(pyObj)` as Int — 0 on null/failure. */
     private fun pyLen(pyObj: PyObject?): Int =
         pyObj?.let {
@@ -605,3 +773,55 @@ internal fun formatLocalInterfaceLabel(
         }
         else -> rawName to rawName.substringBefore("[").trim()
     }
+
+/**
+ * Pure decision logic for the RNS 1.5.5 live interface hot-reload, split out of
+ * [PythonRnsTransportAdmin.reloadInterfaces] so it can be unit-tested without a
+ * live Python runtime.
+ *
+ * Given the live interface names, the desired (enabled) configs, and the baseline
+ * of what the live stack currently reflects, it returns the three actions:
+ *
+ *  - [toDetach]: live but no longer desired.
+ *  - [toAttach]: desired but not yet live.
+ *  - [toReload]: present in both the live set and the desired set, but whose config
+ *    differs from the baseline (a parameter edit such as host/port/passphrase).
+ *
+ * [toReload] is the behaviour the pre-1.5.5 name-only diff could not express: it
+ * left every present interface untouched, so a parameter edit silently did nothing
+ * and the caller had no way to surface a restart. A name that is live+desired but
+ * absent from the baseline is treated as untouched (not reloaded) — without a
+ * baseline we cannot know whether the live parameters match, and reloading an
+ * unedited interface is churn, so the conservative choice is to leave it and let
+ * the next baseline-advancing apply establish the reference.
+ */
+internal object LiveReloadPlan {
+    data class Result(
+        val toDetach: Set<String>,
+        val toAttach: Set<String>,
+        val toReload: Set<String>,
+    )
+
+    fun compute(
+        running: Set<String>,
+        desired: Map<String, InterfaceConfig>,
+        baseline: Map<String, InterfaceConfig>,
+    ): Result {
+        val desiredNames = desired.keys
+        // Detach only interfaces we ourselves started (in the baseline) that are
+        // still live and no longer desired. Scoping to baseline∩running - desired
+        // (rather than running - desired) keeps us from detaching RNS's auto-connected
+        // discovered interfaces, which are live in Transport.interfaces but were never
+        // user-configured (the kotlin backend's syncInterfaces only manages the
+        // interfaces it started, for the same reason).
+        val toDetach = (running.intersect(baseline.keys) - desiredNames).toSortedSet()
+        val toAttach = (desiredNames - running).toSortedSet()
+        val toReload = (desiredNames.intersect(running))
+            .filter { name ->
+                val base = baseline[name]
+                base != null && base != desired[name]
+            }
+            .toSortedSet()
+        return Result(toDetach, toAttach, toReload)
+    }
+}

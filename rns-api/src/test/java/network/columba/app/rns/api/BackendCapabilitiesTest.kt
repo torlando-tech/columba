@@ -18,6 +18,7 @@ class BackendCapabilitiesTest {
         val caps = sampleKotlinCapabilities()
         assertEquals(BackendId.KOTLIN_NATIVE, caps.backendId)
         assert(caps.interfaces.hotReloadInterfaces)
+        assert(caps.interfaces.liveDiscoveryManagement)
         assertEquals(Support.FULL, caps.performance.batteryProfileTuning)
         assertEquals(Support.FULL, caps.telemetry.collectorHostMode)
         assertEquals(Support.UNSUPPORTED, caps.messaging.outgoingResourceProgress)
@@ -30,7 +31,10 @@ class BackendCapabilitiesTest {
     fun `python reference snapshot has expected flag set`() {
         val caps = samplePythonCapabilities()
         assertEquals(BackendId.PYTHON_CHAQUOPY, caps.backendId)
-        assert(!caps.interfaces.hotReloadInterfaces)
+        // RNS 1.5.5 gives the python backend live per-interface hot-reload, but
+        // discovery / autoconnect settings remain restart-gated.
+        assert(caps.interfaces.hotReloadInterfaces)
+        assert(!caps.interfaces.liveDiscoveryManagement)
         assertEquals(Support.UNSUPPORTED, caps.performance.batteryProfileTuning)
         // Telemetry collector host mode is the well-tested reference path on python.
         assertEquals(Support.FULL, caps.telemetry.collectorHostMode)
@@ -84,7 +88,10 @@ class BackendCapabilitiesTest {
         BackendCapabilities(
             backendId = BackendId.KOTLIN_NATIVE,
             versions = Versions(reticulum = "0.0.20", lxmf = "0.0.13", lxst = "0.0.3", bleReticulum = "0.2.2"),
-            interfaces = InterfaceCaps(hotReloadInterfaces = true),
+            interfaces = InterfaceCaps(
+                hotReloadInterfaces = true,
+                liveDiscoveryManagement = true,
+            ),
             telemetry =
                 TelemetryCaps(
                     collectorHostMode = Support.FULL,
@@ -107,7 +114,10 @@ class BackendCapabilitiesTest {
         BackendCapabilities(
             backendId = BackendId.PYTHON_CHAQUOPY,
             versions = Versions(reticulum = "0.7.4", lxmf = "0.5.4", lxst = null, bleReticulum = "n/a"),
-            interfaces = InterfaceCaps(hotReloadInterfaces = false),
+            interfaces = InterfaceCaps(
+                hotReloadInterfaces = true,
+                liveDiscoveryManagement = false,
+            ),
             telemetry =
                 TelemetryCaps(
                     collectorHostMode = Support.FULL,

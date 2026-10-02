@@ -29,6 +29,9 @@ val NATIVE_CAPABILITIES: BackendCapabilities = BackendCapabilities(
     ),
     interfaces = InterfaceCaps(
         hotReloadInterfaces = true,
+        // Live discovery / autoconnect setters (Transport.disableDiscovery,
+        // setMaxAutoConnected, IFAC-only filter) apply without a restart.
+        liveDiscoveryManagement = true,
         // Enforced in NativeRnsBackendImpl.createAutoconnectInterface(): when
         // `autoconnectIfacOnly` is set and a discovered interface didn't
         // advertise an IFAC netname, the factory returns null and skips it.

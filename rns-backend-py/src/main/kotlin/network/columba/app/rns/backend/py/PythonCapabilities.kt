@@ -15,10 +15,14 @@ import network.columba.app.rns.api.BackendCapabilities.Versions
  *
  * The capability deltas vs. the kotlin backend ([NATIVE_CAPABILITIES]):
  *
- * - **`hotReloadInterfaces = false`** — upstream Python RNS has no live
- *   interface-reload path. Interface changes require a full RNS restart
- *   (`RnsCore.shutdown()` then `initialize()`), which the UI surfaces as
- *   "Apply & Restart". This is the headline capability difference.
+ * - **`hotReloadInterfaces = true`** — RNS 1.5.5 adds a live interface
+ *   attach/detach/reload API (`Reticulum.attach_interface` /
+ *   `detach_interface` / `reload_interface`), and `PythonRnsTransportAdmin`
+ *   now drives it directly for add / edit / enable / disable changes, so the
+ *   Python backend applies interface changes live just like the kotlin
+ *   backend (no "Apply & Restart" dialog). A single changed interface is
+ *   reloaded without touching the rest; if a live reload fails the backend
+ *   falls back to the existing full-restart path as a safety net.
  * - **`batteryProfileTuning = UNSUPPORTED`** — the BLE-scan / multicast-lock
  *   / AutoInterface aggressiveness tuning lives in reticulum-kt. The Python
  *   stack has no equivalent runtime knob; the UI replaces the battery
@@ -59,14 +63,20 @@ val PYTHON_CAPABILITIES: BackendCapabilities = BackendCapabilities(
         bleReticulum = "ble-reticulum ${BuildConfig.PY_BLE_RETICULUM_VERSION}",
     ),
     interfaces = InterfaceCaps(
-        hotReloadInterfaces = false,
+        hotReloadInterfaces = true,
+        // Discovery / autoconnect / IFAC-only settings are still config-file-
+        // gated on the python backend (read at Reticulum() construction, no
+        // live-update path). The UI must route those knobs through a full
+        // restart (Apply), not a live setter — even though hotReloadInterfaces
+        // is now true (RNS 1.5.5's per-interface attach/detach/reload API).
+        liveDiscoveryManagement = false,
         autoconnectIfacOnlyFilter = false,
         // Slim RNS 1.4+ parses `autoconnect_interface_mode` in the [reticulum]
         // block and uses it for all auto-connected discovered interfaces.
         autoconnectInterfaceMode = true,
-        degradationHint =
-            "The Python backend cannot hot-reload interfaces — applying changes " +
-                "restarts Reticulum (briefly disconnecting from peers).",
+        // Full parity with the kotlin backend now that RNS 1.5.5 provides the
+        // live attach/detach/reload API (no degradation to surface).
+        degradationHint = null,
     ),
     telemetry = TelemetryCaps(
         collectorHostMode = Support.FULL,

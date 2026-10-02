@@ -2,6 +2,7 @@ package network.columba.app.rns.backend.py
 
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import network.columba.app.rns.api.RnsError
@@ -154,6 +155,11 @@ internal suspend fun <T> pyCall(block: suspend () -> T): T =
         try {
             block()
         } catch (e: RnsException) {
+            throw e
+        } catch (e: CancellationException) {
+            // Cancellation is a control-flow signal, not a failure: rethrow it so the
+            // caller's cancellation handling (and any surrounding withLock's clean
+            // release) is preserved instead of being masked into an RnsException.
             throw e
         } catch (e: Throwable) {
             throw RnsException(

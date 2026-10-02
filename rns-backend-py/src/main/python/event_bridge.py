@@ -302,6 +302,45 @@ def deploy_bundled_interfaces(storage_path):
         traceback.print_exc()
 
 
+def install_rns_guards():
+    """Keep a busy AutoInterface data port from killing the whole service.
+
+    Upstream RNS calls `RNS.panic()` (os._exit) when a built-in interface fails
+    to initialise. AutoInterface binds its data port (42671) per adopted
+    interface in `final_init()` without SO_REUSEADDR, and on Android that port
+    lies inside the kernel's ephemeral range, so any process — another RNS app,
+    or the telephony stack (seen on a VoWiFi phone, uid radio) — can be holding
+    it. `SharedInstanceProbe.isAutoInterfaceUsable()` checks before start, but
+    the holder can appear between the probe and the bind.
+
+    `final_init()` already detaches the interface before re-raising, so on
+    EADDRINUSE we log and leave AutoInterface offline instead of letting the
+    exception reach `RNS.panic()`. Any other error still propagates. Idempotent.
+    """
+    import errno
+    from RNS.Interfaces.AutoInterface import AutoInterface
+
+    if getattr(AutoInterface.final_init, "_columba_guarded", False):
+        return
+    original = AutoInterface.final_init
+
+    def guarded_final_init(self):
+        try:
+            return original(self)
+        except OSError as e:
+            if e.errno != errno.EADDRINUSE:
+                raise
+            self.online = False
+            RNS.log(
+                f"{self}: data port {getattr(self, 'data_port', '?')} is held by another process "
+                f"({e}); AutoInterface stays offline, other interfaces are unaffected",
+                RNS.LOG_ERROR,
+            )
+
+    guarded_final_init._columba_guarded = True
+    AutoInterface.final_init = guarded_final_init
+
+
 def reset_reticulum_for_restart():
     """Reset RNS.Reticulum + RNS.Transport process-global state so a fresh
     Reticulum() can be constructed after a stop — Columba's "Apply & Restart".

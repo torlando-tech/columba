@@ -144,48 +144,86 @@ class PythonRnsTransportAdmin(
         // keyed by the config [[section]] name and re-reads <configdir>/config on
         // every call. So: rewrite the config with the new interface set (same
         // instance-mode flags — see PythonRnsRuntime.rewriteConfigForLiveReload),
-        // then apply the name-based diff against the live interfaces in RNS.Transport.
+        // then apply the diff against the live interfaces in RNS.Transport.
         //
-        // The diff mirrors the kotlin backend's syncInterfaces exactly: detach the
-        // interfaces that are live but no longer desired, attach the ones that are
-        // desired but not yet live, and leave changed-but-present interfaces alone
-        // (a parameter edit still routes through the full-restart "Apply" path, same
-        // as on the kotlin backend). This keeps the two backends behaviourally
-        // identical for the live path.
+        // The diff has three buckets (see LiveReloadPlan.compute):
+        //   - detach:  live but no longer desired
+        //   - attach:  desired but not yet live
+        //   - reload:  present in both, but the parameters changed since the last
+        //              successful apply (a host/port/passphrase edit). RNS 1.5.5's
+        //              reload_interface (detach + re-attach) applies these live —
+        //              before 1.5.5 this path silently left them untouched and the
+        //              caller had no way to surface a restart for the edit.
+        //
+        // Every live operation is tri-state (True / False / None); because each
+        // bucket is computed against the live set, the outcome is unambiguous, and
+        // a genuine failure throws so the caller falls back to Apply & Restart
+        // instead of reporting a silent success.
         pyCall {
             runtime.requireRunning()
 
             val reticulum = runtime.reticulumInstance
                 ?: error("reloadInterfaces: reticulumInstance is null (start() not run)")
 
-            val desired = configs.filter { it.enabled }.map { it.name }.toSet()
-            val running = liveUserInterfaceNames()
+            val desired = configs.filter { it.enabled }.associateBy { it.name }
+            val running = liveUserInterfaceNames()  // throws on read failure
+            val baseline = runtime.lastAppliedInterfaces
 
-            // Rewrite the config BEFORE any attach/detach so the live API reads the
-            // new [interfaces] block (the API re-reads <configdir>/config per call).
+            val plan = LiveReloadPlan.compute(running, desired, baseline)
+
+            // Rewrite the config BEFORE any attach/detach/reload so the live API
+            // reads the new [interfaces] block (the API re-reads <configdir>/config
+            // per call).
             runtime.rewriteConfigForLiveReload(configs)
 
-            val toDetach = running - desired
-            val toAttach = desired - running
+            for (name in plan.toDetach) {
+                if (!callInterfaceOp(reticulum, "detach_interface", name)) {
+                    error("Hot-reload: detach_interface(\"$name\") failed; needs a restart to apply")
+                }
+            }
+            for (name in plan.toReload) {
+                if (!callInterfaceOp(reticulum, "reload_interface", name)) {
+                    error("Hot-reload: reload_interface(\"$name\") failed; needs a restart to apply")
+                }
+            }
+            for (name in plan.toAttach) {
+                if (!callInterfaceOp(reticulum, "attach_interface", name)) {
+                    error("Hot-reload: attach_interface(\"$name\") failed; needs a restart to apply")
+                }
+            }
 
-            for (name in toDetach) {
-                val ok = reticulum.callAttr("detach_interface", name)
-                    ?.toJava(Boolean::class.javaObjectType) ?: false
-                Log.i(TAG, "Hot-reload: detach_interface(\"$name\") -> $ok")
-            }
-            for (name in toAttach) {
-                val ok = reticulum.callAttr("attach_interface", name)
-                    ?.toJava(Boolean::class.javaObjectType) ?: false
-                Log.i(TAG, "Hot-reload: attach_interface(\"$name\") -> $ok")
-            }
+            // Success: advance the baseline so the next diff detects further edits
+            // against what is now actually live.
+            runtime.recordAppliedInterfaces(configs)
 
             Log.i(
                 TAG,
-                "Hot-reload complete: ${configs.size} desired -> detached $toDetach, " +
-                    "attached $toAttach, untouched ${running.size - toDetach.size}",
+                "Hot-reload complete: detached ${plan.toDetach}, reloaded ${plan.toReload}, " +
+                    "attached ${plan.toAttach}, untouched ${(running.size - plan.toDetach.size - plan.toReload.size)}",
             )
             Unit
         }
+    }
+
+    /**
+     * Call a 1.5.5 live-interface method by name and interpret its tri-state
+     * return as "did the operation succeed".
+     *
+     * Upstream returns `True` on success, `False` on a genuine failure, and `None`
+     * for the "nothing to do / can't be done here" case (e.g. attach on a name
+     * already live, detach on a name not live). Because each operation is only
+     * issued for a name in the correct set (see [LiveReloadPlan.compute]), `True`
+     * is the only success and anything else means the live stack did not end up
+     * where we want it — so report `false` and let the caller surface a restart.
+     *
+     * `takeIfNotNone()` folds Python `None` into Kotlin null; a Python boolean is
+     * a non-null `PyObject` that converts cleanly to `Boolean`.
+     */
+    private fun callInterfaceOp(reticulum: PyObject, method: String, name: String): Boolean {
+        val result = reticulum.callAttr(method, name)
+        val ok = result.takeIfNotNone()?.toJava(Boolean::class.javaObjectType) ?: false
+        Log.i(TAG, "Hot-reload: $method(\"$name\") -> ${result.takeIfNotNone()?.toString() ?: "None"} (ok=$ok)")
+        return ok
     }
 
     override suspend fun setDiscoveryEnabled(enabled: Boolean) =
@@ -459,32 +497,33 @@ class PythonRnsTransportAdmin(
      *    block, so including them would make `running - desired` carry names that
      *    are not real config sections.
      *
-     * A failed read returns an empty set (the caller then attaches everything
-     * desired, which is the safe outcome on a cold transport).
+     * A failed read **propagates to the caller** rather than returning an empty
+     * set. Treating an unknown live set as empty would be wrong: it would make
+     * `running - desired` come out empty, so a disable/delete (whose config file
+     * has already been rewritten without the interface) would have no name to
+     * detach and would be silently skipped. Letting the error surface lets
+     * [reloadInterfaces] turn it into an apply-failure, which the caller turns
+     * into the "Apply & Restart" path.
      */
-    private fun liveUserInterfaceNames(): Set<String> =
-        runCatching {
-            val interfaces = transport()["interfaces"] ?: return@runCatching emptySet()
-            runtime.python.builtins.callAttr("list", interfaces).asList()
-                .mapNotNull { iface ->
-                    val pyClassName = runCatching {
-                        runtime.python.builtins.callAttr("type", iface)["__name__"]?.toString()
-                    }.getOrNull()
-                    // The Local interfaces are RNS-internal; the attach/detach API
-                    // cannot manage them. Everything else is a user interface keyed
-                    // by its config section name.
-                    if (pyClassName == "LocalServerInterface" || pyClassName == "LocalClientInterface") {
-                        null
-                    } else {
-                        iface["name"]?.toString()
-                    }
+    private fun liveUserInterfaceNames(): Set<String> {
+        val interfaces = transport()["interfaces"] ?: return emptySet()
+        return runtime.python.builtins.callAttr("list", interfaces).asList()
+            .mapNotNull { iface ->
+                val pyClassName = runCatching {
+                    runtime.python.builtins.callAttr("type", iface)["__name__"]?.toString()
+                }.getOrNull()
+                // The Local interfaces are RNS-internal; the attach/detach API
+                // cannot manage them. Everything else is a user interface keyed
+                // by its config section name.
+                if (pyClassName == "LocalServerInterface" || pyClassName == "LocalClientInterface") {
+                    null
+                } else {
+                    iface["name"]?.toString()
                 }
-                .filter { it.isNotBlank() && it != "None" }
-                .toSet()
-        }.getOrElse {
-            Log.w(TAG, "liveUserInterfaceNames: enumeration failed, treating as empty", it)
-            emptySet()
-        }
+            }
+            .filter { it.isNotBlank() && it != "None" }
+            .toSet()
+    }
 
 
     /** `len(pyObj)` as Int — 0 on null/failure. */
@@ -697,3 +736,55 @@ internal fun formatLocalInterfaceLabel(
         }
         else -> rawName to rawName.substringBefore("[").trim()
     }
+
+/**
+ * Pure decision logic for the RNS 1.5.5 live interface hot-reload, split out of
+ * [PythonRnsTransportAdmin.reloadInterfaces] so it can be unit-tested without a
+ * live Python runtime.
+ *
+ * Given the live interface names, the desired (enabled) configs, and the baseline
+ * of what the live stack currently reflects, it returns the three actions:
+ *
+ *  - [toDetach]: live but no longer desired.
+ *  - [toAttach]: desired but not yet live.
+ *  - [toReload]: present in both the live set and the desired set, but whose config
+ *    differs from the baseline (a parameter edit such as host/port/passphrase).
+ *
+ * [toReload] is the behaviour the pre-1.5.5 name-only diff could not express: it
+ * left every present interface untouched, so a parameter edit silently did nothing
+ * and the caller had no way to surface a restart. A name that is live+desired but
+ * absent from the baseline is treated as untouched (not reloaded) — without a
+ * baseline we cannot know whether the live parameters match, and reloading an
+ * unedited interface is churn, so the conservative choice is to leave it and let
+ * the next baseline-advancing apply establish the reference.
+ */
+internal object LiveReloadPlan {
+    data class Result(
+        val toDetach: Set<String>,
+        val toAttach: Set<String>,
+        val toReload: Set<String>,
+    )
+
+    fun compute(
+        running: Set<String>,
+        desired: Map<String, InterfaceConfig>,
+        baseline: Map<String, InterfaceConfig>,
+    ): Result {
+        val desiredNames = desired.keys
+        // Detach only interfaces we ourselves started (in the baseline) that are
+        // still live and no longer desired. Scoping to baseline∩running - desired
+        // (rather than running - desired) keeps us from detaching RNS's auto-connected
+        // discovered interfaces, which are live in Transport.interfaces but were never
+        // user-configured (the kotlin backend's syncInterfaces only manages the
+        // interfaces it started, for the same reason).
+        val toDetach = (running.intersect(baseline.keys) - desiredNames).toSortedSet()
+        val toAttach = (desiredNames - running).toSortedSet()
+        val toReload = (desiredNames.intersect(running))
+            .filter { name ->
+                val base = baseline[name]
+                base != null && base != desired[name]
+            }
+            .toSortedSet()
+        return Result(toDetach, toAttach, toReload)
+    }
+}

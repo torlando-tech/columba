@@ -97,6 +97,26 @@ class PythonRnsRuntime(
         private set
 
     /**
+     * The `enabled` interface configs that the live stack currently reflects, as
+     * a map of `name -> config`, advanced on every successful [rewriteConfigForLiveReload]
+     * and seeded at [start]. This is the baseline the hot-reload diff uses to tell
+     * a **changed-but-present** interface (present in both the baseline and the new
+     * desired set, but with different parameters) from an untouched one.
+     *
+     * Without a baseline the name-based diff (mirroring the kotlin backend's
+     * `syncInterfaces`) treats every present interface as untouched, so a
+     * parameter edit (host/port/passphrase) would be silently ignored with no
+     * restart surfaced — a regression versus the pre-RNS-1.5.5 Python backend,
+     * which routed *all* edits through the honest "Apply & Restart" path.
+     *
+     * Keyed by interface name with `LinkedHashMap` so order is stable; only the
+     * `enabled` configs are tracked (disabled ones are not live).
+     */
+    @Volatile
+    var lastAppliedInterfaces: Map<String, InterfaceConfig> = emptyMap()
+        private set
+
+    /**
      * Instance-mode flags resolved by [start] via [network.columba.app.rns.api.util.SharedInstanceProbe].
      * Stored so [rewriteConfigForLiveReload] re-emits the config with the SAME
      * mode decisions as `start()` — re-deriving them here would be wrong, because
@@ -323,6 +343,12 @@ class PythonRnsRuntime(
         bootJoinShareInstance = joinShareInstance
         bootHostShareInstance = hostShareInstance
         bootSkipAutoInterface = skipAutoInterface
+        // Seed the live-reload baseline with what start() actually brings up so the
+        // first hot-reload diff compares against the real live set, not an empty
+        // baseline (which would treat every interface as "to attach").
+        lastAppliedInterfaces = config.enabledInterfaces
+            .filter { it.enabled }
+            .associateBy { it.name }
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
 
         // RNS.Transport.find_interfaces() scans <configdir>/interfaces/ for
@@ -522,6 +548,7 @@ class PythonRnsRuntime(
         localIdentity = null
         storagePath = null
         lastConfig = null
+        lastAppliedInterfaces = emptyMap()
         bootJoinShareInstance = false
         bootHostShareInstance = false
         bootSkipAutoInterface = false
@@ -589,6 +616,22 @@ class PythonRnsRuntime(
             "Live-reload: rewrote RNS config (${desiredInterfaces.size} interface(s)) to ${configFile.absolutePath}",
         )
         return configFile.absolutePath
+    }
+
+    /**
+     * Advance the live-reload baseline to [configs] after a hot-reload has been
+     * applied successfully. Called only on the success path of
+     * [PythonRnsTransportAdmin.reloadInterfaces], so the baseline always reflects
+     * what the live stack actually serves. A later reload then diffs against this
+     * (not the stale pre-edit set) to detect changed-but-present interfaces.
+     *
+     * Only the `enabled` configs are recorded — disabled ones are not live, and
+     * recording them would make a later re-enable look like a parameter change.
+     */
+    internal fun recordAppliedInterfaces(configs: List<InterfaceConfig>) {
+        lastAppliedInterfaces = configs
+            .filter { it.enabled }
+            .associateBy { it.name }
     }
 
 

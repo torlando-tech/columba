@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.BatteryProfile
@@ -231,6 +233,13 @@ class NativeRnsBackendImpl(
     // When true, auto-connect ignores discovered interfaces that did not
     // advertise an IFAC network name. Set via setAutoconnectIfacOnly().
     @Volatile private var autoconnectIfacOnly: Boolean = false
+
+    // Serializes initialize()/shutdown(). The :reticulum service self-initializes
+    // from its config snapshot (BackendInitializer) while the UI process may call
+    // initialize() over IPC at the same moment; without this, the second caller hits
+    // "Reticulum is already started" and its failure cleanup tears down the stack the
+    // first caller just brought up.
+    private val lifecycleMutex = Mutex()
 
     // Native reticulum-kt / lxmf-kt instances
     private var reticulum: Reticulum? = null
@@ -613,6 +622,21 @@ class NativeRnsBackendImpl(
 
     override suspend fun initialize(config: ReticulumConfig): Result<Unit> =
         withContext(Dispatchers.IO) {
+            lifecycleMutex.withLock {
+                if (_networkStatus.value is NetworkStatus.READY && reticulum != null) {
+                    // Lost a race with the other initializer (UI vs. service self-init):
+                    // the stack is already up, so this is a no-op — same contract as
+                    // PythonRnsRuntime.start() and what BackendInitializer documents.
+                    Log.i(TAG, "initialize() called while already running — ignoring")
+                    Result.success(Unit)
+                } else {
+                    initializeLocked(config)
+                }
+            }
+        }
+
+    private suspend fun initializeLocked(config: ReticulumConfig): Result<Unit> =
+        run {
             runCatching {
                 _networkStatus.value = NetworkStatus.INITIALIZING
                 // Cancel any coroutines from a previous init cycle before replacing the scope.
@@ -750,6 +774,11 @@ class NativeRnsBackendImpl(
 
     override suspend fun shutdown(): Result<Unit> =
         withContext(Dispatchers.IO) {
+            lifecycleMutex.withLock { shutdownLocked() }
+        }
+
+    private suspend fun shutdownLocked(): Result<Unit> =
+        run {
             runCatching {
                 Log.i(TAG, "Shutting down native Reticulum stack")
                 _networkStatus.value = NetworkStatus.SHUTDOWN

@@ -346,9 +346,7 @@ class PythonRnsRuntime(
         // Seed the live-reload baseline with what start() actually brings up so the
         // first hot-reload diff compares against the real live set, not an empty
         // baseline (which would treat every interface as "to attach").
-        lastAppliedInterfaces = config.enabledInterfaces
-            .filter { it.enabled }
-            .associateBy { it.name }
+        seedAppliedInterfaces(config)
         Log.i(TAG, "Wrote RNS config to ${configDir.absolutePath}/config")
 
         // RNS.Transport.find_interfaces() scans <configdir>/interfaces/ for
@@ -619,19 +617,36 @@ class PythonRnsRuntime(
     }
 
     /**
-     * Advance the live-reload baseline to [configs] after a hot-reload has been
-     * applied successfully. Called only on the success path of
-     * [PythonRnsTransportAdmin.reloadInterfaces], so the baseline always reflects
-     * what the live stack actually serves. A later reload then diffs against this
-     * (not the stale pre-edit set) to detect changed-but-present interfaces.
-     *
-     * Only the `enabled` configs are recorded — disabled ones are not live, and
-     * recording them would make a later re-enable look like a parameter change.
+     * Record [config] as a managed live interface after a successful attach/reload,
+     * so a later hot-reload can detach or reload it. Advances the baseline one entry
+     * at a time (not the whole set) so that if a reload partially succeeds and then
+     * fails, the interfaces that DID apply are still tracked — without that, a later
+     * delete of one of them would have no name to detach and it would stay live
+     * invisibly.
      */
-    internal fun recordAppliedInterfaces(configs: List<InterfaceConfig>) {
-        lastAppliedInterfaces = configs
+    internal fun upsertAppliedInterface(name: String, config: InterfaceConfig) {
+        lastAppliedInterfaces = lastAppliedInterfaces + (name to config)
+    }
+
+    /**
+     * Seed [lastAppliedInterfaces] from a fresh [ReticulumConfig] at [start], so the
+     * first hot-reload diff compares against what the stack actually brought up
+     * rather than an empty baseline (which would treat every interface as "to
+     * attach"). Pulled out of `start()` to keep that method within the detekt
+     * length budget.
+     */
+    private fun seedAppliedInterfaces(config: ReticulumConfig) {
+        lastAppliedInterfaces = config.enabledInterfaces
             .filter { it.enabled }
             .associateBy { it.name }
+    }
+
+    /**
+     * Forget [name] from the managed baseline after a successful detach, so it is
+     * not later treated as a live interface we own.
+     */
+    internal fun forgetAppliedInterface(name: String) {
+        lastAppliedInterfaces = lastAppliedInterfaces - name
     }
 
 

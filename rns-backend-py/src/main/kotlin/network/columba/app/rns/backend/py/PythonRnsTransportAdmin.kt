@@ -6,6 +6,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.DiscoveredInterface
@@ -76,6 +78,23 @@ class PythonRnsTransportAdmin(
     override val bleConnectionsFlow: SharedFlow<String> = _bleConnectionsFlow.asSharedFlow()
     override val debugInfoFlow: SharedFlow<String> = _debugInfoFlow.asSharedFlow()
     override val interfaceStatusFlow: SharedFlow<String> = _interfaceStatusFlow.asSharedFlow()
+
+    /**
+     * Serializes the whole live-reload sequence (read baseline -> rewrite config ->
+     * apply the detach/reload/attach ops -> record the baseline). The reload is a
+     * multi-step read-modify-write of shared state: `PythonRnsRuntime.lastAppliedInterfaces`,
+     * the on-disk config, and `RNS.Transport.interfaces`. Two callers can reach it
+     * concurrently - the interface screen (syncNativeInterfaces) and the
+     * transport-change observer (InterfaceTransportObserver), each with its own
+     * cancel-once job - so without this lock a transport-change reload could switch
+     * to cellular interfaces while a stale screen reload records its Wi-Fi baseline
+     * afterwards, leaving a connection live that the saved settings no longer allow.
+     * Held across the entire body of [reloadInterfaces]; a caller cancelled while
+     * waiting throws CancellationException (not a reload failure), and a mid-body
+     * cancellation is caught by [reloadInterfaces] and rethrown, so the lock is
+     * always released.
+     */
+    private val liveReloadMutex = Mutex()
 
     /** Publish one replayable RNode status delta without re-entering Python. */
     fun publishRNodeOnlineStatus(
@@ -159,49 +178,67 @@ class PythonRnsTransportAdmin(
         // bucket is computed against the live set, the outcome is unambiguous, and
         // a genuine failure throws so the caller falls back to Apply & Restart
         // instead of reporting a silent success.
-        pyCall {
-            runtime.requireRunning()
+        //
+        // The whole sequence (read baseline -> rewrite config -> apply ops ->
+        // record baseline) is one read-modify-write of shared state, so it is
+        // serialized under [liveReloadMutex]: the interface screen and the
+        // transport-change observer each call this with their own jobs, and an
+        // interleaved pair could otherwise leave a connection live that the saved
+        // settings no longer allow.
+        liveReloadMutex.withLock {
+            pyCall {
+                runtime.requireRunning()
 
-            val reticulum = runtime.reticulumInstance
-                ?: error("reloadInterfaces: reticulumInstance is null (start() not run)")
+                val reticulum = runtime.reticulumInstance
+                    ?: error("reloadInterfaces: reticulumInstance is null (start() not run)")
 
-            val desired = configs.filter { it.enabled }.associateBy { it.name }
-            val running = liveUserInterfaceNames()  // throws on read failure
-            val baseline = runtime.lastAppliedInterfaces
+                val desired = configs.filter { it.enabled }.associateBy { it.name }
+                val running = liveUserInterfaceNames()  // throws on read failure
+                val baseline = runtime.lastAppliedInterfaces
 
-            val plan = LiveReloadPlan.compute(running, desired, baseline)
+                val plan = LiveReloadPlan.compute(running, desired, baseline)
 
-            // Rewrite the config BEFORE any attach/detach/reload so the live API
-            // reads the new [interfaces] block (the API re-reads <configdir>/config
-            // per call).
-            runtime.rewriteConfigForLiveReload(configs)
+                // Rewrite the config BEFORE any attach/detach/reload so the live API
+                // reads the new [interfaces] block (the API re-reads
+                // <configdir>/config per call).
+                runtime.rewriteConfigForLiveReload(configs)
 
-            for (name in plan.toDetach) {
-                if (!callInterfaceOp(reticulum, "detach_interface", name)) {
-                    error("Hot-reload: detach_interface(\"$name\") failed; needs a restart to apply")
+                // Apply the diff, advancing the baseline per successful operation. A
+                // partial failure (one op succeeds, a later one fails and throws) must
+                // still have recorded the interfaces that DID apply - otherwise a
+                // later delete of one of them would have no name to detach and it
+                // would stay live invisibly. The throw on failure still surfaces
+                // Apply & Restart.
+                for (name in plan.toDetach) {
+                    if (callInterfaceOp(reticulum, "detach_interface", name)) {
+                        runtime.forgetAppliedInterface(name)
+                    } else {
+                        error("Hot-reload: detach_interface(\"$name\") failed; needs a restart to apply")
+                    }
                 }
-            }
-            for (name in plan.toReload) {
-                if (!callInterfaceOp(reticulum, "reload_interface", name)) {
-                    error("Hot-reload: reload_interface(\"$name\") failed; needs a restart to apply")
+                for (name in plan.toReload) {
+                    if (callInterfaceOp(reticulum, "reload_interface", name)) {
+                        runtime.upsertAppliedInterface(name, desired.getValue(name))
+                    } else {
+                        error("Hot-reload: reload_interface(\"$name\") failed; needs a restart to apply")
+                    }
                 }
-            }
-            for (name in plan.toAttach) {
-                if (!callInterfaceOp(reticulum, "attach_interface", name)) {
-                    error("Hot-reload: attach_interface(\"$name\") failed; needs a restart to apply")
+                for (name in plan.toAttach) {
+                    if (callInterfaceOp(reticulum, "attach_interface", name)) {
+                        runtime.upsertAppliedInterface(name, desired.getValue(name))
+                    } else {
+                        error("Hot-reload: attach_interface(\"$name\") failed; needs a restart to apply")
+                    }
                 }
+
+                val untouched = (desired.keys intersect running) - plan.toReload
+                Log.i(
+                    TAG,
+                    "Hot-reload complete: detached ${plan.toDetach}, reloaded ${plan.toReload}, " +
+                        "attached ${plan.toAttach}, untouched $untouched",
+                )
+                Unit
             }
-
-            // Success: advance the baseline so the next diff detects further edits
-            // against what is now actually live.
-            runtime.recordAppliedInterfaces(configs)
-
-            Log.i(
-                TAG,
-                "Hot-reload complete: detached ${plan.toDetach}, reloaded ${plan.toReload}, " +
-                    "attached ${plan.toAttach}, untouched ${(running.size - plan.toDetach.size - plan.toReload.size)}",
-            )
-            Unit
         }
     }
 

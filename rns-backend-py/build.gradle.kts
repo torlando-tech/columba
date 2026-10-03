@@ -59,7 +59,7 @@ android {
         // torlando-tech's own project, so it carries no "fork" label.
         buildConfigField("String", "PY_RNS_VERSION", "\"1.5.5 (torlando-tech fork)\"")
         buildConfigField("String", "PY_LXMF_VERSION", "\"1.1.0 (torlando-tech fork)\"")
-        buildConfigField("String", "PY_BLE_RETICULUM_VERSION", "\"0.2.2\"")
+        buildConfigField("String", "PY_BLE_RETICULUM_VERSION", "\"0.2.3\"")
     }
 
     compileOptions {

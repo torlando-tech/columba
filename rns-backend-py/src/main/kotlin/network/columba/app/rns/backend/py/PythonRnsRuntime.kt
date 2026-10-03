@@ -377,6 +377,11 @@ class PythonRnsRuntime(
         val usbBridgeModule = python.getModule("usb_bridge")
         usbBridgeModule.callAttr("set_usb_bridge", usbBridge)
 
+        // A busy AutoInterface data port must not take the whole service down
+        // via RNS.panic() (see event_bridge.install_rns_guards). Before
+        // Reticulum() so the startup interface bring-up is covered.
+        eventBridge.callAttr("install_rns_guards")
+
         // Construct the upstream Reticulum instance. RNS.Reticulum is a process
         // singleton — stop() must fully tear it down before a restart.
         reticulumInstance = rnsModule.callAttr("Reticulum", configDir.absolutePath)

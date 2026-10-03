@@ -116,16 +116,16 @@ chaquopy {
             install("git+https://github.com/torlando-tech/LXMF@8912186e48b482a76bf04e2ac4b6c8940991aecc")
 
             // ble-reticulum — RNS.Interface subclass for the Android BLE bridge.
-            // Pinned to the commit SHA at the tip of main for reproducibility.
-            // ed164a8 (main, PR torlando-tech/ble-reticulum#49) carries the
-            // BLEPeerInterface.ifac_size fix (#45) plus the BLE data-path
-            // fixes: peer-announce-rate attributes for the stats RPC (#47),
-            // same-address duplicate-identity normalization so a fixed-MAC
-            // peer reconnecting via the other BLE mode is not misread as MAC
-            // rotation (#48), and the scanner-wedge health check that
+            // Pinned to the v0.2.3 release tag commit for reproducibility.
+            // 63557ac (tag v0.2.3, main tip) is the released 0.2.3 package and
+            // carries the BLEPeerInterface.ifac_size fix (#45) plus the BLE
+            // data-path fixes: peer-announce-rate attributes for the stats RPC
+            // (#47), same-address duplicate-identity normalization so a
+            // fixed-MAC peer reconnecting via the other BLE mode is not misread
+            // as MAC rotation (#48), and the scanner-wedge health check that
             // disambiguates a quiet room from a genuinely wedged adapter
             // without a false "reboot required" (#49).
-            install("git+https://github.com/torlando-tech/ble-reticulum.git@ed164a8d5d9eea6e73d16d6c8459bc7ff09e2c0b")
+            install("git+https://github.com/torlando-tech/ble-reticulum.git@63557acfe5c923dcdafeb7bc37508bf835f16514")
 
             install("cryptography>=42.0.0")
 

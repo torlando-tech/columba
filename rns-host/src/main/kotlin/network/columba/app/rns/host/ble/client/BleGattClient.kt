@@ -13,11 +13,10 @@ import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import network.columba.app.rns.host.ble.model.BleConstants
+import network.columba.app.rns.host.ble.util.BleDispatchers
 import network.columba.app.rns.host.ble.util.BleOperationQueue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -206,7 +205,7 @@ class BleGattClient(
      * @return Result with Unit on success, exception on failure
      */
     suspend fun connect(address: String): Result<Unit> =
-        withContext(Dispatchers.Main) {
+        withContext(BleDispatchers.ble) {
             try {
                 // Check if already connected
                 connectionsMutex.withLock {
@@ -297,14 +296,14 @@ class BleGattClient(
             }
 
             val connData =
-                withContext(Dispatchers.Main) {
+                withContext(BleDispatchers.ble) {
                     connectionsMutex.withLock {
                         connections.remove(address)
                     }
                 }
 
             if (connData != null) {
-                withContext(Dispatchers.Main) {
+                withContext(BleDispatchers.ble) {
                     connData.connectionJob?.cancel()
                     safeGattTeardown(connData.gatt, "manual disconnect $address")
                 }
@@ -446,7 +445,7 @@ class BleGattClient(
                 }
 
                 // Request high connection priority for better stability and throughput
-                withContext(Dispatchers.Main) {
+                withContext(BleDispatchers.ble) {
                     try {
                         val priorityResult =
                             gatt.requestConnectionPriority(
@@ -461,11 +460,11 @@ class BleGattClient(
                 // Small delay to let BLE stack apply parameters
                 delay(100)
 
-                // Discover services (post to main thread for older Android versions)
-                withContext(Dispatchers.Main) {
-                    Handler(Looper.getMainLooper()).post {
-                        gatt.discoverServices()
-                    }
+                // Discover services off the main thread: on Android 13+ discoverServices()
+                // is a synchronous binder call that can block for seconds when the
+                // Bluetooth stack is congested, which caused Background ANRs.
+                withContext(BleDispatchers.ble) {
+                    gatt.discoverServices()
                 }
             }
 
@@ -523,7 +522,7 @@ class BleGattClient(
             connectionsMutex.withLock {
                 connections.remove(address)
             }
-            withContext(Dispatchers.Main) {
+            withContext(BleDispatchers.ble) {
                 safeGattTeardown(gatt, "service discovery failed status=$status")
             }
 
@@ -544,7 +543,7 @@ class BleGattClient(
             connectionsMutex.withLock {
                 connections.remove(address)
             }
-            withContext(Dispatchers.Main) {
+            withContext(BleDispatchers.ble) {
                 safeGattTeardown(gatt, "Reticulum service not found")
             }
 
@@ -568,7 +567,7 @@ class BleGattClient(
             connectionsMutex.withLock {
                 connections.remove(address)
             }
-            withContext(Dispatchers.Main) {
+            withContext(BleDispatchers.ble) {
                 safeGattTeardown(gatt, "required characteristics not found")
             }
 
@@ -853,7 +852,7 @@ class BleGattClient(
                 }
 
             if (connData != null) {
-                withContext(Dispatchers.Main) {
+                withContext(BleDispatchers.ble) {
                     safeGattTeardown(connData.gatt, "failed to enable notifications")
                 }
             }
@@ -1081,7 +1080,7 @@ class BleGattClient(
 
         val connData = connectionsMutex.withLock { connections.remove(address) }
         if (connData != null) {
-            withContext(Dispatchers.Main) {
+            withContext(BleDispatchers.ble) {
                 safeGattTeardown(connData.gatt, "connection timeout")
             }
             onConnectionFailed?.invoke(address, "Connection timeout")

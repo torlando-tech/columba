@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import network.columba.app.rns.host.ble.model.BleConstants
 import network.columba.app.rns.host.ble.model.BleDevice
 import network.columba.app.rns.host.ble.model.BlePowerSettings
+import network.columba.app.rns.host.ble.util.BleDispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -144,7 +145,7 @@ class BleScanner(
      * @return Result indicating success or failure
      */
     suspend fun startScanning(minRssi: Int = BleConstants.MIN_RSSI_DBM): Result<Unit> {
-        return withContext(Dispatchers.Main) {
+        return withContext(BleDispatchers.ble) {
             try {
                 // Check if already scanning
                 if (_isScanning.value) {
@@ -206,7 +207,7 @@ class BleScanner(
             scanJob?.cancel()
             scanJob = null
 
-            withContext(Dispatchers.Main) {
+            withContext(BleDispatchers.ble) {
                 if (_isScanning.value && bluetoothLeScanner != null) {
                     bluetoothLeScanner.stopScan(scanCallback)
                     _isScanning.value = false
@@ -248,7 +249,7 @@ class BleScanner(
      * Perform a single scan.
      */
     private suspend fun performScan(minRssi: Int) {
-        withContext(Dispatchers.Main) {
+        withContext(BleDispatchers.ble) {
             try {
                 val scanner = bluetoothLeScanner ?: return@withContext
 

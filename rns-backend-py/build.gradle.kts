@@ -57,7 +57,7 @@ android {
         // in PINNED_VERSIONS.md, not the user-facing version line). RNS and LXMF
         // ARE torlando-tech forks of markqvist's upstream; ble-reticulum is
         // torlando-tech's own project, so it carries no "fork" label.
-        buildConfigField("String", "PY_RNS_VERSION", "\"1.4.2 (torlando-tech fork)\"")
+        buildConfigField("String", "PY_RNS_VERSION", "\"1.5.2 (torlando-tech fork)\"")
         buildConfigField("String", "PY_LXMF_VERSION", "\"1.1.0 (torlando-tech fork)\"")
         buildConfigField("String", "PY_BLE_RETICULUM_VERSION", "\"0.2.2\"")
     }

@@ -190,7 +190,7 @@ class ErrorHandlingIntegrationTest {
     fun `P0-3 Connection failure is propagated to UI callback`() =
         runTest {
             // Given: GATT client with connection failure callback
-            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue())
+            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue(), bleDispatcher = testDispatcher)
 
             val failureLatch = CountDownLatch(1)
             var failedAddress: String? = null
@@ -227,7 +227,7 @@ class ErrorHandlingIntegrationTest {
     fun `P1-1 Service discovery failure forces connection cleanup`() =
         runTest {
             // Given: GATT client with mocked GATT
-            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue())
+            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue(), bleDispatcher = testDispatcher)
             val testAddress = "AA:BB:CC:DD:EE:FF"
 
             var connectionFailedCalled = false
@@ -270,7 +270,7 @@ class ErrorHandlingIntegrationTest {
     fun `P1-2 Notification enable failure forces connection cleanup`() =
         runTest {
             // Given: GATT client
-            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue())
+            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue(), bleDispatcher = testDispatcher)
             val testAddress = "AA:BB:CC:DD:EE:FF"
 
             val failureLatch = CountDownLatch(1)
@@ -314,7 +314,7 @@ class ErrorHandlingIntegrationTest {
     fun `P1-3 Permission exception provides user-friendly message`() =
         runTest {
             // Given: GATT server that will fail with SecurityException
-            val server = BleGattServer(mockContext, mockBluetoothManager)
+            val server = BleGattServer(mockContext, mockBluetoothManager, bleDispatcher = testDispatcher)
 
             every { mockBluetoothManager.openGattServer(any(), any()) } throws SecurityException("Permission denied")
 
@@ -401,7 +401,7 @@ class ErrorHandlingIntegrationTest {
     fun `concurrent connection failures are handled safely`() =
         runTest {
             // Given: GATT client and multiple concurrent connection attempts
-            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue())
+            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue(), bleDispatcher = testDispatcher)
 
             val failureCount = CountDownLatch(3)
             client.onConnectionFailed = { _, _ ->
@@ -465,7 +465,7 @@ class ErrorHandlingIntegrationTest {
     fun `null GATT during disconnect is handled gracefully`() =
         runTest {
             // Given: GATT client
-            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue())
+            val client = BleGattClient(mockContext, mockBluetoothAdapter, BleOperationQueue(), bleDispatcher = testDispatcher)
             val testAddress = "AA:BB:CC:DD:EE:FF"
 
             // When: Disconnect from address that was never connected

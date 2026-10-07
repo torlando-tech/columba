@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import network.columba.app.rns.host.ble.model.BleConstants
 import network.columba.app.rns.host.ble.util.BleDispatchers
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -72,12 +73,14 @@ internal fun acceptsRxWrite(
  * @property context Application context
  * @property bluetoothManager Bluetooth manager
  * @property scope Coroutine scope for async operations
+ * @property bleDispatcher Dispatcher for blocking Bluetooth framework calls (never Main)
  */
 @SuppressLint("MissingPermission")
 class BleGattServer(
     private val context: Context,
     private val bluetoothManager: BluetoothManager,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+    private val bleDispatcher: CoroutineDispatcher = BleDispatchers.ble,
 ) {
     companion object {
         private const val TAG = "Columba:BLE:K:Server"
@@ -263,7 +266,7 @@ class BleGattServer(
      * @return Result indicating success or failure
      */
     suspend fun open(): Result<Unit> =
-        withContext(BleDispatchers.ble) {
+        withContext(bleDispatcher) {
             try {
                 // Check if already open
                 if (_isServerOpen.value) {
@@ -359,7 +362,7 @@ class BleGattServer(
      * Close the GATT server.
      */
     suspend fun close() =
-        withContext(BleDispatchers.ble) {
+        withContext(bleDispatcher) {
             try {
                 // Clear connected centrals
                 centralsMutex.withLock {
@@ -432,7 +435,7 @@ class BleGattServer(
                 IllegalStateException("TX characteristic not available"),
             )
 
-        return withContext(BleDispatchers.ble) {
+        return withContext(bleDispatcher) {
             try {
                 if (!hasConnectPermission()) {
                     return@withContext Result.failure(
@@ -493,7 +496,7 @@ class BleGattServer(
      * We must manually clean up state and fire the disconnect callback.
      */
     suspend fun disconnectCentral(address: String) =
-        withContext(BleDispatchers.ble) {
+        withContext(bleDispatcher) {
             try {
                 if (!hasConnectPermission()) {
                     Log.w(TAG, "Cannot disconnect central, missing permission")
@@ -671,7 +674,7 @@ class BleGattServer(
         requestId: Int,
         offset: Int,
         characteristic: BluetoothGattCharacteristic,
-    ) = withContext(BleDispatchers.ble) {
+    ) = withContext(bleDispatcher) {
         try {
             if (!hasConnectPermission()) {
                 return@withContext
@@ -736,7 +739,7 @@ class BleGattServer(
         responseNeeded: Boolean,
         offset: Int,
         value: ByteArray,
-    ) = withContext(BleDispatchers.ble) {
+    ) = withContext(bleDispatcher) {
         try {
             if (!hasConnectPermission()) {
                 return@withContext
@@ -828,7 +831,7 @@ class BleGattServer(
         requestId: Int,
         offset: Int,
         descriptor: BluetoothGattDescriptor,
-    ) = withContext(BleDispatchers.ble) {
+    ) = withContext(bleDispatcher) {
         try {
             if (!hasConnectPermission()) {
                 return@withContext
@@ -870,7 +873,7 @@ class BleGattServer(
         responseNeeded: Boolean,
         offset: Int,
         value: ByteArray,
-    ) = withContext(BleDispatchers.ble) {
+    ) = withContext(bleDispatcher) {
         try {
             if (!hasConnectPermission()) {
                 return@withContext

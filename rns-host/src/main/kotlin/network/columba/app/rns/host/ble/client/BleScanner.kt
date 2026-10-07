@@ -18,6 +18,7 @@ import network.columba.app.rns.host.ble.model.BleConstants
 import network.columba.app.rns.host.ble.model.BleDevice
 import network.columba.app.rns.host.ble.model.BlePowerSettings
 import network.columba.app.rns.host.ble.util.BleDispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,6 +49,7 @@ import kotlinx.coroutines.withContext
  * @property context Application context
  * @property bluetoothAdapter Bluetooth adapter instance
  * @property scope Coroutine scope for async operations
+ * @property bleDispatcher Dispatcher for blocking Bluetooth framework calls (never Main)
  */
 @SuppressLint("MissingPermission")
 @Suppress("TooManyFunctions") // Cohesive BLE scanner — splitting would be artificial
@@ -55,6 +57,7 @@ class BleScanner(
     private val context: Context,
     private val bluetoothAdapter: BluetoothAdapter,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+    private val bleDispatcher: CoroutineDispatcher = BleDispatchers.ble,
 ) {
     companion object {
         private const val TAG = "Columba:BLE:K:Scan"
@@ -145,7 +148,7 @@ class BleScanner(
      * @return Result indicating success or failure
      */
     suspend fun startScanning(minRssi: Int = BleConstants.MIN_RSSI_DBM): Result<Unit> {
-        return withContext(BleDispatchers.ble) {
+        return withContext(bleDispatcher) {
             try {
                 // Check if already scanning
                 if (_isScanning.value) {
@@ -207,7 +210,7 @@ class BleScanner(
             scanJob?.cancel()
             scanJob = null
 
-            withContext(BleDispatchers.ble) {
+            withContext(bleDispatcher) {
                 if (_isScanning.value && bluetoothLeScanner != null) {
                     bluetoothLeScanner.stopScan(scanCallback)
                     _isScanning.value = false
@@ -249,7 +252,7 @@ class BleScanner(
      * Perform a single scan.
      */
     private suspend fun performScan(minRssi: Int) {
-        withContext(BleDispatchers.ble) {
+        withContext(bleDispatcher) {
             try {
                 val scanner = bluetoothLeScanner ?: return@withContext
 

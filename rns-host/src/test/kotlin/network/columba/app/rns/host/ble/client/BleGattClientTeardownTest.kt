@@ -60,6 +60,7 @@ class BleGattClientTeardownTest {
                 context = mockk<Context>(),
                 bluetoothAdapter = mockk<BluetoothAdapter>(),
                 operationQueue = mockk<BleOperationQueue>(),
+                bleDispatcher = mainDispatcher,
             )
         val connectionDataClass =
             BleGattClient::class.java.declaredClasses.single { it.simpleName == "ConnectionData" }

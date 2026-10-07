@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import network.columba.app.rns.host.ble.model.BleConstants
 import network.columba.app.rns.host.ble.model.BlePowerSettings
 import network.columba.app.rns.host.ble.util.BleDispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,12 +41,14 @@ import kotlinx.coroutines.withContext
  * @property context Application context
  * @property bluetoothAdapter Bluetooth adapter
  * @property scope Coroutine scope for async operations
+ * @property bleDispatcher Dispatcher for blocking Bluetooth framework calls (never Main)
  */
 @SuppressLint("MissingPermission")
 class BleAdvertiser(
     private val context: Context,
     private val bluetoothAdapter: BluetoothAdapter,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+    private val bleDispatcher: CoroutineDispatcher = BleDispatchers.ble,
 ) {
     companion object {
         private const val TAG = "Columba:BLE:K:Adv"
@@ -143,7 +146,7 @@ class BleAdvertiser(
      * @return Result indicating success or failure
      */
     suspend fun startAdvertising(deviceName: String = BleConstants.DEFAULT_DEVICE_NAME_PREFIX): Result<Unit> =
-        withContext(BleDispatchers.ble) {
+        withContext(bleDispatcher) {
             try {
                 // Check if already advertising
                 if (_isAdvertising.value) {
@@ -244,7 +247,7 @@ class BleAdvertiser(
             // Stop refresh job first
             stopRefreshJob()
 
-            withContext(BleDispatchers.ble) {
+            withContext(bleDispatcher) {
                 if (_isAdvertising.value && bluetoothLeAdvertiser != null) {
                     bluetoothLeAdvertiser.stopAdvertising(advertiseCallback)
                     _isAdvertising.value = false
@@ -367,7 +370,7 @@ class BleAdvertiser(
         isRefreshing = true
         try {
             // Stop current advertising
-            withContext(BleDispatchers.ble) {
+            withContext(bleDispatcher) {
                 try {
                     bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
                 } catch (e: Exception) {
@@ -378,7 +381,7 @@ class BleAdvertiser(
             delay(100) // Brief delay for cleanup
 
             // Restart advertising
-            withContext(BleDispatchers.ble) {
+            withContext(bleDispatcher) {
                 startAdvertisingInternal()
             }
             Log.d(TAG, "Advertising refreshed successfully")

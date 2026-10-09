@@ -111,6 +111,16 @@ fun IdentityScreen(
     val isRestarting by viewModel.isRestarting.collectAsState()
     val settingsState by settingsViewModel.state.collectAsState()
 
+    // Keep this screen's data live while it is visible. The python backend never
+    // emits debugInfoFlow (only the kotlin backend does), so this periodic refresh
+    // is what keeps the interface online-state up to date on that flavor. This was
+    // previously driven by the removed Reticulum Info card; lifting it here preserves
+    // the same live behavior for the remaining cards.
+    val refreshTick = rememberLifecycleTickerMillis(periodMs = 1_000L)
+    LaunchedEffect(refreshTick) {
+        viewModel.refreshDebugInfo()
+    }
+
     // Bluetooth enable launcher
     val bluetoothEnableLauncher =
         rememberLauncherForActivityResult(
@@ -207,12 +217,6 @@ fun IdentityScreen(
                 onTestAnnounce = { viewModel.createTestAnnounce() },
                 testResult = testResult,
                 onClearResult = { viewModel.clearTestResult() },
-            )
-
-            // Reticulum Info Card (auto-refreshes every second for live heartbeat)
-            ReticulumInfoCard(
-                debugInfo = debugInfo,
-                onRefresh = { viewModel.refreshDebugInfo() },
             )
 
             // Bottom spacing for navigation bar (fixed height since M3 NavigationBar consumes the insets)
@@ -322,92 +326,6 @@ fun StatusCard(
                                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                                 RoundedCornerShape(8.dp),
                             ).padding(8.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ReticulumInfoCard(
-    debugInfo: DebugInfo,
-    onRefresh: (() -> Unit)? = null,
-) {
-    if (onRefresh != null) {
-        val refreshTick = rememberLifecycleTickerMillis(periodMs = 1_000L)
-        androidx.compose.runtime.LaunchedEffect(refreshTick) {
-            onRefresh()
-        }
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Reticulum Information",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-
-            Divider()
-
-            InfoRow(label = "RNS Available", value = if (debugInfo.reticulumAvailable) "Yes" else "No")
-            InfoRow(label = "Storage Path", value = debugInfo.storagePath, monospace = true)
-            InfoRow(label = "Transport Enabled", value = if (debugInfo.transportEnabled) "Yes" else "No")
-            InfoRow(label = "Multicast Lock", value = if (debugInfo.multicastLockHeld) "✓ Held" else "✗ Not held")
-            InfoRow(label = "Wake Lock", value = if (debugInfo.wakeLockHeld) "✓ Held" else "✗ Not held")
-
-            Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-            Text(
-                text = "Process Persistence",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-
-            InfoRow(
-                label = "Heartbeat",
-                value =
-                    if (debugInfo.heartbeatAgeSeconds >= 0) {
-                        "${debugInfo.heartbeatAgeSeconds}s ago"
-                    } else {
-                        "Not started"
-                    },
-            )
-            InfoRow(
-                label = "Health Check",
-                value = if (debugInfo.healthCheckRunning) "✓ Running" else "✗ Stopped",
-            )
-            InfoRow(
-                label = "Network Monitor",
-                value = if (debugInfo.networkMonitorRunning) "✓ Running" else "✗ Stopped",
-            )
-            InfoRow(
-                label = "Lock Maintenance",
-                value = if (debugInfo.maintenanceRunning) "✓ Running" else "✗ Stopped",
-            )
-            InfoRow(
-                label = "Last Lock Refresh",
-                value =
-                    if (debugInfo.lastLockRefreshAgeSeconds >= 0) {
-                        "${debugInfo.lastLockRefreshAgeSeconds}s ago"
-                    } else {
-                        "Not yet"
-                    },
-            )
-            if (debugInfo.failedInterfaceCount > 0) {
-                InfoRow(
-                    label = "Failed Interfaces",
-                    value = "${debugInfo.failedInterfaceCount} (auto-retrying)",
                 )
             }
         }

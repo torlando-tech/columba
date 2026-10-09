@@ -130,9 +130,8 @@ internal object NativeInterfaceFactory {
         }
         try {
             val iface = createInterface(config) ?: return
-            val rnsInterface = iface as network.reticulum.interfaces.Interface
-            rnsInterface.start()
-            registerAndTrack(config.name, rnsInterface)
+            iface.start()
+            registerAndTrack(config.name, iface)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start interface ${config.name}: ${e.message}", e)
         }
@@ -253,7 +252,7 @@ internal object NativeInterfaceFactory {
                         name = config.name,
                         driver = driver,
                         transportIdentity = identityHash,
-                    )
+                    ).withMode(config.name, config.mode)
                 iface.onPacketReceived = { data, fromInterface ->
                     Transport.inbound(
                         data,
@@ -356,7 +355,8 @@ internal object NativeInterfaceFactory {
         )
     }
 
-    private fun createInterface(config: InterfaceConfig): Any? {
+    @androidx.annotation.VisibleForTesting
+    internal fun createInterface(config: InterfaceConfig): network.reticulum.interfaces.Interface? {
         fun mapScopeToHex(scopeName: String): String =
             when (scopeName.lowercase()) {
                 "link" -> "2"
@@ -372,7 +372,7 @@ internal object NativeInterfaceFactory {
                 AutoInterface(
                     name = config.name,
                     discoveryScope = mapScopeToHex(config.discoveryScope),
-                )
+                ).withMode(config.name, config.mode)
 
             is InterfaceConfig.TCPClient ->
                 TCPClientInterface(
@@ -383,7 +383,7 @@ internal object NativeInterfaceFactory {
                     keepAlive = false, // Disable for mobile battery
                     ifacNetname = config.networkName,
                     ifacNetkey = config.passphrase,
-                )
+                ).withMode(config.name, config.mode)
 
             is InterfaceConfig.UDP ->
                 UDPInterface(
@@ -392,7 +392,7 @@ internal object NativeInterfaceFactory {
                     bindPort = config.listenPort,
                     forwardIp = config.forwardIp,
                     forwardPort = config.forwardPort,
-                )
+                ).withMode(config.name, config.mode)
 
             is InterfaceConfig.TCPServer ->
                 TCPServerInterface(
@@ -401,7 +401,7 @@ internal object NativeInterfaceFactory {
                     bindPort = config.listenPort,
                     ifacNetname = config.networkName,
                     ifacNetkey = config.passphrase,
-                ).apply {
+                ).withMode(config.name, config.mode).apply {
                     // Register each spawned child interface with Transport BEFORE
                     // start() opens the accept loop, so the first incoming
                     // connection can't race us into a silent-drop: Python RNS

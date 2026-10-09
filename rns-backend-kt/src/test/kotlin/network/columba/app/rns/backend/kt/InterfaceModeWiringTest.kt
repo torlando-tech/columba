@@ -1,8 +1,16 @@
 package network.columba.app.rns.backend.kt
 
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import network.columba.app.rns.api.model.InterfaceConfig
 import network.reticulum.common.InterfaceMode
 import network.reticulum.interfaces.InterfaceAdapter
+import network.reticulum.interfaces.ble.BLEDriver
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -107,6 +115,22 @@ class InterfaceModeWiringTest {
     }
 
     @Test
+    fun tcpServer_reportsConfiguredMode() {
+        // TCPServerInterface binds its ServerSocket only inside start(), so the
+        // factory can construct it without a network - same as TCPClient.
+        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+            val config = InterfaceConfig.TCPServer(name = "tcpserver-$mode", enabled = true, mode = mode)
+            val obj = buildInterface(config)
+            val expected = expectedReticulumMode(mode)!!
+            assertEquals(
+                "TCPServer mode='$mode' should report $expected",
+                expected,
+                effectiveMode(obj),
+            )
+        }
+    }
+
+    @Test
     fun udp_reportsConfiguredMode() {
         for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
             val config = InterfaceConfig.UDP(name = "udp-$mode", enabled = true, mode = mode)
@@ -114,6 +138,73 @@ class InterfaceModeWiringTest {
             val expected = expectedReticulumMode(mode)!!
             assertEquals(
                 "UDP mode='$mode' should report $expected",
+                expected,
+                effectiveMode(obj),
+            )
+        }
+    }
+
+    @Test
+    fun rnode_reportsConfiguredMode() =
+        runBlocking {
+            // Drive the REAL RNodeConnectionHelper (not a copy): mock the host
+            // bridge so openUsbSerial hands back in-memory streams, and capture
+            // the interface the helper registers. If the helper stopped applying
+            // `.withMode` to the constructed RNodeInterface (issue #1169), every
+            // mode below would report FULL and this fails.
+            val input = java.io.ByteArrayInputStream(ByteArray(0))
+            val output = java.io.ByteArrayOutputStream()
+            val bridge =
+                mockk<RNodeHostBridge> {
+                    coEvery { openUsbSerial(any(), any(), any(), any()) } returns Pair(input, output)
+                    every { rnodeFramebufferData() } returns null
+                }
+            val ctx = mockk<android.content.Context>()
+            for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+                var captured: network.reticulum.interfaces.Interface? = null
+                RNodeConnectionHelper.startRNodeInterface(
+                    config =
+                        InterfaceConfig.RNode(
+                            name = "rnode-$mode",
+                            enabled = true,
+                            connectionMode = "usb",
+                            enableFramebuffer = false,
+                            mode = mode,
+                        ),
+                    appContext = ctx,
+                    hostBridge = bridge,
+                    scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                    onRegisterAndTrack = { _, iface -> captured = iface },
+                    onMonitorLifecycle = { _, _ -> },
+                    onEnsureRecovery = { },
+                )
+                val obj = captured!!
+                val expected = expectedReticulumMode(mode)!!
+                assertEquals(
+                    "RNode mode='$mode' should report $expected",
+                    expected,
+                    effectiveMode(obj),
+                )
+            }
+        }
+
+    @Test
+    fun ble_reportsConfiguredMode() {
+        // startBleInterface() builds a BLEInterface then applies
+        // `.withMode(config.name, config.mode)` (NativeInterfaceFactory.kt:255).
+        // Reproduce that exact wiring: construct a real BLEInterface (fake driver,
+        // no start()) and apply the same .withMode call. If that call were dropped,
+        // every mode would report FULL and this fails.
+        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+            val obj =
+                network.reticulum.interfaces.ble.BLEInterface(
+                    name = "ble-$mode",
+                    driver = mockk<BLEDriver>(),
+                    transportIdentity = ByteArray(20),
+                ).withMode("ble-$mode", mode)
+            val expected = expectedReticulumMode(mode)!!
+            assertEquals(
+                "BLE mode='$mode' should report $expected",
                 expected,
                 effectiveMode(obj),
             )

@@ -56,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,6 +78,7 @@ import network.columba.app.ui.components.BluetoothPermissionController
 import network.columba.app.ui.components.QrCodeImage
 import network.columba.app.ui.components.ServiceRestartBanner
 import network.columba.app.ui.components.rememberBluetoothPermissionController
+import network.columba.app.ui.util.rememberLifecycleTickerMillis
 import network.columba.app.util.IdentityQrCodeUtils
 import network.columba.app.viewmodel.BleConnectionsUiState
 import network.columba.app.viewmodel.DebugInfo
@@ -108,6 +110,16 @@ fun IdentityScreen(
     val bleConnectionsState by bleConnectionsViewModel.uiState.collectAsState()
     val isRestarting by viewModel.isRestarting.collectAsState()
     val settingsState by settingsViewModel.state.collectAsState()
+
+    // Keep this screen's data live while it is visible. The python backend never
+    // emits debugInfoFlow (only the kotlin backend does), so this periodic refresh
+    // is what keeps the interface online-state up to date on that flavor. This was
+    // previously driven by the removed Reticulum Info card; lifting it here preserves
+    // the same live behavior for the remaining cards.
+    val refreshTick = rememberLifecycleTickerMillis(periodMs = 1_000L)
+    LaunchedEffect(refreshTick) {
+        viewModel.refreshDebugInfo()
+    }
 
     // Bluetooth enable launcher
     val bluetoothEnableLauncher =

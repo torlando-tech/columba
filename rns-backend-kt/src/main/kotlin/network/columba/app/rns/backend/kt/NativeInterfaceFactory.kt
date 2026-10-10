@@ -27,6 +27,17 @@ internal object NativeInterfaceFactory {
 
     /** Running interfaces keyed by config name. */
     private val runningInterfaces = java.util.concurrent.ConcurrentHashMap<String, network.reticulum.interfaces.Interface>()
+
+    /**
+     * Columba mode string last applied to each running interface, keyed by name.
+     * [syncInterfaces] compares the desired mode against this to detect a saved
+     * mode edit on an already-running interface and restart it so the change
+     * takes effect. The diff-based sync otherwise only starts names that are not
+     * already running, so a persisted mode edit would never reach the running
+     * object (issue #1169, PR #1188 review P1). Tracking just the mode (not the
+     * full config) avoids spurious restarts from non-deterministic config fields.
+     */
+    private val runningModes = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val rnodeRecoveryJobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
 
     /**
@@ -86,6 +97,21 @@ internal object NativeInterfaceFactory {
             stopInterface(name)
         }
 
+        // Restart interfaces whose saved mode changed while they were running.
+        // The diff-based sync below only *starts* names not already running, so a
+        // persisted mode edit on a running interface would otherwise be dropped
+        // (the running object keeps the mode it was started with). Issue #1169,
+        // PR #1188 review P1.
+        for (name in runningNames intersect desiredNames) {
+            val config = configs.first { it.name == name }
+            val previousMode = runningModes[name]
+            val desiredMode = configModeOf(config)
+            if (previousMode != null && previousMode != desiredMode) {
+                Log.i(TAG, "Mode changed for running interface $name: $previousMode -> $desiredMode; restarting")
+                restartInterface(config)
+            }
+        }
+
         // Start new interfaces
         for (name in desiredNames - runningNames) {
             val config = configs.first { it.name == name }
@@ -122,6 +148,17 @@ internal object NativeInterfaceFactory {
         }
     }
 
+    /** Extracts the Columba mode string from an [InterfaceConfig]. */
+    private fun configModeOf(config: InterfaceConfig): String =
+        when (config) {
+            is InterfaceConfig.AutoInterface -> config.mode
+            is InterfaceConfig.TCPClient -> config.mode
+            is InterfaceConfig.TCPServer -> config.mode
+            is InterfaceConfig.UDP -> config.mode
+            is InterfaceConfig.RNode -> config.mode
+            is InterfaceConfig.AndroidBLE -> config.mode
+        }
+
     private fun startInterface(config: InterfaceConfig) {
         // BLE requires async setup (scan + GATT + MTU negotiation)
         if (config is InterfaceConfig.AndroidBLE) {
@@ -131,7 +168,7 @@ internal object NativeInterfaceFactory {
         try {
             val iface = createInterface(config) ?: return
             iface.start()
-            registerAndTrack(config.name, iface)
+            registerAndTrack(config.name, iface, config)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start interface ${config.name}: ${e.message}", e)
         }
@@ -140,12 +177,14 @@ internal object NativeInterfaceFactory {
     private fun registerAndTrack(
         name: String,
         iface: network.reticulum.interfaces.Interface,
+        config: InterfaceConfig,
     ) {
         val ref =
             network.reticulum.interfaces.InterfaceAdapter
                 .getOrCreate(iface)
         Transport.registerInterface(ref)
         runningInterfaces[name] = iface
+        runningModes[name] = configModeOf(config)
 
         // Acquire multicast lock when AutoInterface starts (needed for multicast receive)
         if (iface is network.reticulum.interfaces.auto.AutoInterface) {
@@ -261,7 +300,7 @@ internal object NativeInterfaceFactory {
                     )
                 }
                 iface.start()
-                registerAndTrack(config.name, iface)
+                registerAndTrack(config.name, iface, config)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start BLE interface ${config.name}: ${e.message}", e)
                 // AndroidBLEDriver launches event-aggregator coroutines from
@@ -280,7 +319,7 @@ internal object NativeInterfaceFactory {
             appContext = appContext,
             hostBridge = rnodeHostBridge,
             scope = scope,
-            onRegisterAndTrack = ::registerAndTrack,
+            onRegisterAndTrack = { name, iface -> registerAndTrack(name, iface, config) },
             onMonitorLifecycle = ::monitorRNodeLifecycle,
             onEnsureRecovery = ::ensureRNodeRecovery,
         )
@@ -293,6 +332,7 @@ internal object NativeInterfaceFactory {
         // block sees the interface as unmanaged and bails out instead of
         // leaving an orphaned collector behind.
         val iface = runningInterfaces.remove(name)
+        runningModes.remove(name)
         onlineObservers.remove(name)?.cancel()
         if (iface == null) return
         try {

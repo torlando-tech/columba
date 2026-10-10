@@ -13,7 +13,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Test
 
 /**
@@ -208,6 +210,76 @@ class InterfaceModeWiringTest {
                 expected,
                 effectiveMode(obj),
             )
+        }
+    }
+
+    @Test
+    fun savedModeEditOnRunningInterface_restartsAndAppliesMode() {
+        // Regression for issue #1169 / PR #1188 review P1: the diff-based
+        // syncInterfaces only *started* names not already running, so saving a
+        // new mode for a running interface was a silent no-op. It must now
+        // restart the interface so the running object reports the new mode.
+        val full =
+            InterfaceConfig.TCPClient(
+                name = "tcp-mode-edit",
+                enabled = true,
+                targetHost = "127.0.0.1",
+                targetPort = 4242,
+                mode = "full",
+            )
+        try {
+            NativeInterfaceFactory.syncInterfaces(listOf(full))
+            val initial = NativeInterfaceFactory.currentInterfaces.first { it.name == "tcp-mode-edit" }
+            assertEquals(
+                "interface should start at the configured FULL mode",
+                InterfaceMode.FULL,
+                effectiveMode(initial),
+            )
+
+            // User saves the same interface with a different mode.
+            val gateway = full.copy(mode = "gateway")
+            NativeInterfaceFactory.syncInterfaces(listOf(gateway))
+            val updated = NativeInterfaceFactory.currentInterfaces.first { it.name == "tcp-mode-edit" }
+            assertNotSame(
+                "a saved mode edit must replace the running interface object",
+                initial,
+                updated,
+            )
+            assertEquals(
+                "after the saved edit, the running interface must report the new GATEWAY mode",
+                InterfaceMode.GATEWAY,
+                effectiveMode(updated),
+            )
+        } finally {
+            NativeInterfaceFactory.shutdownAll()
+        }
+    }
+
+    @Test
+    fun unchangedRunningInterface_isNotRestartedOnSync() {
+        // Guard against the fix over-firing: if only the mode is the comparison
+        // key, a sync with the same mode must NOT restart the interface (no
+        // spurious reconnect churn on every save of an unrelated field).
+        val full =
+            InterfaceConfig.TCPClient(
+                name = "tcp-stable",
+                enabled = true,
+                targetHost = "127.0.0.1",
+                targetPort = 4242,
+                mode = "full",
+            )
+        try {
+            NativeInterfaceFactory.syncInterfaces(listOf(full))
+            val initial = NativeInterfaceFactory.currentInterfaces.first { it.name == "tcp-stable" }
+            NativeInterfaceFactory.syncInterfaces(listOf(full))
+            val after = NativeInterfaceFactory.currentInterfaces.first { it.name == "tcp-stable" }
+            assertSame(
+                "a sync with an unchanged mode must not restart the running interface",
+                initial,
+                after,
+            )
+        } finally {
+            NativeInterfaceFactory.shutdownAll()
         }
     }
 

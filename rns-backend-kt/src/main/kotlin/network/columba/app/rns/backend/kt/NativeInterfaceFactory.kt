@@ -27,6 +27,39 @@ internal object NativeInterfaceFactory {
 
     /** Running interfaces keyed by config name. */
     private val runningInterfaces = java.util.concurrent.ConcurrentHashMap<String, network.reticulum.interfaces.Interface>()
+
+    /**
+     * Columba mode string last applied to each running interface, keyed by name.
+     * [syncInterfaces] compares the desired mode against this to detect a saved
+     * mode edit on an already-running interface and restart it so the change
+     * takes effect. The diff-based sync otherwise only starts names that are not
+     * already running, so a persisted mode edit would never reach the running
+     * object (issue #1169, PR #1188 review P1). Tracking just the mode (not the
+     * full config) avoids spurious restarts from non-deterministic config fields.
+     */
+    private val runningModes = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * Per-name start generation, used to invalidate a superseded async start
+     * (RNode, BLE) before it can register. An async start captures the current
+     * generation when it launches; [stopInterface], [restartInterface], and
+     * [syncInterfaces] (when a name is no longer desired) advance the
+     * generation. A start that finishes after its interface was stopped,
+     * restarted, or deleted sees the mismatch and refuses to call
+     * [registerAndTrack], so it cannot revive an interface the user has since
+     * disabled or deleted (issue #1169, PR #1188 review). A generation counter
+     * (rather than the launch Job) is race-free: a stale start can never
+     * clobber or cancel a newer start's bookkeeping.
+     */
+    private val startGenerations = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** Current start generation for [name]. */
+    private fun currentGeneration(name: String): Long = startGenerations[name] ?: 0L
+
+    /** Advances and returns the new start generation for [name]. */
+    private fun nextGeneration(name: String): Long =
+        startGenerations.compute(name) { _, cur -> (cur ?: 0L) + 1L } ?: 1L
+
     private val rnodeRecoveryJobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
 
     /**
@@ -86,6 +119,30 @@ internal object NativeInterfaceFactory {
             stopInterface(name)
         }
 
+        // Invalidate any in-flight async start (RNode/BLE) whose name is no
+        // longer desired. Such a start is not yet in runningInterfaces, so the
+        // stop loop above doesn't reach it; without this a start still waiting
+        // on a radio connection would register and revive an interface the
+        // user just disabled or deleted (issue #1169, PR #1188 review).
+        for (name in startGenerations.keys.toSet()) {
+            if (name !in desiredNames) nextGeneration(name)
+        }
+
+        // Restart interfaces whose saved mode changed while they were running.
+        // The diff-based sync below only *starts* names not already running, so a
+        // persisted mode edit on a running interface would otherwise be dropped
+        // (the running object keeps the mode it was started with). Issue #1169,
+        // PR #1188 review P1.
+        for (name in runningNames intersect desiredNames) {
+            val config = configs.first { it.name == name }
+            val previousMode = runningModes[name]
+            val desiredMode = configModeOf(config)
+            if (previousMode != null && previousMode != desiredMode) {
+                Log.i(TAG, "Mode changed for running interface $name: $previousMode -> $desiredMode; restarting")
+                restartInterface(config)
+            }
+        }
+
         // Start new interfaces
         for (name in desiredNames - runningNames) {
             val config = configs.first { it.name == name }
@@ -122,6 +179,17 @@ internal object NativeInterfaceFactory {
         }
     }
 
+    /** Extracts the Columba mode string from an [InterfaceConfig]. */
+    private fun configModeOf(config: InterfaceConfig): String =
+        when (config) {
+            is InterfaceConfig.AutoInterface -> config.mode
+            is InterfaceConfig.TCPClient -> config.mode
+            is InterfaceConfig.TCPServer -> config.mode
+            is InterfaceConfig.UDP -> config.mode
+            is InterfaceConfig.RNode -> config.mode
+            is InterfaceConfig.AndroidBLE -> config.mode
+        }
+
     private fun startInterface(config: InterfaceConfig) {
         // BLE requires async setup (scan + GATT + MTU negotiation)
         if (config is InterfaceConfig.AndroidBLE) {
@@ -130,9 +198,8 @@ internal object NativeInterfaceFactory {
         }
         try {
             val iface = createInterface(config) ?: return
-            val rnsInterface = iface as network.reticulum.interfaces.Interface
-            rnsInterface.start()
-            registerAndTrack(config.name, rnsInterface)
+            iface.start()
+            registerAndTrack(config.name, iface, config, currentGeneration(config.name))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start interface ${config.name}: ${e.message}", e)
         }
@@ -141,12 +208,29 @@ internal object NativeInterfaceFactory {
     private fun registerAndTrack(
         name: String,
         iface: network.reticulum.interfaces.Interface,
+        config: InterfaceConfig,
+        generation: Long,
     ) {
+        if (currentGeneration(name) != generation) {
+            // A stop/restart/delete advanced the generation after this start
+            // began; do not revive an interface that is no longer wanted.
+            // The start paths call iface.start() BEFORE this check, so the
+            // object already holds a live radio connection and background
+            // coroutines. Detach it so disabling the interface also releases
+            // those resources; otherwise the object keeps running but never
+            // enters runningInterfaces, so stopInterface/shutdownAll cannot
+            // find it (issue #1169, PR #1188 review).
+            Log.i(TAG, "Start for $name superseded (gen $generation -> ${currentGeneration(name)}); not registering, detaching")
+            runCatching { iface.detach() }
+                .onFailure { e -> Log.w(TAG, "Error detaching superseded interface $name: ${e.message}") }
+            return
+        }
         val ref =
             network.reticulum.interfaces.InterfaceAdapter
                 .getOrCreate(iface)
         Transport.registerInterface(ref)
         runningInterfaces[name] = iface
+        runningModes[name] = configModeOf(config)
 
         // Acquire multicast lock when AutoInterface starts (needed for multicast receive)
         if (iface is network.reticulum.interfaces.auto.AutoInterface) {
@@ -220,6 +304,13 @@ internal object NativeInterfaceFactory {
             Log.e(TAG, "Cannot start BLE interface: appContext not set")
             return
         }
+        // Advance + capture the start generation synchronously (before the
+        // coroutine runs) so a stop/restart/delete that lands after this call
+        // but before the async start finishes sees a higher generation and the
+        // stale start's registerAndTrack bails. Calling it inside the coroutine
+        // would leave a window where an early stop is absorbed (the coroutine
+        // would read the already-bumped value and pass the check).
+        val gen = nextGeneration(config.name)
         scope.launch(Dispatchers.IO) {
             // Give the driver its own scope rather than the factory's.
             // BLEInterface.detach() calls driver.shutdown(), which internally
@@ -253,7 +344,7 @@ internal object NativeInterfaceFactory {
                         name = config.name,
                         driver = driver,
                         transportIdentity = identityHash,
-                    )
+                    ).withMode(config.name, config.mode)
                 iface.onPacketReceived = { data, fromInterface ->
                     Transport.inbound(
                         data,
@@ -262,7 +353,7 @@ internal object NativeInterfaceFactory {
                     )
                 }
                 iface.start()
-                registerAndTrack(config.name, iface)
+                registerAndTrack(config.name, iface, config, gen)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start BLE interface ${config.name}: ${e.message}", e)
                 // AndroidBLEDriver launches event-aggregator coroutines from
@@ -275,25 +366,43 @@ internal object NativeInterfaceFactory {
         }
     }
 
-    private suspend fun startRNodeInterface(config: InterfaceConfig.RNode) {
-        RNodeConnectionHelper.startRNodeInterface(
-            config = config,
-            appContext = appContext,
-            hostBridge = rnodeHostBridge,
-            scope = scope,
-            onRegisterAndTrack = ::registerAndTrack,
-            onMonitorLifecycle = ::monitorRNodeLifecycle,
-            onEnsureRecovery = ::ensureRNodeRecovery,
-        )
+    /**
+     * Starts an RNode interface. The suspend work is launched on [scope] and
+     * this returns immediately (non-suspending), so the sync thread that calls
+     * [startInterface] is never blocked on the USB/BLE radio connection. That
+     * matters for the generation guard: if the start were a blocking suspend
+     * call, a disable issued from that same thread could not interleave with
+     * an in-flight start to bump the generation.
+     */
+    private fun startRNodeInterface(
+        config: InterfaceConfig.RNode,
+        gen: Long,
+        scope: CoroutineScope,
+    ) {
+        scope.launch(Dispatchers.IO) {
+            RNodeConnectionHelper.startRNodeInterface(
+                config = config,
+                appContext = appContext,
+                hostBridge = rnodeHostBridge,
+                scope = scope,
+                onRegisterAndTrack = { name, iface -> registerAndTrack(name, iface, config, gen) },
+                onMonitorLifecycle = ::monitorRNodeLifecycle,
+                onEnsureRecovery = ::ensureRNodeRecovery,
+            )
+        }
     }
 
     private fun stopInterface(name: String) {
+        // Invalidate any in-flight async start (RNode/BLE) for this name so it
+        // cannot register later and revive an interface we are tearing down.
+        nextGeneration(name)
         rnodeRecoveryJobs.remove(name)?.cancel()
         // Remove from runningInterfaces BEFORE onlineObservers so that a
         // concurrent observeOnlineState() still sitting in its compute
         // block sees the interface as unmanaged and bails out instead of
         // leaving an orphaned collector behind.
         val iface = runningInterfaces.remove(name)
+        runningModes.remove(name)
         onlineObservers.remove(name)?.cancel()
         if (iface == null) return
         try {
@@ -356,7 +465,8 @@ internal object NativeInterfaceFactory {
         )
     }
 
-    private fun createInterface(config: InterfaceConfig): Any? {
+    @androidx.annotation.VisibleForTesting
+    internal fun createInterface(config: InterfaceConfig): network.reticulum.interfaces.Interface? {
         fun mapScopeToHex(scopeName: String): String =
             when (scopeName.lowercase()) {
                 "link" -> "2"
@@ -372,7 +482,7 @@ internal object NativeInterfaceFactory {
                 AutoInterface(
                     name = config.name,
                     discoveryScope = mapScopeToHex(config.discoveryScope),
-                )
+                ).withMode(config.name, config.mode)
 
             is InterfaceConfig.TCPClient ->
                 TCPClientInterface(
@@ -383,7 +493,7 @@ internal object NativeInterfaceFactory {
                     keepAlive = false, // Disable for mobile battery
                     ifacNetname = config.networkName,
                     ifacNetkey = config.passphrase,
-                )
+                ).withMode(config.name, config.mode)
 
             is InterfaceConfig.UDP ->
                 UDPInterface(
@@ -392,7 +502,7 @@ internal object NativeInterfaceFactory {
                     bindPort = config.listenPort,
                     forwardIp = config.forwardIp,
                     forwardPort = config.forwardPort,
-                )
+                ).withMode(config.name, config.mode)
 
             is InterfaceConfig.TCPServer ->
                 TCPServerInterface(
@@ -401,7 +511,7 @@ internal object NativeInterfaceFactory {
                     bindPort = config.listenPort,
                     ifacNetname = config.networkName,
                     ifacNetkey = config.passphrase,
-                ).apply {
+                ).withMode(config.name, config.mode).apply {
                     // Register each spawned child interface with Transport BEFORE
                     // start() opens the accept loop, so the first incoming
                     // connection can't race us into a silent-drop: Python RNS
@@ -450,9 +560,14 @@ internal object NativeInterfaceFactory {
                 }
 
             is InterfaceConfig.RNode -> {
-                scope.launch(Dispatchers.IO) {
-                    startRNodeInterface(config)
-                }
+                // Advance + capture the start generation synchronously (on the
+                // calling thread, before startRNodeInterface returns) so a
+                // stop/restart/delete landing after this call but before the
+                // async start finishes invalidates it. startRNodeInterface
+                // launches its suspend work on the factory scope and returns
+                // immediately, so this does not block the sync thread.
+                val gen = nextGeneration(config.name)
+                startRNodeInterface(config, gen, scope)
                 null
             }
 

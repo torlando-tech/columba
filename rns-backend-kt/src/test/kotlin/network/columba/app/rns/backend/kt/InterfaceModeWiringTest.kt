@@ -7,11 +7,13 @@ import network.columba.app.rns.api.model.InterfaceConfig
 import network.reticulum.common.InterfaceMode
 import network.reticulum.interfaces.InterfaceAdapter
 import network.reticulum.interfaces.ble.BLEDriver
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNotNull
@@ -352,5 +354,69 @@ class InterfaceModeWiringTest {
             InterfaceMode.FULL,
             effectiveMode(iface),
         )
+    }
+
+    @Test
+    fun disabledInFlightAsyncStart_doesNotReviveInterface() {
+        // Regression for PR #1188 review: a saved disable/delete issued while an
+        // async RNode/BLE start is still waiting on a radio connection must not
+        // let the stale start register later and revive the interface. The
+        // factory bumps the start generation when a name is no longer desired;
+        // the in-flight start's registerAndTrack must see the mismatch and bail.
+        //
+        // Drive it deterministically: park the in-flight start in a mock host
+        // bridge (suspend on openUsbSerial), disable the interface while it is
+        // parked, then release it and assert the interface never registers.
+        val gate = CompletableDeferred<Unit>()
+        val input = java.io.ByteArrayInputStream(ByteArray(0))
+        val output = java.io.ByteArrayOutputStream()
+        val bridge =
+            mockk<RNodeHostBridge> {
+                coEvery { openUsbSerial(any(), any(), any(), any()) } coAnswers {
+                    gate.await()
+                    Pair(input, output)
+                }
+                every { rnodeFramebufferData() } returns null
+            }
+        val ctx = mockk<android.content.Context>()
+        NativeInterfaceFactory.appContext = ctx
+        NativeInterfaceFactory.rnodeHostBridge = bridge
+        try {
+            val rnode =
+                InterfaceConfig.RNode(
+                    name = "rnode-park",
+                    enabled = true,
+                    connectionMode = "usb",
+                    enableFramebuffer = false,
+                )
+            // Start it: the factory captures gen=1 (synchronously) and launches
+            // the async start, which parks in openUsbSerial.
+            NativeInterfaceFactory.syncInterfaces(listOf(rnode))
+            // Disable it while the start is still in flight. This must bump the
+            // generation so the parked start is invalidated on resume.
+            NativeInterfaceFactory.syncInterfaces(emptyList())
+            // Release the parked start; it resumes and attempts to register.
+            gate.complete(Unit)
+
+            // It must NOT register. Poll for a window long enough for the in-memory
+            // RNode start to complete, and fail if the interface ever appears.
+            val deadline = System.currentTimeMillis() + 3000
+            var revived = false
+            while (System.currentTimeMillis() < deadline) {
+                if (NativeInterfaceFactory.currentInterfaces.any { it.name == "rnode-park" }) {
+                    revived = true
+                    break
+                }
+                Thread.sleep(50)
+            }
+            assertFalse(
+                "in-flight RNode start must not revive the interface after it was disabled",
+                revived,
+            )
+        } finally {
+            NativeInterfaceFactory.shutdownAll()
+            NativeInterfaceFactory.appContext = null
+            NativeInterfaceFactory.rnodeHostBridge = null
+        }
     }
 }

@@ -214,7 +214,15 @@ internal object NativeInterfaceFactory {
         if (currentGeneration(name) != generation) {
             // A stop/restart/delete advanced the generation after this start
             // began; do not revive an interface that is no longer wanted.
-            Log.i(TAG, "Start for $name superseded (gen $generation -> ${currentGeneration(name)}); not registering")
+            // The start paths call iface.start() BEFORE this check, so the
+            // object already holds a live radio connection and background
+            // coroutines. Detach it so disabling the interface also releases
+            // those resources; otherwise the object keeps running but never
+            // enters runningInterfaces, so stopInterface/shutdownAll cannot
+            // find it (issue #1169, PR #1188 review).
+            Log.i(TAG, "Start for $name superseded (gen $generation -> ${currentGeneration(name)}); not registering, detaching")
+            runCatching { iface.detach() }
+                .onFailure { e -> Log.w(TAG, "Error detaching superseded interface $name: ${e.message}") }
             return
         }
         val ref =

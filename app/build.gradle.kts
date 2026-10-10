@@ -335,6 +335,17 @@ android {
                     "-Dkotlinx.coroutines.scheduler.core.pool.size=$coroutinePoolFloor " +
                         "-Dkotlinx.coroutines.scheduler.max.pool.size=${maxOf(32, coroutinePoolFloor * 2)}",
                 )
+                // Expose the test task's full runtime classpath so tests that
+                // fork child JVMs (MigrationExporterOomTest) can pass it
+                // explicitly; the worker's own java.class.path is not
+                // reliable. Set in doFirst because input fingerprinting
+                // cannot serialize a lazy classpath value.
+                it.doFirst {
+                    it.systemProperty(
+                        "columba.test.runtimeClasspath",
+                        it.classpath.joinToString(File.pathSeparator),
+                    )
+                }
                 // Enable JaCoCo coverage for Robolectric tests
                 it.extensions.configure<JacocoTaskExtension> {
                     isIncludeNoLocationClasses = true

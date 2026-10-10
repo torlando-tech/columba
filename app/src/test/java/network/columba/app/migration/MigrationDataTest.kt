@@ -20,6 +20,13 @@ class MigrationDataTest {
             encodeDefaults = true
         }
 
+    /** Same [Json] settings as [MigrationExporter]'s production manifest writer. */
+    private val exporterJson =
+        Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+        }
+
     // region Test Data Helpers
 
     private fun createTestSettings() =
@@ -280,9 +287,9 @@ class MigrationDataTest {
             )
 
         val streamed = ByteArrayOutputStream()
-        json.encodeToStream(MigrationBundle.serializer(), bundle, streamed)
+        exporterJson.encodeToStream(MigrationBundle.serializer(), bundle, streamed)
 
-        assertEquals(json.encodeToString(bundle), String(streamed.toByteArray(), Charsets.UTF_8))
+        assertEquals(exporterJson.encodeToString(bundle), String(streamed.toByteArray(), Charsets.UTF_8))
     }
 
     @Test

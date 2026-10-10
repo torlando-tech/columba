@@ -2,6 +2,8 @@ package network.columba.app.migration
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToStream
+import java.io.ByteArrayOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -251,6 +253,36 @@ class MigrationDataTest {
         assertEquals(bundle.messages, decoded.messages)
         assertEquals(bundle.contacts, decoded.contacts)
         assertEquals(bundle.settings, decoded.settings)
+    }
+
+    @Test
+    fun `encodeToStream produces the same manifest bytes as encodeToString`() {
+        val bundle =
+            MigrationBundle(
+                identities = listOf(createTestIdentity()),
+                conversations = listOf(createTestConversation()),
+                messages = listOf(createTestMessage()),
+                contacts = listOf(createTestContact()),
+                announces = listOf(createTestAnnounce()),
+                interfaces = listOf(createTestInterface()),
+                customThemes = listOf(createTestCustomTheme()),
+                settings = createTestSettings(),
+                attachmentManifest =
+                    listOf(
+                        AttachmentRef(
+                            messageId = "msg_001",
+                            fieldKey = "attachment",
+                            relativePath = "attachments/msg_001_attachment.png",
+                            sizeBytes = 12345L,
+                        ),
+                    ),
+                ratchetFiles = listOf(createTestRatchetRef(type = "own", filename = "a1b2c3d4e5f6")),
+            )
+
+        val streamed = ByteArrayOutputStream()
+        json.encodeToStream(MigrationBundle.serializer(), bundle, streamed)
+
+        assertEquals(json.encodeToString(bundle), String(streamed.toByteArray(), Charsets.UTF_8))
     }
 
     @Test

@@ -33,12 +33,21 @@ object MigrationExportOomChild {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        val json = Json { ignoreUnknownKeys = true }
         val workDir =
             File.createTempFile("columba-oom-repro", null).apply {
                 delete()
                 mkdirs()
             }
+        try {
+            run(workDir)
+        } finally {
+            // Never leave export archives behind, even on OOM.
+            workDir.deleteRecursively()
+        }
+    }
+
+    private fun run(workDir: File) {
+        val json = Json { ignoreUnknownKeys = true }
         val context =
             mockk<Context>().apply {
                 every { cacheDir } returns File(workDir, "cache").apply { mkdirs() }
@@ -129,7 +138,13 @@ class MigrationExporterOomTest {
     @Test
     fun `export zip manifest stays bounded under a 256MB heap (COLUMBA-DS)`() {
         val javaExe = File(System.getProperty("java.home"), "bin/java").absolutePath
-        val classpath = System.getProperty("java.class.path")
+        // The Gradle test worker's own java.class.path is not reliable: test
+        // classes load through a separate class loader, so the build exposes
+        // the test task's runtime classpath explicitly.
+        val classpath =
+            System.getProperty("columba.test.runtimeClasspath")
+                ?.takeIf { it.isNotBlank() }
+                ?: System.getProperty("java.class.path")
         val process =
             ProcessBuilder(
                 javaExe,

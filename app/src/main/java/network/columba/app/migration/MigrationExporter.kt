@@ -14,8 +14,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToStream
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -489,7 +489,9 @@ class MigrationExporter
 
             ZipOutputStream(FileOutputStream(exportFile)).use { zipOut ->
                 zipOut.putNextEntry(ZipEntry(MANIFEST_FILENAME))
-                zipOut.write(json.encodeToString(bundle).toByteArray())
+                // Stream the manifest into the zip entry so the full JSON
+                // text is never buffered in memory (COLUMBA-DS).
+                json.encodeToStream(MigrationBundle.serializer(), bundle, zipOut)
                 zipOut.closeEntry()
                 onProgress(0.8f)
 

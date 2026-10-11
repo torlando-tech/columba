@@ -2,6 +2,7 @@
 
 package network.columba.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -12,12 +13,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,11 +34,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -46,11 +54,14 @@ import kotlin.math.roundToInt
  * @property networkRestriction Raw `NetworkRestriction` name ("ANY", "WIFI_ONLY",
  *   "CELLULAR_ONLY"). `:data` cannot reference `:rns-api`, so the restriction is
  *   carried as a raw string and mapped to the enum on the `:app` side.
+ * @property isActive Whether this is the currently-active relay (drives the
+ *   "currently active" indicator and hides the redundant "Set active now" action).
  */
 data class PropagationNodeRow(
     val destinationHash: String,
     val displayName: String,
     val networkRestriction: String,
+    val isActive: Boolean = false,
 )
 
 /** Display label for a raw `NetworkRestriction` name. */
@@ -61,7 +72,7 @@ fun networkRestrictionLabel(restriction: String): String =
         else -> "Any"
     }
 
-/** Cycle to the next restriction: ANY → WIFI_ONLY → CELLULAR_ONLY → ANY. */
+/** Cycle to the next restriction: ANY -> WIFI_ONLY -> CELLULAR_ONLY -> ANY. */
 fun nextNetworkRestriction(current: String): String =
     when (current.uppercase()) {
         "ANY" -> "WIFI_ONLY"
@@ -80,10 +91,10 @@ fun reorderKeyOrder(keys: List<String>, from: Int, to: Int): List<String> =
 
 /**
  * Reorderable list of propagation-node rows with a per-row transport-restriction
- * [FilterChip] and a trailing "Remove" overflow.
+ * [FilterChip], a priority badge, and trailing "Set active now" / "Remove" actions.
  *
  * The list is a bounded [Column] (propagation-node lists are small — a handful of
- * nodes) rather than a `LazyColumn`, which keeps offset→index math and gesture
+ * nodes) rather than a `LazyColumn`, which keeps offset->index math and gesture
  * handling simple. Material3 BOM 2026.05.01 does not ship a lazy-list drag-and-drop
  * API (`LazyListDroppable` / `LazyListDraggableItem` are not present in this BOM),
  * so reorder is a manual [Modifier.pointerInput] on the row's leading drag-handle
@@ -91,8 +102,8 @@ fun reorderKeyOrder(keys: List<String>, from: Int, to: Int): List<String> =
  *
  * Gesture-conflict guarantees (the fiddliest part of this UI, per spec §5):
  * - The drag gesture is scoped to the leading 40.dp drag-handle region of each row;
- *   the [FilterChip] and "Remove" overflow are to the right of it, so a pointer-down
- *   on a chip/overflow never initiates a drag.
+ *   the [FilterChip] and trailing actions are to the right of it, so a pointer-down
+ *   on a chip/action never initiates a drag.
  * - [onReorder] is called exactly once per completed drag (on release), with the
  *   full new key order, never per-frame. The caller persists it via the DAO
  *   `reorder()` transaction.
@@ -103,6 +114,8 @@ fun reorderKeyOrder(keys: List<String>, from: Int, to: Int): List<String> =
  * @param onReorder Committed new key order, called once per drag-end.
  * @param onRestrictionChange Cycle the restriction for a row.
  * @param onRemove Remove a row by key.
+ * @param onSetActiveNow Force a row to become the active relay immediately
+ *   (useful for testing the router push). No-op for the already-active row.
  */
 @Composable
 fun PropagationNodeReorderList(
@@ -110,6 +123,7 @@ fun PropagationNodeReorderList(
     onReorder: (orderedKeys: List<String>) -> Unit,
     onRestrictionChange: (destinationHash: String, newRestriction: String) -> Unit,
     onRemove: (destinationHash: String) -> Unit,
+    onSetActiveNow: (destinationHash: String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -118,6 +132,7 @@ fun PropagationNodeReorderList(
         items.forEachIndexed { index, row ->
             PropagationNodeRowContent(
                 row = row,
+                priorityPosition = index + 1,
                 index = index,
                 itemCount = items.size,
                 onReorderToNewIndex = { to ->
@@ -127,6 +142,7 @@ fun PropagationNodeReorderList(
                 },
                 onRestrictionChange = { onRestrictionChange(row.destinationHash, nextNetworkRestriction(it)) },
                 onRemove = { onRemove(row.destinationHash) },
+                onSetActiveNow = { onSetActiveNow(row.destinationHash) },
             )
         }
     }
@@ -135,16 +151,21 @@ fun PropagationNodeReorderList(
 @Composable
 private fun PropagationNodeRowContent(
     row: PropagationNodeRow,
+    priorityPosition: Int,
     index: Int,
     itemCount: Int,
     onReorderToNewIndex: (to: Int) -> Unit,
     onRestrictionChange: (String) -> Unit,
     onRemove: () -> Unit,
+    onSetActiveNow: () -> Unit,
 ) {
     var isDragging by remember { mutableStateOf(false) }
     // Measured in px by onSizeChanged (reports the full Card height).
     var rowHeightPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
+    // A real RNS destination hash is 32 hex chars; the de-risk fixtures use short
+    // labels. Only show the short-hash line for real hashes to avoid clutter.
+    val showShortHash = row.destinationHash.length >= 8
 
     Card(
         modifier =
@@ -167,7 +188,9 @@ private fun PropagationNodeRowContent(
         colors =
             CardDefaults.cardColors(
                 containerColor =
-                    if (isDragging) {
+                    if (row.isActive) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else if (isDragging) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant
@@ -198,16 +221,49 @@ private fun PropagationNodeRowContent(
                 )
             }
 
-            // Label
-            Text(
-                text = row.displayName,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 4.dp),
-            )
+            // Priority position badge.
+            Box(
+                modifier =
+                    Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = priorityPosition.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+            Spacer(modifier = Modifier.size(6.dp))
 
-            // Restriction chip (cycle: ANY → WIFI_ONLY → CELLULAR_ONLY → ANY)
+            // Name + short hash.
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                Text(
+                    text = row.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (row.isActive) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = "Current relay",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                } else if (showShortHash) {
+                    Text(
+                        text = row.destinationHash.take(8),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+
+            // Restriction chip (cycle: ANY -> WIFI_ONLY -> CELLULAR_ONLY -> ANY)
             FilterChip(
                 selected = false,
                 onClick = { onRestrictionChange(row.networkRestriction) },
@@ -217,7 +273,21 @@ private fun PropagationNodeRowContent(
 
             Spacer(modifier = Modifier.size(4.dp))
 
-            // Overflow — Remove
+            // Set-active-now (only when not already active).
+            if (!row.isActive) {
+                IconButton(
+                    onClick = onSetActiveNow,
+                    modifier = Modifier.testTag("prop_node_setactive_${row.destinationHash}"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Set active now",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            // Overflow — Remove.
             TextButton(
                 onClick = onRemove,
                 modifier = Modifier.testTag("prop_node_remove_${row.destinationHash}"),
@@ -233,7 +303,7 @@ private fun PropagationNodeRowContent(
  *
  * The gesture lives only on the leading [HANDLE_WIDTH] region of the composable the
  * modifier is attached to. A pointer-down to the right of that width is left
- * unconsumed so the chip / overflow handle it. While active, vertical motion is
+ * unconsumed so the chip / actions handle it. While active, vertical motion is
  * consumed and the net offset is reported once on release via [onDragEnded].
  *
  * @param density Used to convert dp thresholds to px inside the gesture.

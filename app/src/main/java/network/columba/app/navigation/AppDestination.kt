@@ -84,6 +84,7 @@ enum class AppDestination(
     NOTIFICATION_SETTINGS("notification_settings"),
     BLOCKED_USERS("blocked_users"),
     THEME_MANAGEMENT("theme_management"),
+    PROPAGATION_NODES("propagation_nodes"),
     THEME_EDITOR_NEW("theme_editor"),
     THEME_EDITOR_EXISTING("theme_editor/{themeId}", "theme_editor/1"),
     BLE_CONNECTION_STATUS("ble_connection_status"),

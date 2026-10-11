@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
@@ -95,6 +96,7 @@ fun MessageDeliveryRetrievalCard(
     onIntervalChange: (Int) -> Unit,
     onSyncNow: () -> Unit,
     onViewMoreRelays: () -> Unit = {},
+    onManagePropagationNodes: () -> Unit = {},
     // Incoming message size limit
     incomingMessageSizeLimitKb: Int = 1024,
     onIncomingMessageSizeLimitChange: (Int) -> Unit = {},
@@ -371,6 +373,21 @@ fun MessageDeliveryRetrievalCard(
                     manualNicknameInput = ""
                 },
             )
+        }
+
+        // Preferred propagation nodes (transport-aware priority list) entry point.
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onManagePropagationNodes,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DragHandle,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Manage preferred nodes")
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

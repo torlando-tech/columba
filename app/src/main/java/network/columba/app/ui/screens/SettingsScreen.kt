@@ -104,6 +104,7 @@ fun SettingsScreen(
     onNavigateToIdentityManager: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToCustomThemes: () -> Unit = {},
+    onNavigateToPropagationNodes: () -> Unit = {},
     onNavigateToMigration: () -> Unit = {},
     onNavigateToAnnounces: (filterType: String?) -> Unit = {},
     onNavigateToFlasher: () -> Unit = {},
@@ -505,6 +506,7 @@ fun SettingsScreen(
                     onIntervalChange = { viewModel.setRetrievalIntervalSeconds(it) },
                     onSyncNow = { viewModel.syncNow() },
                     onViewMoreRelays = { onNavigateToAnnounces("PROPAGATION_NODE") },
+                    onManagePropagationNodes = { onNavigateToPropagationNodes() },
                     // Incoming message size limit
                     incomingMessageSizeLimitKb = state.incomingMessageSizeLimitKb,
                     onIncomingMessageSizeLimitChange = { viewModel.setIncomingMessageSizeLimit(it) },

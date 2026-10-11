@@ -121,6 +121,7 @@ import network.columba.app.ui.screens.MigrationScreen
 import network.columba.app.ui.screens.MyIdentityScreen
 import network.columba.app.ui.screens.NomadNetBrowserScreen
 import network.columba.app.ui.screens.NotificationSettingsScreen
+import network.columba.app.ui.screens.PropagationNodesScreen
 import network.columba.app.ui.screens.QrScannerScreen
 import network.columba.app.ui.screens.SettingsScreen
 import network.columba.app.ui.screens.ThemeEditorScreen
@@ -1708,6 +1709,9 @@ fun ColumbaNavigation(
                                     onNavigateToCustomThemes = {
                                         navController.navigate("theme_management")
                                     },
+                                    onNavigateToPropagationNodes = {
+                                        navController.navigate("propagation_nodes")
+                                    },
                                     onNavigateToMigration = {
                                         navController.navigate("migration")
                                     },
@@ -2167,6 +2171,12 @@ fun ColumbaNavigation(
 
                             appComposable(AppDestination.BLOCKED_USERS) {
                                 BlockedUsersScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                )
+                            }
+
+                            appComposable(AppDestination.PROPAGATION_NODES) {
+                                PropagationNodesScreen(
                                     onBackClick = { navController.popBackStack() },
                                 )
                             }

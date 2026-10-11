@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import network.columba.app.ui.components.PropagationNodeReorderList
+import network.columba.app.util.DestinationHashValidator
 import network.columba.app.viewmodel.PropagationNodesViewModel
 
 /**
@@ -130,15 +131,25 @@ fun PropagationNodesScreen(
                     onImportCurrent = { viewModel.importCurrentRelay() },
                 )
             } else {
-                PropagationNodeReorderList(
-                    items = state.list,
-                    onReorder = { orderedKeys -> viewModel.reorder(orderedKeys) },
-                    onRestrictionChange = { hash, newRestriction ->
-                        viewModel.setRestriction(hash, newRestriction)
-                    },
-                    onRemove = { hash -> viewModel.remove(hash) },
-                    onSetActiveNow = { hash -> viewModel.setActiveNow(hash) },
-                )
+                // The list owns the remaining vertical space and scrolls, so lower rows
+                // (and their actions) stay reachable once the list exceeds the screen.
+                // The active-relay header above stays pinned (it is outside this scroll
+                // region). Drag-to-reorder still works: the per-row pointerInput consumes
+                // vertical motion once a drag is active, and the handle is small enough
+                // that the surrounding scroll only engages for non-drag vertical drags.
+                Column(
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                ) {
+                    PropagationNodeReorderList(
+                        items = state.list,
+                        onReorder = { orderedKeys -> viewModel.reorder(orderedKeys) },
+                        onRestrictionChange = { hash, newRestriction ->
+                            viewModel.setRestriction(hash, newRestriction)
+                        },
+                        onRemove = { hash -> viewModel.remove(hash) },
+                        onSetActiveNow = { hash -> viewModel.setActiveNow(hash) },
+                    )
+                }
             }
         }
     }
@@ -402,10 +413,32 @@ private fun AddPropagationNodeDialog(
                         }
                     }
                 } else {
+                    // Validate the destination hash with the same validator the rest of the
+                    // app uses, and surface its error inline. The stored value is the
+                    // normalized (lowercase) hash from the validator, so a mixed-case entry
+                    // cannot create a contact that the relay-search path can't find, and a
+                    // non-hex entry can never reach hexToByteArray() and kill the sync.
+                    val hashValidation = DestinationHashValidator.validate(hashInput)
                     OutlinedTextField(
                         value = hashInput,
                         onValueChange = { hashInput = it },
                         label = { Text("Destination hash (hex)") },
+                        supportingText = {
+                            Text(
+                                text =
+                                    if (hashValidation is DestinationHashValidator.ValidationResult.Error) {
+                                        hashValidation.message
+                                    } else {
+                                        DestinationHashValidator.getCharacterCount(hashInput)
+                                    },
+                                color =
+                                    if (hashValidation is DestinationHashValidator.ValidationResult.Error) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                            )
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -421,16 +454,18 @@ private fun AddPropagationNodeDialog(
         },
         confirmButton = {
             val byHash = tab == 1
+            val validation = DestinationHashValidator.validate(hashInput)
+            val isValid = validation is DestinationHashValidator.ValidationResult.Valid
             val canConfirm =
                 if (byHash) {
-                    hashInput.isNotBlank() && hashInput !in existingHashes
+                    isValid && validation.normalizedHash !in existingHashes
                 } else {
                     false // announces add on row tap
                 }
             TextButton(
                 onClick = {
                     if (canConfirm) {
-                        onAddByHash(hashInput.trim(), nicknameInput.trim().ifEmpty { null })
+                        onAddByHash((validation as DestinationHashValidator.ValidationResult.Valid).normalizedHash, nicknameInput.trim().ifEmpty { null })
                         onDismiss()
                     }
                 },

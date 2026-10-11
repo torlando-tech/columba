@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -124,26 +125,34 @@ fun PropagationNodeReorderList(
     onRestrictionChange: (destinationHash: String, newRestriction: String) -> Unit,
     onRemove: (destinationHash: String) -> Unit,
     onSetActiveNow: (destinationHash: String) -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // key(row.destinationHash) gives each row a stable identity, so the drag
+        // gesture modifier (pointerInput) and its measured height are preserved across
+        // reorders/removals instead of being re-keyed to position. This is what makes a
+        // consecutive drag (or a drag after a removal) compute its target index from the
+        // current layout rather than a stale one.
         items.forEachIndexed { index, row ->
-            PropagationNodeRowContent(
-                row = row,
-                priorityPosition = index + 1,
-                index = index,
-                itemCount = items.size,
-                onReorderToNewIndex = { to ->
-                    if (index != to) {
-                        onReorder(reorderKeyOrder(items.map { it.destinationHash }, index, to))
-                    }
-                },
-                onRestrictionChange = { onRestrictionChange(row.destinationHash, nextNetworkRestriction(it)) },
-                onRemove = { onRemove(row.destinationHash) },
-                onSetActiveNow = { onSetActiveNow(row.destinationHash) },
-            )
+            key(row.destinationHash) {
+                PropagationNodeRowContent(
+                    row = row,
+                    priorityPosition = index + 1,
+                    index = index,
+                    itemCount = items.size,
+                    onReorderToNewIndex = { to ->
+                        if (index != to) {
+                            onReorder(reorderKeyOrder(items.map { it.destinationHash }, index, to))
+                        }
+                    },
+                    onRestrictionChange = { onRestrictionChange(row.destinationHash, nextNetworkRestriction(it)) },
+                    onRemove = { onRemove(row.destinationHash) },
+                    onSetActiveNow = { onSetActiveNow(row.destinationHash) },
+                )
+            }
         }
     }
 }
@@ -327,9 +336,16 @@ private fun Modifier.dragReorderHandle(
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 if (down.position.x > handleWidthPx) {
-                    // Down outside the handle region — leave it unconsumed.
+                    // Down outside the handle region — leave it unconsumed so the chip,
+                    // the trailing actions, and the parent verticalScroll own that touch.
                     return@awaitEachGesture
                 }
+                // The handle region owns this touch: consume the down and every subsequent
+                // event for this pointer so the surrounding verticalScroll cannot claim it
+                // mid-drag. A tap on the handle does nothing (no reorder); a vertical drag
+                // reorders. This is what makes drag-vs-scroll unambiguous now that the
+                // screen scrolls.
+                down.consume()
                 var totalOffset = 0f
                 var lastY = down.position.y
                 var active = false
@@ -338,14 +354,16 @@ private fun Modifier.dragReorderHandle(
                     val change = event.changes.firstOrNull()
                     if (change == null || !change.pressed) break
                     val dy = change.position.y - lastY
-                    if (!active && abs(totalOffset + dy) > slopPx) {
+                    // Accumulate from the very first movement so a slow drag that crosses
+                    // the slop threshold in small steps still activates. (Before this fix
+                    // the check only tested a single event's dy, so stepwise drags under
+                    // 8 dp each never started.)
+                    totalOffset += dy
+                    if (!active && abs(totalOffset) > slopPx) {
                         active = true
                         onDragStarted()
                     }
-                    if (active) {
-                        totalOffset += dy
-                        change.consume()
-                    }
+                    change.consume()
                     lastY = change.position.y
                 } while (event.changes.any { it.pressed })
                 if (active) {

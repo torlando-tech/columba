@@ -263,6 +263,14 @@ class PropagationNodeManager
         // test's cleared mocks.
         private var startupSelectJob: Job? = null
 
+        // True while the preferred-list writer is authoritative (the enabled list was
+        // non-empty). Used to detect the non-empty → empty transition: when the user
+        // removes the last preferred node, the writer must actively re-resolve to the
+        // legacy nearest relay rather than leaving the (now removed) node active — the
+        // startup one-shot already ran and the periodic auto-select only fires when
+        // currentRelay is null, so without this the removed node would stay selected.
+        private var preferredListActive = false
+
         /**
          * Initialize the manager - start observing database for relay changes.
          * Call this when the Reticulum service becomes ready.
@@ -592,10 +600,22 @@ class PropagationNodeManager
                 .combine(transportObserver.currentTransport) { enabled, transport -> enabled to transport }
                 .distinctUntilChanged()
                 .collect { (enabled, transport) ->
-                    // Gate: the writer only decides who is active when the preferred list is
-                    // non-empty. An empty list hands full ownership back to the legacy
-                    // startup one-shot + periodic auto-select, exactly as before.
-                    if (enabled.isEmpty()) return@collect
+                    if (enabled.isEmpty()) {
+                        // Empty list = legacy mode: the startup one-shot + periodic
+                        // auto-select own the relay. But if the list *just* became empty
+                        // (the user removed the last preferred node), actively re-resolve
+                        // to the legacy nearest relay now — otherwise the node that was
+                        // active under ordered mode would stay selected, because the
+                        // startup one-shot already ran and the periodic auto-select only
+                        // fires when currentRelay is null.
+                        if (preferredListActive) {
+                            Log.i(TAG, "Preferred list emptied — re-resolving to legacy auto-select")
+                            selectBestRelay()
+                        }
+                        preferredListActive = false
+                        return@collect
+                    }
+                    preferredListActive = true
                     val selection = PreferredNodePolicy.resolve(enabled.map { it.toPreferredNode() }, transport)
                     when (selection) {
                         is PropagationNodeSelection.FromList -> applyPreferredRelay(selection.destinationHash)
@@ -692,10 +712,20 @@ class PropagationNodeManager
             settingsRepository.saveAutoSelectPropagationNode(false)
             settingsRepository.saveManualPropagationNode(destinationHash)
 
-            // Update contacts - add if needed and mark as relay
+            // Update contacts - add if needed and mark as relay.
+            //
+            // Create the contact from an announce when one is available, but fall back to a
+            // PENDING contact when the node was added by raw hash with no announce. Without
+            // this fallback, setting a hash-only node as active would clear the previous
+            // relay (setAsMyRelay) while leaving no contact behind, i.e. no active relay at
+            // all — and the relay observer would hex-decode a hash with nothing to back it.
             val announce = announceRepository.getAnnounce(destinationHash)
-            if (!contactRepository.hasContact(destinationHash) && announce != null) {
-                contactRepository.addContactFromAnnounce(destinationHash, announce.publicKey)
+            if (!contactRepository.hasContact(destinationHash)) {
+                if (announce != null) {
+                    contactRepository.addContactFromAnnounce(destinationHash, announce.publicKey)
+                } else {
+                    contactRepository.addPendingContact(destinationHash, null)
+                }
             }
 
             // This updates the database, which triggers currentRelay Flow,
@@ -705,7 +735,17 @@ class PropagationNodeManager
 
         /**
          * Switch back to auto-selection mode.
-         * Immediately picks the best available relay.
+         *
+         * **Ordered mode (non-empty preferred list):** the transport-aware policy writer
+         * already owns the active relay and re-resolves from the list + transport on every
+         * emission. We must NOT bypass it with `selectBestRelay()` (nearest-by-hops) here —
+         * that would replace a working transport-specific preferred node with an unrelated
+         * nearest relay (and the writer would then only re-correct on the next list/transport
+         * emission, causing a flap). Enabling auto-select in this mode simply restores the
+         * writer's authority by leaving it in place.
+         *
+         * **Legacy mode (empty preferred list):** the writer is idle, so fall back to the
+         * classic immediate nearest-by-hops selection.
          */
         suspend fun enableAutoSelect() {
             Log.i(TAG, "Enabling auto-select for propagation node")
@@ -713,7 +753,13 @@ class PropagationNodeManager
             settingsRepository.saveAutoSelectPropagationNode(true)
             settingsRepository.saveManualPropagationNode(null)
 
-            selectBestRelay()
+            // The writer is authoritative iff the enabled preferred list is non-empty.
+            val orderedMode = preferredPropagationNodeRepository.observeEnabled().first().isNotEmpty()
+            if (orderedMode) {
+                Log.i(TAG, "enableAutoSelect: ordered mode — policy writer owns the relay")
+            } else {
+                selectBestRelay()
+            }
         }
 
         /**

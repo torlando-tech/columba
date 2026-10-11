@@ -4,8 +4,10 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 /**
  * DAO for the prioritized preferred-propagation-node list.
@@ -58,4 +60,32 @@ interface PreferredPropagationNodeDao {
     /** Number of rows in the list. */
     @Query("SELECT COUNT(*) FROM preferred_propagation_nodes")
     suspend fun count(): Int
+
+    /**
+     * Atomically persist a new priority order. [destinationHashes] is the full new list
+     * order (index = new priority). Wrapping all the priority writes in one transaction
+     * means observers (the relay writer, the screen) only ever see the complete old order
+     * or the complete new order — never a half-reordered state where two rows share a
+     * priority.
+     */
+    @Transaction
+    suspend fun reorderPriorities(destinationHashes: List<String>) {
+        destinationHashes.forEachIndexed { index, hash ->
+            setPriority(hash, index)
+        }
+    }
+
+    /**
+     * Atomically remove a node and re-pack the remaining `priority` values so the list
+     * stays contiguous (no gap) with a single commit.
+     */
+    @Transaction
+    suspend fun removeAndRepackPriorities(destinationHash: String) {
+        deleteByHash(destinationHash)
+        observeOrdered().first().forEachIndexed { index, node ->
+            if (node.priority != index) {
+                setPriority(node.destinationHash, index)
+            }
+        }
+    }
 }

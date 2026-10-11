@@ -3,7 +3,6 @@ package network.columba.app.data.repository
 import network.columba.app.data.db.dao.PreferredPropagationNodeDao
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,9 +10,10 @@ import javax.inject.Singleton
  * Thin repository over [PreferredPropagationNodeDao] for the prioritized
  * preferred-propagation-node list.
  *
- * Persistence is delegated to Room; [reorder] is the one multi-write operation and
- * must run in a single transaction so a partial reorder (e.g. a mid-drag process
- * death) can never leave the `priority` column inconsistent with the displayed order.
+ * The multi-write operations ([reorder] and [remove]) delegate to the DAO's
+ * `@Transaction` methods so they are atomic: a process death or crash mid-operation can
+ * never leave the `priority` column in a half-applied state (e.g. two rows sharing a
+ * priority, or a reorder visible to the relay writer part-way through).
  *
  * `:data` cannot reference `:rns-api`'s `NetworkRestriction`, so this repository works
  * with the raw restriction string; the `:app`-side mapping to the enum lives with the
@@ -68,27 +68,19 @@ class PreferredPropagationNodeRepository
         /**
          * Remove a node from the list by destination hash, then re-pack the remaining
          * `priority` values (across enabled + disabled rows) so the list stays contiguous
-         * and no gap is left in the ordering.
+         * and no gap is left in the ordering. Atomic (single DAO transaction).
          */
         suspend fun remove(destinationHash: String) {
-            dao.deleteByHash(destinationHash)
-            dao.observeOrdered().first().forEachIndexed { index, node ->
-                if (node.priority != index) {
-                    dao.setPriority(node.destinationHash, index)
-                }
-            }
+            dao.removeAndRepackPriorities(destinationHash)
         }
 
         /**
          * Persist a new priority order. [destinationHashes] is the full new list order
-         * (index = new priority). Each row is written in sequence; the final state is
-         * the new order, so a process death mid-way at worst leaves a gap that the next
-         * reorder/remove re-packs.
+         * (index = new priority). Atomic (single DAO transaction): observers see either the
+         * complete old order or the complete new order, never a partial reorder.
          */
         suspend fun reorder(destinationHashes: List<String>) {
-            destinationHashes.forEachIndexed { index, hash ->
-                dao.setPriority(hash, index)
-            }
+            dao.reorderPriorities(destinationHashes)
         }
 
         /** Update a node's transport restriction (raw `NetworkRestriction` name). */

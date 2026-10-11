@@ -715,21 +715,25 @@ class PropagationNodeManagerTest {
         }
 
     @Test
-    fun `setManualRelay - skips contact add when no announce available`() =
+    fun `setManualRelay - no announce creates a pending contact so the relay is backed`() =
         runTest {
-            // Given: Contact does not exist AND announce is not available
+            // Given: Contact does not exist AND announce is not available.
             coEvery { contactRepository.hasContact(testDestHash) } returns false
             coEvery { announceRepository.getAnnounce(testDestHash) } returns null
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(network.columba.app.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
             val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
-            // Then: Should NOT add contact (no announce data)
+            // Then: a PENDING contact is created (so the active relay has a backing contact
+            // and the relay observer can sync it), not an announce contact.
             assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.addContactFromAnnounce(any(), any()) }
+            coVerify(exactly = 1) { contactRepository.addPendingContact(testDestHash, null) }
 
-            // But should still set as relay
+            // And the relay is still set.
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -2841,6 +2845,70 @@ class PropagationNodeManagerTest {
             assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
             // The non-matching preferred node was NOT selected.
             coVerify(exactly = 0) { contactRepository.setAsMyRelay("aa11", clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `enableAutoSelect in ordered mode does not bypass the policy writer with nearest`() =
+        runTest {
+            // Non-empty enabled preferred list = ordered mode. The policy writer already
+            // owns the active relay, so enabling auto-select must NOT run selectBestRelay()
+            // (nearest-by-hops) — that would replace the transport-specific preferred node
+            // with an unrelated relay. The legacy scan is stubbed so a regression that calls
+            // it would be detectable (it is not expected to be called).
+            val wifiOnlyHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(wifiOnlyHash, "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            val legacyAnnounce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(legacyAnnounce))
+
+            manager.enableAutoSelect()
+            runCurrent()
+
+            // The legacy nearest scan was NOT used in ordered mode.
+            coVerify(exactly = 0) { announceRepository.getAnnouncesByTypes(any()) }
+            // And therefore the nearest relay was NOT selected (the manager was never
+            // started, so the only thing that could have set a relay is the forbidden
+            // selectBestRelay() path — asserting the relay is still unset proves it didn't).
+            assertNull(
+                "ordered-mode enableAutoSelect must not auto-select the nearest relay",
+                myRelayFlow.value?.destinationHash,
+            )
+            // Auto-select is restored and the manual pick cleared.
+            coVerify(exactly = 1) { settingsRepository.saveAutoSelectPropagationNode(true) }
+            coVerify(exactly = 1) { settingsRepository.saveManualPropagationNode(null) }
+        }
+
+    @Test
+    fun `writer - non-empty to empty list transition re-resolves to legacy nearest`() =
+        runTest {
+            // Hex-valid preferred hash (the relay observer hex-decodes the active relay).
+            val preferredHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(preferredHash, "ANY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            // Legacy nearest candidate present throughout.
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+            // Ordered mode: the preferred node is active.
+            assertEquals(preferredHash, myRelayFlow.value?.destinationHash)
+
+            // Remove the last preferred node -> the list becomes empty mid-run. Without the
+            // non-empty->empty transition handling, the removed node would stay active
+            // (startup one-shot already ran; periodic auto-select only fires when null).
+            preferredListFlow.value = emptyList()
+            flushRelayUntilStable()
+
+            // The relay re-resolved to the legacy nearest node, not the removed one.
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
+            assertNotEquals(preferredHash, myRelayFlow.value?.destinationHash)
             manager.stop()
         }
 

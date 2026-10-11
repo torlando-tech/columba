@@ -41,19 +41,18 @@ import org.junit.Test
  *  2. The factory never applies the mapped mode to the constructed object, so
  *     every object stays at the default FULL.
  *
- * INTERNAL is handled as a "not-yet-mappable" case: the pinned reticulum-kt
- * [InterfaceMode] enum has no INTERNAL value (reticulum-kt #91, still open), so
- * the factory must NOT silently coerce internal to FULL - it must leave the
- * interface un-mapped (modeOverride == null, declared mode == FULL) and log a
- * warning. That is the only honest representation until the enum lands INTERNAL.
+ * INTERNAL is mappable from reticulum-kt v0.0.24 (reticulum-kt #91 landed):
+ * the [InterfaceMode] enum has INTERNAL with the RNS 1.3.6+ semi-transport
+ * semantics, so the factory wires "internal" 1:1 to [InterfaceMode.INTERNAL]
+ * rather than leaving the interface at the default.
  */
 class InterfaceModeWiringTest {
 
     /**
      * Maps a Columba interface-mode string to the reticulum-kt [InterfaceMode]
-     * the fix must apply. Returns null for values reticulum-kt cannot represent
-     * yet (INTERNAL) or for unknown strings, which the factory must treat as
-     * "leave default + warn" rather than silently coercing to FULL.
+     * the fix must apply. Returns null only for unknown strings, which the
+     * factory must treat as "leave default + warn" rather than silently
+     * coercing to FULL. INTERNAL maps 1:1 (reticulum-kt v0.0.24, #91 landed).
      *
      * Kept in the test as the reference vocabulary; the implementation fix
      * should mirror this mapping.
@@ -65,7 +64,7 @@ class InterfaceModeWiringTest {
             "access_point" -> InterfaceMode.ACCESS_POINT
             "roaming" -> InterfaceMode.ROAMING
             "boundary" -> InterfaceMode.BOUNDARY
-            "internal" -> null // reticulum-kt #91: no INTERNAL value yet
+            "internal" -> InterfaceMode.INTERNAL // reticulum-kt v0.0.24 (#91 landed)
             else -> null
         }
 
@@ -85,7 +84,7 @@ class InterfaceModeWiringTest {
 
     @Test
     fun autoInterface_reportsConfiguredMode() {
-        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary", "internal")) {
             val config = InterfaceConfig.AutoInterface(name = "auto-$mode", enabled = true, mode = mode)
             val obj = buildInterface(config)
             val expected = expectedReticulumMode(mode)!!
@@ -99,7 +98,7 @@ class InterfaceModeWiringTest {
 
     @Test
     fun tcpClient_reportsConfiguredMode() {
-        for (mode in listOf("gateway", "access_point", "roaming", "boundary")) {
+        for (mode in listOf("gateway", "access_point", "roaming", "boundary", "internal")) {
             val config =
                 InterfaceConfig.TCPClient(
                     name = "tcp-$mode",
@@ -122,7 +121,7 @@ class InterfaceModeWiringTest {
     fun tcpServer_reportsConfiguredMode() {
         // TCPServerInterface binds its ServerSocket only inside start(), so the
         // factory can construct it without a network - same as TCPClient.
-        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary", "internal")) {
             val config = InterfaceConfig.TCPServer(name = "tcpserver-$mode", enabled = true, mode = mode)
             val obj = buildInterface(config)
             val expected = expectedReticulumMode(mode)!!
@@ -136,7 +135,7 @@ class InterfaceModeWiringTest {
 
     @Test
     fun udp_reportsConfiguredMode() {
-        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary", "internal")) {
             val config = InterfaceConfig.UDP(name = "udp-$mode", enabled = true, mode = mode)
             val obj = buildInterface(config)
             val expected = expectedReticulumMode(mode)!!
@@ -164,7 +163,7 @@ class InterfaceModeWiringTest {
                     every { rnodeFramebufferData() } returns null
                 }
             val ctx = mockk<android.content.Context>()
-            for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+            for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary", "internal")) {
                 var captured: network.reticulum.interfaces.Interface? = null
                 RNodeConnectionHelper.startRNodeInterface(
                     config =
@@ -199,7 +198,7 @@ class InterfaceModeWiringTest {
         // Reproduce that exact wiring: construct a real BLEInterface (fake driver,
         // no start()) and apply the same .withMode call. If that call were dropped,
         // every mode would report FULL and this fails.
-        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary")) {
+        for (mode in listOf("full", "gateway", "access_point", "roaming", "boundary", "internal")) {
             val obj =
                 network.reticulum.interfaces.ble.BLEInterface(
                     name = "ble-$mode",
@@ -324,14 +323,14 @@ class InterfaceModeWiringTest {
     }
 
     @Test
-    fun internalMode_isNotSilentlyCoercedToFull() {
-        // reticulum-kt #91: the pinned InterfaceMode enum has no INTERNAL.
-        // The factory must not silently coerce "internal" to FULL (that would
-        // be a behavior change the user never asked for and the wrong semantics).
-        // Acceptable behavior: leave the interface at its declared default with
-        // modeOverride == null (the "no mapping, log a warning" path).
-        // What must NOT happen: a fabricated INTERNAL, or a hard-wired FULL that
-        // makes internal indistinguishable from a deliberate full selection.
+    fun internalMode_isWiredToReticulumInternal() {
+        // reticulum-kt v0.0.24 (#91 landed): the InterfaceMode enum has INTERNAL,
+        // so the factory wires "internal" 1:1 to ReticulumMode.INTERNAL instead
+        // of leaving it at the default. This is the RNS 1.3.6+ semi-transport
+        // mode (relays + path discovery, announce re-broadcast gated on the
+        // next-hop mode). What must NOT happen: a fabricated value, or a silent
+        // coercion to FULL that makes internal indistinguishable from a
+        // deliberate full selection.
         val config =
             InterfaceConfig.TCPClient(
                 name = "tcp-internal",
@@ -341,17 +340,17 @@ class InterfaceModeWiringTest {
                 mode = "internal",
             )
         val iface = buildInterface(config)
-        // The pinned enum cannot express INTERNAL, so the object must not pretend
-        // to be a mappable mode via modeOverride.
+        // The factory must set modeOverride to the real INTERNAL value.
         assertEquals(
-            "internal must not be coerced to a mappable modeOverride on pinned reticulum-kt",
-            null,
+            "internal must be wired to ReticulumMode.INTERNAL (not left null, not coerced to FULL)",
+            InterfaceMode.INTERNAL,
             iface.modeOverride,
         )
-        // And it must be left at the declared default, not silently coerced to FULL.
+        // And the effective mode (as Transport/InterfaceAdapter surface it)
+        // must be INTERNAL, not the declared default FULL.
         assertEquals(
-            "internal must be left at the declared default mode (FULL), not coerced",
-            InterfaceMode.FULL,
+            "internal must report INTERNAL as its effective mode, not the FULL default",
+            InterfaceMode.INTERNAL,
             effectiveMode(iface),
         )
     }

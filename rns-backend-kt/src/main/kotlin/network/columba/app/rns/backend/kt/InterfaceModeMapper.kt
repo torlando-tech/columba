@@ -16,35 +16,26 @@ private const val TAG = "InterfaceModeMapper"
  * because coercing would silently change runtime behavior to unverified semantics
  * (see issue #1169 and its dependency on reticulum-kt #91).
  *
- * INTERNAL is currently unrepresentable: the pinned reticulum-kt [ReticulumMode]
- * has no INTERNAL value, and its stray [ReticulumMode.POINT_TO_POINT] corresponds
- * to no RNS config mode string. Per #1169 it must stay a no-op until #91
- * reconciles the enum with the Python reference vocabulary - mapping it to
- * POINT_TO_POINT (or FULL) would change announce re-broadcast behavior without
- * conformance proof.
+ * INTERNAL is representable from reticulum-kt v0.0.24 (reticulum-kt #91 landed:
+ * the [ReticulumMode] enum gained an INTERNAL value with the RNS 1.3.6+ semi-
+ * transport semantics - relays + path discovery, announce re-broadcast gated on
+ * the next-hop mode). It maps 1:1 to [ReticulumMode.INTERNAL]. The stray
+ * [ReticulumMode.POINT_TO_POINT] still corresponds to no RNS config mode string
+ * and is intentionally not mapped.
  */
 internal fun mapInterfaceMode(configName: String, modeString: String): ReticulumMode? {
-    val mapped =
-        when (ColumbaMode.fromValue(modeString)) {
-            ColumbaMode.FULL -> ReticulumMode.FULL
-            ColumbaMode.GATEWAY -> ReticulumMode.GATEWAY
-            ColumbaMode.ACCESS_POINT -> ReticulumMode.ACCESS_POINT
-            ColumbaMode.ROAMING -> ReticulumMode.ROAMING
-            ColumbaMode.BOUNDARY -> ReticulumMode.BOUNDARY
-            ColumbaMode.INTERNAL -> null // unrepresentable until reticulum-kt #91
-            null -> {
-                Log.w(TAG, "Interface $configName: unknown mode '$modeString', leaving default")
-                null
-            }
+    return when (ColumbaMode.fromValue(modeString)) {
+        ColumbaMode.FULL -> ReticulumMode.FULL
+        ColumbaMode.GATEWAY -> ReticulumMode.GATEWAY
+        ColumbaMode.ACCESS_POINT -> ReticulumMode.ACCESS_POINT
+        ColumbaMode.ROAMING -> ReticulumMode.ROAMING
+        ColumbaMode.BOUNDARY -> ReticulumMode.BOUNDARY
+        ColumbaMode.INTERNAL -> ReticulumMode.INTERNAL
+        null -> {
+            Log.w(TAG, "Interface $configName: unknown mode '$modeString', leaving default")
+            null
         }
-    if (mapped == null && ColumbaMode.fromValue(modeString) == ColumbaMode.INTERNAL) {
-        Log.w(
-            TAG,
-            "Interface $configName: mode '$modeString' not supported by pinned reticulum-kt " +
-                "(no INTERNAL in InterfaceMode, pending #91); leaving interface at default mode",
-        )
     }
-    return mapped
 }
 
 /**

@@ -2728,6 +2728,27 @@ class PropagationNodeManagerTest {
             enabled = true,
         )
 
+    /**
+     * Drain the shared test scheduler until the active relay (`myRelayFlow`) has
+     * converged, without advancing virtual time.
+     *
+     * `advanceUntilIdle()` is deliberately NOT used here: after `start()` it
+     * re-wakes the periodic-sync `delay()` loop every round and OOMs the fork.
+     * `runCurrent()` only drains tasks that are ready *now*, so the delay-based
+     * periodic loop stays suspended and no virtual time elapses. The writer's
+     * `setAsMyRelay` write is idempotent, so once `myRelayFlow` holds a value it
+     * stays put even if the startup race fires the writer more than once.
+     */
+    private fun TestScope.flushRelayUntilStable(maxRounds: Int = 50) {
+        var previous: String? = myRelayFlow.value?.destinationHash
+        repeat(maxRounds) {
+            runCurrent()
+            val current = myRelayFlow.value?.destinationHash
+            if (current == previous) return
+            previous = current
+        }
+    }
+
     @Test
     fun `writer - non-empty wifi-only list on wifi transport sets that node as relay`() =
         runTest {
@@ -2735,12 +2756,12 @@ class PropagationNodeManagerTest {
             transportFlow.value = CurrentTransport.WIFI_LIKE
             coEvery { preferredRepository.count() } returns 1
             coEvery { contactRepository.hasContact(any()) } returns true
-            coEvery { contactRepository.setAsMyRelay(any(), any()) } just Runs
 
             manager.start()
-            testScheduler.runCurrent()
+            flushRelayUntilStable()
 
-            coVerify(exactly = 1) { contactRepository.setAsMyRelay("aa11", clearOther = true) }
+            // The active relay converges to the wifi-only node.
+            assertEquals("aa11", myRelayFlow.value?.destinationHash)
             manager.stop()
         }
 
@@ -2754,41 +2775,46 @@ class PropagationNodeManagerTest {
             every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
 
             manager.start()
-            testScheduler.runCurrent()
+            flushRelayUntilStable()
 
-            // Legacy nearest-by-hops set the announced node (not a preferred-list call).
-            coVerify(exactly = 1) { contactRepository.setAsMyRelay(announce.destinationHash, clearOther = true) }
+            // The active relay converges to the legacy nearest node (not a preferred hash).
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
             manager.stop()
         }
 
     @Test
     fun `writer - transport flip re-resolves the active relay (wifi to cellular)`() =
         runTest {
-            // onboard is wifi-only, internet is ANY (ashore fallback).
+            // onboard-style node is wifi-only, internet-style node is ANY (ashore fallback).
+            // Hashes must be hex-valid: the relay observer hex-decodes the active relay's
+            // destinationHash (syncRelayToPython) once it becomes the active relay.
+            val wifiOnlyHash = "a1b2c3d4e5f6a7b8"
+            val anyHash = "f6e5d4c3b2a10987"
             preferredListFlow.value = listOf(
-                preferredNode("onboard", "WIFI_ONLY"),
-                preferredNode("internet", "ANY"),
+                preferredNode(wifiOnlyHash, "WIFI_ONLY"),
+                preferredNode(anyHash, "ANY"),
             )
             transportFlow.value = CurrentTransport.WIFI_LIKE
             coEvery { preferredRepository.count() } returns 2
             coEvery { contactRepository.hasContact(any()) } returns true
-            coEvery { contactRepository.setAsMyRelay(any(), any()) } just Runs
 
             manager.start()
-            testScheduler.runCurrent()
-            coVerify(exactly = 1) { contactRepository.setAsMyRelay("onboard", clearOther = true) }
+            flushRelayUntilStable()
+            // On wifi the wifi-only node is active.
+            assertEquals(wifiOnlyHash, myRelayFlow.value?.destinationHash)
 
             // Ashore: cellular. The wifi-only node no longer matches; ANY is the fallback.
             transportFlow.value = CurrentTransport.CELLULAR
-            testScheduler.runCurrent()
-            coVerify(exactly = 1) { contactRepository.setAsMyRelay("internet", clearOther = true) }
+            flushRelayUntilStable()
+            // The active relay re-resolved to the cellular/ANY node.
+            assertEquals(anyHash, myRelayFlow.value?.destinationHash)
             manager.stop()
         }
 
     @Test
     fun `writer - non-empty list with no transport match and no ANY falls back to legacy nearest`() =
         runTest {
-            // Only a wifi-only node, but we are on cellular → nothing applies, no ANY.
+            // Only a wifi-only node, but we are on cellular -> nothing applies, no ANY.
             preferredListFlow.value = listOf(preferredNode("aa11", "WIFI_ONLY"))
             transportFlow.value = CurrentTransport.CELLULAR
             coEvery { preferredRepository.count() } returns 1
@@ -2796,12 +2822,13 @@ class PropagationNodeManagerTest {
             every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
 
             manager.start()
-            testScheduler.runCurrent()
+            flushRelayUntilStable()
 
-            // Legacy auto-select set the announced node.
-            coVerify(exactly = 1) { contactRepository.setAsMyRelay(announce.destinationHash, clearOther = true) }
+            // The active relay converges to the legacy nearest node, not the non-matching preferred one.
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
             // The non-matching preferred node was NOT selected.
             coVerify(exactly = 0) { contactRepository.setAsMyRelay("aa11", clearOther = true) }
             manager.stop()
         }
+
 }

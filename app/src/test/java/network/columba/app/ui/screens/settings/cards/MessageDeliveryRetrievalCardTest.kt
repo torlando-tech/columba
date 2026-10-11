@@ -294,7 +294,7 @@ class MessageDeliveryRetrievalCardTest {
     fun relaySelection_displaysAutoSelectOption() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        composeTestRule.onNodeWithText("Auto-select nearest").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Auto-select (preferred, then nearest)").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -308,8 +308,8 @@ class MessageDeliveryRetrievalCardTest {
     fun relaySelection_autoSelectTrue_autoRadioSelected() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.defaultState())
 
-        // When isAutoSelect is true, "Auto-select nearest" should be visible
-        composeTestRule.onNodeWithText("Auto-select nearest").performScrollTo().assertIsDisplayed()
+        // When isAutoSelect is true, "Auto-select (preferred, then nearest)" should be visible
+        composeTestRule.onNodeWithText("Auto-select (preferred, then nearest)").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -324,7 +324,7 @@ class MessageDeliveryRetrievalCardTest {
     fun relaySelection_clickAutoOption_invokesOnAutoSelectToggleTrue() {
         setUpCardWithConfig(MessageDeliveryRetrievalTestFixtures.manualRelaySelectionState())
 
-        composeTestRule.onNodeWithText("Auto-select nearest").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Auto-select (preferred, then nearest)").performScrollTo().performClick()
 
         assertEquals(true, autoSelectToggled)
     }

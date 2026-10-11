@@ -2971,40 +2971,43 @@ class SettingsViewModelTest {
     // region Manual Propagation Node Tests
 
     @Test
-    fun `addManualPropagationNode calls propagationNodeManager setManualRelayByHash`() =
+    fun `addManualPropagationNode calls propagationNodeManager addPreferredRelay`() =
         runTest {
             viewModel = createViewModel()
+            coEvery { propagationNodeManager.addPreferredRelay(any(), any()) } just Runs
             val testHash = "abcd1234abcd1234abcd1234abcd1234"
             val testNickname = "My Test Relay"
 
             val result = runCatching { viewModel.addManualPropagationNode(testHash, testNickname) }
 
             assertTrue("addManualPropagationNode should complete successfully", result.isSuccess)
-            coVerify { propagationNodeManager.setManualRelayByHash(testHash, testNickname) }
+            coVerify { propagationNodeManager.addPreferredRelay(testHash, testNickname) }
         }
 
     @Test
     fun `addManualPropagationNode with null nickname calls propagationNodeManager`() =
         runTest {
             viewModel = createViewModel()
+            coEvery { propagationNodeManager.addPreferredRelay(any(), any()) } just Runs
             val testHash = "abcd1234abcd1234abcd1234abcd1234"
 
             val result = runCatching { viewModel.addManualPropagationNode(testHash, null) }
 
             assertTrue("addManualPropagationNode should complete successfully", result.isSuccess)
-            coVerify { propagationNodeManager.setManualRelayByHash(testHash, null) }
+            coVerify { propagationNodeManager.addPreferredRelay(testHash, null) }
         }
 
     @Test
-    fun `selectRelay calls propagationNodeManager setManualRelay`() =
+    fun `selectRelay calls propagationNodeManager addPreferredRelay`() =
         runTest {
             viewModel = createViewModel()
+            coEvery { propagationNodeManager.addPreferredRelay(any(), any()) } just Runs
             val testHash = "abcd1234abcd1234abcd1234abcd1234"
 
             val result = runCatching { viewModel.selectRelay(testHash) }
 
             assertTrue("selectRelay should complete successfully", result.isSuccess)
-            coVerify { propagationNodeManager.setManualRelay(testHash) }
+            coVerify { propagationNodeManager.addPreferredRelay(testHash, null) }
         }
 
     // endregion

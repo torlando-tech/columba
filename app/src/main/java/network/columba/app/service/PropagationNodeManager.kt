@@ -2,15 +2,23 @@ package network.columba.app.service
 
 import android.util.Log
 import network.columba.app.data.db.entity.ContactEntity
+import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
+import network.columba.app.data.repository.PreferredPropagationNodeRepository
 import network.columba.app.di.ApplicationScope
 import network.columba.app.di.DefaultDispatcher
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkStatus
+import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.host.manager.CurrentTransport
+import network.columba.app.rns.host.manager.PreferredNode
+import network.columba.app.rns.host.manager.PreferredNodePolicy
+import network.columba.app.rns.host.manager.PropagationNodeSelection
+import network.columba.app.service.manager.InterfaceTransportObserver
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -130,6 +138,8 @@ class PropagationNodeManager
         private val announceRepository: AnnounceRepository,
         private val rnsCore: RnsCore,
         private val rnsLxmf: RnsLxmf,
+        private val preferredPropagationNodeRepository: PreferredPropagationNodeRepository,
+        private val transportObserver: InterfaceTransportObserver,
         @ApplicationScope private val scope: CoroutineScope,
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     ) {
@@ -244,6 +254,14 @@ class PropagationNodeManager
 
         private var relayObserverJob: Job? = null
 
+        private var preferredObserverJob: Job? = null
+
+        // The startup auto-select one-shot. Captured so stop() cancels it — it has
+        // suspension points (getAutoSelectPropagationNode / count / currentRelayState.first)
+        // where a stale instance could otherwise outlive the manager and fire on the next
+        // test's cleared mocks.
+        private var startupSelectJob: Job? = null
+
         /**
          * Initialize the manager - start observing database for relay changes.
          * Call this when the Reticulum service becomes ready.
@@ -301,17 +319,28 @@ class PropagationNodeManager
                     observePropagationStateChanges()
                 }
 
+            // Observe preferred-node list + transport, resolving the active relay (Ticket 03).
+            // Active only when the list is non-empty; empty list leaves legacy auto in charge.
+            preferredObserverJob =
+                scope.launch {
+                    observePreferredNodes()
+                }
+
             // Start periodic sync with propagation node
             startPeriodicSync()
 
-            // One-shot auto-select on startup (if auto mode + no relay configured)
-            scope.launch {
-                val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
-                val loaded = currentRelayState.first { it is RelayLoadState.Loaded } as RelayLoadState.Loaded
-                if (isAutoSelect && loaded.relay == null) {
-                    selectBestRelay()
+            // One-shot auto-select on startup (legacy path). Skipped when the preferred list
+            // is non-empty — the writer above owns relay selection in ordered mode, so this
+            // would fight it. Empty list = legacy behavior byte-for-byte unchanged.
+            startupSelectJob =
+                scope.launch {
+                    val isAutoSelect = settingsRepository.getAutoSelectPropagationNode()
+                    val listEmpty = preferredPropagationNodeRepository.count() == 0
+                    val loaded = currentRelayState.first { it is RelayLoadState.Loaded } as RelayLoadState.Loaded
+                    if (isAutoSelect && listEmpty && loaded.relay == null) {
+                        selectBestRelay()
+                    }
                 }
-            }
         }
 
         /**
@@ -527,13 +556,89 @@ class PropagationNodeManager
         fun stop() {
             Log.d(TAG, "Stopping PropagationNodeManager")
             relayObserverJob?.cancel()
+            preferredObserverJob?.cancel()
             syncJob?.cancel()
             settingsObserverJob?.cancel()
             propagationStateObserverJob?.cancel()
+            startupSelectJob?.cancel()
             relayObserverJob = null
+            preferredObserverJob = null
             syncJob = null
             settingsObserverJob = null
             propagationStateObserverJob = null
+            startupSelectJob = null
+        }
+
+        /**
+         * Preferred-list writer. Combines the ordered preferred-node list with the device's
+         * current transport and runs the pure [PreferredNodePolicy] ladder. When the policy
+         * resolves to a list node, the contact is ensured to exist and marked as the active
+         * relay (`isMyRelay`); when it falls through to [PropagationNodeSelection.LegacyAuto],
+         * the existing nearest-by-hops auto-selection is used.
+         *
+         * This is the *only* thing that decides who `isMyRelay` points to when the preferred
+         * list is non-empty. The rest of the pipeline (`currentRelay` →
+         * `observeRelayChanges` → `syncRelayToPython`) is reused unchanged. When the list is
+         * empty the writer stays idle and the legacy startup one-shot + periodic auto-select
+         * keep full ownership, exactly as before.
+         *
+         * The `distinctUntilChanged` on the resolved hash means a transport blip that
+         * resolves back to the same node does not re-push `setOutboundPropagationNode`.
+         */
+        private suspend fun observePreferredNodes() {
+            preferredPropagationNodeRepository
+                .observeEnabled()
+                .combine(transportObserver.currentTransport) { enabled, transport -> enabled to transport }
+                .distinctUntilChanged()
+                .collect { (enabled, transport) ->
+                    // Gate: the writer only decides who is active when the preferred list is
+                    // non-empty. An empty list hands full ownership back to the legacy
+                    // startup one-shot + periodic auto-select, exactly as before.
+                    if (enabled.isEmpty()) return@collect
+                    val selection = PreferredNodePolicy.resolve(enabled.map { it.toPreferredNode() }, transport)
+                    when (selection) {
+                        is PropagationNodeSelection.FromList -> applyPreferredRelay(selection.destinationHash)
+                        // Non-empty list but nothing matched the transport → legacy nearest.
+                        PropagationNodeSelection.LegacyAuto -> selectBestRelay()
+                    }
+                }
+        }
+
+        /** Map a stored preferred node to the policy's view (enum-restriction by name). */
+        private fun PreferredPropagationNodeEntity.toPreferredNode(): PreferredNode =
+            PreferredNode(
+                destinationHash = destinationHash,
+                restriction = networkRestriction.toNetworkRestriction(),
+            )
+
+        /**
+         * Persist [destinationHash] as the active relay, creating the contact first if it
+         * is not already a contact. The `setAsMyRelay(clearOther = true)` write is idempotent
+         * and triggers `currentRelay` → `observeRelayChanges` → `syncRelayToPython`.
+         */
+        private suspend fun applyPreferredRelay(destinationHash: String) {
+            if (!contactRepository.hasContact(destinationHash)) {
+                val node = preferredPropagationNodeRepository.findByHash(destinationHash)
+                val announce = announceRepository.getAnnounce(destinationHash)
+                val nodePublicKey = node?.publicKey
+                val result =
+                    when {
+                        announce != null ->
+                            contactRepository.addContactFromAnnounce(destinationHash, announce.publicKey)
+                        nodePublicKey != null ->
+                            contactRepository.addContactFromAnnounce(
+                                destinationHash,
+                                nodePublicKey.hexToByteArray(),
+                            )
+                        else -> contactRepository.addPendingContact(destinationHash, node?.displayName)
+                    }
+                if (result.isFailure) {
+                    Log.e(TAG, "Failed to create contact for preferred relay: ${result.exceptionOrNull()?.message}")
+                    return
+                }
+            }
+            // Idempotent — skips the write if this hash is already the active relay.
+            contactRepository.setAsMyRelay(destinationHash, clearOther = true)
         }
 
         /**
@@ -726,6 +831,14 @@ class PropagationNodeManager
          * Convert hex string to ByteArray.
          */
         private fun String.hexToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+        /**
+         * Map a stored `networkRestriction` string (the `NetworkRestriction` enum NAME) to the
+         * enum, defaulting to [NetworkRestriction.ANY] for any unrecognized/legacy value so a
+         * malformed row never drops the node from the policy.
+         */
+        private fun String.toNetworkRestriction(): NetworkRestriction =
+            NetworkRestriction.entries.firstOrNull { it.name == this } ?: NetworkRestriction.ANY
 
         // ==================== PROPAGATION NODE SYNC ====================
 

@@ -2,13 +2,17 @@ package network.columba.app.service
 
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.ContactEntity
+import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
+import network.columba.app.data.repository.PreferredPropagationNodeRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.host.manager.CurrentTransport
+import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.test.TestFactories
 import io.mockk.Runs
 import io.mockk.clearAllMocks
@@ -68,11 +72,15 @@ class PropagationNodeManagerTest {
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var rnsCore: RnsCore
     private lateinit var rnsLxmf: RnsLxmf
+    private lateinit var preferredRepository: PreferredPropagationNodeRepository
+    private lateinit var transportObserver: InterfaceTransportObserver
     private lateinit var manager: PropagationNodeManager
     private lateinit var myRelayFlow: MutableStateFlow<ContactEntity?>
     private lateinit var autoSelectFlow: MutableStateFlow<Boolean>
     private lateinit var networkStatusFlow: MutableStateFlow<NetworkStatus>
     private lateinit var propagationStateFlow: MutableSharedFlow<PropagationState>
+    private lateinit var preferredListFlow: MutableStateFlow<List<PreferredPropagationNodeEntity>>
+    private lateinit var transportFlow: MutableStateFlow<CurrentTransport>
 
     private val testDestHash = TestFactories.TEST_DEST_HASH
     private val testDestHash2 = TestFactories.TEST_DEST_HASH_2
@@ -88,12 +96,17 @@ class PropagationNodeManagerTest {
         announceRepository = mockk()
         rnsCore = mockk()
         rnsLxmf = mockk()
+        preferredRepository = mockk()
+        transportObserver = mockk()
 
         // Initialize mutable flows for reactive testing
         myRelayFlow = MutableStateFlow<ContactEntity?>(null)
         autoSelectFlow = MutableStateFlow(true)
         networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
         propagationStateFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        // Default: empty preferred list (legacy mode) + wifi transport.
+        preferredListFlow = MutableStateFlow(emptyList())
+        transportFlow = MutableStateFlow(CurrentTransport.WIFI_LIKE)
 
         // Mock networkStatus flow
         every { rnsCore.networkStatus } returns networkStatusFlow
@@ -129,6 +142,12 @@ class PropagationNodeManagerTest {
         every { contactRepository.getMyRelayFlow() } returns myRelayFlow
         coEvery { rnsLxmf.setOutboundPropagationNode(any()) } returns Result.success(Unit)
 
+        // Preferred-node list defaults: empty list (legacy mode) on wifi transport.
+        every { preferredRepository.observeEnabled() } returns preferredListFlow
+        coEvery { preferredRepository.count() } returns 0
+        coEvery { preferredRepository.findByHash(any()) } returns null
+        every { transportObserver.currentTransport } returns transportFlow
+
         // Mock setAsMyRelay to update the myRelayFlow (simulate database update)
         coEvery { contactRepository.setAsMyRelay(any(), any()) } answers {
             val destHash = firstArg<String>()
@@ -147,6 +166,8 @@ class PropagationNodeManagerTest {
                 announceRepository = announceRepository,
                 rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                preferredPropagationNodeRepository = preferredRepository,
+                transportObserver = transportObserver,
                 scope = testScope.backgroundScope,
                 defaultDispatcher = testDispatcher,
             )
@@ -1014,6 +1035,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1065,6 +1088,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1113,6 +1138,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2227,6 +2254,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2267,6 +2296,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2304,6 +2335,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2352,6 +2385,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2406,6 +2441,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2472,6 +2509,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2676,6 +2715,93 @@ class PropagationNodeManagerTest {
             // Then: syncProgress should transition to Idle
             assertEquals(SyncProgress.Idle, manager.syncProgress.value)
 
+            manager.stop()
+        }
+
+        // ========== Preferred-node list writer (Ticket 03) ==========
+
+    private fun preferredNode(hash: String, restriction: String) =
+        PreferredPropagationNodeEntity(
+            destinationHash = hash,
+            priority = 0,
+            networkRestriction = restriction,
+            enabled = true,
+        )
+
+    @Test
+    fun `writer - non-empty wifi-only list on wifi transport sets that node as relay`() =
+        runTest {
+            preferredListFlow.value = listOf(preferredNode("aa11", "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+            coEvery { contactRepository.setAsMyRelay(any(), any()) } just Runs
+
+            manager.start()
+            testScheduler.runCurrent()
+
+            coVerify(exactly = 1) { contactRepository.setAsMyRelay("aa11", clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - empty list does not fight the legacy auto-select (legacy owns relay)`() =
+        runTest {
+            // Empty preferred list = legacy mode. The startup one-shot should pick the
+            // nearest announced node; the writer stays idle.
+            preferredListFlow.value = emptyList()
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            manager.start()
+            testScheduler.runCurrent()
+
+            // Legacy nearest-by-hops set the announced node (not a preferred-list call).
+            coVerify(exactly = 1) { contactRepository.setAsMyRelay(announce.destinationHash, clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - transport flip re-resolves the active relay (wifi to cellular)`() =
+        runTest {
+            // onboard is wifi-only, internet is ANY (ashore fallback).
+            preferredListFlow.value = listOf(
+                preferredNode("onboard", "WIFI_ONLY"),
+                preferredNode("internet", "ANY"),
+            )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+            coEvery { contactRepository.setAsMyRelay(any(), any()) } just Runs
+
+            manager.start()
+            testScheduler.runCurrent()
+            coVerify(exactly = 1) { contactRepository.setAsMyRelay("onboard", clearOther = true) }
+
+            // Ashore: cellular. The wifi-only node no longer matches; ANY is the fallback.
+            transportFlow.value = CurrentTransport.CELLULAR
+            testScheduler.runCurrent()
+            coVerify(exactly = 1) { contactRepository.setAsMyRelay("internet", clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - non-empty list with no transport match and no ANY falls back to legacy nearest`() =
+        runTest {
+            // Only a wifi-only node, but we are on cellular → nothing applies, no ANY.
+            preferredListFlow.value = listOf(preferredNode("aa11", "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.CELLULAR
+            coEvery { preferredRepository.count() } returns 1
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            manager.start()
+            testScheduler.runCurrent()
+
+            // Legacy auto-select set the announced node.
+            coVerify(exactly = 1) { contactRepository.setAsMyRelay(announce.destinationHash, clearOther = true) }
+            // The non-matching preferred node was NOT selected.
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay("aa11", clearOther = true) }
             manager.stop()
         }
 }

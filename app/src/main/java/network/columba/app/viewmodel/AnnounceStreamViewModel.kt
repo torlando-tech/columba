@@ -524,12 +524,16 @@ class AnnounceStreamViewModel
 
         /**
          * Set a propagation node as the user's relay.
-         * This will add it to contacts if not already present and mark it as the relay.
+         *
+         * In ordered mode (preferred list non-empty) this appends the node to the
+         * preferred list and lets the transport-aware policy writer resolve the active
+         * relay (ticket 06). With an empty list it falls back to the legacy direct set,
+         * so first-time users still get immediate behavior.
          */
         fun setAsMyRelay(destinationHash: String) {
             viewModelScope.launch {
                 try {
-                    propagationNodeManager.setManualRelay(destinationHash)
+                    propagationNodeManager.addPreferredRelay(destinationHash, null)
                     Log.d(TAG, "Set ${destinationHash.take(16)} as my relay")
                 } catch (e: CancellationException) {
                     throw e

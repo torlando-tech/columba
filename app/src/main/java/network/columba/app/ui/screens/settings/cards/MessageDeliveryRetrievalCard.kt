@@ -240,8 +240,14 @@ fun MessageDeliveryRetrievalCard(
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Auto-select nearest",
+                    text = "Auto-select (preferred, then nearest)",
                     style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "Uses your preferred list by transport; falls back to the nearest relay.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
                 )
                 if (isAutoSelect && currentRelayName != null) {
                     Row(

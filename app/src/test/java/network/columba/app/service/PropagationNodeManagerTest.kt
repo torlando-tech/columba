@@ -7,6 +7,7 @@ import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.data.repository.PreferredPropagationNodeRepository
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.RnsCore
@@ -14,6 +15,7 @@ import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.host.manager.CurrentTransport
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.test.TestFactories
+import network.columba.app.util.HexUtils.toHexString
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -2735,16 +2737,27 @@ class PropagationNodeManagerTest {
      * `advanceUntilIdle()` is deliberately NOT used here: after `start()` it
      * re-wakes the periodic-sync `delay()` loop every round and OOMs the fork.
      * `runCurrent()` only drains tasks that are ready *now*, so the delay-based
-     * periodic loop stays suspended and no virtual time elapses. The writer's
-     * `setAsMyRelay` write is idempotent, so once `myRelayFlow` holds a value it
-     * stays put even if the startup race fires the writer more than once.
+     * periodic loop stays suspended and no virtual time elapses.
+     *
+     * Convergence = the relay holds the same *non-null* value across two consecutive
+     * drain rounds. A single unchanged round is not enough: after a transport flip the
+     * writer's `combine` (preferred list × transport) must recombine and the nested
+     * `applyPreferredRelay` chain must propagate before the new relay lands, which can
+     * take more than one ready-task drain. The two-round hysteresis makes the transport
+     * flip test deterministic without advancing virtual time.
      */
-    private fun TestScope.flushRelayUntilStable(maxRounds: Int = 50) {
+    private fun TestScope.flushRelayUntilStable(maxRounds: Int = 60) {
         var previous: String? = myRelayFlow.value?.destinationHash
+        var stableRounds = 0
         repeat(maxRounds) {
             runCurrent()
             val current = myRelayFlow.value?.destinationHash
-            if (current == previous) return
+            if (current != null && current == previous) {
+                stableRounds++
+                if (stableRounds >= 2) return
+            } else {
+                stableRounds = 0
+            }
             previous = current
         }
     }
@@ -2829,6 +2842,63 @@ class PropagationNodeManagerTest {
             // The non-matching preferred node was NOT selected.
             coVerify(exactly = 0) { contactRepository.setAsMyRelay("aa11", clearOther = true) }
             manager.stop()
+        }
+
+        // ========== Manual-pick reroute (Ticket 06) ==========
+
+        @Test
+        fun `addPreferredRelay with a non-empty list appends to the preferred list (no raw bypass)`() = runTest {
+            val hash = testDestHash2
+            // Non-empty preferred list -> ordered mode.
+            coEvery { preferredRepository.count() } returns 1
+            // Contact already exists -> no contact creation; findByHash(any()) -> null (from @Before).
+            coEvery { contactRepository.hasContact(hash) } returns true
+            val addedHash = slot<String>()
+            val addedRestriction = slot<String>()
+            coEvery {
+                preferredRepository.add(
+                    destinationHash = capture(addedHash),
+                    networkRestriction = capture(addedRestriction),
+                    displayName = any(),
+                    publicKey = any(),
+                )
+            } just Runs
+
+            manager.addPreferredRelay(hash, "boat")
+
+            // Appended to the preferred list with ANY restriction and the nickname preserved.
+            assertEquals(hash, addedHash.captured)
+            assertEquals(NetworkRestriction.ANY.name, addedRestriction.captured)
+            coVerify(exactly = 1) {
+                preferredRepository.add(
+                    destinationHash = hash,
+                    networkRestriction = NetworkRestriction.ANY.name,
+                    displayName = "boat",
+                    publicKey = any(),
+                )
+            }
+            // Not a raw bypass: the relay was NOT set directly via setAsMyRelay (the
+            // policy writer owns the active relay in ordered mode).
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(hash, clearOther = true) }
+        }
+
+        @Test
+        fun `addPreferredRelay with an empty list uses the legacy direct-set path`() = runTest {
+            val hash = testDestHash2
+            // Empty preferred list -> legacy mode.
+            coEvery { preferredRepository.count() } returns 0
+            // No contact, no announce -> addPendingContact path; setAsMyRelay is the @Before stub.
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns null
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(network.columba.app.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            manager.addPreferredRelay(hash, null)
+
+            // Legacy path: the relay was set directly (myRelayFlow updated by the @Before stub).
+            assertEquals(hash, myRelayFlow.value?.destinationHash)
+            // NOT appended to the (empty) preferred list.
+            coVerify(exactly = 0) { preferredRepository.add(any(), any(), any(), any()) }
         }
 
 }

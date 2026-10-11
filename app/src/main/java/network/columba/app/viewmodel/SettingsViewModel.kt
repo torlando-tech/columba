@@ -1677,7 +1677,7 @@ class SettingsViewModel
             nickname: String?,
         ) {
             viewModelScope.launch {
-                propagationNodeManager.setManualRelayByHash(destinationHash, nickname)
+                propagationNodeManager.addPreferredRelay(destinationHash, nickname)
                 Log.d(TAG, "Manual propagation node added: $destinationHash")
             }
         }
@@ -1688,7 +1688,7 @@ class SettingsViewModel
          */
         fun selectRelay(destinationHash: String) {
             viewModelScope.launch {
-                propagationNodeManager.setManualRelay(destinationHash)
+                propagationNodeManager.addPreferredRelay(destinationHash, null)
                 Log.d(TAG, "Relay selected from list: ${destinationHash.take(16)}")
             }
         }

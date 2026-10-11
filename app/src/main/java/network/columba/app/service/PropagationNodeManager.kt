@@ -19,6 +19,7 @@ import network.columba.app.rns.host.manager.PreferredNode
 import network.columba.app.rns.host.manager.PreferredNodePolicy
 import network.columba.app.rns.host.manager.PropagationNodeSelection
 import network.columba.app.service.manager.InterfaceTransportObserver
+import network.columba.app.util.HexUtils.toHexString
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -761,6 +762,56 @@ class PropagationNodeManager
             // This updates the database, which triggers currentRelay Flow,
             // which triggers observeRelayChanges() to sync Python layer
             contactRepository.setAsMyRelay(destinationHash, clearOther = true)
+        }
+
+        /**
+         * User "set as relay" intent from the announces screen, contacts list, or the
+         * settings card (ticket 06). Branches on the preferred list:
+         *
+         * - **Non-empty preferred list (ordered mode):** append the node to the list
+         *   (denormalizing its public key + nickname for contact creation) and let the
+         *   ticket-03 transport-aware policy writer resolve which node is active. We do
+         *   NOT bypass the writer with a raw `setAsMyRelay` here, because when the list is
+         *   non-empty the writer owns the active relay and a raw write would be reverted on
+         *   the next transport emission (flap).
+         * - **Empty list (legacy mode):** fall back to the legacy direct set so a first-time
+         *   user who hasn't adopted the preferred list yet still gets immediate behavior.
+         *
+         * The `setActiveNow` action on the propagation-nodes screen uses the raw
+         * hard-set path (`setManualRelay`), not this method.
+         */
+        suspend fun addPreferredRelay(destinationHash: String, nickname: String?) {
+            // Ensure a contact exists (the relay observer / writer both expect a contact
+            // to back the active relay), mirroring setManualRelay's contact handling.
+            if (!contactRepository.hasContact(destinationHash)) {
+                val announce = announceRepository.getAnnounce(destinationHash)
+                if (announce != null) {
+                    contactRepository.addContactFromAnnounce(destinationHash, announce.publicKey)
+                } else {
+                    contactRepository.addPendingContact(destinationHash, nickname)
+                }
+            }
+
+            if (preferredPropagationNodeRepository.count() == 0) {
+                // Legacy mode: no preferred list yet, so use the existing direct-set path.
+                Log.i(TAG, "addPreferredRelay: empty list -> legacy direct set ${destinationHash.take(16)}")
+                setManualRelay(destinationHash)
+                return
+            }
+
+            // Ordered mode: append to the preferred list and let the policy writer resolve.
+            Log.i(TAG, "addPreferredRelay: appending to preferred list ${destinationHash.take(16)}")
+            val publicKeyHex =
+                preferredPropagationNodeRepository
+                    .findByHash(destinationHash)
+                    ?.publicKey
+                    ?: announceRepository.getAnnounce(destinationHash)?.publicKey?.toHexString()
+            preferredPropagationNodeRepository.add(
+                destinationHash = destinationHash,
+                networkRestriction = NetworkRestriction.ANY.name,
+                displayName = nickname,
+                publicKey = publicKeyHex,
+            )
         }
 
         /**

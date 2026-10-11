@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import network.columba.app.test.RegisterComponentActivityRule
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -181,6 +182,88 @@ class PropagationNodeReorderListTest {
         assertEquals(listOf("beta"), removed)
         assertEquals("remove must not reorder", 0, reorderCalls)
         composeRule.onAllNodesWithText("Beta").assertCountEquals(0)
+    }
+
+    // ---- Compose: consecutive drags save the correct (current) order ----
+    //
+    // Regression for Greptile finding "Later drags save old order": the drag gesture lives in
+    // `pointerInput(Unit)`, which keeps the FIRST composition's onDragEnded closure alive. A
+    // row keeps its identity across reorders (stable key), so a second drag on a moved row
+    // must read the CURRENT index/itemCount. Before the `rememberUpdatedState` fix, dragging
+    // a row down and then back up read the stale index and saved the wrong order.
+
+    @Test
+    fun consecutiveDragsSaveTheCurrentOrder() {
+        // Stateful list: onReorder commits the new key order back into `items`, recomposing
+        // the list so the second drag operates on the current layout.
+        var items by mutableStateOf(sampleRows())
+        val reorderLog = mutableListOf<List<String>>()
+
+        composeRule.setContent {
+            PropagationNodeReorderList(
+                items = items,
+                onReorder = { keys ->
+                    reorderLog.add(keys)
+                    items = items.map { row -> row.destinationHash to row }.toMap()
+                        .let { m -> keys.map { m.getValue(it) } }
+                },
+                onRestrictionChange = { _, _ -> },
+                onRemove = {},
+            )
+        }
+        composeRule.waitForIdle()
+
+        // Drag Alpha (top row) down one position using its handle.
+        dragHandleToAdjacentRow("alpha", directionDown = true)
+        composeRule.waitForIdle()
+        assertEquals("first drag should move alpha down one", listOf("beta", "alpha", "gamma"), reorderLog.last())
+        assertEquals(listOf("beta", "alpha", "gamma"), items.map { it.destinationHash })
+
+        // Drag Alpha (now the MIDDLE row, same identity as before) back up one position.
+        // Without the current-state fix this reads the stale top-row index and produces a
+        // wrong order; with it, alpha returns to the top.
+        dragHandleToAdjacentRow("alpha", directionDown = false)
+        composeRule.waitForIdle()
+        assertEquals("second drag must use the CURRENT list, not the first composition's",
+            listOf("alpha", "beta", "gamma"), reorderLog.last())
+        assertEquals(listOf("alpha", "beta", "gamma"), items.map { it.destinationHash })
+    }
+
+    private fun dragHandleToAdjacentRow(destinationHash: String, directionDown: Boolean) {
+        // Measure the real row pitch (center-to-center distance between adjacent rows, in px)
+        // from the rendered handles, so the synthetic drag crosses exactly one row boundary
+        // regardless of Robolectric density or the card's rendered height. We drag by 60% of
+        // the pitch: well past the 8dp slop (so the drag activates) but under one full row
+        // height, so the component's `roundToInt(netOffset / rowHeight)` lands on delta == 1.
+        val pitch = adjacentRowPitch()
+        val handleSize = composeRule
+            .onNodeWithTag("prop_node_handle_$destinationHash")
+            .fetchSemanticsNode()
+            .boundsInWindow
+            .size
+        val start = androidx.compose.ui.geometry.Offset(handleSize.width / 2f, handleSize.height / 2f)
+        val dy = if (directionDown) pitch * 0.6f else -(pitch * 0.6f)
+        val end = androidx.compose.ui.geometry.Offset(start.x, start.y + dy)
+        // A down → moveTo → up is a single-finger drag in the handle's local space.
+        composeRule.onNodeWithTag("prop_node_handle_$destinationHash").performTouchInput {
+            down(start)
+            moveTo(end)
+            up()
+        }
+    }
+
+    private fun adjacentRowPitch(): Float {
+        // Display names (contentDescription is "Reorder <displayName>") for the sample rows.
+        val ys = listOf("Alpha", "Beta", "Gamma").map {
+            composeRule
+                .onNodeWithContentDescription("Reorder $it")
+                .fetchSemanticsNode()
+                .boundsInWindow
+                .center
+                .y
+        }.sorted()
+        // The smallest center-to-center gap is one row pitch.
+        return (1 until ys.size).minOf { ys[it] - ys[it - 1] }
     }
 
     private fun sampleRows() =

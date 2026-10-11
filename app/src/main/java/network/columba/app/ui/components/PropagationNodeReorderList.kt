@@ -32,6 +32,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -172,6 +173,16 @@ private fun PropagationNodeRowContent(
     // Measured in px by onSizeChanged (reports the full Card height).
     var rowHeightPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
+    // The drag gesture lives in `pointerInput(Unit)`, which runs its block ONCE and keeps the
+    // original lambdas for the component's lifetime. A row keeps its identity across reorders
+    // (stable `key(destinationHash)` in the parent), so on a consecutive drag the surviving
+    // gesture would otherwise read the *first* composition's `index`/`itemCount`/
+    // `onReorderToNewIndex` and save a wrong order. `rememberUpdatedState` gives a stable
+    // reference whose `.value` is always the current recomposition's value, so the long-lived
+    // gesture reads the live list state on release.
+    val currentIndex by rememberUpdatedState(index)
+    val currentItemCount by rememberUpdatedState(itemCount)
+    val currentOnReorderToNewIndex by rememberUpdatedState(onReorderToNewIndex)
     // A real RNS destination hash is 32 hex chars; the de-risk fixtures use short
     // labels. Only show the short-hash line for real hashes to avoid clutter.
     val showShortHash = row.destinationHash.length >= 8
@@ -189,8 +200,8 @@ private fun PropagationNodeRowContent(
                         isDragging = false
                         if (rowHeightPx > 0f && netOffsetPx != 0f) {
                             val delta = (netOffsetPx / rowHeightPx).roundToInt()
-                            val target = (index + delta).coerceIn(0, itemCount - 1)
-                            onReorderToNewIndex(target)
+                            val target = (currentIndex + delta).coerceIn(0, currentItemCount - 1)
+                            currentOnReorderToNewIndex(target)
                         }
                     },
                 ),

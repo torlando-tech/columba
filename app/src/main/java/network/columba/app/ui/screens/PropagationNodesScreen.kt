@@ -462,8 +462,8 @@ private fun CandidateList(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .height(240.dp),
+                    .height(240.dp)
+                    .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             list.forEach { candidate ->

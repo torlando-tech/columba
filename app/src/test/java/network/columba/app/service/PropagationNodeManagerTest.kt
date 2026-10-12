@@ -146,6 +146,10 @@ class PropagationNodeManagerTest {
 
         // Preferred-node list defaults: empty list (legacy mode) on wifi transport.
         every { preferredRepository.observeEnabled() } returns preferredListFlow
+        // preferredRelayHashes (Node Details "In priority list" affordance) reads
+        // observeOrdered(); default to an empty list so the property's stateIn collector
+        // has an answer at construction.
+        every { preferredRepository.observeOrdered() } returns flowOf(emptyList())
         coEvery { preferredRepository.count() } returns 0
         coEvery { preferredRepository.findByHash(any()) } returns null
         every { transportObserver.currentTransport } returns transportFlow
@@ -2967,6 +2971,52 @@ class PropagationNodeManagerTest {
             assertEquals(hash, myRelayFlow.value?.destinationHash)
             // NOT appended to the (empty) preferred list.
             coVerify(exactly = 0) { preferredRepository.add(any(), any(), any(), any()) }
+        }
+
+        @Test
+        fun `addToPriorityList with an empty list still adds a row (no legacy bypass)`() = runTest {
+            val hash = testDestHash2
+            // Empty preferred list (legacy mode) — the case the new "Add to priority list"
+            // action must handle by ALWAYS creating a row (the old addPreferredRelay
+            // short-circuited to setManualRelay here and never added one).
+            coEvery { preferredRepository.contains(hash) } returns false
+            coEvery { preferredRepository.count() } returns 0
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns null
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(network.columba.app.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+            val addedHash = slot<String>()
+            val addedRestriction = slot<String>()
+            coEvery {
+                preferredRepository.add(
+                    destinationHash = capture(addedHash),
+                    networkRestriction = capture(addedRestriction),
+                    displayName = any(),
+                    publicKey = any(),
+                )
+            } just Runs
+
+            manager.addToPriorityList(hash, null)
+
+            // A row was added to the (empty) preferred list with the ANY restriction.
+            assertEquals(hash, addedHash.captured)
+            assertEquals(NetworkRestriction.ANY.name, addedRestriction.captured)
+            // No raw bypass: the relay was NOT set directly via setAsMyRelay.
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(hash, clearOther = true) }
+        }
+
+        @Test
+        fun `addToPriorityList is a no-op when the node is already listed`() = runTest {
+            val hash = testDestHash2
+            coEvery { preferredRepository.contains(hash) } returns true
+
+            manager.addToPriorityList(hash, null)
+
+            // Already present -> no add, no contact lookup, and the (null) relay state is
+            // left untouched.
+            assertNull(myRelayFlow.value)
+            coVerify(exactly = 0) { preferredRepository.add(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { contactRepository.hasContact(any()) }
         }
 
 }

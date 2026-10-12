@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -199,12 +201,19 @@ class PropagationNodeManager
          * Set of destination hashes currently in the preferred propagation-nodes list.
          * Used by the Node Details screen to show "In priority list" vs "Add to priority
          * list" for a relay, so the add affordance reflects the live list state.
+         *
+         * Built with the lazy [flow] builder so that `observeOrdered()` is only invoked when
+         * the flow is actually collected (by the Node Details screen), not at manager
+         * construction. An eager `stateIn` — or even an eagerly-built pipeline — would call
+         * `observeOrdered()` while constructing the manager, which breaks unit tests that
+         * build the manager with a minimal repository mock.
          */
-        val preferredRelayHashes: StateFlow<Set<String>> =
+        val preferredRelayHashes: Flow<Set<String>> = flow {
             preferredPropagationNodeRepository
                 .observeOrdered()
                 .map { nodes -> nodes.map { it.destinationHash }.toSet() }
-                .stateIn(scope, SharingStarted.WhileSubscribed(5000L), emptySet())
+                .collect { emit(it) }
+        }
 
         /**
          * Available propagation nodes sorted by hop count (ascending), limited to 10.
@@ -863,6 +872,38 @@ class PropagationNodeManager
                     .findByHash(destinationHash)
                     ?.publicKey
                     ?: announceRepository.getAnnounce(destinationHash)?.publicKey?.toHexString()
+            preferredPropagationNodeRepository.add(
+                destinationHash = destinationHash,
+                networkRestriction = NetworkRestriction.ANY.name,
+                displayName = nickname,
+                publicKey = publicKeyHex,
+            )
+        }
+
+        /**
+         * Unconditionally add a node to the preferred propagation-nodes (priority) list,
+         * creating a backing contact first if needed. Unlike [addPreferredRelay], this never
+         * falls back to the legacy direct-set path: a "Add to priority list" action (e.g. from
+         * the Node Details screen) must always create a list row, even when the list is empty,
+         * so the user's intent to build a priority list is preserved. Once the row is added the
+         * transport-aware policy writer resolves the active relay from the (now non-empty)
+         * list — auto-select is left untouched.
+         */
+        suspend fun addToPriorityList(destinationHash: String, nickname: String?) {
+            if (preferredPropagationNodeRepository.contains(destinationHash)) {
+                return
+            }
+            Log.i(TAG, "addToPriorityList: adding to preferred list ${destinationHash.take(16)}")
+            if (!contactRepository.hasContact(destinationHash)) {
+                val announce = announceRepository.getAnnounce(destinationHash)
+                if (announce != null) {
+                    contactRepository.addContactFromAnnounce(destinationHash, announce.publicKey)
+                } else {
+                    contactRepository.addPendingContact(destinationHash, nickname)
+                }
+            }
+            val publicKeyHex =
+                announceRepository.getAnnounce(destinationHash)?.publicKey?.toHexString()
             preferredPropagationNodeRepository.add(
                 destinationHash = destinationHash,
                 networkRestriction = NetworkRestriction.ANY.name,

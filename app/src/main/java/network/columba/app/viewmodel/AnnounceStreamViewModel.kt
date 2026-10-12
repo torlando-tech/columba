@@ -531,13 +531,14 @@ class AnnounceStreamViewModel
             propagationNodeManager.preferredRelayHashes.map { hashes -> destinationHash in hashes }
 
         /**
-         * Add the given propagation node to the preferred list (creating a contact first). Uses the
-         * manager's shared add path so the empty-list/ordered-list semantics match the settings
-         * screen. A no-op when the node is already listed.
+         * Add the given propagation node to the preferred propagation-nodes (priority) list,
+         * creating a backing contact first. Unlike [setAsMyRelay], this always creates a list
+         * row — even when the list is empty — so the user's intent to build a priority list is
+         * preserved and auto-select is left to the policy writer. A no-op when already listed.
          */
         fun addToPriorityList(destinationHash: String, nickname: String?) {
             viewModelScope.launch {
-                propagationNodeManager.addPreferredRelay(destinationHash, nickname)
+                propagationNodeManager.addToPriorityList(destinationHash, nickname)
             }
         }
 

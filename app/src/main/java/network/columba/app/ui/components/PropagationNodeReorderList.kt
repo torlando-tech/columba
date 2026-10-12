@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import network.columba.app.util.formatRelativeTime
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -58,12 +60,21 @@ import kotlin.math.roundToInt
  *   carried as a raw string and mapped to the enum on the `:app` side.
  * @property isActive Whether this is the currently-active relay (drives the
  *   "currently active" indicator and hides the redundant "Set active now" action).
+ * @property failureReason Human-readable reason the relay was last seen unreachable
+ *   (e.g. "No path to relay"), or null if it has never failed. Shown as a compact,
+ *   non-dismissible warning on the row.
+ * @property failureAtMs Epoch millis of the last recorded failure (for the "when"), or null.
+ * @property failureCode Raw LXMF state code of the last failure (for the "which state"), or
+ *   null. Decoded for display via [propagationFailureCodeLabel].
  */
 data class PropagationNodeRow(
     val destinationHash: String,
     val displayName: String,
     val networkRestriction: String,
     val isActive: Boolean = false,
+    val failureReason: String? = null,
+    val failureAtMs: Long? = null,
+    val failureCode: Int? = null,
 )
 
 /** Display label for a raw `NetworkRestriction` name. */
@@ -80,6 +91,25 @@ fun nextNetworkRestriction(current: String): String =
         "ANY" -> "WIFI_ONLY"
         "WIFI_ONLY" -> "CELLULAR_ONLY"
         else -> "ANY"
+    }
+
+/**
+ * Short, readable label for a raw LXMF failure state code (the
+ * `preferred_propagation_nodes.lastFailureCode` column). Covers both backend code spaces: the
+ * Python `0xf0+` `PR_*` terminals and the native `LXMRouter.PropagationTransferState` ordinals
+ * (FAILED = 8, NO_PATH = 9, NO_LINK = 10). Unknown codes render as a hex token so the exact
+ * value is never lost.
+ */
+fun propagationFailureCodeLabel(code: Int): String =
+    when (code) {
+        0xf0, 9 -> "NO_PATH"
+        0xf1 -> "LINK_FAILED"
+        0xf2 -> "TRANSFER_FAILED"
+        0xf3 -> "NO_IDENTITY"
+        0xf4 -> "NO_ACCESS"
+        8 -> "FAILED"
+        10 -> "NO_LINK"
+        else -> "0x${Integer.toHexString(code)}"
     }
 
 /** Move an element from index [from] to index [to] in a key list. */
@@ -279,6 +309,36 @@ private fun PropagationNodeRowContent(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
+                    )
+                }
+                // Compact, non-dismissible warning: why this relay was last seen unreachable
+                // (the recorded LXMF state code, decoded) and when. Auto-clears: the row is
+                // derived from the DB and the failure is cleared on a successful sync (or
+                // expires via the unreachable cooldown), so this line disappears on its own.
+                if (row.failureReason != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = buildString {
+                            // Explanation + decoded state code + when, e.g.
+                            // "No path to relay (NO_PATH) · 5 minutes ago".
+                            append(row.failureReason)
+                            val code = row.failureCode
+                            if (code != null) {
+                                append(" (")
+                                append(propagationFailureCodeLabel(code))
+                                append(")")
+                            }
+                            val at = row.failureAtMs
+                            if (at != null) {
+                                append(" · ")
+                                append(formatRelativeTime(at))
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("prop_node_failure_${row.destinationHash}"),
                     )
                 }
             }

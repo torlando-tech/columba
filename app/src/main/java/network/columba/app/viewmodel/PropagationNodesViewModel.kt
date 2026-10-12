@@ -71,6 +71,9 @@ class PropagationNodesViewModel
                             displayName = it.displayName ?: it.destinationHash.take(12),
                             networkRestriction = it.networkRestriction,
                             isActive = it.destinationHash == activeHash,
+                            failureReason = it.lastFailureExplanation,
+                            failureAtMs = it.lastFailureAt,
+                            failureCode = it.lastFailureCode,
                         )
                     },
                     activeHash = activeHash,

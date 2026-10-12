@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
+import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.PreferredPropagationNodeRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkRestriction
@@ -53,6 +54,7 @@ class PropagationNodesViewModel
         private val announceRepository: AnnounceRepository,
         private val settingsRepository: SettingsRepository,
         private val propagationNodeManager: PropagationNodeManager,
+        private val identityRepository: IdentityRepository,
     ) : ViewModel() {
 
         val state: StateFlow<PropagationNodesUiState> =
@@ -149,5 +151,16 @@ class PropagationNodesViewModel
         /** Load the top announced propagation nodes for the "From announces" add tab (one-shot). */
         suspend fun loadTopCandidates(limit: Int = 10): List<Announce> =
             announceRepository.getTopPropagationNodes(limit).first()
+
+        /**
+         * Load the relays the active identity has saved as contacts for the "Saved relays" add
+         * tab. Resolves the active identity and returns its saved propagation nodes (empty when
+         * there is no active identity), so the add dialog surfaces the user's own relays rather
+         * than only the nearest anonymous nodes.
+         */
+        suspend fun loadSavedRelayCandidates(): List<Announce> {
+            val identity = identityRepository.activeIdentity.first() ?: return emptyList()
+            return announceRepository.getSavedPropagationNodes(identity.identityHash).first()
+        }
     }
 

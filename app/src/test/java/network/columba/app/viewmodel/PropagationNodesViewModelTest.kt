@@ -17,9 +17,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
+import network.columba.app.data.repository.IdentityRepository
 import network.columba.app.data.repository.PreferredPropagationNodeRepository
 import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.NetworkRestriction
@@ -45,6 +47,7 @@ class PropagationNodesViewModelTest {
     // Strict mock: the VM only reads `manager.currentRelay` (stubbed in @Before)
     // and calls `setManualRelay` (stubbed per-test), so no relaxed fallback is needed.
     private val manager = mockk<PropagationNodeManager>()
+    private val identityRepo = mockk<IdentityRepository>()
 
     private val orderedNodes = MutableStateFlow<List<PreferredPropagationNodeEntity>>(emptyList())
     private val currentRelay = MutableStateFlow<RelayInfo?>(null)
@@ -82,7 +85,7 @@ class PropagationNodesViewModelTest {
         )
 
     private fun vm() =
-        PropagationNodesViewModel(preferredRepo, announceRepo, settingsRepo, manager)
+        PropagationNodesViewModel(preferredRepo, announceRepo, settingsRepo, manager, identityRepo)
 
     @Test
     fun `state reflects ordered list, active relay, and import eligibility`() = runTest {
@@ -237,5 +240,49 @@ class PropagationNodesViewModelTest {
 
         assertEquals(1, result.size)
         assertEquals("9900", result[0].destinationHash)
+    }
+
+    private fun identity() =
+        LocalIdentityEntity(
+            identityHash = "id1",
+            displayName = "main",
+            destinationHash = "mydest",
+            filePath = "/keys/main.key",
+            createdTimestamp = 0L,
+            lastUsedTimestamp = 0L,
+            isActive = true,
+        )
+
+    @Test
+    fun `loadSavedRelayCandidates returns saved relays for the active identity`() = runTest {
+        val model = vm()
+        val saved =
+            Announce(
+                destinationHash = "luthen",
+                peerName = "Luthen",
+                publicKey = ByteArray(0),
+                appData = null,
+                hops = 1,
+                lastSeenTimestamp = 0L,
+                nodeType = "PROPAGATION_NODE",
+            )
+        every { identityRepo.activeIdentity } returns flowOf(identity())
+        coEvery { announceRepo.getSavedPropagationNodes("id1") } returns flowOf(listOf(saved))
+
+        val result = model.loadSavedRelayCandidates()
+
+        assertEquals(1, result.size)
+        assertEquals("luthen", result[0].destinationHash)
+        assertEquals("Luthen", result[0].peerName)
+    }
+
+    @Test
+    fun `loadSavedRelayCandidates is empty when there is no active identity`() = runTest {
+        val model = vm()
+        every { identityRepo.activeIdentity } returns flowOf(null)
+
+        val result = model.loadSavedRelayCandidates()
+
+        assertTrue(result.isEmpty())
     }
 }

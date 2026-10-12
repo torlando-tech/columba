@@ -167,6 +167,16 @@ class AnnounceRepository
             }
 
         /**
+         * Get the propagation nodes the given identity has saved as contacts (starred via the
+         * "Save peer" button), for the preferred-nodes "Saved relays" tab. Scoped to that
+         * identity's saved relays rather than the nearest anonymous nodes.
+         */
+        fun getSavedPropagationNodes(identityHash: String): Flow<List<Announce>> =
+            announceDao.getEnrichedSavedPropagationNodes(identityHash).map { enriched ->
+                enriched.map { it.toAnnounce() }
+            }
+
+        /**
          * Get announces with pagination support. Combines node type filtering and search query.
          * Initial load: 30 items, Page size: 30 items, Prefetch distance: 10 items.
          * Includes icon data from peer_icons table.

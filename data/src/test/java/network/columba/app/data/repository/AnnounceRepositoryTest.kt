@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.data.db.entity.AnnounceEntity
+import network.columba.app.data.db.entity.ContactEntity
+import network.columba.app.data.db.entity.LocalIdentityEntity
 import network.columba.app.data.model.EnrichedAnnounce
 import network.columba.app.data.model.InterfaceType
 import org.junit.After
@@ -203,6 +205,68 @@ class AnnounceRepositoryTest {
                     ).load(PagingSource.LoadParams.Refresh(key = null, loadSize = 1, placeholdersEnabled = false))
             val rows = (page as PagingSource.LoadResult.Page<Int, EnrichedAnnounce>).data
             assertTrue(rows.isEmpty())
+        }
+
+    @Test
+    fun getSavedPropagationNodes_returnsOnlySavedContactsOfThatIdentity() =
+        runTest {
+            val dao = database.announceDao()
+            val contacts = database.contactDao()
+            val identities = database.localIdentityDao()
+            val now = System.currentTimeMillis()
+            // Seed the active identity so the contact FK (identityHash -> local_identities) holds.
+            identities.insert(
+                LocalIdentityEntity(
+                    identityHash = "id1",
+                    displayName = "main",
+                    destinationHash = "mydest",
+                    filePath = "/keys/main.key",
+                    createdTimestamp = now,
+                    lastUsedTimestamp = now,
+                    isActive = true,
+                )
+            )
+            // Two propagation-node announces: one saved by the active identity, one not.
+            dao.upsertAnnounce(
+                AnnounceEntity(
+                    destinationHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    peerName = "Saved relay",
+                    publicKey = ByteArray(32) { 0x01 },
+                    appData = null,
+                    hops = 1,
+                    lastSeenTimestamp = now,
+                    nodeType = "PROPAGATION_NODE",
+                    receivingInterface = "RNodeInterface[Radio]",
+                )
+            )
+            dao.upsertAnnounce(
+                AnnounceEntity(
+                    destinationHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    peerName = "Unserved relay",
+                    publicKey = ByteArray(32) { 0x02 },
+                    appData = null,
+                    hops = 2,
+                    lastSeenTimestamp = now,
+                    nodeType = "PROPAGATION_NODE",
+                    receivingInterface = "RNodeInterface[Radio]",
+                )
+            )
+            // Save only the first as a contact for identity "id1".
+            contacts.insertContact(
+                ContactEntity(
+                    destinationHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    identityHash = "id1",
+                    publicKey = ByteArray(32) { 0x01 },
+                    addedTimestamp = now,
+                    addedVia = "ANNOUNCE",
+                )
+            )
+
+            val saved = repository.getSavedPropagationNodes("id1").first()
+
+            assertEquals(1, saved.size)
+            assertEquals("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", saved[0].destinationHash)
+            assertEquals("Saved relay", saved[0].peerName)
         }
 
     private suspend fun saveTestAnnounce(

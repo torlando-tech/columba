@@ -196,6 +196,17 @@ class PropagationNodeManager
                 .stateIn(scope, SharingStarted.WhileSubscribed(5000L), null)
 
         /**
+         * Set of destination hashes currently in the preferred propagation-nodes list.
+         * Used by the Node Details screen to show "In priority list" vs "Add to priority
+         * list" for a relay, so the add affordance reflects the live list state.
+         */
+        val preferredRelayHashes: StateFlow<Set<String>> =
+            preferredPropagationNodeRepository
+                .observeOrdered()
+                .map { nodes -> nodes.map { it.destinationHash }.toSet() }
+                .stateIn(scope, SharingStarted.WhileSubscribed(5000L), emptySet())
+
+        /**
          * Available propagation nodes sorted by hop count (ascending), limited to 10.
          * Used for relay selection UI.
          *

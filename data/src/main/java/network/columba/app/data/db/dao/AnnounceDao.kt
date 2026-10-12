@@ -614,6 +614,54 @@ interface AnnounceDao {
     )
     fun getEnrichedTopPropagationNodes(limit: Int = 10): Flow<List<EnrichedAnnounce>>
 
+    /**
+     * Get the propagation nodes the active identity has saved as contacts (starred via the
+     * "Save peer" button), enriched exactly like [getEnrichedTopPropagationNodes] so the
+     * preferred-nodes "Saved relays" tab can render them. Unlike the top-N query this is scoped
+     * to the caller's saved contacts, so it surfaces the relays the user actually chose to keep
+     * rather than only the nearest anonymous nodes.
+     */
+    @Query(
+        """
+        SELECT
+            a.destinationHash,
+            a.peerName,
+            a.publicKey,
+            a.appData,
+            a.hops,
+            a.lastSeenTimestamp,
+            a.nodeType,
+            a.receivingInterface,
+            a.receivingInterfaceType,
+            a.aspect,
+            a.isFavorite,
+            a.favoritedTimestamp,
+            a.stampCost,
+            a.stampCostFlexibility,
+            a.peeringCost,
+            a.propagationTransferLimitKb,
+            (
+                SELECT GROUP_CONCAT(DISTINCT s.interfaceType)
+                FROM announce_interface_sightings s
+                WHERE s.destinationHash = a.destinationHash
+                AND s.lastSeenTimestamp >= (CAST(strftime('%s', 'now') AS INTEGER) * 1000 - 2592000000)
+            ) AS recentInterfaceTypes,
+            pi.iconName as iconName,
+            pi.foregroundColor as iconForegroundColor,
+            pi.backgroundColor as iconBackgroundColor
+        FROM contacts c
+        INNER JOIN announces a ON a.destinationHash = c.destinationHash
+        LEFT JOIN peer_icons pi ON a.destinationHash = pi.destinationHash
+        WHERE c.identityHash = :identityHash
+        AND a.nodeType = 'PROPAGATION_NODE'
+        ORDER BY
+            c.isMyRelay DESC,
+            a.hops ASC,
+            a.lastSeenTimestamp DESC
+        """,
+    )
+    fun getEnrichedSavedPropagationNodes(identityHash: String): Flow<List<EnrichedAnnounce>>
+
     // Paging3 methods for infinite scroll (with peer_icons JOIN)
 
     /**

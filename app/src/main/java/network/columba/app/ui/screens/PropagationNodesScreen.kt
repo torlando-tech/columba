@@ -293,15 +293,22 @@ private fun AddPropagationNodeDialog(
     scope: kotlinx.coroutines.CoroutineScope,
     viewModel: PropagationNodesViewModel,
 ) {
-    var tab by remember { mutableStateOf(0) } // 0 = announces, 1 = by hash
+    var tab by remember { mutableStateOf(0) } // 0 = saved relays, 1 = announces, 2 = by hash
+    var savedCandidates by remember { mutableStateOf<List<network.columba.app.data.repository.Announce>?>(null) }
     var candidates by remember { mutableStateOf<List<network.columba.app.data.repository.Announce>?>(null) }
     var hashInput by remember { mutableStateOf("") }
     var nicknameInput by remember { mutableStateOf("") }
 
-    // Load announce candidates once on first show.
+    // Load candidates once on first show. Saved relays is the default tab (the user's own
+    // starred relays), so load it eagerly; announces is loaded lazily when that tab is opened.
     remember {
         scope.launch {
-            candidates = viewModel.loadTopCandidates()
+            savedCandidates = viewModel.loadSavedRelayCandidates()
+        }
+    }
+    fun ensureAnnouncesLoaded() {
+        if (candidates == null) {
+            scope.launch { candidates = viewModel.loadTopCandidates() }
         }
     }
 
@@ -314,104 +321,46 @@ private fun AddPropagationNodeDialog(
                     SegmentedButton(
                         selected = tab == 0,
                         onClick = { tab = 0 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                    ) {
+                        Text("Saved relays")
+                    }
+                    SegmentedButton(
+                        selected = tab == 1,
+                        onClick = { tab = 1; ensureAnnouncesLoaded() },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
                     ) {
                         Text("From announces")
                     }
                     SegmentedButton(
-                        selected = tab == 1,
-                        onClick = { tab = 1 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        selected = tab == 2,
+                        onClick = { tab = 2 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                     ) {
                         Text("By destination hash")
                     }
                 }
 
                 if (tab == 0) {
-                    val list = candidates
-                    if (list == null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                            Text("Loading…", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    } else if (list.isEmpty()) {
-                        Text(
-                            "No propagation-node announces on the network yet.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .verticalScroll(rememberScrollState())
-                                    .height(240.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            list.forEach { candidate ->
-                                val alreadyAdded = candidate.destinationHash in existingHashes
-                                Surface(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .testTag("prop_node_candidate_${candidate.destinationHash}")
-                                            .then(
-                                                if (alreadyAdded) {
-                                                    Modifier
-                                                } else {
-                                                    Modifier.clickable {
-                                                        onAddFromAnnounce(candidate)
-                                                        onDismiss()
-                                                    }
-                                                },
-                                            ),
-                                    color =
-                                        if (alreadyAdded) {
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        } else {
-                                            MaterialTheme.colorScheme.surface
-                                        },
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text =
-                                                    candidate.peerName.ifEmpty {
-                                                        candidate.destinationHash.take(12)
-                                                    },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                text =
-                                                    candidate.destinationHash.take(8) +
-                                                        " · " + candidate.hops + " hops",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                            )
-                                        }
-                                        if (alreadyAdded) {
-                                            Text(
-                                                "Added",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    CandidateList(
+                        list = savedCandidates,
+                        emptyMessage = "No saved propagation nodes yet. Star a relay (Save peer) to see it here.",
+                        alreadyAdded = { hash -> hash in existingHashes },
+                        onPick = { candidate ->
+                            onAddFromAnnounce(candidate)
+                            onDismiss()
+                        },
+                    )
+                } else if (tab == 1) {
+                    CandidateList(
+                        list = candidates,
+                        emptyMessage = "No propagation-node announces on the network yet.",
+                        alreadyAdded = { hash -> hash in existingHashes },
+                        onPick = { candidate ->
+                            onAddFromAnnounce(candidate)
+                            onDismiss()
+                        },
+                    )
                 } else {
                     // Validate the destination hash with the same validator the rest of the
                     // app uses, and surface its error inline. The stored value is the
@@ -453,7 +402,7 @@ private fun AddPropagationNodeDialog(
             }
         },
         confirmButton = {
-            val byHash = tab == 1
+            val byHash = tab == 2
             val validation = DestinationHashValidator.validate(hashInput)
             val isValid = validation is DestinationHashValidator.ValidationResult.Valid
             val canConfirm =
@@ -480,4 +429,95 @@ private fun AddPropagationNodeDialog(
             }
         },
     )
+}
+
+/**
+ * Renders a candidate list (shared by the "Saved relays" and "From announces" tabs). Shows a
+ * spinner while [list] is null, [emptyMessage] when it is empty, otherwise one tappable row per
+ * candidate; rows already in [existingHashes] are dimmed and non-interactive.
+ */
+@Composable
+private fun CandidateList(
+    list: List<network.columba.app.data.repository.Announce>?,
+    emptyMessage: String,
+    alreadyAdded: (String) -> Boolean,
+    onPick: (network.columba.app.data.repository.Announce) -> Unit,
+) {
+    if (list == null) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+            Text("Loading…", style = MaterialTheme.typography.bodyMedium)
+        }
+    } else if (list.isEmpty()) {
+        Text(
+            emptyMessage,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    } else {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .height(240.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            list.forEach { candidate ->
+                val added = alreadyAdded(candidate.destinationHash)
+                Surface(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("prop_node_candidate_${candidate.destinationHash}")
+                            .then(
+                                if (added) {
+                                    Modifier
+                                } else {
+                                    Modifier.clickable { onPick(candidate) }
+                                },
+                            ),
+                    color =
+                        if (added) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text =
+                                    candidate.peerName.ifEmpty { candidate.destinationHash.take(12) },
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text =
+                                    candidate.destinationHash.take(8) + " · " + candidate.hops + " hops",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                        if (added) {
+                            Text(
+                                "Added",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

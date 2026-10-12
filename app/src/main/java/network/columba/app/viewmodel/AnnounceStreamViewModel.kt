@@ -523,6 +523,25 @@ class AnnounceStreamViewModel
         fun isMyRelayFlow(destinationHash: String): Flow<Boolean> = contactRepository.isMyRelayFlow(destinationHash)
 
         /**
+         * Whether the given node is currently in the preferred propagation-nodes (priority) list.
+         * Drives the "Add to priority list" / "In priority list" affordance on the Node Details
+         * screen for relays.
+         */
+        fun isPreferredRelayFlow(destinationHash: String): Flow<Boolean> =
+            propagationNodeManager.preferredRelayHashes.map { hashes -> destinationHash in hashes }
+
+        /**
+         * Add the given propagation node to the preferred list (creating a contact first). Uses the
+         * manager's shared add path so the empty-list/ordered-list semantics match the settings
+         * screen. A no-op when the node is already listed.
+         */
+        fun addToPriorityList(destinationHash: String, nickname: String?) {
+            viewModelScope.launch {
+                propagationNodeManager.addPreferredRelay(destinationHash, nickname)
+            }
+        }
+
+        /**
          * Set a propagation node as the user's relay.
          *
          * In ordered mode (preferred list non-empty) this appends the node to the

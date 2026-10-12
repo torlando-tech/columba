@@ -96,4 +96,30 @@ class PreferredNodePolicyTest {
         // On wifi, the wifi-specific one applies.
         assertEquals(PropagationNodeSelection.FromList("w"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE))
     }
+
+    // ---- Unreachable-hash exclusion (failover) ----
+
+    @Test
+    fun `unreachable node is skipped and the next in priority order is chosen`() {
+        val list = listOf(PreferredNode("a", nAny), PreferredNode("w", nWifi))
+        // Highest-priority node "a" is currently unreachable → skipped; "w" is chosen on wifi.
+        assertEquals(PropagationNodeSelection.FromList("w"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE, setOf("a")))
+        // With no unreachable nodes, "a" wins as before.
+        assertEquals(PropagationNodeSelection.FromList("a"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE))
+    }
+
+    @Test
+    fun `all-unreachable list falls back to legacy auto`() {
+        val list = listOf(PreferredNode("a", nAny), PreferredNode("b", nAny))
+        assertEquals(PropagationNodeSelection.LegacyAuto, PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE, setOf("a", "b")))
+        // A stale/irrelevant hash in the set that is not in the list does not affect resolution.
+        assertEquals(PropagationNodeSelection.FromList("a"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE, setOf("ghost")))
+    }
+
+    @Test
+    fun `unreachable lower-ranked node does not affect a higher-ranked reachable pick`() {
+        val list = listOf(PreferredNode("a", nAny), PreferredNode("w", nWifi))
+        // Lower-ranked "w" is unreachable, but higher-ranked "a" is reachable → "a" still wins.
+        assertEquals(PropagationNodeSelection.FromList("a"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE, setOf("w")))
+    }
 }

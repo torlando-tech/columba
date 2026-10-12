@@ -61,19 +61,33 @@ object PreferredNodePolicy {
     /**
      * Resolve the active propagation node for [currentTransport] from an enabled-only,
      * priority-ascending [nodes] list.
+     *
+     * Nodes whose hash is in [unreachableHashes] are skipped: the caller (the relay writer)
+     * pre-filters the set from each node's most-recent recorded sync failure that is still
+     * inside the cooldown window, so a relay LXMF just reported no-path / no-link for is not
+     * re-selected immediately. This is what makes the list *fail over* to the next relay when
+     * the chosen one is down, without any new network activity. If every node is either
+     * unreachable or transport-incompatible, the result is [PropagationNodeSelection.LegacyAuto]
+     * (the existing nearest-by-hops fallback), so an exhausted list never leaves the router
+     * with no destination.
      */
     fun resolve(
         nodes: List<PreferredNode>,
         currentTransport: CurrentTransport,
+        unreachableHashes: Set<String> = emptySet(),
     ): PropagationNodeSelection {
-        // Single pass in priority order: the first node reachable on the current transport
-        // wins. `ANY` is reachable on every transport, so a higher-ranked `ANY` beats a
-        // lower-ranked transport-specific node (the user's ordering is the primary axis).
-        val reachable = nodes.firstOrNull { it.restriction reachableOn currentTransport }
+        // Single pass in priority order: the first node that is reachable on the current
+        // transport AND not currently marked unreachable wins. `ANY` is reachable on every
+        // transport, so a higher-ranked `ANY` beats a lower-ranked transport-specific node
+        // (the user's ordering is the primary axis).
+        val reachable = nodes.firstOrNull { node ->
+            node.destinationHash !in unreachableHashes && node.restriction reachableOn currentTransport
+        }
         if (reachable != null) {
             return PropagationNodeSelection.FromList(reachable.destinationHash)
         }
-        // No node is reachable on this transport — fall back to nearest-by-hops auto-selection.
+        // No node is reachable on this transport (or all are unreachable) — fall back to
+        // nearest-by-hops auto-selection.
         return PropagationNodeSelection.LegacyAuto
     }
 

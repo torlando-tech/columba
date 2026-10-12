@@ -485,17 +485,12 @@ fun SettingsScreen(
                     tryPropagationOnFail = state.tryPropagationOnFail,
                     currentRelayName = state.currentRelayName,
                     currentRelayHops = state.currentRelayHops,
-                    currentRelayHash = state.currentRelayHash,
                     isAutoSelect = state.autoSelectPropagationNode,
-                    availableRelays = state.availableRelays,
                     onMethodChange = { viewModel.setDefaultDeliveryMethod(it) },
                     onTryPropagationToggle = { viewModel.setTryPropagationOnFail(it) },
                     onAutoSelectToggle = { viewModel.setAutoSelectPropagationNode(it) },
                     onAddManualRelay = { hash, nickname ->
                         viewModel.addManualPropagationNode(hash, nickname)
-                    },
-                    onSelectRelay = { hash, _ ->
-                        viewModel.selectRelay(hash)
                     },
                     // Retrieval settings
                     autoRetrieveEnabled = state.autoRetrieveEnabled,

@@ -70,7 +70,7 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PendingDeliveryStatusEntity::class,
         PreferredPropagationNodeEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -373,6 +373,36 @@ abstract class ColumbaDatabase : RoomDatabase() {
                     db.execSQL(
                         "CREATE INDEX IF NOT EXISTS `index_preferred_propagation_nodes_priority` " +
                             "ON `preferred_propagation_nodes` (`priority`)",
+                    )
+                }
+            }
+
+        /**
+         * v8 → v9: record *why* a preferred propagation node was last seen unreachable.
+         *
+         * Three nullable columns are added to `preferred_propagation_nodes`:
+         *  - `lastFailureCode`        (INTEGER, null) — raw LXMF `PR_*` state code.
+         *  - `lastFailureExplanation` (TEXT, null)    — human-readable reason.
+         *  - `lastFailureAt`          (INTEGER, null) — epoch millis of the failure.
+         *
+         * All are nullable and default to null so every existing row is untouched and reads
+         * as "never seen unreachable" — the selection policy only excludes a node when a
+         * recent failure is on record. No data backfill is required.
+         */
+        val MIGRATION_8_9: Migration =
+            object : Migration(8, 9) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE `preferred_propagation_nodes` " +
+                            "ADD COLUMN `lastFailureCode` INTEGER",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE `preferred_propagation_nodes` " +
+                            "ADD COLUMN `lastFailureExplanation` TEXT",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE `preferred_propagation_nodes` " +
+                            "ADD COLUMN `lastFailureAt` INTEGER",
                     )
                 }
             }

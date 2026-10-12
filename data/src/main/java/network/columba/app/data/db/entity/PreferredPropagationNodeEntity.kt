@@ -43,6 +43,22 @@ data class PreferredPropagationNodeEntity(
      * re-fetch of the announce. Null for hash-only (pending) entries.
      */
     val publicKey: String? = null,
+    /**
+     * Raw LXMF propagation state code (`PropagationState.state`) of the most recent
+     * sync failure observed for this node while it was the active relay — `PR_NO_PATH`,
+     * `PR_LINK_FAILED`, `PR_TRANSFER_FAILED`, `PR_NO_ACCESS`, or a generic `FAILED`. Null
+     * when no failure has been recorded (the node has never been seen unreachable). This is
+     * the "why" behind [isCurrentlyUnreachable] and is surfaced in the UI.
+     */
+    val lastFailureCode: Int? = null,
+    /** Human-readable explanation of [lastFailureCode] (e.g. "No path to relay"). */
+    val lastFailureExplanation: String? = null,
+    /**
+     * Epoch millis (UTC) when [lastFailureCode] was recorded. Together with the manager's
+     * unreachable-cooldown this decides whether the node is *currently* excluded from the
+     * selection policy (see [isCurrentlyUnreachable]).
+     */
+    val lastFailureAt: Long? = null,
 ) {
     /** Column-level constants for the `networkRestriction` string. */
     object NetworkRestrictionColumn {

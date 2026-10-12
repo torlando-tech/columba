@@ -114,4 +114,66 @@ class PreferredPropagationNodeDaoTest {
         assertEquals("aaa", dao.findByHash("aaa")?.destinationHash)
         assertNull(dao.findByHash("zzz"))
     }
+
+    @Test
+    fun `recordFailure stores code, explanation and timestamp`() = runTest {
+        repository.add("aaa", "ANY")
+        repository.recordFailure("aaa", code = 0xf0, explanation = "No path to relay", timestamp = 1234L)
+
+        val node = dao.findByHash("aaa")!!
+        assertEquals(0xf0, node.lastFailureCode)
+        assertEquals("No path to relay", node.lastFailureExplanation)
+        assertEquals(1234L, node.lastFailureAt)
+    }
+
+    @Test
+    fun `recordFailure is a no-op for a hash not in the list`() = runTest {
+        // No rows added — recording on an absent hash must not create a row.
+        repository.recordFailure("ghost", code = 8, explanation = "Relay unreachable", timestamp = 1L)
+        assertEquals(0, dao.count())
+        assertNull(dao.findByHash("ghost"))
+    }
+
+    @Test
+    fun `recordFailure overwrites the prior record (latest wins)`() = runTest {
+        repository.add("aaa", "ANY")
+        repository.recordFailure("aaa", code = 8, explanation = "Relay unreachable", timestamp = 100L)
+        repository.recordFailure("aaa", code = 0xf0, explanation = "No path to relay", timestamp = 200L)
+
+        val node = dao.findByHash("aaa")!!
+        assertEquals(0xf0, node.lastFailureCode)
+        assertEquals("No path to relay", node.lastFailureExplanation)
+        assertEquals(200L, node.lastFailureAt)
+    }
+
+    @Test
+    fun `clearFailure nulls all three columns`() = runTest {
+        repository.add("aaa", "ANY")
+        repository.recordFailure("aaa", code = 9, explanation = "No path to relay", timestamp = 5L)
+        repository.clearFailure("aaa")
+
+        val node = dao.findByHash("aaa")!!
+        assertNull(node.lastFailureCode)
+        assertNull(node.lastFailureExplanation)
+        assertNull(node.lastFailureAt)
+    }
+
+    @Test
+    fun `isCurrentlyUnreachable is true inside the cooldown window only`() = runTest {
+        repository.add("aaa", "ANY")
+        val base = dao.findByHash("aaa")!!
+
+        // Never failed → not unreachable.
+        assertFalse(repository.isCurrentlyUnreachable(base, nowMillis = 1000L, cooldownMillis = 600_000L))
+
+        repository.recordFailure("aaa", code = 9, explanation = "No path to relay", timestamp = 1000L)
+        val failed = dao.findByHash("aaa")!!
+
+        // Inside the window → unreachable.
+        assertTrue(repository.isCurrentlyUnreachable(failed, nowMillis = 1000L + 300_000L, cooldownMillis = 600_000L))
+        // Exactly at the window edge is still excluded.
+        assertTrue(repository.isCurrentlyUnreachable(failed, nowMillis = 1000L + 600_000L, cooldownMillis = 600_000L))
+        // Past the window → recovered (re-eligible).
+        assertFalse(repository.isCurrentlyUnreachable(failed, nowMillis = 1000L + 600_001L, cooldownMillis = 600_000L))
+    }
 }

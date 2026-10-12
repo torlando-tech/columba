@@ -93,4 +93,45 @@ class PreferredPropagationNodeRepository
         suspend fun setEnabled(destinationHash: String, enabled: Boolean) {
             dao.setEnabled(destinationHash, enabled)
         }
+
+        /**
+         * Record that a sync to [destinationHash] (as the active relay) failed. Stores the raw
+         * LXMF state [code], a human-readable [explanation], and [timestamp] so the UI can show
+         * *why* the node went unreachable and the selection policy can exclude it for the
+         * cooldown window. No-op for a hash that is not in the list.
+         */
+        suspend fun recordFailure(
+            destinationHash: String,
+            code: Int,
+            explanation: String,
+            timestamp: Long,
+        ) {
+            if (!dao.contains(destinationHash)) return
+            dao.recordLastFailure(destinationHash, code, explanation, timestamp)
+        }
+
+        /**
+         * Clear a node's recorded failure after a successful sync, so it is eligible for
+         * selection again. No-op for a hash that is not in the list.
+         */
+        suspend fun clearFailure(destinationHash: String) {
+            if (!dao.contains(destinationHash)) return
+            dao.clearLastFailure(destinationHash)
+        }
+
+        /**
+         * Whether a node's *most recent* recorded failure is still inside the unreachable
+         * cooldown window relative to [nowMillis]. This is the single source of truth for
+         * whether the selection policy should skip the node: a node is excluded only while a
+         * recent failure is on record, so a recovered relay (or a stale pre-cooldown failure)
+         * is never excluded forever. Null failure (never seen unreachable) → false.
+         */
+        fun isCurrentlyUnreachable(
+            node: PreferredPropagationNodeEntity,
+            nowMillis: Long,
+            cooldownMillis: Long,
+        ): Boolean {
+            val failedAt = node.lastFailureAt ?: return false
+            return (nowMillis - failedAt) in 0..cooldownMillis
+        }
     }

@@ -62,6 +62,34 @@ interface PreferredPropagationNodeDao {
     suspend fun count(): Int
 
     /**
+     * Record the most recent sync failure for a node while it was the active relay.
+     * Overwrites any prior failure record (a node is only ever excluded while its *most
+     * recent* failure is inside the cooldown window, so the latest event wins).
+     */
+    @Query(
+        "UPDATE preferred_propagation_nodes SET lastFailureCode = :lastFailureCode, " +
+            "lastFailureExplanation = :lastFailureExplanation, lastFailureAt = :lastFailureAt " +
+            "WHERE destinationHash = :destinationHash",
+    )
+    suspend fun recordLastFailure(
+        destinationHash: String,
+        lastFailureCode: Int,
+        lastFailureExplanation: String,
+        lastFailureAt: Long,
+    )
+
+    /**
+     * Clear a node's recorded failure (all three columns → null). Called after a successful
+     * sync to that relay so a recovered node is no longer excluded by the policy.
+     */
+    @Query(
+        "UPDATE preferred_propagation_nodes SET lastFailureCode = NULL, " +
+            "lastFailureExplanation = NULL, lastFailureAt = NULL " +
+            "WHERE destinationHash = :destinationHash",
+    )
+    suspend fun clearLastFailure(destinationHash: String)
+
+    /**
      * Atomically persist a new priority order. [destinationHashes] is the full new list
      * order (index = new priority). Wrapping all the priority writes in one transaction
      * means observers (the relay writer, the screen) only ever see the complete old order

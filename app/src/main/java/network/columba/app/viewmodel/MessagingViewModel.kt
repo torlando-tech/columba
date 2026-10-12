@@ -2598,8 +2598,8 @@ class MessagingViewModel
                     rnsLxmf.setIncomingMessageSizeLimit(newLimitKb)
                     Log.d(TAG, "Python layer updated with temporary size limit")
 
-                    // Trigger sync to fetch the file (silent = no toast)
-                    // Don't use keepSyncingState so isSyncing properly reflects sync completion/failure
+                    // Trigger sync to fetch the file (silent = no toast). isSyncing reflects the
+                    // sync completion/failure (reset by the shared sync engine on completion).
                     propagationNodeManager.triggerSync(silent = true)
                     Log.d(TAG, "Sync triggered to fetch pending file")
 

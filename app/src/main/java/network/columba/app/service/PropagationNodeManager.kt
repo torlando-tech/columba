@@ -229,6 +229,15 @@ class PropagationNodeManager
         // Timeout for sync operation (5 minutes for large transfers)
         private val syncTimeoutMs = 5 * 60 * 1000L
 
+        /**
+         * How long a preferred relay that LXMF just reported unreachable (no path / no link /
+         * failed) stays excluded from the selection policy before it is tried again. This is
+         * the loop-avoidance: a down relay is not retried every sync cycle, but is re-attempted
+         * once per cooldown (self-healing) — and immediately if a sync to it later succeeds
+         * ([clearRelayFailure]).
+         */
+        private val unreachableCooldownMs = 10 * 60 * 1000L
+
         private var syncJob: Job? = null
         private var settingsObserverJob: Job? = null
         private var propagationStateObserverJob: Job? = null
@@ -464,6 +473,9 @@ class PropagationNodeManager
                     timeoutJob.cancel()
                     _isSyncing.value = false
                     _syncProgress.value = SyncProgress.Idle
+                    // Record *why* the relay was unreachable so the writer fails over to the
+                    // next in the list (no-op when the relay is not a preferred node).
+                    recordRelayFailureIfUnreachable(state)
                     if (_isManualSync) {
                         _manualSyncResult.emit(SyncResult.Error("Sync failed: ${state.stateName}"))
                         _isManualSync = false
@@ -504,6 +516,11 @@ class PropagationNodeManager
                 _lastSyncTimestamp.value = timestamp
                 settingsRepository.saveLastSyncTimestamp(timestamp)
 
+                // A successful sync to the active relay is proof it is reachable again — clear
+                // any recorded failure so a previously-failing relay is re-eligible immediately
+                // instead of waiting out the unreachable cooldown. No-op for non-preferred relays.
+                clearRelayFailureOnSuccess()
+
                 // Emit result for UI only if manually triggered
                 if (_isManualSync) {
                     _manualSyncResult.emit(SyncResult.Success(messagesReceived))
@@ -531,12 +548,58 @@ class PropagationNodeManager
                 _isSyncing.value = false
                 _syncProgress.value = SyncProgress.Idle
 
+                // If the active relay is a *preferred* node and LXMF reported it unreachable,
+                // record *why* (code + explanation + timestamp) so the relay writer can fail
+                // over to the next in the list. This reuses an event LXMF already emitted — no
+                // new network activity.
+                recordRelayFailureIfUnreachable(state)
+
                 // Emit error for UI only if manually triggered
                 if (_isManualSync) {
                     _manualSyncResult.emit(SyncResult.Error(errorMsg, state.state))
                     _isManualSync = false
                 }
             }
+        }
+
+        /**
+         * Record *why* the active relay went unreachable, if that relay is a preferred node.
+         *
+         * Called from every failure terminal (the flow `handleSyncError`, the poll
+         * `handlePollResult`, and the initial-response `"failed"` branch) with the exact
+         * [PropagationState] LXMF emitted. It stores the raw state code, a human-readable
+         * explanation, and a timestamp on the preferred row, so the relay writer can exclude
+         * the node and fail over to the next in the list. No new network activity is created —
+         * this only classifies an event that already happened.
+         *
+         * No-op when [state] is not an unreachable failure, when there is no active relay, or
+         * when the active relay is not in the preferred list (legacy auto-selected relays have
+         * no preferred row to record on).
+         */
+        private suspend fun recordRelayFailureIfUnreachable(state: PropagationState) {
+            if (!PropagationFailureReason.isUnreachable(state)) return
+            val activeHash = currentRelay.value?.destinationHash ?: return
+            if (!preferredPropagationNodeRepository.contains(activeHash)) return
+            val reason = PropagationFailureReason.explanation(state)
+            Log.i(TAG, "Recording unreachable relay $activeHash: $reason (code ${state.state})")
+            preferredPropagationNodeRepository.recordFailure(
+                destinationHash = activeHash,
+                code = state.state,
+                explanation = reason,
+                timestamp = System.currentTimeMillis(),
+            )
+        }
+
+        /**
+         * Clear a preferred relay's recorded failure after a successful sync to it, so it is
+         * re-eligible for selection immediately rather than waiting out the cooldown. No-op for
+         * a non-preferred relay.
+         */
+        private suspend fun clearRelayFailureOnSuccess() {
+            val activeHash = currentRelay.value?.destinationHash ?: return
+            if (!preferredPropagationNodeRepository.contains(activeHash)) return
+            Log.d(TAG, "Clearing recorded failure for recovered relay $activeHash")
+            preferredPropagationNodeRepository.clearFailure(activeHash)
         }
 
         /**
@@ -596,10 +659,28 @@ class PropagationNodeManager
                         return@collect
                     }
                     preferredListActive = true
-                    val selection = PreferredNodePolicy.resolve(enabled.map { it.toPreferredNode() }, transport)
+                    // Exclude preferred relays LXMF recently reported unreachable (no path / no
+                    // link / failed) so a down relay fails over to the next in the list. The
+                    // set is derived purely from each node's most-recent recorded failure that
+                    // is still inside the cooldown window — no new network activity.
+                    val now = System.currentTimeMillis()
+                    val unreachableHashes =
+                        enabled
+                            .filter { preferredPropagationNodeRepository.isCurrentlyUnreachable(it, now, unreachableCooldownMs) }
+                            .map { it.destinationHash }
+                            .toSet()
+                    if (unreachableHashes.isNotEmpty()) {
+                        Log.i(TAG, "Preferred relay(s) currently unreachable, failing over: $unreachableHashes")
+                    }
+                    val selection = PreferredNodePolicy.resolve(
+                        enabled.map { it.toPreferredNode() },
+                        transport,
+                        unreachableHashes,
+                    )
                     when (selection) {
                         is PropagationNodeSelection.FromList -> applyPreferredRelay(selection.destinationHash)
-                        // Non-empty list but nothing matched the transport → legacy nearest.
+                        // Non-empty list but nothing matched the transport (or all are
+                        // unreachable) → legacy nearest.
                         PropagationNodeSelection.LegacyAuto -> selectBestRelay()
                     }
                 }
@@ -983,14 +1064,14 @@ class PropagationNodeManager
         }
 
         /**
-         * Sync messages from the propagation node (periodic/automatic sync).
-         * This requests any waiting messages from the configured propagation node.
+         * Periodic/automatic sync trigger. Runs the shared [executeSync] engine with the
+         * periodic profile: it is gated on RNS being READY (the periodic path may fire during
+         * shutdown) and resolves the relay from the current value rather than blocking on it.
+         * If no relay is configured and auto-select is enabled it selects one first (the
+         * fresh-install case) and defers to the next cycle.
          *
-         * If no relay is configured and auto-select is enabled, tries to select one first.
-         * This handles the fresh-install case where announces arrive after startup.
-         *
-         * The actual completion is handled by observePropagationStateChanges() which
-         * monitors LXMF propagation states.
+         * The completion/error bookkeeping lives entirely in the engine, so the periodic and
+         * manual triggers share one code path (see [executeSync]).
          */
         suspend fun syncWithPropagationNode() {
             // Don't sync if network is not ready (e.g., during shutdown)
@@ -1009,113 +1090,48 @@ class PropagationNodeManager
                 return // next sync cycle will use the newly selected relay
             }
 
-            // Don't start a new sync if one is already in progress
+            Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.destinationHash.take(16)}")
+            executeSync(manual = false)
+        }
+
+        /**
+         * Manual sync trigger (pull-to-refresh / explicit user action). Runs the shared
+         * [executeSync] engine with the manual profile: it waits (up to a short timeout) for
+         * the relay state to load, and emits a [SyncResult] to [manualSyncResult] for UI
+         * notification unless [silent].
+         *
+         * @param silent If true, does not emit to manualSyncResult (no toast shown)
+         */
+        suspend fun triggerSync(silent: Boolean = false) {
+            val relay = awaitRelayOrEmitError(silent) ?: return
+            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.destinationHash.take(16)} (silent=$silent)")
+            executeSync(manual = !silent)
+        }
+
+        /**
+         * The single sync engine shared by both the periodic ([syncWithPropagationNode]) and
+         * manual ([triggerSync]) triggers. The two triggers only differ in *how* they resolve
+         * the relay and whether a UI [SyncResult] is emitted — the request, timeout watchdog,
+         * and every completion/error bookkeeping path (including the unreachable-relay failure
+         * record and the recovery clear) live here exactly once.
+         *
+         * @param manual When true, [PropagationNodeManager._isManualSync] is set for this sync so
+         *   the terminal handlers emit a UI result; when false (periodic), no result is emitted
+         *   and completion is surfaced only through the progress/last-sync state.
+         */
+        private suspend fun executeSync(manual: Boolean) {
             if (_isSyncing.value) {
                 Log.d(TAG, "Sync already in progress, skipping")
                 return
             }
 
-            Log.d(TAG, "📡 Periodic sync with propagation node: ${relay.destinationHash.take(16)}")
             // Cancel any still-alive poll loop from a previous sync so it can't wake up
             // mid-delay and start observing this sync's _isSyncing flag.
             activePollJob?.cancel()
             activePollJob = null
             syncFinalized.set(false)
             _isSyncing.value = true
-            _syncProgress.value = SyncProgress.Starting
-
-            // Start timeout watchdog to prevent indefinite sync state
-            val timeoutJob =
-                scope.launch {
-                    kotlinx.coroutines.delay(syncTimeoutMs)
-                    if (_isSyncing.value) {
-                        Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
-                        // Finalize before clearing _isSyncing so an orphaned pollForSyncCompletion
-                        // loop can't race the next startSync and prematurely finish it.
-                        syncFinalized.set(true)
-                        _isSyncing.value = false
-                        _syncProgress.value = SyncProgress.Idle
-                    }
-                }
-
-            try {
-                val result = rnsLxmf.requestMessagesFromPropagationNode()
-                result
-                    .onSuccess { state ->
-                        Log.d(TAG, "Periodic sync initiated: state=${state.stateName}")
-                        when (state.stateName) {
-                            "complete" -> {
-                                timeoutJob.cancel()
-                                // Run completion bookkeeping so _lastSyncTimestamp is updated;
-                                // skipping this leaves the Settings "Last synced" display stale
-                                // forever whenever the initial response is already complete.
-                                handleSyncComplete(state.messagesReceived)
-                            }
-                            "failed" -> {
-                                timeoutJob.cancel()
-                                // Match the finalization discipline used everywhere else so a stale
-                                // propagationStateFlow "complete" can't later pass the CAS in
-                                // handleSyncComplete and consume the next sync's finalizer.
-                                syncFinalized.set(true)
-                                _isSyncing.value = false
-                                _syncProgress.value = SyncProgress.Idle
-                            }
-                            else -> {
-                                // Poll for completion (propagationStateFlow doesn't work on native path)
-                                activePollJob =
-                                    scope.launch {
-                                        pollForSyncCompletion(timeoutJob)
-                                    }
-                            }
-                        }
-                    }.onFailure { error ->
-                        Log.w(TAG, "Periodic sync request failed: ${error.message}")
-                        timeoutJob.cancel()
-                        syncFinalized.set(true)
-                        _isSyncing.value = false
-                        _syncProgress.value = SyncProgress.Idle
-                    }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error requesting messages from propagation node", e)
-                timeoutJob.cancel()
-                syncFinalized.set(true)
-                _isSyncing.value = false
-                _syncProgress.value = SyncProgress.Idle
-            }
-            // Note: _isSyncing is not reset on success - propagation state observer handles it
-        }
-
-        /**
-         * Manually trigger a sync with the propagation node.
-         * Useful for pull-to-refresh or when user explicitly wants to check for messages.
-         * Emits result to manualSyncResult SharedFlow for UI notification (unless silent).
-         *
-         * The actual completion is handled by observePropagationStateChanges() which
-         * monitors LXMF propagation states and emits success/error when complete.
-         *
-         * @param silent If true, does not emit to manualSyncResult (no toast shown)
-         * @param keepSyncingState If true, does not reset isSyncing to false when done
-         *        (caller is responsible for calling setSyncingState(false) later)
-         */
-        suspend fun triggerSync(
-            silent: Boolean = false,
-            keepSyncingState: Boolean = false,
-        ) {
-            val relay = awaitRelayOrEmitError(silent) ?: return
-
-            if (_isSyncing.value) {
-                Log.d(TAG, "Sync already in progress, skipping manual trigger")
-                return
-            }
-
-            Log.d(TAG, "📡 Manual sync with propagation node: ${relay.destinationHash.take(16)} (silent=$silent)")
-            // Cancel any still-alive poll loop from a previous sync so it can't wake up
-            // mid-delay and start observing this sync's _isSyncing flag.
-            activePollJob?.cancel()
-            activePollJob = null
-            syncFinalized.set(false)
-            _isSyncing.value = true
-            _isManualSync = !silent
+            _isManualSync = manual
             _syncProgress.value = SyncProgress.Starting
 
             val timeoutJob = launchSyncTimeoutWatchdog()
@@ -1124,14 +1140,14 @@ class PropagationNodeManager
                 val result = rnsLxmf.requestMessagesFromPropagationNode()
                 result
                     .onSuccess { propState ->
-                        handleSyncRequestSuccess(propState, timeoutJob, keepSyncingState)
+                        handleSyncRequestSuccess(propState, timeoutJob)
                     }.onFailure { error ->
-                        Log.w(TAG, "Manual sync request failed: ${error.message}")
-                        resetSyncOnFailure(timeoutJob, keepSyncingState, error.message ?: "Unknown error")
+                        Log.w(TAG, "Sync request failed: ${error.message}")
+                        resetSyncOnFailure(timeoutJob, error.message ?: "Unknown error")
                     }
             } catch (e: Exception) {
-                Log.e(TAG, "Error during manual sync", e)
-                resetSyncOnFailure(timeoutJob, keepSyncingState, e.message ?: "Unknown error")
+                Log.e(TAG, "Error during sync", e)
+                resetSyncOnFailure(timeoutJob, e.message ?: "Unknown error")
             }
         }
 
@@ -1161,7 +1177,7 @@ class PropagationNodeManager
                 if (_isSyncing.value) {
                     Log.w(TAG, "Sync timed out after ${syncTimeoutMs / 1000} seconds")
                     // Finalize before clearing _isSyncing so an orphaned pollForSyncCompletion
-                    // loop can't race the next startSync, observe the new sync's _isSyncing=true,
+                    // loop can't race the next sync, observe the new sync's _isSyncing=true,
                     // call handleSyncComplete, and prematurely finish the new sync.
                     syncFinalized.set(true)
                     _isSyncing.value = false
@@ -1176,13 +1192,13 @@ class PropagationNodeManager
         private suspend fun handleSyncRequestSuccess(
             propState: PropagationState,
             timeoutJob: Job,
-            keepSyncingState: Boolean,
         ) {
-            Log.d(TAG, "Manual sync initiated: state=${propState.stateName}")
+            Log.d(TAG, "Sync initiated: state=${propState.stateName}")
             when (propState.stateName) {
                 "complete" -> {
                     timeoutJob.cancel()
-                    // Run completion bookkeeping (updates _lastSyncTimestamp, emits success
+                    // Run completion bookkeeping (updates _lastSyncTimestamp, clears a
+                    // recorded failure so a recovered relay is re-eligible, and emits success
                     // to _manualSyncResult when appropriate). Clearing _isSyncing without
                     // calling this left the "Last synced" display stale on instant-complete.
                     handleSyncComplete(propState.messagesReceived)
@@ -1193,10 +1209,11 @@ class PropagationNodeManager
                     // propagationStateFlow "complete" can't later pass the CAS in
                     // handleSyncComplete and consume the next sync's finalizer.
                     syncFinalized.set(true)
-                    if (!keepSyncingState) {
-                        _isSyncing.value = false
-                        _syncProgress.value = SyncProgress.Idle
-                    }
+                    _isSyncing.value = false
+                    _syncProgress.value = SyncProgress.Idle
+                    // Record *why* the relay was unreachable so the writer fails over to the
+                    // next in the list (no-op when the relay is not a preferred node).
+                    recordRelayFailureIfUnreachable(propState)
                     if (_isManualSync) {
                         _manualSyncResult.emit(SyncResult.Error("Propagation node not reachable"))
                         _isManualSync = false
@@ -1213,26 +1230,15 @@ class PropagationNodeManager
 
         private suspend fun resetSyncOnFailure(
             timeoutJob: Job,
-            keepSyncingState: Boolean,
             errorMessage: String,
         ) {
             timeoutJob.cancel()
             syncFinalized.set(true)
-            if (!keepSyncingState) {
-                _isSyncing.value = false
-                _syncProgress.value = SyncProgress.Idle
-            }
+            _isSyncing.value = false
+            _syncProgress.value = SyncProgress.Idle
             if (_isManualSync) {
                 _manualSyncResult.emit(SyncResult.Error(errorMessage))
                 _isManualSync = false
             }
-        }
-
-        /**
-         * Manually set the syncing state.
-         * Used by callers that use keepSyncingState=true to reset the state when done.
-         */
-        fun setSyncingState(syncing: Boolean) {
-            _isSyncing.value = syncing
         }
     }

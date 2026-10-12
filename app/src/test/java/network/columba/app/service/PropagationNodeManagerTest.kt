@@ -1764,6 +1764,58 @@ class PropagationNodeManagerTest {
         }
 
     @Test
+    fun `sync attributes an in-flight failure to the relay that started the sync, not the current relay`() =
+        runTest {
+            // Relay B starts the sync; before it completes the active relay switches to A.
+            // The failure must be recorded on B (the relay that synced), not A.
+            val bHash = testDestHash
+            val aHash = testDestHash2
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            coEvery { preferredRepository.contains(bHash) } returns true
+            coEvery { preferredRepository.contains(aHash) } returns false
+
+            manager.start()
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // The sync is held in flight until we release it (the initial response is a
+            // no-path failure, so it records a failure on completion).
+            val syncCompletion = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } coAnswers {
+                syncCompletion.await()
+                Result.success(PropagationState(state = 0xf0, stateName = "failed", progress = 0f, messagesReceived = 0))
+            }
+
+            val syncJob = async { manager.triggerSync(silent = true) }
+            // The sync starts and captures activeSyncRelayHash = B (the current relay now).
+            runCurrent()
+            assert(manager.isSyncing.value) { "sync should be in flight" }
+
+            // Mid-sync: the active relay switches B -> A (as the recheck timer / a transport
+            // flip would do). currentRelay now resolves to A.
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            runCurrent()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            // Release the sync; it completes with B's failure.
+            syncCompletion.complete(Unit)
+            syncJob.join()
+            runCurrent()
+
+            // The failure is attributed to B (the relay that started the sync), not A.
+            coVerify(exactly = 1) { preferredRepository.recordFailure(eq(bHash), any(), any(), any()) }
+            coVerify(exactly = 0) { preferredRepository.recordFailure(eq(aHash), any(), any(), any()) }
+            manager.stop()
+        }
+
+    @Test
     fun `sync does not record a failure for a non-preferred relay`() =
         runTest {
             // Active relay is NOT in the preferred list (legacy auto-selected) — no row to record on.

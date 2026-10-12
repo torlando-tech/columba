@@ -267,6 +267,16 @@ class PropagationNodeManager
         private var preferredListActive = false
 
         /**
+         * The destination hash of the relay that *started* the in-flight sync, captured at
+         * [executeSync] start. The sync's failure/success terminals must record/clear that
+         * relay's state, not whatever [currentRelay] happens to be when the terminal fires:
+         * the recheck timer (or a transport flip) can switch the active relay mid-sync, in
+         * which case keying off [currentRelay] would attribute B's failure to A. Null when no
+         * sync is in flight.
+         */
+        private var activeSyncRelayHash: String? = null
+
+        /**
          * Recheck token for the preferred-list writer. The writer's `combine(enabled,
          * transport, recheck)` re-evaluates when the saved list, the transport, OR this token
          * changes. A relay marked unreachable (and thus skipped) recovers when its failure's
@@ -602,7 +612,9 @@ class PropagationNodeManager
          */
         private suspend fun recordRelayFailureIfUnreachable(state: PropagationState) {
             if (!PropagationFailureReason.isUnreachable(state)) return
-            val activeHash = currentRelay.value?.destinationHash ?: return
+            // Key off the relay that started the sync, not currentRelay (which may have been
+            // switched mid-sync) — otherwise a failure on B could be recorded against A.
+            val activeHash = activeSyncRelayHash ?: return
             if (!preferredPropagationNodeRepository.contains(activeHash)) return
             val reason = PropagationFailureReason.explanation(state)
             Log.i(TAG, "Recording unreachable relay $activeHash: $reason (code ${state.state})")
@@ -620,7 +632,7 @@ class PropagationNodeManager
          * a non-preferred relay.
          */
         private suspend fun clearRelayFailureOnSuccess() {
-            val activeHash = currentRelay.value?.destinationHash ?: return
+            val activeHash = activeSyncRelayHash ?: return
             if (!preferredPropagationNodeRepository.contains(activeHash)) return
             Log.d(TAG, "Clearing recorded failure for recovered relay $activeHash")
             preferredPropagationNodeRepository.clearFailure(activeHash)
@@ -1211,6 +1223,10 @@ class PropagationNodeManager
             _isSyncing.value = true
             _isManualSync = manual
             _syncProgress.value = SyncProgress.Starting
+            // Capture the relay that starts this sync. The failure/success terminals key off
+            // this (not currentRelay, which can be switched mid-sync by the recheck timer or a
+            // transport flip) so a failure is attributed to the relay that actually synced.
+            activeSyncRelayHash = currentRelay.value?.destinationHash
 
             val timeoutJob = launchSyncTimeoutWatchdog()
 

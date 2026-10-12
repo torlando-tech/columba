@@ -1879,6 +1879,62 @@ class PropagationNodeManagerTest {
         }
 
     @Test
+    fun `sync attributes an in-flight success to the relay that started the sync, not the current relay`() =
+        runTest {
+            // Relay B starts the sync; before it completes the active relay switches to A.
+            // The recovery clear must target B (the relay that synced), not A — the success
+            // terminal captures the starting hash before it opens the sync gate, so the
+            // mid-sync switch (and the saveLastSyncTimestamp suspension) can't redirect it.
+            val bHash = testDestHash
+            val aHash = testDestHash2
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            coEvery { preferredRepository.contains(bHash) } returns true
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.clearFailure(bHash) } just Runs
+            coEvery { preferredRepository.clearFailure(aHash) } just Runs
+
+            manager.start()
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // The sync is held in flight until we release it (the initial response is a
+            // "complete" state, so it clears a failure on completion).
+            val syncCompletion = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } coAnswers {
+                syncCompletion.await()
+                Result.success(PropagationState(state = 7, stateName = "complete", progress = 1f, messagesReceived = 2))
+            }
+
+            val syncJob = async { manager.triggerSync(silent = true) }
+            // The sync starts and captures activeSyncRelayHash = B (the current relay now).
+            runCurrent()
+            assert(manager.isSyncing.value) { "sync should be in flight" }
+
+            // Mid-sync: the active relay switches B -> A (as the recheck timer / a transport
+            // flip would do). currentRelay now resolves to A.
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            runCurrent()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            // Release the sync; it completes with B's success.
+            syncCompletion.complete(Unit)
+            syncJob.join()
+            runCurrent()
+
+            // The recovery clear is attributed to B (the relay that started the sync), not A.
+            coVerify(exactly = 1) { preferredRepository.clearFailure(eq(bHash)) }
+            coVerify(exactly = 0) { preferredRepository.clearFailure(eq(aHash)) }
+            manager.stop()
+        }
+
+    @Test
     fun `triggerSync - updates lastSyncTimestamp on success`() =
         runTest {
             // Given: Relay is configured

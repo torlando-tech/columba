@@ -524,6 +524,12 @@ class PropagationNodeManager
          */
         private suspend fun handleSyncComplete(messagesReceived: Int) {
             if (!syncFinalized.compareAndSet(false, true)) return
+            // Capture the relay that started this sync *before* we open the sync gate below
+            // (_isSyncing = false). Once the gate is open a concurrent executeSync may start and
+            // overwrite the shared activeSyncRelayHash var, and the saveLastSyncTimestamp write
+            // suspends in the meantime — so the recovery clear must key off this local, not the
+            // live var, or it could clear a different relay's recorded failure.
+            val activeHash = activeSyncRelayHash
             if (_isSyncing.value) {
                 Log.d(TAG, "Sync complete: $messagesReceived messages received (manual=$_isManualSync)")
                 _isSyncing.value = false
@@ -552,8 +558,11 @@ class PropagationNodeManager
 
                 // A successful sync to the active relay is proof it is reachable again — clear
                 // any recorded failure so a previously-failing relay is re-eligible immediately
-                // instead of waiting out the unreachable cooldown. No-op for non-preferred relays.
-                clearRelayFailureOnSuccess()
+                // instead of waiting out the unreachable cooldown. Keyed off the hash captured at
+                // the top of this handler (not the live var), so a mid-sync relay switch or a
+                // concurrent sync can't make us clear a different relay's failure. No-op for
+                // non-preferred relays.
+                clearRelayFailureOnSuccess(activeHash)
 
                 // Emit result for UI only if manually triggered
                 if (_isManualSync) {
@@ -630,9 +639,13 @@ class PropagationNodeManager
          * Clear a preferred relay's recorded failure after a successful sync to it, so it is
          * re-eligible for selection immediately rather than waiting out the cooldown. No-op for
          * a non-preferred relay.
+         *
+         * @param destinationHash The relay that started the (now-completed) sync, captured by the
+         *   caller before the sync gate opened — so a mid-sync relay switch or a concurrent sync
+         *   can't redirect the clear to a different relay.
          */
-        private suspend fun clearRelayFailureOnSuccess() {
-            val activeHash = activeSyncRelayHash ?: return
+        private suspend fun clearRelayFailureOnSuccess(destinationHash: String?) {
+            val activeHash = destinationHash ?: return
             if (!preferredPropagationNodeRepository.contains(activeHash)) return
             Log.d(TAG, "Clearing recorded failure for recovered relay $activeHash")
             preferredPropagationNodeRepository.clearFailure(activeHash)

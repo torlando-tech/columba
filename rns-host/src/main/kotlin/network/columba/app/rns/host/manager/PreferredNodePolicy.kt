@@ -35,23 +35,22 @@ sealed class PropagationNodeSelection {
 /**
  * Pure selection policy for the prioritized preferred-propagation-node list.
  *
- * This is a *selection* problem, not a concurrency one: the LXMF router holds a single
- * outbound propagation node, so exactly one list entry becomes active at a time. The
- * wifi/cellular layer ("layer the wifi/cellular on top of the list") is implemented as a
- * two-pass ladder over the user's priority order:
+ * The user's priority ordering is the primary axis: the wifi/cellular reachability check is
+ * a single pass over the list in priority order, and `ANY` is reachable on every transport, so
+ * a higher-ranked `ANY` always beats a lower-ranked transport-specific node.
  *
- *  1. **Transport-specific, priority order** — the highest-priority node whose restriction
- *     matches the current transport ([NetworkRestriction.WIFI_ONLY] on
- *     [CurrentTransport.WIFI_LIKE], [NetworkRestriction.CELLULAR_ONLY] on
- *     [CurrentTransport.CELLULAR]). A generic `ANY` node ranked above a transport-specific
- *     node does NOT win here — the transport-specific layer sits on top of the ordering.
- *  2. **`ANY`, priority order** — if no transport-specific node applies, the highest-priority
- *     `ANY` node. `ANY` is the in-list universal fallback: it matches every transport
- *     including [CurrentTransport.NONE], so a brief network blip does not flap the router's
- *     destination.
- *  3. **Legacy** — if neither applies (e.g. the list is empty, or it contains only
- *     transport-specific nodes that don't match), fall back to the existing
- *     nearest-by-hops auto-selection.
+ *  1. **Highest-priority reachable node, priority order** — walk the list in priority order
+ *     and return the first node whose restriction is reachable on the current transport.
+ *     [NetworkRestriction.WIFI_ONLY] is reachable only on [CurrentTransport.WIFI_LIKE],
+ *     [NetworkRestriction.CELLULAR_ONLY] only on [CurrentTransport.CELLULAR], and
+ *     [NetworkRestriction.ANY] on every transport. Because the walk is strictly by priority,
+ *     a higher-ranked `ANY` beats a lower-ranked transport-specific node: priority-1 `ANY`
+ *     plus priority-2 `WIFI_ONLY` on wifi resolves to the `ANY` node. `ANY` also matches
+ *     [CurrentTransport.NONE] and [CurrentTransport.UNKNOWN], so it is the in-list universal
+ *     fallback and a brief network blip does not flap the router's destination.
+ *  2. **Legacy** — if no node is reachable on the current transport (e.g. the list is empty,
+ *     or it contains only transport-specific nodes that don't match), fall back to the
+ *     existing nearest-by-hops auto-selection.
  *
  * Deliberately independent of [InterfaceTransportFilter.passesTransport]: that truth table
  * disables ALL IP interfaces on [CurrentTransport.NONE] (a blip drops every IP interface).
@@ -67,29 +66,27 @@ object PreferredNodePolicy {
         nodes: List<PreferredNode>,
         currentTransport: CurrentTransport,
     ): PropagationNodeSelection {
-        // Pass 1: transport-specific, priority order. `ANY` is excluded here so it cannot
-        // shadow a lower-ranked but transport-matched node.
-        val transportSpecific = nodes.firstOrNull { it.restriction matchesTransport currentTransport }
-        if (transportSpecific != null) {
-            return PropagationNodeSelection.FromList(transportSpecific.destinationHash)
+        // Single pass in priority order: the first node reachable on the current transport
+        // wins. `ANY` is reachable on every transport, so a higher-ranked `ANY` beats a
+        // lower-ranked transport-specific node (the user's ordering is the primary axis).
+        val reachable = nodes.firstOrNull { it.restriction reachableOn currentTransport }
+        if (reachable != null) {
+            return PropagationNodeSelection.FromList(reachable.destinationHash)
         }
-        // Pass 2: the universal in-list fallback.
-        val any = nodes.firstOrNull { it.restriction == NetworkRestriction.ANY }
-        if (any != null) {
-            return PropagationNodeSelection.FromList(any.destinationHash)
-        }
-        // Pass 3: nothing applied — fall back to nearest-by-hops auto-selection.
+        // No node is reachable on this transport — fall back to nearest-by-hops auto-selection.
         return PropagationNodeSelection.LegacyAuto
     }
 
     /**
-     * Whether a transport-specific [NetworkRestriction] matches [transport]. `ANY` is
-     * intentionally `false` here — it is the pass-2 catch-all, not a transport match.
+     * Whether [NetworkRestriction] is reachable on [transport]. `ANY` is reachable on every
+     * transport (it is the in-list universal fallback, so a no-network blip keeps the relay
+     * stable instead of flapping to nearest-by-hops). `WIFI_ONLY`/`CELLULAR_ONLY` are
+     * reachable only on their matching transport.
      */
-    private infix fun NetworkRestriction.matchesTransport(transport: CurrentTransport): Boolean =
+    private infix fun NetworkRestriction.reachableOn(transport: CurrentTransport): Boolean =
         when (this) {
             NetworkRestriction.WIFI_ONLY -> transport == CurrentTransport.WIFI_LIKE
             NetworkRestriction.CELLULAR_ONLY -> transport == CurrentTransport.CELLULAR
-            NetworkRestriction.ANY -> false
+            NetworkRestriction.ANY -> true
         }
 }

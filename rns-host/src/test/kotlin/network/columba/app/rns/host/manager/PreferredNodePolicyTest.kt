@@ -42,19 +42,22 @@ class PreferredNodePolicyTest {
     }
 
     @Test
-    fun `transport-specific node beats a higher-ranked any node`() {
-        // The wifi/cellular layer sits ON TOP of the user's ordering.
+    fun `higher-ranked any beats a lower-ranked transport-specific node`() {
+        // Priority is the primary axis: a higher-ranked ANY is reachable on wifi and wins,
+        // so it beats the lower-ranked WIFI_ONLY node on wifi (the user's reported case).
         val list = listOf(PreferredNode("a", nAny), PreferredNode("w", nWifi))
-        assertEquals(PropagationNodeSelection.FromList("w"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE))
-        // ...but on a non-matching transport the ANY node is the fallback.
+        assertEquals(PropagationNodeSelection.FromList("a"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE))
+        // ...and ANY also wins on a transport the WIFI_ONLY node does not match.
         assertEquals(PropagationNodeSelection.FromList("a"), PreferredNodePolicy.resolve(list, CurrentTransport.CELLULAR))
     }
 
     @Test
-    fun `any node is preferred over a lower-ranked non-matching transport-specific node`() {
-        // On cellular, a WIFI_ONLY node does not apply; the lower-ranked ANY is the fallback.
+    fun `lower-ranked any is the fallback when a higher-ranked node does not match`() {
+        // WIFI_ONLY@1 is not reachable on cellular, so the walk continues to ANY@2.
         val list = listOf(PreferredNode("w", nWifi), PreferredNode("a", nAny))
         assertEquals(PropagationNodeSelection.FromList("a"), PreferredNodePolicy.resolve(list, CurrentTransport.CELLULAR))
+        // ...but on wifi the higher-ranked WIFI_ONLY node wins.
+        assertEquals(PropagationNodeSelection.FromList("w"), PreferredNodePolicy.resolve(list, CurrentTransport.WIFI_LIKE))
     }
 
     @Test

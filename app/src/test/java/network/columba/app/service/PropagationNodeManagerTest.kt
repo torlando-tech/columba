@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -46,6 +47,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -68,6 +73,10 @@ class PropagationNodeManagerTest {
     private val testDispatcher = StandardTestDispatcher()
     private val testScheduler get() = testDispatcher.scheduler
     private lateinit var testScope: TestScope
+    // Clock the manager uses for "now" + the recheck delay. Tied to the test scheduler so a
+    // single advanceTimeBy(ms) both ages out a recorded failure (now() moves) AND fires the
+    // scheduled recheck delay — keeping the manager's time and the coroutine clock consistent.
+    private val clock = MutableTestClock()
 
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var contactRepository: ContactRepository
@@ -92,6 +101,8 @@ class PropagationNodeManagerTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         testScope = TestScope(testDispatcher)
+        // The clock the manager sees advances in lockstep with the test scheduler.
+        clock.scheduler = testDispatcher.scheduler
 
         settingsRepository = mockk()
         contactRepository = mockk()
@@ -184,6 +195,7 @@ class PropagationNodeManagerTest {
                 transportObserver = transportObserver,
                 scope = testScope.backgroundScope,
                 defaultDispatcher = testDispatcher,
+                timeProvider = clock,
             )
     }
 
@@ -1717,6 +1729,9 @@ class PropagationNodeManagerTest {
             myRelayFlow.value =
                 TestFactories.createContactEntity(destinationHash = testDestHash, isMyRelay = true)
             coEvery { preferredRepository.contains(testDestHash) } returns true
+            // Move the virtual clock forward so the recorded failure timestamp (nowMs()) is a
+            // positive epoch value, as asserted below.
+            clock.advance(1_000_000)
 
             manager.start()
             manager.currentRelayState.test(timeout = 5.seconds) {
@@ -2802,6 +2817,76 @@ class PropagationNodeManagerTest {
         }
 
     @Test
+    fun `writer - legacy fallback does not re-pick the unreachable preferred relay`() =
+        runTest {
+            // The only preferred node is ALSO the nearest announce. When it is marked
+            // unreachable, the legacy nearest fallback must NOT re-select it (that would bypass
+            // the cooldown); with nothing else available the relay stays unselected.
+            val anyHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(anyHash, "ANY").copy(lastFailureAt = 42L))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } returns true
+            // The nearest announce is the very preferred node we just marked unreachable.
+            val announce = TestFactories.createAnnounce(destinationHash = anyHash, hops = 1)
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // The excluded preferred relay is not selected by the fallback either, and with it
+            // the only candidate there is nothing to select — so no relay is set at all.
+            assertNull(myRelayFlow.value)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(anyHash, clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - recovered preferred relay is retried once its failure cooldown elapses`() =
+        runTest {
+            // Higher-priority relay A has a failure inside the cooldown; B is healthy. The
+            // writer fails over to B. When A's cooldown elapses the writer must re-evaluate and
+            // re-select A — even though the list and transport never change in the meantime.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            // A's failure was recorded at virtual time T0 = 1_000_000 ms; the clock baseline is
+            // moved to T0 so the failure is "just now" (age 0 → inside the cooldown window).
+            val aFailedAt = 1_000_000L
+            // Move the clock's baseline to the failure time so "now" starts there; the failure
+            // is then in the past (age 0 → inside the cooldown window).
+            clock.advance(aFailedAt)
+            preferredListFlow.value = listOf(
+                preferredNode(aHash, "ANY").copy(lastFailureAt = aFailedAt),
+                preferredNode(bHash, "ANY"),
+            )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+            // A is unreachable while now < aFailedAt + cooldown; B never is.
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } answers {
+                val node = firstArg<PreferredPropagationNodeEntity>()
+                val now = secondArg<Long>()
+                node.destinationHash == aHash && (now - node.lastFailureAt!!) in 0..(600_000L)
+            }
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // While A is still inside its cooldown, the active relay is the healthy B.
+            assertEquals(bHash, myRelayFlow.value?.destinationHash)
+
+            // Advance virtual time past A's failure + cooldown. The scheduled recheck fires,
+            // the writer re-evaluates with A now re-eligible, and re-selects the higher-priority A.
+            advanceTimeBy(aFailedAt + 600_001L)
+            flushRelayUntilStable()
+
+            // A's cooldown has elapsed and it is re-selected ahead of B.
+            assertEquals(aHash, myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+    @Test
     fun `writer - transport-incompatible node is not affected by an unrelated unreachable hash`() =
         runTest {
             // The unreachable hash is not even in the list; resolution is unchanged.
@@ -3007,4 +3092,37 @@ class PropagationNodeManagerTest {
             coVerify(exactly = 0) { contactRepository.hasContact(any()) }
         }
 
+}
+
+/**
+ * A [Clock] whose "now" tracks a coroutine-test [TestCoroutineScheduler]. The manager is built
+ * with this so that, inside `runTest`, `nowMs()` reflects exactly the virtual time the test has
+ * advanced. This keeps the manager's failure-age computation and the recheck `delay` on the same
+ * clock: a single `scheduler.advanceTimeBy(ms)` both ages out a recorded failure AND fires the
+ * pending recheck, without ever using `advanceUntilIdle` (which OOMs the periodic-sync loop).
+ *
+ * `startAtMillis` is epoch 0 so test failure timestamps (small longs) are already in the future
+ * of the clock's start and age forward cleanly.
+ */
+@OptIn(ExperimentalCoroutinesApi::class) // TestCoroutineScheduler is a test-only experimental API.
+private class MutableTestClock(startAtMillis: Long = 0L) : Clock() {
+    var scheduler: TestCoroutineScheduler? = null
+    private var offsetMillis: Long = startAtMillis
+
+    fun advance(ms: Long) {
+        offsetMillis += ms
+    }
+
+    override fun getZone(): ZoneId = ZoneOffset.UTC
+
+    override fun withZone(zone: ZoneId): Clock = this
+
+    override fun instant(): Instant {
+        val s = scheduler
+        return if (s != null) {
+            Instant.ofEpochMilli(offsetMillis + s.currentTime)
+        } else {
+            Instant.ofEpochMilli(offsetMillis)
+        }
+    }
 }

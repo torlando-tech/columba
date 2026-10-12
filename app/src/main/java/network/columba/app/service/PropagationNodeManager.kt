@@ -20,6 +20,7 @@ import network.columba.app.rns.host.manager.PreferredNodePolicy
 import network.columba.app.rns.host.manager.PropagationNodeSelection
 import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.util.HexUtils.toHexString
+import java.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -121,6 +122,7 @@ sealed class RelayLoadState {
 @Suppress("TooManyFunctions") // Relay lifecycle inherently needs many operations
 class PropagationNodeManager
     @Inject
+    @Suppress("LongParameterList") // Hilt DI: one injected collaborator per parameter; time-based logic is clock-injected for testability.
     constructor(
         private val settingsRepository: SettingsRepository,
         private val contactRepository: ContactRepository,
@@ -131,10 +133,14 @@ class PropagationNodeManager
         private val transportObserver: InterfaceTransportObserver,
         @ApplicationScope private val scope: CoroutineScope,
         @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
+        private val timeProvider: Clock = Clock.systemUTC(),
     ) {
         companion object {
             private const val TAG = "PropagationNodeManager"
         }
+
+        /** Epoch millis now, via the injectable clock (defaults to real time). */
+        private fun nowMs(): Long = timeProvider.millis()
 
         /**
          * Build RelayInfo from a contact entity and auto-select setting.
@@ -259,6 +265,24 @@ class PropagationNodeManager
         // startup one-shot already ran and the periodic auto-select only fires when
         // currentRelay is null, so without this the removed node would stay selected.
         private var preferredListActive = false
+
+        /**
+         * Recheck token for the preferred-list writer. The writer's `combine(enabled,
+         * transport, recheck)` re-evaluates when the saved list, the transport, OR this token
+         * changes. A relay marked unreachable (and thus skipped) recovers when its failure's
+         * cooldown elapses — but that writes nothing to the DB, so neither the list nor the
+         * transport changes and the writer would never re-evaluate, leaving the user on a
+         * lower-priority relay forever. [schedulePreferredRelayRecheck] bumps this token
+         * (a new value each time, so [distinctUntilChanged] lets it through) exactly when the
+         * soonest-excluded relay's cooldown is about to expire; the writer then re-evaluates
+         * with the current list + transport and re-picks the recovered relay.
+         *
+         * [kotlinx.coroutines.flow.MutableStateFlow] (not a SharedFlow) so [combine] receives
+         * an initial value at subscription and the writer emits its first triple immediately.
+         */
+        private val preferredRelayRecheck = MutableStateFlow(0L)
+
+        private var recheckJob: Job? = null
 
         /**
          * Initialize the manager - start observing database for relay changes.
@@ -586,7 +610,7 @@ class PropagationNodeManager
                 destinationHash = activeHash,
                 code = state.state,
                 explanation = reason,
-                timestamp = System.currentTimeMillis(),
+                timestamp = nowMs(),
             )
         }
 
@@ -609,6 +633,8 @@ class PropagationNodeManager
             Log.d(TAG, "Stopping PropagationNodeManager")
             relayObserverJob?.cancel()
             preferredObserverJob?.cancel()
+            recheckJob?.cancel()
+            recheckJob = null
             syncJob?.cancel()
             settingsObserverJob?.cancel()
             propagationStateObserverJob?.cancel()
@@ -641,7 +667,14 @@ class PropagationNodeManager
             preferredPropagationNodeRepository
                 .observeEnabled()
                 .combine(transportObserver.currentTransport) { enabled, transport -> enabled to transport }
+                // Dedupe on the (list, transport) pair so a redundant re-emission of an
+                // unchanged pair does not re-run the policy.
                 .distinctUntilChanged()
+                // The recheck token is the third source, combined AFTER the dedup on purpose:
+                // a token bump (a recovered relay's cooldown about to expire) re-emits the
+                // current pair even though the list and transport have not changed, which
+                // forces a re-evaluation that the dedup above would otherwise swallow.
+                .combine(preferredRelayRecheck) { enabledTransport, _ -> enabledTransport }
                 .collect { (enabled, transport) ->
                     if (enabled.isEmpty()) {
                         // Empty list = legacy mode: the startup one-shot + periodic
@@ -651,6 +684,8 @@ class PropagationNodeManager
                         // active under ordered mode would stay selected, because the
                         // startup one-shot already ran and the periodic auto-select only
                         // fires when currentRelay is null.
+                        recheckJob?.cancel()
+                        recheckJob = null
                         if (preferredListActive) {
                             Log.i(TAG, "Preferred list emptied — re-resolving to legacy auto-select")
                             selectBestRelay()
@@ -663,15 +698,20 @@ class PropagationNodeManager
                     // link / failed) so a down relay fails over to the next in the list. The
                     // set is derived purely from each node's most-recent recorded failure that
                     // is still inside the cooldown window — no new network activity.
-                    val now = System.currentTimeMillis()
-                    val unreachableHashes =
-                        enabled
-                            .filter { preferredPropagationNodeRepository.isCurrentlyUnreachable(it, now, unreachableCooldownMs) }
-                            .map { it.destinationHash }
-                            .toSet()
+                    val now = nowMs()
+                    val excluded =
+                        enabled.filter {
+                            preferredPropagationNodeRepository.isCurrentlyUnreachable(it, now, unreachableCooldownMs)
+                        }
+                    val unreachableHashes = excluded.map { it.destinationHash }.toSet()
                     if (unreachableHashes.isNotEmpty()) {
                         Log.i(TAG, "Preferred relay(s) currently unreachable, failing over: $unreachableHashes")
                     }
+                    // A relay that recovers only when its failure's cooldown ages out writes
+                    // nothing to the DB, so the combine above would never re-fire and the user
+                    // would stay on a lower-priority relay forever. Schedule a re-evaluation for
+                    // the moment the soonest-excluded relay's cooldown expires.
+                    schedulePreferredRelayRecheck(now, excluded)
                     val selection = PreferredNodePolicy.resolve(
                         enabled.map { it.toPreferredNode() },
                         transport,
@@ -680,9 +720,45 @@ class PropagationNodeManager
                     when (selection) {
                         is PropagationNodeSelection.FromList -> applyPreferredRelay(selection.destinationHash)
                         // Non-empty list but nothing matched the transport (or all are
-                        // unreachable) → legacy nearest.
-                        PropagationNodeSelection.LegacyAuto -> selectBestRelay()
+                        // unreachable) → legacy nearest. Pass the excluded set through so the
+                        // nearest-by-hops fallback can't immediately re-pick the relay we just
+                        // marked unreachable (that would bypass the cooldown).
+                        PropagationNodeSelection.LegacyAuto -> selectBestRelay(excludeHashes = unreachableHashes)
                     }
+                }
+        }
+
+        /**
+         * Schedule a single writer recheck for when the soonest-excluded preferred relay's
+         * failure cooldown is about to expire, so a recovered relay is retried. The writer's
+         * [observePreferredNodes] combine re-fires only when the list, transport, or the
+         * recheck token changes; a failure aging out changes none of the first two (no DB
+         * write), so without this the user stays on a lower-priority relay indefinitely.
+         *
+         * Cancels any in-flight schedule first, so only the soonest pending expiry is kept.
+         * No-op when nothing is currently excluded (nothing to retry).
+         */
+        private fun schedulePreferredRelayRecheck(nowMs: Long, excluded: List<PreferredPropagationNodeEntity>) {
+            recheckJob?.cancel()
+            recheckJob = null
+            // Re-eligible one millisecond past the (half-open) cooldown window, matching
+            // [PreferredPropagationNodeRepository.isCurrentlyUnreachable]'s `0..cooldown` test.
+            val soonestExpiry =
+                excluded
+                    .mapNotNull { it.lastFailureAt }
+                    .minOrNull()
+                    ?.let { it + unreachableCooldownMs + 1L }
+                    ?: return
+            val delayMs = soonestExpiry - nowMs
+            if (delayMs <= 0L) {
+                return // already at/past expiry — the current evaluation already handled it
+            }
+            recheckJob =
+                scope.launch {
+                    kotlinx.coroutines.delay(delayMs)
+                    // A new token value each time so the writer's distinctUntilChanged lets the
+                    // re-evaluation through.
+                    preferredRelayRecheck.value = soonestExpiry
                 }
         }
 
@@ -727,17 +803,19 @@ class PropagationNodeManager
          * One-shot: query DB for best available relay and set it.
          * Called on startup, when user enables auto-select, or after relay deletion.
          *
-         * @param excludeHash Optional hash to exclude (e.g., just-deleted relay)
+         * @param excludeHashes Optional hashes to exclude (e.g., just-deleted relay, or the
+         *   relays the preferred-list writer just marked unreachable). The nearest-by-hops
+         *   fallback must not re-pick a relay that is currently excluded.
          */
-        private suspend fun selectBestRelay(excludeHash: String? = null) {
+        private suspend fun selectBestRelay(excludeHashes: Set<String> = emptySet()) {
             val propagationNodes =
                 announceRepository
                     .getAnnouncesByTypes(listOf("PROPAGATION_NODE"))
                     .first()
 
             val candidates =
-                if (excludeHash != null) {
-                    propagationNodes.filter { it.destinationHash != excludeHash }
+                if (excludeHashes.isNotEmpty()) {
+                    propagationNodes.filter { it.destinationHash !in excludeHashes }
                 } else {
                     propagationNodes
                 }
@@ -969,7 +1047,7 @@ class PropagationNodeManager
 
             if (autoSelectNew) {
                 settingsRepository.saveAutoSelectPropagationNode(true)
-                selectBestRelay(excludeHash = excludeHash)
+                selectBestRelay(excludeHashes = excludeHash?.let { setOf(it) } ?: emptySet())
             } else {
                 // Disable auto-select so periodic sync doesn't re-select a relay,
                 // which would contradict the user's "Remove Only" intent

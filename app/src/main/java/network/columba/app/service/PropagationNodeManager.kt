@@ -108,20 +108,6 @@ sealed class RelayLoadState {
 }
 
 /**
- * Represents the loading state of available relays list.
- * Used to distinguish between "not yet loaded from DB" and "loaded, no relays available".
- */
-sealed class AvailableRelaysState {
-    /** Relays are being loaded from database */
-    data object Loading : AvailableRelaysState()
-
-    /** Relays have been loaded from database */
-    data class Loaded(
-        val relays: List<RelayInfo>,
-    ) : AvailableRelaysState()
-}
-
-/**
  * Manages propagation node (relay) selection for LXMF message delivery.
  *
  * Auto-selection is one-shot: "pick the best relay when asked, then stop."
@@ -214,32 +200,6 @@ class PropagationNodeManager
                 .map { nodes -> nodes.map { it.destinationHash }.toSet() }
                 .collect { emit(it) }
         }
-
-        /**
-         * Available propagation nodes sorted by hop count (ascending), limited to 10.
-         * Used for relay selection UI.
-         *
-         * Uses optimized SQL query with LIMIT to fetch only 10 rows.
-         */
-        val availableRelaysState: StateFlow<AvailableRelaysState> =
-            announceRepository
-                .getTopPropagationNodes(limit = 10)
-                .map { announces ->
-                    Log.d(TAG, "availableRelays: got ${announces.size} top propagation nodes from DB")
-                    val relays =
-                        announces.map { announce ->
-                            RelayInfo(
-                                destinationHash = announce.destinationHash,
-                                displayName = announce.peerName,
-                                hops = announce.hops,
-                                isAutoSelected = false,
-                                lastSeenTimestamp = announce.lastSeenTimestamp,
-                            )
-                        }
-                    // Deduplicate by destinationHash to prevent LazyColumn duplicate key crash
-                    // (issue #542: transient duplicates from data layer race conditions)
-                    AvailableRelaysState.Loaded(relays.distinctBy { it.destinationHash })
-                }.stateIn(scope, SharingStarted.WhileSubscribed(5000L), AvailableRelaysState.Loading)
 
         private val _isSyncing = MutableStateFlow(false)
         val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()

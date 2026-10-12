@@ -44,9 +44,7 @@ import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.api.util.SharedInstanceProbe
 import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
-import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.PropagationNodeManager
-import network.columba.app.service.RelayInfo
 import network.columba.app.service.TelemetryCollectorManager
 import network.columba.app.ui.theme.AppTheme
 import network.columba.app.ui.theme.PresetTheme
@@ -132,9 +130,6 @@ data class SettingsState(
     val autoSelectPropagationNode: Boolean = true,
     val currentRelayName: String? = null,
     val currentRelayHops: Int? = null,
-    val currentRelayHash: String? = null,
-    val availableRelays: List<RelayInfo> = emptyList(),
-    val availableRelaysLoading: Boolean = true,
     // Message retrieval state
     val autoRetrieveEnabled: Boolean = true,
     val retrievalIntervalSeconds: Int = 3600,
@@ -545,10 +540,7 @@ class SettingsViewModel
                             // Preserve relay state from startRelayMonitor()
                             currentRelayName = _state.value.currentRelayName,
                             currentRelayHops = _state.value.currentRelayHops,
-                            currentRelayHash = _state.value.currentRelayHash,
                             autoSelectPropagationNode = _state.value.autoSelectPropagationNode,
-                            availableRelays = _state.value.availableRelays,
-                            availableRelaysLoading = _state.value.availableRelaysLoading,
                             // Transport node + battery profile state
                             transportNodeEnabled = transportNodeEnabled,
                             batteryProfile = batteryProfile,
@@ -1683,17 +1675,6 @@ class SettingsViewModel
         }
 
         /**
-         * Select a relay from the available relays list.
-         * Used when user taps on the current relay card and selects a different one.
-         */
-        fun selectRelay(destinationHash: String) {
-            viewModelScope.launch {
-                propagationNodeManager.addPreferredRelay(destinationHash, null)
-                Log.d(TAG, "Relay selected from list: ${destinationHash.take(16)}")
-            }
-        }
-
-        /**
          * Start observing current relay info from PropagationNodeManager.
          * Call this after init to update state with relay information.
          *
@@ -1730,7 +1711,6 @@ class SettingsViewModel
                                 currentRelayName = relayInfo?.displayName,
                                 // -1 means unknown hops (relay restored without announce data)
                                 currentRelayHops = relayInfo?.hops?.takeIf { it >= 0 },
-                                currentRelayHash = relayInfo?.destinationHash,
                                 // Use the actual setting from DataStore, not a default
                                 autoSelectPropagationNode = isAutoSelect,
                             )
@@ -1744,47 +1724,12 @@ class SettingsViewModel
         }
 
         /**
-         * Start monitoring available relays and isSyncing state.
+         * Start monitoring isSyncing state.
          * Note: lastSyncTimestamp, autoRetrieveEnabled, and retrievalIntervalSeconds
          * are included in the main loadSettings() combine to avoid race conditions.
          * isSyncing is kept separate because it changes rapidly (true→false in ms).
          */
         private fun startSyncStateMonitor() {
-            // Monitor available relays for selection UI
-            viewModelScope.launch {
-                propagationNodeManager.availableRelaysState
-                    .distinctUntilChanged { old, new ->
-                        // Only update when the list content actually changes
-                        when {
-                            old is AvailableRelaysState.Loading && new is AvailableRelaysState.Loading -> true
-                            old is AvailableRelaysState.Loaded && new is AvailableRelaysState.Loaded ->
-                                old.relays.size == new.relays.size &&
-                                    old.relays.zip(new.relays).all { (oldRelay, newRelay) ->
-                                        oldRelay.destinationHash == newRelay.destinationHash &&
-                                            oldRelay.displayName == newRelay.displayName &&
-                                            oldRelay.hops == newRelay.hops
-                                    }
-                            else -> false
-                        }
-                    }.collect { state ->
-                        when (state) {
-                            is AvailableRelaysState.Loading -> {
-                                Log.d(TAG, "SettingsViewModel: available relays loading")
-                                _state.update { it.copy(availableRelaysLoading = true) }
-                            }
-                            is AvailableRelaysState.Loaded -> {
-                                Log.d(TAG, "SettingsViewModel received ${state.relays.size} available relays")
-                                _state.update {
-                                    it.copy(
-                                        availableRelays = state.relays,
-                                        availableRelaysLoading = false,
-                                    )
-                                }
-                            }
-                        }
-                    }
-            }
-
             // Monitor isSyncing separately - it changes rapidly and shouldn't trigger
             // full state recomposition via the main combine
             viewModelScope.launch {

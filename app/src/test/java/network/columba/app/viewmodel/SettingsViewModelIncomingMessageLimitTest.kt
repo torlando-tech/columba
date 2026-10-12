@@ -15,7 +15,6 @@ import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTransportAdmin
 import network.columba.app.rns.host.persistence.ReticulumConfigSnapshot
-import network.columba.app.service.AvailableRelaysState
 import network.columba.app.service.InterfaceConfigManager
 import network.columba.app.service.LocationSharingManager
 import network.columba.app.service.PropagationNodeManager
@@ -235,8 +234,6 @@ class SettingsViewModelIncomingMessageLimitTest {
         every { propagationNodeManager.currentRelay } returns MutableStateFlow(null)
         every { propagationNodeManager.isSyncing } returns MutableStateFlow(false)
         every { propagationNodeManager.lastSyncTimestamp } returns MutableStateFlow(null)
-        every { propagationNodeManager.availableRelaysState } returns
-            MutableStateFlow(AvailableRelaysState.Loaded(emptyList()))
 
         // Mock other required methods
         coEvery { identityRepository.getActiveIdentitySync() } returns null

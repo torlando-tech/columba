@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
@@ -243,22 +244,20 @@ fun MessageDeliveryRetrievalCard(
                     maxLines = 2,
                 )
                 if (isAutoSelect && currentRelayName != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Currently: $currentRelayName",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (currentRelayHops != null) {
                         Text(
-                            text = "Currently: $currentRelayName",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (currentRelayHops != null) {
-                            Text(
-                                text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
                 }
             }
@@ -284,22 +283,20 @@ fun MessageDeliveryRetrievalCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (!isAutoSelect && currentRelayName != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = currentRelayName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (currentRelayHops != null) {
                         Text(
-                            text = currentRelayName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (currentRelayHops != null) {
-                            Text(
-                                text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
                 } else if (!isAutoSelect) {
                     Text(
@@ -738,6 +735,9 @@ private fun CurrentRelayInfo(
                         text = relayName,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     if (isAutoSelected) {
                         Text(

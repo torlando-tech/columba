@@ -18,6 +18,7 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelephony
@@ -362,6 +363,44 @@ class MessagingViewModel
 
         // Real-time sync progress for status UI
         val syncProgress: StateFlow<SyncProgress> = propagationNodeManager.syncProgress
+
+        /**
+         * In-flight **propagation-method** sends awaiting a terminal delivery-status event.
+         *
+         * Keyed by the (lowercased) message hash returned in the send receipt. The value is the
+         * *captured* payload + the [PropagationRetry] closure that re-drives this exact send
+         * against whichever relay is active when it is fired. Tracked here (not re-read from the
+         * composer at fail time) because the user may have changed the composer contents between
+         * the original send and the async delivery failure.
+         *
+         * Only propagation-method sends are tracked: a propagated send's `FAILED` delivery status
+         * means the relay never stored the deferred message (deferred-delivery model — "propagated"
+         * = relay accepted, "failed" = relay unreachable), so a failure is attributed to the relay
+         * and the writer fails over to the next in the priority list, after which the captured
+         * send is re-driven. Direct / opportunistic sends are not relay-routed and never register
+         * here. Entries are removed on any terminal status (delivered / propagated / failed) so
+         * the map can't grow without bound.
+         */
+        private val inFlightPropagationSends =
+            java.util.concurrent.ConcurrentHashMap<String, PropagationSendRecord>()
+
+        /**
+         * A propagated send awaiting delivery, captured at send time so the failover retry can
+         * re-drive the *exact* payload (not whatever is in the composer now).
+         */
+        private data class PropagationSendRecord(
+            val retry: suspend () -> Unit,
+        )
+
+        /**
+         * A synthesized unreachable-relay [PropagationState] for a propagated send whose delivery
+         * status flipped to `FAILED`. The delivery-status callback carries no reason code, so this
+         * is the generic "relay never received the deferred message" terminal — mapped by
+         * [PropagationFailureReason] to a "No path to relay" style explanation. Native-backend
+         * ordinals are used (FAILED = 8) since the send path is backend-agnostic here.
+         */
+        private val propagationSendFailedState =
+            PropagationState(state = 8, stateName = "failed", progress = 0f, messagesReceived = 0)
 
         private val _transferProgress =
             MutableStateFlow<Map<String, network.columba.app.rns.api.model.TransferProgressUpdate>>(emptyMap())
@@ -1054,6 +1093,29 @@ class MessagingViewModel
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
 
+                // Propagation-method send failover. A propagated send whose terminal delivery
+                // status is FAILED means the relay never stored the deferred message (no path
+                // to the relay) — so mark *that* relay unreachable, which drives the writer to
+                // fail over to the next in the user's priority list, and register the captured
+                // payload to be re-driven once the new relay is active (the manager fires it
+                // from observeRelayChanges). Only propagation-method sends are tracked in
+                // inFlightPropagationSends, so direct/opportunistic sends never trigger this.
+                // The entry is removed for any terminal status (delivered/propagated/failed) so
+                // the map is bounded.
+                inFlightPropagationSends.remove(update.messageHash)?.let { record ->
+                    if (update.status == DeliveryStatus.FAILED) {
+                        Log.i(
+                            TAG,
+                            "Propagated send ${update.messageHash.take(16)}... failed — relay " +
+                                "unreachable; failing over to next relay and retrying the send",
+                        )
+                        propagationNodeManager.reportRelayUnreachable(
+                            state = propagationSendFailedState,
+                            retryAction = record.retry,
+                        )
+                    }
+                }
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
             }
@@ -1336,127 +1398,19 @@ class MessagingViewModel
                     }
 
                     val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return@launch
-                    val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
-                    val identity =
-                        loadIdentityIfNeeded() ?: run {
-                            Log.e(TAG, "Failed to load source identity")
-                            return@launch
-                        }
-
-                    val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod =
-                        determineDeliveryMethod(
-                            sanitized = sanitized,
-                            imageData = imageData,
-                            fileAttachments = fileAttachments,
-                            voiceBytes = voiceBytes,
-                            defaultMethod = defaultMethod,
-                        )
-                    val deliveryMethodString = deliveryMethod.toStorageString()
-
-                    // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
-                    val fileAttachmentPairs = fileAttachments.map { it.filename to it.data }
-
-                    Log.d(
-                        TAG,
-                        "Sending LXMF message to $destinationHash " +
-                            "(${sanitized.length} chars, hasImage=${imageData != null}, " +
-                            "files=${fileAttachments.size}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
-                    )
-
-                    // Get pending reply ID if replying to a message
                     val replyToId = _pendingReplyTo.value?.messageId
 
-                    // Get user's icon appearance for Sideband/MeshChat interoperability
-                    val iconAppearance =
-                        identityRepository.getActiveIdentitySync()?.let { activeId ->
-                            val name = activeId.iconName
-                            val fg = activeId.iconForegroundColor
-                            val bg = activeId.iconBackgroundColor
-                            if (name != null && fg != null && bg != null) {
-                                network.columba.app.rns.api.model.IconAppearance(
-                                    iconName = name,
-                                    foregroundColor = fg,
-                                    backgroundColor = bg,
-                                )
-                            } else {
-                                null
-                            }
-                        }
-
-                    val result =
-                        rnsLxmf.sendLxmfMessageWithMethod(
-                            destinationHash = destHashBytes,
-                            content = sanitized,
-                            sourceIdentity = identity,
-                            deliveryMethod = deliveryMethod,
-                            tryPropagationOnFail = tryPropOnFail,
-                            imageData = imageData,
-                            imageFormat = imageFormat,
-                            fileAttachments = fileAttachmentPairs.ifEmpty { null },
-                            extraFields =
-                                voiceBytes?.let {
-                                    mapOf(
-                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
-                                            listOf(checkNotNull(voiceMode), it),
-                                    )
-                                },
-                            replyToMessageId = replyToId,
-                            // MeshChatX-interop reply format ships the
-                            // quoted content inline (fields[0x31]) so
-                            // recipients render the preview even when
-                            // they don't have the original in their
-                            // local store (cross-app interop, or peer
-                            // history aged out). We pull it from local
-                            // DB at send time the same way MeshChatX
-                            // does.
-                            replyQuotedContent = replyToId?.let { id ->
-                                runCatching {
-                                    conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
-                                }.getOrNull()
-                            },
-                            iconAppearance = iconAppearance,
-                        )
-
-                    result
-                        .onSuccess { receipt ->
-                            val persisted =
-                                handleSendSuccess(
-                                    receipt,
-                                    sanitized,
-                                    destinationHash,
-                                    imageData,
-                                    imageFormat,
-                                    fileAttachments,
-                                    deliveryMethodString,
-                                    replyToId,
-                                    voiceRecording,
-                                    voiceBytes,
-                                    voiceMode,
-                                )
-                            if (persisted) {
-                                clearSubmittedDraft(destinationHash, content, replyToId)
-                            }
-                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
-                        }.onFailure { error ->
-                            val persisted =
-                                handleSendFailure(
-                                    error = error,
-                                    sanitized = sanitized,
-                                    destinationHash = destinationHash,
-                                    deliveryMethodString = deliveryMethodString,
-                                    imageData = imageData,
-                                    imageFormat = imageFormat,
-                                    fileAttachments = fileAttachments,
-                                    replyToMessageId = replyToId,
-                                    voiceBytes = voiceBytes,
-                                    voiceMode = voiceMode,
-                                    voiceRecording = voiceRecording,
-                                )
-                            if (persisted) clearSubmittedDraft(destinationHash, content, replyToId)
-                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
-                        }
+                    executeLxmfSend(
+                        destinationHash = destinationHash,
+                        content = sanitized,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = fileAttachments,
+                        replyToId = replyToId,
+                        voiceBytes = voiceBytes,
+                        voiceMode = voiceMode,
+                        voiceRecording = voiceRecording,
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
                 } finally {
@@ -1464,6 +1418,179 @@ class MessagingViewModel
                     sendInProgress.set(false)
                 }
             }
+        }
+
+        /**
+         * The send + bookkeeping core, shared by the composer path ([sendMessage]) and the
+         * propagation-failover retry (see [inFlightPropagationSends]).
+         *
+         * Crucially it does NOT read the composer: every payload element (content, image, file
+         * attachments, voice bytes, reply target) is passed in. This lets the failover retry
+         * re-drive the *exact* send that failed against the newly-selected relay, even if the
+         * user has since edited the composer. `tryPropagationOnFail` is always false here —
+         * the app-level relay failover (mark unreachable → writer picks next → re-drive) supersedes
+         * the backend's direct-to-propagated auto-fallback, and a propagation-method send has no
+         * further fallback anyway.
+         */
+        @Suppress("LongMethod", "LongParameterList")
+        private suspend fun executeLxmfSend(
+            destinationHash: String,
+            content: String,
+            imageData: ByteArray?,
+            imageFormat: String?,
+            fileAttachments: List<FileAttachment>,
+            replyToId: String?,
+            voiceBytes: ByteArray?,
+            voiceMode: Int?,
+            voiceRecording: tech.torlando.lxst.recording.RecordedAudio?,
+        ) {
+            val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return
+            val destHashBytes = validateDestinationHash(destinationHash) ?: return
+            val identity =
+                loadIdentityIfNeeded() ?: run {
+                    Log.e(TAG, "Failed to load source identity")
+                    return
+                }
+
+            val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
+            val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
+            val deliveryMethod =
+                determineDeliveryMethod(
+                    sanitized = sanitized,
+                    imageData = imageData,
+                    fileAttachments = fileAttachments,
+                    voiceBytes = voiceBytes,
+                    defaultMethod = defaultMethod,
+                )
+            val deliveryMethodString = deliveryMethod.toStorageString()
+
+            // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
+            val fileAttachmentPairs = fileAttachments.map { it.filename to it.data }
+
+            Log.d(
+                TAG,
+                "Sending LXMF message to $destinationHash " +
+                    "(${sanitized.length} chars, hasImage=${imageData != null}, " +
+                    "files=${fileAttachments.size}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
+            )
+
+            // Get user's icon appearance for Sideband/MeshChat interoperability
+            val iconAppearance =
+                identityRepository.getActiveIdentitySync()?.let { activeId ->
+                    val name = activeId.iconName
+                    val fg = activeId.iconForegroundColor
+                    val bg = activeId.iconBackgroundColor
+                    if (name != null && fg != null && bg != null) {
+                        network.columba.app.rns.api.model.IconAppearance(
+                            iconName = name,
+                            foregroundColor = fg,
+                            backgroundColor = bg,
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+            val result =
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = destHashBytes,
+                    content = sanitized,
+                    sourceIdentity = identity,
+                    deliveryMethod = deliveryMethod,
+                    tryPropagationOnFail = tryPropOnFail,
+                    imageData = imageData,
+                    imageFormat = imageFormat,
+                    fileAttachments = fileAttachmentPairs.ifEmpty { null },
+                    extraFields =
+                        voiceBytes?.let {
+                            mapOf(
+                                network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                    listOf(checkNotNull(voiceMode), it),
+                            )
+                        },
+                    replyToMessageId = replyToId,
+                    // MeshChatX-interop reply format ships the
+                    // quoted content inline (fields[0x31]) so
+                    // recipients render the preview even when
+                    // they don't have the original in their
+                    // local store (cross-app interop, or peer
+                    // history aged out). We pull it from local
+                    // DB at send time the same way MeshChatX
+                    // does.
+                    replyQuotedContent = replyToId?.let { id ->
+                        runCatching {
+                            conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
+                        }.getOrNull()
+                    },
+                    iconAppearance = iconAppearance,
+                )
+
+            result
+                .onSuccess { receipt ->
+                    // Track propagation-method sends awaiting their terminal delivery
+                    // status so a `FAILED` (relay never stored the deferred message) can
+                    // mark the relay unreachable and re-drive this exact payload on the
+                    // next relay. Direct/opportunistic sends are not relay-routed and
+                    // are not tracked.
+                    val propagationRetry: (suspend () -> Unit)? =
+                        if (deliveryMethod == DeliveryMethod.PROPAGATED) {
+                            {
+                                executeLxmfSend(
+                                    destinationHash = destinationHash,
+                                    content = sanitized,
+                                    imageData = imageData,
+                                    imageFormat = imageFormat,
+                                    fileAttachments = fileAttachments,
+                                    replyToId = replyToId,
+                                    voiceBytes = voiceBytes,
+                                    voiceMode = voiceMode,
+                                    voiceRecording = voiceRecording,
+                                )
+                            }
+                        } else {
+                            null
+                        }
+                    if (propagationRetry != null) {
+                        inFlightPropagationSends[
+                            receipt.messageHash.joinToString("") { "%02x".format(it) }
+                        ] = PropagationSendRecord(propagationRetry)
+                    }
+                    val persisted =
+                        handleSendSuccess(
+                            receipt,
+                            sanitized,
+                            destinationHash,
+                            imageData,
+                            imageFormat,
+                            fileAttachments,
+                            deliveryMethodString,
+                            replyToId,
+                            voiceRecording,
+                            voiceBytes,
+                            voiceMode,
+                        )
+                    if (persisted) {
+                        clearSubmittedDraft(destinationHash, content, replyToId)
+                    }
+                    composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
+                }.onFailure { error ->
+                    val persisted =
+                        handleSendFailure(
+                            error = error,
+                            sanitized = sanitized,
+                            destinationHash = destinationHash,
+                            deliveryMethodString = deliveryMethodString,
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            replyToMessageId = replyToId,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            voiceRecording = voiceRecording,
+                        )
+                    if (persisted) clearSubmittedDraft(destinationHash, content, replyToId)
+                    composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
+                }
         }
 
         @Suppress("LongParameterList") // Refactoring to data class would add unnecessary complexity

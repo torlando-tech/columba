@@ -277,6 +277,31 @@ class PropagationNodeManager
         private var activeSyncRelayHash: String? = null
 
         /**
+         * The operation to re-drive automatically once the writer fails over to a *different*
+         * relay after a relay-unreachable failure. Set by [reportRelayUnreachable] (or the sync
+         * failure terminals) to a closure that re-runs the failed action — a sync, or a
+         * propagation-method send with its captured payload. Fired at most once, when the active
+         * relay changes to a relay other than the one that failed ([observeRelayChanges]), then
+         * cleared. Null when there is no pending retry.
+         *
+         * This is what makes "see why a relay failed, fail over to the next one, and retry the
+         * failed action on that next relay" work as one loop: the DB write drives the immediate
+         * failover (the writer re-evaluates on the live `observeOrdered` emission), and this
+         * closure re-drives the operation once the new relay is active. It is naturally bounded —
+         * each relay is excluded by the 10-minute cooldown, so a failing action walks the list at
+         * most once rather than hammering a dead relay.
+         */
+        private var pendingRelayRetryAction: (suspend () -> Unit)? = null
+
+        /**
+         * The hash of the relay that the pending retry is attributed to (the one that failed).
+         * [observeRelayChanges] fires the retry only when the active relay changes to a relay
+         * *other than* this, so a retry never re-runs against the very relay that just failed.
+         * Cleared together with [pendingRelayRetryAction].
+         */
+        private var pendingRetryFailedRelayHash: String? = null
+
+        /**
          * Recheck token for the preferred-list writer. The writer's `combine(enabled,
          * transport, recheck)` re-evaluates when the saved list, the transport, OR this token
          * changes. A relay marked unreachable (and thus skipped) recovers when its failure's
@@ -386,6 +411,11 @@ class PropagationNodeManager
                 .distinctUntilChanged()
                 .collect { destinationHash ->
                     syncRelayToPython(destinationHash)
+                    // Once the new relay is active in the Python layer, re-drive the operation
+                    // that failed against the previous (now-unreachable) relay, if there is
+                    // one pending. No-op when the relay did not change away from the failed
+                    // relay or no retry is pending.
+                    firePendingRelayRetryIfDue(destinationHash)
                 }
         }
 
@@ -508,8 +538,9 @@ class PropagationNodeManager
                     _isSyncing.value = false
                     _syncProgress.value = SyncProgress.Idle
                     // Record *why* the relay was unreachable so the writer fails over to the
-                    // next in the list (no-op when the relay is not a preferred node).
-                    recordRelayFailureIfUnreachable(state)
+                    // next in the list (no-op when the relay is not a preferred node), and
+                    // retry this sync on the new relay automatically.
+                    recordSyncFailureAndScheduleRetry(state)
                     if (_isManualSync) {
                         _manualSyncResult.emit(SyncResult.Error("Sync failed: ${state.stateName}"))
                         _isManualSync = false
@@ -593,9 +624,10 @@ class PropagationNodeManager
 
                 // If the active relay is a *preferred* node and LXMF reported it unreachable,
                 // record *why* (code + explanation + timestamp) so the relay writer can fail
-                // over to the next in the list. This reuses an event LXMF already emitted — no
-                // new network activity.
-                recordRelayFailureIfUnreachable(state)
+                // over to the next in the list, and retry this sync on the new relay
+                // automatically. This reuses an event LXMF already emitted — no new network
+                // activity.
+                recordSyncFailureAndScheduleRetry(state)
 
                 // Emit error for UI only if manually triggered
                 if (_isManualSync) {
@@ -624,11 +656,44 @@ class PropagationNodeManager
             // Key off the relay that started the sync, not currentRelay (which may have been
             // switched mid-sync) — otherwise a failure on B could be recorded against A.
             val activeHash = activeSyncRelayHash ?: return
+            recordUnreachableOn(activeHash, state)
+        }
+
+        /**
+         * Record the unreachable relay for a *sync* failure and register a retry of that sync
+         * to be re-driven once the writer fails over to a different relay.
+         *
+         * The retry is registered only when the failure would actually be recorded (the active
+         * relay is in the preferred list), so a non-preferred/legacy relay neither records nor
+         * retries. The retry re-runs [triggerSync] silently — the user already saw the manual
+         * sync's failure toast (if any); the auto-retry should not surface a second toast. The
+         * retry fires only when the active relay has changed away from the one that failed
+         * (see [firePendingRelayRetryIfDue]).
+         */
+        private suspend fun recordSyncFailureAndScheduleRetry(state: PropagationState) {
+            val activeHash = activeSyncRelayHash ?: return
+            // Only retry (and only record) for an *unreachable* relay failure — a generic
+            // "failed" that is not a no-path/no-link condition is not a reason to fail over.
+            if (!PropagationFailureReason.isUnreachable(state)) return
             if (!preferredPropagationNodeRepository.contains(activeHash)) return
+            recordUnreachableOn(activeHash, state)
+            pendingRetryFailedRelayHash = activeHash
+            pendingRelayRetryAction = { triggerSync(silent = true) }
+        }
+
+        /**
+         * Record [state] as an unreachable failure on [destinationHash]. Shared by the sync
+         * terminals (which key off [activeSyncRelayHash]) and [reportRelayUnreachable] (which
+         * keys off whatever relay the caller — a send or a sync — was using). No-op when the
+         * relay is not in the preferred list.
+         */
+        private suspend fun recordUnreachableOn(destinationHash: String, state: PropagationState) {
+            if (!PropagationFailureReason.isUnreachable(state)) return
+            if (!preferredPropagationNodeRepository.contains(destinationHash)) return
             val reason = PropagationFailureReason.explanation(state)
-            Log.i(TAG, "Recording unreachable relay $activeHash: $reason (code ${state.state})")
+            Log.i(TAG, "Recording unreachable relay $destinationHash: $reason (code ${state.state})")
             preferredPropagationNodeRepository.recordFailure(
-                destinationHash = activeHash,
+                destinationHash = destinationHash,
                 code = state.state,
                 explanation = reason,
                 timestamp = nowMs(),
@@ -652,6 +717,72 @@ class PropagationNodeManager
         }
 
         /**
+         * Mark the active relay unreachable (recording *why*) and register [retryAction] to be
+         * re-driven automatically once the writer fails over to a *different* relay.
+         *
+         * This is the single entry point for "an operation against the active relay failed
+         * because the relay is unreachable, so record the failure, fail over, and retry the
+         * operation on the next relay." Both a propagation-method *send* failure (surfaced via
+         * the delivery-status callback) and a *sync* failure route here. The DB write drives the
+         * immediate failover (the writer re-evaluates on the live `observeOrdered` emission and
+         * skips the now-unreachable relay); [retryAction] is fired by [observeRelayChanges] the
+         * first time the active relay becomes a relay other than the one that failed.
+         *
+         * [retryAction] is a closure that re-runs the failed action against whatever relay is
+         * active at fire time — a sync re-runs [triggerSync], a send re-submits its captured
+         * payload. It is fired at most once and then cleared, and only when the active relay
+         * actually changed away from the failed relay, so a retry never re-runs against the very
+         * relay that just failed.
+         *
+         * No-op (no record, no retry) when there is no active relay or it is not in the
+         * preferred list — a legacy auto-selected relay has no preferred row to record on.
+         */
+        suspend fun reportRelayUnreachable(
+            state: PropagationState,
+            retryAction: suspend () -> Unit,
+        ) {
+            val activeHash = activeSyncRelayHash ?: currentRelay.value?.destinationHash ?: return
+            // Only fail over (and only record) for an *unreachable* relay failure.
+            if (!PropagationFailureReason.isUnreachable(state)) return
+            if (!preferredPropagationNodeRepository.contains(activeHash)) return
+            recordUnreachableOn(activeHash, state)
+            Log.i(
+                TAG,
+                "Relay $activeHash unreachable (${state.stateName}); scheduling retry of the failed action on the next relay",
+            )
+            pendingRetryFailedRelayHash = activeHash
+            pendingRelayRetryAction = retryAction
+        }
+
+        /**
+         * Fire the pending retry action, if any, once the active relay has become a relay other
+         * than the one that failed. Called from [observeRelayChanges] after a relay change.
+         * Clears the pending state after firing (at most one retry per failure).
+         */
+        private fun firePendingRelayRetryIfDue(newRelayHash: String?) {
+            val action = pendingRelayRetryAction ?: return
+            val failedHash = pendingRetryFailedRelayHash
+            // Only retry when the relay actually changed away from the one that failed. If the
+            // writer re-selected the same (now-recovered) relay, or there is still no relay, the
+            // retry is stale — drop it rather than re-driving against the failed relay.
+            if (newRelayHash == null || newRelayHash == failedHash) {
+                pendingRelayRetryAction = null
+                pendingRetryFailedRelayHash = null
+                return
+            }
+            pendingRelayRetryAction = null
+            pendingRetryFailedRelayHash = null
+            Log.i(TAG, "Relay changed to $newRelayHash — retrying the previously failed action")
+            scope.launch {
+                try {
+                    action()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Pending relay retry failed: ${e.message}", e)
+                }
+            }
+        }
+
+        /**
          * Stop the manager.
          */
         fun stop() {
@@ -670,6 +801,9 @@ class PropagationNodeManager
             settingsObserverJob = null
             propagationStateObserverJob = null
             startupSelectJob = null
+            // Drop any pending retry so a stale operation is not re-driven after a stop.
+            pendingRelayRetryAction = null
+            pendingRetryFailedRelayHash = null
         }
 
         /**

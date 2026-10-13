@@ -2995,6 +2995,80 @@ class PropagationNodeManagerTest {
         }
 
     @Test
+    fun `reportRelayUnreachable records the failure and retries once the relay changes to a different one`() =
+        runTest {
+            // Relay A is the active relay. A propagation send (or sync) fails against A →
+            // reportRelayUnreachable records A's failure and schedules the failed action to
+            // re-run. When the writer fails over (the active relay becomes B), the pending retry
+            // must fire exactly once against the new relay, and the failure must have been
+            // recorded on the relay that failed (A), not the one we fail over to (B).
+            //
+            // The relay change is driven directly via myRelayFlow (the same flow the writer's
+            // setAsMyRelay writes in production) — the writer's own failover-to-next logic is
+            // covered by the `writer - ...` tests below; this test isolates the retry-on-change.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            // Start on relay A.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            var retryInvocations = 0
+            // A failed (no-path terminal). The retry closure re-drives the failed action.
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+
+            // The failure is recorded on the relay that failed (A).
+            coVerify(exactly = 1) {
+                preferredRepository.recordFailure(aHash, 9, "No path to relay", any())
+            }
+            coVerify(exactly = 0) { preferredRepository.recordFailure(bHash, any(), any(), any()) }
+
+            // The writer fails over to B: the pending retry fires exactly once, now that the
+            // active relay is no longer the one that failed.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(bHash, manager.currentRelay.value?.destinationHash)
+            assertEquals(1, retryInvocations)
+            manager.stop()
+        }
+
+    @Test
+    fun `reportRelayUnreachable does not retry when the active relay does not change`() =
+        runTest {
+            // A relay fails and a retry is registered, but the active relay never changes away
+            // from the one that failed. The retry must NOT fire — firing it would re-drive the
+            // operation against the very relay that just failed. The failure is still recorded.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            coEvery { preferredRepository.contains(aHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            var retryInvocations = 0
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+
+            // Failure recorded, but no relay change occurred → the retry never fires.
+            coVerify(exactly = 1) { preferredRepository.recordFailure(aHash, 9, "No path to relay", any()) }
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+            assertEquals(0, retryInvocations)
+            manager.stop()
+        }
+
+    @Test
     fun `writer - transport-incompatible node is not affected by an unrelated unreachable hash`() =
         runTest {
             // The unreachable hash is not even in the list; resolution is unchanged.

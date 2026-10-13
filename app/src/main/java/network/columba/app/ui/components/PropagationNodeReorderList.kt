@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -248,6 +250,10 @@ private fun PropagationNodeRowContent(
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isDragging) 4.dp else 0.dp),
     ) {
+        // Two rows: the identity (badge + name + failure reason) on top, the restriction
+        // chip + action buttons on a second row. Putting the chip and buttons on their own
+        // row gives the failure-reason line the full content width, so it isn't truncated to
+        // "No path to re…" when a long node name is present.
         Row(
             modifier =
                 Modifier
@@ -255,11 +261,14 @@ private fun PropagationNodeRowContent(
                     .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Drag handle — the only draggable region (40.dp leading slot).
+            // Drag handle — the only draggable region (40.dp leading slot). The drag gesture
+            // itself lives on the Card's leading region, so this visual box only needs to sit
+            // in that slot; it spans both rows so it reads as one handle for the whole card.
             Box(
                 modifier =
                     Modifier
-                        .size(HANDLE_WIDTH)
+                        .width(HANDLE_WIDTH)
+                        .fillMaxHeight()
                         .testTag("prop_node_handle_${row.destinationHash}"),
                 contentAlignment = Alignment.Center,
             ) {
@@ -271,50 +280,58 @@ private fun PropagationNodeRowContent(
                 )
             }
 
-            // Priority position badge.
-            Box(
-                modifier =
-                    Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = priorityPosition.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-            Spacer(modifier = Modifier.size(6.dp))
-
-            // Name + short hash.
             Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
-                Text(
-                    text = row.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (row.isActive) {
-                    Icon(
-                        imageVector = Icons.Filled.CheckCircle,
-                        contentDescription = "Current relay",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                } else if (showShortHash) {
+                // Row 1 — identity: priority badge + name + active/short-hash indicator.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = priorityPosition.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(6.dp))
                     Text(
-                        text = row.destinationHash.take(8),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = row.displayName,
+                        style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
+                    if (row.isActive) {
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = "Current relay",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    } else if (showShortHash) {
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text(
+                            text = row.destinationHash.take(8),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
                 }
+
                 // Compact, non-dismissible warning: why this relay was last seen unreachable
-                // (the recorded LXMF state code, decoded) and when. Auto-clears: the row is
-                // derived from the DB and the failure is cleared on a successful sync (or
-                // expires via the unreachable cooldown), so this line disappears on its own.
+                // (the recorded LXMF state code, decoded) and when. Now on its own full-width
+                // line, so the explanation isn't clipped. Auto-clears: the row is derived from
+                // the DB and the failure is cleared on a successful sync (or expires via the
+                // unreachable cooldown), so this line disappears on its own.
                 if (row.failureReason != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -336,43 +353,54 @@ private fun PropagationNodeRowContent(
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("prop_node_failure_${row.destinationHash}"),
                     )
                 }
-            }
 
-            // Restriction chip (cycle: ANY -> WIFI_ONLY -> CELLULAR_ONLY -> ANY)
-            FilterChip(
-                selected = false,
-                onClick = { onRestrictionChange(row.networkRestriction) },
-                label = { Text(networkRestrictionLabel(row.networkRestriction)) },
-                modifier = Modifier.testTag("prop_node_chip_${row.destinationHash}"),
-            )
-
-            Spacer(modifier = Modifier.size(4.dp))
-
-            // Set-active-now (only when not already active).
-            if (!row.isActive) {
-                IconButton(
-                    onClick = onSetActiveNow,
-                    modifier = Modifier.testTag("prop_node_setactive_${row.destinationHash}"),
+                // Row 2 — controls: restriction chip + set-active + remove.
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = "Set active now",
-                        tint = MaterialTheme.colorScheme.primary,
+                    // Restriction chip (cycle: ANY -> WIFI_ONLY -> CELLULAR_ONLY -> ANY)
+                    FilterChip(
+                        selected = false,
+                        onClick = { onRestrictionChange(row.networkRestriction) },
+                        label = { Text(networkRestrictionLabel(row.networkRestriction)) },
+                        modifier = Modifier.testTag("prop_node_chip_${row.destinationHash}"),
                     )
-                }
-            }
 
-            // Overflow — Remove.
-            TextButton(
-                onClick = onRemove,
-                modifier = Modifier.testTag("prop_node_remove_${row.destinationHash}"),
-            ) {
-                Text("Remove")
+                    Spacer(modifier = Modifier.size(4.dp))
+
+                    // Set-active-now (only when not already active).
+                    if (!row.isActive) {
+                        IconButton(
+                            onClick = onSetActiveNow,
+                            modifier = Modifier.testTag("prop_node_setactive_${row.destinationHash}"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = "Set active now",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Overflow — Remove.
+                    TextButton(
+                        onClick = onRemove,
+                        modifier = Modifier.testTag("prop_node_remove_${row.destinationHash}"),
+                    ) {
+                        Text("Remove")
+                    }
+                }
             }
         }
     }

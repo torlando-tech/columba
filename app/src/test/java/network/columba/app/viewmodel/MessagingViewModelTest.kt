@@ -6101,6 +6101,65 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `retryFailedMessage preserves gif format on re-drive`() =
+        runViewModelTest {
+            // Regression for "Retries lose message details": reconstructForReDrive used to
+            // hard-code imageFormat = "jpg", so a re-driven animated GIF / PNG was re-sent with
+            // the wrong format tag. The format is now sniffed from the stored bytes. GIF magic:
+            // 0x47 0x49 0x46 0x38 ("GIF8"). The file-backed field is read as a hex string and
+            // hex-decoded (see loadAttachmentFromDisk -> hexStringToByteArray), so the file
+            // holds the hex of the GIF bytes.
+            val imageFile =
+                java.io.File(applicationContext.filesDir, "attachments/gif-image/6_image").apply {
+                    parentFile!!.mkdirs()
+                    writeText("4749463839610100")
+                }
+            val failedMessage =
+                MessageEntity(
+                    id = "gif-image",
+                    conversationHash = testPeerHash,
+                    identityHash = "identity-hash",
+                    content = "image",
+                    timestamp = System.currentTimeMillis(),
+                    isFromMe = true,
+                    status = "failed",
+                    fieldsJson = """{"6":{"_file_ref":${org.json.JSONObject.quote(imageFile.absolutePath)}}}""",
+                )
+            coEvery { conversationRepository.getMessageById("gif-image") } returns failedMessage
+            coEvery { conversationRepository.updateMessageStatus(any(), any()) } just Runs
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { 0xB1.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                    ),
+                )
+
+            viewModel.retryFailedMessage("gif-image")
+            advanceUntilIdle()
+
+            // The re-driven GIF must carry its real "gif" tag, not the old hard-coded "jpg".
+            var sniffedGif = false
+            coVerify {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "image",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = any(),
+                    tryPropagationOnFail = any(),
+                    imageData = any(),
+                    imageFormat = match { sniffedGif = it == "gif"; it == "gif" },
+                    extraFields = any(),
+                )
+            }
+            assertTrue("re-driven GIF must be re-sent with the sniffed 'gif' format", sniffedGif)
+        }
+
+    @Test
     fun `retryFailedMessage fails closed when persisted image is unavailable`() =
         runViewModelTest {
             val missingPath = java.io.File(applicationContext.filesDir, "attachments/missing/6_image").absolutePath

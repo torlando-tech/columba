@@ -720,6 +720,7 @@ class ConversationRepository
          * @param oldMessageId The current message ID
          * @param newMessageId The new message ID to use
          */
+        @Transaction
         suspend fun updateMessageId(
             oldMessageId: String,
             newMessageId: String,
@@ -730,8 +731,10 @@ class ConversationRepository
             // Create new message with updated ID
             val newMessage = oldMessage.copy(id = newMessageId, status = "pending")
 
-            // Delete old and insert new atomically would require @Transaction,
-            // but for simplicity we do it in sequence
+            // Atomic rename: Room runs the delete + insert in a single transaction so an
+            // interruption (app stop, OOM, failed insert) between the two cannot drop the
+            // only saved copy. Required because automatic relay failover (not just the
+            // manual retry) now re-keys the row on every hop.
             messageDao.deleteMessageById(oldMessageId, activeIdentity.identityHash)
             messageDao.insertMessage(newMessage)
 

@@ -2857,6 +2857,27 @@ class MessagingViewModel
         }
 
         /**
+         * Sniff the image format tag from raw image bytes so a re-drive preserves the original
+         * format (an animated GIF or a PNG must not be re-sent as "jpg"). The format tag is what
+         * the sender stamps in LXMF field 6 (see [NativeMessageSender]: `listOf(imageFormat, data)`),
+         * and the wire only carries a short tag, so the value must match the set the backends
+         * accept ("jpg", "png", "gif", "webp"). Falls back to "jpg" for anything unrecognised.
+         */
+        private fun sniffImageFormat(bytes: ByteArray): String {
+            fun hasPrefix(prefix: ByteArray, offset: Int = 0): Boolean =
+                bytes.size >= offset + prefix.size && prefix.indices.all { i -> bytes[offset + i] == prefix[i] }
+            return when {
+                hasPrefix(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())) -> "jpg"
+                hasPrefix(byteArrayOf(0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte())) -> "png"
+                hasPrefix(byteArrayOf(0x47.toByte(), 0x49.toByte(), 0x46.toByte(), 0x38.toByte())) -> "gif"
+                // RIFF container with a WEBP payload at offset 8.
+                hasPrefix(byteArrayOf(0x52.toByte(), 0x49.toByte(), 0x46.toByte(), 0x46.toByte())) &&
+                    hasPrefix(byteArrayOf(0x57.toByte(), 0x45.toByte(), 0x42.toByte(), 0x50.toByte()), offset = 8) -> "webp"
+                else -> "jpg"
+            }
+        }
+
+        /**
          * Build and register the [PropagationSendRecord] for a send that has a propagation
          * phase to fail over, returning the record (the caller stores it under the send's
          * hash in [inFlightPropagationSends]).
@@ -2878,18 +2899,39 @@ class MessagingViewModel
                 PropagationSendRecord(
                     relayed = relayedAtSubmit,
                     retry = {
-                        // Re-send the current row as PROPAGATED through the (failed-over) relay;
-                        // on success the row is re-keyed to the new hash. Null means the re-drive
-                        // failed and the row keeps its current id, so nothing to re-register.
+                        // Re-drive re-keys the row (old id -> new id) and re-sends as
+                        // PROPAGATED. The re-key happens *inside* reDriveMessage, so a fast
+                        // FAILED on the new hash can reach handlePropagationSendFailover
+                        // before the record is re-registered under the new hash, and the
+                        // failover would be silently lost. reDriveMessage therefore invokes
+                        // [onRekey] just BEFORE the re-key (while the old-hash record is
+                        // still present) so we can register the record under the new hash
+                        // ahead of the row swap; the stale old-hash entry is dropped after.
                         val currentHash = rowHash.get()
-                        val newHash = reDriveMessage(currentHash, forcedMethod = DeliveryMethod.PROPAGATED)
+                        val rec = record
+                        val newHash =
+                            reDriveMessage(
+                                messageId = currentHash,
+                                forcedMethod = DeliveryMethod.PROPAGATED,
+                                onRekey = { nextHash ->
+                                    if (rec != null) {
+                                        inFlightPropagationSends[nextHash] = rec
+                                    }
+                                },
+                            )
                         if (newHash != null) {
                             rowHash.set(newHash)
-                            record?.let { rec ->
+                            // Drop the stale old-hash entry — but only when the re-key actually
+                            // moved to a new hash (the normal case, a new hash per hop). A
+                            // no-op re-key (same hash returned) keeps the record under that
+                            // hash, so removing it here would drop the live record.
+                            if (newHash != currentHash) {
                                 inFlightPropagationSends.remove(currentHash)
-                                inFlightPropagationSends[newHash] = rec
                             }
                         }
+                        // newHash == null: the re-drive failed (attachment lost / send failed),
+                        // the row kept its old id, and the old-hash record (still present)
+                        // handles its own terminal. Nothing to re-register.
                     },
                 )
             return record
@@ -2923,7 +2965,9 @@ class MessagingViewModel
                 )
                 return null
             }
-            val imageFormat = if (imageData != null) "jpg" else null
+            // The real format is not persisted (only the byte payload is); sniff it from the
+            // stored bytes so a re-driven animated GIF / PNG is not mis-labelled as "jpg".
+            val imageFormat = imageData?.let { sniffImageFormat(it) }
             val audioAttachment = parseAudioAttachment(fieldsJson)
             val voiceMode = audioAttachment?.mode?.wireValue
             val voiceBytes =
@@ -2976,7 +3020,11 @@ class MessagingViewModel
          *   failed (the row keeps its id and is marked failed again).
          */
         @Suppress("LongMethod", "ReturnCount")
-        private suspend fun reDriveMessage(messageId: String, forcedMethod: DeliveryMethod? = null): String? {
+        private suspend fun reDriveMessage(
+            messageId: String,
+            forcedMethod: DeliveryMethod? = null,
+            onRekey: ((newHash: String) -> Unit)? = null,
+        ): String? {
             Log.d(TAG, "Re-driving message: $messageId (forcedMethod=$forcedMethod)")
 
             // Load the message from database
@@ -3047,12 +3095,26 @@ class MessagingViewModel
                         },
                     // Preserve reply on re-drive
                     replyToMessageId = message.replyToMessageId,
+                    // Preserve the quoted reply preview too: a recipient without the quoted
+                    // message in their local store (cross-app, or their history aged out) would
+                    // otherwise lose its preview when the re-send ships.
+                    replyQuotedContent = message.replyToMessageId?.let { id ->
+                        runCatching {
+                            conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
+                        }.getOrNull()
+                    },
                 )
 
             return result.fold(
                 onSuccess = { receipt ->
                     val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
                     Log.d(TAG, "Re-drive successful, new hash: ${newMessageHash.take(16)}...")
+                    // Register the record under the new hash BEFORE the row re-keys (fast-FAILED
+                    // race): the old-hash record is still present, so a FAILED on newHash that
+                    // lands before or during the re-key still finds the record under newHash and
+                    // drives the next failover instead of being silently dropped. The re-key itself
+                    // is atomic (Room @Transaction), so the row swap can't drop the only copy.
+                    onRekey?.invoke(newMessageHash)
                     // Re-key the row to the new hash (delete old, insert one under the new id).
                     conversationRepository.updateMessageId(messageId, newMessageHash)
                     newMessageHash

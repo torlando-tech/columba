@@ -1449,6 +1449,44 @@ class MessagingViewModelTest {
             coVerify(exactly = 0) { conversationRepository.clearDraft(testPeerHash) }
         }
 
+    @Test
+    fun `send with padded text still clears the composer and draft`() =
+        runViewModelTest {
+            // Regression (introduced when the send path was factored into executeLxmfSend): the
+            // composer/draft clearing compares lastDraftText against the text the user actually
+            // typed. The network path trims the text (" hello " -> "hello"), so comparing
+            // against the trimmed value left the padded draft in the composer and DB, letting
+            // the user accidentally re-send. The original submitted text must drive the clear.
+            val destination = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns
+                Result.success(
+                    MessageReceipt(
+                        messageHash = ByteArray(32) { it.toByte() },
+                        timestamp = 3_000L,
+                        destinationHash = destination,
+                    ),
+                )
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            coEvery { conversationRepository.clearDraft(testPeerHash) } just Runs
+
+            viewModel.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            // The user types padded text; lastDraftText records the raw padded value.
+            viewModel.onDraftTextChanged("  hello  ")
+            val sendResult = async { viewModel.composerSendResult.first() }
+            viewModel.sendMessage(testPeerHash, "  hello  ")
+            advanceUntilIdle()
+
+            // The composer/draft clears: the send is attributed to the raw submitted text
+            // (== lastDraftText), not the trimmed network text.
+            val result = sendResult.await()
+            assertEquals("  hello  ", result.submittedText)
+            assertTrue(result.clearComposer)
+            coVerify(exactly = 1) { conversationRepository.clearDraft(testPeerHash) }
+        }
+
     // ========== DELIVERY STATUS HANDLING TESTS ==========
 
     @Test

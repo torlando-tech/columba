@@ -3107,6 +3107,117 @@ class PropagationNodeManagerTest {
         }
 
     @Test
+    fun `a send failure after a sync blames the relay the send used, not the last synced one`() =
+        runTest {
+            // Regression: reportRelayUnreachable used to key off activeSyncRelayHash, a
+            // sync-specific variable that lingers from the last sync. After "sync on A, switch
+            // to B, send on B fails" it would record the failure on A (the healthy relay we
+            // just moved off), excluding it for 10 minutes. A *send* must blame the relay it
+            // was routing through (the current relay), never the stale sync variable.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            // Start on A and run a sync that stays in the "syncing" poll branch — this sets
+            // activeSyncRelayHash = A and leaves it there (the bug's precondition).
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
+                Result.success(PropagationState(state = 1, stateName = "syncing", progress = 0.5f, messagesReceived = 0))
+            val syncJob = launch { manager.triggerSync(silent = true) }
+            advanceUntilIdle()
+            // The writer now fails over to B; the in-flight sync's activeSyncRelayHash is still A.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(bHash, manager.currentRelay.value?.destinationHash)
+
+            // A propagation SEND on B fails. It must blame B, not the stale sync relay A.
+            var retryInvocations = 0
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+            coVerify(exactly = 1) { preferredRepository.recordFailure(bHash, 9, "No path to relay", any()) }
+            coVerify(exactly = 0) { preferredRepository.recordFailure(aHash, 9, "No path to relay", any()) }
+            syncJob.cancel()
+            manager.stop()
+        }
+
+    @Test
+    fun `two failed sends before failover both re-drive when the relay changes`() =
+        runTest {
+            // Regression: the pending retry was a single slot, so a second failure overwrote the
+            // first's retry and only the last operation was ever re-driven. Both must survive
+            // until the relay changes, and each must fire exactly once.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            val noPath = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0)
+
+            var firstRetries = 0
+            var secondRetries = 0
+            manager.reportRelayUnreachable(state = noPath, retryAction = { firstRetries++ })
+            runCurrent()
+            manager.reportRelayUnreachable(state = noPath, retryAction = { secondRetries++ })
+            runCurrent()
+            assertEquals(0, firstRetries)
+            assertEquals(0, secondRetries)
+
+            // Writer fails over to B: BOTH queued retries fire exactly once.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(1, firstRetries)
+            assertEquals(1, secondRetries)
+            manager.stop()
+        }
+
+    @Test
+    fun `an immediate failed sync response schedules a failover retry`() =
+        runTest {
+            // Regression: the initial "failed" response path recorded the relay failure but
+            // never registered a retry, so with automatic retrieval off the user had to request
+            // it again after the writer switched relays. It must go through the same
+            // record-and-retry path as the polled failure terminal.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            // The backend's request returns an immediate terminal "failed" (state 8), not a
+            // transient syncing state — this is the path that previously skipped the retry.
+            // Count requests so the assertion below proves the retry actually re-ran the sync
+            // on the new relay (not just that a failure was recorded).
+            var requestCount = 0
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } answers {
+                requestCount++
+                Result.success(PropagationState(state = 8, stateName = "failed", progress = 0f, messagesReceived = 0))
+            }
+
+            val syncJob = launch { manager.triggerSync(silent = true) }
+            advanceUntilIdle()
+            coVerify(exactly = 1) { preferredRepository.recordFailure(aHash, 8, any(), any()) }
+            assertEquals(1, requestCount)
+            // The retry is queued now (not fired yet — the relay has not changed).
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            // The queued sync retry re-runs the request on the new relay: requestCount grows.
+            assertTrue("the immediate-failed sync retry must re-run the request on the new relay", requestCount >= 2)
+            syncJob.cancel()
+            manager.stop()
+        }
+
+    @Test
     fun `writer - transport-incompatible node is not affected by an unrelated unreachable hash`() =
         runTest {
             // The unreachable hash is not even in the list; resolution is unchanged.

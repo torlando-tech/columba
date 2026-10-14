@@ -1465,6 +1465,7 @@ class MessagingViewModel
                     executeLxmfSend(
                         destinationHash = destinationHash,
                         content = sanitized,
+                        submittedText = content,
                         imageData = imageData,
                         imageFormat = imageFormat,
                         fileAttachments = fileAttachments,
@@ -1495,6 +1496,7 @@ class MessagingViewModel
         private suspend fun executeLxmfSend(
             destinationHash: String,
             content: String,
+            submittedText: String,
             imageData: ByteArray?,
             imageFormat: String?,
             fileAttachments: List<FileAttachment>,
@@ -1645,9 +1647,9 @@ class MessagingViewModel
                             voiceMode,
                         )
                     if (persisted) {
-                        clearSubmittedDraft(destinationHash, content, replyToId)
+                        clearSubmittedDraft(destinationHash, submittedText, replyToId)
                     }
-                    composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
+                    composerSendResults.send(ComposerSendResult(destinationHash, submittedText, persisted))
                 }.onFailure { error ->
                     val persisted =
                         handleSendFailure(
@@ -1663,8 +1665,8 @@ class MessagingViewModel
                             voiceMode = voiceMode,
                             voiceRecording = voiceRecording,
                         )
-                    if (persisted) clearSubmittedDraft(destinationHash, content, replyToId)
-                    composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
+                    if (persisted) clearSubmittedDraft(destinationHash, submittedText, replyToId)
+                    composerSendResults.send(ComposerSendResult(destinationHash, submittedText, persisted))
                 }
         }
 

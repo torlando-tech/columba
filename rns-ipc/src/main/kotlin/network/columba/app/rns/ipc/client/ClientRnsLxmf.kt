@@ -230,6 +230,10 @@ internal class ClientRnsLxmf(
         Unit
     }
 
+    override suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean> = runCatching {
+        awaitBool { cb -> remote.retryPropagatedMessage(messageHashHex, cb) }
+    }
+
     private val propagationShared = MutableSharedFlow<PropagationState>(extraBufferCapacity = 16)
 
     init {

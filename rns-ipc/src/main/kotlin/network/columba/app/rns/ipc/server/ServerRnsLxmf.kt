@@ -19,6 +19,7 @@ import network.columba.app.rns.ipc.BundleKeys
 import network.columba.app.rns.ipc.FieldsBlob
 import network.columba.app.rns.ipc.IRnsLxmf
 import network.columba.app.rns.ipc.toExtraFieldsMap
+import network.columba.app.rns.ipc.callback.IRnsBoolCallback
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback
 import network.columba.app.rns.ipc.callback.IRnsMessageCallback
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback
@@ -207,6 +208,9 @@ internal class ServerRnsLxmf(
 
     override fun cancelMessageSync(cb: IRnsResultCallback) =
         dispatch(cb, scope) { impl.cancelMessageSync().bundleOrThrow() }
+
+    override fun retryPropagatedMessage(messageHashHex: String, cb: IRnsBoolCallback) =
+        dispatchBool(cb, scope) { impl.retryPropagatedMessage(messageHashHex).getOrThrow() }
 
     override fun registerPropagationStateObserver(cb: IRnsPropagationStateCallback) =
         propagationHub.registerObserver(cb)

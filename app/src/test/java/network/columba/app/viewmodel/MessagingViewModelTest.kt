@@ -1527,6 +1527,199 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `propagated send RETRYING_PROPAGATED then FAILED still triggers relay failover`() =
+        runViewModelTest {
+            // Regression: a propagated-method send emits RETRYING_PROPAGATED (non-terminal)
+            // before its terminal FAILED. The in-flight entry must NOT be removed on the
+            // non-terminal update, or the FAILED terminal finds nothing and the relay
+            // failover (reportRelayUnreachable) never fires — leaving the user's priority
+            // list showing the stale sync-time failure instead of a fresh one.
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "propagated"
+            coEvery { settingsRepository.getTryPropagationOnFail() } returns false
+
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val receiptHash = ByteArray(32) { it.toByte() }
+            val receiptHashHex = receiptHash.joinToString("") { "%02x".format(it) }
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = receiptHash,
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(testReceipt)
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            val failoverRetrySlot = slot<suspend () -> Unit>()
+            coEvery { propagationNodeManager.reportRelayUnreachable(any(), capture(failoverRetrySlot)) } just Runs
+            // Delivery-status handler applies the status to the DB before reaching the
+            // failover block; the message is "not found" (null) here, which the handler
+            // tolerates (it retries then proceeds to the failover check).
+            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            var retriedHash: String? = null
+            coEvery { rnsLxmf.retryPropagatedMessage(any()) } answers {
+                retriedHash = firstArg()
+                Result.success(true)
+            }
+
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            // Fresh ViewModel so its init-time observeDeliveryStatus collector picks up the
+            // stubbed flow (the shared `viewModel` already consumed the setup flowOf()).
+            val vm = createTestViewModel()
+            advanceUntilIdle()
+
+            vm.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            runCatching { vm.sendMessage(testPeerHash, "Propagated test") }
+            advanceUntilIdle()
+
+            // The send was PROPAGATED-method, so the entry must now be tracked.
+            coVerify(exactly = 1) {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "Propagated test",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = DeliveryMethod.PROPAGATED,
+                    tryPropagationOnFail = false,
+                    imageData = null,
+                    imageFormat = null,
+                )
+            }
+
+            // Non-terminal RETRYING_PROPAGATED: must NOT drop the tracked entry.
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = receiptHashHex,
+                    status = DeliveryStatus.RETRYING_PROPAGATED,
+                    timestamp = 3000L,
+                    originatingIdentityHash = testIdentity.hash.joinToString("") { "%02x".format(it) },
+                ),
+            )
+            advanceUntilIdle()
+
+            // Terminal FAILED: the entry is still present, so failover fires.
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = receiptHashHex,
+                    status = DeliveryStatus.FAILED,
+                    timestamp = 3100L,
+                    originatingIdentityHash = testIdentity.hash.joinToString("") { "%02x".format(it) },
+                ),
+            )
+            advanceUntilIdle()
+
+            // The failed send registered a re-drive retry: invoking it must re-drive the
+            // *same* message (same hash) via retryPropagatedMessage — not re-submit a new one.
+            failoverRetrySlot.captured.invoke()
+            advanceUntilIdle()
+            assertEquals(receiptHashHex, retriedHash)
+            coVerify(exactly = 1) { propagationNodeManager.reportRelayUnreachable(any(), any()) }
+        }
+
+    @Test
+    fun `direct send that falls back to propagation triggers relay failover`() =
+        runViewModelTest {
+            // Regression for the user's actual report: a DIRECT/OPPORTUNISTIC send to an
+            // unreachable peer fails direct, the Python sideband falls it back to the relay
+            // (RETRYING_PROPAGATED), the relay is also unreachable (FAILED). The send is NOT
+            // PROPAGATED-method at send time, so it must still be tracked (tryPropOnFail &&
+            // a relay is present) and its FAILED terminal must mark the relay unreachable and
+            // re-drive the payload as PROPAGATED against the newly-selected relay.
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "direct"
+            coEvery { settingsRepository.getTryPropagationOnFail() } returns true
+            every { propagationNodeManager.currentRelay } returns MutableStateFlow(
+                network.columba.app.service.RelayInfo(
+                    destinationHash = "a5ce55f87db3841dd606553880b3ae3db3ae3d00000000000000000000000001",
+                    displayName = "Luthen",
+                    hops = 2,
+                    isAutoSelected = true,
+                    lastSeenTimestamp = 1L,
+                ),
+            )
+
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val receiptHash = ByteArray(32) { (it + 100).toByte() }
+            val receiptHashHex = receiptHash.joinToString("") { "%02x".format(it) }
+            val testReceipt =
+                MessageReceipt(
+                    messageHash = receiptHash,
+                    timestamp = 3000L,
+                    destinationHash = destHashBytes,
+                )
+            coEvery { rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(testReceipt)
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            val retrySlot = slot<suspend () -> Unit>()
+            coEvery { propagationNodeManager.reportRelayUnreachable(any(), capture(retrySlot)) } just Runs
+            var retriedFallbackHash: String? = null
+            coEvery { rnsLxmf.retryPropagatedMessage(any()) } answers {
+                retriedFallbackHash = firstArg()
+                Result.success(true)
+            }
+            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+
+            val vm = createTestViewModel()
+            advanceUntilIdle()
+
+            vm.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            runCatching { vm.sendMessage(testPeerHash, "Fallback test") }
+            advanceUntilIdle()
+
+            // The original send was OPPORTUNISTIC (direct default, short text) with the
+            // fallback flag on — NOT PROPAGATED.
+            coVerify(exactly = 1) {
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = any(),
+                    content = "Fallback test",
+                    sourceIdentity = testIdentity,
+                    deliveryMethod = DeliveryMethod.OPPORTUNISTIC,
+                    tryPropagationOnFail = true,
+                    imageData = null,
+                    imageFormat = null,
+                )
+            }
+
+            val originHash = testIdentity.hash.joinToString("") { "%02x".format(it) }
+
+            // Sideband fallback: RETRYING_PROPAGATED (non-terminal) must NOT drop the entry.
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = receiptHashHex,
+                    status = DeliveryStatus.RETRYING_PROPAGATED,
+                    timestamp = 3000L,
+                    originatingIdentityHash = originHash,
+                ),
+            )
+            advanceUntilIdle()
+
+            // Terminal FAILED: the tracked entry is still present, so failover fires.
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = receiptHashHex,
+                    status = DeliveryStatus.FAILED,
+                    timestamp = 3100L,
+                    originatingIdentityHash = originHash,
+                ),
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { propagationNodeManager.reportRelayUnreachable(any(), any()) }
+
+            // The captured retry must re-drive the *same* message (same hash) — not re-submit a
+            // new one. Assert the retry re-drives the exact hash, and that no second
+            // sendLxmfMessageWithMethod (a fresh message) is issued.
+            retrySlot.captured.invoke()
+            advanceUntilIdle()
+            assertEquals(receiptHashHex, retriedFallbackHash)
+            coVerify(exactly = 1) { rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        }
+
+    @Test
     fun `delivered status updates message status only`() =
         runViewModelTest {
             // Setup: Create a flow that emits a delivered status update

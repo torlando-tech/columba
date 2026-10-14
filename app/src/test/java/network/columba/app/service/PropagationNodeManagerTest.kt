@@ -3069,6 +3069,44 @@ class PropagationNodeManagerTest {
         }
 
     @Test
+    fun `a transient null during failover does not drop the pending retry`() =
+        runTest {
+            // Regression for the on-device bug: setAsMyRelay(clearOther = true) clears the
+            // failed relay before setting the replacement, so currentRelay emits null between
+            // the two. firePendingRelayRetryIfDue(null) must NOT drop the pending retry — the
+            // real next relay arrives right after and must still fire it exactly once.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            var retryInvocations = 0
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+
+            // The failover clears A (null) before setting B — exactly the production order.
+            myRelayFlow.value = null
+            flushRelayUntilStable()
+            // The transient null must NOT have fired or dropped the retry.
+            assertEquals(0, retryInvocations)
+
+            // Then B arrives: the pending retry fires exactly once.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(bHash, manager.currentRelay.value?.destinationHash)
+            assertEquals(1, retryInvocations)
+            manager.stop()
+        }
+
+    @Test
     fun `writer - transport-incompatible node is not affected by an unrelated unreachable hash`() =
         runTest {
             // The unreachable hash is not even in the list; resolution is unchanged.

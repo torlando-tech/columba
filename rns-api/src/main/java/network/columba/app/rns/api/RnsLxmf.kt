@@ -171,6 +171,26 @@ interface RnsLxmf {
     suspend fun cancelMessageSync(): Result<Unit>
 
     /**
+     * Re-drive an already-sent LXMessage against the current outbound
+     * propagation node — the app-level relay-failover retry.
+     *
+     * Unlike re-submitting the send (which mints a new LXMessage and a new
+     * conversation row), this re-submits the *same* message object: same hash,
+     * same DB row, no duplicate bubble. The Python backend holds a registry of
+     * live outbound messages and re-packs/re-sends the one identified by
+     * [messageHashHex] (lowercase hex) through `handle_outbound`, exactly like
+     * the direct→propagation fallback does.
+     *
+     * @param messageHashHex Lowercase hex of the message to re-drive.
+     * @return `Result.success(true)` if the message was found and re-driven;
+     *   `Result.success(false)` if it was not in the registry (already
+     *   delivered/expired) or no router was ready; `Result.failure` on a
+     *   backend error. The Kotlin (non-Python) backend has no such primitive
+     *   and returns a failed Result.
+     */
+    suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean>
+
+    /**
      * Observable stream of propagation transfer state changes (path
      * request → link establish → receiving → complete). UI subscribes for
      * the propagation sync progress indicator.

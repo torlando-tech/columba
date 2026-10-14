@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.model.AnnounceEvent
 import network.columba.app.rns.api.model.BatteryProfile
 import network.columba.app.rns.api.model.CallState
@@ -1406,6 +1408,13 @@ class NativeRnsBackendImpl(
             _propagationStateFlow.tryEmit(PropagationState.IDLE)
             Log.i(TAG, "Cancelled propagation sync (soft — lxmf-kt teardown TODO)")
         }
+
+    override suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean> =
+        Result.failure(
+            RnsException(
+                RnsError.FeatureUnsupported("retryPropagatedMessage is only available on the Python backend"),
+            ),
+        )
 
     private fun readPropagationState(r: network.reticulum.lxmf.LXMRouter): PropagationState =
         PropagationState(

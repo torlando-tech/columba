@@ -1100,24 +1100,44 @@ class MessagingViewModel
                 // payload to be re-driven once the new relay is active (the manager fires it
                 // from observeRelayChanges). Only propagation-method sends are tracked in
                 // inFlightPropagationSends, so direct/opportunistic sends never trigger this.
-                // The entry is removed for any terminal status (delivered/propagated/failed) so
-                // the map is bounded.
-                inFlightPropagationSends.remove(update.messageHash)?.let { record ->
-                    if (update.status == DeliveryStatus.FAILED) {
-                        Log.i(
-                            TAG,
-                            "Propagated send ${update.messageHash.take(16)}... failed — relay " +
-                                "unreachable; failing over to next relay and retrying the send",
-                        )
-                        propagationNodeManager.reportRelayUnreachable(
-                            state = propagationSendFailedState,
-                            retryAction = record.retry,
-                        )
-                    }
-                }
+                handlePropagationSendFailover(update)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
+            }
+        }
+
+        /**
+         * Terminal-status hook for propagation-method send failover.
+         *
+         * The entry is removed only on a *terminal* status (delivered/propagated/failed)
+         * so the map is bounded. Non-terminal updates (pending, retrying_propagated) must
+         * NOT remove the entry — a propagated send emits retrying_propagated before it
+         * fails, and removing on that update would drop the record before the FAILED
+         * terminal arrives, silently skipping the failover (and leaking the entry).
+         */
+        private suspend fun handlePropagationSendFailover(
+            update: network.columba.app.rns.api.model.DeliveryStatusUpdate,
+        ) {
+            val isTerminalStatus =
+                update.status == DeliveryStatus.DELIVERED ||
+                    update.status == DeliveryStatus.PROPAGATED ||
+                    update.status == DeliveryStatus.FAILED
+            if (!isTerminalStatus) {
+                return
+            }
+            inFlightPropagationSends.remove(update.messageHash)?.let { record ->
+                if (update.status == DeliveryStatus.FAILED) {
+                    Log.i(
+                        TAG,
+                        "Propagated send ${update.messageHash.take(16)}... failed — relay " +
+                            "unreachable; failing over to next relay and retrying the send",
+                    )
+                    propagationNodeManager.reportRelayUnreachable(
+                        state = propagationSendFailedState,
+                        retryAction = record.retry,
+                    )
+                }
             }
         }
 
@@ -1427,10 +1447,7 @@ class MessagingViewModel
          * Crucially it does NOT read the composer: every payload element (content, image, file
          * attachments, voice bytes, reply target) is passed in. This lets the failover retry
          * re-drive the *exact* send that failed against the newly-selected relay, even if the
-         * user has since edited the composer. `tryPropagationOnFail` is always false here —
-         * the app-level relay failover (mark unreachable → writer picks next → re-drive) supersedes
-         * the backend's direct-to-propagated auto-fallback, and a propagation-method send has no
-         * further fallback anyway.
+         * user has since edited the composer.
          */
         @Suppress("LongMethod", "LongParameterList")
         private suspend fun executeLxmfSend(
@@ -1527,33 +1544,40 @@ class MessagingViewModel
 
             result
                 .onSuccess { receipt ->
-                    // Track propagation-method sends awaiting their terminal delivery
-                    // status so a `FAILED` (relay never stored the deferred message) can
-                    // mark the relay unreachable and re-drive this exact payload on the
-                    // next relay. Direct/opportunistic sends are not relay-routed and
-                    // are not tracked.
-                    val propagationRetry: (suspend () -> Unit)? =
-                        if (deliveryMethod == DeliveryMethod.PROPAGATED) {
-                            {
-                                executeLxmfSend(
-                                    destinationHash = destinationHash,
-                                    content = sanitized,
-                                    imageData = imageData,
-                                    imageFormat = imageFormat,
-                                    fileAttachments = fileAttachments,
-                                    replyToId = replyToId,
-                                    voiceBytes = voiceBytes,
-                                    voiceMode = voiceMode,
-                                    voiceRecording = voiceRecording,
-                                )
+                    // Track any send that has a propagation phase that can fail, awaiting its
+                    // terminal delivery status so a `FAILED` (relay never stored the deferred
+                    // message) can mark the relay unreachable and re-drive this exact payload on
+                    // the next relay. Two cases register:
+                    //   1. deliveryMethod == PROPAGATED — the send went to the relay directly.
+                    //   2. tryPropOnFail && a relay is configured — a direct/opportunistic send
+                    //      that will *fall back* to the relay via the Python sideband when direct
+                    //      fails (emits RETRYING_PROPAGATED then FAILED). The sideband is the
+                    //      only relay-touching phase, so it is what fails over.
+                    // A direct send with tryPropOnFail=false never touches a relay, so it is
+                    // not tracked.
+                    val hasRelay = propagationNodeManager.currentRelay.value != null
+                    val willUseRelay =
+                        deliveryMethod == DeliveryMethod.PROPAGATED ||
+                            (tryPropOnFail && hasRelay)
+                    // The retry re-drives the *same* message (same hash) against the next relay —
+                    // it does NOT re-submit the send, because a re-submit would mint a new
+                    // LXMessage and a new conversation row (the duplicate-bubble bug). The
+                    // Python backend keeps a registry of live outbound messages and re-sends
+                    // the one identified by this hash through the (newly-failed-over) node.
+                    //
+                    // When the retry fires it re-registers itself (via the self-referential
+                    // `record` holder) so the re-driven attempt's own failure re-arms the
+                    // next failover: one bubble, cycling through the relays until it is
+                    // delivered or the list is exhausted — never a new message per node.
+                    val propagatedHashHex = receipt.messageHash.joinToString("") { "%02x".format(it) }
+                    if (willUseRelay) {
+                        var record: PropagationSendRecord? = null
+                        record =
+                            PropagationSendRecord {
+                                record?.let { inFlightPropagationSends[propagatedHashHex] = it }
+                                rnsLxmf.retryPropagatedMessage(propagatedHashHex)
                             }
-                        } else {
-                            null
-                        }
-                    if (propagationRetry != null) {
-                        inFlightPropagationSends[
-                            receipt.messageHash.joinToString("") { "%02x".format(it) }
-                        ] = PropagationSendRecord(propagationRetry)
+                        inFlightPropagationSends[propagatedHashHex] = record
                     }
                     val persisted =
                         handleSendSuccess(

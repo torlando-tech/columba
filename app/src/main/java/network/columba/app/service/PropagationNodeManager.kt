@@ -762,10 +762,19 @@ class PropagationNodeManager
         private fun firePendingRelayRetryIfDue(newRelayHash: String?) {
             val action = pendingRelayRetryAction ?: return
             val failedHash = pendingRetryFailedRelayHash
+            // A transient null is the *middle* of a failover: setAsMyRelay(clearOther = true)
+            // clears the old relay before setting the new one, so currentRelay emits null
+            // between the failed relay and the replacement. Dropping the pending retry here
+            // would eat it — the real next relay arrives right after and must still fire it.
+            // Hold the pending state through the null; it is cleared on stop() or when a real
+            // relay (the failed one again, or a different one) arrives.
+            if (newRelayHash == null) {
+                return
+            }
             // Only retry when the relay actually changed away from the one that failed. If the
-            // writer re-selected the same (now-recovered) relay, or there is still no relay, the
-            // retry is stale — drop it rather than re-driving against the failed relay.
-            if (newRelayHash == null || newRelayHash == failedHash) {
+            // writer re-selected the same (now-recovered) relay, the retry is stale — drop it
+            // rather than re-driving against the relay that just failed.
+            if (newRelayHash == failedHash) {
                 pendingRelayRetryAction = null
                 pendingRetryFailedRelayHash = null
                 return

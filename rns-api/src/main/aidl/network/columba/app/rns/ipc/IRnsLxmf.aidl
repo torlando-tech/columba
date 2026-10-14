@@ -23,6 +23,7 @@ package network.columba.app.rns.ipc;
 import network.columba.app.rns.api.model.DeliveryMethod;
 import network.columba.app.rns.api.model.IconAppearance;
 import network.columba.app.rns.api.model.Identity;
+import network.columba.app.rns.ipc.callback.IRnsBoolCallback;
 import network.columba.app.rns.ipc.callback.IRnsDeliveryStatusCallback;
 import network.columba.app.rns.ipc.callback.IRnsMessageCallback;
 import network.columba.app.rns.ipc.callback.IRnsPropagationStateCallback;
@@ -89,6 +90,14 @@ oneway interface IRnsLxmf {
     void requestMessagesFromPropagationNode(in @nullable byte[] identityPrivateKey, int maxMessages, in IRnsResultCallback cb);
     void getPropagationState(in IRnsResultCallback cb);
     void cancelMessageSync(in IRnsResultCallback cb);
+
+    // Re-drive an already-sent LXMessage against the current outbound
+    // propagation node (app-level relay-failover retry). Returns
+    // Result<Boolean>: true iff the message was found in the backend's
+    // outbound registry and re-driven (same hash, no duplicate). The Python
+    // backend implements this via `event_bridge.retry_outbound_propagated_message`;
+    // the Kotlin backend returns a failed Result (no such primitive).
+    void retryPropagatedMessage(in String messageHashHex, in IRnsBoolCallback cb);
 
     // SharedFlow<PropagationState>: observer register/unregister.
     void registerPropagationStateObserver(in IRnsPropagationStateCallback cb);

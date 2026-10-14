@@ -1728,7 +1728,7 @@ def attach_lxmessage_callbacks(
     lxmessage.register_failed_callback(_failed)
 
 
-def register_outbound_message(lxmessage, originating_identity_hash=None):
+def register_outbound_message(lxmessage, originating_identity_hash=None, on_delivered=None):
     """Record a live LXMessage by its hash so an app-level relay failover can
     re-drive it.
 
@@ -1739,6 +1739,12 @@ def register_outbound_message(lxmessage, originating_identity_hash=None):
     hash is stashed on the message so a later re-drive re-attaches the same
     delivery-status identity the Kotlin side matches on.
 
+    `on_delivered` is the *per-send* delivered-status callback the Kotlin send
+    path wired onto this message (the delivery-status sink, not the module-level
+    incoming-message sink). It is stashed so a relay-failover re-drive re-attaches
+    the SAME callback — a successful retry must flip the original row to delivered,
+    which only the delivery-status sink does.
+
     No-op when the message has no hash yet (shouldn't happen post-`handle_outbound`,
     but guarded for safety).
     """
@@ -1747,6 +1753,7 @@ def register_outbound_message(lxmessage, originating_identity_hash=None):
         return
     try:
         lxmessage._columba_originating_identity_hash = originating_identity_hash
+        lxmessage._columba_on_lxmf_delivered = on_delivered
     except Exception:  # noqa: BLE001 — non-critical tag
         pass
     _outbound_lxmessages[h] = lxmessage
@@ -1795,12 +1802,17 @@ def retry_outbound_propagated_message(hash_hex):
     # Re-attach delivery/failed callbacks so the Kotlin side learns the
     # re-driven attempt's outcome. `attach_lxmessage_callbacks` re-registers
     # `_delivered`/`_failed` closures on the same message object.
-    # The `on_retrying_propagated` param is None here: the re-driven message is
-    # already PROPAGATED-method, so there is no further direct→prop fallback to
-    # announce.
+    #
+    # The delivered-status callback MUST be the per-send sink the original send
+    # used (stashed on the message at registration) — the delivery-status sink,
+    # not the module-level incoming-message sink (`_on_lxmf_delivery`). A
+    # successful retry has to flip the original row to delivered, which only the
+    # delivery-status sink does. Fall back to the module sink only if the tag is
+    # missing (shouldn't happen — registration always sets it).
+    on_delivered = getattr(msg, "_columba_on_lxmf_delivered", None) or _on_lxmf_delivery
     attach_lxmessage_callbacks(
         msg,
-        _on_lxmf_delivery,
+        on_delivered,
         _on_lxmf_failure,
         None,
         try_propagation_on_fail=False,

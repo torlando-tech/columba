@@ -129,6 +129,30 @@ class OutboundRegistryRetryTest(unittest.TestCase):
         message.delivery_callback(message)
         self.assertEqual("delivered", events[0][0])
 
+    def test_retry_reattaches_per_send_delivered_status_sink(self):
+        # Regression (Greptile P1 "successful retries still look failed"): the retry
+        # must re-attach the *per-send* delivered-status sink the original send used,
+        # not the module-level incoming-message sink. A successful retry has to flip
+        # the original row to delivered, which only the delivery-status sink does.
+        delivered_events = []
+        per_send_sink = Callback(delivered_events, "per_send_delivered")
+        message = Message()
+        self.module._lxmf_router = RetryRouter()
+        # The module-level incoming-message sink must NOT be the one used for the
+        # re-driven attempt's delivery.
+        self.module._on_lxmf_delivery = Callback([], "incoming")
+        self.module._on_lxmf_failure = Callback([], "failed")
+
+        self.module.register_outbound_message(
+            message, originating_identity_hash="identity-a", on_delivered=per_send_sink
+        )
+        self.module.retry_outbound_propagated_message(self.hash_hex)
+
+        # A delivery for the re-driven attempt must reach the per-send sink, not the
+        # module incoming-message sink.
+        message.delivery_callback(message)
+        self.assertEqual([("per_send_delivered", self.hash_hex)], delivered_events)
+
 
 if __name__ == "__main__":
     unittest.main()

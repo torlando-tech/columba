@@ -405,6 +405,7 @@ class BoundRnsBackendTest {
         override suspend fun requestMessagesFromPropagationNode(identityPrivateKey: ByteArray?, maxMessages: Int): Result<PropagationState> = error("not used")
         override suspend fun getPropagationState(): Result<PropagationState> = error("not used")
         override suspend fun cancelMessageSync() = Result.success(Unit)
+        override suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean> = Result.success(false)
         override val propagationStateFlow: SharedFlow<PropagationState> = MutableSharedFlow<PropagationState>(replay = 0).asSharedFlow()
         override fun setConversationActive(active: Boolean) {}
         override fun setIncomingMessageSizeLimit(limitKb: Int) {}

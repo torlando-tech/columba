@@ -385,10 +385,32 @@ class MessagingViewModel
             java.util.concurrent.ConcurrentHashMap<String, PropagationSendRecord>()
 
         /**
+         * messageHash -> true once the send has actually entered its propagation phase.
+         *
+         * A pure PROPAGATED send is relay-routed at submit (the relay is always tried), so it
+         * never needs this flag. A sideband (tryPropOnFail) direct send, however, only reaches
+         * the relay once the Python fallback re-routes it — which the bridge announces with a
+         * `RETRYING_PROPAGATED` delivery-status update. A `FAILED` that arrives *without* that
+         * marker means the send died upstream of the relay (e.g. the bridge's fallback queue was
+         * full and it rejected the message before submitting anything), so blaming the active
+         * relay for it would wrongly exclude a healthy relay for the 10-minute cooldown.
+         * Bounded: entries are removed together with the [inFlightPropagationSends] entry on
+         * any terminal status.
+         */
+        private val propagationPhaseEntered =
+            java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+        /**
          * A propagated send awaiting delivery, captured at send time so the failover retry can
          * re-drive the *exact* payload (not whatever is in the composer now).
+         *
+         * @property relayedDirectly true for a PROPAGATED-method send (relayed at submit, so a
+         *   `FAILED` always implicates the relay); false for a sideband send whose failure is
+         *   only attributed to the relay once [propagationPhaseEntered] confirms the send
+         *   actually reached its propagation phase.
          */
         private data class PropagationSendRecord(
+            val relayedDirectly: Boolean,
             val retry: suspend () -> Unit,
         )
 
@@ -1119,6 +1141,20 @@ class MessagingViewModel
         private suspend fun handlePropagationSendFailover(
             update: network.columba.app.rns.api.model.DeliveryStatusUpdate,
         ) {
+            // A sideband (tryPropOnFail) send enters its relay phase only when the Python
+            // fallback re-routes it, which the bridge announces with RETRYING_PROPAGATED.
+            // Record that so a later FAILED can be attributed to the relay. A FAILED that
+            // arrives *without* this marker means the send died upstream of the relay (e.g.
+            // the bridge's fallback queue was full and it rejected the message before
+            // submitting anything), so it must NOT blame a healthy relay. Pure PROPAGATED
+            // sends are relay-routed at submit, so this marker is irrelevant to them.
+            if (update.status == DeliveryStatus.RETRYING_PROPAGATED) {
+                if (inFlightPropagationSends.containsKey(update.messageHash)) {
+                    propagationPhaseEntered[update.messageHash] = true
+                }
+                return
+            }
+
             val isTerminalStatus =
                 update.status == DeliveryStatus.DELIVERED ||
                     update.status == DeliveryStatus.PROPAGATED ||
@@ -1126,17 +1162,30 @@ class MessagingViewModel
             if (!isTerminalStatus) {
                 return
             }
+            val enteredPhase = propagationPhaseEntered.remove(update.messageHash) == true
             inFlightPropagationSends.remove(update.messageHash)?.let { record ->
                 if (update.status == DeliveryStatus.FAILED) {
-                    Log.i(
-                        TAG,
-                        "Propagated send ${update.messageHash.take(16)}... failed — relay " +
-                            "unreachable; failing over to next relay and retrying the send",
-                    )
-                    propagationNodeManager.reportRelayUnreachable(
-                        state = propagationSendFailedState,
-                        retryAction = record.retry,
-                    )
+                    // Only blame the relay when the send actually reached its propagation
+                    // phase: a pure PROPAGATED send (relayedDirectly) always did, and a
+                    // sideband send did iff the fallback re-routed it (enteredPhase above).
+                    if (record.relayedDirectly || enteredPhase) {
+                        Log.i(
+                            TAG,
+                            "Propagated send ${update.messageHash.take(16)}... failed — relay " +
+                                "unreachable; failing over to next relay and retrying the send",
+                        )
+                        propagationNodeManager.reportRelayUnreachable(
+                            state = propagationSendFailedState,
+                            retryAction = record.retry,
+                        )
+                    } else {
+                        Log.i(
+                            TAG,
+                            "Sideband send ${update.messageHash.take(16)}... failed before " +
+                                "reaching the relay (no RETRYING_PROPAGATED); not blaming the " +
+                                "active relay",
+                        )
+                    }
                 }
             }
         }
@@ -1573,10 +1622,19 @@ class MessagingViewModel
                     if (willUseRelay) {
                         var record: PropagationSendRecord? = null
                         record =
-                            PropagationSendRecord {
-                                record?.let { inFlightPropagationSends[propagatedHashHex] = it }
-                                rnsLxmf.retryPropagatedMessage(propagatedHashHex)
-                            }
+                            PropagationSendRecord(
+                                relayedDirectly = deliveryMethod == DeliveryMethod.PROPAGATED,
+                                retry = {
+                                    record?.let { inFlightPropagationSends[propagatedHashHex] = it }
+                                    rnsLxmf.retryPropagatedMessage(propagatedHashHex).onFailure { e ->
+                                        Log.w(
+                                            TAG,
+                                            "Retry re-drive of ${propagatedHashHex.take(16)}... " +
+                                                "unsupported by this backend: ${e.message}",
+                                        )
+                                    }
+                                },
+                            )
                         inFlightPropagationSends[propagatedHashHex] = record
                     }
                     val persisted =

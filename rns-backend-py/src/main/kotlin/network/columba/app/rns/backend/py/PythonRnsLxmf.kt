@@ -304,11 +304,14 @@ class PythonRnsLxmf(
         // Register the live message so an app-level relay-failover retry can
         // re-drive the *same* message (same hash, no duplicate DB row) against
         // a new outbound propagation node. The hash is set inside handle_outbound,
-        // so it is valid to read here.
+        // so it is valid to read here. The per-send delivered-status callback is
+        // stashed so a retry re-attaches the same sink (a successful retry must
+        // flip this row to delivered, which only the delivery-status sink does).
         runtime.eventBridge.callAttr(
             "register_outbound_message",
             lxmessage,
             originatingIdentityHash,
+            events.onLxmfDelivered,
         )
 
         val hashBytes = lxmessage["hash"]?.toJava(ByteArray::class.java) ?: ByteArray(0)
@@ -752,12 +755,10 @@ class PythonRnsLxmf(
     override suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean> =
         pyResult {
             runtime.requireRunning()
-            val ok = runtime.eventBridge.callAttr("retry_outbound_propagated_message", messageHashHex)
             // The Python function returns True (re-driven) / False (not found or no router).
-            val drove = when (ok) {
-                is Boolean -> ok
-                else -> (ok as? Number)?.toInt() == 1
-            }
+            // `callAttr` returns a PyObject, so unwrap it like the other Python helpers do.
+            val ok = runtime.eventBridge.callAttr("retry_outbound_propagated_message", messageHashHex)
+            val drove = ok?.toJava(Boolean::class.javaObjectType) ?: false
             Log.i(TAG, "retryPropagatedMessage($messageHashHex) -> re-driven=$drove")
             drove
         }

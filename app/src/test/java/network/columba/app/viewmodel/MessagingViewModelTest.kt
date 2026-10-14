@@ -1720,6 +1720,61 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `sideband send that fails before entering the propagation phase does not blame the relay`() =
+        runViewModelTest {
+            // Regression (Greptile P1 "working relays get excluded"): a tryPropOnFail send's
+            // FAILED event does not prove the relay was tried. The Python bridge emits FAILED
+            // when its fallback queue is full, *before* submitting anything to the relay. A
+            // FAILED with no preceding RETRYING_PROPAGATED (the fallback's re-route marker)
+            // means the send died upstream of the relay, so the healthy relay must NOT be
+            // marked unreachable (that would exclude it for the 10-minute cooldown).
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "direct"
+            coEvery { settingsRepository.getTryPropagationOnFail() } returns true
+            every { propagationNodeManager.currentRelay } returns MutableStateFlow(
+                network.columba.app.service.RelayInfo(
+                    destinationHash = "a5ce55f87db3841dd606553880b3ae3db3ae3d00000000000000000000000001",
+                    displayName = "Luthen",
+                    hops = 2,
+                    isAutoSelected = true,
+                    lastSeenTimestamp = 1L,
+                ),
+            )
+            val receiptHash = ByteArray(32) { (it + 200).toByte() }
+            val receiptHashHex = receiptHash.joinToString("") { "%02x".format(it) }
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt = MessageReceipt(messageHash = receiptHash, timestamp = 3000L, destinationHash = destHashBytes)
+            coEvery { rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(testReceipt)
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            var relayUnreachableCalls = 0
+            coEvery { propagationNodeManager.reportRelayUnreachable(any(), any()) } answers { relayUnreachableCalls++; Unit }
+            coEvery { rnsLxmf.retryPropagatedMessage(any()) } returns Result.success(true)
+            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+            val vm = createTestViewModel()
+            advanceUntilIdle()
+            vm.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            runCatching { vm.sendMessage(testPeerHash, "Upstream failure") }
+            advanceUntilIdle()
+            val originHash = testIdentity.hash.joinToString("") { "%02x".format(it) }
+            // Terminal FAILED directly — no RETRYING_PROPAGATED, so the relay was never tried.
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = receiptHashHex,
+                    status = DeliveryStatus.FAILED,
+                    timestamp = 3100L,
+                    originatingIdentityHash = originHash,
+                ),
+            )
+            advanceUntilIdle()
+            assertTrue(
+                "sideband FAILED before entering the relay phase must not blame the relay",
+                relayUnreachableCalls == 0,
+            )
+        }
+
+    @Test
     fun `delivered status updates message status only`() =
         runViewModelTest {
             // Setup: Create a flow that emits a delivered status update

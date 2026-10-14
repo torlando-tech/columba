@@ -385,32 +385,25 @@ class MessagingViewModel
             java.util.concurrent.ConcurrentHashMap<String, PropagationSendRecord>()
 
         /**
-         * messageHash -> true once the send has actually entered its propagation phase.
-         *
-         * A pure PROPAGATED send is relay-routed at submit (the relay is always tried), so it
-         * never needs this flag. A sideband (tryPropOnFail) direct send, however, only reaches
-         * the relay once the Python fallback re-routes it — which the bridge announces with a
-         * `RETRYING_PROPAGATED` delivery-status update. A `FAILED` that arrives *without* that
-         * marker means the send died upstream of the relay (e.g. the bridge's fallback queue was
-         * full and it rejected the message before submitting anything), so blaming the active
-         * relay for it would wrongly exclude a healthy relay for the 10-minute cooldown.
-         * Bounded: entries are removed together with the [inFlightPropagationSends] entry on
-         * any terminal status.
-         */
-        private val propagationPhaseEntered =
-            java.util.concurrent.ConcurrentHashMap<String, Boolean>()
-
-        /**
          * A propagated send awaiting delivery, captured at send time so the failover retry can
          * re-drive the *exact* payload (not whatever is in the composer now).
          *
-         * @property relayedDirectly true for a PROPAGATED-method send (relayed at submit, so a
-         *   `FAILED` always implicates the relay); false for a sideband send whose failure is
-         *   only attributed to the relay once [propagationPhaseEntered] confirms the send
-         *   actually reached its propagation phase.
+         * @property relayed true once the send is known to be in its propagation (relay) phase,
+         *   so a `FAILED` should be attributed to the relay. Set at send time for a PROPAGATED
+         *   send (relayed at submit) and *latched* for a sideband (tryPropOnFail) send the moment
+         *   its fallback re-routes it (the `RETRYING_PROPAGATED` update). The latch — not a
+         *   one-shot flag — matters because the re-drive on the next relay emits no new
+         *   `RETRYING_PROPAGATED` (it re-sends straight as PROPAGATED, no direct→prop fallback),
+         *   so a later failure on relay B, C, … must still blame the relay. A sideband `FAILED`
+         *   that arrives *before* the latch (the bridge's fallback queue was full and it rejected
+         *   the message before submitting) stays `relayed=false`, so a healthy relay is not
+         *   wrongly excluded for the 10-minute cooldown.
+         * @property retry the self-referential closure that re-drives this same message on the
+         *   next relay and re-registers this same record (carrying the latched `relayed`).
          */
-        private data class PropagationSendRecord(
-            val relayedDirectly: Boolean,
+        private class PropagationSendRecord(
+            @Volatile
+            var relayed: Boolean,
             val retry: suspend () -> Unit,
         )
 
@@ -1143,15 +1136,16 @@ class MessagingViewModel
         ) {
             // A sideband (tryPropOnFail) send enters its relay phase only when the Python
             // fallback re-routes it, which the bridge announces with RETRYING_PROPAGATED.
-            // Record that so a later FAILED can be attributed to the relay. A FAILED that
-            // arrives *without* this marker means the send died upstream of the relay (e.g.
-            // the bridge's fallback queue was full and it rejected the message before
-            // submitting anything), so it must NOT blame a healthy relay. Pure PROPAGATED
-            // sends are relay-routed at submit, so this marker is irrelevant to them.
+            // Latch that on the record so the send's later re-drives (relays B, C, …) keep
+            // blaming the relay — the re-drive on the next relay emits no new
+            // RETRYING_PROPAGATED (it re-sends straight as PROPAGATED), so the flag must
+            // persist across the re-drive rather than be one-shot. A sideband FAILED that
+            // arrives *before* any RETRYING_PROPAGATED (the bridge's fallback queue was full
+            // and it rejected the message before submitting) never latches, so a healthy
+            // relay is not wrongly excluded. Pure PROPAGATED sends are relay-routed at submit
+            // (relayed=true from the start), so this latch is irrelevant to them.
             if (update.status == DeliveryStatus.RETRYING_PROPAGATED) {
-                if (inFlightPropagationSends.containsKey(update.messageHash)) {
-                    propagationPhaseEntered[update.messageHash] = true
-                }
+                inFlightPropagationSends[update.messageHash]?.relayed = true
                 return
             }
 
@@ -1162,13 +1156,12 @@ class MessagingViewModel
             if (!isTerminalStatus) {
                 return
             }
-            val enteredPhase = propagationPhaseEntered.remove(update.messageHash) == true
             inFlightPropagationSends.remove(update.messageHash)?.let { record ->
                 if (update.status == DeliveryStatus.FAILED) {
-                    // Only blame the relay when the send actually reached its propagation
-                    // phase: a pure PROPAGATED send (relayedDirectly) always did, and a
-                    // sideband send did iff the fallback re-routed it (enteredPhase above).
-                    if (record.relayedDirectly || enteredPhase) {
+                    // Only blame the relay once the send is known to be in its propagation
+                    // phase (relayed latched). Until then a sideband FAILED died upstream of
+                    // the relay and must not exclude a healthy relay.
+                    if (record.relayed) {
                         Log.i(
                             TAG,
                             "Propagated send ${update.messageHash.take(16)}... failed — relay " +
@@ -1623,7 +1616,7 @@ class MessagingViewModel
                         var record: PropagationSendRecord? = null
                         record =
                             PropagationSendRecord(
-                                relayedDirectly = deliveryMethod == DeliveryMethod.PROPAGATED,
+                                relayed = deliveryMethod == DeliveryMethod.PROPAGATED,
                                 retry = {
                                     record?.let { inFlightPropagationSends[propagatedHashHex] = it }
                                     rnsLxmf.retryPropagatedMessage(propagatedHashHex).onFailure { e ->

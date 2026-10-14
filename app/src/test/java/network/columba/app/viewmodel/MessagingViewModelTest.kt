@@ -1775,6 +1775,72 @@ class MessagingViewModelTest {
         }
 
     @Test
+    fun `sideband send that entered the relay phase keeps blaming the relay on each re-drive`() =
+        runViewModelTest {
+            // Regression (Greptile P1 "later relays are never tried"): once a sideband send
+            // enters its relay phase (RETRYING_PROPAGATED), a re-drive on the *next* relay
+            // emits no new RETRYING_PROPAGATED (it re-sends straight as PROPAGATED). The
+            // "relayed" flag must therefore latch on the record across re-drives, so a failure
+            // on relay B (and C, …) still blames the relay — without the latch the send would
+            // get stuck failed even when more relays remain.
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "direct"
+            coEvery { settingsRepository.getTryPropagationOnFail() } returns true
+            every { propagationNodeManager.currentRelay } returns MutableStateFlow(
+                network.columba.app.service.RelayInfo(
+                    destinationHash = "a5ce55f87db3841dd606553880b3ae3db3ae3d00000000000000000000000001",
+                    displayName = "Luthen",
+                    hops = 2,
+                    isAutoSelected = true,
+                    lastSeenTimestamp = 1L,
+                ),
+            )
+            val receiptHash = ByteArray(32) { (it + 300).toByte() }
+            val receiptHashHex = receiptHash.joinToString("") { "%02x".format(it) }
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val testReceipt = MessageReceipt(messageHash = receiptHash, timestamp = 3000L, destinationHash = destHashBytes)
+            coEvery { rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(testReceipt)
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            val retrySlot = slot<suspend () -> Unit>()
+            var failoverCalls = 0
+            coEvery { propagationNodeManager.reportRelayUnreachable(any(), capture(retrySlot)) } answers {
+                failoverCalls++
+                Unit
+            }
+            coEvery { rnsLxmf.retryPropagatedMessage(any()) } returns Result.success(true)
+            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+            val vm = createTestViewModel()
+            advanceUntilIdle()
+            vm.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            runCatching { vm.sendMessage(testPeerHash, "Multi-relay") }
+            advanceUntilIdle()
+            val originHash = testIdentity.hash.joinToString("") { "%02x".format(it) }
+            suspend fun emit(status: DeliveryStatus, ts: Long) {
+                deliveryStatusFlow.emit(
+                    DeliveryStatusUpdate(messageHash = receiptHashHex, status = status, timestamp = ts, originatingIdentityHash = originHash),
+                )
+                advanceUntilIdle()
+            }
+            // Relay A: fallback re-routes (latches relayed=true), then A fails -> failover #1.
+            emit(DeliveryStatus.RETRYING_PROPAGATED, 3000L)
+            emit(DeliveryStatus.FAILED, 3100L)
+            assertEquals(1, failoverCalls)
+            // The recorded retry re-drives the same message and re-registers the SAME record
+            // (carrying the latched relayed=true).
+            retrySlot.captured.invoke()
+            advanceUntilIdle()
+            // Relay B: the re-drive emits no new RETRYING_PROPAGATED, but B fails. Because the
+            // relayed latch persisted across the re-drive, B's failure must STILL fail over.
+            emit(DeliveryStatus.FAILED, 3200L)
+            assertTrue(
+                "a sideband send that entered the relay phase must keep blaming the relay on each re-drive",
+                failoverCalls >= 2,
+            )
+        }
+
+    @Test
     fun `delivered status updates message status only`() =
         runViewModelTest {
             // Setup: Create a flow that emits a delivered status update

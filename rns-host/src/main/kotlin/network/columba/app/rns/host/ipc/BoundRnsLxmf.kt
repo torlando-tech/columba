@@ -124,9 +124,6 @@ internal class BoundRnsLxmf(
 
     override suspend fun cancelMessageSync(): Result<Unit> = awaitBound().lxmf.cancelMessageSync()
 
-    override suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean> =
-        awaitBound().lxmf.retryPropagatedMessage(messageHashHex)
-
     // SharedFlow republishing: flatMapLatest subscribes to the active backend's
     // propagationStateFlow on each rebind, then shareIn caches replay=1 so late
     // subscribers see the most recent upstream emission across the rebind seam.

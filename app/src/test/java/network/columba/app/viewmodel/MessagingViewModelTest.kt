@@ -1584,9 +1584,13 @@ class MessagingViewModelTest {
                     timestamp = 3000L,
                     destinationHash = destHashBytes,
                 )
+            var sendCalls = 0
             coEvery {
                 rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
-            } returns Result.success(testReceipt)
+            } answers {
+                sendCalls++
+                Result.success(testReceipt)
+            }
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
             val failoverRetrySlot = slot<suspend () -> Unit>()
             coEvery { propagationNodeManager.reportRelayUnreachable(any(), capture(failoverRetrySlot)) } just Runs
@@ -1594,11 +1598,21 @@ class MessagingViewModelTest {
             // failover block; the message is "not found" (null) here, which the handler
             // tolerates (it retries then proceeds to the failover check).
             coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
-            var retriedHash: String? = null
-            coEvery { rnsLxmf.retryPropagatedMessage(any()) } answers {
-                retriedHash = firstArg()
-                Result.success(true)
-            }
+            // The failover retry re-drives from the persisted row: seed a FAILED row under the
+            // send's hash so reDriveMessage reconstructs and re-sends it as PROPAGATED, then
+            // re-keys the row to the new hash (updateMessageId) — one row, never a duplicate.
+            val failedRow =
+                MessageEntity(
+                    id = receiptHashHex,
+                    conversationHash = testPeerHash,
+                    identityHash = testIdentity.hash.joinToString("") { "%02x".format(it) },
+                    content = "Propagated test",
+                    timestamp = 3000L,
+                    isFromMe = true,
+                    status = "failed",
+                )
+            coEvery { conversationRepository.getMessageById(receiptHashHex) } returns failedRow
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
 
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
@@ -1649,10 +1663,14 @@ class MessagingViewModelTest {
             advanceUntilIdle()
 
             // The failed send registered a re-drive retry: invoking it must re-drive the
-            // *same* message (same hash) via retryPropagatedMessage — not re-submit a new one.
+            // message by re-sending it as PROPAGATED (forced, no fallback) and re-keying the
+            // row to the new hash (updateMessageId) — NOT re-submitting via a live-registry
+            // primitive and NOT persisting a second row. Assert: the re-drive issued a second
+            // send (original + re-drive = 2) and re-keyed exactly once.
             failoverRetrySlot.captured.invoke()
             advanceUntilIdle()
-            assertEquals(receiptHashHex, retriedHash)
+            assertEquals(2, sendCalls)
+            coVerify(exactly = 1) { conversationRepository.updateMessageId(receiptHashHex, receiptHashHex) }
             coVerify(exactly = 1) { propagationNodeManager.reportRelayUnreachable(any(), any()) }
         }
 
@@ -1676,40 +1694,46 @@ class MessagingViewModelTest {
                     lastSeenTimestamp = 1L,
                 ),
             )
-
             val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val receiptHash = ByteArray(32) { (it + 100).toByte() }
             val receiptHashHex = receiptHash.joinToString("") { "%02x".format(it) }
-            val testReceipt =
-                MessageReceipt(
-                    messageHash = receiptHash,
-                    timestamp = 3000L,
-                    destinationHash = destHashBytes,
-                )
-            coEvery { rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Result.success(testReceipt)
+            val testReceipt = MessageReceipt(messageHash = receiptHash, timestamp = 3000L, destinationHash = destHashBytes)
+            var sendCalls = 0
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } answers {
+                sendCalls++
+                Result.success(testReceipt)
+            }
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
             val retrySlot = slot<suspend () -> Unit>()
             coEvery { propagationNodeManager.reportRelayUnreachable(any(), capture(retrySlot)) } just Runs
-            var retriedFallbackHash: String? = null
-            coEvery { rnsLxmf.retryPropagatedMessage(any()) } answers {
-                retriedFallbackHash = firstArg()
-                Result.success(true)
-            }
+            // The failover retry re-drives from the persisted row: seed a FAILED row under the
+            // send's hash so reDriveMessage re-sends it as PROPAGATED (forced, no fallback).
+            val originHash = testIdentity.hash.joinToString("") { "%02x".format(it) }
+            coEvery {
+                conversationRepository.getMessageById(receiptHashHex)
+            } returns MessageEntity(
+                id = receiptHashHex,
+                conversationHash = testPeerHash,
+                identityHash = originHash,
+                content = "Fallback test",
+                timestamp = 3000L,
+                isFromMe = true,
+                status = "failed",
+            )
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
             coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
-
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
-
             val vm = createTestViewModel()
             advanceUntilIdle()
-
             vm.loadMessages(testPeerHash, testPeerName)
             advanceUntilIdle()
             runCatching { vm.sendMessage(testPeerHash, "Fallback test") }
             advanceUntilIdle()
-
-            // The original send was OPPORTUNISTIC (direct default, short text) with the
-            // fallback flag on — NOT PROPAGATED.
+            // The original send was OPPORTUNISTIC (direct default, short text) with the fallback
+            // flag on — NOT PROPAGATED.
             coVerify(exactly = 1) {
                 rnsLxmf.sendLxmfMessageWithMethod(
                     destinationHash = any(),
@@ -1721,40 +1745,27 @@ class MessagingViewModelTest {
                     imageFormat = null,
                 )
             }
-
-            val originHash = testIdentity.hash.joinToString("") { "%02x".format(it) }
-
-            // Sideband fallback: RETRYING_PROPAGATED (non-terminal) must NOT drop the entry.
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = receiptHashHex,
-                    status = DeliveryStatus.RETRYING_PROPAGATED,
-                    timestamp = 3000L,
-                    originatingIdentityHash = originHash,
-                ),
-            )
-            advanceUntilIdle()
-
-            // Terminal FAILED: the tracked entry is still present, so failover fires.
-            deliveryStatusFlow.emit(
-                DeliveryStatusUpdate(
-                    messageHash = receiptHashHex,
-                    status = DeliveryStatus.FAILED,
-                    timestamp = 3100L,
-                    originatingIdentityHash = originHash,
-                ),
-            )
-            advanceUntilIdle()
-
+            suspend fun emit(status: DeliveryStatus, ts: Long) {
+                deliveryStatusFlow.emit(
+                    DeliveryStatusUpdate(
+                        messageHash = receiptHashHex,
+                        status = status,
+                        timestamp = ts,
+                        originatingIdentityHash = originHash,
+                    ),
+                )
+                advanceUntilIdle()
+            }
+            // Sideband fallback (RETRYING_PROPAGATED, non-terminal) must NOT drop the entry; the
+            // terminal FAILED then finds it and fires the failover.
+            emit(DeliveryStatus.RETRYING_PROPAGATED, 3000L)
+            emit(DeliveryStatus.FAILED, 3100L)
             coVerify(exactly = 1) { propagationNodeManager.reportRelayUnreachable(any(), any()) }
-
-            // The captured retry must re-drive the *same* message (same hash) — not re-submit a
-            // new one. Assert the retry re-drives the exact hash, and that no second
-            // sendLxmfMessageWithMethod (a fresh message) is issued.
+            // The retry re-drives by re-sending as PROPAGATED (forced, no re-derive) and re-keys.
             retrySlot.captured.invoke()
             advanceUntilIdle()
-            assertEquals(receiptHashHex, retriedFallbackHash)
-            coVerify(exactly = 1) { rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            assertEquals(2, sendCalls)
+            coVerify(exactly = 1) { conversationRepository.updateMessageId(receiptHashHex, receiptHashHex) }
         }
 
     @Test
@@ -1785,7 +1796,6 @@ class MessagingViewModelTest {
             coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
             var relayUnreachableCalls = 0
             coEvery { propagationNodeManager.reportRelayUnreachable(any(), any()) } answers { relayUnreachableCalls++; Unit }
-            coEvery { rnsLxmf.retryPropagatedMessage(any()) } returns Result.success(true)
             coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
@@ -1844,7 +1854,23 @@ class MessagingViewModelTest {
                 failoverCalls++
                 Unit
             }
-            coEvery { rnsLxmf.retryPropagatedMessage(any()) } returns Result.success(true)
+            // The retry re-drives from the persisted row: seed a FAILED row under the send's
+            // hash so reDriveMessage re-sends it as PROPAGATED and re-keys the row (here the mock
+            // receipt always returns the same hash, so the re-key is a no-op and the record is
+            // re-registered under the same hash) — which is what lets relay B's failure re-arm
+            // the failover.
+            val failedRow =
+                MessageEntity(
+                    id = receiptHashHex,
+                    conversationHash = testPeerHash,
+                    identityHash = testIdentity.hash.joinToString("") { "%02x".format(it) },
+                    content = "Multi-relay",
+                    timestamp = 3000L,
+                    isFromMe = true,
+                    status = "failed",
+                )
+            coEvery { conversationRepository.getMessageById(receiptHashHex) } returns failedRow
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
             coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
             val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
             every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
@@ -1876,6 +1902,100 @@ class MessagingViewModelTest {
                 "a sideband send that entered the relay phase must keep blaming the relay on each re-drive",
                 failoverCalls >= 2,
             )
+        }
+
+    @Test
+    fun `failover re-drive re-keys the row so the bubble stays single`() =
+        runViewModelTest {
+            // Regression for "no duplicate bubbles": the automatic failover retry re-drives the
+            // failed send by re-key re-send — it re-sends as PROPAGATED and, on success, deletes
+            // the row under the old hash and inserts ONE under the new hash. A new hash per hop
+            // is acceptable (the bubble is keyed by the re-keyed row id); what must hold is that
+            // the old id disappears and exactly one row remains under the new id.
+            coEvery { settingsRepository.getDefaultDeliveryMethod() } returns "propagated"
+            coEvery { settingsRepository.getTryPropagationOnFail() } returns false
+            every { propagationNodeManager.currentRelay } returns MutableStateFlow(
+                network.columba.app.service.RelayInfo(
+                    destinationHash = "a5ce55f87db3841dd606553880b3ae3db3ae3d00000000000000000000000001",
+                    displayName = "Luthen",
+                    hops = 2,
+                    isAutoSelected = true,
+                    lastSeenTimestamp = 1L,
+                ),
+            )
+            val oldHash = ByteArray(32) { (it + 10).toByte() }
+            val newHash = ByteArray(32) { (it + 50).toByte() }
+            val oldHashHex = oldHash.joinToString("") { "%02x".format(it) }
+            val newHashHex = newHash.joinToString("") { "%02x".format(it) }
+            val destHashBytes = testPeerHash.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            // The initial send mints oldHash; the re-drive mints a DISTINCT newHash, so the
+            // re-key is a real old→new transition, not a no-op.
+            var sendCalls = 0
+            coEvery {
+                rnsLxmf.sendLxmfMessageWithMethod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } answers {
+                sendCalls++
+                Result.success(
+                    MessageReceipt(
+                        messageHash = if (sendCalls == 1) oldHash else newHash,
+                        timestamp = 3000L,
+                        destinationHash = destHashBytes,
+                    ),
+                )
+            }
+            coEvery { conversationRepository.saveMessage(any(), any(), any(), any()) } just Runs
+            val retrySlot = slot<suspend () -> Unit>()
+            coEvery { propagationNodeManager.reportRelayUnreachable(any(), capture(retrySlot)) } just Runs
+            // The re-drive reads the persisted (FAILED) row under the registered hash and
+            // re-keys it to the new hash.
+            val originHash = testIdentity.hash.joinToString("") { "%02x".format(it) }
+            coEvery {
+                conversationRepository.getMessageById(oldHashHex)
+            } returns MessageEntity(
+                id = oldHashHex,
+                conversationHash = testPeerHash,
+                identityHash = originHash,
+                content = "Rekey test",
+                timestamp = 3000L,
+                isFromMe = true,
+                status = "failed",
+            )
+            coEvery { conversationRepository.updateMessageId(any(), any()) } just Runs
+            coEvery { conversationRepository.applyDeliveryStatus(any(), any(), any()) } returns null
+
+            val deliveryStatusFlow = MutableSharedFlow<DeliveryStatusUpdate>()
+            every { rnsLxmf.observeDeliveryStatus() } returns deliveryStatusFlow
+            val vm = createTestViewModel()
+            advanceUntilIdle()
+            vm.loadMessages(testPeerHash, testPeerName)
+            advanceUntilIdle()
+            runCatching { vm.sendMessage(testPeerHash, "Rekey test") }
+            advanceUntilIdle()
+
+            // Pure PROPAGATED send (relayed at submit): a FAILED terminal fires the failover.
+            deliveryStatusFlow.emit(
+                DeliveryStatusUpdate(
+                    messageHash = oldHashHex,
+                    status = DeliveryStatus.FAILED,
+                    timestamp = 3100L,
+                    originatingIdentityHash = originHash,
+                ),
+            )
+            advanceUntilIdle()
+            coVerify(exactly = 1) { propagationNodeManager.reportRelayUnreachable(any(), any()) }
+
+            // Fire the re-drive: the row must be re-keyed old→new exactly once.
+            retrySlot.captured.invoke()
+            advanceUntilIdle()
+            // Exactly two sends (the original + the re-drive), re-keyed old→new exactly once.
+            assertEquals(2, sendCalls)
+            coVerify(exactly = 1) {
+                conversationRepository.updateMessageId(oldHashHex, newHashHex)
+            }
+            // The old hash is gone (no re-key back to it, no second re-key).
+            coVerify(exactly = 0) {
+                conversationRepository.updateMessageId(newHashHex, any())
+            }
         }
 
     @Test

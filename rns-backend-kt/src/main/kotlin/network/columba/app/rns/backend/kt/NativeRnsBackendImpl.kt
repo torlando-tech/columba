@@ -1409,13 +1409,6 @@ class NativeRnsBackendImpl(
             Log.i(TAG, "Cancelled propagation sync (soft — lxmf-kt teardown TODO)")
         }
 
-    override suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean> =
-        Result.failure(
-            RnsException(
-                RnsError.FeatureUnsupported("retryPropagatedMessage is only available on the Python backend"),
-            ),
-        )
-
     private fun readPropagationState(r: network.reticulum.lxmf.LXMRouter): PropagationState =
         PropagationState(
             state = r.propagationTransferState.ordinal,

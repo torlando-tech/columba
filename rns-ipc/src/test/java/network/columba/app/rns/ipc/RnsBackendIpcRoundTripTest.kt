@@ -717,7 +717,6 @@ private class FakeRnsLxmf : RnsLxmf {
 
     override suspend fun getPropagationState(): Result<PropagationState> = Result.failure(NotImplementedError())
     override suspend fun cancelMessageSync(): Result<Unit> = Result.success(Unit)
-    override suspend fun retryPropagatedMessage(messageHashHex: String): Result<Boolean> = Result.success(true)
     override val propagationStateFlow: SharedFlow<PropagationState> = propagation.asSharedFlow()
 
     override fun setConversationActive(active: Boolean) {}

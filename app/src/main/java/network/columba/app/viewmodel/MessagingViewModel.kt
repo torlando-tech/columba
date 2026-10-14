@@ -1603,34 +1603,22 @@ class MessagingViewModel
                     val willUseRelay =
                         deliveryMethod == DeliveryMethod.PROPAGATED ||
                             (tryPropOnFail && hasRelay)
-                    // The retry re-drives the *same* message (same hash) against the next relay —
-                    // it does NOT re-submit the send, because a re-submit would mint a new
-                    // LXMessage and a new conversation row (the duplicate-bubble bug). The
-                    // Python backend keeps a registry of live outbound messages and re-sends
-                    // the one identified by this hash through the (newly-failed-over) node.
+                    // The retry re-drives the send against the next relay by *re-key re-send*:
+                    // it reconstructs the message from the persisted row, re-sends it as
+                    // PROPAGATED through the (newly-failed-over) relay, and — on success —
+                    // re-keys the row to the new hash (delete old, insert one under the new
+                    // hash). One bubble, never a second row. A re-send (not a same-hash
+                    // re-submit) is what keeps the bubble single: the row's id IS the hash and
+                    // the bubble is keyed by it, so re-keying in place is invisible to the UI.
                     //
-                    // When the retry fires it re-registers itself (via the self-referential
-                    // `record` holder) so the re-driven attempt's own failure re-arms the
-                    // next failover: one bubble, cycling through the relays until it is
-                    // delivered or the list is exhausted — never a new message per node.
+                    // The record re-registers under the *new* hash after a successful re-drive
+                    // (the row id changes), so the re-drive's own FAILED terminal re-arms the
+                    // next failover and its relayed flag carries across the hop. Cycles through
+                    // the relays until delivered or the list is exhausted.
                     val propagatedHashHex = receipt.messageHash.joinToString("") { "%02x".format(it) }
                     if (willUseRelay) {
-                        var record: PropagationSendRecord? = null
-                        record =
-                            PropagationSendRecord(
-                                relayed = deliveryMethod == DeliveryMethod.PROPAGATED,
-                                retry = {
-                                    record?.let { inFlightPropagationSends[propagatedHashHex] = it }
-                                    rnsLxmf.retryPropagatedMessage(propagatedHashHex).onFailure { e ->
-                                        Log.w(
-                                            TAG,
-                                            "Retry re-drive of ${propagatedHashHex.take(16)}... " +
-                                                "unsupported by this backend: ${e.message}",
-                                        )
-                                    }
-                                },
-                            )
-                        inFlightPropagationSends[propagatedHashHex] = record
+                        inFlightPropagationSends[propagatedHashHex] =
+                            registerPropagationSendRecord(propagatedHashHex, deliveryMethod == DeliveryMethod.PROPAGATED)
                     }
                     val persisted =
                         handleSendSuccess(
@@ -2869,143 +2857,232 @@ class MessagingViewModel
         }
 
         /**
+         * Build and register the [PropagationSendRecord] for a send that has a propagation
+         * phase to fail over, returning the record (the caller stores it under the send's
+         * hash in [inFlightPropagationSends]).
+         *
+         * The record's `retry` closure is the re-key re-drive: it re-sends the *current* row
+         * as PROPAGATED via [reDriveMessage] and, on a successful re-key (the row id becomes
+         * the new hash), re-registers the SAME record under the new hash so the re-drive's own
+         * FAILED terminal re-arms the next failover and its latched `relayed` flag carries
+         * across the hop. [rowHash] tracks the current row id so a second hop re-drives the
+         * already re-keyed row, not the stale first one.
+         */
+        private fun registerPropagationSendRecord(
+            propagatedHashHex: String,
+            relayedAtSubmit: Boolean,
+        ): PropagationSendRecord {
+            val rowHash = java.util.concurrent.atomic.AtomicReference(propagatedHashHex)
+            var record: PropagationSendRecord? = null
+            record =
+                PropagationSendRecord(
+                    relayed = relayedAtSubmit,
+                    retry = {
+                        // Re-send the current row as PROPAGATED through the (failed-over) relay;
+                        // on success the row is re-keyed to the new hash. Null means the re-drive
+                        // failed and the row keeps its current id, so nothing to re-register.
+                        val currentHash = rowHash.get()
+                        val newHash = reDriveMessage(currentHash, forcedMethod = DeliveryMethod.PROPAGATED)
+                        if (newHash != null) {
+                            rowHash.set(newHash)
+                            record?.let { rec ->
+                                inFlightPropagationSends.remove(currentHash)
+                                inFlightPropagationSends[newHash] = rec
+                            }
+                        }
+                    },
+                )
+            return record
+        }
+
+        /** Reconstructed outbound payload for a re-drive, as loaded from the persisted row. */
+        private data class ReDrivePayload(
+            val imageData: ByteArray?,
+            val imageFormat: String?,
+            val fileAttachments: List<FileAttachment>,
+            val voiceBytes: ByteArray?,
+            val voiceMode: Int?,
+        )
+
+        /**
+         * Rebuild every persisted attachment (image / voice / file) from a row's `fieldsJson`
+         * so [reDriveMessage] can re-send it. Returns null — after writing an
+         * [updateMessageDeliveryDetails] explaining which attachment was lost — if any
+         * attachment the row claims to carry can no longer be read, so a re-drive never sends a
+         * half-rebuilt payload.
+         */
+        @Suppress("ReturnCount")
+        private suspend fun reconstructForReDrive(messageId: String, fieldsJson: String?): ReDrivePayload? {
+            val (hasPersistedImage, imageData) = reconstructImageForRetry(fieldsJson)
+            if (hasPersistedImage && imageData == null) {
+                Log.e(TAG, "Stored image attachment is unavailable for re-drive")
+                conversationRepository.updateMessageDeliveryDetails(
+                    messageId,
+                    deliveryMethod = null,
+                    errorMessage = "Image attachment is no longer available",
+                )
+                return null
+            }
+            val imageFormat = if (imageData != null) "jpg" else null
+            val audioAttachment = parseAudioAttachment(fieldsJson)
+            val voiceMode = audioAttachment?.mode?.wireValue
+            val voiceBytes =
+                audioAttachment?.let { attachment ->
+                    audioAttachmentLoader.loadBytes(attachment)
+                }
+            if (audioAttachment != null && voiceBytes == null) {
+                Log.e(TAG, "Stored voice attachment is unavailable for re-drive")
+                conversationRepository.updateMessageDeliveryDetails(
+                    messageId,
+                    deliveryMethod = null,
+                    errorMessage = "Voice recording is no longer available",
+                )
+                return null
+            }
+            val fileAttachments = reconstructFileAttachments(fieldsJson)
+            if (fileAttachments == null) {
+                Log.e(TAG, "Stored file attachment is unavailable for re-drive")
+                conversationRepository.updateMessageDeliveryDetails(
+                    messageId,
+                    deliveryMethod = null,
+                    errorMessage = "A file attachment is no longer available",
+                )
+                return null
+            }
+            return ReDrivePayload(imageData, imageFormat, fileAttachments, voiceBytes, voiceMode)
+        }
+
+        /**
+         * Re-drive an already-persisted message by reconstructing it from its stored row and
+         * re-sending it as a fresh message, then re-keying the row to the new hash on success.
+         *
+         * This is the single "re-send" primitive shared by:
+         *  - the manual long-press retry ([retryFailedMessage], [forcedMethod] == null so the
+         *    delivery method is re-derived as before), and
+         *  - the automatic propagation-failover retry (the relay-failover `retry` closure in
+         *    [executeLxmfSend]), which forces [DeliveryMethod.PROPAGATED] so the re-send goes
+         *    straight to the (newly-failed-over) relay instead of re-deriving and skipping it.
+         *
+         * Re-keying keeps the bubble single: the row's id is the message hash and the chat row
+         * is keyed by it, so deleting the old row and inserting one under the new hash is
+         * invisible to the UI (no duplicate bubble, no visible hash).
+         *
+         * @param messageId the current row id (== the current message hash) to re-drive.
+         * @param forcedMethod if non-null, force this delivery method instead of deriving; the
+         *   automatic failover passes [DeliveryMethod.PROPAGATED]. A forced PROPAGATED send also
+         *   passes `tryPropagationOnFail = false` — it is already at the relay, no second fallback.
+         * @return the new message hash on success (the row is re-keyed to it), or null if the
+         *   re-drive could not run (row missing / not failed / attachment lost) or the send
+         *   failed (the row keeps its id and is marked failed again).
+         */
+        @Suppress("LongMethod", "ReturnCount")
+        private suspend fun reDriveMessage(messageId: String, forcedMethod: DeliveryMethod? = null): String? {
+            Log.d(TAG, "Re-driving message: $messageId (forcedMethod=$forcedMethod)")
+
+            // Load the message from database
+            val message = conversationRepository.getMessageById(messageId) ?: run {
+                Log.e(TAG, "Message not found for re-drive: $messageId")
+                return null
+            }
+
+            // Only re-drive failed messages (the failover retry fires on a FAILED terminal; the
+            // manual retry is only reachable for failed rows).
+            if (message.status != "failed") {
+                Log.w(TAG, "Message $messageId is not failed (status: ${message.status}), skipping re-drive")
+                return null
+            }
+
+            // Destination hash bytes (MessageEntity uses conversationHash).
+            val destHashBytes = validateDestinationHash(message.conversationHash) ?: run {
+                Log.e(TAG, "Invalid destination hash in re-driven message")
+                return null
+            }
+
+            // Source identity for sending.
+            val identity = loadIdentityIfNeeded() ?: run {
+                Log.e(TAG, "Failed to load source identity for re-drive")
+                return null
+            }
+
+            // Reconstruct the persisted attachment payloads from fieldsJson (image / voice / file);
+            // null means an attachment was lost (details written) and the re-drive must not run.
+            val payload = reconstructForReDrive(messageId, message.fieldsJson) ?: return null
+
+            // Resolve the delivery method: a forced method (the automatic failover's PROPAGATED)
+            // wins; otherwise derive from the payload as the manual retry always did. A forced
+            // PROPAGATED send is already at the relay, so it must not fall back again.
+            val deliveryMethod =
+                forcedMethod
+                    ?: determineDeliveryMethod(
+                        sanitized = message.content,
+                        imageData = payload.imageData,
+                        fileAttachments = payload.fileAttachments,
+                        voiceBytes = payload.voiceBytes,
+                        defaultMethod = settingsRepository.getDefaultDeliveryMethod(),
+                    )
+            val tryPropagationOnFail = forcedMethod != DeliveryMethod.PROPAGATED && settingsRepository.getTryPropagationOnFail()
+
+            Log.d(TAG, "Re-driving message via $deliveryMethod delivery")
+
+            // Mark message as pending before sending
+            conversationRepository.updateMessageStatus(messageId, "pending")
+
+            // Send the message
+            val result =
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = destHashBytes,
+                    content = message.content,
+                    sourceIdentity = identity,
+                    deliveryMethod = deliveryMethod,
+                    tryPropagationOnFail = tryPropagationOnFail,
+                    imageData = payload.imageData,
+                    imageFormat = payload.imageFormat,
+                    fileAttachments = payload.fileAttachments.map { it.filename to it.data }.ifEmpty { null },
+                    extraFields =
+                        payload.voiceBytes?.let {
+                            mapOf(
+                                network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                    listOf(checkNotNull(payload.voiceMode), it),
+                            )
+                        },
+                    // Preserve reply on re-drive
+                    replyToMessageId = message.replyToMessageId,
+                )
+
+            return result.fold(
+                onSuccess = { receipt ->
+                    val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
+                    Log.d(TAG, "Re-drive successful, new hash: ${newMessageHash.take(16)}...")
+                    // Re-key the row to the new hash (delete old, insert one under the new id).
+                    conversationRepository.updateMessageId(messageId, newMessageHash)
+                    newMessageHash
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "Re-drive failed: ${error.message}", error)
+                    // Mark as failed again with the error message
+                    conversationRepository.updateMessageStatus(messageId, "failed")
+                    conversationRepository.updateMessageDeliveryDetails(
+                        messageId,
+                        deliveryMethod = null,
+                        errorMessage = error.message,
+                    )
+                    null
+                },
+            )
+        }
+
+        /**
          * Retry sending a failed message.
          * Re-sends the message with the same content and destination,
          * updating the database with the new message hash.
          *
          * @param messageId The ID (hash) of the failed message to retry
          */
-        // Retry reconstructs every supported persisted attachment form and deliberately
-        // keeps the lifecycle in one coroutine so status restoration cannot be skipped.
-        @Suppress("LongMethod")
         fun retryFailedMessage(messageId: String) {
             if (!retriesInProgress.add(messageId)) return
             viewModelScope.launch {
                 try {
-                    Log.d(TAG, "Retrying failed message: $messageId")
-
-                    // Load the failed message from database
-                    val failedMessage = conversationRepository.getMessageById(messageId)
-                    if (failedMessage == null) {
-                        Log.e(TAG, "Failed message not found: $messageId")
-                        return@launch
-                    }
-
-                    // Only retry failed messages
-                    if (failedMessage.status != "failed") {
-                        Log.w(TAG, "Message $messageId is not failed (status: ${failedMessage.status}), skipping retry")
-                        return@launch
-                    }
-
-                    // Get destination hash bytes (MessageEntity uses conversationHash)
-                    val destHashBytes = validateDestinationHash(failedMessage.conversationHash)
-                    if (destHashBytes == null) {
-                        Log.e(TAG, "Invalid destination hash in failed message")
-                        return@launch
-                    }
-
-                    // Load identity for sending
-                    val identity = loadIdentityIfNeeded()
-                    if (identity == null) {
-                        Log.e(TAG, "Failed to load source identity for retry")
-                        return@launch
-                    }
-
-                    val (hasPersistedImage, imageData) = reconstructImageForRetry(failedMessage.fieldsJson)
-                    if (hasPersistedImage && imageData == null) {
-                        Log.e(TAG, "Stored image attachment is unavailable for retry")
-                        conversationRepository.updateMessageDeliveryDetails(
-                            messageId,
-                            deliveryMethod = null,
-                            errorMessage = "Image attachment is no longer available",
-                        )
-                        return@launch
-                    }
-                    val imageFormat = if (imageData != null) "jpg" else null
-                    val audioAttachment = parseAudioAttachment(failedMessage.fieldsJson)
-                    val voiceMode = audioAttachment?.mode?.wireValue
-                    val voiceBytes =
-                        audioAttachment?.let { attachment ->
-                            audioAttachmentLoader.loadBytes(attachment)
-                        }
-                    if (audioAttachment != null && voiceBytes == null) {
-                        Log.e(TAG, "Stored voice attachment is unavailable for retry")
-                        conversationRepository.updateMessageDeliveryDetails(
-                            messageId,
-                            deliveryMethod = null,
-                            errorMessage = "Voice recording is no longer available",
-                        )
-                        return@launch
-                    }
-
-                    val fileAttachments = reconstructFileAttachments(failedMessage.fieldsJson)
-                    if (fileAttachments == null) {
-                        Log.e(TAG, "Stored file attachment is unavailable for retry")
-                        conversationRepository.updateMessageDeliveryDetails(
-                            messageId,
-                            deliveryMethod = null,
-                            errorMessage = "A file attachment is no longer available",
-                        )
-                        return@launch
-                    }
-
-                    // Get delivery settings
-                    val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod =
-                        determineDeliveryMethod(
-                            sanitized = failedMessage.content,
-                            imageData = imageData,
-                            fileAttachments = fileAttachments,
-                            voiceBytes = voiceBytes,
-                            defaultMethod = defaultMethod,
-                        )
-
-                    Log.d(TAG, "Retrying message via $deliveryMethod delivery")
-
-                    // Mark message as pending before sending
-                    conversationRepository.updateMessageStatus(messageId, "pending")
-
-                    // Send the message
-                    val result =
-                        rnsLxmf.sendLxmfMessageWithMethod(
-                            destinationHash = destHashBytes,
-                            content = failedMessage.content,
-                            sourceIdentity = identity,
-                            deliveryMethod = deliveryMethod,
-                            tryPropagationOnFail = tryPropOnFail,
-                            imageData = imageData,
-                            imageFormat = imageFormat,
-                            fileAttachments = fileAttachments.map { it.filename to it.data }.ifEmpty { null },
-                            extraFields =
-                                voiceBytes?.let {
-                                    mapOf(
-                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
-                                            listOf(checkNotNull(voiceMode), it),
-                                    )
-                                },
-                            // Preserve reply on retry
-                            replyToMessageId = failedMessage.replyToMessageId,
-                        )
-
-                    result
-                        .onSuccess { receipt ->
-                            val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
-                            Log.d(TAG, "Retry successful, new hash: ${newMessageHash.take(16)}...")
-
-                            // Update the message with the new hash
-                            // Delete the old message entry and create a new one with the new hash
-                            conversationRepository.updateMessageId(messageId, newMessageHash)
-                        }.onFailure { error ->
-                            Log.e(TAG, "Retry failed: ${error.message}", error)
-                            // Mark as failed again with the error message
-                            conversationRepository.updateMessageStatus(messageId, "failed")
-                            conversationRepository.updateMessageDeliveryDetails(
-                                messageId,
-                                deliveryMethod = null,
-                                errorMessage = error.message,
-                            )
-                        }
+                    reDriveMessage(messageId)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error retrying message", e)
                     // Restore failed status

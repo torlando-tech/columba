@@ -481,17 +481,6 @@ _announce_handler = None
 
 _fallback_queue = queue.Queue(maxsize=64)
 
-# Outbound LXMessage registry: hex hash -> live LXMessage object. LXMF drops a
-# message from its own `pending_outbound` the instant it fails, so it is not
-# retained for later lookup; we keep it here so an app-level relay failover can
-# re-drive the *same* message (same hash, no duplicate) against a new outbound
-# propagation node. Bounded + LRU-trimmed because it lives for the process
-# lifetime. Populated by `register_outbound_message`, consumed by
-# `retry_outbound_propagated_message`.
-_outbound_lxmessages = {}
-_outbound_lxmessage_order = []  # hash hex order, oldest first
-_OUTBOUND_REGISTRY_MAX = 128
-
 
 def _fallback_worker():
     while True:
@@ -1726,105 +1715,6 @@ def attach_lxmessage_callbacks(
 
     lxmessage.register_delivery_callback(_delivered)
     lxmessage.register_failed_callback(_failed)
-
-
-def register_outbound_message(lxmessage, originating_identity_hash=None, on_delivered=None):
-    """Record a live LXMessage by its hash so an app-level relay failover can
-    re-drive it.
-
-    Called by the Kotlin send path immediately after `handle_outbound` has run
-    (at which point the message is packed and `.hash` is set). The message may
-    already be in flight — the registry holds a reference so it survives LXMF
-    dropping it from `pending_outbound` on failure. The originating identity
-    hash is stashed on the message so a later re-drive re-attaches the same
-    delivery-status identity the Kotlin side matches on.
-
-    `on_delivered` is the *per-send* delivered-status callback the Kotlin send
-    path wired onto this message (the delivery-status sink, not the module-level
-    incoming-message sink). It is stashed so a relay-failover re-drive re-attaches
-    the SAME callback — a successful retry must flip the original row to delivered,
-    which only the delivery-status sink does.
-
-    No-op when the message has no hash yet (shouldn't happen post-`handle_outbound`,
-    but guarded for safety).
-    """
-    h = _hex(getattr(lxmessage, "hash", None))
-    if h is None:
-        return
-    try:
-        lxmessage._columba_originating_identity_hash = originating_identity_hash
-        lxmessage._columba_on_lxmf_delivered = on_delivered
-    except Exception:  # noqa: BLE001 — non-critical tag
-        pass
-    _outbound_lxmessages[h] = lxmessage
-    if h not in _outbound_lxmessage_order:
-        _outbound_lxmessage_order.append(h)
-    while len(_outbound_lxmessage_order) > _OUTBOUND_REGISTRY_MAX:
-        oldest = _outbound_lxmessage_order.pop(0)
-        _outbound_lxmessages.pop(oldest, None)
-
-
-def retry_outbound_propagated_message(hash_hex):
-    """Re-drive an already-sent LXMessage against the current outbound
-    propagation node.
-
-    This is the app-level relay-failover retry: when a propagated (or
-    direct-then-fallback) send fails because the active relay is unreachable,
-    the app records the relay failure, the writer fails over to the next relay,
-    and the app calls this to re-send *the same message* (same hash, no
-    duplicate DB row) through the new node.
-
-    Mirrors `_submit_propagated` (the direct→propagation fallback) which
-    re-packs and re-submits the same LXMessage — the proven, hash-preserving
-    pattern. The message's `desired_method` is pinned to PROPAGATED so it does
-    not repeat the already-failed direct phase.
-
-    Returns True if the message was found and re-submitted; False otherwise.
-    """
-    if hash_hex is None:
-        return False
-    msg = _outbound_lxmessages.get(hash_hex)
-    if msg is None:
-        RNS.log(f"event_bridge: retry_outbound_propagated_message: no registry entry for {hash_hex}", RNS.LOG_WARNING)
-        return False
-    if _lxmf_router is None:
-        RNS.log("event_bridge: retry_outbound_propagated_message: router not ready", RNS.LOG_WARNING)
-        return False
-    # Reset the message for a fresh propagation attempt (same pattern as
-    # `_submit_propagated` in `attach_lxmessage_callbacks`).
-    msg.try_propagation_on_fail = False
-    msg.delivery_attempts = 0
-    msg.packed = None
-    msg.propagation_packed = None
-    msg.propagation_stamp = None
-    msg.defer_propagation_stamp = True
-    msg.desired_method = LXMF.LXMessage.PROPAGATED
-    # Re-attach delivery/failed callbacks so the Kotlin side learns the
-    # re-driven attempt's outcome. `attach_lxmessage_callbacks` re-registers
-    # `_delivered`/`_failed` closures on the same message object.
-    #
-    # The delivered-status callback MUST be the per-send sink the original send
-    # used (stashed on the message at registration) — the delivery-status sink,
-    # not the module-level incoming-message sink (`_on_lxmf_delivery`). A
-    # successful retry has to flip the original row to delivered, which only the
-    # delivery-status sink does. Fall back to the module sink only if the tag is
-    # missing (shouldn't happen — registration always sets it).
-    on_delivered = getattr(msg, "_columba_on_lxmf_delivered", None) or _on_lxmf_delivery
-    attach_lxmessage_callbacks(
-        msg,
-        on_delivered,
-        _on_lxmf_failure,
-        None,
-        try_propagation_on_fail=False,
-        originating_identity_hash=getattr(msg, "_columba_originating_identity_hash", None),
-    )
-    try:
-        _lxmf_router.handle_outbound(msg)
-    except Exception as e:  # noqa: BLE001
-        RNS.log(f"event_bridge: retry_outbound_propagated_message: handle_outbound failed: {e}", RNS.LOG_ERROR)
-        return False
-    RNS.log(f"event_bridge: re-driven propagated message {hash_hex} against current outbound node", RNS.LOG_DEBUG)
-    return True
 
 
 # --- Accessors for the per-object callbacks -------------------------------

@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.time.Clock
 import network.columba.app.data.database.InterfaceDatabase
 import network.columba.app.data.database.dao.InterfaceDao
 import network.columba.app.data.db.ColumbaDatabase
@@ -77,6 +78,15 @@ object InterfaceDatabaseModule {
     @IoDispatcher
     @Provides
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
+
+    /**
+     * Provides the clock for time-based logic (relay-unreachable cooldown scheduling). A real
+     * wall clock in production; tests construct managers with a virtual [Clock] directly (this
+     * binding only satisfies the DI graph).
+     */
+    @Provides
+    @Singleton
+    fun provideClock(): Clock = Clock.systemUTC()
 
     /**
      * Provides the Interface database singleton.

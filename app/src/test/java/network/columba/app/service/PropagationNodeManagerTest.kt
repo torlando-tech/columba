@@ -2,14 +2,20 @@ package network.columba.app.service
 
 import app.cash.turbine.test
 import network.columba.app.data.db.entity.ContactEntity
+import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
+import network.columba.app.data.repository.PreferredPropagationNodeRepository
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.rns.api.model.NetworkRestriction
 import network.columba.app.rns.api.model.NetworkStatus
 import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
+import network.columba.app.rns.host.manager.CurrentTransport
+import network.columba.app.service.manager.InterfaceTransportObserver
 import network.columba.app.test.TestFactories
+import network.columba.app.util.HexUtils.toHexString
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -26,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -40,6 +47,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -62,17 +73,25 @@ class PropagationNodeManagerTest {
     private val testDispatcher = StandardTestDispatcher()
     private val testScheduler get() = testDispatcher.scheduler
     private lateinit var testScope: TestScope
+    // Clock the manager uses for "now" + the recheck delay. Tied to the test scheduler so a
+    // single advanceTimeBy(ms) both ages out a recorded failure (now() moves) AND fires the
+    // scheduled recheck delay — keeping the manager's time and the coroutine clock consistent.
+    private val clock = MutableTestClock()
 
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var contactRepository: ContactRepository
     private lateinit var announceRepository: AnnounceRepository
     private lateinit var rnsCore: RnsCore
     private lateinit var rnsLxmf: RnsLxmf
+    private lateinit var preferredRepository: PreferredPropagationNodeRepository
+    private lateinit var transportObserver: InterfaceTransportObserver
     private lateinit var manager: PropagationNodeManager
     private lateinit var myRelayFlow: MutableStateFlow<ContactEntity?>
     private lateinit var autoSelectFlow: MutableStateFlow<Boolean>
     private lateinit var networkStatusFlow: MutableStateFlow<NetworkStatus>
     private lateinit var propagationStateFlow: MutableSharedFlow<PropagationState>
+    private lateinit var preferredListFlow: MutableStateFlow<List<PreferredPropagationNodeEntity>>
+    private lateinit var transportFlow: MutableStateFlow<CurrentTransport>
 
     private val testDestHash = TestFactories.TEST_DEST_HASH
     private val testDestHash2 = TestFactories.TEST_DEST_HASH_2
@@ -82,18 +101,25 @@ class PropagationNodeManagerTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         testScope = TestScope(testDispatcher)
+        // The clock the manager sees advances in lockstep with the test scheduler.
+        clock.scheduler = testDispatcher.scheduler
 
         settingsRepository = mockk()
         contactRepository = mockk()
         announceRepository = mockk()
         rnsCore = mockk()
         rnsLxmf = mockk()
+        preferredRepository = mockk()
+        transportObserver = mockk()
 
         // Initialize mutable flows for reactive testing
         myRelayFlow = MutableStateFlow<ContactEntity?>(null)
         autoSelectFlow = MutableStateFlow(true)
         networkStatusFlow = MutableStateFlow<NetworkStatus>(NetworkStatus.READY)
         propagationStateFlow = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+        // Default: empty preferred list (legacy mode) + wifi transport.
+        preferredListFlow = MutableStateFlow(emptyList())
+        transportFlow = MutableStateFlow(CurrentTransport.WIFI_LIKE)
 
         // Mock networkStatus flow
         every { rnsCore.networkStatus } returns networkStatusFlow
@@ -129,6 +155,24 @@ class PropagationNodeManagerTest {
         every { contactRepository.getMyRelayFlow() } returns myRelayFlow
         coEvery { rnsLxmf.setOutboundPropagationNode(any()) } returns Result.success(Unit)
 
+        // Preferred-node list defaults: empty list (legacy mode) on wifi transport.
+        every { preferredRepository.observeEnabled() } returns preferredListFlow
+        // preferredRelayHashes (Node Details "In priority list" affordance) reads
+        // observeOrdered(); default to an empty list so the property's stateIn collector
+        // has an answer at construction.
+        every { preferredRepository.observeOrdered() } returns flowOf(emptyList())
+        coEvery { preferredRepository.count() } returns 0
+        coEvery { preferredRepository.findByHash(any()) } returns null
+        // Unreachable-failure record/clear: default to "not in list / no-op" so sync handlers
+        // that classify a failure never hit an unstubbed mock. Individual tests override
+        // contains() and recordFailure() when they assert the failure record.
+        coEvery { preferredRepository.contains(any()) } returns false
+        coEvery { preferredRepository.recordFailure(any(), any(), any(), any()) } just Runs
+        coEvery { preferredRepository.clearFailure(any()) } just Runs
+        // Default: no node is currently unreachable (failover not engaged).
+        every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } returns false
+        every { transportObserver.currentTransport } returns transportFlow
+
         // Mock setAsMyRelay to update the myRelayFlow (simulate database update)
         coEvery { contactRepository.setAsMyRelay(any(), any()) } answers {
             val destHash = firstArg<String>()
@@ -147,8 +191,11 @@ class PropagationNodeManagerTest {
                 announceRepository = announceRepository,
                 rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                preferredPropagationNodeRepository = preferredRepository,
+                transportObserver = transportObserver,
                 scope = testScope.backgroundScope,
                 defaultDispatcher = testDispatcher,
+                timeProvider = clock,
             )
     }
 
@@ -692,21 +739,25 @@ class PropagationNodeManagerTest {
         }
 
     @Test
-    fun `setManualRelay - skips contact add when no announce available`() =
+    fun `setManualRelay - no announce creates a pending contact so the relay is backed`() =
         runTest {
-            // Given: Contact does not exist AND announce is not available
+            // Given: Contact does not exist AND announce is not available.
             coEvery { contactRepository.hasContact(testDestHash) } returns false
             coEvery { announceRepository.getAnnounce(testDestHash) } returns null
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(network.columba.app.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
 
             // When
             val result = runCatching { manager.setManualRelay(testDestHash) }
             advanceUntilIdle()
 
-            // Then: Should NOT add contact (no announce data)
+            // Then: a PENDING contact is created (so the active relay has a backing contact
+            // and the relay observer can sync it), not an announce contact.
             assertTrue("setManualRelay() should complete successfully", result.isSuccess)
             coVerify(exactly = 0) { contactRepository.addContactFromAnnounce(any(), any()) }
+            coVerify(exactly = 1) { contactRepository.addPendingContact(testDestHash, null) }
 
-            // But should still set as relay
+            // And the relay is still set.
             coVerify { contactRepository.setAsMyRelay(testDestHash, clearOther = true) }
         }
 
@@ -1014,6 +1065,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1065,6 +1118,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1113,6 +1168,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -1663,6 +1720,218 @@ class PropagationNodeManagerTest {
                 }
                 cancelAndConsumeRemainingEvents()
             }
+        }
+
+    @Test
+    fun `sync records the unreachable reason on the active preferred relay`() =
+        runTest {
+            // Active relay is a preferred node, so a failure can be recorded for it.
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = testDestHash, isMyRelay = true)
+            coEvery { preferredRepository.contains(testDestHash) } returns true
+            // Move the virtual clock forward so the recorded failure timestamp (nowMs()) is a
+            // positive epoch value, as asserted below.
+            clock.advance(1_000_000)
+
+            manager.start()
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // The initial response is an unreachable failure (python generic "failed", 0xf0 no-path).
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
+                Result.success(PropagationState(state = 0xf0, stateName = "failed", progress = 0f, messagesReceived = 0))
+
+            val codeSlot = slot<Int>()
+            val reasonSlot = slot<String>()
+            val tsSlot = slot<Long>()
+            coEvery {
+                preferredRepository.recordFailure(testDestHash, capture(codeSlot), capture(reasonSlot), capture(tsSlot))
+            } just Runs
+
+            manager.triggerSync(silent = true)
+            advanceUntilIdle()
+
+            // The failure reason was recorded on the active relay: 0xf0 no-path → "No path to relay".
+            assertEquals(0xf0, codeSlot.captured)
+            assertEquals("No path to relay", reasonSlot.captured)
+            assertTrue(tsSlot.captured > 0L)
+            manager.stop()
+        }
+
+    @Test
+    fun `sync attributes an in-flight failure to the relay that started the sync, not the current relay`() =
+        runTest {
+            // Relay B starts the sync; before it completes the active relay switches to A.
+            // The failure must be recorded on B (the relay that synced), not A.
+            val bHash = testDestHash
+            val aHash = testDestHash2
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            coEvery { preferredRepository.contains(bHash) } returns true
+            coEvery { preferredRepository.contains(aHash) } returns false
+
+            manager.start()
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // The sync is held in flight until we release it (the initial response is a
+            // no-path failure, so it records a failure on completion).
+            val syncCompletion = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } coAnswers {
+                syncCompletion.await()
+                Result.success(PropagationState(state = 0xf0, stateName = "failed", progress = 0f, messagesReceived = 0))
+            }
+
+            val syncJob = async { manager.triggerSync(silent = true) }
+            // The sync starts and captures activeSyncRelayHash = B (the current relay now).
+            runCurrent()
+            assert(manager.isSyncing.value) { "sync should be in flight" }
+
+            // Mid-sync: the active relay switches B -> A (as the recheck timer / a transport
+            // flip would do). currentRelay now resolves to A.
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            runCurrent()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            // Release the sync; it completes with B's failure.
+            syncCompletion.complete(Unit)
+            syncJob.join()
+            runCurrent()
+
+            // The failure is attributed to B (the relay that started the sync), not A.
+            coVerify(exactly = 1) { preferredRepository.recordFailure(eq(bHash), any(), any(), any()) }
+            coVerify(exactly = 0) { preferredRepository.recordFailure(eq(aHash), any(), any(), any()) }
+            manager.stop()
+        }
+
+    @Test
+    fun `sync does not record a failure for a non-preferred relay`() =
+        runTest {
+            // Active relay is NOT in the preferred list (legacy auto-selected) — no row to record on.
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = testDestHash, isMyRelay = true)
+            coEvery { preferredRepository.contains(testDestHash) } returns false
+
+            manager.start()
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
+                Result.success(PropagationState(state = 0xf0, stateName = "failed", progress = 0f, messagesReceived = 0))
+
+            manager.triggerSync(silent = true)
+            advanceUntilIdle()
+
+            // No preferred row → recordFailure is never invoked, and the sync still finalizes
+            // (progress back to Idle, no longer syncing) — a real behavioral outcome, not just
+            // a mock call-count.
+            assertEquals(SyncProgress.Idle, manager.syncProgress.value)
+            assertEquals(false, manager.isSyncing.value)
+            coVerify(exactly = 0) { preferredRepository.recordFailure(any(), any(), any(), any()) }
+            manager.stop()
+        }
+
+    @Test
+    fun `sync clears a recorded failure when a preferred relay syncs successfully`() =
+        runTest {
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = testDestHash, isMyRelay = true)
+            coEvery { preferredRepository.contains(testDestHash) } returns true
+            coEvery { preferredRepository.clearFailure(testDestHash) } just Runs
+
+            manager.start()
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // Instant-complete sync to the active preferred relay.
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
+                Result.success(PropagationState(state = 7, stateName = "complete", progress = 1f, messagesReceived = 2))
+
+            manager.triggerSync(silent = true)
+            advanceUntilIdle()
+
+            // Completion bookkeeping ran (lastSyncTimestamp set) and a successful sync to the
+            // active preferred relay clears any recorded failure.
+            assertTrue(manager.lastSyncTimestamp.value != null)
+            coVerify(exactly = 1) { preferredRepository.clearFailure(testDestHash) }
+            manager.stop()
+        }
+
+    @Test
+    fun `sync attributes an in-flight success to the relay that started the sync, not the current relay`() =
+        runTest {
+            // Relay B starts the sync; before it completes the active relay switches to A.
+            // The recovery clear must target B (the relay that synced), not A — the success
+            // terminal captures the starting hash before it opens the sync gate, so the
+            // mid-sync switch (and the saveLastSyncTimestamp suspension) can't redirect it.
+            val bHash = testDestHash
+            val aHash = testDestHash2
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            coEvery { preferredRepository.contains(bHash) } returns true
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.clearFailure(bHash) } just Runs
+            coEvery { preferredRepository.clearFailure(aHash) } just Runs
+
+            manager.start()
+            manager.currentRelayState.test(timeout = 5.seconds) {
+                var state = awaitItem()
+                while (state is RelayLoadState.Loading) {
+                    state = awaitItem()
+                }
+                cancelAndConsumeRemainingEvents()
+            }
+
+            // The sync is held in flight until we release it (the initial response is a
+            // "complete" state, so it clears a failure on completion).
+            val syncCompletion = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } coAnswers {
+                syncCompletion.await()
+                Result.success(PropagationState(state = 7, stateName = "complete", progress = 1f, messagesReceived = 2))
+            }
+
+            val syncJob = async { manager.triggerSync(silent = true) }
+            // The sync starts and captures activeSyncRelayHash = B (the current relay now).
+            runCurrent()
+            assert(manager.isSyncing.value) { "sync should be in flight" }
+
+            // Mid-sync: the active relay switches B -> A (as the recheck timer / a transport
+            // flip would do). currentRelay now resolves to A.
+            myRelayFlow.value =
+                TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            runCurrent()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            // Release the sync; it completes with B's success.
+            syncCompletion.complete(Unit)
+            syncJob.join()
+            runCurrent()
+
+            // The recovery clear is attributed to B (the relay that started the sync), not A.
+            coVerify(exactly = 1) { preferredRepository.clearFailure(eq(bHash)) }
+            coVerify(exactly = 0) { preferredRepository.clearFailure(eq(aHash)) }
+            manager.stop()
         }
 
     @Test
@@ -2227,6 +2496,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2267,6 +2538,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2304,6 +2577,8 @@ class PropagationNodeManagerTest {
                     announceRepository = announceRepository,
                     rnsCore = rnsCore,
                     rnsLxmf = rnsLxmf,
+                    preferredPropagationNodeRepository = preferredRepository,
+                    transportObserver = transportObserver,
                     scope = testScope.backgroundScope,
                     defaultDispatcher = testDispatcher,
                 )
@@ -2313,186 +2588,6 @@ class PropagationNodeManagerTest {
             advanceUntilIdle()
 
             // Then: No exception thrown, manager continues to function
-            testManager.stop()
-        }
-
-    // ========== availableRelaysState Tests ==========
-
-    @Test
-    fun `availableRelaysState - maps announces to RelayInfo correctly`() =
-        runTest {
-            // Clear existing mock state
-            clearAllMocks()
-
-            // Given: Database has propagation node announces
-            val testAnnounce =
-                TestFactories.createAnnounce(
-                    destinationHash = testDestHash,
-                    peerName = "Test Relay",
-                    hops = 3,
-                    nodeType = "PROPAGATION_NODE",
-                )
-            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(listOf(testAnnounce))
-            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
-            coEvery { announceRepository.getAnnounce(any()) } returns null
-            coEvery { announceRepository.getNodeTypeCounts() } returns emptyList()
-            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
-            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
-            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
-            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
-            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
-            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-            coEvery { settingsRepository.getManualPropagationNode() } returns null
-
-            // Create a new manager to get fresh StateFlow
-            val testManager =
-                PropagationNodeManager(
-                    settingsRepository = settingsRepository,
-                    contactRepository = contactRepository,
-                    announceRepository = announceRepository,
-                    rnsCore = rnsCore,
-                    rnsLxmf = rnsLxmf,
-                    scope = testScope.backgroundScope,
-                    defaultDispatcher = testDispatcher,
-                )
-
-            // Wait for StateFlow to emit
-            testManager.availableRelaysState.test(timeout = 5.seconds) {
-                // Skip loading state
-                var state = awaitItem()
-                if (state is AvailableRelaysState.Loading) {
-                    state = awaitItem()
-                }
-
-                // Then: Should be Loaded with correct relay info
-                assertTrue("State should be Loaded", state is AvailableRelaysState.Loaded)
-                val loadedState = state as AvailableRelaysState.Loaded
-                assertEquals(1, loadedState.relays.size)
-                val relay = loadedState.relays[0]
-                assertEquals(testDestHash, relay.destinationHash)
-                assertEquals("Test Relay", relay.displayName)
-                assertEquals(3, relay.hops)
-
-                cancelAndConsumeRemainingEvents()
-            }
-
-            testManager.stop()
-        }
-
-    @Test
-    fun `availableRelaysState - empty when no propagation nodes`() =
-        runTest {
-            // Clear existing mock state
-            clearAllMocks()
-
-            // Given: No propagation nodes in database
-            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(emptyList())
-            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
-            coEvery { announceRepository.getAnnounce(any()) } returns null
-            coEvery { announceRepository.getNodeTypeCounts() } returns emptyList()
-            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
-            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
-            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
-            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
-            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
-            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-            coEvery { settingsRepository.getManualPropagationNode() } returns null
-
-            // Create a new manager
-            val testManager =
-                PropagationNodeManager(
-                    settingsRepository = settingsRepository,
-                    contactRepository = contactRepository,
-                    announceRepository = announceRepository,
-                    rnsCore = rnsCore,
-                    rnsLxmf = rnsLxmf,
-                    scope = testScope.backgroundScope,
-                    defaultDispatcher = testDispatcher,
-                )
-
-            // Wait for StateFlow to emit
-            testManager.availableRelaysState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                if (state is AvailableRelaysState.Loading) {
-                    state = awaitItem()
-                }
-
-                // Then: Should be Loaded with empty list
-                assertTrue("State should be Loaded", state is AvailableRelaysState.Loaded)
-                val loadedState = state as AvailableRelaysState.Loaded
-                assertTrue("Relays should be empty", loadedState.relays.isEmpty())
-
-                cancelAndConsumeRemainingEvents()
-            }
-
-            testManager.stop()
-        }
-
-    @Test
-    fun `availableRelaysState - deduplicates relays by destinationHash`() =
-        runTest {
-            // Given: Database returns announces with duplicate destinationHash
-            // (can happen transiently via Paging3 race conditions - see issue #542)
-            clearAllMocks()
-
-            val duplicateAnnounces =
-                listOf(
-                    TestFactories.createAnnounce(
-                        destinationHash = testDestHash,
-                        peerName = "Relay A",
-                        hops = 2,
-                    ),
-                    TestFactories.createAnnounce(
-                        destinationHash = testDestHash2,
-                        peerName = "Relay B",
-                        hops = 3,
-                    ),
-                    TestFactories.createAnnounce(
-                        destinationHash = testDestHash, // Duplicate of first
-                        peerName = "Relay A (dup)",
-                        hops = 4,
-                    ),
-                )
-            every { announceRepository.getTopPropagationNodes(any()) } returns flowOf(duplicateAnnounces)
-            every { announceRepository.getAnnouncesByTypes(any()) } returns flowOf(emptyList())
-            coEvery { announceRepository.getAnnounce(any()) } returns null
-            coEvery { announceRepository.getNodeTypeCounts() } returns emptyList()
-            every { contactRepository.getMyRelayFlow() } returns flowOf(null)
-            every { settingsRepository.autoSelectPropagationNodeFlow } returns flowOf(true)
-            every { settingsRepository.retrievalIntervalSecondsFlow } returns flowOf(60)
-            every { settingsRepository.autoRetrieveEnabledFlow } returns flowOf(false)
-            coEvery { settingsRepository.getLastSyncTimestamp() } returns null
-            coEvery { settingsRepository.getAutoSelectPropagationNode() } returns true
-            coEvery { settingsRepository.getManualPropagationNode() } returns null
-
-            val testManager =
-                PropagationNodeManager(
-                    settingsRepository = settingsRepository,
-                    contactRepository = contactRepository,
-                    announceRepository = announceRepository,
-                    rnsCore = rnsCore,
-                    rnsLxmf = rnsLxmf,
-                    scope = testScope.backgroundScope,
-                    defaultDispatcher = testDispatcher,
-                )
-
-            // When: availableRelaysState is collected
-            testManager.availableRelaysState.test(timeout = 5.seconds) {
-                var state = awaitItem()
-                if (state is AvailableRelaysState.Loading) {
-                    state = awaitItem()
-                }
-
-                // Then: Only unique destinationHash entries remain
-                assertTrue("State should be Loaded", state is AvailableRelaysState.Loaded)
-                val loadedState = state as AvailableRelaysState.Loaded
-                assertEquals(2, loadedState.relays.size)
-                val hashes = loadedState.relays.map { it.destinationHash }
-                assertEquals(hashes.distinct(), hashes)
-
-                cancelAndConsumeRemainingEvents()
-            }
-
             testManager.stop()
         }
 
@@ -2678,4 +2773,687 @@ class PropagationNodeManagerTest {
 
             manager.stop()
         }
+
+        // ========== Preferred-node list writer (Ticket 03) ==========
+
+    private fun preferredNode(hash: String, restriction: String) =
+        PreferredPropagationNodeEntity(
+            destinationHash = hash,
+            priority = 0,
+            networkRestriction = restriction,
+            enabled = true,
+        )
+
+    /**
+     * Drain the shared test scheduler until the active relay (`myRelayFlow`) has
+     * converged, without advancing virtual time.
+     *
+     * `advanceUntilIdle()` is deliberately NOT used here: after `start()` it
+     * re-wakes the periodic-sync `delay()` loop every round and OOMs the fork.
+     * `runCurrent()` only drains tasks that are ready *now*, so the delay-based
+     * periodic loop stays suspended and no virtual time elapses.
+     *
+     * Convergence = the relay holds the same *non-null* value across two consecutive
+     * drain rounds. A single unchanged round is not enough: after a transport flip the
+     * writer's `combine` (preferred list × transport) must recombine and the nested
+     * `applyPreferredRelay` chain must propagate before the new relay lands, which can
+     * take more than one ready-task drain. The two-round hysteresis makes the transport
+     * flip test deterministic without advancing virtual time.
+     */
+    private fun TestScope.flushRelayUntilStable(maxRounds: Int = 60) {
+        var previous: String? = myRelayFlow.value?.destinationHash
+        var stableRounds = 0
+        repeat(maxRounds) {
+            runCurrent()
+            val current = myRelayFlow.value?.destinationHash
+            if (current != null && current == previous) {
+                stableRounds++
+                if (stableRounds >= 2) return
+            } else {
+                stableRounds = 0
+            }
+            previous = current
+        }
+    }
+
+    @Test
+    fun `writer - non-empty wifi-only list on wifi transport sets that node as relay`() =
+        runTest {
+            preferredListFlow.value = listOf(preferredNode("aa11", "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // The active relay converges to the wifi-only node.
+            assertEquals("aa11", myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - empty list does not fight the legacy auto-select (legacy owns relay)`() =
+        runTest {
+            // Empty preferred list = legacy mode. The startup one-shot should pick the
+            // nearest announced node; the writer stays idle.
+            preferredListFlow.value = emptyList()
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // The active relay converges to the legacy nearest node (not a preferred hash).
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - transport flip re-resolves the active relay (wifi to cellular)`() =
+        runTest {
+            // onboard-style node is wifi-only, internet-style node is ANY (ashore fallback).
+            // Hashes must be hex-valid: the relay observer hex-decodes the active relay's
+            // destinationHash (syncRelayToPython) once it becomes the active relay.
+            val wifiOnlyHash = "a1b2c3d4e5f6a7b8"
+            val anyHash = "f6e5d4c3b2a10987"
+            preferredListFlow.value = listOf(
+                preferredNode(wifiOnlyHash, "WIFI_ONLY"),
+                preferredNode(anyHash, "ANY"),
+            )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            manager.start()
+            flushRelayUntilStable()
+            // On wifi the wifi-only node is active.
+            assertEquals(wifiOnlyHash, myRelayFlow.value?.destinationHash)
+
+            // Ashore: cellular. The wifi-only node no longer matches; ANY is the fallback.
+            transportFlow.value = CurrentTransport.CELLULAR
+            flushRelayUntilStable()
+            // The active relay re-resolved to the cellular/ANY node.
+            assertEquals(anyHash, myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - currently-unreachable preferred node fails over to next in priority order`() =
+        runTest {
+            val anyHash = "a1b2c3d4e5f6a7b8"
+            val wifiHash = "f6e5d4c3b2a10987"
+            // Highest-priority ANY node has a failure within the cooldown window; the wifi node
+            // does not. The writer must skip the unreachable one and pick the wifi node.
+            val unreachable = preferredNode(anyHash, "ANY").copy(lastFailureAt = 42L)
+            preferredListFlow.value = listOf(unreachable, preferredNode(wifiHash, "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } answers {
+                (firstArg<PreferredPropagationNodeEntity>().destinationHash == anyHash)
+            }
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // The unreachable ANY node is skipped; the active relay is the next-in-order wifi node.
+            assertEquals(wifiHash, myRelayFlow.value?.destinationHash)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(anyHash, clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - all-preferred-unreachable falls back to legacy nearest`() =
+        runTest {
+            val anyHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(anyHash, "ANY").copy(lastFailureAt = 42L))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } returns true
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // All preferred unreachable → legacy nearest is chosen, not the preferred node.
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(anyHash, clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - legacy fallback does not re-pick the unreachable preferred relay`() =
+        runTest {
+            // The only preferred node is ALSO the nearest announce. When it is marked
+            // unreachable, the legacy nearest fallback must NOT re-select it (that would bypass
+            // the cooldown); with nothing else available the relay stays unselected.
+            val anyHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(anyHash, "ANY").copy(lastFailureAt = 42L))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } returns true
+            // The nearest announce is the very preferred node we just marked unreachable.
+            val announce = TestFactories.createAnnounce(destinationHash = anyHash, hops = 1)
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // The excluded preferred relay is not selected by the fallback either, and with it
+            // the only candidate there is nothing to select — so no relay is set at all.
+            assertNull(myRelayFlow.value)
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(anyHash, clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - recovered preferred relay is retried once its failure cooldown elapses`() =
+        runTest {
+            // Higher-priority relay A has a failure inside the cooldown; B is healthy. The
+            // writer fails over to B. When A's cooldown elapses the writer must re-evaluate and
+            // re-select A — even though the list and transport never change in the meantime.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            // A's failure was recorded at virtual time T0 = 1_000_000 ms; the clock baseline is
+            // moved to T0 so the failure is "just now" (age 0 → inside the cooldown window).
+            val aFailedAt = 1_000_000L
+            // Move the clock's baseline to the failure time so "now" starts there; the failure
+            // is then in the past (age 0 → inside the cooldown window).
+            clock.advance(aFailedAt)
+            preferredListFlow.value = listOf(
+                preferredNode(aHash, "ANY").copy(lastFailureAt = aFailedAt),
+                preferredNode(bHash, "ANY"),
+            )
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 2
+            coEvery { contactRepository.hasContact(any()) } returns true
+            // A is unreachable while now < aFailedAt + cooldown; B never is.
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } answers {
+                val node = firstArg<PreferredPropagationNodeEntity>()
+                val now = secondArg<Long>()
+                node.destinationHash == aHash && (now - node.lastFailureAt!!) in 0..(600_000L)
+            }
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // While A is still inside its cooldown, the active relay is the healthy B.
+            assertEquals(bHash, myRelayFlow.value?.destinationHash)
+
+            // Advance virtual time past A's failure + cooldown. The scheduled recheck fires,
+            // the writer re-evaluates with A now re-eligible, and re-selects the higher-priority A.
+            advanceTimeBy(aFailedAt + 600_001L)
+            flushRelayUntilStable()
+
+            // A's cooldown has elapsed and it is re-selected ahead of B.
+            assertEquals(aHash, myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+    @Test
+    fun `reportRelayUnreachable records the failure and retries once the relay changes to a different one`() =
+        runTest {
+            // Relay A is the active relay. A propagation send (or sync) fails against A →
+            // reportRelayUnreachable records A's failure and schedules the failed action to
+            // re-run. When the writer fails over (the active relay becomes B), the pending retry
+            // must fire exactly once against the new relay, and the failure must have been
+            // recorded on the relay that failed (A), not the one we fail over to (B).
+            //
+            // The relay change is driven directly via myRelayFlow (the same flow the writer's
+            // setAsMyRelay writes in production) — the writer's own failover-to-next logic is
+            // covered by the `writer - ...` tests below; this test isolates the retry-on-change.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            // Start on relay A.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            var retryInvocations = 0
+            // A failed (no-path terminal). The retry closure re-drives the failed action.
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+
+            // The failure is recorded on the relay that failed (A).
+            coVerify(exactly = 1) {
+                preferredRepository.recordFailure(aHash, 9, "No path to relay", any())
+            }
+            coVerify(exactly = 0) { preferredRepository.recordFailure(bHash, any(), any(), any()) }
+
+            // The writer fails over to B: the pending retry fires exactly once, now that the
+            // active relay is no longer the one that failed.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(bHash, manager.currentRelay.value?.destinationHash)
+            assertEquals(1, retryInvocations)
+            manager.stop()
+        }
+
+    @Test
+    fun `reportRelayUnreachable does not retry when the active relay does not change`() =
+        runTest {
+            // A relay fails and a retry is registered, but the active relay never changes away
+            // from the one that failed. The retry must NOT fire — firing it would re-drive the
+            // operation against the very relay that just failed. The failure is still recorded.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            coEvery { preferredRepository.contains(aHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            var retryInvocations = 0
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+
+            // Failure recorded, but no relay change occurred → the retry never fires.
+            coVerify(exactly = 1) { preferredRepository.recordFailure(aHash, 9, "No path to relay", any()) }
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+            assertEquals(0, retryInvocations)
+            manager.stop()
+        }
+
+    @Test
+    fun `a transient null during failover does not drop the pending retry`() =
+        runTest {
+            // Regression for the on-device bug: setAsMyRelay(clearOther = true) clears the
+            // failed relay before setting the replacement, so currentRelay emits null between
+            // the two. firePendingRelayRetryIfDue(null) must NOT drop the pending retry — the
+            // real next relay arrives right after and must still fire it exactly once.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(aHash, manager.currentRelay.value?.destinationHash)
+
+            var retryInvocations = 0
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+
+            // The failover clears A (null) before setting B — exactly the production order.
+            myRelayFlow.value = null
+            flushRelayUntilStable()
+            // The transient null must NOT have fired or dropped the retry.
+            assertEquals(0, retryInvocations)
+
+            // Then B arrives: the pending retry fires exactly once.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(bHash, manager.currentRelay.value?.destinationHash)
+            assertEquals(1, retryInvocations)
+            manager.stop()
+        }
+
+    @Test
+    fun `a send failure after a sync blames the relay the send used, not the last synced one`() =
+        runTest {
+            // Regression: reportRelayUnreachable used to key off activeSyncRelayHash, a
+            // sync-specific variable that lingers from the last sync. After "sync on A, switch
+            // to B, send on B fails" it would record the failure on A (the healthy relay we
+            // just moved off), excluding it for 10 minutes. A *send* must blame the relay it
+            // was routing through (the current relay), never the stale sync variable.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            // Start on A and run a sync that stays in the "syncing" poll branch — this sets
+            // activeSyncRelayHash = A and leaves it there (the bug's precondition).
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } returns
+                Result.success(PropagationState(state = 1, stateName = "syncing", progress = 0.5f, messagesReceived = 0))
+            val syncJob = launch { manager.triggerSync(silent = true) }
+            advanceUntilIdle()
+            // The writer now fails over to B; the in-flight sync's activeSyncRelayHash is still A.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(bHash, manager.currentRelay.value?.destinationHash)
+
+            // A propagation SEND on B fails. It must blame B, not the stale sync relay A.
+            var retryInvocations = 0
+            manager.reportRelayUnreachable(
+                state = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0),
+                retryAction = { retryInvocations++ },
+            )
+            runCurrent()
+            coVerify(exactly = 1) { preferredRepository.recordFailure(bHash, 9, "No path to relay", any()) }
+            coVerify(exactly = 0) { preferredRepository.recordFailure(aHash, 9, "No path to relay", any()) }
+            syncJob.cancel()
+            manager.stop()
+        }
+
+    @Test
+    fun `two failed sends before failover both re-drive when the relay changes`() =
+        runTest {
+            // Regression: the pending retry was a single slot, so a second failure overwrote the
+            // first's retry and only the last operation was ever re-driven. Both must survive
+            // until the relay changes, and each must fire exactly once.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            val noPath = PropagationState(state = 9, stateName = "no_path", progress = 0f, messagesReceived = 0)
+
+            var firstRetries = 0
+            var secondRetries = 0
+            manager.reportRelayUnreachable(state = noPath, retryAction = { firstRetries++ })
+            runCurrent()
+            manager.reportRelayUnreachable(state = noPath, retryAction = { secondRetries++ })
+            runCurrent()
+            assertEquals(0, firstRetries)
+            assertEquals(0, secondRetries)
+
+            // Writer fails over to B: BOTH queued retries fire exactly once.
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            assertEquals(1, firstRetries)
+            assertEquals(1, secondRetries)
+            manager.stop()
+        }
+
+    @Test
+    fun `an immediate failed sync response schedules a failover retry`() =
+        runTest {
+            // Regression: the initial "failed" response path recorded the relay failure but
+            // never registered a retry, so with automatic retrieval off the user had to request
+            // it again after the writer switched relays. It must go through the same
+            // record-and-retry path as the polled failure terminal.
+            val aHash = "a1b2c3d4e5f6a7b8"
+            val bHash = "f6e5d4c3b2a10987"
+            coEvery { preferredRepository.contains(aHash) } returns true
+            coEvery { preferredRepository.contains(bHash) } returns true
+
+            manager.start()
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = aHash, isMyRelay = true)
+            flushRelayUntilStable()
+            // The backend's request returns an immediate terminal "failed" (state 8), not a
+            // transient syncing state — this is the path that previously skipped the retry.
+            // Count requests so the assertion below proves the retry actually re-ran the sync
+            // on the new relay (not just that a failure was recorded).
+            var requestCount = 0
+            coEvery { rnsLxmf.requestMessagesFromPropagationNode() } answers {
+                requestCount++
+                Result.success(PropagationState(state = 8, stateName = "failed", progress = 0f, messagesReceived = 0))
+            }
+
+            val syncJob = launch { manager.triggerSync(silent = true) }
+            advanceUntilIdle()
+            coVerify(exactly = 1) { preferredRepository.recordFailure(aHash, 8, any(), any()) }
+            assertEquals(1, requestCount)
+            // The retry is queued now (not fired yet — the relay has not changed).
+            myRelayFlow.value = TestFactories.createContactEntity(destinationHash = bHash, isMyRelay = true)
+            flushRelayUntilStable()
+            // The queued sync retry re-runs the request on the new relay: requestCount grows.
+            assertTrue("the immediate-failed sync retry must re-run the request on the new relay", requestCount >= 2)
+            syncJob.cancel()
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - transport-incompatible node is not affected by an unrelated unreachable hash`() =
+        runTest {
+            // The unreachable hash is not even in the list; resolution is unchanged.
+            val wifiHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(wifiHash, "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+            // A ghost hash in the unreachable set does not match the wifi node.
+            every { preferredRepository.isCurrentlyUnreachable(any(), any(), any()) } returns false
+
+            manager.start()
+            flushRelayUntilStable()
+
+            assertEquals(wifiHash, myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+    @Test
+    fun `writer - non-empty list with no transport match and no ANY falls back to legacy nearest`() =
+        runTest {
+            // Only a wifi-only node, but we are on cellular -> nothing applies, no ANY.
+            preferredListFlow.value = listOf(preferredNode("aa11", "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.CELLULAR
+            coEvery { preferredRepository.count() } returns 1
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+
+            // The active relay converges to the legacy nearest node, not the non-matching preferred one.
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
+            // The non-matching preferred node was NOT selected.
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay("aa11", clearOther = true) }
+            manager.stop()
+        }
+
+    @Test
+    fun `enableAutoSelect in ordered mode does not bypass the policy writer with nearest`() =
+        runTest {
+            // Non-empty enabled preferred list = ordered mode. The policy writer already
+            // owns the active relay, so enabling auto-select must NOT run selectBestRelay()
+            // (nearest-by-hops) — that would replace the transport-specific preferred node
+            // with an unrelated relay. The legacy scan is stubbed so a regression that calls
+            // it would be detectable (it is not expected to be called).
+            val wifiOnlyHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(wifiOnlyHash, "WIFI_ONLY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            val legacyAnnounce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(legacyAnnounce))
+
+            manager.enableAutoSelect()
+            runCurrent()
+
+            // The legacy nearest scan was NOT used in ordered mode.
+            coVerify(exactly = 0) { announceRepository.getAnnouncesByTypes(any()) }
+            // And therefore the nearest relay was NOT selected (the manager was never
+            // started, so the only thing that could have set a relay is the forbidden
+            // selectBestRelay() path — asserting the relay is still unset proves it didn't).
+            assertNull(
+                "ordered-mode enableAutoSelect must not auto-select the nearest relay",
+                myRelayFlow.value?.destinationHash,
+            )
+            // Auto-select is restored and the manual pick cleared.
+            coVerify(exactly = 1) { settingsRepository.saveAutoSelectPropagationNode(true) }
+            coVerify(exactly = 1) { settingsRepository.saveManualPropagationNode(null) }
+        }
+
+    @Test
+    fun `writer - non-empty to empty list transition re-resolves to legacy nearest`() =
+        runTest {
+            // Hex-valid preferred hash (the relay observer hex-decodes the active relay).
+            val preferredHash = "a1b2c3d4e5f6a7b8"
+            preferredListFlow.value = listOf(preferredNode(preferredHash, "ANY"))
+            transportFlow.value = CurrentTransport.WIFI_LIKE
+            coEvery { preferredRepository.count() } returns 1
+            coEvery { contactRepository.hasContact(any()) } returns true
+
+            // Legacy nearest candidate present throughout.
+            val announce = TestFactories.createAnnounce(nodeType = "PROPAGATION_NODE")
+            every { announceRepository.getAnnouncesByTypes(listOf("PROPAGATION_NODE")) } returns
+                flowOf(listOf(announce))
+
+            manager.start()
+            flushRelayUntilStable()
+            // Ordered mode: the preferred node is active.
+            assertEquals(preferredHash, myRelayFlow.value?.destinationHash)
+
+            // Remove the last preferred node -> the list becomes empty mid-run. Without the
+            // non-empty->empty transition handling, the removed node would stay active
+            // (startup one-shot already ran; periodic auto-select only fires when null).
+            preferredListFlow.value = emptyList()
+            flushRelayUntilStable()
+
+            // The relay re-resolved to the legacy nearest node, not the removed one.
+            assertEquals(announce.destinationHash, myRelayFlow.value?.destinationHash)
+            assertNotEquals(preferredHash, myRelayFlow.value?.destinationHash)
+            manager.stop()
+        }
+
+        // ========== Manual-pick reroute (Ticket 06) ==========
+
+        @Test
+        fun `addPreferredRelay with a non-empty list appends to the preferred list (no raw bypass)`() = runTest {
+            val hash = testDestHash2
+            // Non-empty preferred list -> ordered mode.
+            coEvery { preferredRepository.count() } returns 1
+            // Contact already exists -> no contact creation; findByHash(any()) -> null (from @Before).
+            coEvery { contactRepository.hasContact(hash) } returns true
+            val addedHash = slot<String>()
+            val addedRestriction = slot<String>()
+            coEvery {
+                preferredRepository.add(
+                    destinationHash = capture(addedHash),
+                    networkRestriction = capture(addedRestriction),
+                    displayName = any(),
+                    publicKey = any(),
+                )
+            } just Runs
+
+            manager.addPreferredRelay(hash, "boat")
+
+            // Appended to the preferred list with ANY restriction and the nickname preserved.
+            assertEquals(hash, addedHash.captured)
+            assertEquals(NetworkRestriction.ANY.name, addedRestriction.captured)
+            coVerify(exactly = 1) {
+                preferredRepository.add(
+                    destinationHash = hash,
+                    networkRestriction = NetworkRestriction.ANY.name,
+                    displayName = "boat",
+                    publicKey = any(),
+                )
+            }
+            // Not a raw bypass: the relay was NOT set directly via setAsMyRelay (the
+            // policy writer owns the active relay in ordered mode).
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(hash, clearOther = true) }
+        }
+
+        @Test
+        fun `addPreferredRelay with an empty list uses the legacy direct-set path`() = runTest {
+            val hash = testDestHash2
+            // Empty preferred list -> legacy mode.
+            coEvery { preferredRepository.count() } returns 0
+            // No contact, no announce -> addPendingContact path; setAsMyRelay is the @Before stub.
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns null
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(network.columba.app.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+
+            manager.addPreferredRelay(hash, null)
+
+            // Legacy path: the relay was set directly (myRelayFlow updated by the @Before stub).
+            assertEquals(hash, myRelayFlow.value?.destinationHash)
+            // NOT appended to the (empty) preferred list.
+            coVerify(exactly = 0) { preferredRepository.add(any(), any(), any(), any()) }
+        }
+
+        @Test
+        fun `addToPriorityList with an empty list still adds a row (no legacy bypass)`() = runTest {
+            val hash = testDestHash2
+            // Empty preferred list (legacy mode) — the case the new "Add to priority list"
+            // action must handle by ALWAYS creating a row (the old addPreferredRelay
+            // short-circuited to setManualRelay here and never added one).
+            coEvery { preferredRepository.contains(hash) } returns false
+            coEvery { preferredRepository.count() } returns 0
+            coEvery { contactRepository.hasContact(hash) } returns false
+            coEvery { announceRepository.getAnnounce(hash) } returns null
+            coEvery { contactRepository.addPendingContact(any(), any()) } returns
+                Result.success(network.columba.app.data.repository.ContactRepository.AddPendingResult.AddedAsPending)
+            val addedHash = slot<String>()
+            val addedRestriction = slot<String>()
+            coEvery {
+                preferredRepository.add(
+                    destinationHash = capture(addedHash),
+                    networkRestriction = capture(addedRestriction),
+                    displayName = any(),
+                    publicKey = any(),
+                )
+            } just Runs
+
+            manager.addToPriorityList(hash, null)
+
+            // A row was added to the (empty) preferred list with the ANY restriction.
+            assertEquals(hash, addedHash.captured)
+            assertEquals(NetworkRestriction.ANY.name, addedRestriction.captured)
+            // No raw bypass: the relay was NOT set directly via setAsMyRelay.
+            coVerify(exactly = 0) { contactRepository.setAsMyRelay(hash, clearOther = true) }
+        }
+
+        @Test
+        fun `addToPriorityList is a no-op when the node is already listed`() = runTest {
+            val hash = testDestHash2
+            coEvery { preferredRepository.contains(hash) } returns true
+
+            manager.addToPriorityList(hash, null)
+
+            // Already present -> no add, no contact lookup, and the (null) relay state is
+            // left untouched.
+            assertNull(myRelayFlow.value)
+            coVerify(exactly = 0) { preferredRepository.add(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { contactRepository.hasContact(any()) }
+        }
+
+}
+
+/**
+ * A [Clock] whose "now" tracks a coroutine-test [TestCoroutineScheduler]. The manager is built
+ * with this so that, inside `runTest`, `nowMs()` reflects exactly the virtual time the test has
+ * advanced. This keeps the manager's failure-age computation and the recheck `delay` on the same
+ * clock: a single `scheduler.advanceTimeBy(ms)` both ages out a recorded failure AND fires the
+ * pending recheck, without ever using `advanceUntilIdle` (which OOMs the periodic-sync loop).
+ *
+ * `startAtMillis` is epoch 0 so test failure timestamps (small longs) are already in the future
+ * of the clock's start and age forward cleanly.
+ */
+@OptIn(ExperimentalCoroutinesApi::class) // TestCoroutineScheduler is a test-only experimental API.
+private class MutableTestClock(startAtMillis: Long = 0L) : Clock() {
+    var scheduler: TestCoroutineScheduler? = null
+    private var offsetMillis: Long = startAtMillis
+
+    fun advance(ms: Long) {
+        offsetMillis += ms
+    }
+
+    override fun getZone(): ZoneId = ZoneOffset.UTC
+
+    override fun withZone(zone: ZoneId): Clock = this
+
+    override fun instant(): Instant {
+        val s = scheduler
+        return if (s != null) {
+            Instant.ofEpochMilli(offsetMillis + s.currentTime)
+        } else {
+            Instant.ofEpochMilli(offsetMillis)
+        }
+    }
 }

@@ -19,6 +19,7 @@ import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
 import network.columba.app.data.db.dao.PendingDeliveryStatusDao
+import network.columba.app.data.db.dao.PreferredPropagationNodeDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
 import network.columba.app.data.db.dao.CallHistoryDao
@@ -41,6 +42,7 @@ import network.columba.app.data.db.entity.PeerActivityEventEntity
 import network.columba.app.data.db.entity.PeerIconEntity
 import network.columba.app.data.db.entity.PeerIdentityEntity
 import network.columba.app.data.db.entity.PendingDeliveryStatusEntity
+import network.columba.app.data.db.entity.PreferredPropagationNodeEntity
 import network.columba.app.data.db.entity.ReceivedLocationEntity
 import network.columba.app.data.db.entity.RmspServerEntity
 
@@ -66,8 +68,9 @@ import network.columba.app.data.db.entity.RmspServerEntity
         PeerActivityEntity::class,
         PeerActivityEventEntity::class,
         PendingDeliveryStatusEntity::class,
+        PreferredPropagationNodeEntity::class,
     ],
-    version = 7,
+    version = 9,
     exportSchema = true,
 )
 abstract class ColumbaDatabase : RoomDatabase() {
@@ -345,6 +348,65 @@ abstract class ColumbaDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * v7 → v8: add the prioritized preferred-propagation-node list. Additive,
+         * non-destructive CREATE TABLE; existing relays are NOT migrated in (an empty
+         * list = today's behavior; the UI offers a one-time "import current relay").
+         */
+        val MIGRATION_7_8: Migration =
+            object : Migration(7, 8) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `preferred_propagation_nodes` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`destinationHash` TEXT NOT NULL, " +
+                            "`priority` INTEGER NOT NULL, " +
+                            "`networkRestriction` TEXT NOT NULL, " +
+                            "`enabled` INTEGER NOT NULL, " +
+                            "`displayName` TEXT, " +
+                            "`publicKey` TEXT)",
+                    )
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_preferred_propagation_nodes_destinationHash` " +
+                            "ON `preferred_propagation_nodes` (`destinationHash`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_preferred_propagation_nodes_priority` " +
+                            "ON `preferred_propagation_nodes` (`priority`)",
+                    )
+                }
+            }
+
+        /**
+         * v8 → v9: record *why* a preferred propagation node was last seen unreachable.
+         *
+         * Three nullable columns are added to `preferred_propagation_nodes`:
+         *  - `lastFailureCode`        (INTEGER, null) — raw LXMF `PR_*` state code.
+         *  - `lastFailureExplanation` (TEXT, null)    — human-readable reason.
+         *  - `lastFailureAt`          (INTEGER, null) — epoch millis of the failure.
+         *
+         * All are nullable and default to null so every existing row is untouched and reads
+         * as "never seen unreachable" — the selection policy only excludes a node when a
+         * recent failure is on record. No data backfill is required.
+         */
+        val MIGRATION_8_9: Migration =
+            object : Migration(8, 9) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "ALTER TABLE `preferred_propagation_nodes` " +
+                            "ADD COLUMN `lastFailureCode` INTEGER",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE `preferred_propagation_nodes` " +
+                            "ADD COLUMN `lastFailureExplanation` TEXT",
+                    )
+                    db.execSQL(
+                        "ALTER TABLE `preferred_propagation_nodes` " +
+                            "ADD COLUMN `lastFailureAt` INTEGER",
+                    )
+                }
+            }
+
         @Suppress("ReturnCount")
         fun splitReactionsOutOfFieldsJson(fieldsJson: String): Pair<String, String>? =
             try {
@@ -398,4 +460,6 @@ abstract class ColumbaDatabase : RoomDatabase() {
     abstract fun callHistoryDeletionDao(): CallHistoryDeletionDao
 
     abstract fun pendingDeliveryStatusDao(): PendingDeliveryStatusDao
+
+    abstract fun preferredPropagationNodeDao(): PreferredPropagationNodeDao
 }

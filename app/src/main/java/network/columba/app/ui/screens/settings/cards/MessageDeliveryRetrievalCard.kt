@@ -14,12 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
@@ -51,8 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import network.columba.app.service.RelayInfo
 import network.columba.app.ui.components.CollapsibleSettingsCard
 import network.columba.app.ui.util.rememberLifecycleTickerMillis
 import network.columba.app.util.DestinationHashValidator
@@ -78,14 +77,11 @@ fun MessageDeliveryRetrievalCard(
     tryPropagationOnFail: Boolean,
     currentRelayName: String?,
     currentRelayHops: Int?,
-    currentRelayHash: String?,
     isAutoSelect: Boolean,
-    availableRelays: List<RelayInfo>,
     onMethodChange: (String) -> Unit,
     onTryPropagationToggle: (Boolean) -> Unit,
     onAutoSelectToggle: (Boolean) -> Unit,
     onAddManualRelay: (destinationHash: String, nickname: String?) -> Unit,
-    onSelectRelay: (destinationHash: String, displayName: String) -> Unit,
     // Retrieval settings
     autoRetrieveEnabled: Boolean,
     retrievalIntervalSeconds: Int,
@@ -95,6 +91,7 @@ fun MessageDeliveryRetrievalCard(
     onIntervalChange: (Int) -> Unit,
     onSyncNow: () -> Unit,
     onViewMoreRelays: () -> Unit = {},
+    onManagePropagationNodes: () -> Unit = {},
     // Incoming message size limit
     incomingMessageSizeLimitKb: Int = 1024,
     onIncomingMessageSizeLimitChange: (Int) -> Unit = {},
@@ -104,7 +101,6 @@ fun MessageDeliveryRetrievalCard(
 ) {
     var showMethodDropdown by remember { mutableStateOf(false) }
     var showCustomIntervalDialog by remember { mutableStateOf(false) }
-    var showRelaySelectionDialog by remember { mutableStateOf(false) }
     var showCustomSizeLimitDialog by remember { mutableStateOf(false) }
     var customIntervalInput by remember { mutableStateOf("") }
     var customSizeLimitInput by remember { mutableStateOf("") }
@@ -238,26 +234,30 @@ fun MessageDeliveryRetrievalCard(
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Auto-select nearest",
+                    text = "Auto-select (preferred, then nearest)",
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                Text(
+                    text = "Uses your preferred list by transport; falls back to the nearest relay.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
                 if (isAutoSelect && currentRelayName != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Currently: $currentRelayName",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (currentRelayHops != null) {
                         Text(
-                            text = "Currently: $currentRelayName",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (currentRelayHops != null) {
-                            Text(
-                                text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
                 }
             }
@@ -283,22 +283,20 @@ fun MessageDeliveryRetrievalCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (!isAutoSelect && currentRelayName != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = currentRelayName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (currentRelayHops != null) {
                         Text(
-                            text = currentRelayName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (currentRelayHops != null) {
-                            Text(
-                                text = "($currentRelayHops ${if (currentRelayHops == 1) "hop" else "hops"})",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
                 } else if (!isAutoSelect) {
                     Text(
@@ -314,7 +312,7 @@ fun MessageDeliveryRetrievalCard(
         if (currentRelayName != null) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Tap to select a different relay",
+                text = "Tap to view all discovered relays",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -322,7 +320,7 @@ fun MessageDeliveryRetrievalCard(
                 relayName = currentRelayName,
                 hops = currentRelayHops,
                 isAutoSelected = isAutoSelect,
-                onClick = { showRelaySelectionDialog = true },
+                onClick = onViewMoreRelays,
             )
         } else if (isAutoSelect) {
             // Auto-select mode with no relay yet
@@ -337,10 +335,10 @@ fun MessageDeliveryRetrievalCard(
         if (!isAutoSelect) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Show button to open relay selection dialog when no relay is selected
+            // Show button to open the discovered-nodes screen (Relays filter) when no relay is selected
             if (currentRelayName == null) {
                 OutlinedButton(
-                    onClick = { showRelaySelectionDialog = true },
+                    onClick = onViewMoreRelays,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(
@@ -349,7 +347,7 @@ fun MessageDeliveryRetrievalCard(
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Select from available relays")
+                    Text("View all discovered relays")
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -371,6 +369,21 @@ fun MessageDeliveryRetrievalCard(
                     manualNicknameInput = ""
                 },
             )
+        }
+
+        // Preferred propagation nodes (transport-aware priority list) entry point.
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onManagePropagationNodes,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DragHandle,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Manage preferred nodes")
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -642,20 +655,6 @@ fun MessageDeliveryRetrievalCard(
         )
     }
 
-    // Relay selection dialog
-    if (showRelaySelectionDialog) {
-        RelaySelectionDialog(
-            availableRelays = availableRelays,
-            currentRelayHash = currentRelayHash,
-            onSelectRelay = { hash, name ->
-                onSelectRelay(hash, name)
-                showRelaySelectionDialog = false
-            },
-            onViewMoreRelays = onViewMoreRelays,
-            onDismiss = { showRelaySelectionDialog = false },
-        )
-    }
-
     // Custom size limit dialog
     if (showCustomSizeLimitDialog) {
         CustomSizeLimitDialog(
@@ -736,6 +735,9 @@ private fun CurrentRelayInfo(
                         text = relayName,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     if (isAutoSelected) {
                         Text(
@@ -923,164 +925,6 @@ private fun ManualRelayInput(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Set as Relay")
-        }
-    }
-}
-
-/**
- * Dialog for selecting a relay from the list of available propagation nodes.
- */
-@Composable
-private fun RelaySelectionDialog(
-    availableRelays: List<RelayInfo>,
-    currentRelayHash: String?,
-    onSelectRelay: (hash: String, name: String) -> Unit,
-    onViewMoreRelays: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Relay") },
-        text = {
-            // Skip loading state - query is fast enough. Just show relays or empty message.
-            if (availableRelays.isEmpty()) {
-                Text(
-                    text = "No propagation nodes discovered yet. Wait for announces or enter a hash manually.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(availableRelays, key = { it.destinationHash }) { relay ->
-                        RelayListItem(
-                            relay = relay,
-                            isSelected = relay.destinationHash == currentRelayHash,
-                            onClick = { onSelectRelay(relay.destinationHash, relay.displayName) },
-                        )
-                    }
-                    // "More..." item to view all relays in the announces screen
-                    item(key = "more_relays") {
-                        MoreRelaysItem(
-                            onClick = {
-                                onViewMoreRelays()
-                                onDismiss()
-                            },
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
-}
-
-/**
- * A single relay item in the selection list.
- */
-@Composable
-private fun RelayListItem(
-    relay: RelayInfo,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    Card(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor =
-                    if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
-            ),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Hub icon
-            Icon(
-                imageVector = Icons.Default.Hub,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint =
-                    if (isSelected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = relay.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                )
-                Text(
-                    text = "${relay.hops} ${if (relay.hops == 1) "hop" else "hops"} away",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (isSelected) {
-                Text(
-                    text = "Current",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
-
-/**
- * A "More..." item at the end of the relay list to view all relays.
- */
-@Composable
-private fun MoreRelaysItem(onClick: () -> Unit) {
-    Card(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
-            ),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = "View All Relays...",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
-            )
         }
     }
 }

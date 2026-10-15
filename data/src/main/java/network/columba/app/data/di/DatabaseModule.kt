@@ -26,6 +26,7 @@ import network.columba.app.data.db.dao.OfflineMapRegionDao
 import network.columba.app.data.db.dao.PeerActivityDao
 import network.columba.app.data.db.dao.PeerIconDao
 import network.columba.app.data.db.dao.PeerIdentityDao
+import network.columba.app.data.db.dao.PreferredPropagationNodeDao
 import network.columba.app.data.db.dao.ReceivedLocationDao
 import network.columba.app.data.db.dao.RmspServerDao
 import javax.inject.Singleton
@@ -117,6 +118,8 @@ object DatabaseModule {
                 ColumbaDatabase.MIGRATION_4_5,
                 ColumbaDatabase.MIGRATION_5_6,
                 ColumbaDatabase.MIGRATION_6_7,
+                ColumbaDatabase.MIGRATION_7_8,
+                ColumbaDatabase.MIGRATION_8_9,
             )
             .enableMultiInstanceInvalidation()
             .addCallback(DURABILITY_CALLBACK)
@@ -142,6 +145,10 @@ object DatabaseModule {
 
     @Provides
     fun provideContactDao(database: ColumbaDatabase): ContactDao = database.contactDao()
+
+    @Provides
+    fun providePreferredPropagationNodeDao(database: ColumbaDatabase): PreferredPropagationNodeDao =
+        database.preferredPropagationNodeDao()
 
     @Provides
     fun provideCustomThemeDao(database: ColumbaDatabase): CustomThemeDao = database.customThemeDao()

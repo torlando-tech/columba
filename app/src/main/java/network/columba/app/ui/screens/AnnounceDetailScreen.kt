@@ -106,6 +106,9 @@ fun AnnounceDetailScreen(
     // Observe if this contact is the current relay
     val isMyRelay by viewModel.isMyRelayFlow(destinationHash).collectAsState(initial = false)
 
+    // Observe if this node is already in the preferred (priority) relay list
+    val isPreferredRelay by viewModel.isPreferredRelayFlow(destinationHash).collectAsState(initial = false)
+
     // Cross-linked announces (e.g., telephony <-> messaging for the same identity)
     val linkedAnnounces by viewModel.getLinkedAnnouncesFlow(destinationHash).collectAsState(initial = emptyList())
 
@@ -321,6 +324,41 @@ fun AnnounceDetailScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (isMyRelay) "Current Relay" else "Set as My Relay",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+
+                    // "Add to priority list" for relays: lets the user keep a node in the
+                    // transport-aware preferred list without making it the active relay.
+                    Button(
+                        onClick = {
+                            viewModel.addToPriorityList(announceNonNull.destinationHash, announceNonNull.peerName)
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor =
+                                    if (isPreferredRelay) {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    },
+                            ),
+                        enabled = !isPreferredRelay,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isPreferredRelay) "In priority list" else "Add to priority list",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                         )

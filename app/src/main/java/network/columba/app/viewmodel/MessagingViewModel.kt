@@ -18,6 +18,7 @@ import network.columba.app.repository.SettingsRepository
 import network.columba.app.rns.api.model.DeliveryMethod
 import network.columba.app.rns.api.model.DeliveryStatus
 import network.columba.app.rns.api.model.Identity
+import network.columba.app.rns.api.model.PropagationState
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.rns.api.RnsLxmf
 import network.columba.app.rns.api.RnsTelephony
@@ -362,6 +363,59 @@ class MessagingViewModel
 
         // Real-time sync progress for status UI
         val syncProgress: StateFlow<SyncProgress> = propagationNodeManager.syncProgress
+
+        /**
+         * In-flight **propagation-method** sends awaiting a terminal delivery-status event.
+         *
+         * Keyed by the (lowercased) message hash returned in the send receipt. The value is the
+         * *captured* payload + the [PropagationRetry] closure that re-drives this exact send
+         * against whichever relay is active when it is fired. Tracked here (not re-read from the
+         * composer at fail time) because the user may have changed the composer contents between
+         * the original send and the async delivery failure.
+         *
+         * Only propagation-method sends are tracked: a propagated send's `FAILED` delivery status
+         * means the relay never stored the deferred message (deferred-delivery model — "propagated"
+         * = relay accepted, "failed" = relay unreachable), so a failure is attributed to the relay
+         * and the writer fails over to the next in the priority list, after which the captured
+         * send is re-driven. Direct / opportunistic sends are not relay-routed and never register
+         * here. Entries are removed on any terminal status (delivered / propagated / failed) so
+         * the map can't grow without bound.
+         */
+        private val inFlightPropagationSends =
+            java.util.concurrent.ConcurrentHashMap<String, PropagationSendRecord>()
+
+        /**
+         * A propagated send awaiting delivery, captured at send time so the failover retry can
+         * re-drive the *exact* payload (not whatever is in the composer now).
+         *
+         * @property relayed true once the send is known to be in its propagation (relay) phase,
+         *   so a `FAILED` should be attributed to the relay. Set at send time for a PROPAGATED
+         *   send (relayed at submit) and *latched* for a sideband (tryPropOnFail) send the moment
+         *   its fallback re-routes it (the `RETRYING_PROPAGATED` update). The latch — not a
+         *   one-shot flag — matters because the re-drive on the next relay emits no new
+         *   `RETRYING_PROPAGATED` (it re-sends straight as PROPAGATED, no direct→prop fallback),
+         *   so a later failure on relay B, C, … must still blame the relay. A sideband `FAILED`
+         *   that arrives *before* the latch (the bridge's fallback queue was full and it rejected
+         *   the message before submitting) stays `relayed=false`, so a healthy relay is not
+         *   wrongly excluded for the 10-minute cooldown.
+         * @property retry the self-referential closure that re-drives this same message on the
+         *   next relay and re-registers this same record (carrying the latched `relayed`).
+         */
+        private class PropagationSendRecord(
+            @Volatile
+            var relayed: Boolean,
+            val retry: suspend () -> Unit,
+        )
+
+        /**
+         * A synthesized unreachable-relay [PropagationState] for a propagated send whose delivery
+         * status flipped to `FAILED`. The delivery-status callback carries no reason code, so this
+         * is the generic "relay never received the deferred message" terminal — mapped by
+         * [PropagationFailureReason] to a "No path to relay" style explanation. Native-backend
+         * ordinals are used (FAILED = 8) since the send path is backend-agnostic here.
+         */
+        private val propagationSendFailedState =
+            PropagationState(state = 8, stateName = "failed", progress = 0f, messagesReceived = 0)
 
         private val _transferProgress =
             MutableStateFlow<Map<String, network.columba.app.rns.api.model.TransferProgressUpdate>>(emptyMap())
@@ -1054,8 +1108,78 @@ class MessagingViewModel
                     Log.w(TAG, "Delivery status update for unknown message after $maxRetries retries: ${update.messageHash.take(16)}...")
                 }
 
+                // Propagation-method send failover. A propagated send whose terminal delivery
+                // status is FAILED means the relay never stored the deferred message (no path
+                // to the relay) — so mark *that* relay unreachable, which drives the writer to
+                // fail over to the next in the user's priority list, and register the captured
+                // payload to be re-driven once the new relay is active (the manager fires it
+                // from observeRelayChanges). Only propagation-method sends are tracked in
+                // inFlightPropagationSends, so direct/opportunistic sends never trigger this.
+                handlePropagationSendFailover(update)
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating message status", e)
+            }
+        }
+
+        /**
+         * Terminal-status hook for propagation-method send failover.
+         *
+         * The entry is removed only on a *terminal* status (delivered/propagated/failed)
+         * so the map is bounded. Non-terminal updates (pending, retrying_propagated) must
+         * NOT remove the entry — a propagated send emits retrying_propagated before it
+         * fails, and removing on that update would drop the record before the FAILED
+         * terminal arrives, silently skipping the failover (and leaking the entry).
+         */
+        private suspend fun handlePropagationSendFailover(
+            update: network.columba.app.rns.api.model.DeliveryStatusUpdate,
+        ) {
+            // A sideband (tryPropOnFail) send enters its relay phase only when the Python
+            // fallback re-routes it, which the bridge announces with RETRYING_PROPAGATED.
+            // Latch that on the record so the send's later re-drives (relays B, C, …) keep
+            // blaming the relay — the re-drive on the next relay emits no new
+            // RETRYING_PROPAGATED (it re-sends straight as PROPAGATED), so the flag must
+            // persist across the re-drive rather than be one-shot. A sideband FAILED that
+            // arrives *before* any RETRYING_PROPAGATED (the bridge's fallback queue was full
+            // and it rejected the message before submitting) never latches, so a healthy
+            // relay is not wrongly excluded. Pure PROPAGATED sends are relay-routed at submit
+            // (relayed=true from the start), so this latch is irrelevant to them.
+            if (update.status == DeliveryStatus.RETRYING_PROPAGATED) {
+                inFlightPropagationSends[update.messageHash]?.relayed = true
+                return
+            }
+
+            val isTerminalStatus =
+                update.status == DeliveryStatus.DELIVERED ||
+                    update.status == DeliveryStatus.PROPAGATED ||
+                    update.status == DeliveryStatus.FAILED
+            if (!isTerminalStatus) {
+                return
+            }
+            inFlightPropagationSends.remove(update.messageHash)?.let { record ->
+                if (update.status == DeliveryStatus.FAILED) {
+                    // Only blame the relay once the send is known to be in its propagation
+                    // phase (relayed latched). Until then a sideband FAILED died upstream of
+                    // the relay and must not exclude a healthy relay.
+                    if (record.relayed) {
+                        Log.i(
+                            TAG,
+                            "Propagated send ${update.messageHash.take(16)}... failed — relay " +
+                                "unreachable; failing over to next relay and retrying the send",
+                        )
+                        propagationNodeManager.reportRelayUnreachable(
+                            state = propagationSendFailedState,
+                            retryAction = record.retry,
+                        )
+                    } else {
+                        Log.i(
+                            TAG,
+                            "Sideband send ${update.messageHash.take(16)}... failed before " +
+                                "reaching the relay (no RETRYING_PROPAGATED); not blaming the " +
+                                "active relay",
+                        )
+                    }
+                }
             }
         }
 
@@ -1336,127 +1460,20 @@ class MessagingViewModel
                     }
 
                     val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return@launch
-                    val destHashBytes = validateDestinationHash(destinationHash) ?: return@launch
-                    val identity =
-                        loadIdentityIfNeeded() ?: run {
-                            Log.e(TAG, "Failed to load source identity")
-                            return@launch
-                        }
-
-                    val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod =
-                        determineDeliveryMethod(
-                            sanitized = sanitized,
-                            imageData = imageData,
-                            fileAttachments = fileAttachments,
-                            voiceBytes = voiceBytes,
-                            defaultMethod = defaultMethod,
-                        )
-                    val deliveryMethodString = deliveryMethod.toStorageString()
-
-                    // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
-                    val fileAttachmentPairs = fileAttachments.map { it.filename to it.data }
-
-                    Log.d(
-                        TAG,
-                        "Sending LXMF message to $destinationHash " +
-                            "(${sanitized.length} chars, hasImage=${imageData != null}, " +
-                            "files=${fileAttachments.size}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
-                    )
-
-                    // Get pending reply ID if replying to a message
                     val replyToId = _pendingReplyTo.value?.messageId
 
-                    // Get user's icon appearance for Sideband/MeshChat interoperability
-                    val iconAppearance =
-                        identityRepository.getActiveIdentitySync()?.let { activeId ->
-                            val name = activeId.iconName
-                            val fg = activeId.iconForegroundColor
-                            val bg = activeId.iconBackgroundColor
-                            if (name != null && fg != null && bg != null) {
-                                network.columba.app.rns.api.model.IconAppearance(
-                                    iconName = name,
-                                    foregroundColor = fg,
-                                    backgroundColor = bg,
-                                )
-                            } else {
-                                null
-                            }
-                        }
-
-                    val result =
-                        rnsLxmf.sendLxmfMessageWithMethod(
-                            destinationHash = destHashBytes,
-                            content = sanitized,
-                            sourceIdentity = identity,
-                            deliveryMethod = deliveryMethod,
-                            tryPropagationOnFail = tryPropOnFail,
-                            imageData = imageData,
-                            imageFormat = imageFormat,
-                            fileAttachments = fileAttachmentPairs.ifEmpty { null },
-                            extraFields =
-                                voiceBytes?.let {
-                                    mapOf(
-                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
-                                            listOf(checkNotNull(voiceMode), it),
-                                    )
-                                },
-                            replyToMessageId = replyToId,
-                            // MeshChatX-interop reply format ships the
-                            // quoted content inline (fields[0x31]) so
-                            // recipients render the preview even when
-                            // they don't have the original in their
-                            // local store (cross-app interop, or peer
-                            // history aged out). We pull it from local
-                            // DB at send time the same way MeshChatX
-                            // does.
-                            replyQuotedContent = replyToId?.let { id ->
-                                runCatching {
-                                    conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
-                                }.getOrNull()
-                            },
-                            iconAppearance = iconAppearance,
-                        )
-
-                    result
-                        .onSuccess { receipt ->
-                            val persisted =
-                                handleSendSuccess(
-                                    receipt,
-                                    sanitized,
-                                    destinationHash,
-                                    imageData,
-                                    imageFormat,
-                                    fileAttachments,
-                                    deliveryMethodString,
-                                    replyToId,
-                                    voiceRecording,
-                                    voiceBytes,
-                                    voiceMode,
-                                )
-                            if (persisted) {
-                                clearSubmittedDraft(destinationHash, content, replyToId)
-                            }
-                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
-                        }.onFailure { error ->
-                            val persisted =
-                                handleSendFailure(
-                                    error = error,
-                                    sanitized = sanitized,
-                                    destinationHash = destinationHash,
-                                    deliveryMethodString = deliveryMethodString,
-                                    imageData = imageData,
-                                    imageFormat = imageFormat,
-                                    fileAttachments = fileAttachments,
-                                    replyToMessageId = replyToId,
-                                    voiceBytes = voiceBytes,
-                                    voiceMode = voiceMode,
-                                    voiceRecording = voiceRecording,
-                                )
-                            if (persisted) clearSubmittedDraft(destinationHash, content, replyToId)
-                            composerSendResults.send(ComposerSendResult(destinationHash, content, persisted))
-                        }
+                    executeLxmfSend(
+                        destinationHash = destinationHash,
+                        content = sanitized,
+                        submittedText = content,
+                        imageData = imageData,
+                        imageFormat = imageFormat,
+                        fileAttachments = fileAttachments,
+                        replyToId = replyToId,
+                        voiceBytes = voiceBytes,
+                        voiceMode = voiceMode,
+                        voiceRecording = voiceRecording,
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sending message", e)
                 } finally {
@@ -1464,6 +1481,181 @@ class MessagingViewModel
                     sendInProgress.set(false)
                 }
             }
+        }
+
+        /**
+         * The send + bookkeeping core, shared by the composer path ([sendMessage]) and the
+         * propagation-failover retry (see [inFlightPropagationSends]).
+         *
+         * Crucially it does NOT read the composer: every payload element (content, image, file
+         * attachments, voice bytes, reply target) is passed in. This lets the failover retry
+         * re-drive the *exact* send that failed against the newly-selected relay, even if the
+         * user has since edited the composer.
+         */
+        @Suppress("LongMethod", "LongParameterList")
+        private suspend fun executeLxmfSend(
+            destinationHash: String,
+            content: String,
+            submittedText: String,
+            imageData: ByteArray?,
+            imageFormat: String?,
+            fileAttachments: List<FileAttachment>,
+            replyToId: String?,
+            voiceBytes: ByteArray?,
+            voiceMode: Int?,
+            voiceRecording: tech.torlando.lxst.recording.RecordedAudio?,
+        ) {
+            val sanitized = validateAndSanitizeContent(content, imageData, fileAttachments, voiceBytes) ?: return
+            val destHashBytes = validateDestinationHash(destinationHash) ?: return
+            val identity =
+                loadIdentityIfNeeded() ?: run {
+                    Log.e(TAG, "Failed to load source identity")
+                    return
+                }
+
+            val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
+            val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
+            val deliveryMethod =
+                determineDeliveryMethod(
+                    sanitized = sanitized,
+                    imageData = imageData,
+                    fileAttachments = fileAttachments,
+                    voiceBytes = voiceBytes,
+                    defaultMethod = defaultMethod,
+                )
+            val deliveryMethodString = deliveryMethod.toStorageString()
+
+            // Convert file attachments to protocol format: List<Pair<String, ByteArray>>
+            val fileAttachmentPairs = fileAttachments.map { it.filename to it.data }
+
+            Log.d(
+                TAG,
+                "Sending LXMF message to $destinationHash " +
+                    "(${sanitized.length} chars, hasImage=${imageData != null}, " +
+                    "files=${fileAttachments.size}, method=$deliveryMethod, tryPropOnFail=$tryPropOnFail)...",
+            )
+
+            // Get user's icon appearance for Sideband/MeshChat interoperability
+            val iconAppearance =
+                identityRepository.getActiveIdentitySync()?.let { activeId ->
+                    val name = activeId.iconName
+                    val fg = activeId.iconForegroundColor
+                    val bg = activeId.iconBackgroundColor
+                    if (name != null && fg != null && bg != null) {
+                        network.columba.app.rns.api.model.IconAppearance(
+                            iconName = name,
+                            foregroundColor = fg,
+                            backgroundColor = bg,
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+            val result =
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = destHashBytes,
+                    content = sanitized,
+                    sourceIdentity = identity,
+                    deliveryMethod = deliveryMethod,
+                    tryPropagationOnFail = tryPropOnFail,
+                    imageData = imageData,
+                    imageFormat = imageFormat,
+                    fileAttachments = fileAttachmentPairs.ifEmpty { null },
+                    extraFields =
+                        voiceBytes?.let {
+                            mapOf(
+                                network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                    listOf(checkNotNull(voiceMode), it),
+                            )
+                        },
+                    replyToMessageId = replyToId,
+                    // MeshChatX-interop reply format ships the
+                    // quoted content inline (fields[0x31]) so
+                    // recipients render the preview even when
+                    // they don't have the original in their
+                    // local store (cross-app interop, or peer
+                    // history aged out). We pull it from local
+                    // DB at send time the same way MeshChatX
+                    // does.
+                    replyQuotedContent = replyToId?.let { id ->
+                        runCatching {
+                            conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
+                        }.getOrNull()
+                    },
+                    iconAppearance = iconAppearance,
+                )
+
+            result
+                .onSuccess { receipt ->
+                    // Track any send that has a propagation phase that can fail, awaiting its
+                    // terminal delivery status so a `FAILED` (relay never stored the deferred
+                    // message) can mark the relay unreachable and re-drive this exact payload on
+                    // the next relay. Two cases register:
+                    //   1. deliveryMethod == PROPAGATED — the send went to the relay directly.
+                    //   2. tryPropOnFail && a relay is configured — a direct/opportunistic send
+                    //      that will *fall back* to the relay via the Python sideband when direct
+                    //      fails (emits RETRYING_PROPAGATED then FAILED). The sideband is the
+                    //      only relay-touching phase, so it is what fails over.
+                    // A direct send with tryPropOnFail=false never touches a relay, so it is
+                    // not tracked.
+                    val hasRelay = propagationNodeManager.currentRelay.value != null
+                    val willUseRelay =
+                        deliveryMethod == DeliveryMethod.PROPAGATED ||
+                            (tryPropOnFail && hasRelay)
+                    // The retry re-drives the send against the next relay by *re-key re-send*:
+                    // it reconstructs the message from the persisted row, re-sends it as
+                    // PROPAGATED through the (newly-failed-over) relay, and — on success —
+                    // re-keys the row to the new hash (delete old, insert one under the new
+                    // hash). One bubble, never a second row. A re-send (not a same-hash
+                    // re-submit) is what keeps the bubble single: the row's id IS the hash and
+                    // the bubble is keyed by it, so re-keying in place is invisible to the UI.
+                    //
+                    // The record re-registers under the *new* hash after a successful re-drive
+                    // (the row id changes), so the re-drive's own FAILED terminal re-arms the
+                    // next failover and its relayed flag carries across the hop. Cycles through
+                    // the relays until delivered or the list is exhausted.
+                    val propagatedHashHex = receipt.messageHash.joinToString("") { "%02x".format(it) }
+                    if (willUseRelay) {
+                        inFlightPropagationSends[propagatedHashHex] =
+                            registerPropagationSendRecord(propagatedHashHex, deliveryMethod == DeliveryMethod.PROPAGATED)
+                    }
+                    val persisted =
+                        handleSendSuccess(
+                            receipt,
+                            sanitized,
+                            destinationHash,
+                            imageData,
+                            imageFormat,
+                            fileAttachments,
+                            deliveryMethodString,
+                            replyToId,
+                            voiceRecording,
+                            voiceBytes,
+                            voiceMode,
+                        )
+                    if (persisted) {
+                        clearSubmittedDraft(destinationHash, submittedText, replyToId)
+                    }
+                    composerSendResults.send(ComposerSendResult(destinationHash, submittedText, persisted))
+                }.onFailure { error ->
+                    val persisted =
+                        handleSendFailure(
+                            error = error,
+                            sanitized = sanitized,
+                            destinationHash = destinationHash,
+                            deliveryMethodString = deliveryMethodString,
+                            imageData = imageData,
+                            imageFormat = imageFormat,
+                            fileAttachments = fileAttachments,
+                            replyToMessageId = replyToId,
+                            voiceBytes = voiceBytes,
+                            voiceMode = voiceMode,
+                            voiceRecording = voiceRecording,
+                        )
+                    if (persisted) clearSubmittedDraft(destinationHash, submittedText, replyToId)
+                    composerSendResults.send(ComposerSendResult(destinationHash, submittedText, persisted))
+                }
         }
 
         @Suppress("LongParameterList") // Refactoring to data class would add unnecessary complexity
@@ -2598,8 +2790,8 @@ class MessagingViewModel
                     rnsLxmf.setIncomingMessageSizeLimit(newLimitKb)
                     Log.d(TAG, "Python layer updated with temporary size limit")
 
-                    // Trigger sync to fetch the file (silent = no toast)
-                    // Don't use keepSyncingState so isSyncing properly reflects sync completion/failure
+                    // Trigger sync to fetch the file (silent = no toast). isSyncing reflects the
+                    // sync completion/failure (reset by the shared sync engine on completion).
                     propagationNodeManager.triggerSync(silent = true)
                     Log.d(TAG, "Sync triggered to fetch pending file")
 
@@ -2665,143 +2857,294 @@ class MessagingViewModel
         }
 
         /**
+         * Sniff the image format tag from raw image bytes so a re-drive preserves the original
+         * format (an animated GIF or a PNG must not be re-sent as "jpg"). The format tag is what
+         * the sender stamps in LXMF field 6 (see [NativeMessageSender]: `listOf(imageFormat, data)`),
+         * and the wire only carries a short tag, so the value must match the set the backends
+         * accept ("jpg", "png", "gif", "webp"). Falls back to "jpg" for anything unrecognised.
+         */
+        private fun sniffImageFormat(bytes: ByteArray): String {
+            fun hasPrefix(prefix: ByteArray, offset: Int = 0): Boolean =
+                bytes.size >= offset + prefix.size && prefix.indices.all { i -> bytes[offset + i] == prefix[i] }
+            return when {
+                hasPrefix(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())) -> "jpg"
+                hasPrefix(byteArrayOf(0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte())) -> "png"
+                hasPrefix(byteArrayOf(0x47.toByte(), 0x49.toByte(), 0x46.toByte(), 0x38.toByte())) -> "gif"
+                // RIFF container with a WEBP payload at offset 8.
+                hasPrefix(byteArrayOf(0x52.toByte(), 0x49.toByte(), 0x46.toByte(), 0x46.toByte())) &&
+                    hasPrefix(byteArrayOf(0x57.toByte(), 0x45.toByte(), 0x42.toByte(), 0x50.toByte()), offset = 8) -> "webp"
+                else -> "jpg"
+            }
+        }
+
+        /**
+         * Build and register the [PropagationSendRecord] for a send that has a propagation
+         * phase to fail over, returning the record (the caller stores it under the send's
+         * hash in [inFlightPropagationSends]).
+         *
+         * The record's `retry` closure is the re-key re-drive: it re-sends the *current* row
+         * as PROPAGATED via [reDriveMessage] and, on a successful re-key (the row id becomes
+         * the new hash), re-registers the SAME record under the new hash so the re-drive's own
+         * FAILED terminal re-arms the next failover and its latched `relayed` flag carries
+         * across the hop. [rowHash] tracks the current row id so a second hop re-drives the
+         * already re-keyed row, not the stale first one.
+         */
+        private fun registerPropagationSendRecord(
+            propagatedHashHex: String,
+            relayedAtSubmit: Boolean,
+        ): PropagationSendRecord {
+            val rowHash = java.util.concurrent.atomic.AtomicReference(propagatedHashHex)
+            var record: PropagationSendRecord? = null
+            record =
+                PropagationSendRecord(
+                    relayed = relayedAtSubmit,
+                    retry = {
+                        // Re-drive re-keys the row (old id -> new id) and re-sends as
+                        // PROPAGATED. The re-key happens *inside* reDriveMessage, so a fast
+                        // FAILED on the new hash can reach handlePropagationSendFailover
+                        // before the record is re-registered under the new hash, and the
+                        // failover would be silently lost. reDriveMessage therefore invokes
+                        // [onRekey] just BEFORE the re-key (while the old-hash record is
+                        // still present) so we can register the record under the new hash
+                        // ahead of the row swap; the stale old-hash entry is dropped after.
+                        val currentHash = rowHash.get()
+                        val rec = record
+                        val newHash =
+                            reDriveMessage(
+                                messageId = currentHash,
+                                forcedMethod = DeliveryMethod.PROPAGATED,
+                                onRekey = { nextHash ->
+                                    if (rec != null) {
+                                        inFlightPropagationSends[nextHash] = rec
+                                    }
+                                },
+                            )
+                        if (newHash != null) {
+                            rowHash.set(newHash)
+                            // Drop the stale old-hash entry — but only when the re-key actually
+                            // moved to a new hash (the normal case, a new hash per hop). A
+                            // no-op re-key (same hash returned) keeps the record under that
+                            // hash, so removing it here would drop the live record.
+                            if (newHash != currentHash) {
+                                inFlightPropagationSends.remove(currentHash)
+                            }
+                        }
+                        // newHash == null: the re-drive failed (attachment lost / send failed),
+                        // the row kept its old id, and the old-hash record (still present)
+                        // handles its own terminal. Nothing to re-register.
+                    },
+                )
+            return record
+        }
+
+        /** Reconstructed outbound payload for a re-drive, as loaded from the persisted row. */
+        private data class ReDrivePayload(
+            val imageData: ByteArray?,
+            val imageFormat: String?,
+            val fileAttachments: List<FileAttachment>,
+            val voiceBytes: ByteArray?,
+            val voiceMode: Int?,
+        )
+
+        /**
+         * Rebuild every persisted attachment (image / voice / file) from a row's `fieldsJson`
+         * so [reDriveMessage] can re-send it. Returns null — after writing an
+         * [updateMessageDeliveryDetails] explaining which attachment was lost — if any
+         * attachment the row claims to carry can no longer be read, so a re-drive never sends a
+         * half-rebuilt payload.
+         */
+        @Suppress("ReturnCount")
+        private suspend fun reconstructForReDrive(messageId: String, fieldsJson: String?): ReDrivePayload? {
+            val (hasPersistedImage, imageData) = reconstructImageForRetry(fieldsJson)
+            if (hasPersistedImage && imageData == null) {
+                Log.e(TAG, "Stored image attachment is unavailable for re-drive")
+                conversationRepository.updateMessageDeliveryDetails(
+                    messageId,
+                    deliveryMethod = null,
+                    errorMessage = "Image attachment is no longer available",
+                )
+                return null
+            }
+            // The real format is not persisted (only the byte payload is); sniff it from the
+            // stored bytes so a re-driven animated GIF / PNG is not mis-labelled as "jpg".
+            val imageFormat = imageData?.let { sniffImageFormat(it) }
+            val audioAttachment = parseAudioAttachment(fieldsJson)
+            val voiceMode = audioAttachment?.mode?.wireValue
+            val voiceBytes =
+                audioAttachment?.let { attachment ->
+                    audioAttachmentLoader.loadBytes(attachment)
+                }
+            if (audioAttachment != null && voiceBytes == null) {
+                Log.e(TAG, "Stored voice attachment is unavailable for re-drive")
+                conversationRepository.updateMessageDeliveryDetails(
+                    messageId,
+                    deliveryMethod = null,
+                    errorMessage = "Voice recording is no longer available",
+                )
+                return null
+            }
+            val fileAttachments = reconstructFileAttachments(fieldsJson)
+            if (fileAttachments == null) {
+                Log.e(TAG, "Stored file attachment is unavailable for re-drive")
+                conversationRepository.updateMessageDeliveryDetails(
+                    messageId,
+                    deliveryMethod = null,
+                    errorMessage = "A file attachment is no longer available",
+                )
+                return null
+            }
+            return ReDrivePayload(imageData, imageFormat, fileAttachments, voiceBytes, voiceMode)
+        }
+
+        /**
+         * Re-drive an already-persisted message by reconstructing it from its stored row and
+         * re-sending it as a fresh message, then re-keying the row to the new hash on success.
+         *
+         * This is the single "re-send" primitive shared by:
+         *  - the manual long-press retry ([retryFailedMessage], [forcedMethod] == null so the
+         *    delivery method is re-derived as before), and
+         *  - the automatic propagation-failover retry (the relay-failover `retry` closure in
+         *    [executeLxmfSend]), which forces [DeliveryMethod.PROPAGATED] so the re-send goes
+         *    straight to the (newly-failed-over) relay instead of re-deriving and skipping it.
+         *
+         * Re-keying keeps the bubble single: the row's id is the message hash and the chat row
+         * is keyed by it, so deleting the old row and inserting one under the new hash is
+         * invisible to the UI (no duplicate bubble, no visible hash).
+         *
+         * @param messageId the current row id (== the current message hash) to re-drive.
+         * @param forcedMethod if non-null, force this delivery method instead of deriving; the
+         *   automatic failover passes [DeliveryMethod.PROPAGATED]. A forced PROPAGATED send also
+         *   passes `tryPropagationOnFail = false` — it is already at the relay, no second fallback.
+         * @return the new message hash on success (the row is re-keyed to it), or null if the
+         *   re-drive could not run (row missing / not failed / attachment lost) or the send
+         *   failed (the row keeps its id and is marked failed again).
+         */
+        @Suppress("LongMethod", "ReturnCount")
+        private suspend fun reDriveMessage(
+            messageId: String,
+            forcedMethod: DeliveryMethod? = null,
+            onRekey: ((newHash: String) -> Unit)? = null,
+        ): String? {
+            Log.d(TAG, "Re-driving message: $messageId (forcedMethod=$forcedMethod)")
+
+            // Load the message from database
+            val message = conversationRepository.getMessageById(messageId) ?: run {
+                Log.e(TAG, "Message not found for re-drive: $messageId")
+                return null
+            }
+
+            // Only re-drive failed messages (the failover retry fires on a FAILED terminal; the
+            // manual retry is only reachable for failed rows).
+            if (message.status != "failed") {
+                Log.w(TAG, "Message $messageId is not failed (status: ${message.status}), skipping re-drive")
+                return null
+            }
+
+            // Destination hash bytes (MessageEntity uses conversationHash).
+            val destHashBytes = validateDestinationHash(message.conversationHash) ?: run {
+                Log.e(TAG, "Invalid destination hash in re-driven message")
+                return null
+            }
+
+            // Source identity for sending.
+            val identity = loadIdentityIfNeeded() ?: run {
+                Log.e(TAG, "Failed to load source identity for re-drive")
+                return null
+            }
+
+            // Reconstruct the persisted attachment payloads from fieldsJson (image / voice / file);
+            // null means an attachment was lost (details written) and the re-drive must not run.
+            val payload = reconstructForReDrive(messageId, message.fieldsJson) ?: return null
+
+            // Resolve the delivery method: a forced method (the automatic failover's PROPAGATED)
+            // wins; otherwise derive from the payload as the manual retry always did. A forced
+            // PROPAGATED send is already at the relay, so it must not fall back again.
+            val deliveryMethod =
+                forcedMethod
+                    ?: determineDeliveryMethod(
+                        sanitized = message.content,
+                        imageData = payload.imageData,
+                        fileAttachments = payload.fileAttachments,
+                        voiceBytes = payload.voiceBytes,
+                        defaultMethod = settingsRepository.getDefaultDeliveryMethod(),
+                    )
+            val tryPropagationOnFail = forcedMethod != DeliveryMethod.PROPAGATED && settingsRepository.getTryPropagationOnFail()
+
+            Log.d(TAG, "Re-driving message via $deliveryMethod delivery")
+
+            // Mark message as pending before sending
+            conversationRepository.updateMessageStatus(messageId, "pending")
+
+            // Send the message
+            val result =
+                rnsLxmf.sendLxmfMessageWithMethod(
+                    destinationHash = destHashBytes,
+                    content = message.content,
+                    sourceIdentity = identity,
+                    deliveryMethod = deliveryMethod,
+                    tryPropagationOnFail = tryPropagationOnFail,
+                    imageData = payload.imageData,
+                    imageFormat = payload.imageFormat,
+                    fileAttachments = payload.fileAttachments.map { it.filename to it.data }.ifEmpty { null },
+                    extraFields =
+                        payload.voiceBytes?.let {
+                            mapOf(
+                                network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
+                                    listOf(checkNotNull(payload.voiceMode), it),
+                            )
+                        },
+                    // Preserve reply on re-drive
+                    replyToMessageId = message.replyToMessageId,
+                    // Preserve the quoted reply preview too: a recipient without the quoted
+                    // message in their local store (cross-app, or their history aged out) would
+                    // otherwise lose its preview when the re-send ships.
+                    replyQuotedContent = message.replyToMessageId?.let { id ->
+                        runCatching {
+                            conversationRepository.getMessageById(id)?.content?.takeIf { it.isNotEmpty() }
+                        }.getOrNull()
+                    },
+                )
+
+            return result.fold(
+                onSuccess = { receipt ->
+                    val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
+                    Log.d(TAG, "Re-drive successful, new hash: ${newMessageHash.take(16)}...")
+                    // Register the record under the new hash BEFORE the row re-keys (fast-FAILED
+                    // race): the old-hash record is still present, so a FAILED on newHash that
+                    // lands before or during the re-key still finds the record under newHash and
+                    // drives the next failover instead of being silently dropped. The re-key itself
+                    // is atomic (Room @Transaction), so the row swap can't drop the only copy.
+                    onRekey?.invoke(newMessageHash)
+                    // Re-key the row to the new hash (delete old, insert one under the new id).
+                    conversationRepository.updateMessageId(messageId, newMessageHash)
+                    newMessageHash
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "Re-drive failed: ${error.message}", error)
+                    // Mark as failed again with the error message
+                    conversationRepository.updateMessageStatus(messageId, "failed")
+                    conversationRepository.updateMessageDeliveryDetails(
+                        messageId,
+                        deliveryMethod = null,
+                        errorMessage = error.message,
+                    )
+                    null
+                },
+            )
+        }
+
+        /**
          * Retry sending a failed message.
          * Re-sends the message with the same content and destination,
          * updating the database with the new message hash.
          *
          * @param messageId The ID (hash) of the failed message to retry
          */
-        // Retry reconstructs every supported persisted attachment form and deliberately
-        // keeps the lifecycle in one coroutine so status restoration cannot be skipped.
-        @Suppress("LongMethod")
         fun retryFailedMessage(messageId: String) {
             if (!retriesInProgress.add(messageId)) return
             viewModelScope.launch {
                 try {
-                    Log.d(TAG, "Retrying failed message: $messageId")
-
-                    // Load the failed message from database
-                    val failedMessage = conversationRepository.getMessageById(messageId)
-                    if (failedMessage == null) {
-                        Log.e(TAG, "Failed message not found: $messageId")
-                        return@launch
-                    }
-
-                    // Only retry failed messages
-                    if (failedMessage.status != "failed") {
-                        Log.w(TAG, "Message $messageId is not failed (status: ${failedMessage.status}), skipping retry")
-                        return@launch
-                    }
-
-                    // Get destination hash bytes (MessageEntity uses conversationHash)
-                    val destHashBytes = validateDestinationHash(failedMessage.conversationHash)
-                    if (destHashBytes == null) {
-                        Log.e(TAG, "Invalid destination hash in failed message")
-                        return@launch
-                    }
-
-                    // Load identity for sending
-                    val identity = loadIdentityIfNeeded()
-                    if (identity == null) {
-                        Log.e(TAG, "Failed to load source identity for retry")
-                        return@launch
-                    }
-
-                    val (hasPersistedImage, imageData) = reconstructImageForRetry(failedMessage.fieldsJson)
-                    if (hasPersistedImage && imageData == null) {
-                        Log.e(TAG, "Stored image attachment is unavailable for retry")
-                        conversationRepository.updateMessageDeliveryDetails(
-                            messageId,
-                            deliveryMethod = null,
-                            errorMessage = "Image attachment is no longer available",
-                        )
-                        return@launch
-                    }
-                    val imageFormat = if (imageData != null) "jpg" else null
-                    val audioAttachment = parseAudioAttachment(failedMessage.fieldsJson)
-                    val voiceMode = audioAttachment?.mode?.wireValue
-                    val voiceBytes =
-                        audioAttachment?.let { attachment ->
-                            audioAttachmentLoader.loadBytes(attachment)
-                        }
-                    if (audioAttachment != null && voiceBytes == null) {
-                        Log.e(TAG, "Stored voice attachment is unavailable for retry")
-                        conversationRepository.updateMessageDeliveryDetails(
-                            messageId,
-                            deliveryMethod = null,
-                            errorMessage = "Voice recording is no longer available",
-                        )
-                        return@launch
-                    }
-
-                    val fileAttachments = reconstructFileAttachments(failedMessage.fieldsJson)
-                    if (fileAttachments == null) {
-                        Log.e(TAG, "Stored file attachment is unavailable for retry")
-                        conversationRepository.updateMessageDeliveryDetails(
-                            messageId,
-                            deliveryMethod = null,
-                            errorMessage = "A file attachment is no longer available",
-                        )
-                        return@launch
-                    }
-
-                    // Get delivery settings
-                    val tryPropOnFail = settingsRepository.getTryPropagationOnFail()
-                    val defaultMethod = settingsRepository.getDefaultDeliveryMethod()
-                    val deliveryMethod =
-                        determineDeliveryMethod(
-                            sanitized = failedMessage.content,
-                            imageData = imageData,
-                            fileAttachments = fileAttachments,
-                            voiceBytes = voiceBytes,
-                            defaultMethod = defaultMethod,
-                        )
-
-                    Log.d(TAG, "Retrying message via $deliveryMethod delivery")
-
-                    // Mark message as pending before sending
-                    conversationRepository.updateMessageStatus(messageId, "pending")
-
-                    // Send the message
-                    val result =
-                        rnsLxmf.sendLxmfMessageWithMethod(
-                            destinationHash = destHashBytes,
-                            content = failedMessage.content,
-                            sourceIdentity = identity,
-                            deliveryMethod = deliveryMethod,
-                            tryPropagationOnFail = tryPropOnFail,
-                            imageData = imageData,
-                            imageFormat = imageFormat,
-                            fileAttachments = fileAttachments.map { it.filename to it.data }.ifEmpty { null },
-                            extraFields =
-                                voiceBytes?.let {
-                                    mapOf(
-                                        network.columba.app.rns.api.util.LxmfFields.FIELD_AUDIO to
-                                            listOf(checkNotNull(voiceMode), it),
-                                    )
-                                },
-                            // Preserve reply on retry
-                            replyToMessageId = failedMessage.replyToMessageId,
-                        )
-
-                    result
-                        .onSuccess { receipt ->
-                            val newMessageHash = receipt.messageHash.joinToString("") { "%02x".format(it) }
-                            Log.d(TAG, "Retry successful, new hash: ${newMessageHash.take(16)}...")
-
-                            // Update the message with the new hash
-                            // Delete the old message entry and create a new one with the new hash
-                            conversationRepository.updateMessageId(messageId, newMessageHash)
-                        }.onFailure { error ->
-                            Log.e(TAG, "Retry failed: ${error.message}", error)
-                            // Mark as failed again with the error message
-                            conversationRepository.updateMessageStatus(messageId, "failed")
-                            conversationRepository.updateMessageDeliveryDetails(
-                                messageId,
-                                deliveryMethod = null,
-                                errorMessage = error.message,
-                            )
-                        }
+                    reDriveMessage(messageId)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error retrying message", e)
                     // Restore failed status

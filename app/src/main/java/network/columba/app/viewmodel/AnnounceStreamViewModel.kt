@@ -523,13 +523,37 @@ class AnnounceStreamViewModel
         fun isMyRelayFlow(destinationHash: String): Flow<Boolean> = contactRepository.isMyRelayFlow(destinationHash)
 
         /**
+         * Whether the given node is currently in the preferred propagation-nodes (priority) list.
+         * Drives the "Add to priority list" / "In priority list" affordance on the Node Details
+         * screen for relays.
+         */
+        fun isPreferredRelayFlow(destinationHash: String): Flow<Boolean> =
+            propagationNodeManager.preferredRelayHashes.map { hashes -> destinationHash in hashes }
+
+        /**
+         * Add the given propagation node to the preferred propagation-nodes (priority) list,
+         * creating a backing contact first. Unlike [setAsMyRelay], this always creates a list
+         * row — even when the list is empty — so the user's intent to build a priority list is
+         * preserved and auto-select is left to the policy writer. A no-op when already listed.
+         */
+        fun addToPriorityList(destinationHash: String, nickname: String?) {
+            viewModelScope.launch {
+                propagationNodeManager.addToPriorityList(destinationHash, nickname)
+            }
+        }
+
+        /**
          * Set a propagation node as the user's relay.
-         * This will add it to contacts if not already present and mark it as the relay.
+         *
+         * In ordered mode (preferred list non-empty) this appends the node to the
+         * preferred list and lets the transport-aware policy writer resolve the active
+         * relay (ticket 06). With an empty list it falls back to the legacy direct set,
+         * so first-time users still get immediate behavior.
          */
         fun setAsMyRelay(destinationHash: String) {
             viewModelScope.launch {
                 try {
-                    propagationNodeManager.setManualRelay(destinationHash)
+                    propagationNodeManager.addPreferredRelay(destinationHash, null)
                     Log.d(TAG, "Set ${destinationHash.take(16)} as my relay")
                 } catch (e: CancellationException) {
                     throw e

@@ -85,6 +85,9 @@ class SettingsRepository
             val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
             val NEEDS_IDENTITY_UNLOCK = booleanPreferencesKey("needs_identity_unlock")
 
+            // One-time "import your current relay" affordance on the preferred-nodes screen.
+            val PREFERRED_NODES_IMPORT_OFFERED = booleanPreferencesKey("preferred_nodes_import_offered")
+
             // Auto-announce preferences
             val AUTO_ANNOUNCE_ENABLED = booleanPreferencesKey("auto_announce_enabled")
             val AUTO_ANNOUNCE_INTERVAL_MINUTES = intPreferencesKey("auto_announce_interval_minutes") // Legacy, for migration
@@ -479,6 +482,26 @@ class SettingsRepository
         suspend fun markOnboardingCompleted() {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] = true
+            }
+        }
+
+        /**
+         * Flow tracking whether the one-time "import your current relay" affordance on the
+         * preferred-nodes screen has already been shown. Defaults to false (fresh install),
+         * so the import CTA appears exactly once when the list is empty.
+         */
+        val preferredNodesImportOfferedFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PREFERRED_NODES_IMPORT_OFFERED] ?: false
+                }.distinctUntilChanged()
+
+        /**
+         * Mark that the one-time import affordance has been shown, so it never reappears.
+         */
+        suspend fun markPreferredNodesImportOffered() {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PREFERRED_NODES_IMPORT_OFFERED] = true
             }
         }
 

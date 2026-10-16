@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Chat
@@ -111,6 +112,7 @@ fun ChatsScreen(
     onViewPeerDetails: (peerHash: String) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
+    onNewCallClick: () -> Unit = {},
     viewModel: ChatsViewModel = hiltViewModel(),
     settingsViewModel: network.columba.app.viewmodel.SettingsViewModel = hiltViewModel(),
     debugViewModel: network.columba.app.viewmodel.DebugViewModel = hiltViewModel(),
@@ -268,6 +270,13 @@ fun ChatsScreen(
                         }
                     }
                     } else {
+                        // New call button — manual destination entry (Voice subtab only)
+                        IconButton(onClick = onNewCallClick) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = stringResource(R.string.new_call_title),
+                            )
+                        }
                         IconButton(onClick = { showVoiceActions = true }) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,

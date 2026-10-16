@@ -135,6 +135,11 @@ enum class AppDestination(
         "voice_call/{destinationHash}?autoAnswer={autoAnswer}&profileCode={profileCode}",
         "voice_call/0123456789abcdef?autoAnswer=false&profileCode=-1",
     ),
+    NEW_CALL("new_call"),
+    NEW_CALL_HASH_ENTRY(
+        "new_call/entry/{mode}",
+        "new_call/entry/identity",
+    ),
     INCOMING_CALL("incoming_call/{identityHash}", "incoming_call/0123456789abcdef"),
 }
 

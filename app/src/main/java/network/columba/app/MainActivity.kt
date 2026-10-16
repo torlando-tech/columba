@@ -118,6 +118,8 @@ import network.columba.app.ui.screens.MapScreen
 import network.columba.app.ui.screens.MessageDetailScreen
 import network.columba.app.ui.screens.MessagingScreen
 import network.columba.app.ui.screens.MigrationScreen
+import network.columba.app.ui.screens.NewCallHashEntryScreen
+import network.columba.app.ui.screens.NewCallScreen
 import network.columba.app.ui.screens.MyIdentityScreen
 import network.columba.app.ui.screens.NomadNetBrowserScreen
 import network.columba.app.ui.screens.NotificationSettingsScreen
@@ -1431,6 +1433,9 @@ fun ColumbaNavigation(
                                     onNavigateToQrScanner = {
                                         navController.navigate("qr_scanner")
                                     },
+                                    onNewCallClick = {
+                                        navController.navigate("new_call")
+                                    },
                                     settingsViewModel = settingsViewModel,
                                 )
                             }
@@ -2549,6 +2554,49 @@ fun ColumbaNavigation(
                                     onEndCall = exitCallFlow,
                                     autoAnswer = autoAnswer,
                                     profileCode = profileCode,
+                                )
+                            }
+
+                            // New call — manual destination entry (identity or LXST destination hash)
+                            appComposable(AppDestination.NEW_CALL) {
+                                NewCallScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    onModeSelected = { mode ->
+                                        val modeSegment =
+                                            if (mode == network.columba.app.viewmodel.NewCallInputMode.IDENTITY_HASH) {
+                                                "identity"
+                                            } else {
+                                                "lxst"
+                                            }
+                                        navController.navigate("new_call/entry/$modeSegment")
+                                    },
+                                )
+                            }
+
+                            appComposable(
+                                AppDestination.NEW_CALL_HASH_ENTRY,
+                                arguments =
+                                    listOf(
+                                        navArgument("mode") { type = NavType.StringType },
+                                    ),
+                            ) { backStackEntry ->
+                                val mode =
+                                    if (backStackEntry.arguments?.getString("mode") == "lxst") {
+                                        network.columba.app.viewmodel.NewCallInputMode.LXST_DESTINATION_HASH
+                                    } else {
+                                        network.columba.app.viewmodel.NewCallInputMode.IDENTITY_HASH
+                                    }
+                                NewCallHashEntryScreen(
+                                    mode = mode,
+                                    onBackClick = { navController.popBackStack() },
+                                    onViewNodeDetails = { destinationHash ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("announce_detail/$encodedHash")
+                                    },
+                                    onStartCall = { destinationHash ->
+                                        val encodedHash = Uri.encode(destinationHash)
+                                        navController.navigate("voice_call/$encodedHash")
+                                    },
                                 )
                             }
 

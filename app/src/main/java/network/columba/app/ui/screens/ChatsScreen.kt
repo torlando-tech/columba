@@ -113,6 +113,9 @@ fun ChatsScreen(
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
     onNewCallClick: () -> Unit = {},
+    // Dedicated phone-tab mode: renders the Voice view directly, without the
+    // Text|Voice segment selector (see NavTab.VOICE / AppDestination.VOICE_CALLS).
+    voiceOnly: Boolean = false,
     viewModel: ChatsViewModel = hiltViewModel(),
     settingsViewModel: network.columba.app.viewmodel.SettingsViewModel = hiltViewModel(),
     debugViewModel: network.columba.app.viewmodel.DebugViewModel = hiltViewModel(),
@@ -121,6 +124,7 @@ fun ChatsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val voiceSearchQuery by viewModel.voiceSearchQuery.collectAsState()
     val selectedSegment by viewModel.selectedSegment.collectAsState()
+    val effectiveSegment = if (voiceOnly) ChatsSegment.VOICE else selectedSegment
     val voiceHistoryState by viewModel.voiceHistoryState.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
@@ -210,8 +214,10 @@ fun ChatsScreen(
         topBar = {
             Column {
                 SearchableTopAppBar(
-                title = stringResource(R.string.chats_title),
-                subtitle = if (selectedSegment == ChatsSegment.TEXT) {
+                title = stringResource(
+                    if (voiceOnly) R.string.chats_segment_voice else R.string.chats_title,
+                ),
+                subtitle = if (effectiveSegment == ChatsSegment.TEXT) {
                     pluralStringResource(
                         R.plurals.conversation_count,
                         chatsState.conversations.size,
@@ -225,21 +231,21 @@ fun ChatsScreen(
                     )
                 },
                 isSearching = isSearching,
-                searchQuery = if (selectedSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery,
+                searchQuery = if (effectiveSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery,
                 onSearchQueryChange = {
-                    if (selectedSegment == ChatsSegment.TEXT) viewModel.searchQuery.value = it else viewModel.voiceSearchQuery.value = it
+                    if (effectiveSegment == ChatsSegment.TEXT) viewModel.searchQuery.value = it else viewModel.voiceSearchQuery.value = it
                 },
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder =
                     stringResource(
-                        if (selectedSegment == ChatsSegment.TEXT) {
+                        if (effectiveSegment == ChatsSegment.TEXT) {
                             R.string.search_conversations_placeholder
                         } else {
                             R.string.search_call_history_placeholder
                         },
                     ),
                 additionalActions = {
-                    if (selectedSegment == ChatsSegment.TEXT) {
+                    if (effectiveSegment == ChatsSegment.TEXT) {
                     // QR Code button
                     IconButton(onClick = { showQrBottomSheet = true }) {
                         Icon(
@@ -298,17 +304,19 @@ fun ChatsScreen(
                     }
                 },
             )
-                ChatsSegmentSelector(
-                    selected = selectedSegment,
-                    onSelected = {
-                        viewModel.selectedSegment.value = it
-                        isSearching = false
-                    },
-                )
+                if (!voiceOnly) {
+                    ChatsSegmentSelector(
+                        selected = selectedSegment,
+                        onSelected = {
+                            viewModel.selectedSegment.value = it
+                            isSearching = false
+                        },
+                    )
+                }
             }
         },
     ) { paddingValues ->
-        if (selectedSegment == ChatsSegment.VOICE) {
+        if (effectiveSegment == ChatsSegment.VOICE) {
             VoiceHistoryContent(
                 state = voiceHistoryState,
                 onRecordClick = viewModel::openCallHistory,

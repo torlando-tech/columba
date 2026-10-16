@@ -1302,6 +1302,51 @@ fun ColumbaNavigation(
         }
     }
 
+    // Shared body of the two chats-family bottom-nav destinations: the regular
+    // Chats tab (Text|Voice selector) and the dedicated Voice phone tab
+    // (voiceOnly). Navigation callbacks are identical; only the screen mode
+    // differs, so both entries stay in lockstep automatically.
+    @Composable
+    fun ChatsDestination(voiceOnly: Boolean) {
+        ChatsScreen(
+            onChatClick = { destinationHash, peerName ->
+                val encodedHash = Uri.encode(destinationHash)
+                val encodedName = Uri.encode(peerName)
+                navController.navigate("messaging/$encodedHash/$encodedName")
+            },
+            onViewPeerDetails = { peerHash ->
+                val encodedHash = Uri.encode(peerHash)
+                navController.navigate("announce_detail/$encodedHash")
+            },
+            onLocateOnMap = { peerHash ->
+                mapViewModel.focusOnContact(peerHash)
+                navController.navigate(Screen.Map.route) {
+                    popUpTo(navController.graph.startDestinationId) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            },
+            onCallHistoryClick = { callAttemptId ->
+                navController.navigate(callDetailsRoute(callAttemptId))
+            },
+            onActiveCallHistoryClick = { callAttemptId, localIdentityHash, remoteIdentityHash, profileCode ->
+                navController.navigate(
+                    activeCallRoute(callAttemptId, remoteIdentityHash, profileCode, localIdentityHash),
+                )
+            },
+            onNavigateToQrScanner = {
+                navController.navigate("qr_scanner")
+            },
+            onNewCallClick = {
+                navController.navigate("new_call")
+            },
+            voiceOnly = voiceOnly,
+            settingsViewModel = settingsViewModel,
+        )
+    }
+
     ColumbaTheme(
         darkTheme = settingsState.themeMode.resolveDark(isSystemInDarkTheme()),
         selectedTheme = settingsState.selectedTheme,
@@ -1402,42 +1447,12 @@ fun ColumbaNavigation(
 
                             appComposable(AppDestination.CHATS) {
                                 DoubleBackToExitHandler(Screen.Chats.route)
-                                ChatsScreen(
-                                    onChatClick = { destinationHash, peerName ->
-                                        val encodedHash = Uri.encode(destinationHash)
-                                        val encodedName = Uri.encode(peerName)
-                                        navController.navigate("messaging/$encodedHash/$encodedName")
-                                    },
-                                    onViewPeerDetails = { peerHash ->
-                                        val encodedHash = Uri.encode(peerHash)
-                                        navController.navigate("announce_detail/$encodedHash")
-                                    },
-                                    onLocateOnMap = { peerHash ->
-                                        mapViewModel.focusOnContact(peerHash)
-                                        navController.navigate(Screen.Map.route) {
-                                            popUpTo(navController.graph.startDestinationId) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    onCallHistoryClick = { callAttemptId ->
-                                        navController.navigate(callDetailsRoute(callAttemptId))
-                                    },
-                                    onActiveCallHistoryClick = { callAttemptId, localIdentityHash, remoteIdentityHash, profileCode ->
-                                        navController.navigate(
-                                            activeCallRoute(callAttemptId, remoteIdentityHash, profileCode, localIdentityHash),
-                                        )
-                                    },
-                                    onNavigateToQrScanner = {
-                                        navController.navigate("qr_scanner")
-                                    },
-                                    onNewCallClick = {
-                                        navController.navigate("new_call")
-                                    },
-                                    settingsViewModel = settingsViewModel,
-                                )
+                                ChatsDestination(voiceOnly = false)
+                            }
+
+                            appComposable(AppDestination.VOICE_CALLS) {
+                                DoubleBackToExitHandler(AppDestination.VOICE_CALLS.routePattern)
+                                ChatsDestination(voiceOnly = true)
                             }
 
                             callDetailsDestination(navController)

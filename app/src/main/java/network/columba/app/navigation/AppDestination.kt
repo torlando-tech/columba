@@ -22,6 +22,9 @@ enum class AppDestination(
     WELCOME("welcome", backContract = BackContract.ENTRY_GATE),
     IDENTITY_UNLOCK("identity_unlock", backContract = BackContract.ENTRY_GATE),
     CHATS("chats", backContract = BackContract.TOP_LEVEL),
+    // Dedicated bottom-nav phone tab: the voice/call-history view without the
+    // Text|Voice segment selector.
+    VOICE_CALLS("voice_calls", backContract = BackContract.TOP_LEVEL),
     CALL_DETAILS("call_details/{callAttemptId}", "call_details/test-attempt"),
 
     ANNOUNCES("announce_stream?filterType={filterType}", "announce_stream?filterType=all"),

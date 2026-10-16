@@ -1,0 +1,25 @@
+name: Russian localization
+
+# Падает, если после слияния с upstream русский перевод неполон или сломан:
+# новые ключи без перевода, удалённые ключи, несовпадающие плейсхолдеры, неполные plurals.
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'app/src/main/res/values*/**', 'scripts/l10n/**' ]
+  pull_request:
+    paths: [ 'app/src/main/res/values*/**', 'scripts/l10n/**' ]
+
+permissions:
+  contents: read
+
+jobs:
+  check-ru:
+    name: values-ru is in sync with values
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Check Russian strings
+        run: python3 scripts/l10n/check_ru.py --hardcoded

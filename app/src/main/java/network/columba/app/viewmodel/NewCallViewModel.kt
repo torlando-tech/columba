@@ -187,10 +187,12 @@ data class NewCallRecentDestination(
  * Backs the "New call" mode picker: surfaces the most recently called
  * destinations so redialing does not require re-entering a hash.
  *
- * Note the history column `remoteIdentityHash` carries the lxst.telephony
- * destination hash for outgoing attempts but the caller's identity hash for
- * incoming ones, so the chip's input [NewCallRecentDestination.mode] is
- * derived from the record direction.
+ * Note the history column `remoteIdentityHash` carries the dialed
+ * destination hash for outgoing attempts (lxmf.delivery when dialed from a
+ * contact, lxst.telephony from the new-call flow) but the caller's identity
+ * hash for incoming ones, so the chip's input [NewCallRecentDestination.mode]
+ * is derived from the record direction, and rows are deduplicated per peer by
+ * mapping derivable destination hashes back to the incoming identity.
  */
 @HiltViewModel
 class NewCallPickerViewModel
@@ -202,8 +204,27 @@ class NewCallPickerViewModel
             callHistoryRepository
                 .observeHistory()
                 .map { records ->
-                    records
-                        .sortedByDescending { it.attemptedAt }
+                    val sorted = records.sortedByDescending { it.attemptedAt }
+                    // Incoming rows carry the caller's identity hash; outgoing
+                    // rows carry the dialed destination. Map every destination
+                    // derivable from a known incoming identity back onto that
+                    // identity so both sides of one peer merge into one chip.
+                    val identityByDestination = buildMap {
+                        sorted.forEach { record ->
+                            if (!record.direction.equals("OUTGOING", ignoreCase = true)) {
+                                val identity = record.remoteIdentityHash
+                                put(identity, identity)
+                                LxstDestination.telephonyDestinationHashFromIdentity(identity)
+                                    ?.let { put(it, identity) }
+                                LxstDestination.deliveryDestinationHashFromIdentity(identity)
+                                    ?.let { put(it, identity) }
+                            }
+                        }
+                    }
+                    sorted
+                        .distinctBy {
+                            identityByDestination[it.remoteIdentityHash] ?: it.remoteIdentityHash
+                        }
                         .map { record ->
                             NewCallRecentDestination(
                                 hash = record.remoteIdentityHash,
@@ -219,7 +240,6 @@ class NewCallPickerViewModel
                                         ?: "${record.remoteIdentityHash.take(12)}…",
                             )
                         }
-                        .distinctBy { it.hash }
                         .take(MAX_RECENT_DESTINATIONS)
                 }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

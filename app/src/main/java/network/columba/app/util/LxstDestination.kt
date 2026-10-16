@@ -3,15 +3,16 @@ package network.columba.app.util
 import java.security.MessageDigest
 
 /**
- * Derivation of LXST telephony destination hashes from Reticulum identity hashes.
+ * Derivation of Reticulum destination hashes from identity hashes, for the
+ * aspects this app dials: `lxst.telephony` and `lxmf.delivery`.
  *
- * Mirrors `RNS.Destination.hash(identity, "lxst", "telephony")` from the
- * Reticulum reference implementation:
+ * Mirrors `RNS.Destination.hash(identity, app, aspect)` from the Reticulum
+ * reference implementation:
  *
- *   name_hash = sha256("lxst.telephony")[:10]   (NAME_HASH_LENGTH = 80 bits)
+ *   name_hash = sha256("app.aspect")[:10]   (NAME_HASH_LENGTH = 80 bits)
  *   dest_hash = sha256(name_hash + identity_hash)[:16]  (TRUNCATED_HASHLENGTH = 128 bits)
  *
- * Note the name hash is computed over the bare "lxst.telephony" string WITHOUT
+ * Note the name hash is computed over the bare "app.aspect" string WITHOUT
  * the identity appended (expand_name is called with identity = None), while the
  * identity hash bytes are mixed in at the destination-hash step.
  */
@@ -22,6 +23,7 @@ object LxstDestination {
     private const val NAME_HASH_BYTES = 10
     private const val DEST_HASH_BYTES = 16
     private const val LXST_TELEPHONY_NAME = "lxst.telephony"
+    private const val LXMF_DELIVERY_NAME = "lxmf.delivery"
 
     /**
      * Normalize a user-entered hash: trim, strip embedded spaces, lowercase.
@@ -56,8 +58,30 @@ object LxstDestination {
      * @param normalizedIdentityHashHex lowercase 32-char hex identity hash
      * @return the derived 32-char lowercase hex destination hash
      */
-    fun telephonyDestinationHashFromNormalizedIdentity(normalizedIdentityHashHex: String): String {
-        val nameHash = sha256(LXST_TELEPHONY_NAME.toByteArray(Charsets.UTF_8))
+    fun telephonyDestinationHashFromNormalizedIdentity(normalizedIdentityHashHex: String): String =
+        destinationHashFromName(LXST_TELEPHONY_NAME, normalizedIdentityHashHex)
+
+    /**
+     * Derive the `lxmf.delivery` destination hash for a Reticulum identity hash.
+     *
+     * @param identityHashHex 32-char hex identity hash (spaces tolerated)
+     * @return the derived 32-char lowercase hex destination hash, or null if the
+     *         input is not a valid identity hash.
+     */
+    fun deliveryDestinationHashFromIdentity(identityHashHex: String): String? {
+        val identityHash = normalizeHash(identityHashHex) ?: return null
+        return destinationHashFromName(LXMF_DELIVERY_NAME, identityHash)
+    }
+
+    /**
+     * Derive the `lxmf.delivery` destination hash from an already-normalized
+     * identity hash. See [telephonyDestinationHashFromNormalizedIdentity].
+     */
+    fun deliveryDestinationHashFromNormalizedIdentity(normalizedIdentityHashHex: String): String =
+        destinationHashFromName(LXMF_DELIVERY_NAME, normalizedIdentityHashHex)
+
+    private fun destinationHashFromName(name: String, normalizedIdentityHashHex: String): String {
+        val nameHash = sha256(name.toByteArray(Charsets.UTF_8))
             .copyOf(NAME_HASH_BYTES)
         val destHash = sha256(nameHash + hexToBytes(normalizedIdentityHashHex))
             .copyOf(DEST_HASH_BYTES)

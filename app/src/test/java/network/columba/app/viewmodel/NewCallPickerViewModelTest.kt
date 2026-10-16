@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.data.model.CallHistoryRecord
 import network.columba.app.data.repository.CallHistoryRepository
+import network.columba.app.util.LxstDestination
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -114,6 +115,60 @@ class NewCallPickerViewModelTest {
                 val recent = awaitItem()
                 assertEquals(1, recent.size)
                 assertEquals("New Name", recent.single().label)
+            }
+        }
+
+    @Test
+    fun `recent destinations merge incoming and outgoing rows of the same peer`() =
+        runTest {
+            val dialedDelivery = LxstDestination.deliveryDestinationHashFromNormalizedIdentity(identityHash)
+            every { callHistoryRepository.observeHistory() } returns
+                flowOf(
+                    listOf(
+                        record(dialedDelivery, "OUTGOING", attemptedAt = 100, displayName = "Peer"),
+                        record(identityHash, "INCOMING", attemptedAt = 200, displayName = "Peer"),
+                    ),
+                )
+
+            viewModel = NewCallPickerViewModel(callHistoryRepository)
+
+            viewModel.recentDestinations.test {
+                skipItems(1) // initial empty state
+                val recent = awaitItem()
+                assertEquals(
+                    listOf(NewCallRecentDestination(identityHash, NewCallInputMode.IDENTITY_HASH, "Peer")),
+                    recent,
+                )
+            }
+        }
+
+    @Test
+    fun `recent destinations merge outgoing telephony row with incoming identity row`() =
+        runTest {
+            val dialedTelephony = LxstDestination.telephonyDestinationHashFromNormalizedIdentity(identityHash)
+            every { callHistoryRepository.observeHistory() } returns
+                flowOf(
+                    listOf(
+                        record(identityHash, "INCOMING", attemptedAt = 100, displayName = "Peer"),
+                        record(dialedTelephony, "OUTGOING", attemptedAt = 200, displayName = "Peer"),
+                    ),
+                )
+
+            viewModel = NewCallPickerViewModel(callHistoryRepository)
+
+            viewModel.recentDestinations.test {
+                skipItems(1) // initial empty state
+                val recent = awaitItem()
+                assertEquals(
+                    listOf(
+                        NewCallRecentDestination(
+                            dialedTelephony,
+                            NewCallInputMode.LXST_DESTINATION_HASH,
+                            "Peer",
+                        ),
+                    ),
+                    recent,
+                )
             }
         }
 

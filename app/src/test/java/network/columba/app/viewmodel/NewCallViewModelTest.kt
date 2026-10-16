@@ -8,10 +8,16 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import network.columba.app.data.repository.Announce
@@ -41,8 +47,8 @@ class NewCallViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        announceRepository = mockk(relaxed = true)
-        rnsCore = mockk(relaxed = true)
+        announceRepository = mockk()
+        rnsCore = mockk()
         viewModel = NewCallViewModel(announceRepository, rnsCore)
     }
 
@@ -98,10 +104,11 @@ class NewCallViewModelTest {
         }
 
     @Test
-    fun `search network submits path request and re-checks db`() =
+    fun `search network falls back to db check when announce flow is empty`() =
         runTest {
             val announce = sampleAnnounce(telephonyHash)
             coEvery { rnsCore.requestPath(any()) } returns Result.success(Unit)
+            every { announceRepository.getAnnounceFlow(telephonyHash) } returns flowOf()
             coEvery { announceRepository.getAnnounce(telephonyHash) } returns announce
 
             viewModel.searchNetwork(telephonyHash)
@@ -127,6 +134,70 @@ class NewCallViewModelTest {
                 val failed = awaitItem() as NewCallLookupState.NetworkRequestFailed
                 assertEquals(telephonyHash, failed.telephonyDestinationHash)
                 assertEquals("no route", failed.message)
+            }
+        }
+
+    @Test
+    fun `search network resolves when announce lands after path request`() =
+        runTest {
+            val announce = sampleAnnounce(telephonyHash)
+            coEvery { rnsCore.requestPath(any()) } returns Result.success(Unit)
+            every { announceRepository.getAnnounceFlow(telephonyHash) } returns flowOf(null, announce)
+
+            viewModel.searchNetwork(telephonyHash)
+            viewModel.state.test {
+                skipItems(1) // RequestingNetwork
+                val resolved = awaitItem() as NewCallLookupState.Resolved
+                assertEquals(telephonyHash, resolved.telephonyDestinationHash)
+                assertEquals(announce, resolved.announce)
+            }
+        }
+
+    @Test
+    fun `search network resolves not-found when no announce arrives`() =
+        runTest {
+            coEvery { rnsCore.requestPath(any()) } returns Result.success(Unit)
+            every { announceRepository.getAnnounceFlow(telephonyHash) } returns
+                flow<Announce?> { awaitCancellation() }
+            coEvery { announceRepository.getAnnounce(telephonyHash) } returns null
+
+            viewModel.searchNetwork(telephonyHash)
+            viewModel.state.test {
+                skipItems(1) // RequestingNetwork
+                val resolved = awaitItem() as NewCallLookupState.Resolved
+                assertNull(resolved.announce)
+            }
+        }
+
+    @Test
+    fun `submit cancels in-flight network search`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            coEvery { rnsCore.requestPath(any()) } coAnswers {
+                gate.await()
+                Result.success(Unit)
+            }
+            val otherHash = "cd".repeat(16)
+            coEvery { announceRepository.getAnnounce(otherHash) } returns null
+
+            viewModel.searchNetwork(telephonyHash)
+            runCurrent()
+
+            viewModel.submit(otherHash, NewCallInputMode.LXST_DESTINATION_HASH)
+            advanceUntilIdle()
+            viewModel.state.test {
+                val state = awaitItem()
+                assert(state is NewCallLookupState.Resolved)
+                assertEquals(otherHash, (state as NewCallLookupState.Resolved).telephonyDestinationHash)
+            }
+
+            // The superseded path request completing late must not clobber the new result.
+            gate.complete(Unit)
+            advanceUntilIdle()
+            viewModel.state.test {
+                val state = awaitItem()
+                assert(state is NewCallLookupState.Resolved)
+                assertEquals(otherHash, (state as NewCallLookupState.Resolved).telephonyDestinationHash)
             }
         }
 }

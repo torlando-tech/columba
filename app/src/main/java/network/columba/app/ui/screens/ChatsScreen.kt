@@ -68,7 +68,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -217,25 +216,7 @@ fun ChatsScreen(
                 title = stringResource(
                     if (voiceOnly) R.string.chats_segment_voice else R.string.chats_title,
                 ),
-                subtitle = when {
-                    // The dedicated phone tab shows the call list directly; a
-                    // count under the title adds nothing there.
-                    voiceOnly -> null
-                    effectiveSegment == ChatsSegment.TEXT -> {
-                        pluralStringResource(
-                            R.plurals.conversation_count,
-                            chatsState.conversations.size,
-                            chatsState.conversations.size,
-                        )
-                    }
-                    else -> {
-                        pluralStringResource(
-                            R.plurals.call_count,
-                            voiceHistoryState.records.size,
-                            voiceHistoryState.records.size,
-                        )
-                    }
-                },
+                subtitle = null,
                 isSearching = isSearching,
                 searchQuery = if (effectiveSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery,
                 onSearchQueryChange = {

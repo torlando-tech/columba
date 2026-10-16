@@ -72,14 +72,6 @@
     <string name="call_status_rejected">Call rejected</string>
     <string name="call_status_ended">Call ended</string>
     <string name="call_status_calling">Calling…</string>
-    <plurals name="conversation_count">
-        <item quantity="one">%d conversation</item>
-        <item quantity="other">%d conversations</item>
-    </plurals>
-    <plurals name="call_count">
-        <item quantity="one">%d call</item>
-        <item quantity="other">%d calls</item>
-    </plurals>
     <string name="call_details_call_again_failed_title">Couldn’t start call</string>
     <string name="call_details_also_blackhole">Also blackhole this identity</string>
     <string name="call_details_block_title">Block this identity?</string>

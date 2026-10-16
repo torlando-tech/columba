@@ -47,6 +47,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -304,13 +305,34 @@ fun ChatsScreen(
         },
     ) { paddingValues ->
         if (effectiveSegment == ChatsSegment.VOICE) {
-            VoiceHistoryContent(
-                state = voiceHistoryState,
-                onRecordClick = viewModel::openCallHistory,
-                onRetry = viewModel::retryVoiceHistory,
-                listState = voiceListState,
-                modifier = Modifier.padding(paddingValues).consumeWindowInsets(paddingValues),
-            )
+            // The Scaffold FAB slot misplaces the FAB in this nested-nav
+            // layout (the Contacts FAB lands in the top bar too), so overlay
+            // it manually in the bottom corner, clear of the bottom bar.
+            Box(modifier = Modifier.fillMaxSize()) {
+                VoiceHistoryContent(
+                    state = voiceHistoryState,
+                    onRecordClick = viewModel::openCallHistory,
+                    onRetry = viewModel::retryVoiceHistory,
+                    listState = voiceListState,
+                    modifier =
+                        Modifier
+                            .padding(paddingValues)
+                            .consumeWindowInsets(paddingValues)
+                )
+                FloatingActionButton(
+                    onClick = onNewCallClick,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(paddingValues)
+                            .padding(end = 16.dp, bottom = 96.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.new_call_title),
+                    )
+                }
+            }
         } else {
         // Only show loading spinner when loading AND list is empty
         // This prevents flickering when data updates while content is displayed

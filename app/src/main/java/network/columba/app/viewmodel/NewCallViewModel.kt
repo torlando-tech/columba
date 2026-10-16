@@ -28,6 +28,12 @@ enum class NewCallInputMode {
     LXST_DESTINATION_HASH,
 }
 
+/** Why the entered hash could not be used; the UI resolves these to string resources. */
+enum class NewCallInvalidReason {
+    INVALID_IDENTITY_HASH,
+    INVALID_DESTINATION_HASH,
+}
+
 /**
  * Resolution state for the entered hash.
  */
@@ -37,8 +43,8 @@ sealed interface NewCallLookupState {
     /** Looking up matching announces in the local database. */
     data object Searching : NewCallLookupState
 
-    /** Input could not be parsed as a hash (or derivation failed). */
-    data class InvalidInput(val message: String) : NewCallLookupState
+    /** The input could not be parsed as a hash for the selected mode. */
+    data class InvalidInput(val reason: NewCallInvalidReason) : NewCallLookupState
 
     /**
      * Lookup finished.
@@ -55,10 +61,15 @@ sealed interface NewCallLookupState {
     /** Network path request in flight. */
     data class RequestingNetwork(val telephonyDestinationHash: String) : NewCallLookupState
 
-    /** Network path request failed. */
+    /**
+     * Network path request failed.
+     *
+     * @param message the transport error message, or null; the UI supplies a
+     *                localized fallback when absent.
+     */
     data class NetworkRequestFailed(
         val telephonyDestinationHash: String,
-        val message: String,
+        val message: String?,
     ) : NewCallLookupState
 }
 
@@ -98,9 +109,9 @@ class NewCallViewModel
                 _state.value =
                     NewCallLookupState.InvalidInput(
                         if (mode == NewCallInputMode.LXST_DESTINATION_HASH) {
-                            "Enter a valid 32-character destination hash"
+                            NewCallInvalidReason.INVALID_DESTINATION_HASH
                         } else {
-                            "Enter a valid 32-character identity hash"
+                            NewCallInvalidReason.INVALID_IDENTITY_HASH
                         },
                     )
                 return
@@ -110,12 +121,7 @@ class NewCallViewModel
                 when (mode) {
                     NewCallInputMode.LXST_DESTINATION_HASH -> normalized
                     NewCallInputMode.IDENTITY_HASH ->
-                        LxstDestination.telephonyDestinationHashFromIdentity(normalized)
-                            ?: run {
-                                _state.value =
-                                    NewCallLookupState.InvalidInput("Could not derive LXST destination from this identity hash")
-                                return
-                            }
+                        LxstDestination.telephonyDestinationHashFromNormalizedIdentity(normalized)
                 }
 
             activeJob?.cancel()
@@ -154,7 +160,7 @@ class NewCallViewModel
                         _state.value =
                             NewCallLookupState.NetworkRequestFailed(
                                 telephonyDestinationHash,
-                                error.message ?: "Network path request failed",
+                                error.message,
                             )
                     }
             }

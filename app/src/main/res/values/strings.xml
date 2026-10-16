@@ -337,4 +337,7 @@
     <string name="new_call_search_network">Search Network</string>
     <string name="new_call_searching_network">Searching network…</string>
     <string name="new_call_search_network_explainer">Submit a path request to the network for this destination</string>
+    <string name="new_call_invalid_identity_hash">Enter a valid 32-character identity hash</string>
+    <string name="new_call_invalid_destination_hash">Enter a valid 32-character destination hash</string>
+    <string name="new_call_network_request_failed">Network path request failed</string>
 </resources>

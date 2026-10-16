@@ -1,5 +1,6 @@
 package network.columba.app.ui.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import network.columba.app.R
 import network.columba.app.viewmodel.NewCallInputMode
+import network.columba.app.viewmodel.NewCallInvalidReason
 import network.columba.app.viewmodel.NewCallLookupState
 import network.columba.app.viewmodel.NewCallViewModel
 
@@ -125,9 +127,10 @@ fun NewCallHashEntryScreen(
                 isError = lookupState is NewCallLookupState.InvalidInput,
                 supportingText =
                     if (lookupState is NewCallLookupState.InvalidInput) {
+                        val reason = (lookupState as NewCallLookupState.InvalidInput).reason
                         {
                             Text(
-                                text = (lookupState as NewCallLookupState.InvalidInput).message,
+                                text = stringResource(reason.stringRes()),
                                 color = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -201,7 +204,7 @@ fun NewCallHashEntryScreen(
                     NotFoundCard(
                         destinationHash = state.telephonyDestinationHash,
                         requesting = false,
-                        errorMessage = state.message,
+                        errorMessage = state.message ?: stringResource(R.string.new_call_network_request_failed),
                         onSearchNetwork = { viewModel.searchNetwork(state.telephonyDestinationHash) },
                     )
                 }
@@ -209,6 +212,13 @@ fun NewCallHashEntryScreen(
         }
     }
 }
+
+@StringRes
+private fun NewCallInvalidReason.stringRes(): Int =
+    when (this) {
+        NewCallInvalidReason.INVALID_IDENTITY_HASH -> R.string.new_call_invalid_identity_hash
+        NewCallInvalidReason.INVALID_DESTINATION_HASH -> R.string.new_call_invalid_destination_hash
+    }
 
 @Composable
 private fun FoundAnnounceCard(

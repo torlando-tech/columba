@@ -64,12 +64,18 @@ class NewCallViewModelTest {
         }
 
     @Test
-    fun `invalid input produces InvalidInput state`() =
+    fun `invalid input produces InvalidInput with mode-specific reason`() =
         runTest {
             viewModel.submit("nope", NewCallInputMode.IDENTITY_HASH)
             viewModel.state.test {
-                val state = awaitItem()
-                assert(state is NewCallLookupState.InvalidInput)
+                val state = awaitItem() as NewCallLookupState.InvalidInput
+                assertEquals(NewCallInvalidReason.INVALID_IDENTITY_HASH, state.reason)
+            }
+
+            viewModel.submit("nope", NewCallInputMode.LXST_DESTINATION_HASH)
+            viewModel.state.test {
+                val state = awaitItem() as NewCallLookupState.InvalidInput
+                assertEquals(NewCallInvalidReason.INVALID_DESTINATION_HASH, state.reason)
             }
         }
 

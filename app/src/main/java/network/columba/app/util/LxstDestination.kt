@@ -45,9 +45,21 @@ object LxstDestination {
      */
     fun telephonyDestinationHashFromIdentity(identityHashHex: String): String? {
         val identityHash = normalizeHash(identityHashHex) ?: return null
+        return telephonyDestinationHashFromNormalizedIdentity(identityHash)
+    }
+
+    /**
+     * Derive the `lxst.telephony` destination hash from an already-normalized
+     * identity hash (the output of [normalizeHash]). Derivation from a valid
+     * normalized hash cannot fail, so this never returns null.
+     *
+     * @param normalizedIdentityHashHex lowercase 32-char hex identity hash
+     * @return the derived 32-char lowercase hex destination hash
+     */
+    fun telephonyDestinationHashFromNormalizedIdentity(normalizedIdentityHashHex: String): String {
         val nameHash = sha256(LXST_TELEPHONY_NAME.toByteArray(Charsets.UTF_8))
             .copyOf(NAME_HASH_BYTES)
-        val destHash = sha256(nameHash + hexToBytes(identityHash))
+        val destHash = sha256(nameHash + hexToBytes(normalizedIdentityHashHex))
             .copyOf(DEST_HASH_BYTES)
         return destHash.toHex()
     }

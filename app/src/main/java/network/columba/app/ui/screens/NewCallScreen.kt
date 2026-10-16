@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import network.columba.app.R
+import network.columba.app.ui.components.ProfileIcon
 import network.columba.app.viewmodel.NewCallInputMode
 import network.columba.app.viewmodel.NewCallPickerViewModel
 import network.columba.app.viewmodel.NewCallRecentDestination
@@ -106,15 +107,12 @@ fun NewCallScreen(
                             )
                         },
                         leadingIcon = {
-                            Icon(
-                                imageVector =
-                                    if (recent.mode == NewCallInputMode.IDENTITY_HASH) {
-                                        Icons.Default.Person
-                                    } else {
-                                        Icons.Default.Call
-                                    },
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
+                            ProfileIcon(
+                                iconName = recent.iconName,
+                                foregroundColor = recent.iconForegroundColor,
+                                backgroundColor = recent.iconBackgroundColor,
+                                size = 24.dp,
+                                fallbackHash = recent.hash.callHistoryIdenticonBytes(),
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),

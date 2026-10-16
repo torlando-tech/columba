@@ -51,6 +51,7 @@ class NewCallPickerViewModelTest {
         attemptedAt: Long,
         displayName: String? = null,
         peerDisplayNameSnapshot: String? = null,
+        icon: Triple<String, String, String>? = null,
     ) = CallHistoryRecord(
         callAttemptId = "attempt-$remoteIdentityHash-$attemptedAt",
         localIdentityHash = "cd".repeat(16),
@@ -67,6 +68,9 @@ class NewCallPickerViewModelTest {
         failureReason = null,
         displayName = displayName,
         currentDestinationHash = null,
+        iconName = icon?.first,
+        iconForegroundColor = icon?.second,
+        iconBackgroundColor = icon?.third,
     )
 
     @Test
@@ -211,6 +215,50 @@ class NewCallPickerViewModelTest {
                 skipItems(1) // initial empty state
                 val recent = awaitItem()
                 assertEquals("${telephonyHash.take(12)}…", recent.single().label)
+            }
+        }
+
+    @Test
+    fun `recent destinations carry fused announce icon from either side of the peer`() =
+        runTest {
+            val dialedDelivery = LxstDestination.deliveryDestinationHashFromNormalizedIdentity(identityHash)
+            every { callHistoryRepository.observeHistory() } returns
+                flowOf(
+                    listOf(
+                        record(
+                            dialedDelivery,
+                            "OUTGOING",
+                            attemptedAt = 200,
+                            displayName = "Peer",
+                        ),
+                        record(
+                            identityHash,
+                            "INCOMING",
+                            attemptedAt = 100,
+                            displayName = "Peer",
+                            icon = Triple("star", "FFFFFF", "1E88E5"),
+                        ),
+                    ),
+                )
+
+            viewModel = NewCallPickerViewModel(callHistoryRepository)
+
+            viewModel.recentDestinations.test {
+                skipItems(1) // initial empty state
+                val recent = awaitItem()
+                assertEquals(
+                    listOf(
+                        NewCallRecentDestination(
+                            dialedDelivery,
+                            NewCallInputMode.LXST_DESTINATION_HASH,
+                            "Peer",
+                            iconName = "star",
+                            iconForegroundColor = "FFFFFF",
+                            iconBackgroundColor = "1E88E5",
+                        ),
+                    ),
+                    recent,
+                )
             }
         }
 }

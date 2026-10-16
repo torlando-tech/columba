@@ -181,6 +181,9 @@ data class NewCallRecentDestination(
     val hash: String,
     val mode: NewCallInputMode,
     val label: String,
+    val iconName: String? = null,
+    val iconForegroundColor: String? = null,
+    val iconBackgroundColor: String? = null,
 )
 
 /**
@@ -222,22 +225,36 @@ class NewCallPickerViewModel
                         }
                     }
                     sorted
-                        .distinctBy {
+                        .groupBy {
                             identityByDestination[it.remoteIdentityHash] ?: it.remoteIdentityHash
                         }
-                        .map { record ->
+                        .values
+                        .map { group ->
+                            val newest = group.first()
+                            // Fused announce icon may be present on only one
+                            // side of the peer; take it from one row so the
+                            // color triple always matches its icon.
+                            val iconRow =
+                                group.firstOrNull { record ->
+                                    record.iconName != null &&
+                                        record.iconForegroundColor != null &&
+                                        record.iconBackgroundColor != null
+                                }
                             NewCallRecentDestination(
-                                hash = record.remoteIdentityHash,
+                                hash = newest.remoteIdentityHash,
                                 mode =
-                                    if (record.direction.equals("OUTGOING", ignoreCase = true)) {
+                                    if (newest.direction.equals("OUTGOING", ignoreCase = true)) {
                                         NewCallInputMode.LXST_DESTINATION_HASH
                                     } else {
                                         NewCallInputMode.IDENTITY_HASH
                                     },
                                 label =
-                                    record.displayName
-                                        ?: record.peerDisplayNameSnapshot
-                                        ?: "${record.remoteIdentityHash.take(12)}…",
+                                    newest.displayName
+                                        ?: newest.peerDisplayNameSnapshot
+                                        ?: "${newest.remoteIdentityHash.take(12)}…",
+                                iconName = iconRow?.iconName,
+                                iconForegroundColor = iconRow?.iconForegroundColor,
+                                iconBackgroundColor = iconRow?.iconBackgroundColor,
                             )
                         }
                         .take(MAX_RECENT_DESTINATIONS)

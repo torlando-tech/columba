@@ -2,6 +2,7 @@ package network.columba.app.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.People
@@ -32,6 +33,10 @@ enum class NavTab(
     val icon: ImageVector,
 ) {
     CHATS("chats", "chats", "chats", "Chats", Icons.Default.Chat),
+    // Lands on the dedicated voice/call-history screen (voice_calls), which is
+    // the Chats voice view without the Text|Voice selector; its prefix is
+    // disjoint from `chats` so the two tabs never highlight each other.
+    VOICE("voice", "voice_calls", "voice_calls", "Voice", Icons.Default.Call),
     ANNOUNCES("announces", "announce_stream", "announce_stream", "Announces", Icons.Default.Sensors),
     CONTACTS("contacts", "contacts", "contacts", "Contacts", Icons.Default.People),
     MAP("map", "map", "map", "Map", Icons.Default.Map),

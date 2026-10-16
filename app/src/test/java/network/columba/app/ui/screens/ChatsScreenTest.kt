@@ -684,52 +684,6 @@ class ChatsScreenTest {
     }
 
     @Test
-    fun chatsScreen_displaysConversationCount_singular() {
-        // Given
-        val mockViewModel =
-            createMockChatsViewModel(
-                conversations = listOf(TestFactories.createConversation()),
-            )
-
-        // When
-        composeTestRule.setContent {
-            ChatsScreen(
-                onChatClick = { _, _ -> },
-                onViewPeerDetails = {},
-                viewModel = mockViewModel,
-                settingsViewModel = createMockSettingsViewModel(),
-                debugViewModel = createMockDebugViewModel(),
-            )
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("1 conversation").assertIsDisplayed()
-    }
-
-    @Test
-    fun chatsScreen_displaysConversationCount_plural() {
-        // Given
-        val mockViewModel =
-            createMockChatsViewModel(
-                conversations = TestFactories.createMultipleConversations(3),
-            )
-
-        // When
-        composeTestRule.setContent {
-            ChatsScreen(
-                onChatClick = { _, _ -> },
-                onViewPeerDetails = {},
-                viewModel = mockViewModel,
-                settingsViewModel = createMockSettingsViewModel(),
-                debugViewModel = createMockDebugViewModel(),
-            )
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("3 conversations").assertIsDisplayed()
-    }
-
-    @Test
     fun chatsScreen_emptyList_displaysEmptyState() {
         // Given - not loading and empty list
         val mockViewModel = createMockChatsViewModel(conversations = emptyList(), isLoading = false)

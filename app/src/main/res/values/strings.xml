@@ -72,14 +72,6 @@
     <string name="call_status_rejected">Call rejected</string>
     <string name="call_status_ended">Call ended</string>
     <string name="call_status_calling">Calling…</string>
-    <plurals name="conversation_count">
-        <item quantity="one">%d conversation</item>
-        <item quantity="other">%d conversations</item>
-    </plurals>
-    <plurals name="call_count">
-        <item quantity="one">%d call</item>
-        <item quantity="other">%d calls</item>
-    </plurals>
     <string name="call_details_call_again_failed_title">Couldn’t start call</string>
     <string name="call_details_also_blackhole">Also blackhole this identity</string>
     <string name="call_details_block_title">Block this identity?</string>
@@ -321,4 +313,24 @@
     <string name="nomadnet_node_detail_auto_identify_subtitle">Automatically identify to this node</string>
     <string name="nomadnet_auto_identify_enabled_snackbar">Always identifying to this node</string>
     <string name="nomadnet_auto_identify_disabled_snackbar">Stopped auto-identifying to this node</string>
+    <!-- New call (manual destination entry) -->
+    <string name="back">Back</string>
+    <string name="new_call_title">New call</string>
+    <string name="new_call_find_by_identity_hash">Find by identity hash</string>
+    <string name="new_call_find_by_lxst_destination_hash">Find by LXST destination hash</string>
+    <string name="new_call_identity_hash_placeholder">Identity hash</string>
+    <string name="new_call_lxst_destination_hash_placeholder">LXST destination hash</string>
+    <string name="new_call_derive_and_lookup">Derive &amp; look up</string>
+    <string name="new_call_lookup_destination">Look up destination</string>
+    <string name="new_call_searching_local_db">Searching local announces…</string>
+    <string name="new_call_announce_found_hint">Announce found. Tap the card for node details.</string>
+    <string name="new_call_start_call">Start call</string>
+    <string name="new_call_announce_not_found">No announce found for this destination</string>
+    <string name="new_call_search_network">Search Network</string>
+    <string name="new_call_searching_network">Searching network…</string>
+    <string name="new_call_search_network_explainer">Submit a path request to the network for this destination</string>
+    <string name="new_call_recent">Recent</string>
+    <string name="new_call_invalid_identity_hash">Enter a valid 32-character identity hash</string>
+    <string name="new_call_invalid_destination_hash">Enter a valid 32-character destination hash</string>
+    <string name="new_call_network_request_failed">Network path request failed</string>
 </resources>

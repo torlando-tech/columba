@@ -22,6 +22,14 @@ class NavTabTest {
     }
 
     @Test
+    fun `voice tab id round-trips through sanitize`() {
+        assertEquals(
+            listOf(NavTab.VOICE, NavTab.CHATS, NavTab.SETTINGS),
+            NavTab.sanitize("voice,chats"),
+        )
+    }
+
+    @Test
     fun `sanitize always appends pinned settings last`() {
         assertEquals(
             listOf(NavTab.CHATS, NavTab.CONTACTS, NavTab.SETTINGS),
@@ -65,6 +73,15 @@ class NavTabTest {
         assertTrue(NavTab.NOMADNET.matchesRoute("nomadnet_home"))
         assertFalse(NavTab.CHATS.matchesRoute("messaging/abc/Name"))
         assertFalse(NavTab.CHATS.matchesRoute(null))
+    }
+
+    @Test
+    fun `voice and chats tabs never highlight each other`() {
+        assertTrue(NavTab.VOICE.matchesRoute("voice_calls"))
+        assertFalse(NavTab.VOICE.matchesRoute("chats"))
+        assertFalse(NavTab.CHATS.matchesRoute("voice_calls"))
+        // The live-call screen keeps its own prefix and must not light the Voice tab.
+        assertFalse(NavTab.VOICE.matchesRoute("voice_call/attempt-1"))
     }
 
     @Test

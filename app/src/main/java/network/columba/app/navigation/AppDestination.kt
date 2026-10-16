@@ -22,6 +22,9 @@ enum class AppDestination(
     WELCOME("welcome", backContract = BackContract.ENTRY_GATE),
     IDENTITY_UNLOCK("identity_unlock", backContract = BackContract.ENTRY_GATE),
     CHATS("chats", backContract = BackContract.TOP_LEVEL),
+    // Dedicated bottom-nav phone tab: the voice/call-history view without the
+    // Text|Voice segment selector.
+    VOICE_CALLS("voice_calls", backContract = BackContract.TOP_LEVEL),
     CALL_DETAILS("call_details/{callAttemptId}", "call_details/test-attempt"),
 
     ANNOUNCES("announce_stream?filterType={filterType}", "announce_stream?filterType=all"),
@@ -134,6 +137,11 @@ enum class AppDestination(
     VOICE_CALL(
         "voice_call/{destinationHash}?autoAnswer={autoAnswer}&profileCode={profileCode}",
         "voice_call/0123456789abcdef?autoAnswer=false&profileCode=-1",
+    ),
+    NEW_CALL("new_call"),
+    NEW_CALL_HASH_ENTRY(
+        "new_call/entry/{mode}?initialHash={initialHash}",
+        "new_call/entry/identity",
     ),
     INCOMING_CALL("incoming_call/{identityHash}", "incoming_call/0123456789abcdef"),
 }

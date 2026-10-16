@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Chat
@@ -46,6 +47,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -67,7 +69,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -111,6 +112,10 @@ fun ChatsScreen(
     onViewPeerDetails: (peerHash: String) -> Unit = {},
     onLocateOnMap: (peerHash: String) -> Unit = {},
     onNavigateToQrScanner: () -> Unit = {},
+    onNewCallClick: () -> Unit = {},
+    // Dedicated phone-tab mode: renders the Voice view directly, without the
+    // Text|Voice segment selector (see NavTab.VOICE / AppDestination.VOICE_CALLS).
+    voiceOnly: Boolean = false,
     viewModel: ChatsViewModel = hiltViewModel(),
     settingsViewModel: network.columba.app.viewmodel.SettingsViewModel = hiltViewModel(),
     debugViewModel: network.columba.app.viewmodel.DebugViewModel = hiltViewModel(),
@@ -119,6 +124,7 @@ fun ChatsScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val voiceSearchQuery by viewModel.voiceSearchQuery.collectAsState()
     val selectedSegment by viewModel.selectedSegment.collectAsState()
+    val effectiveSegment = if (voiceOnly) ChatsSegment.VOICE else selectedSegment
     val voiceHistoryState by viewModel.voiceHistoryState.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
@@ -208,36 +214,26 @@ fun ChatsScreen(
         topBar = {
             Column {
                 SearchableTopAppBar(
-                title = stringResource(R.string.chats_title),
-                subtitle = if (selectedSegment == ChatsSegment.TEXT) {
-                    pluralStringResource(
-                        R.plurals.conversation_count,
-                        chatsState.conversations.size,
-                        chatsState.conversations.size,
-                    )
-                } else {
-                    pluralStringResource(
-                        R.plurals.call_count,
-                        voiceHistoryState.records.size,
-                        voiceHistoryState.records.size,
-                    )
-                },
+                title = stringResource(
+                    if (voiceOnly) R.string.chats_segment_voice else R.string.chats_title,
+                ),
+                subtitle = null,
                 isSearching = isSearching,
-                searchQuery = if (selectedSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery,
+                searchQuery = if (effectiveSegment == ChatsSegment.TEXT) searchQuery else voiceSearchQuery,
                 onSearchQueryChange = {
-                    if (selectedSegment == ChatsSegment.TEXT) viewModel.searchQuery.value = it else viewModel.voiceSearchQuery.value = it
+                    if (effectiveSegment == ChatsSegment.TEXT) viewModel.searchQuery.value = it else viewModel.voiceSearchQuery.value = it
                 },
                 onSearchToggle = { isSearching = !isSearching },
                 searchPlaceholder =
                     stringResource(
-                        if (selectedSegment == ChatsSegment.TEXT) {
+                        if (effectiveSegment == ChatsSegment.TEXT) {
                             R.string.search_conversations_placeholder
                         } else {
                             R.string.search_call_history_placeholder
                         },
                     ),
                 additionalActions = {
-                    if (selectedSegment == ChatsSegment.TEXT) {
+                    if (effectiveSegment == ChatsSegment.TEXT) {
                     // QR Code button
                     IconButton(onClick = { showQrBottomSheet = true }) {
                         Icon(
@@ -268,6 +264,13 @@ fun ChatsScreen(
                         }
                     }
                     } else {
+                        // New call button — manual destination entry (Voice subtab only)
+                        IconButton(onClick = onNewCallClick) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = stringResource(R.string.new_call_title),
+                            )
+                        }
                         IconButton(onClick = { showVoiceActions = true }) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -289,24 +292,47 @@ fun ChatsScreen(
                     }
                 },
             )
-                ChatsSegmentSelector(
-                    selected = selectedSegment,
-                    onSelected = {
-                        viewModel.selectedSegment.value = it
-                        isSearching = false
-                    },
-                )
+                if (!voiceOnly) {
+                    ChatsSegmentSelector(
+                        selected = selectedSegment,
+                        onSelected = {
+                            viewModel.selectedSegment.value = it
+                            isSearching = false
+                        },
+                    )
+                }
             }
         },
     ) { paddingValues ->
-        if (selectedSegment == ChatsSegment.VOICE) {
-            VoiceHistoryContent(
-                state = voiceHistoryState,
-                onRecordClick = viewModel::openCallHistory,
-                onRetry = viewModel::retryVoiceHistory,
-                listState = voiceListState,
-                modifier = Modifier.padding(paddingValues).consumeWindowInsets(paddingValues),
-            )
+        if (effectiveSegment == ChatsSegment.VOICE) {
+            // The Scaffold FAB slot misplaces the FAB in this nested-nav
+            // layout (the Contacts FAB lands in the top bar too), so overlay
+            // it manually in the bottom corner, clear of the bottom bar.
+            Box(modifier = Modifier.fillMaxSize()) {
+                VoiceHistoryContent(
+                    state = voiceHistoryState,
+                    onRecordClick = viewModel::openCallHistory,
+                    onRetry = viewModel::retryVoiceHistory,
+                    listState = voiceListState,
+                    modifier =
+                        Modifier
+                            .padding(paddingValues)
+                            .consumeWindowInsets(paddingValues)
+                )
+                FloatingActionButton(
+                    onClick = onNewCallClick,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(paddingValues)
+                            .padding(end = 16.dp, bottom = 96.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.new_call_title),
+                    )
+                }
+            }
         } else {
         // Only show loading spinner when loading AND list is empty
         // This prevents flickering when data updates while content is displayed
@@ -336,7 +362,16 @@ fun ChatsScreen(
                             .padding(paddingValues)
                             .consumeWindowInsets(paddingValues)
                             .simpleVerticalScrollbar(listState),
-                    contentPadding = PaddingValues(16.dp),
+                    // Bottom clearance = the app bottom bar overlaying this
+                    // list, so the last conversation scrolls fully clear of
+                    // it while the list itself stays flush under the bar.
+                    contentPadding =
+                        PaddingValues(
+                            start = 16.dp,
+                            top = 16.dp,
+                            end = 16.dp,
+                            bottom = 16.dp + bottomBarClearance(),
+                        ),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(chatsState.conversations, key = { it.peerHash }) { conversation ->

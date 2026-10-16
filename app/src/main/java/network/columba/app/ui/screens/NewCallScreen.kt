@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -23,13 +24,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import network.columba.app.R
 import network.columba.app.viewmodel.NewCallInputMode
+import network.columba.app.viewmodel.NewCallPickerViewModel
+import network.columba.app.viewmodel.NewCallRecentDestination
 
 /**
  * Entry screen for manually dialing a destination.
@@ -42,7 +49,10 @@ import network.columba.app.viewmodel.NewCallInputMode
 fun NewCallScreen(
     onBackClick: () -> Unit,
     onModeSelected: (NewCallInputMode) -> Unit,
+    onRecentSelected: (NewCallRecentDestination) -> Unit,
+    viewModel: NewCallPickerViewModel = hiltViewModel(),
 ) {
+    val recentDestinations by viewModel.recentDestinations.collectAsStateWithLifecycle()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,6 +89,38 @@ fun NewCallScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (recentDestinations.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.new_call_recent),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                recentDestinations.forEach { recent ->
+                    AssistChip(
+                        onClick = { onRecentSelected(recent) },
+                        label = {
+                            Text(
+                                text = recent.label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector =
+                                    if (recent.mode == NewCallInputMode.IDENTITY_HASH) {
+                                        Icons.Default.Person
+                                    } else {
+                                        Icons.Default.Call
+                                    },
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             Button(
                 onClick = { onModeSelected(NewCallInputMode.IDENTITY_HASH) },
                 modifier = Modifier.fillMaxWidth(),

@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,13 +61,20 @@ import network.columba.app.viewmodel.NewCallViewModel
 @Composable
 fun NewCallHashEntryScreen(
     mode: NewCallInputMode,
+    initialHash: String? = null,
     onBackClick: () -> Unit,
     onViewNodeDetails: (destinationHash: String) -> Unit,
     onStartCall: (destinationHash: String) -> Unit,
     viewModel: NewCallViewModel = hiltViewModel(),
 ) {
-    var hashInput by rememberSaveable { mutableStateOf("") }
+    var hashInput by rememberSaveable { mutableStateOf(initialHash.orEmpty()) }
     val lookupState by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(initialHash) {
+        if (!initialHash.isNullOrBlank()) {
+            viewModel.submit(initialHash, mode)
+        }
+    }
 
     Scaffold(
         topBar = {

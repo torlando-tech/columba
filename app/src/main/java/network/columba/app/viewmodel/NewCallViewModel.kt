@@ -5,14 +5,18 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import network.columba.app.data.repository.Announce
 import network.columba.app.data.repository.AnnounceRepository
+import network.columba.app.data.repository.CallHistoryRepository
 import network.columba.app.rns.api.RnsCore
 import network.columba.app.util.LxstDestination
 import javax.inject.Inject
@@ -169,5 +173,58 @@ class NewCallViewModel
         private companion object {
             /** Upper bound on waiting for an announce to land after dispatching a path request. */
             const val ANNOUNCE_WAIT_MS = 20_000L
+        }
+    }
+
+/** A recently called destination offered for one-tap redial on the mode picker. */
+data class NewCallRecentDestination(
+    val hash: String,
+    val mode: NewCallInputMode,
+    val label: String,
+)
+
+/**
+ * Backs the "New call" mode picker: surfaces the most recently called
+ * destinations so redialing does not require re-entering a hash.
+ *
+ * Note the history column `remoteIdentityHash` carries the lxst.telephony
+ * destination hash for outgoing attempts but the caller's identity hash for
+ * incoming ones, so the chip's input [NewCallRecentDestination.mode] is
+ * derived from the record direction.
+ */
+@HiltViewModel
+class NewCallPickerViewModel
+    @Inject
+    constructor(
+        private val callHistoryRepository: CallHistoryRepository,
+    ) : ViewModel() {
+        val recentDestinations: StateFlow<List<NewCallRecentDestination>> =
+            callHistoryRepository
+                .observeHistory()
+                .map { records ->
+                    records
+                        .sortedByDescending { it.attemptedAt }
+                        .map { record ->
+                            NewCallRecentDestination(
+                                hash = record.remoteIdentityHash,
+                                mode =
+                                    if (record.direction.equals("OUTGOING", ignoreCase = true)) {
+                                        NewCallInputMode.LXST_DESTINATION_HASH
+                                    } else {
+                                        NewCallInputMode.IDENTITY_HASH
+                                    },
+                                label =
+                                    record.displayName
+                                        ?: record.peerDisplayNameSnapshot
+                                        ?: "${record.remoteIdentityHash.take(12)}…",
+                            )
+                        }
+                        .distinctBy { it.hash }
+                        .take(MAX_RECENT_DESTINATIONS)
+                }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+        companion object {
+            private const val MAX_RECENT_DESTINATIONS = 4
         }
     }

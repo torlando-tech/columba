@@ -2570,6 +2570,15 @@ fun ColumbaNavigation(
                                             }
                                         navController.navigate("new_call/entry/$modeSegment")
                                     },
+                                    onRecentSelected = { recent ->
+                                        val modeSegment =
+                                            if (recent.mode == network.columba.app.viewmodel.NewCallInputMode.IDENTITY_HASH) {
+                                                "identity"
+                                            } else {
+                                                "lxst"
+                                            }
+                                        navController.navigate("new_call/entry/$modeSegment?initialHash=${recent.hash}")
+                                    },
                                 )
                             }
 
@@ -2578,6 +2587,11 @@ fun ColumbaNavigation(
                                 arguments =
                                     listOf(
                                         navArgument("mode") { type = NavType.StringType },
+                                        navArgument("initialHash") {
+                                            type = NavType.StringType
+                                            nullable = true
+                                            defaultValue = null
+                                        },
                                     ),
                             ) { backStackEntry ->
                                 val mode =
@@ -2588,6 +2602,7 @@ fun ColumbaNavigation(
                                     }
                                 NewCallHashEntryScreen(
                                     mode = mode,
+                                    initialHash = backStackEntry.arguments?.getString("initialHash"),
                                     onBackClick = { navController.popBackStack() },
                                     onViewNodeDetails = { destinationHash ->
                                         val encodedHash = Uri.encode(destinationHash)

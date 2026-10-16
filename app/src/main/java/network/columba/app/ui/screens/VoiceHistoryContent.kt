@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -113,6 +114,11 @@ fun VoiceHistoryContent(
             LazyColumn(
                 state = listState,
                 modifier = modifier.fillMaxSize(),
+                // The app bottom bar overlays this list; contentPadding (not
+                // layout padding) keeps the list flush under the bar - the bar
+                // owns its inset - while the last record still scrolls fully
+                // clear of it. See 302e446e7.
+                contentPadding = PaddingValues(bottom = bottomBarClearance()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (state.hasError) {

@@ -362,7 +362,16 @@ fun ChatsScreen(
                             .padding(paddingValues)
                             .consumeWindowInsets(paddingValues)
                             .simpleVerticalScrollbar(listState),
-                    contentPadding = PaddingValues(16.dp),
+                    // Bottom clearance = the app bottom bar overlaying this
+                    // list, so the last conversation scrolls fully clear of
+                    // it while the list itself stays flush under the bar.
+                    contentPadding =
+                        PaddingValues(
+                            start = 16.dp,
+                            top = 16.dp,
+                            end = 16.dp,
+                            bottom = 16.dp + bottomBarClearance(),
+                        ),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(chatsState.conversations, key = { it.peerHash }) { conversation ->

@@ -81,7 +81,10 @@ class CallHistoryRepository
             if (records.isEmpty()) return flowOf(emptyList())
             val iconFlows =
                 records.map { record ->
-                    record.currentDestinationHash?.let(peerIconDao::observeIcon) ?: flowOf(null)
+                    // Incoming rows resolve through the announce-derived
+                    // delivery destination; outgoing rows already store the
+                    // dialed destination, which is the peer_icons key itself.
+                    peerIconDao.observeIcon(record.currentDestinationHash ?: record.remoteIdentityHash)
                 }
             return combine(iconFlows) { icons ->
                 records.mapIndexed { index, record ->

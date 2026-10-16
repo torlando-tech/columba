@@ -73,9 +73,14 @@ fun NewCallHashEntryScreen(
     // Submit the saved input, not the navigation argument: after process or
     // configuration recreation `hashInput` holds what the user last typed,
     // while `initialHash` still carries the originally tapped destination.
+    // Skip when the (navigation-scoped) view model already resolved or is
+    // mid-search — resubmitting would cancel the surviving network search.
     LaunchedEffect(Unit) {
         val pendingHash = hashInput
-        if (pendingHash.isNotBlank()) {
+        if (
+            pendingHash.isNotBlank() &&
+            viewModel.state.value is NewCallLookupState.Idle
+        ) {
             viewModel.submit(pendingHash, mode)
         }
     }

@@ -70,9 +70,13 @@ fun NewCallHashEntryScreen(
     var hashInput by rememberSaveable { mutableStateOf(initialHash.orEmpty()) }
     val lookupState by viewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(initialHash) {
-        if (!initialHash.isNullOrBlank()) {
-            viewModel.submit(initialHash, mode)
+    // Submit the saved input, not the navigation argument: after process or
+    // configuration recreation `hashInput` holds what the user last typed,
+    // while `initialHash` still carries the originally tapped destination.
+    LaunchedEffect(Unit) {
+        val pendingHash = hashInput
+        if (pendingHash.isNotBlank()) {
+            viewModel.submit(pendingHash, mode)
         }
     }
 

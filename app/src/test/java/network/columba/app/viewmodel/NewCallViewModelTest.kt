@@ -8,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -204,6 +205,38 @@ class NewCallViewModelTest {
                 val state = awaitItem()
                 assert(state is NewCallLookupState.Resolved)
                 assertEquals(otherHash, (state as NewCallLookupState.Resolved).telephonyDestinationHash)
+            }
+        }
+
+    @Test
+    fun `invalid submit cancels in-flight search so its late failure cannot replace the error`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            // Mirrors ClientRnsCore.requestPath, which converts cancellation
+            // of its internal wait into a failed Result instead of throwing.
+            coEvery { rnsCore.requestPath(any()) } coAnswers {
+                try {
+                    gate.await()
+                } catch (_: CancellationException) {
+                    // swallowed by the core's runCatching wrapper
+                }
+                Result.failure(Exception("cancelled"))
+            }
+
+            viewModel.searchNetwork(telephonyHash)
+            runCurrent()
+
+            viewModel.submit("not-a-hash", NewCallInputMode.LXST_DESTINATION_HASH)
+            advanceUntilIdle()
+            viewModel.state.test {
+                assert(awaitItem() is NewCallLookupState.InvalidInput)
+            }
+
+            // The superseded request completing late must not clobber InvalidInput.
+            gate.complete(Unit)
+            advanceUntilIdle()
+            viewModel.state.test {
+                assert(awaitItem() is NewCallLookupState.InvalidInput)
             }
         }
 }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import network.columba.app.data.repository.Announce
@@ -108,6 +109,11 @@ class NewCallViewModel
             rawHash: String,
             mode: NewCallInputMode,
         ) {
+            // Supersede any in-flight lookup/search first: an invalid new
+            // submission must not leave an older job alive to overwrite the
+            // error state when it completes.
+            activeJob?.cancel()
+
             val normalized = LxstDestination.normalizeHash(rawHash)
             if (normalized == null) {
                 _state.value =
@@ -161,11 +167,16 @@ class NewCallViewModel
                             } ?: announceRepository.getAnnounce(telephonyDestinationHash)
                         _state.value = NewCallLookupState.Resolved(telephonyDestinationHash, announce)
                     }.onFailure { error ->
-                        _state.value =
-                            NewCallLookupState.NetworkRequestFailed(
-                                telephonyDestinationHash,
-                                error.message,
-                            )
+                        // ClientRnsCore.requestPath converts cancellation into a
+                        // failed Result; a superseded job must not publish its
+                        // error over the newer lookup's state.
+                        if (isActive) {
+                            _state.value =
+                                NewCallLookupState.NetworkRequestFailed(
+                                    telephonyDestinationHash,
+                                    error.message,
+                                )
+                        }
                     }
             }
         }

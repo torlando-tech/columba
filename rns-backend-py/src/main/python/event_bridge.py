@@ -132,9 +132,10 @@ def apply_android_env_patches():
 # When the user disables the persistent PARTIAL_WAKE_LOCK (Advanced setting),
 # the CPU is free to suspend between mesh traffic. To keep in-flight work
 # (link establishment, propagation syncs, multi-packet exchanges) from being
-# cut short by a suspend, we wrap the base `Interface.process_incoming` /
-# `process_outgoing` — every packet on every interface passes through one of
-# them — and signal the Kotlin host, which extends a short timed wake lock.
+# cut short by a suspend, we wrap `RNS.Transport.inbound` /
+# `RNS.Transport.outbound` — every packet on every interface passes
+# through one of them — and signal the Kotlin host, which extends a
+# short timed wake lock.
 #
 # The signal is throttled Python-side so a packet storm costs at most one
 # JNI hop per window; the Kotlin-side lock timeout is longer than the window,
@@ -175,40 +176,49 @@ def _signal_traffic_activity():
 def install_traffic_activity_callback(callback):
     """Install (or clear, with None) the traffic-activity Kotlin callback.
 
-    Wraps `RNS.Interfaces.Interface.Interface.process_incoming/process_outgoing`
-    once per class — the guard attribute rides the class, so repeated backend
-    restarts in this process only swap the callback, never double-wrap.
-    Subclasses that override these methods (AutoInterface parent, Backbone
-    server stubs) delegate to a spawned/real interface whose base methods
-    still run, so coverage stays complete.
+    Wraps `RNS.Transport.inbound` / `RNS.Transport.outbound` once — the guard
+    attribute rides the wrapper functions, so repeated backend restarts in
+    this process only swap the callback, never double-wrap.
+
+    These are the two choke points every interface reaches: all RX calls
+    `Transport.inbound` (base `Interface.process_incoming`, the RNode
+    interfaces' direct `_process_incoming` calls, and the propagation
+    announce path), and all TX calls `Transport.outbound` (every
+    `Packet.send`, including interfaces like `ColumbaRNodeInterface` whose
+    `process_outgoing` override never delegates to the base method).
+    Patching the base `Interface` methods instead would miss those custom
+    paths, letting the CPU sleep mid-transfer with duty-cycle mode on.
     """
     global _traffic_activity_callback
     _traffic_activity_callback = callback
     try:
-        from RNS.Interfaces.Interface import Interface as _Interface
+        import RNS
+
+        transport = RNS.Transport
     except Exception as e:  # noqa: BLE001
         RNS.log(
-            f"event_bridge: cannot import Interface for traffic hook (non-fatal): {e}",
+            f"event_bridge: cannot import RNS.Transport for traffic hook (non-fatal): {e}",
             RNS.LOG_WARNING,
         )
         return
-    if getattr(_Interface, "_columba_traffic_hooked", False):
+    if getattr(transport.inbound, "_columba_traffic_hooked", False):
         return
 
-    _orig_in = _Interface.process_incoming
-    _orig_out = _Interface.process_outgoing
+    _orig_in = transport.inbound
+    _orig_out = transport.outbound
 
-    def process_incoming(self, data):
+    def inbound(raw, *args, **kwargs):
         _signal_traffic_activity()
-        return _orig_in(self, data)
+        return _orig_in(raw, *args, **kwargs)
 
-    def process_outgoing(self, data):
+    def outbound(packet, *args, **kwargs):
         _signal_traffic_activity()
-        return _orig_out(self, data)
+        return _orig_out(packet, *args, **kwargs)
 
-    _Interface.process_incoming = process_incoming
-    _Interface.process_outgoing = process_outgoing
-    _Interface._columba_traffic_hooked = True
+    inbound._columba_traffic_hooked = True
+    outbound._columba_traffic_hooked = True
+    transport.inbound = inbound
+    transport.outbound = outbound
 
 
 # Slot for the KotlinBLEBridge instance. Populated by Kotlin via

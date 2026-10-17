@@ -8,21 +8,26 @@ from pathlib import Path
 EVENT_BRIDGE_PATH = Path(__file__).resolve().parents[2] / "main/python/event_bridge.py"
 
 
-def make_fake_interface_class():
-    """Fresh Interface stand-in with recording process_incoming/outgoing."""
+def make_fake_transport():
+    """Fresh Transport stand-in with recording inbound/outbound.
 
-    class FakeInterface:
+    Mirrors the real `RNS.Transport` shape the hook sees: module-level
+    callables invoked as `RNS.Transport.inbound(raw, interface)` /
+    `RNS.Transport.outbound(packet)`.
+    """
+
+    class FakeTransport:
         def __init__(self):
             self.incoming = []
             self.outgoing = []
 
-        def process_incoming(self, data):
-            self.incoming.append(data)
+        def inbound(self, raw, interface=None):
+            self.incoming.append(raw)
 
-        def process_outgoing(self, data):
-            self.outgoing.append(data)
+        def outbound(self, packet):
+            self.outgoing.append(packet)
 
-    return FakeInterface
+    return FakeTransport()
 
 
 class TrafficActivityHookTests(unittest.TestCase):
@@ -33,7 +38,7 @@ class TrafficActivityHookTests(unittest.TestCase):
         setattr(rns, "LOG_ERROR", 3)
         setattr(rns, "LOG_WARNING", 2)
         setattr(rns, "log", lambda *args, **kwargs: None)
-        setattr(rns, "Transport", types.SimpleNamespace())
+        setattr(rns, "Transport", make_fake_transport())
         sys.modules["RNS"] = rns
 
         lxmf = types.ModuleType("LXMF")
@@ -52,17 +57,11 @@ class TrafficActivityHookTests(unittest.TestCase):
         spec.loader.exec_module(cls.module)
 
     def setUp(self):
-        # Fresh Interface class + module globals per test: the patch guard
-        # lives on the class, so a new class re-triggers install cleanly.
-        self.interface_cls = make_fake_interface_class()
-        iface_mod = types.ModuleType("RNS.Interfaces.Interface")
-        setattr(iface_mod, "Interface", self.interface_cls)
-        sys.modules["RNS.Interfaces"] = types.ModuleType("RNS.Interfaces")
-        sys.modules["RNS.Interfaces.Interface"] = iface_mod
-        # Mirror the parent-attribute wiring a real package import performs,
-        # so `from RNS.Interfaces.Interface import Interface` resolves.
-        sys.modules["RNS"].Interfaces = sys.modules["RNS.Interfaces"]
-        sys.modules["RNS.Interfaces"].Interface = iface_mod
+        # Fresh Transport stand-in + module globals per test: the patch
+        # guard rides the wrapper functions, so a new Transport re-triggers
+        # install cleanly.
+        self.transport = make_fake_transport()
+        sys.modules["RNS"].Transport = self.transport
 
         self.module._traffic_activity_callback = None
         self.module._traffic_activity_last_emit = 0.0
@@ -75,35 +74,39 @@ class TrafficActivityHookTests(unittest.TestCase):
         self.module._traffic_activity_callback = None
         self.module._traffic_activity_last_emit = 0.0
 
-    def test_install_wraps_process_incoming_and_signals(self):
+    def test_inbound_is_wrapped_and_signals(self):
+        """Regression: interfaces that call RNS.Transport.inbound directly
+        (ColumbaRNodeInterface._process_incoming, the announce path) must
+        request the traffic lock — patching base Interface.process_incoming
+        alone missed them."""
         self.module.install_traffic_activity_callback(self.callback)
 
-        iface = self.interface_cls()
-        iface.process_incoming(b"packet")
+        self.transport.inbound(b"packet", interface=object())
 
-        self.assertEqual([b"packet"], iface.incoming)
+        self.assertEqual([b"packet"], self.transport.incoming)
         self.assertEqual(1, len(self.signals))
 
-    def test_install_wraps_process_outgoing_and_signals(self):
+    def test_outbound_is_wrapped_and_signals(self):
+        """Regression: ColumbaRNodeInterface.process_outgoing never calls
+        the base method, so only the Transport.outbound choke point sees
+        its TX."""
         self.module.install_traffic_activity_callback(self.callback)
 
-        iface = self.interface_cls()
-        iface.process_outgoing(b"packet")
+        self.transport.outbound(b"packet")
 
-        self.assertEqual([b"packet"], iface.outgoing)
+        self.assertEqual([b"packet"], self.transport.outgoing)
         self.assertEqual(1, len(self.signals))
 
     def test_signal_is_throttled(self):
         self.module.install_traffic_activity_callback(self.callback)
 
-        iface = self.interface_cls()
-        iface.process_incoming(b"one")
-        iface.process_incoming(b"two")
-        iface.process_outgoing(b"three")
+        self.transport.inbound(b"one")
+        self.transport.inbound(b"two")
+        self.transport.outbound(b"three")
 
         # All packets still traverse the original bodies...
-        self.assertEqual([b"one", b"two"], iface.incoming)
-        self.assertEqual([b"three"], iface.outgoing)
+        self.assertEqual([b"one", b"two"], self.transport.incoming)
+        self.assertEqual([b"three"], self.transport.outgoing)
         # ...but the Kotlin hop fires once per throttle window.
         self.assertEqual(1, len(self.signals))
 
@@ -111,28 +114,32 @@ class TrafficActivityHookTests(unittest.TestCase):
         self.module._traffic_activity_last_emit = (
             self.module._monotonic() - self.module.TRAFFIC_ACTIVITY_MIN_INTERVAL_S - 1
         )
-        iface.process_incoming(b"four")
+        self.transport.inbound(b"four")
         self.assertEqual(2, len(self.signals))
 
     def test_no_callback_means_no_signal_but_original_runs(self):
         self.module.install_traffic_activity_callback(None)
 
-        iface = self.interface_cls()
-        iface.process_incoming(b"packet")
+        self.transport.inbound(b"packet")
 
-        self.assertEqual([b"packet"], iface.incoming)
+        self.assertEqual([b"packet"], self.transport.incoming)
         self.assertEqual([], self.signals)
 
     def test_install_is_idempotent(self):
         self.module.install_traffic_activity_callback(self.callback)
+        wrapped_in = self.transport.inbound
+        wrapped_out = self.transport.outbound
+
         self.module.install_traffic_activity_callback(self.callback)
 
-        iface = self.interface_cls()
-        iface.process_incoming(b"packet")
+        # A second install must leave the wrappers untouched — identity,
+        # not behavior: nested wrappers would still run the original once
+        # and the throttle would mask the extra signal attempts.
+        self.assertIs(wrapped_in, self.transport.inbound)
+        self.assertIs(wrapped_out, self.transport.outbound)
 
-        # Double-wrapping would record the packet twice (original runs once
-        # per wrapper layer) — one recording proves a single wrap.
-        self.assertEqual([b"packet"], iface.incoming)
+        self.transport.inbound(b"packet")
+        self.assertEqual([b"packet"], self.transport.incoming)
         self.assertEqual(1, len(self.signals))
 
 

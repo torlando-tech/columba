@@ -544,6 +544,8 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.BATTERY, it) },
                     batteryProfile = state.batteryProfile,
                     onBatteryProfileChange = { viewModel.setBatteryProfile(it) },
+                    persistentWakeLockEnabled = state.persistentWakeLockEnabled,
+                    onPersistentWakeLockToggle = { viewModel.setPersistentWakeLockEnabled(it) },
                 )
 
                 DataMigrationCard(
@@ -578,8 +580,6 @@ fun SettingsScreen(
                     isRestarting = state.isRestarting,
                     crashReportingEnabled = state.crashReportingEnabled,
                     onCrashReportingToggle = { viewModel.setCrashReportingEnabled(it) },
-                    persistentWakeLockEnabled = state.persistentWakeLockEnabled,
-                    onPersistentWakeLockToggle = { viewModel.setPersistentWakeLockEnabled(it) },
                 )
 
                 // About section

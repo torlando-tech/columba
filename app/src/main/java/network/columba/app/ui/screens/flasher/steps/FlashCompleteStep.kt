@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import network.columba.app.rns.host.flasher.FrequencyBand
 import network.columba.app.rns.host.flasher.RNodeDeviceInfo
+import network.columba.app.ui.screens.flasher.asString
 import network.columba.app.viewmodel.FlashResult
 
 /**
@@ -74,7 +75,7 @@ fun FlashCompleteStep(
                 )
             is FlashResult.Failure ->
                 FailureContent(
-                    error = result.error,
+                    error = result.error.asString(),
                     onFlashAnother = onFlashAnother,
                     onDone = onDone,
                 )

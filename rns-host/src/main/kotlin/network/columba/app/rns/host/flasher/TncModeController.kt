@@ -1,6 +1,7 @@
 package network.columba.app.rns.host.flasher
 
 import android.util.Log
+import network.columba.app.rns.host.R
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -40,14 +41,14 @@ class TncModeController(
     ): Boolean =
         withContext(Dispatchers.IO) {
             try {
-                flashState.value = RNodeFlasher.FlashState.Progress(50, "Connecting to device...")
+                flashState.value = RNodeFlasher.FlashState.Progress(50, flashText(R.string.flash_connecting_device))
 
                 if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
-                    flashState.value = RNodeFlasher.FlashState.Error("Failed to connect to device")
+                    flashState.value = RNodeFlasher.FlashState.Error(flashText(R.string.flash_connect_failed))
                     return@withContext false
                 }
 
-                flashState.value = RNodeFlasher.FlashState.Progress(60, "Configuring radio parameters...")
+                flashState.value = RNodeFlasher.FlashState.Progress(60, flashText(R.string.tnc_configuring))
 
                 val success =
                     detector.enableTncMode(
@@ -64,7 +65,7 @@ class TncModeController(
                 if (success) {
                     flashState.value = RNodeFlasher.FlashState.Complete(null)
                 } else {
-                    flashState.value = RNodeFlasher.FlashState.Error("Failed to configure radio parameters")
+                    flashState.value = RNodeFlasher.FlashState.Error(flashText(R.string.tnc_config_failed))
                 }
                 success
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -73,7 +74,9 @@ class TncModeController(
             } catch (e: Exception) {
                 Log.e(TAG, "TNC mode configuration failed", e)
                 usbBridge.disconnect()
-                flashState.value = RNodeFlasher.FlashState.Error("Configuration failed: ${e.message}")
+                flashState.value = RNodeFlasher.FlashState.Error(
+                    flashText(R.string.tnc_config_failed_error, e.message ?: "null"),
+                )
                 false
             }
         }
@@ -90,20 +93,20 @@ class TncModeController(
     suspend fun disableTncMode(deviceId: Int): Boolean =
         withContext(Dispatchers.IO) {
             try {
-                flashState.value = RNodeFlasher.FlashState.Progress(50, "Connecting to device...")
+                flashState.value = RNodeFlasher.FlashState.Progress(50, flashText(R.string.flash_connecting_device))
 
                 if (!usbBridge.connect(deviceId, RNodeConstants.BAUD_RATE_DEFAULT)) {
-                    flashState.value = RNodeFlasher.FlashState.Error("Failed to connect to device")
+                    flashState.value = RNodeFlasher.FlashState.Error(flashText(R.string.flash_connect_failed))
                     return@withContext false
                 }
 
-                flashState.value = RNodeFlasher.FlashState.Progress(70, "Disabling transport mode...")
+                flashState.value = RNodeFlasher.FlashState.Progress(70, flashText(R.string.tnc_disabling_transport))
 
                 val success = detector.disableTncMode()
 
                 if (success) {
                     // Reset the device so it reboots into normal mode
-                    flashState.value = RNodeFlasher.FlashState.Progress(90, "Resetting device...")
+                    flashState.value = RNodeFlasher.FlashState.Progress(90, flashText(R.string.flash_resetting_device))
                     val resetFrame =
                         KISSCodec.createFrame(
                             RNodeConstants.CMD_RESET,
@@ -118,7 +121,7 @@ class TncModeController(
                 if (success) {
                     flashState.value = RNodeFlasher.FlashState.Complete(null)
                 } else {
-                    flashState.value = RNodeFlasher.FlashState.Error("Failed to disable transport mode")
+                    flashState.value = RNodeFlasher.FlashState.Error(flashText(R.string.tnc_disable_failed))
                 }
                 success
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -127,7 +130,9 @@ class TncModeController(
             } catch (e: Exception) {
                 Log.e(TAG, "Disable TNC mode failed", e)
                 usbBridge.disconnect()
-                flashState.value = RNodeFlasher.FlashState.Error("Failed to disable transport: ${e.message}")
+                flashState.value = RNodeFlasher.FlashState.Error(
+                    flashText(R.string.tnc_disable_failed_error, e.message ?: "null"),
+                )
                 false
             }
         }

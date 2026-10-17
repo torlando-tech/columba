@@ -259,6 +259,9 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             resValue("string", "app_name", "columbatest")
+            // en-XA pseudo-locale: surfaces missed hardcoded strings and
+            // truncation on long translations (i18n migration verification).
+            isPseudoLocalesEnabled = true
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }

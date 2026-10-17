@@ -55,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -1297,7 +1298,7 @@ fun ColumbaNavigation(
                 (context as? ComponentActivity)?.finish()
             } else {
                 backPressedOnce = true
-                Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.toast_press_back_to_exit), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1377,7 +1378,7 @@ fun ColumbaNavigation(
                             bottomNavTabs.forEach { tab ->
                                 NavigationBarItem(
                                     icon = { Icon(tab.icon, contentDescription = null) },
-                                    label = { Text(tab.label) },
+                                    label = { Text(stringResource(tab.labelRes)) },
                                     selected = tab.matchesRoute(currentRoute),
                                     onClick = {
                                         navController.navigateToTab(tab)

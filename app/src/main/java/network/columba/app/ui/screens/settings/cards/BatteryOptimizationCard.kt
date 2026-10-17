@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -149,7 +150,7 @@ fun BatteryOptimizationCard(
                             color = contentColor,
                         )
                         Text(
-                            text = batteryProfile.displayName,
+                            text = stringResource(batteryProfile.displayName),
                             style = MaterialTheme.typography.bodySmall,
                             color = contentColor,
                         )
@@ -204,12 +205,12 @@ fun BatteryOptimizationCard(
                                                     .weight(1f),
                                         ) {
                                             Text(
-                                                text = profile.displayName,
+                                                text = stringResource(profile.displayName),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = contentColor,
                                             )
                                             Text(
-                                                text = profile.description,
+                                                text = stringResource(profile.description),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = contentColor.copy(alpha = 0.9f),
                                             )

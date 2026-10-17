@@ -1,5 +1,6 @@
 package tech.torlando.rns.stats.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -34,12 +35,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import tech.torlando.rns.stats.R
 import tech.torlando.rns.stats.data.InterfaceHistoryPoint
 import tech.torlando.rns.stats.data.SpeedSample
 import tech.torlando.rns.stats.data.formatSpeed
@@ -50,14 +53,14 @@ import tech.torlando.rns.stats.data.toSpeedSamples
  * Ported from Carina's Canvas-based chart implementation.
  *
  * @param history List of timestamped byte counter snapshots
- * @param title Optional title displayed above the chart
+ * @param title Optional title string resource displayed above the chart
  * @param rxColor Color for the RX (receive) line
  * @param txColor Color for the TX (transmit) line
  */
 @Composable
 fun TrafficSpeedChart(
     history: List<InterfaceHistoryPoint>,
-    title: String = "Traffic Speed",
+    @StringRes title: Int = R.string.traffic_speed,
     rxColor: Color = MaterialTheme.colorScheme.primary,
     txColor: Color = MaterialTheme.colorScheme.tertiary,
     modifier: Modifier = Modifier,
@@ -105,7 +108,7 @@ fun TrafficSpeedChart(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = title,
+                text = stringResource(title),
                 style = MaterialTheme.typography.titleSmall,
             )
             Spacer(Modifier.height(4.dp))

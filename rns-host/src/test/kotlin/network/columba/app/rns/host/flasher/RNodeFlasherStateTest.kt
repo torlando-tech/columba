@@ -17,24 +17,24 @@ import org.junit.Test
 class FlashStateProgressTest {
     @Test
     fun `Progress state has correct percent and message`() {
-        val state = RNodeFlasher.FlashState.Progress(50, "Flashing...")
+        val state = RNodeFlasher.FlashState.Progress(50, FlashText.Raw("Flashing..."))
         assertEquals(50, state.percent)
-        assertEquals("Flashing...", state.message)
+        assertEquals(FlashText.Raw("Flashing..."), state.message)
     }
 
     @Test
     fun `Progress states with same values are equal`() {
-        val state1 = RNodeFlasher.FlashState.Progress(50, "Flashing...")
-        val state2 = RNodeFlasher.FlashState.Progress(50, "Flashing...")
+        val state1 = RNodeFlasher.FlashState.Progress(50, FlashText.Raw("Flashing..."))
+        val state2 = RNodeFlasher.FlashState.Progress(50, FlashText.Raw("Flashing..."))
         assertEquals(state1, state2)
         assertEquals(state1.hashCode(), state2.hashCode())
     }
 
     @Test
     fun `Progress states with different values are not equal`() {
-        val state1 = RNodeFlasher.FlashState.Progress(50, "Flashing...")
-        val state2 = RNodeFlasher.FlashState.Progress(75, "Flashing...")
-        val state3 = RNodeFlasher.FlashState.Progress(50, "Almost done...")
+        val state1 = RNodeFlasher.FlashState.Progress(50, FlashText.Raw("Flashing..."))
+        val state2 = RNodeFlasher.FlashState.Progress(75, FlashText.Raw("Flashing..."))
+        val state3 = RNodeFlasher.FlashState.Progress(50, FlashText.Raw("Almost done..."))
         assertNotEquals(state1, state2)
         assertNotEquals(state1, state3)
     }
@@ -43,14 +43,14 @@ class FlashStateProgressTest {
 class FlashStateDetectingTest {
     @Test
     fun `Detecting state has correct message`() {
-        val state = RNodeFlasher.FlashState.Detecting("Connecting...")
-        assertEquals("Connecting...", state.message)
+        val state = RNodeFlasher.FlashState.Detecting(FlashText.Raw("Connecting..."))
+        assertEquals(FlashText.Raw("Connecting..."), state.message)
     }
 
     @Test
     fun `Detecting states with same message are equal`() {
-        val state1 = RNodeFlasher.FlashState.Detecting("Connecting...")
-        val state2 = RNodeFlasher.FlashState.Detecting("Connecting...")
+        val state1 = RNodeFlasher.FlashState.Detecting(FlashText.Raw("Connecting..."))
+        val state2 = RNodeFlasher.FlashState.Detecting(FlashText.Raw("Connecting..."))
         assertEquals(state1, state2)
     }
 }
@@ -58,14 +58,14 @@ class FlashStateDetectingTest {
 class FlashStateProvisioningTest {
     @Test
     fun `Provisioning state has correct message`() {
-        val state = RNodeFlasher.FlashState.Provisioning("Writing EEPROM...")
-        assertEquals("Writing EEPROM...", state.message)
+        val state = RNodeFlasher.FlashState.Provisioning(FlashText.Raw("Writing EEPROM..."))
+        assertEquals(FlashText.Raw("Writing EEPROM..."), state.message)
     }
 
     @Test
     fun `Provisioning states with same message are equal`() {
-        val state1 = RNodeFlasher.FlashState.Provisioning("Writing EEPROM...")
-        val state2 = RNodeFlasher.FlashState.Provisioning("Writing EEPROM...")
+        val state1 = RNodeFlasher.FlashState.Provisioning(FlashText.Raw("Writing EEPROM..."))
+        val state2 = RNodeFlasher.FlashState.Provisioning(FlashText.Raw("Writing EEPROM..."))
         assertEquals(state1, state2)
     }
 }
@@ -76,10 +76,10 @@ class FlashStateNeedsManualResetTest {
         val state =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.TBEAM_S,
-                message = "Please reset the device",
+                message = FlashText.Raw("Please reset the device"),
             )
         assertEquals(RNodeBoard.TBEAM_S, state.board)
-        assertEquals("Please reset the device", state.message)
+        assertEquals(FlashText.Raw("Please reset the device"), state.message)
         assertNull(state.firmwareHash)
     }
 
@@ -89,7 +89,7 @@ class FlashStateNeedsManualResetTest {
         val state =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.HELTEC_V4,
-                message = "Please reset",
+                message = FlashText.Raw("Please reset"),
                 firmwareHash = hash,
             )
         assertArrayEquals(hash, state.firmwareHash)
@@ -104,19 +104,19 @@ class FlashStateNeedsManualResetTest {
         val state1 =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.TDECK,
-                message = "Reset",
+                message = FlashText.Raw("Reset"),
                 firmwareHash = hash1,
             )
         val state2 =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.TDECK,
-                message = "Reset",
+                message = FlashText.Raw("Reset"),
                 firmwareHash = hash2,
             )
         val state3 =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.TDECK,
-                message = "Reset",
+                message = FlashText.Raw("Reset"),
                 firmwareHash = hash3,
             )
 
@@ -129,13 +129,13 @@ class FlashStateNeedsManualResetTest {
         val state1 =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.HELTEC_V3,
-                message = "Reset",
+                message = FlashText.Raw("Reset"),
                 firmwareHash = null,
             )
         val state2 =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.HELTEC_V3,
-                message = "Reset",
+                message = FlashText.Raw("Reset"),
                 firmwareHash = null,
             )
         assertEquals(state1, state2)
@@ -146,13 +146,13 @@ class FlashStateNeedsManualResetTest {
         val state1 =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.HELTEC_V3,
-                message = "Reset",
+                message = FlashText.Raw("Reset"),
                 firmwareHash = null,
             )
         val state2 =
             RNodeFlasher.FlashState.NeedsManualReset(
                 board = RNodeBoard.HELTEC_V3,
-                message = "Reset",
+                message = FlashText.Raw("Reset"),
                 firmwareHash = byteArrayOf(0x01),
             )
         assertNotEquals(state1, state2)
@@ -162,28 +162,28 @@ class FlashStateNeedsManualResetTest {
 class FlashStateErrorTest {
     @Test
     fun `Error state has correct message`() {
-        val state = RNodeFlasher.FlashState.Error("Flash failed")
-        assertEquals("Flash failed", state.message)
+        val state = RNodeFlasher.FlashState.Error(FlashText.Raw("Flash failed"))
+        assertEquals(FlashText.Raw("Flash failed"), state.message)
         assertTrue(state.recoverable)
     }
 
     @Test
     fun `Error state can be non-recoverable`() {
-        val state = RNodeFlasher.FlashState.Error("Critical failure", recoverable = false)
+        val state = RNodeFlasher.FlashState.Error(FlashText.Raw("Critical failure"), recoverable = false)
         assertFalse(state.recoverable)
     }
 
     @Test
     fun `Error states with same values are equal`() {
-        val state1 = RNodeFlasher.FlashState.Error("Flash failed", true)
-        val state2 = RNodeFlasher.FlashState.Error("Flash failed", true)
+        val state1 = RNodeFlasher.FlashState.Error(FlashText.Raw("Flash failed"), true)
+        val state2 = RNodeFlasher.FlashState.Error(FlashText.Raw("Flash failed"), true)
         assertEquals(state1, state2)
     }
 
     @Test
     fun `Error states with different recoverable are not equal`() {
-        val state1 = RNodeFlasher.FlashState.Error("Flash failed", true)
-        val state2 = RNodeFlasher.FlashState.Error("Flash failed", false)
+        val state1 = RNodeFlasher.FlashState.Error(FlashText.Raw("Flash failed"), true)
+        val state2 = RNodeFlasher.FlashState.Error(FlashText.Raw("Flash failed"), false)
         assertNotEquals(state1, state2)
     }
 }
@@ -233,12 +233,12 @@ class FlashStateHierarchyTest {
         val states =
             listOf<RNodeFlasher.FlashState>(
                 RNodeFlasher.FlashState.Idle,
-                RNodeFlasher.FlashState.Detecting("test"),
-                RNodeFlasher.FlashState.Progress(50, "test"),
-                RNodeFlasher.FlashState.Provisioning("test"),
-                RNodeFlasher.FlashState.NeedsManualReset(RNodeBoard.TBEAM_S, "test"),
+                RNodeFlasher.FlashState.Detecting(FlashText.Raw("test")),
+                RNodeFlasher.FlashState.Progress(50, FlashText.Raw("test")),
+                RNodeFlasher.FlashState.Provisioning(FlashText.Raw("test")),
+                RNodeFlasher.FlashState.NeedsManualReset(RNodeBoard.TBEAM_S, FlashText.Raw("test")),
                 RNodeFlasher.FlashState.Complete(null),
-                RNodeFlasher.FlashState.Error("test"),
+                RNodeFlasher.FlashState.Error(FlashText.Raw("test")),
             )
 
         for (state in states) {

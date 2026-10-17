@@ -248,16 +248,10 @@
     <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Unblocked ${peer.displayName ?: peer.peerHash.take(16)}"</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Bottom Navigation"</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Choose which shortcuts appear in the bottom bar (max ${NavTab.MAX_TABS}) and use the arrows to arrange them. Settings is always pinned to the end."</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${tab.label} down"</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${tab.label} up"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${stringResource(tab.labelRes)} down"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${stringResource(tab.labelRes)} up"</ID>
     <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Pinned"</ID>
-    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Remove ${tab.label} from bottom bar"</ID>
-    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Incoming Calls"</ID>
-    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Incoming Voice Call"</ID>
-    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Notifications for active voice calls"</ID>
-    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Notifications for incoming voice calls"</ID>
-    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Ongoing Calls"</ID>
-    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Voice Call"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Remove ${stringResource(tab.labelRes)} from bottom bar"</ID>
     <ID>NoHardcodedUiString:ChatsScreen.kt$"Also blackhole (don't relay their announces)"</ID>
     <ID>NoHardcodedUiString:ChatsScreen.kt$"Also delete conversation and messages"</ID>
     <ID>NoHardcodedUiString:ChatsScreen.kt$"Are you sure you want to delete your conversation with $peerName? This will permanently delete all messages."</ID>
@@ -1007,7 +1001,6 @@
     <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.PRECISE$"Precise"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"Region"</ID>
     <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"~10km radius"</ID>
-    <ID>NoHardcodedUiString:MainActivity.kt$"Press back again to exit"</ID>
     <ID>NoHardcodedUiString:MainActivity.kt$MainActivity$"Janky frame: ${durationMs}ms"</ID>
     <ID>NoHardcodedUiString:MapScreen.kt$"Altitude"</ID>
     <ID>NoHardcodedUiString:MapScreen.kt$"Bandwidth"</ID>
@@ -1316,13 +1309,6 @@
     <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Proves messages came from you\n"</ID>
     <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Send you messages\n"</ID>
     <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Verify your identity\n"</ID>
-    <ID>NoHardcodedUiString:NavTab.kt$NavTab.ANNOUNCES$"Announces"</ID>
-    <ID>NoHardcodedUiString:NavTab.kt$NavTab.CHATS$"Chats"</ID>
-    <ID>NoHardcodedUiString:NavTab.kt$NavTab.CONTACTS$"Contacts"</ID>
-    <ID>NoHardcodedUiString:NavTab.kt$NavTab.MAP$"Map"</ID>
-    <ID>NoHardcodedUiString:NavTab.kt$NavTab.NOMADNET$"NomadNet"</ID>
-    <ID>NoHardcodedUiString:NavTab.kt$NavTab.SETTINGS$"Settings"</ID>
-    <ID>NoHardcodedUiString:NavTab.kt$NavTab.VOICE$"Voice"</ID>
     <ID>NoHardcodedUiString:NetworkCard.kt$"BLE Connections"</ID>
     <ID>NoHardcodedUiString:NetworkCard.kt$"Manage Interfaces"</ID>
     <ID>NoHardcodedUiString:NetworkCard.kt$"Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics."</ID>
@@ -1345,17 +1331,6 @@
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Reload all images"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Retry"</ID>
     <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Share"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Announce from $peerName"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Announces"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"BLE Peer Connected"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"BLE Peer Disconnected"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Bluetooth Events"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Connected to $displayName"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Disconnected from $displayName"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Messages"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Notifications for Bluetooth connection events"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Notifications for heard announces"</ID>
-    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Notifications for received messages"</ID>
     <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Manage Notifications"</ID>
     <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Notifications"</ID>
     <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"BLE Peer Connected"</ID>

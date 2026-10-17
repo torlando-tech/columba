@@ -26,6 +26,7 @@ class ServiceSettingsAccessor(
         const val KEY_NETWORK_CHANGE_ANNOUNCE_TIME = "network_change_announce_time"
         const val KEY_LAST_AUTO_ANNOUNCE_TIME = "last_auto_announce_time"
         const val KEY_LAST_NETWORK_STATUS = "last_network_status"
+        const val KEY_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
     }
 
     // Get fresh SharedPreferences each time to avoid caching issues across processes
@@ -90,6 +91,20 @@ class ServiceSettingsAccessor(
      */
     fun getAllowVoiceCalls(): Boolean =
         getCrossProcessPrefs().getBoolean(KEY_ALLOW_VOICE_CALLS, true)
+
+    /**
+     * Get the persistent-wake-lock setting. When true (default), the service holds
+     * a PARTIAL_WAKE_LOCK for its whole lifetime so the CPU never suspends. When
+     * false (duty-cycle mode) the CPU may sleep between mesh traffic and short
+     * timed locks cover active RX/TX bursts instead.
+     *
+     * Written by the app process (SettingsRepository dual-write); read here at
+     * service start and on every network-change lock re-acquisition.
+     *
+     * @return true (default) to hold the persistent wake lock, false for duty-cycle mode
+     */
+    fun getPersistentWakeLockEnabled(): Boolean =
+        getCrossProcessPrefs().getBoolean(KEY_PERSISTENT_WAKE_LOCK, true)
 
     /**
      * Persist the app process's current network-status string so the service process can

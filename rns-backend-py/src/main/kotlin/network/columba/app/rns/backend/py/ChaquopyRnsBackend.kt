@@ -88,6 +88,16 @@ class ChaquopyRnsBackend(
     override val nomadnet: RnsNomadnet = nomadnetImpl
     override val transportAdmin: RnsTransportAdmin = transportAdminImpl
 
+    /**
+     * Duty-cycle wake-lock hook: stash on the runtime; [PythonRnsRuntime.start]
+     * forwards it into `event_bridge.install_traffic_activity_callback` so the
+     * wrapped `Interface.process_incoming/process_outgoing` can signal the
+     * service's LockManager on mesh traffic.
+     */
+    override fun setTrafficActivityCallback(callback: (() -> Unit)?) {
+        runtime.trafficActivityCallback = callback
+    }
+
     private val _capabilities: MutableStateFlow<BackendCapabilities> =
         MutableStateFlow(PYTHON_CAPABILITIES)
     override val capabilities: StateFlow<BackendCapabilities> = _capabilities.asStateFlow()

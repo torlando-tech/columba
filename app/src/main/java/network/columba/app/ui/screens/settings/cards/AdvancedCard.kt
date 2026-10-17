@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Hub
@@ -22,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import network.columba.app.BuildConfig
@@ -50,6 +52,12 @@ import network.columba.app.ui.components.LocalCapabilities
  *   to the pending-changes hint. Plumbs through to `SettingsViewModel.restartService()`.
  * @param isRestarting True while a service restart is in flight; disables the
  *   inline Restart button and shows a small progress spinner instead of the icon.
+ * @param persistentWakeLockEnabled Whether the service holds a persistent wake lock
+ *   (true = current behavior: CPU never suspends, zero-latency packet handling;
+ *   false = duty-cycle mode: CPU sleeps between mesh traffic, short timed locks
+ *   cover active bursts). Applies to the running service immediately.
+ * @param onPersistentWakeLockToggle Callback when the Persistent Wake Lock toggle
+ *   is changed.
  */
 @Composable
 fun AdvancedCard(
@@ -64,6 +72,8 @@ fun AdvancedCard(
     isRestarting: Boolean = false,
     crashReportingEnabled: Boolean = false,
     onCrashReportingToggle: (Boolean) -> Unit = {},
+    persistentWakeLockEnabled: Boolean = true,
+    onPersistentWakeLockToggle: (Boolean) -> Unit = {},
 ) {
     val canHostShareInstance = LocalCapabilities.current.performance.shareInstanceHosting
     CollapsibleSettingsCard(
@@ -96,6 +106,7 @@ fun AdvancedCard(
             Switch(
                 checked = transportNodeEnabled,
                 onCheckedChange = onTransportNodeToggle,
+                modifier = Modifier.testTag("transport_node_toggle"),
             )
         }
         Text(
@@ -107,6 +118,46 @@ fun AdvancedCard(
                     "can negatively impact multihop routing. Enabling this will increase data " +
                     "usage and battery drain. However, in a BLE-only mesh, it's required for " +
                     "multi-hop messaging.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        // Persistent Wake Lock toggle
+        Spacer(Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.BatterySaver,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Persistent Wake Lock",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Switch(
+                checked = persistentWakeLockEnabled,
+                onCheckedChange = onPersistentWakeLockToggle,
+                modifier = Modifier.testTag("persistent_wake_lock_toggle"),
+            )
+        }
+        Text(
+            text =
+                "Keep the CPU awake so incoming mesh packets are processed the " +
+                    "instant they arrive. On (default) is the most responsive but " +
+                    "drains battery while backgrounded all day. Off lets the CPU " +
+                    "sleep between traffic; a short lock still covers active " +
+                    "transfers, and delivery resumes within seconds of each wake. " +
+                    "Changes apply immediately.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

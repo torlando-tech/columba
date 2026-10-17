@@ -47,4 +47,14 @@ interface RnsBackend {
 
     /** Interface management, battery profile, RNode, BLE diagnostics. */
     val transportAdmin: RnsTransportAdmin
+
+    /**
+     * Host hook for mesh RX/TX activity, used by the service's duty-cycle
+     * wake-lock mode (Advanced setting "Persistent Wake Lock" off): the
+     * service installs a callback that extends a short timed PARTIAL_WAKE_LOCK
+     * so in-flight traffic processing completes without a CPU suspend; pass
+     * null to clear. Backends without a traffic signal — the Kotlin-native
+     * stack manages its own locks — keep the no-op default.
+     */
+    fun setTrafficActivityCallback(callback: (() -> Unit)?): Unit = Unit
 }

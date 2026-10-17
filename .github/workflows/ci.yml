@@ -107,6 +107,21 @@ jobs:
 
           echo "✓ No new forbidden suppressions found"
 
+      - name: Check NoHardcodedUiString suppression ratchet
+        run: |
+          # @Suppress("NoHardcodedUiString") marks genuine false positives —
+          # non-UI text that matches a UI sink name (e.g. telemetry fields).
+          # BASELINE: ratchet down over time; do not increase without review.
+          UI_STRING_COUNT=$(grep -r "Suppress.*NoHardcodedUiString" app/src/main rns-host/src/main rns-api/src/main rns-stats/src/main rns-backend-kt/src/main --include="*.kt" 2>/dev/null | wc -l || echo "0")
+          echo "NoHardcodedUiString suppressions: $UI_STRING_COUNT"
+          UI_STRING_BASELINE=0
+          if [ "$UI_STRING_COUNT" -gt "$UI_STRING_BASELINE" ]; then
+            echo "::error::NoHardcodedUiString suppressions increased from $UI_STRING_BASELINE to $UI_STRING_COUNT"
+            echo "Move the string to strings.xml instead of suppressing; suppress only genuine non-UI false positives, with a comment."
+            exit 1
+          fi
+          echo "✓ NoHardcodedUiString suppression ratchet OK"
+
       - name: Upload lint reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -349,7 +364,7 @@ jobs:
             robolectric-
 
       - name: Run RNS, stats, data, and micron module tests
-        run: ./gradlew :rns-api:testDebugUnitTest :rns-ipc:testDebugUnitTest :rns-host:testKotlinBackendDebugUnitTest :rns-host:testPythonBackendDebugUnitTest :rns-backend-kt:testDebugUnitTest :rns-backend-py:testDebugUnitTest :rns-stats:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
+        run: ./gradlew :detekt-rules:test :rns-api:testDebugUnitTest :rns-ipc:testDebugUnitTest :rns-host:testKotlinBackendDebugUnitTest :rns-host:testPythonBackendDebugUnitTest :rns-backend-kt:testDebugUnitTest :rns-backend-py:testDebugUnitTest :rns-stats:testDebugUnitTest :data:testDebugUnitTest :micron:test --stacktrace --max-workers=4
 
       - name: Run rns-backend-py Python unit tests
         # The event-bridge / RNS Python unit tests (rns-backend-py/src/test/

@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import network.columba.app.navigation.NavTab
 import network.columba.app.ui.components.CollapsibleSettingsCard
@@ -124,7 +125,7 @@ fun BottomNavigationCard(
                                 modifier = Modifier.size(16.dp),
                             )
                         },
-                        label = { Text(tab.label) },
+                        label = { Text(stringResource(tab.labelRes)) },
                     )
                 }
             }
@@ -156,7 +157,7 @@ private fun TabRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Text(tab.label, style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(tab.labelRes), style = MaterialTheme.typography.bodyLarge)
             if (tab == NavTab.SETTINGS) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(
@@ -171,20 +172,20 @@ private fun TabRow(
             IconButton(onClick = onRemove) {
                 Icon(
                     imageVector = Icons.Default.Remove,
-                    contentDescription = "Remove ${tab.label} from bottom bar",
+                    contentDescription = "Remove ${stringResource(tab.labelRes)} from bottom bar",
                 )
             }
         }
         IconButton(onClick = onMoveUp, enabled = canMoveUp) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowUp,
-                contentDescription = "Move ${tab.label} up",
+                contentDescription = "Move ${stringResource(tab.labelRes)} up",
             )
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Move ${tab.label} down",
+                contentDescription = "Move ${stringResource(tab.labelRes)} down",
             )
         }
     }

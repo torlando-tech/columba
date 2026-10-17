@@ -31,11 +31,6 @@
     <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.TDECK$"LilyGO T-Deck"</ID>
     <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.TECHO$"LilyGO T-Echo"</ID>
     <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.UNKNOWN$"Unknown"</ID>
-    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"$names lost connection. Attempting to reconnect..."</ID>
-    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"Alerts when an RNode radio loses connection"</ID>
-    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"Columba Mesh Network"</ID>
-    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"Keeps Reticulum network running in background"</ID>
-    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"RNode Disconnected"</ID>
     <ID>ReturnCount:BleConnectionManager.kt$BleConnectionManager$suspend fun connectToDevice(address: String): Result&lt;Unit&gt;</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$fun shouldConnect(peerAddress: String): Boolean</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$suspend fun start( serviceUuid: String, rxCharUuid: String, txCharUuid: String, identityCharUuid: String, ): Result&lt;Unit&gt;</ID>

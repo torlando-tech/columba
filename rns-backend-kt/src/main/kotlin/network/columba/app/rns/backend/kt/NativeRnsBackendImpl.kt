@@ -1215,7 +1215,14 @@ class NativeRnsBackendImpl(
         withContext(Dispatchers.IO) {
             val identity =
                 NativeIdentity.fromBytes(fileData)
-                    ?: return@withContext mapOf("success" to false, "error" to "Invalid identity data")
+                    ?: return@withContext mapOf(
+                        "success" to false,
+                        // Rendered verbatim by IdentityManagerViewModel's snackbar;
+                        // resolved from resources so it can be translated.
+                        // appContext is always present in the `:reticulum` process
+                        // (null only in unit-test mode, which never imports files).
+                        "error" to requireNotNull(appContext).getString(R.string.invalid_identity_data),
+                    )
             buildIdentityResult(identity, displayName)
         }
 

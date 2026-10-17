@@ -5,6 +5,9 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
+import network.columba.app.rns.host.R as RnsHostR
+import network.columba.app.rns.host.flasher.FlashText
 import network.columba.app.rns.host.flasher.FirmwarePackage
 import network.columba.app.rns.host.flasher.FirmwareSource
 import network.columba.app.rns.host.flasher.FrequencyBand
@@ -42,7 +45,7 @@ sealed class FlashResult {
     ) : FlashResult()
 
     data class Failure(
-        val error: String,
+        val error: FlashText,
     ) : FlashResult()
 
     data object Cancelled : FlashResult()
@@ -64,7 +67,7 @@ data class FlasherUiState(
     // Step 2: Device Detection
     val isDetecting: Boolean = false,
     val detectedInfo: RNodeDeviceInfo? = null,
-    val detectionError: String? = null,
+    val detectionError: FlashText? = null,
     val useManualBoardSelection: Boolean = false,
     // Step 3: Firmware Selection
     val availableFirmwareSources: List<FirmwareSource>? = null, // null = still loading
@@ -83,15 +86,15 @@ data class FlasherUiState(
     val downloadError: String? = null,
     // Step 4: Flash Progress
     val flashProgress: Int = 0,
-    val flashMessage: String = "",
+    val flashMessage: FlashText? = null,
     val isFlashing: Boolean = false,
     val showCancelConfirmation: Boolean = false,
     // Step 4b: Waiting for manual reset (ESP32-S3 native USB)
     val needsManualReset: Boolean = false,
-    val resetMessage: String? = null,
+    val resetMessage: FlashText? = null,
     // Step 4c: Provisioning
     val isProvisioning: Boolean = false,
-    val provisioningMessage: String? = null,
+    val provisioningMessage: FlashText? = null,
     // Step 4d: TNC Configuration (microReticulum)
     val tncConfigOnly: Boolean = false, // standalone config mode (no flashing)
     val tncSelectedRegion: network.columba.app.data.model.FrequencyRegion? = null,
@@ -102,13 +105,13 @@ data class FlasherUiState(
     val tncCodingRate: String = "5",
     val tncTxPower: String = "17",
     val tncConfiguring: Boolean = false,
-    val tncConfigError: String? = null,
+    val tncConfigError: FlashText? = null,
     val tncConfigComplete: Boolean = false, // signals standalone config finished
     // Step 5: Complete
     val flashResult: FlashResult? = null,
     // General state
     val isLoading: Boolean = false,
-    val error: String? = null,
+    val error: FlashText? = null,
 )
 
 /**
@@ -217,7 +220,7 @@ class FlasherViewModel
         }
 
         private fun handleNeedsManualReset(flashState: RNodeFlasher.FlashState.NeedsManualReset) {
-            Log.i(TAG, "Device needs manual reset: ${flashState.message} (hash: ${flashState.firmwareHash != null})")
+            Log.i(TAG, "Device needs manual reset (hash: ${flashState.firmwareHash != null})")
             firmwareHashForProvisioning = flashState.firmwareHash
             _state.update {
                 it.copy(
@@ -309,7 +312,7 @@ class FlasherViewModel
                     _state.update {
                         it.copy(
                             isRefreshingDevices = false,
-                            error = "Failed to scan devices: ${e.message}",
+                            error = FlashText.Resource(R.string.flasher_scan_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -383,7 +386,7 @@ class FlasherViewModel
                         _state.update {
                             it.copy(
                                 isDetecting = false,
-                                detectionError = "Could not identify device. You can proceed with manual board selection.",
+                                detectionError = FlashText.Resource(R.string.flasher_detect_unidentified),
                             )
                         }
                     }
@@ -392,7 +395,7 @@ class FlasherViewModel
                     _state.update {
                         it.copy(
                             isDetecting = false,
-                            detectionError = "Detection failed: ${e.message}",
+                            detectionError = FlashText.Resource(R.string.flasher_detect_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -603,7 +606,7 @@ class FlasherViewModel
                     currentStep = FlasherStep.FLASH_PROGRESS,
                     isFlashing = true,
                     flashProgress = 0,
-                    flashMessage = "Starting flash...",
+                    flashMessage = FlashText.Resource(RnsHostR.string.flash_starting),
                     showCancelConfirmation = false,
                 )
             }
@@ -646,7 +649,11 @@ class FlasherViewModel
                         it.copy(
                             currentStep = FlasherStep.COMPLETE,
                             isFlashing = false,
-                            flashResult = FlashResult.Failure(e.message ?: "Unknown error"),
+                            flashResult =
+                                FlashResult.Failure(
+                                    e.message?.let { FlashText.Raw(it) }
+                                        ?: FlashText.Resource(R.string.flasher_unknown_error),
+                                ),
                         )
                     }
                 }
@@ -689,7 +696,7 @@ class FlasherViewModel
                 it.copy(
                     needsManualReset = false,
                     isProvisioning = true,
-                    provisioningMessage = "Connecting...",
+                    provisioningMessage = FlashText.Resource(R.string.flasher_connecting),
                 )
             }
 
@@ -726,8 +733,8 @@ class FlasherViewModel
                 it.copy(
                     currentStep = FlasherStep.FLASH_PROGRESS,
                     needsManualReset = true,
-                    resetMessage = "Connect your ${board.displayName} and press RST if needed.",
-                    flashMessage = "Ready to provision ${board.displayName}",
+                    resetMessage = FlashText.Resource(R.string.flasher_reset_connect_prompt, listOf(board.displayName)),
+                    flashMessage = FlashText.Resource(R.string.flasher_ready_to_provision, listOf(board.displayName)),
                 )
             }
         }

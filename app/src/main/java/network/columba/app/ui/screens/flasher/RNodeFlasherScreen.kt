@@ -262,8 +262,8 @@ fun RNodeFlasherScreen(
                         DeviceDetectionStep(
                             isDetecting = state.isDetecting,
                             detectedInfo = state.detectedInfo,
-                            detectionError = state.detectionError,
-                            detectionMessage = state.flashMessage,
+                            detectionError = state.detectionError?.asString(),
+                            detectionMessage = state.flashMessage?.asString() ?: "",
                             onManualSelection = { viewModel.enableManualBoardSelection() },
                         )
 
@@ -297,7 +297,7 @@ fun RNodeFlasherScreen(
                     FlasherStep.FLASH_PROGRESS ->
                         FlashProgressStep(
                             progress = state.flashProgress,
-                            message = state.flashMessage,
+                            message = state.flashMessage?.asString() ?: "",
                             showCancelConfirmation = state.showCancelConfirmation,
                             onShowCancelConfirmation = { viewModel.showCancelConfirmation() },
                             onHideCancelConfirmation = { viewModel.hideCancelConfirmation() },
@@ -315,7 +315,7 @@ fun RNodeFlasherScreen(
                             codingRate = state.tncCodingRate,
                             txPower = state.tncTxPower,
                             isConfiguring = state.tncConfiguring,
-                            configError = state.tncConfigError,
+                            configError = state.tncConfigError?.asString(),
                             isStandaloneConfig = state.tncConfigOnly,
                             selectedRegion = state.tncSelectedRegion,
                             selectedPreset = state.tncSelectedPreset,
@@ -353,7 +353,7 @@ fun RNodeFlasherScreen(
         AlertDialog(
             onDismissRequest = { viewModel.clearError() },
             title = { Text("Error") },
-            text = { Text(error) },
+            text = { Text(error.asString()) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearError() }) {
                     Text("OK")

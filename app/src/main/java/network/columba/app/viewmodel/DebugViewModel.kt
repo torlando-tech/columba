@@ -195,13 +195,17 @@ class DebugViewModel
                     withContext(ioDispatcher) {
                         rnsTransportAdmin.getFailedInterfaces()
                     }
+                val unknownName =
+                    context.getString(network.columba.app.rns.api.R.string.failed_interface_unknown_name)
+                val unknownError =
+                    context.getString(network.columba.app.rns.api.R.string.failed_interface_unknown_error)
                 val failedInterfaceInfos =
                     failedInterfaces.map { failed ->
                         InterfaceInfo(
-                            name = failed.name,
-                            type = failed.name,
+                            name = failed.name.ifEmpty { unknownName },
+                            type = failed.name.ifEmpty { unknownName },
                             online = false,
-                            error = failed.error,
+                            error = failed.error.ifEmpty { unknownError },
                         )
                     }
 
@@ -300,9 +304,18 @@ class DebugViewModel
                                 online = ifaceMap["online"] as? Boolean ?: false,
                             )
                         }
+                    val unknownName =
+                        context.getString(network.columba.app.rns.api.R.string.failed_interface_unknown_name)
+                    val unknownError =
+                        context.getString(network.columba.app.rns.api.R.string.failed_interface_unknown_error)
                     val failedInterfaceInfos =
                         failedInterfaces.map { failed ->
-                            InterfaceInfo(name = failed.name, type = failed.name, online = false, error = failed.error)
+                            InterfaceInfo(
+                                name = failed.name.ifEmpty { unknownName },
+                                type = failed.name.ifEmpty { unknownName },
+                                online = false,
+                                error = failed.error.ifEmpty { unknownError },
+                            )
                         }
                     val interfaces = activeInterfaces + failedInterfaceInfos
                     val status = rnsCore.networkStatus.value

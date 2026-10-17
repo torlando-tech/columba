@@ -1,5 +1,6 @@
 package network.columba.app.rns.host.flasher
 
+import network.columba.app.rns.host.R
 import network.columba.app.rns.host.usb.UsbDeviceInfo
 import java.io.InputStream
 
@@ -34,10 +35,10 @@ internal class PyxisFlashCore(
         deviceId: Int,
         pyxisPackage: PyxisFirmwarePackage,
     ): Boolean {
-        emitState(RNodeFlasher.FlashState.Progress(0, "Starting Pyxis flash..."))
+        emitState(RNodeFlasher.FlashState.Progress(0, flashText(R.string.pyxis_starting)))
         val usbDevice = findDevice(deviceId)
         if (usbDevice == null) {
-            emitState(RNodeFlasher.FlashState.Error("USB device is not connected"))
+            emitState(RNodeFlasher.FlashState.Error(flashText(R.string.pyxis_device_disconnected)))
             return false
         }
 
@@ -47,14 +48,14 @@ internal class PyxisFlashCore(
                 override fun onProgress(
                     percent: Int,
                     stage: ESPToolFlasher.FlashStage,
-                    message: String,
+                    message: FlashText,
                 ) {
                     if (stage !in SUPPRESSED_RNODE_STAGES) {
                         emitState(RNodeFlasher.FlashState.Progress(percent, message))
                     }
                 }
 
-                override fun onError(error: String) {
+                override fun onError(error: FlashText) {
                     callbackError = true
                     emitState(RNodeFlasher.FlashState.Error(error))
                 }
@@ -83,20 +84,23 @@ internal class PyxisFlashCore(
             if (success && !callbackError) {
                 emitState(RNodeFlasher.FlashState.Complete(null))
             } else if (!callbackError) {
-                emitState(RNodeFlasher.FlashState.Error("Pyxis flash failed"))
+                emitState(RNodeFlasher.FlashState.Error(flashText(R.string.pyxis_flash_failed)))
             }
             success && !callbackError
         } catch (_: ESPToolFlasher.ManualBootModeRequired) {
             emitState(
                 RNodeFlasher.FlashState.Error(
-                    "Could not enter the Pyxis bootloader automatically. Put the T-Deck Plus " +
-                        "into ESP32-S3 download mode manually, then try again.",
+                    flashText(R.string.pyxis_manual_boot),
                     recoverable = true,
                 ),
             )
             false
         } catch (e: Exception) {
-            emitState(RNodeFlasher.FlashState.Error("Pyxis flash failed: ${e.message ?: "unknown error"}"))
+            emitState(
+                RNodeFlasher.FlashState.Error(
+                    flashText(R.string.pyxis_flash_failed_error, e.message ?: "unknown error"),
+                ),
+            )
             false
         }
     }

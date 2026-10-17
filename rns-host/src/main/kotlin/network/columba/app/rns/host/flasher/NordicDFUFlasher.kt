@@ -1,6 +1,7 @@
 package network.columba.app.rns.host.flasher
 
 import android.util.Log
+import network.columba.app.rns.host.R
 import network.columba.app.rns.host.usb.KotlinUSBBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -107,10 +108,10 @@ class NordicDFUFlasher(
     interface ProgressCallback {
         fun onProgress(
             percent: Int,
-            message: String,
+            message: FlashText,
         )
 
-        fun onError(error: String)
+        fun onError(error: FlashText)
 
         fun onComplete()
     }
@@ -130,12 +131,12 @@ class NordicDFUFlasher(
     ): Boolean =
         withContext(Dispatchers.IO) {
             try {
-                progressCallback.onProgress(0, "Parsing firmware package...")
+                progressCallback.onProgress(0, flashText(R.string.flash_parsing_package))
 
                 // Parse the firmware ZIP
                 val firmwareData = parseFirmwareZip(firmwareZipStream)
                 if (firmwareData == null) {
-                    progressCallback.onError("Invalid firmware package: missing required files")
+                    progressCallback.onError(flashText(R.string.nordic_invalid_package))
                     return@withContext false
                 }
 
@@ -150,21 +151,21 @@ class NordicDFUFlasher(
                     Log.d(TAG, "Device already in bootloader mode (PID=0x${deviceInfo?.productId?.toString(16)}), skipping 1200-baud touch")
                     bootloaderDeviceId = deviceId
                 } else {
-                    progressCallback.onProgress(5, "Entering DFU mode...")
+                    progressCallback.onProgress(5, flashText(R.string.nordic_entering_dfu))
 
                     // Enter DFU mode (1200 baud touch)
                     if (!enterDfuMode(deviceId)) {
-                        progressCallback.onError("Failed to enter DFU mode")
+                        progressCallback.onError(flashText(R.string.nordic_enter_dfu_failed))
                         return@withContext false
                     }
 
-                    progressCallback.onProgress(10, "Connecting to bootloader...")
+                    progressCallback.onProgress(10, flashText(R.string.nordic_connecting_bootloader))
 
                     // After the 1200-baud touch, the device re-enumerates in bootloader
                     // mode with a new USB device ID (and different PID). Find it.
                     val foundId = findBootloaderDevice(deviceId)
                     if (foundId == null) {
-                        progressCallback.onError("Failed to find bootloader device after reset")
+                        progressCallback.onError(flashText(R.string.nordic_bootloader_not_found))
                         return@withContext false
                     }
                     bootloaderDeviceId = foundId
@@ -186,7 +187,7 @@ class NordicDFUFlasher(
                 // the system auto-grants via device_filter.xml), connect() will fail
                 // with "No permission". Retry to give time for permission grant.
                 if (!connectWithRetry(bootloaderDeviceId, DFU_FLASH_BAUD)) {
-                    progressCallback.onError("Failed to connect to bootloader")
+                    progressCallback.onError(flashText(R.string.nordic_connect_bootloader_failed))
                     return@withContext false
                 }
 
@@ -196,7 +197,7 @@ class NordicDFUFlasher(
 
                 delay(SERIAL_PORT_OPEN_WAIT_MS)
 
-                progressCallback.onProgress(15, "Starting DFU transfer...")
+                progressCallback.onProgress(15, flashText(R.string.nordic_starting_transfer))
 
                 // Send DFU packets
                 val success =
@@ -226,7 +227,7 @@ class NordicDFUFlasher(
                 success
             } catch (e: Exception) {
                 Log.e(TAG, "Flash failed", e)
-                progressCallback.onError("Flash failed: ${e.message}")
+                progressCallback.onError(flashText(R.string.flash_failed_error, e.message ?: "null"))
                 false
             } finally {
                 // Safety net: disconnect if still connected (e.g. after exception)
@@ -386,29 +387,29 @@ class NordicDFUFlasher(
         // Send DFU Start packet (triggers flash erase)
         Log.d(TAG, "Sending DFU start packet (firmware size: ${firmware.size} bytes)")
         if (!sendStartDfu(HEX_TYPE_APPLICATION, 0, 0, firmware.size)) {
-            progressCallback.onError("Failed to send DFU start packet")
+            progressCallback.onError(flashText(R.string.nordic_start_packet_failed))
             return false
         }
 
-        progressCallback.onProgress(20, "Sending init packet...")
+        progressCallback.onProgress(20, flashText(R.string.nordic_sending_init))
 
         // Send DFU Init packet
         Log.d(TAG, "Sending DFU init packet (${initPacket.size} bytes)")
         if (!sendInitPacket(initPacket)) {
-            progressCallback.onError("Failed to send DFU init packet")
+            progressCallback.onError(flashText(R.string.nordic_init_packet_failed))
             return false
         }
 
-        progressCallback.onProgress(25, "Sending firmware...")
+        progressCallback.onProgress(25, flashText(R.string.nordic_sending_firmware))
 
         // Send firmware data in chunks
         Log.d(TAG, "Sending firmware data (${firmware.size} bytes in ${(firmware.size + DFU_PACKET_MAX_SIZE - 1) / DFU_PACKET_MAX_SIZE} packets)")
         if (!sendFirmware(firmware, progressCallback)) {
-            progressCallback.onError("Failed to send firmware data")
+            progressCallback.onError(flashText(R.string.nordic_firmware_data_failed))
             return false
         }
 
-        progressCallback.onProgress(100, "Flashing complete!")
+        progressCallback.onProgress(100, flashText(R.string.nordic_flash_complete))
         Log.i(TAG, "DFU transfer complete")
 
         return true
@@ -542,7 +543,10 @@ class NordicDFUFlasher(
             }
 
             val progress = 25 + (packetIndex * 70 / totalPackets)
-            progressCallback.onProgress(progress, "Sending firmware: $packetIndex/$totalPackets")
+            progressCallback.onProgress(
+                progress,
+                flashText(R.string.nordic_sending_firmware_progress, packetIndex, totalPackets),
+            )
         }
 
         // Wait for last page to write (may be partial page)

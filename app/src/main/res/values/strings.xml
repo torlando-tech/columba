@@ -333,4 +333,17 @@
     <string name="new_call_invalid_identity_hash">Enter a valid 32-character identity hash</string>
     <string name="new_call_invalid_destination_hash">Enter a valid 32-character destination hash</string>
     <string name="new_call_network_request_failed">Network path request failed</string>
+    <plurals name="notif_hops">
+        <item quantity="one">1 hop</item>
+        <item quantity="other">%d hops</item>
+    </plurals>
+    <string name="flasher_scan_failed">Failed to scan devices: %1$s</string>
+    <string name="flasher_detect_unidentified">Could not identify device. You can proceed with manual board selection.</string>
+    <string name="flasher_detect_failed">Detection failed: %1$s</string>
+    <string name="flasher_unknown_error">Unknown error</string>
+    <string name="flasher_connecting">Connecting...</string>
+    <string name="flasher_reset_connect_prompt">Connect your %1$s and press RST if needed.</string>
+    <string name="flasher_ready_to_provision">Ready to provision %1$s</string>
+    <string name="flasher_custom_read_failed">Failed to read custom firmware</string>
+    <string name="flasher_custom_save_failed">Failed to save custom firmware</string>
 </resources>

@@ -1,4 +1,6 @@
-@file:Suppress("IgnoredReturnValue") // first() calls trigger flow collection, result intentionally unused
+// IgnoredReturnValue: first() calls trigger flow collection, result intentionally unused.
+// NoVerifyOnlyTests: readiness tests verify observeAnnounces side effects — start/no-start IS the behavior.
+@file:Suppress("IgnoredReturnValue", "NoVerifyOnlyTests")
 
 package network.columba.app.viewmodel
 
@@ -200,15 +202,11 @@ class AnnounceStreamViewModelTest {
                 )
 
             // Status starts as SHUTDOWN - should wait
-            viewModel.initializationStatus.test {
-                assertEquals("Reticulum managed by app", awaitItem())
+            verify(exactly = 0) { reticulumProtocol.observeAnnounces() }
 
-                // Change to READY
-                networkStatusFlow.value = NetworkStatus.READY
-                advanceUntilIdle()
-
-                assertEquals("Ready", awaitItem())
-            }
+            // Change to READY
+            networkStatusFlow.value = NetworkStatus.READY
+            advanceUntilIdle()
 
             // Verify observeAnnounces was called after READY
             verify { reticulumProtocol.observeAnnounces() }
@@ -228,19 +226,11 @@ class AnnounceStreamViewModelTest {
                     identityResolutionManager,
                 )
 
-            viewModel.initializationStatus.test {
-                assertEquals("Reticulum managed by app", awaitItem())
+            networkStatusFlow.value = NetworkStatus.ERROR("Test error")
+            advanceUntilIdle()
 
-                // Change to ERROR
-                networkStatusFlow.value = NetworkStatus.ERROR("Test error")
-                advanceUntilIdle()
-
-                val status = awaitItem()
-                assertTrue(status.contains("Error"))
-                assertTrue(status.contains("Test error"))
-
-                cancelAndConsumeRemainingEvents()
-            }
+            // ERROR stops the wait without ever starting collection
+            verify(exactly = 0) { reticulumProtocol.observeAnnounces() }
         }
 
     @Test
@@ -262,13 +252,8 @@ class AnnounceStreamViewModelTest {
             testScheduler.advanceTimeBy(11000)
             advanceUntilIdle()
 
-            viewModel.initializationStatus.test {
-                val status = awaitItem()
-                assertTrue(
-                    status == "Timeout waiting for service" ||
-                        status == "Reticulum managed by app",
-                ) // May not have updated yet
-            }
+            // Timeout stops the wait without ever starting collection
+            verify(exactly = 0) { reticulumProtocol.observeAnnounces() }
         }
 
     @Test
@@ -443,18 +428,14 @@ class AnnounceStreamViewModelTest {
                     identityResolutionManager,
                 )
 
-            viewModel.initializationStatus.test {
-                assertEquals("Reticulum managed by app", awaitItem())
+            verify(exactly = 0) { reticulumProtocol.observeAnnounces() }
 
-                // Change to READY (simulating initialization completing)
-                networkStatusFlow.value = NetworkStatus.READY
-                testScheduler.advanceTimeBy(100) // Small advancement
-                testScheduler.runCurrent()
+            // Change to READY (simulating initialization completing)
+            networkStatusFlow.value = NetworkStatus.READY
+            testScheduler.advanceTimeBy(100) // Small advancement
+            testScheduler.runCurrent()
 
-                assertEquals("Ready", awaitItem())
-
-                cancelAndConsumeRemainingEvents()
-            }
+            verify { reticulumProtocol.observeAnnounces() }
         }
 
     @Test

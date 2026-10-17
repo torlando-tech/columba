@@ -99,6 +99,13 @@ data class RegionLimits(
 )
 
 /**
+ * Control-flow phase of USB-assisted Bluetooth pairing. The UI renders
+ * [RNodeWizardState.usbPairingStatus]; comparisons check this phase instead
+ * of the display text (i18n ticket 02).
+ */
+enum class UsbPairingPhase { AwaitingPin, Scanning, Pairing, Done, Failed }
+
+/**
  * State for the RNode setup wizard.
  */
 @androidx.compose.runtime.Immutable
@@ -148,6 +155,7 @@ data class RNodeWizardState(
     val isUsbPairingMode: Boolean = false,
     val usbBluetoothPin: String? = null,
     val usbPairingStatus: String? = null,
+    val usbPairingPhase: UsbPairingPhase? = null,
     val showManualPinEntry: Boolean = false,
     val manualPinInput: String = "",
     // USB-assisted Bluetooth pairing (from Bluetooth tab)
@@ -2066,7 +2074,10 @@ class RNodeWizardViewModel
 
                     // Show unified status during PIN wait + discovery
                     _state.update {
-                        it.copy(usbPairingStatus = "Waiting for PIN or scanning for RNode...")
+                        it.copy(
+                            usbPairingStatus = "Waiting for PIN or scanning for RNode...",
+                            usbPairingPhase = UsbPairingPhase.AwaitingPin,
+                        )
                     }
 
                     // Start discovery IMMEDIATELY - don't wait for PIN entry!
@@ -2095,6 +2106,7 @@ class RNodeWizardViewModel
                             it.copy(
                                 showManualPinEntry = true,
                                 usbPairingStatus = "Enter the PIN shown on your RNode's display",
+                                usbPairingPhase = UsbPairingPhase.AwaitingPin,
                             )
                         }
                         // Keep USB connected - we'll disconnect after manual PIN entry
@@ -2137,14 +2149,24 @@ class RNodeWizardViewModel
                 // - Boards with HAS_BLE (e.g., Heltec v3): BLE only
                 // We don't know which type we're pairing with, so run BOTH discovery methods.
                 Log.d(TAG, "Starting BOTH Classic BT discovery AND BLE scan for RNode")
-                _state.update { it.copy(usbPairingStatus = "Scanning for RNode...") }
+                _state.update {
+                    it.copy(
+                        usbPairingStatus = "Scanning for RNode...",
+                        usbPairingPhase = UsbPairingPhase.Scanning,
+                    )
+                }
 
                 // Start both discovery methods in parallel
                 startClassicBluetoothDiscovery(pin)
                 startBleScanForPairing(pin)
             } catch (e: Exception) {
                 Log.e(TAG, "Auto-pairing failed", e)
-                _state.update { it.copy(usbPairingStatus = "Auto-pairing failed: ${e.message}") }
+                _state.update {
+                    it.copy(
+                        usbPairingStatus = "Auto-pairing failed: ${e.message}",
+                        usbPairingPhase = UsbPairingPhase.Failed,
+                    )
+                }
             }
         }
 
@@ -2201,7 +2223,12 @@ class RNodeWizardViewModel
             val scanner = bluetoothAdapter?.bluetoothLeScanner
             if (scanner == null) {
                 Log.e(TAG, "BLE scanner not available")
-                _state.update { it.copy(usbPairingStatus = "BLE scanner not available") }
+                _state.update {
+                    it.copy(
+                        usbPairingStatus = "BLE scanner not available",
+                        usbPairingPhase = UsbPairingPhase.Failed,
+                    )
+                }
                 return
             }
 
@@ -2262,6 +2289,7 @@ class RNodeWizardViewModel
                                 _state.update { state ->
                                     state.copy(
                                         usbPairingStatus = "$deviceName is already paired!",
+                                        usbPairingPhase = UsbPairingPhase.Done,
                                         isUsbPairingMode = false,
                                         usbBluetoothPin = null,
                                         // Add to discovered devices and auto-select it
@@ -2288,7 +2316,10 @@ class RNodeWizardViewModel
 
                             viewModelScope.launch {
                                 _state.update {
-                                    it.copy(usbPairingStatus = "Found $deviceName, pairing...")
+                                    it.copy(
+                                        usbPairingStatus = "Found $deviceName, pairing...",
+                                        usbPairingPhase = UsbPairingPhase.Pairing,
+                                    )
                                 }
 
                                 // Initiate bonding with BLE transport
@@ -2322,7 +2353,12 @@ class RNodeWizardViewModel
                                 6 -> "BLE scan failed: scanning too frequently"
                                 else -> "BLE scan failed: error code $errorCode"
                             }
-                        _state.update { it.copy(usbPairingStatus = errorMessage) }
+                        _state.update {
+                            it.copy(
+                                usbPairingStatus = errorMessage,
+                                usbPairingPhase = UsbPairingPhase.Failed,
+                            )
+                        }
                     }
                 }
 
@@ -2345,16 +2381,24 @@ class RNodeWizardViewModel
                         }
                         pairingScanCallback = null
                         // Only update status if we're still in scanning state
-                        if (_state.value.usbPairingStatus == "Scanning for RNode...") {
+                        if (_state.value.usbPairingPhase == UsbPairingPhase.Scanning) {
                             _state.update {
-                                it.copy(usbPairingStatus = "No RNode found. Make sure your RNode is in pairing mode.")
+                                it.copy(
+                                    usbPairingStatus = "No RNode found. Make sure your RNode is in pairing mode.",
+                                    usbPairingPhase = UsbPairingPhase.Failed,
+                                )
                             }
                         }
                     }
                 }
             } catch (e: SecurityException) {
                 Log.e(TAG, "BLE scan permission denied", e)
-                _state.update { it.copy(usbPairingStatus = "Bluetooth permission required") }
+                _state.update {
+                    it.copy(
+                        usbPairingStatus = "Bluetooth permission required",
+                        usbPairingPhase = UsbPairingPhase.Failed,
+                    )
+                }
             }
         }
 
@@ -2433,7 +2477,10 @@ class RNodeWizardViewModel
 
                                         viewModelScope.launch {
                                             _state.update { state ->
-                                                state.copy(usbPairingStatus = "Found $deviceName, pairing...")
+                                                state.copy(
+                                                    usbPairingStatus = "Found $deviceName, pairing...",
+                                                    usbPairingPhase = UsbPairingPhase.Pairing,
+                                                )
                                             }
 
                                             // Initiate bonding
@@ -2465,9 +2512,12 @@ class RNodeWizardViewModel
                             BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                                 Log.d(TAG, "Classic Bluetooth discovery finished")
                                 // Check if we're still in scanning state (no device found)
-                                if (_state.value.usbPairingStatus == "Scanning for RNode...") {
+                                if (_state.value.usbPairingPhase == UsbPairingPhase.Scanning) {
                                     _state.update {
-                                        it.copy(usbPairingStatus = "No RNode found. Make sure your RNode is in pairing mode.")
+                                        it.copy(
+                                            usbPairingStatus = "No RNode found. Make sure your RNode is in pairing mode.",
+                                            usbPairingPhase = UsbPairingPhase.Failed,
+                                        )
                                     }
                                 }
                                 try {
@@ -3000,6 +3050,7 @@ class RNodeWizardViewModel
                         manualPinInput = "",
                         isUsbPairingMode = false,
                         usbPairingStatus = null,
+                        usbPairingPhase = null,
                     )
                 }
                 withContext(Dispatchers.IO) {
@@ -3057,6 +3108,7 @@ class RNodeWizardViewModel
                         _state.update {
                             it.copy(
                                 usbPairingStatus = null,
+                                usbPairingPhase = null,
                                 pairingError = "No USB devices found. Connect your RNode via USB cable.",
                             )
                         }
@@ -3069,31 +3121,7 @@ class RNodeWizardViewModel
 
                     // Check if we need USB permission
                     if (!usbDevice.hasPermission) {
-                        _state.update {
-                            it.copy(
-                                selectedUsbDevice = usbDevice,
-                                isRequestingUsbPermission = true,
-                                usbPairingStatus = "Requesting USB permission...",
-                            )
-                        }
-                        usbBridge.requestPermission(usbDevice.deviceId) { granted ->
-                            viewModelScope.launch {
-                                _state.update { it.copy(isRequestingUsbPermission = false) }
-                                if (granted) {
-                                    val updatedDevice = usbDevice.copy(hasPermission = true)
-                                    _state.update { it.copy(selectedUsbDevice = updatedDevice) }
-                                    // Now enter pairing mode using the shared flow
-                                    enterUsbBluetoothPairingMode()
-                                } else {
-                                    _state.update {
-                                        it.copy(
-                                            usbPairingStatus = null,
-                                            pairingError = "USB permission denied. Please grant permission.",
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        requestUsbPermissionAndPair(usbDevice)
                         return@launch
                     }
 
@@ -3105,10 +3133,42 @@ class RNodeWizardViewModel
                     _state.update {
                         it.copy(
                             usbPairingStatus = null,
+                            usbPairingPhase = null,
                             pairingError = "USB-assisted pairing failed: ${e.message}",
                         )
                     }
                 }
+        }
+
+        private fun requestUsbPermissionAndPair(
+            usbDevice: network.columba.app.data.model.DiscoveredUsbDevice,
+        ) {
+            _state.update {
+                it.copy(
+                    selectedUsbDevice = usbDevice,
+                    isRequestingUsbPermission = true,
+                    usbPairingStatus = "Requesting USB permission...",
+                )
+            }
+            usbBridge.requestPermission(usbDevice.deviceId) { granted ->
+                viewModelScope.launch {
+                    _state.update { it.copy(isRequestingUsbPermission = false) }
+                    if (granted) {
+                        val updatedDevice = usbDevice.copy(hasPermission = true)
+                        _state.update { it.copy(selectedUsbDevice = updatedDevice) }
+                        // Now enter pairing mode using the shared flow
+                        enterUsbBluetoothPairingMode()
+                    } else {
+                        _state.update {
+                            it.copy(
+                                usbPairingStatus = null,
+                                usbPairingPhase = null,
+                                pairingError = "USB permission denied. Please grant permission.",
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Pairing handler to auto-confirm Just Works pairing

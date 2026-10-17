@@ -171,9 +171,6 @@ class AnnounceStreamViewModel
         private val _reachableAnnounceCount = MutableStateFlow(0)
         val reachableAnnounceCount: StateFlow<Int> = _reachableAnnounceCount.asStateFlow()
 
-        private val _initializationStatus = MutableStateFlow<String>("Initializing...")
-        val initializationStatus: StateFlow<String> = _initializationStatus.asStateFlow()
-
         // Manual announce state
         private val _isAnnouncing = MutableStateFlow(false)
         val isAnnouncing: StateFlow<Boolean> = _isAnnouncing.asStateFlow()
@@ -196,7 +193,6 @@ class AnnounceStreamViewModel
             // Reticulum is now initialized by ColumbaApplication with config from database
             // No need to initialize here
             Log.d(TAG, "AnnounceStreamViewModel initialized - using RNS from ColumbaApplication")
-            _initializationStatus.value = "Reticulum managed by app"
 
             // Start collecting announces - but only if service is ready
             startCollectingAnnouncesWhenReady()
@@ -265,12 +261,10 @@ class AnnounceStreamViewModel
                                 when (status) {
                                     is network.columba.app.rns.api.model.NetworkStatus.READY -> {
                                         Log.d(TAG, "Service is READY, starting announce collection")
-                                        _initializationStatus.value = "Ready"
                                         true
                                     }
                                     is network.columba.app.rns.api.model.NetworkStatus.ERROR -> {
                                         Log.e(TAG, "Service entered ERROR state: $status, not starting announce collection")
-                                        _initializationStatus.value = "Error: ${status.message}"
                                         throw RuntimeException("Service error: ${status.message}")
                                     }
                                     is network.columba.app.rns.api.model.NetworkStatus.CONNECTING -> {
@@ -294,13 +288,11 @@ class AnnounceStreamViewModel
                     } else {
                         // Timeout reached
                         Log.e(TAG, "Timeout waiting for service to become READY")
-                        _initializationStatus.value = "Timeout waiting for service"
                     }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error waiting for service readiness", e)
-                    _initializationStatus.value = "Error: ${e.message}"
                 }
             }
         }

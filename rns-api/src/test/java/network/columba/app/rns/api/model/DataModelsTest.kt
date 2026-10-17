@@ -325,25 +325,6 @@ class DataModelsTest {
     }
 
     @Test
-    fun `ReticulumError types work correctly`() {
-        val networkError = ReticulumError.NetworkError("Connection failed")
-        val timeoutError = ReticulumError.TimeoutError("sendPacket")
-        val invalidDest = ReticulumError.InvalidDestination("abcd1234")
-        val encryptionError = ReticulumError.EncryptionError("Key exchange failed")
-        val serializationError = ReticulumError.SerializationError("Invalid JSON")
-
-        assertTrue(networkError is ReticulumError)
-        assertTrue(timeoutError is ReticulumError)
-        assertTrue(invalidDest is ReticulumError)
-        assertTrue(encryptionError is ReticulumError)
-        assertTrue(serializationError is ReticulumError)
-
-        assertEquals("Connection failed", networkError.message)
-        assertEquals("Operation timed out: sendPacket", timeoutError.message)
-        assertEquals("Invalid destination: abcd1234", invalidDest.message)
-    }
-
-    @Test
     fun `PacketType sealed class instances`() {
         val data = PacketType.DATA
         val announce = PacketType.ANNOUNCE

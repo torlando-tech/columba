@@ -461,7 +461,7 @@ class ReticulumService : Service() {
      * hook. Persistent vs duty-cycle mode comes from the user setting
      * (cross-process mirror; UI pushes ACTION_SET_WAKE_LOCK_MODE for live
      * changes). In duty-cycle mode the python backend's event_bridge wraps
-     * Interface.process_incoming/process_outgoing and signals here (throttled
+     * Transport.inbound/outbound and signals here (throttled
      * Python-side to one hop per window) so a short timed lock covers active
      * RX/TX bursts. No-op while the persistent lock is held; the kotlin
      * backend's default setter is a no-op (it manages its own locks).

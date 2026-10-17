@@ -213,6 +213,7 @@ class SettingsViewModelTest {
         every { settingsRepository.blockUnknownSendersFlow } returns flowOf(false)
         every { settingsRepository.allowCallsFromContactsOnlyFlow } returns flowOf(false)
         every { settingsRepository.allowVoiceCallsFlow } returns flowOf(true)
+        every { settingsRepository.persistentWakeLockFlow } returns flowOf(true)
         every { settingsRepository.telemetryCollectorEnabledFlow } returns flowOf(false)
         every { settingsRepository.telemetryCollectorAddressFlow } returns flowOf(null)
         every { settingsRepository.telemetrySendIntervalSecondsFlow } returns flowOf(60)

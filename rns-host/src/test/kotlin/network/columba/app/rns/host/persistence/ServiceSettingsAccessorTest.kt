@@ -199,6 +199,7 @@ class ServiceSettingsAccessorTest {
         assertEquals("allow_voice_calls", ServiceSettingsAccessor.KEY_ALLOW_VOICE_CALLS)
         assertEquals("network_change_announce_time", ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME)
         assertEquals("last_auto_announce_time", ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME)
+        assertEquals("persistent_wake_lock", ServiceSettingsAccessor.KEY_PERSISTENT_WAKE_LOCK)
     }
 
     // ========== Integration Tests ==========
@@ -215,5 +216,22 @@ class ServiceSettingsAccessorTest {
         assertEquals(networkTime, prefs.getLong(ServiceSettingsAccessor.KEY_NETWORK_CHANGE_ANNOUNCE_TIME, -1L))
         assertEquals(announceTime, prefs.getLong(ServiceSettingsAccessor.KEY_LAST_AUTO_ANNOUNCE_TIME, -1L))
         assertTrue(accessor.getBlockUnknownSenders())
+    }
+
+    // ========== Persistent Wake Lock Tests ==========
+
+    @Test
+    fun `getPersistentWakeLockEnabled defaults to true`() {
+        assertTrue(
+            "Duty-cycle mode must be opt-in; default preserves the persistent wake lock",
+            accessor.getPersistentWakeLockEnabled(),
+        )
+    }
+
+    @Test
+    fun `getPersistentWakeLockEnabled reads value written by app process`() {
+        prefs.edit().putBoolean(ServiceSettingsAccessor.KEY_PERSISTENT_WAKE_LOCK, false).apply()
+
+        assertFalse(accessor.getPersistentWakeLockEnabled())
     }
 }

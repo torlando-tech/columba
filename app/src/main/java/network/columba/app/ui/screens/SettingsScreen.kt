@@ -578,6 +578,8 @@ fun SettingsScreen(
                     isRestarting = state.isRestarting,
                     crashReportingEnabled = state.crashReportingEnabled,
                     onCrashReportingToggle = { viewModel.setCrashReportingEnabled(it) },
+                    persistentWakeLockEnabled = state.persistentWakeLockEnabled,
+                    onPersistentWakeLockToggle = { viewModel.setPersistentWakeLockEnabled(it) },
                 )
 
                 // About section

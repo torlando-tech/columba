@@ -544,6 +544,8 @@ fun SettingsScreen(
                     onExpandedChange = { viewModel.toggleCardExpanded(SettingsCardId.BATTERY, it) },
                     batteryProfile = state.batteryProfile,
                     onBatteryProfileChange = { viewModel.setBatteryProfile(it) },
+                    persistentWakeLockEnabled = state.persistentWakeLockEnabled,
+                    onPersistentWakeLockToggle = { viewModel.setPersistentWakeLockEnabled(it) },
                 )
 
                 DataMigrationCard(

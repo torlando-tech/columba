@@ -35,6 +35,7 @@ import json
 import queue
 import signal
 import threading
+import time
 
 import LXMF
 import RNS
@@ -123,6 +124,101 @@ def apply_android_env_patches():
             f"connect timeout (non-fatal): {e}",
             RNS.LOG_WARNING,
         )
+
+
+# ----------------------------------------------------------------------------
+# Traffic activity hook — duty-cycle wake lock support.
+#
+# When the user disables the persistent PARTIAL_WAKE_LOCK (Advanced setting),
+# the CPU is free to suspend between mesh traffic. To keep in-flight work
+# (link establishment, propagation syncs, multi-packet exchanges) from being
+# cut short by a suspend, we wrap `RNS.Transport.inbound` /
+# `RNS.Transport.outbound` — every packet on every interface passes
+# through one of them — and signal the Kotlin host, which extends a
+# short timed wake lock.
+#
+# The signal is throttled Python-side so a packet storm costs at most one
+# JNI hop per window; the Kotlin-side lock timeout is longer than the window,
+# so the hold never lapses mid-burst.
+# ----------------------------------------------------------------------------
+
+# Minimum interval between Kotlin signals. Must stay below the Kotlin
+# traffic-lock timeout (LockManager.TRAFFIC_WAKE_LOCK_TIMEOUT_MS, 90s) so a
+# sustained burst keeps refreshing before expiry.
+TRAFFIC_ACTIVITY_MIN_INTERVAL_S = 15.0
+
+_traffic_activity_callback = None
+_traffic_activity_last_emit = 0.0
+
+
+def _monotonic():
+    return time.monotonic()
+
+
+def _signal_traffic_activity():
+    """Notify the Kotlin host of mesh RX/TX, at most once per window."""
+    global _traffic_activity_last_emit
+    if _traffic_activity_callback is None:
+        return
+    now = _monotonic()
+    if now - _traffic_activity_last_emit < TRAFFIC_ACTIVITY_MIN_INTERVAL_S:
+        return
+    _traffic_activity_last_emit = now
+    try:
+        _traffic_activity_callback.onEvent({"direction": "traffic"})
+    except Exception as e:  # noqa: BLE001 — must not escape onto the RNS thread
+        RNS.log(
+            f"event_bridge: traffic activity signal failed: {e}",
+            RNS.LOG_ERROR,
+        )
+
+
+def install_traffic_activity_callback(callback):
+    """Install (or clear, with None) the traffic-activity Kotlin callback.
+
+    Wraps `RNS.Transport.inbound` / `RNS.Transport.outbound` once — the guard
+    attribute rides the wrapper functions, so repeated backend restarts in
+    this process only swap the callback, never double-wrap.
+
+    These are the two choke points every interface reaches: all RX calls
+    `Transport.inbound` (base `Interface.process_incoming`, the RNode
+    interfaces' direct `_process_incoming` calls, and the propagation
+    announce path), and all TX calls `Transport.outbound` (every
+    `Packet.send`, including interfaces like `ColumbaRNodeInterface` whose
+    `process_outgoing` override never delegates to the base method).
+    Patching the base `Interface` methods instead would miss those custom
+    paths, letting the CPU sleep mid-transfer with duty-cycle mode on.
+    """
+    global _traffic_activity_callback
+    _traffic_activity_callback = callback
+    try:
+        import RNS
+
+        transport = RNS.Transport
+    except Exception as e:  # noqa: BLE001
+        RNS.log(
+            f"event_bridge: cannot import RNS.Transport for traffic hook (non-fatal): {e}",
+            RNS.LOG_WARNING,
+        )
+        return
+    if getattr(transport.inbound, "_columba_traffic_hooked", False):
+        return
+
+    _orig_in = transport.inbound
+    _orig_out = transport.outbound
+
+    def inbound(raw, *args, **kwargs):
+        _signal_traffic_activity()
+        return _orig_in(raw, *args, **kwargs)
+
+    def outbound(packet, *args, **kwargs):
+        _signal_traffic_activity()
+        return _orig_out(packet, *args, **kwargs)
+
+    inbound._columba_traffic_hooked = True
+    outbound._columba_traffic_hooked = True
+    transport.inbound = inbound
+    transport.outbound = outbound
 
 
 # Slot for the KotlinBLEBridge instance. Populated by Kotlin via

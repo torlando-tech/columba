@@ -4,8 +4,8 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import network.columba.app.test.RegisterComponentActivityRule
@@ -34,6 +34,11 @@ class AdvancedCardTest {
     val ruleChain: RuleChain = RuleChain.outerRule(registerActivityRule).around(composeRule)
 
     val composeTestRule get() = composeRule
+
+    /**
+     * The card holds several toggles; resolve each Switch by its testTag.
+     */
+    private fun toggleFor(tag: String) = composeTestRule.onNodeWithTag(tag)
 
     // ========== Header and Content Tests ==========
 
@@ -81,7 +86,7 @@ class AdvancedCardTest {
                 transportNodeEnabled = true,
             )
         }
-        composeTestRule.onNode(isToggleable()).assertIsOn()
+        toggleFor("transport_node_toggle").assertIsOn()
     }
 
     @Test
@@ -93,7 +98,7 @@ class AdvancedCardTest {
                 transportNodeEnabled = false,
             )
         }
-        composeTestRule.onNode(isToggleable()).assertIsOff()
+        toggleFor("transport_node_toggle").assertIsOff()
     }
 
     @Test
@@ -107,7 +112,7 @@ class AdvancedCardTest {
                 onTransportNodeToggle = { receivedValue = it },
             )
         }
-        composeTestRule.onNode(isToggleable()).performClick()
+        toggleFor("transport_node_toggle").performClick()
         assertEquals(false, receivedValue)
     }
 
@@ -122,7 +127,7 @@ class AdvancedCardTest {
                 onTransportNodeToggle = { receivedValue = it },
             )
         }
-        composeTestRule.onNode(isToggleable()).performClick()
+        toggleFor("transport_node_toggle").performClick()
         assertEquals(true, receivedValue)
     }
 
@@ -137,7 +142,7 @@ class AdvancedCardTest {
                 onTransportNodeToggle = { callCount++ },
             )
         }
-        composeTestRule.onNode(isToggleable()).performClick()
+        toggleFor("transport_node_toggle").performClick()
         assertEquals("Callback should be called exactly once", 1, callCount)
     }
 }

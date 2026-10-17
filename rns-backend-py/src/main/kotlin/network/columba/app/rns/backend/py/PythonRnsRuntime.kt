@@ -192,6 +192,29 @@ class PythonRnsRuntime(
     var bleBridge: Any? = null
 
     /**
+     * Mesh RX/TX activity hook for the service's duty-cycle wake-lock mode.
+     * Set by `:rns-host`'s `ReticulumService` (it owns the `LockManager`);
+     * forwarded to `event_bridge.install_traffic_activity_callback` on every
+     * [start] and cleared on [stop]. The Python side throttles signals to at
+     * most one JNI hop per window, so this may be a hot path upstream.
+     */
+    @Volatile
+    var trafficActivityCallback: (() -> Unit)? = null
+
+    /**
+     * Install (or clear) the traffic-activity hook on event_bridge. Unlike the
+     * peripheral bridges this need not precede `Reticulum()` — the hook only
+     * observes packets — but doing it in [start] keeps every restart wired with
+     * the current callback (the Python-side class patch is idempotent).
+     */
+    private fun installTrafficActivityHook() {
+        eventBridge.callAttr(
+            "install_traffic_activity_callback",
+            trafficActivityCallback?.let { cb -> PyEventCallback { cb() } },
+        )
+    }
+
+    /**
      * `KotlinRNodeBridge` instance for the bundled ColumbaRNodeInterface
      * (Classic SPP + BLE GATT to RNode LoRa hardware).
      *
@@ -377,6 +400,8 @@ class PythonRnsRuntime(
         val usbBridgeModule = python.getModule("usb_bridge")
         usbBridgeModule.callAttr("set_usb_bridge", usbBridge)
 
+        installTrafficActivityHook()
+
         // Construct the upstream Reticulum instance. RNS.Reticulum is a process
         // singleton — stop() must fully tear it down before a restart.
         reticulumInstance = rnsModule.callAttr("Reticulum", configDir.absolutePath)
@@ -515,6 +540,8 @@ class PythonRnsRuntime(
             .onFailure { Log.w(TAG, "External stamp generator unregister failed", it) }
         runCatching { eventBridge.callAttr("deregister_callbacks") }
             .onFailure { Log.w(TAG, "event_bridge deregister failed", it) }
+        runCatching { eventBridge.callAttr("install_traffic_activity_callback", null as Any?) }
+            .onFailure { Log.w(TAG, "Traffic activity callback clear failed", it) }
         // The destination resolver must outlive the callbacks: the telemetry
         // stream response resolves its outbound destination through it. Clear
         // it only after callbacks can no longer dispatch, so a request arriving

@@ -140,6 +140,9 @@ data class SettingsState(
     val batteryProfile: BatteryProfile = BatteryProfile.BALANCED,
     // Anonymous crash reporting opt-in (sentry flavor only). Defaults to off.
     val crashReportingEnabled: Boolean = false,
+    // Persistent wake lock (Advanced). True = service holds PARTIAL_WAKE_LOCK
+    // for its whole lifetime; false = duty-cycle mode (see LockManager).
+    val persistentWakeLockEnabled: Boolean = true,
     // RNS shared-instance HOSTING (python backend only; capability-gated in UI).
     //
     // - `shareInstanceHostingEnabled` mirrors the persisted preference — what
@@ -313,6 +316,8 @@ class SettingsViewModel
             loadBottomNavTabs()
             // Load privacy settings
             loadPrivacySettings()
+            // Load advanced (wake-lock) settings
+            loadAdvancedSettings()
             // Load protocol versions for About screen
             fetchProtocolVersions()
             loadTelemetryCollectorSettings()
@@ -1867,6 +1872,17 @@ class SettingsViewModel
         }
 
         /**
+         * Load advanced-card settings that use the individual-collector pattern.
+         */
+        private fun loadAdvancedSettings() {
+            viewModelScope.launch {
+                settingsRepository.persistentWakeLockFlow.collect { enabled ->
+                    _state.update { it.copy(persistentWakeLockEnabled = enabled) }
+                }
+            }
+        }
+
+        /**
          * Set the block unknown senders setting.
          * When enabled, messages from senders not in contacts are silently discarded.
          */
@@ -1912,6 +1928,44 @@ class SettingsViewModel
                 runCatching { rnsTelephony.setIncomingEnabled(enabled) }
                     .onFailure { Log.w(TAG, "setIncomingEnabled($enabled) AIDL call failed", it) }
                 Log.d(TAG, "Allow voice calls ${if (enabled) "enabled" else "disabled"}")
+            }
+        }
+
+        /**
+         * Set the persistent wake lock setting (Advanced). When disabled, the
+         * service drops its lifetime PARTIAL_WAKE_LOCK and relies on short
+         * traffic-driven locks (duty-cycle mode), trading packet latency for
+         * significantly better background battery life.
+         *
+         * Persists (with the cross-process mirror for cold-start), then pushes
+         * the mode to the live `:reticulum` service via
+         * `ACTION_SET_WAKE_LOCK_MODE` — SharedPreferences listeners do not
+         * fire across processes. Intent failures are logged; the cold-start
+         * path applies the persisted value eventually.
+         */
+        fun setPersistentWakeLockEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.savePersistentWakeLock(enabled)
+                _state.update { it.copy(persistentWakeLockEnabled = enabled) }
+                runCatching {
+                    val wakeLockIntent =
+                        android.content.Intent(
+                            context,
+                            network.columba.app.rns.host.ReticulumService::class.java,
+                        ).apply {
+                            action =
+                                network.columba.app.rns.host
+                                    .ReticulumService.ACTION_SET_WAKE_LOCK_MODE
+                            putExtra(
+                                network.columba.app.rns.host
+                                    .ReticulumService.EXTRA_PERSISTENT_WAKE_LOCK,
+                                enabled,
+                            )
+                        }
+                    androidx.core.content.ContextCompat
+                        .startForegroundService(context, wakeLockIntent)
+                }.onFailure { Log.w(TAG, "setWakeLockMode($enabled) service intent failed", it) }
+                Log.d(TAG, "Persistent wake lock ${if (enabled) "enabled" else "disabled"}")
             }
         }
 

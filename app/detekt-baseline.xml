@@ -25,6 +25,1809 @@
     <ID>LoopWithTooManyJumpStatements:SettingsViewModel.kt$SettingsViewModel$while</ID>
     <ID>MaxLineLength:BleTestFixtures.kt$BleTestFixtures$"""{"identityHash":"${connection.identityHash}","peerName":"${connection.peerName}","currentMac":"${connection.currentMac}","hasCentralConnection":$hasCentral,"hasPeripheralConnection":$hasPeripheral,"mtu":${connection.mtu},"connectedAt":${connection.connectedAt},"firstSeen":${connection.firstSeen},"lastSeen":${connection.lastSeen},"rssi":${connection.rssi}}"""</ID>
     <ID>NestedBlockDepth:ConfigFileParser.kt$ConfigFileParser$private fun parseConfigLines(lines: List&lt;String&gt;): List&lt;InterfaceConfig&gt;</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"API Level"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"About Reticulum"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"About"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Android Version"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"App Information"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"BLE-Reticulum"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Build Date"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Build Number"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Build Type"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Built With"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Check for Updates"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Columba Logo"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Columba"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Copy System Info"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Device Information"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Device Model"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Git Commit"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"GitHub Repository"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Identity Hash"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Identity"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Include pre-releases"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Jetpack Compose"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"LXMF by Mark Qvist"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"LXST"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Links &amp; Resources"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Manufacturer"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Material Design 3"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Native Android messaging app using Bluetooth LE, TCP, or RNode (LoRa) over LXMF and Reticulum"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Protocol Versions"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Report Bug"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Report an Issue"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Reticulum by Mark Qvist"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Reticulum"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Up to date (v${result.currentVersion})"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Update available: ${result.tagName}"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Updates"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"Version"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"View License"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"View Release"</ID>
+    <ID>NoHardcodedUiString:AboutCard.kt$"© 2025–${network.columba.app.BuildConfig.COPYRIGHT_YEAR} Columba Contributors"</ID>
+    <ID>NoHardcodedUiString:AddContactConfirmationDialog.kt$"Add Contact"</ID>
+    <ID>NoHardcodedUiString:AddContactConfirmationDialog.kt$"Add Contact?"</ID>
+    <ID>NoHardcodedUiString:AddContactConfirmationDialog.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:AddContactConfirmationDialog.kt$"Destination Hash"</ID>
+    <ID>NoHardcodedUiString:AddContactConfirmationDialog.kt$"Enter a friendly name"</ID>
+    <ID>NoHardcodedUiString:AddContactConfirmationDialog.kt$"Nickname (optional)"</ID>
+    <ID>NoHardcodedUiString:AddContactConfirmationDialog.kt$"You can add a nickname to easily identify this contact."</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"(Sideband, rnsd, …) can route through Columba's transport. "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Advanced"</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Anonymous Crash Reports"</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Change pending — restart Reticulum to apply."</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Columba will join it as a client instead — see the Shared Instance banner."</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Forward traffic for the mesh network. When disabled, this device will only "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"If another app is already hosting a shared instance on this device, "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"It's generally not recommended for mobile devices to be transport nodes. "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Make Columba available as a shared RNS instance so other apps on this device "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"No message content, contacts, or identity information is ever included. "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Off by default; you can change this at any time."</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Requires a service restart to take effect. "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Restart"</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Restarting…"</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Send anonymous crash and error reports to help the developer fix bugs. "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Share Instance"</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"They are less likely to maintain a fixed position in the network, and thus "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"Transport Node"</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"can negatively impact multihop routing. Enabling this will increase data "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"handle its own traffic and won't relay messages for other peers. "</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"multi-hop messaging."</ID>
+    <ID>NoHardcodedUiString:AdvancedCard.kt$"usage and battery drain. However, in a BLE-only mesh, it's required for "</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"${interfaceInfo.subtitle} — latest Reticulum-selected route"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Block"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Browse Site"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Cost for node peering"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Current Path"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Destination Aspect"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Destination Hash"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Go Back"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Interfaces Reticulum selected for this destination"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Last Seen"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Maximum message size accepted by this relay"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Network Distance"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Node Details"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Node not found"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Peering Cost"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove $contactName from your contacts? You can re-add them later from the Announce Stream."</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove &amp; Auto-Select New"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove Contact?"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove Only"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Remove"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Required proof-of-work difficulty"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Seen Via — Last 30 Days"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Stamp Cost"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Start Chat"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Transfer Size Limit"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"Unset as Your Relay?"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"View messaging destination"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"View telephony destination"</ID>
+    <ID>NoHardcodedUiString:AnnounceDetailScreen.kt$"\"$relayName\" will be removed from contacts."</ID>
+    <ID>NoHardcodedUiString:AnnounceFilterChips.kt$"Active filters: $joined. Tap to edit."</ID>
+    <ID>NoHardcodedUiString:AnnounceFilterChips.kt$"All"</ID>
+    <ID>NoHardcodedUiString:AnnounceFilterChips.kt$"Filtering: "</ID>
+    <ID>NoHardcodedUiString:AnnounceFilterChips.kt$AspectChip.AUDIO$"Audio"</ID>
+    <ID>NoHardcodedUiString:AnnounceFilterChips.kt$AspectChip.NODE$"Sites"</ID>
+    <ID>NoHardcodedUiString:AnnounceFilterChips.kt$AspectChip.PEER$"Peers"</ID>
+    <ID>NoHardcodedUiString:AnnounceFilterChips.kt$AspectChip.RELAY$"Relays"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"$reachableCount nodes in range (active paths)"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Announce now"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Announce sent!"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Clear All Announces"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Clear All Announces?"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Clear All"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Delete Announce?"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Discovered Nodes"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Error: $error"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Listening for announces..."</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Loading network..."</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"More options"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"No nodes discovered yet"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Remove $peerName from the list? They will reappear when they announce again."</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Scroll to top"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"Start Chat"</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"This will remove all discovered nodes from the list, except those saved in My Contacts. Nodes will reappear when they announce again."</ID>
+    <ID>NoHardcodedUiString:AnnounceStreamScreen.kt$"View Details"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"APK size: ${"%.1f".format(sizeMb)} MB"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Grant Permission"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Have the other person scan this QR code"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Instructions"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"No WiFi? Share by creating a temporary hotspot instead."</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Or share another way"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Permission needed to create a WiFi hotspot for sharing."</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Share APK via..."</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Share Columba"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Start Hotspot"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Starting WiFi hotspot..."</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Starting sharing server..."</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Step 1: Scan to connect to hotspot"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Step 2: Scan to download Columba"</ID>
+    <ID>NoHardcodedUiString:ApkSharingScreen.kt$"Use Bluetooth, Nearby Share, or any other installed sharing app."</ID>
+    <ID>NoHardcodedUiString:AttachmentPanel.kt$"Allow access to show recent photos"</ID>
+    <ID>NoHardcodedUiString:AttachmentPanel.kt$"Allow access"</ID>
+    <ID>NoHardcodedUiString:AttachmentPanel.kt$"File"</ID>
+    <ID>NoHardcodedUiString:AttachmentPanel.kt$"Gallery"</ID>
+    <ID>NoHardcodedUiString:AttachmentPanel.kt$"No photos found"</ID>
+    <ID>NoHardcodedUiString:AttachmentPanel.kt$"Photo"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Announce Interval: $intervalHours hour${if (intervalHours != 1) "s" else ""}"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Announce Now"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Announce sent!"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Auto Announce"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Automatically announce your presence on the network at regular intervals. "</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Confirm"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Custom Interval"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Enter announce interval (1-12 hours):"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Error"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Error: $manualAnnounceError"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Hours"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"No announces sent yet"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Success"</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"This helps other peers discover you."</ID>
+    <ID>NoHardcodedUiString:AutoAnnounceCard.kt$"Value must be between 1 and 12"</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"Background Location"</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"Columba needs the \"Allow all the time\" permission.\n\n"</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"Continue"</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"Not Now"</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"On the next screen, please select \"Allow all the time\"."</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"This lets Columba continue sending your encrypted location to chosen "</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"To share your location with contacts while the app is in the background, "</ID>
+    <ID>NoHardcodedUiString:BackgroundLocationPermissionBottomSheet.kt$"contacts even when you switch to another app or lock your screen.\n\n"</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Android battery optimization is still enabled. The battery profile above reduces "</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Battery &amp; Background"</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Battery optimization exemption granted. Columba can run more reliably in the background during deep idle."</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Choose how aggressively Columba should run native Reticulum in the background. Changes apply immediately."</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Open Battery Settings Manually"</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"Request Exemption"</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"View Battery Settings"</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"background work, but Android may still delay or kill background networking "</ID>
+    <ID>NoHardcodedUiString:BatteryOptimizationCard.kt$"unless Columba is exempted."</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"BLE Connections"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"BLE peers will appear here when connected"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Bluetooth Settings"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Bluetooth is turned off"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Bluetooth is turned on"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Central"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Connected"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Data Received"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Data Sent"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Disconnect"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Enable Bluetooth to discover and connect to nearby BLE peers."</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Error Loading Connections"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"First Seen"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Last Seen"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Loading connections..."</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"MAC Address"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"No active connections"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Performance"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Peripheral"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Refresh"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Retry"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Signal Strength"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Success Rate"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Total"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn ON"</ID>
+    <ID>NoHardcodedUiString:BleConnectionStatusScreen.kt$"Turn on Bluetooth to see BLE connections"</ID>
+    <ID>NoHardcodedUiString:BlePermissionBottomSheet.kt$"Bluetooth Permissions Required"</ID>
+    <ID>NoHardcodedUiString:BlePermissionBottomSheet.kt$"Not Now"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Blackhole (don't relay announces)"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Blocked ${dateFormat.format(Date(peer.blockedTimestamp))}"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Blocked Users"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"No blocked users"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"They will be able to send you messages again. Their conversation will reappear if it wasn't deleted."</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Unblock ${peer.displayName ?: peer.peerHash.take(16)}?"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Unblock"</ID>
+    <ID>NoHardcodedUiString:BlockedUsersScreen.kt$"Unblocked ${peer.displayName ?: peer.peerHash.take(16)}"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Bottom Navigation"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Choose which shortcuts appear in the bottom bar (max ${NavTab.MAX_TABS}) and use the arrows to arrange them. Settings is always pinned to the end."</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${tab.label} down"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Move ${tab.label} up"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Pinned"</ID>
+    <ID>NoHardcodedUiString:BottomNavigationCard.kt$"Remove ${tab.label} from bottom bar"</ID>
+    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Incoming Calls"</ID>
+    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Incoming Voice Call"</ID>
+    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Notifications for active voice calls"</ID>
+    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Notifications for incoming voice calls"</ID>
+    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Ongoing Calls"</ID>
+    <ID>NoHardcodedUiString:CallNotificationHelper.kt$CallNotificationHelper$"Voice Call"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Also blackhole (don't relay their announces)"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Also delete conversation and messages"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Are you sure you want to delete your conversation with $peerName? This will permanently delete all messages."</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Block $peerName?"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Block User"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Block"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Blocked ${conversationToBlock.displayName}"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Delete Conversation"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Delete Conversation?"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Deleted conversation with $deletedName"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Loading conversations..."</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Mark as Unread"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Marked as unread"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Messages from peers will appear here"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"No conversations yet"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"QR Code"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Saved contact"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Sync messages"</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"They won't be able to send you messages. Their conversation will be hidden from the chat list."</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"Transport is currently disabled. This identity will be blackholed whenever transport is later enabled."</ID>
+    <ID>NoHardcodedUiString:ChatsScreen.kt$"View Peer Details"</ID>
+    <ID>NoHardcodedUiString:ColorPickerDialog.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:ColorPickerDialog.kt$"Confirm"</ID>
+    <ID>NoHardcodedUiString:ColorPickerDialog.kt$"Hex Color"</ID>
+    <ID>NoHardcodedUiString:ColorPickerDialog.kt$"Hue"</ID>
+    <ID>NoHardcodedUiString:ColorPickerDialog.kt$"Lightness"</ID>
+    <ID>NoHardcodedUiString:ColorPickerDialog.kt$"Saturation"</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"Battery"</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"Identity"</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"Networks"</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"Notifications"</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"Share your identity QR code to let others add you as a contact."</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"Show QR Code"</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"Summary"</ID>
+    <ID>NoHardcodedUiString:CompletePage.kt$"You're all set!"</ID>
+    <ID>NoHardcodedUiString:ConnectivityPage.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:ConnectivityPage.kt$"Continue"</ID>
+    <ID>NoHardcodedUiString:ConnectivityPage.kt$"How will you connect?"</ID>
+    <ID>NoHardcodedUiString:ConnectivityPage.kt$"Select the networks you'd like to use:"</ID>
+    <ID>NoHardcodedUiString:ConnectivityPage.kt$"You can configure these later in Settings"</ID>
+    <ID>NoHardcodedUiString:ContactLocationBottomSheet.kt$"Directions"</ID>
+    <ID>NoHardcodedUiString:ContactLocationBottomSheet.kt$"Message"</ID>
+    <ID>NoHardcodedUiString:ContactLocationBottomSheet.kt$"No maps application found"</ID>
+    <ID>NoHardcodedUiString:ContactLocationBottomSheet.kt$"Remove from map"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"(auto)"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"ALL CONTACTS"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Add Contact"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Add contact"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Add"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Added via ${contact.addedVia}"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Announce now"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Announce sent!"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clear All Announces"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clear nickname"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clear search"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Clearing the nickname will use the announce name if available"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contact Already Added"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contact Exists"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contact: $destinationHash"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Contacts"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Edit Nickname"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Enter a custom name"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Enter a name"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Error: $error"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Full lxma:// URL or 32-character hex address"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity not found - tap to retry"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity not found"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Identity or Address"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Loading contacts..."</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"MY RELAY"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Manual Entry"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"More options"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"My Relay"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Never seen"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Nickname (optional)"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Nickname"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"No contacts yet"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"PINNED"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Paste RNS identity string"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Paste an LXMF identity string (lxma://...) or destination hash from Sideband"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"RELAY"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Remove &amp; Auto-Select New"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Remove Contact"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Remove Only"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Retry search"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Save"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Scan QR Code"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Scan a contact's QR code to add them"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Searching for identity..."</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Set a custom nickname for this contact"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Sharing location with you"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Star peers in the Announce Stream\nor add contacts via QR code"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"Unset as Your Relay?"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"View Peer Details"</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"\"${currentRelayToUnset.displayName}\" will be removed from contacts."</ID>
+    <ID>NoHardcodedUiString:ContactsScreen.kt$"lxma://... or 32-char hash"</ID>
+    <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.MY_CONTACTS$"My Contacts"</ID>
+    <ID>NoHardcodedUiString:ContactsTab.kt$ContactsTab.NETWORK$"Network"</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"App Crashed"</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Dismiss"</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Exception: $exceptionName"</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Report Bug"</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Sensitive data like identity hashes and IP addresses are automatically redacted."</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"The app crashed unexpectedly. Would you like to report this issue?"</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Time: $crashTime"</ID>
+    <ID>NoHardcodedUiString:CrashReportDialog.kt$"Your bug report will include system info and recent logs. "</ID>
+    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Columba can send anonymous crash and error reports so the developer can "</ID>
+    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Enable"</ID>
+    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Help improve Columba?"</ID>
+    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Not now"</ID>
+    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"Settings → Advanced."</ID>
+    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"find and fix bugs. No message content, contacts, or identity "</ID>
+    <ID>NoHardcodedUiString:CrashReportingOptInDialog.kt$"information is ever included. You can change this anytime in "</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Anonymous Crash Reports"</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Columba can send anonymous crash and error reports to help the "</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Continue"</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"Help Us Improve"</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"You can change this anytime in Settings → Advanced"</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"developer find and fix bugs. No message content, contacts, or "</ID>
+    <ID>NoHardcodedUiString:CrashReportingPage.kt$"identity information is ever included."</ID>
+    <ID>NoHardcodedUiString:DataMigrationCard.kt$"Data Migration"</ID>
+    <ID>NoHardcodedUiString:DataMigrationCard.kt$"Export / Import Data"</ID>
+    <ID>NoHardcodedUiString:DataMigrationCard.kt$"Export your data (identities, messages, contacts) to transfer to "</ID>
+    <ID>NoHardcodedUiString:DataMigrationCard.kt$"another device or import from a previous backup."</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Board type unknown (EEPROM may be wiped)"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Board"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Continue with Manual Selection"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Detection Failed"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Device Detected"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Device Detection"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Device Information"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Firmware"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Frequency Band"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Identifying your RNode device"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"If your device wasn't detected automatically, you can manually select the board type in the next step."</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"MCU"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Manual Selection"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Platform"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Select Board Type"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Serial"</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Since the board type couldn't be determined automatically, please select it manually in the next step."</ID>
+    <ID>NoHardcodedUiString:DeviceDetectionStep.kt$"Status"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth Classic"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth Device Name"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth LE"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth Pairing Mode"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Bluetooth"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Cancel manual entry"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connect RNode via USB cable. Supports FTDI, CP210x, CH340, and CDC-ACM devices."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connect RNode via USB to securely configure Bluetooth pairing"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connect to an RNode device over WiFi/TCP (port 7633)."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connected"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connection Method"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Connection Type"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Current Device"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Default port is 7633."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Dismiss"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"ESP32-S3 and nRF52840 devices support BLE. ESP32 (original) devices support Bluetooth Classic."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter Bluetooth Pairing Mode"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter device manually"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter the 6-digit PIN shown on your RNode's display:"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Enter the PIN code shown on your RNode display"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Exit Pairing Mode"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Failed"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Grant"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Having trouble pairing?"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"IP Address or Hostname"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"If your device isn't listed"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Looking for: $name"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Or select a different device:"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"PIN Code"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"PIN Code:"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pair RNode with your phone via Bluetooth"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pair via USB"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pair"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Pairing..."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Permitted"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Power on device and rescan to auto-detect type."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Rescan USB Devices"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Retry"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scan Again"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scanning for RNode devices..."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scanning for RNodes to pair..."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Scanning for USB devices..."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Select connection type:"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Selected"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Submit"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Success"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Test Connection"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"The RNode must be connected to the same network and have WiFi/TCP enabled. "</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Unknown type"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"Waiting for RNode to reconnect..."</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"WiFi / TCP"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"e.g., 10.0.0.1 or rnode.local"</ID>
+    <ID>NoHardcodedUiString:DeviceDiscoveryStep.kt$"e.g., RNode 1234"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Connect an RNode device via USB and tap refresh"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Connect your RNode device via USB"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"No USB devices found"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Refresh devices"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Select USB Device"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Selected"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"VID: ${formatHex(device.vendorId)} | PID: ${formatHex(device.productId)}"</ID>
+    <ID>NoHardcodedUiString:DeviceSelectionStep.kt$"Waiting for USB permission..."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Add to Config"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Auto-connect limit"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Available"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Bootstrap Interfaces"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Clear filters"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Clear search"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Clear"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Connected"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Copy Params"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Discovered Interfaces"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P (Invisible Internet Project) is an anonymous overlay network. To connect "</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P Network"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P network"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"I2P or i2pd app from F-Droid and start it before connecting."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"IFAC only"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"IFAC-protected interfaces only"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"IFAC: "</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Interface Discovery"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Interfaces announced by other nodes will appear here once discovery is active."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"It's available on F-Droid and Google Play."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Last heard: ${formatLastHeard(iface.lastHeard)}"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"LoRa parameters copied"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Network info"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"No Discovered Interfaces"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"No discovered interfaces match the current search or filters."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"No matches"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Only TCP interfaces can be added currently"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Open in maps"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Radio interface"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Refresh"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Search by name, type, host, or IFAC network"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Skip auto-connect for public interfaces; only join networks that announced IFAC credentials."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Stale"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"TCP network"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"These interfaces will auto-detach once discovered interfaces connect."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Total"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Unknown interface"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Unknown"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Use for RNode"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Yggdrasil Network"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Yggdrasil is an encrypted IPv6 mesh network. To connect to this "</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"Yggdrasil network"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"interface, you need the Yggdrasil app installed and running on your device. "</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"to this interface, you need an I2P daemon running on your device. Install the "</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesScreen.kt$"transport: ${transportId.take(12)}..."</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesViewModel.kt$DiscoveredInterfaceTypeFilter.OTHER$"Other"</ID>
+    <ID>NoHardcodedUiString:DiscoveredInterfacesViewModel.kt$DiscoveredInterfaceTypeFilter.RADIO$"Radio"</ID>
+    <ID>NoHardcodedUiString:FileAttachmentCard.kt$"File type: ${attachment.mimeType}"</ID>
+    <ID>NoHardcodedUiString:FileAttachmentOptionsSheet.kt$"Open in another app"</ID>
+    <ID>NoHardcodedUiString:FileAttachmentOptionsSheet.kt$"Open with..."</ID>
+    <ID>NoHardcodedUiString:FileAttachmentOptionsSheet.kt$"Save to a folder on your device"</ID>
+    <ID>NoHardcodedUiString:FileAttachmentOptionsSheet.kt$"Save to device"</ID>
+    <ID>NoHardcodedUiString:FileAttachmentPreviewRow.kt$"Remove ${attachment.filename}"</ID>
+    <ID>NoHardcodedUiString:FileAttachmentPreviewRow.kt$"Total: ${FileUtils.formatFileSize(totalSizeBytes)}"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"(Required)"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"About microReticulum"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"After flashing, you will be prompted to configure the radio parameters for transport mode."</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Already Flashed?"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Available for download:"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Band: ${selectedFirmware.frequencyBand.displayName} | Platform: ${selectedFirmware.platform.name}"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Board Type"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Cached firmware:"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Choose the firmware to flash"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Custom Firmware"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Download from URL:"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Downloading firmware..."</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"File selected: ${customFirmwareUri.lastPathSegment ?: "custom firmware"}"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware .zip URL"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware Selection"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware Source"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware Version"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Firmware will be downloaded when you proceed"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Frequency Band"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"If you've already flashed the firmware externally, you can skip to provisioning the EEPROM."</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"It operates as a standalone transport node and will not pair with Columba as a radio interface.\n\n"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"No firmware available. Connect to the internet to download."</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Or pick a local file:"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Pick .zip file"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Provision Only (Skip Flashing)"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Select a board type first"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Select a firmware version above to continue"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Selected: ${selectedFirmware.board.displayName} v${selectedFirmware.version}"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Will download when flashing starts"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"Will download: v$selectedVersion"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"https://example.com/firmware.zip"</ID>
+    <ID>NoHardcodedUiString:FirmwareSelectionStep.kt$"microReticulum runs an embedded Reticulum transport stack on the device itself. "</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"1. Try disconnecting and reconnecting the device\n"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"2. Ensure the USB cable supports data transfer\n"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"3. Put the device into bootloader mode manually\n"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"4. Try using a different USB port"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Band"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Board"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Configure RNode"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Consider reflashing to ensure proper operation."</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Device Information"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Done"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Error Details"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Firmware"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Another Device"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Cancelled"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Failed"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Flash Successful!"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Recovery Tips"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"The flash operation was cancelled before completion"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Try Again"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Unknown state"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Your RNode has been updated successfully"</ID>
+    <ID>NoHardcodedUiString:FlashCompleteStep.kt$"Your device may be in an inconsistent state. "</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Cancel Flash"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Cancel Flashing?"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Continue Flashing"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Do not disconnect the device while flashing is in progress."</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Flashing Firmware"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Flashing complete!"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"I've Reset the Device"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Interrupting the flash process may leave your device in an unusable state. "</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Press the RESET (RST) button on your device, then tap the button below to continue with provisioning."</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Provisioning Device"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Reset Required"</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"Setting up device identity and firmware verification. This may take a moment."</ID>
+    <ID>NoHardcodedUiString:FlashProgressStep.kt$"You may need to use the bootloader to recover."</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Avoid Meshtastic frequencies to prevent interference."</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Choose a different slot to avoid interference."</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Choose a frequency slot within the ${region.name} band. "</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Community-tested configurations for your region"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Decrease slot"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Frequency Spectrum"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Increase slot"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Meshtastic Frequencies (Avoid)"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Meshtastic Interference"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Meshtastic"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Only one frequency slot available for this region/preset combination"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Popular RNode Frequencies"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Select Frequency Slot"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Selected"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot $slot"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot ${slot.slot}"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot ${state.selectedSlot} overlaps with Meshtastic. "</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"Slot Number"</ID>
+    <ID>NoHardcodedUiString:FrequencySlotStep.kt$"These frequencies are used by Meshtastic networks"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"$iconCount icons"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"${searchResults.size} icons"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Background Color"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Background"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Choose Profile Icon"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Clear search"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Clear"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Icon Color"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Icon"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"No icons found for \"$searchQuery\""</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Preview"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Save"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Search Results"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Search icons"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Search to find any of ${MaterialDesignIcons.iconCount} icons"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Search"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"Tap a color to customize"</ID>
+    <ID>NoHardcodedUiString:IconPickerDialog.kt$"e.g., star, heart, wifi"</ID>
+    <ID>NoHardcodedUiString:IdentityCard.kt$"Create and manage multiple identities for different contexts (work, personal, anonymous)."</ID>
+    <ID>NoHardcodedUiString:IdentityCard.kt$"Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityCard.kt$"Manage Identities"</ID>
+    <ID>NoHardcodedUiString:IdentityCard.kt$"View My Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityCard.kt$"View and share your identity, edit your display name, and manage QR codes for contact sharing."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- All contacts"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- All conversations"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- All messages"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"- Identity keys"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Active"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Base32 Key"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"CANCEL"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"CREATE"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Choose how to import your identity:"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Copy Key as Text"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Copy"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Create New Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Create identity"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Create your first identity to start using Columba, or import an existing identity from a backup file."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Current: ${currentIdentity?.displayName ?: "None"}"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"DELETE"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"DONE"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Delete Identity?"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Deleting \"${identity.displayName}\" will permanently remove:"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Display Name"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a display name for the identity extracted from the Sideband backup."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a display name for the imported identity."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a display name for this identity. You can use this to manage different personas or use cases."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Enter a new display name:"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Export as File"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Export this identity first if you want to back it up."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"From Identity File"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"From Sideband Backup"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"IMPORT"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Identity Key"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Identity Manager"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Identity: ${identity.identityHash.take(16)}..."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import Key from Text"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import from File"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import from Sideband Backup"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Import identity"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"More options"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Navigate back"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"New: ${identity.displayName}"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"No Identities Yet"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste Base32 Key"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste Key"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste a Base32-encoded identity key (e.g., from Sideband)."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste identity key here..."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Paste key"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Rename Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Rename"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Restarting network service..."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"SAVE"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"SWITCH"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Share"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Switch Identity?"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Switch to"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"Switching to \"${identity.displayName}\" will restart the network service."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"This action cannot be undone"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"This key can be imported in Sideband or another Columba instance."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"This may take a few seconds"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"You will see only the conversations, contacts, and messages associated with this identity."</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"e.g., Backup, Restored Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"e.g., Sideband Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityManagerScreen.kt$"e.g., Work, Personal, Anonymous"</ID>
+    <ID>NoHardcodedUiString:IdentityPage.kt$"Anonymous Peer"</ID>
+    <ID>NoHardcodedUiString:IdentityPage.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:IdentityPage.kt$"Choose a display name others will see:"</ID>
+    <ID>NoHardcodedUiString:IdentityPage.kt$"Continue"</ID>
+    <ID>NoHardcodedUiString:IdentityPage.kt$"Display Name"</ID>
+    <ID>NoHardcodedUiString:IdentityPage.kt$"You can change this anytime, or create multiple identities for different contexts."</ID>
+    <ID>NoHardcodedUiString:IdentityPage.kt$"Your Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityQrCodeDialog.kt$"Destination Hash (LXMF)"</ID>
+    <ID>NoHardcodedUiString:IdentityQrCodeDialog.kt$"Identity Hash"</ID>
+    <ID>NoHardcodedUiString:IdentityQrCodeDialog.kt$"Share Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityQrCodeDialogContent.kt$"Close"</ID>
+    <ID>NoHardcodedUiString:IdentityQrCodeDialogContent.kt$"Scan this QR code to add me as a contact"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Another Reticulum app may be using this interface. "</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"BLE Connections"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"BLE connections are not available while using a shared Reticulum instance. "</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth Settings"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth is turned off"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth is turned on"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Bluetooth permissions required"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Central"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Check that the device is powered on, in range, and properly configured."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Close other apps or disable this interface in Settings."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Close"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Copy"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Destination Hash (LXMF)"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Destination"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Dismiss"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Display Name"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error sending announce"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: $error"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Error: ${uiState.message}"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Hash: ${testResult.hexHash}"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Identity Hash"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Initialized"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Loading connections..."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Manage interfaces"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Manually stop or restart the background Reticulum service."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Network Interfaces (${interfaces.size})"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Network Status"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"No active BLE connections"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"No interfaces configured"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Only Columba's own instance can initiate Bluetooth LE connections."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Peripheral"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Restart"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Reticulum Status"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Scan this QR code to add me as a contact"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Scan"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Send Test Announce"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Service Control"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Service control is disabled while using a shared Reticulum instance. "</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Share"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Shutdown Service?"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Shutdown"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Tap to view full identity details and QR code for sharing"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Test Actions"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Test announce sent!"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"The network service is managed by another app (e.g., Sideband)."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"This interface failed to start:"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"This interface is currently offline and not passing traffic."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"This will stop the background Reticulum service. You will not receive messages until you restart the app or manually restart the service."</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Total"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Turn ON"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"View Details"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"View QR Code"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"View details"</ID>
+    <ID>NoHardcodedUiString:IdentityScreen.kt$"Your Identity"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Choose another file"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Different identity"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Existing: ${active.take(8)}…\n\n"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Got it"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Import identity file"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Imported: ${imported.take(8)}…\n"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Importing the identity file you exported before switching devices "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Keystore key. Keystore keys are tied to the app's install ID and don't "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Looking for: ${identity.displayName} (${identity.identityHash.take(8)}…)"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Restore your identity"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Start fresh"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Start fresh?"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"The app will restart to finish setting up."</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"The file was not imported. Choose the original identity file that matches "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"The file you picked holds a different identity than the one on this device.\n\n"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"This removes your old identity and takes you through onboarding to create "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Try again"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Why did this happen?"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Why this happens"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Your identity's private key is wrapped with a hardware-backed Android "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"Your messages and contacts were restored from backup, but your identity "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"a new one. Your restored messages and contacts were tied to the old "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"back but the identity couldn't decrypt itself.\n\n"</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"cross a factory reset or device swap — even when the app data is "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"identity, so they'll disappear from the app — and peers on the other "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"keys couldn't come back across devices. Import the identity file you "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"lets us re-wrap the same identity with this device's Keystore key."</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"restored from cloud backup. That's why messages and contacts came "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"saved before switching phones to continue using the same identity — or "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"side of any existing conversations won't recognize the new identity. "</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"start fresh with a new one."</ID>
+    <ID>NoHardcodedUiString:IdentityUnlockScreen.kt$"the restored identity."</ID>
+    <ID>NoHardcodedUiString:IfacConfigCard.kt$"IFAC (Network Access)"</ID>
+    <ID>NoHardcodedUiString:IfacConfigCard.kt$"Network Name"</ID>
+    <ID>NoHardcodedUiString:IfacConfigCard.kt$"Passphrase"</ID>
+    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Auto mode detects your network type and selects the optimal preset."</ID>
+    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Image Compression"</ID>
+    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Max: ${formatDimension(displayPreset.maxDimensionPx)}px, "</ID>
+    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Select compression level for image attachments. "</ID>
+    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Sending large images may take a very long time or fail."</ID>
+    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Slow interfaces (LoRa/BLE) are enabled. "</ID>
+    <ID>NoHardcodedUiString:ImageCompressionCard.kt$"Warning"</ID>
+    <ID>NoHardcodedUiString:ImageOptionsSheet.kt$"Image"</ID>
+    <ID>NoHardcodedUiString:ImageOptionsSheet.kt$"Save to a folder on your device"</ID>
+    <ID>NoHardcodedUiString:ImageOptionsSheet.kt$"Save to device"</ID>
+    <ID>NoHardcodedUiString:ImageOptionsSheet.kt$"Share via another app"</ID>
+    <ID>NoHardcodedUiString:ImageOptionsSheet.kt$"Share"</ID>
+    <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Answer call"</ID>
+    <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Answer"</ID>
+    <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Decline call"</ID>
+    <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Decline"</ID>
+    <ID>NoHardcodedUiString:IncomingCallScreen.kt$"Incoming Voice Call"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"${configState.deviceName.length}/${ValidationConstants.MAX_DEVICE_NAME_LENGTH} characters"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"29716 (default)"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"42671 (default)"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Active On Network"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Ad Refresh Interval: ${configState.bleAdvertisingRefreshIntervalMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "60s"}"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Advanced Options"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Allows other Reticulum nodes to connect to this device. "</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Auto Discovery Configuration"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Bluetooth LE Configuration"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Data Port"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Delay between scans when no new devices are being found"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Delay between scans while discovering new devices"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Device Name (optional)"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Discovery Port"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Discovery Scope"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Enabled"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Group ID (optional)"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"How long each scan listens for nearby devices"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"How often to restart advertising in case Android silently stopped it"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"IFAC network name and passphrase. Only clients with matching "</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"IP address or hostname"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"IP address to bind to. Use 0.0.0.0 to listen on all interfaces."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Interface Name"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Interface Type"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Leave blank unless inbound clients must authenticate with an "</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Leave blank unless the RNode network requires an IFAC "</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Leave empty for default network"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Leave empty to omit from advertisement"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Listen IP"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Listen Port"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Max Connections"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Maximum simultaneous BLE peers (recommended: 7)"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Network restriction"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Optional: For debugging only. Keep short (max 8 chars recommended) or leave empty to maximize BLE advertisement reliability."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Orbot default: 9050."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Power Profile"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Proxy Host"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Proxy Port"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Route through a SOCKS5 proxy (e.g., Orbot for Tor). Required for .onion addresses."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"SOCKS5 Proxy"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"SOCKS5 proxy address. Use 127.0.0.1 for Orbot running on this device."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Scan Duration: ${configState.bleScanDurationMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "10s"}"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Scan Interval (active): ${configState.bleDiscoveryIntervalMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "5s"}"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Scan Interval (idle): ${configState.bleDiscoveryIntervalIdleMs.toLongOrNull()?.let { "${it / 1000}s" } ?: "30s"}"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Skip starting this interface when the device's active network doesn't match. "</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"TCP Client Configuration"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"TCP Server Configuration"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"TCP port to listen on for incoming connections."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Target Host *"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Target Port"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Useful for Yggdrasil connectivity or when this device should act as a hub."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Warning: scan duration ≥ active interval — high duty-cycle scanning will increase battery usage"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"Wi-Fi/Ethernet are bucketed together; cellular includes mobile data."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"credentials will be able to connect."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"e.g., Home WiFi, Laptop TCP"</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"matching credentials can communicate."</ID>
+    <ID>NoHardcodedUiString:InterfaceConfigDialog.kt$"network name and passphrase. Only interfaces with "</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"$peerCount peer${if (peerCount != 1) "s" else ""}"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"$totalCount interfaces found via RNS Discovery"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"$typeLabel interface"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Accept incoming connections from other Reticulum nodes"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Add Interface"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Advanced"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"An error occurred while applying configuration changes:"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Apply &amp; Restart"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Applying Changes"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Applying interface changes restarts Reticulum on this backend. "</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Are you sure you want to delete \"$interfaceName\"? This action cannot be undone."</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Auto Discovery"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Automatically discover peers on local network"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"BLE permission required"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Bluetooth LE"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Connect to a remote Reticulum transport node"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Connects to separate RNode hardware via BLE or Bluetooth Classic"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Delete Interface?"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Direct connection to Columba users and Linux ble-reticulum devices"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Discovered"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Discovery enabled - no interfaces found yet"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Enabled"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Failed to Apply Changes"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Grant"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Interface Discovery"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Interface Issue"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Network Interfaces"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"No interfaces configured"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"RNode LoRa"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Restarting Reticulum network..."</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Select Interface Type"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Shared Instance host"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"TCP Client"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"TCP Server"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Tap + to add your first network interface"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Tap to configure RNS 1.1.x interface discovery"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"This may take a few seconds"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Total"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"View details"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"You'll briefly disconnect from peers, and any in-progress "</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"Your changes have been saved to the database. Try applying them again, or restart the app."</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"available"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"stale"</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"transfers will be interrupted. This usually takes a few seconds."</ID>
+    <ID>NoHardcodedUiString:InterfaceManagementScreen.kt$"unknown"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Bandwidth"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Coding Rate"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Connection"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Device"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Edit Configuration"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Frequency"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Go Back"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Grant USB Permission"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Grant permission to connect to the USB device"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Listen Port"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Mode"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"RSSI"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Radio Settings"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Received"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"SNR"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Server"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Spreading Factor"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Status"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"TX Power"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Traffic Statistics"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Transmitted"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"Type"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"USB Device"</ID>
+    <ID>NoHardcodedUiString:InterfaceStatsScreen.kt$"USB permission required"</ID>
+    <ID>NoHardcodedUiString:LocationPermissionBottomSheet.kt$"Location Permission"</ID>
+    <ID>NoHardcodedUiString:LocationPermissionBottomSheet.kt$"Not Now"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"$localDisplayName (myself)"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"${selectedHashes.size} contact(s) selected"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"15min"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"30min"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"5min"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Allow this app to share your location. "</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Allowed Requesters"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Change"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Choose how precisely your location is shared:"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Currently sharing with:"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Default Duration"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Default duration"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Done"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Edit allowed requesters"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Get everyone's location periodically"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Group Host"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Group Tracker"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Host Group"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"If no contacts are selected, all requests will be blocked."</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Last received: ${formatTelemetryRelativeTime(lastRequestTime, currentTime)}"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Last sent: ${formatTelemetryRelativeTime(lastSendTime, currentTime)}"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Let others use you as their group tracker"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Location Precision"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Location Sharing"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Location precision"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"No contacts available. Add contacts first."</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"No contacts selected - all requests blocked"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"None"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Only selected contacts can request your group's location data. "</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Only selected contacts can request your group's locations"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Receive locations from group"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Request Now"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Request every: ${formatTelemetryIntervalDisplay(requestIntervalSeconds)}"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Requesting..."</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Search contacts"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select Allowed Requesters"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select Group Host"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select the default duration for new location sharing sessions:"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select yourself to host the group, or choose a contact to send your location to."</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Select"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Send Now"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Send every: ${formatTelemetryIntervalDisplay(sendIntervalSeconds)}"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Sending..."</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Share with group"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Share your location with a group and see where everyone is"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Stop All Sharing"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"Stop"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"When off, location sharing is blocked everywhere — including "</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$"active sessions, conversations, and the group tracker."</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.CITY$"City"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.CITY$"~1km radius"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.NEIGHBORHOOD$"Neighborhood"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.NEIGHBORHOOD$"~100m radius"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.PRECISE$"Exact GPS location"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.PRECISE$"Precise"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"Region"</ID>
+    <ID>NoHardcodedUiString:LocationSharingCard.kt$PrecisionPreset.REGION$"~10km radius"</ID>
+    <ID>NoHardcodedUiString:MainActivity.kt$"Press back again to exit"</ID>
+    <ID>NoHardcodedUiString:MainActivity.kt$MainActivity$"Janky frame: ${durationMs}ms"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Altitude"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Bandwidth"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Coding Rate"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Copy Params"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Dismiss"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Download Offline Maps First"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Enable HTTP Map Source"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Enable location access to see your position on the map."</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"First Seen"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Frequency"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Hops"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Last Heard"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"LoRa Parameters"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"LoRa parameters copied"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Loading map..."</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Location permission required"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Location"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Map layers"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Map style"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Modulation"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"My location"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Network"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"No Map Source Enabled"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Offline Maps"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Radio Parameters"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Request Now"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Send Now"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Show on map"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Spreading Factor"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Status"</ID>
+    <ID>NoHardcodedUiString:MapScreen.kt$"Use for RNode"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Configure how map tiles are fetched. Offline maps take priority when available."</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Fetch tiles from the internet"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"HTTP (OpenFreeMap)"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Map"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Marker declutter"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"No map tiles will load until a source is enabled or offline maps are downloaded"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Offline maps available - they will be used when location is covered"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"RMSP (Mesh Network)"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Settings"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Sources"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Spread overlapping markers for readability"</ID>
+    <ID>NoHardcodedUiString:MapSourcesCard.kt$"Warning"</ID>
+    <ID>NoHardcodedUiString:MapStylePreference.kt$MapStylePreference.AUTO$"Auto"</ID>
+    <ID>NoHardcodedUiString:MapStylePreference.kt$MapStylePreference.DARK$"Dark"</ID>
+    <ID>NoHardcodedUiString:MapStylePreference.kt$MapStylePreference.LIGHT$"Light"</ID>
+    <ID>NoHardcodedUiString:MarkdownMessageText.kt$SafeMarkdownUriHandler$"Unable to open link"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"$hops ${if (hops == 1) "hop" else "hops"} away"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"(auto)"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"32-character hex"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Auto-retrieve from relay"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Auto-select (preferred, then nearest)"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Configure how messages are sent and retrieved via relay."</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Confirm"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Currently: $currentRelayName"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Custom Retrieval Interval"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Custom Size Limit"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Default Delivery Method"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Destination Hash"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Direct (Link-based)"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter a valid number"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter maximum message size (1-128 MB):"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter relay destination hash:"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Enter retrieval interval (1-12 hours):"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Establishes a link, unlimited size, with retries"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"INCOMING MESSAGE SIZE"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"If direct delivery fails, retry through relay"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Last sync: ${formatRelativeTime(lastSyncTimestamp, currentTime)}"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"MESSAGE RETRIEVAL"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"MESSAGE SORT ORDER"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Manage preferred nodes"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Maximum is 128 MB"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Maximum is 43200 seconds (12 hours)"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Maximum size of messages to accept. Larger messages will be rejected."</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Message Delivery &amp; Retrieval"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Minimum is 1 MB"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Minimum is 3600 seconds (1 hour)"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"My Relay"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Nickname (optional)"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"No relay configured. Waiting for propagation node announces..."</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"No relay selected"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Or enter a relay hash manually:"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Periodically check for messages"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Propagated (Via Relay)"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Relay"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Retrieval interval: ${formatIntervalDisplay(retrievalIntervalSeconds)}"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Retry via Relay on Failure"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Seconds"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Set as Relay"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Size limit: ${formatSizeLimit(incomingMessageSizeLimitKb)}"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Sort by sender's time"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Stores message on relay for offline recipients"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Sync Now"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Syncing..."</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Tap to view all discovered relays"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Unlimited"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Use specific relay"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"Uses your preferred list by transport; falls back to the nearest relay."</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"View all discovered relays"</ID>
+    <ID>NoHardcodedUiString:MessageDeliveryRetrievalCard.kt$"e.g., My Home Relay"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"$hops hops"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"1 hop"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Delivered via relay node for offline recipients"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Delivered"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Delivery Method"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Direct"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Error Details"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Failed"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Hop Count"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Hop count unavailable"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Link-based delivery with retries, supports large messages"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Loading..."</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message Details"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message delivery failed"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message has been sent"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message received directly from sender"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message traveled through $hops relays"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message traveled through 1 relay"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Message was successfully delivered to recipient"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Opportunistic"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Pending"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Propagated"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Received Via"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Received"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Sent Via"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Sent by Sender"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Sent"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Signal Quality"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Signal Strength"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Single packet delivery for small messages, no link required"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Status"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Unknown delivery method"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Unknown"</ID>
+    <ID>NoHardcodedUiString:MessageDetailScreen.kt$"Waiting for delivery confirmation"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"$remaining characters remaining"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"+${pendingFileInfo.fileCount - 1} more file${if (pendingFileInfo.fileCount &gt; 2) "s" else ""}"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Active link"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Allow Location"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Animated GIF"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Animated image attachment"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Block User"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Blocked $peerName"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Copy"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Delete message"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to attach file: ${result.message}"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to load file"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Failed to load image"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"File too large (${actualSizeKb}KB). Max size is ${maxSizeKb}KB."</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Fullscreen animated image"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Fullscreen image"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Image Not Available"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Image attachment"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Image unavailable"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"More options"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"No app found to open this file"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"No app found to share"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"No messages yet"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Not available"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Preview message text"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Remove image"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Reply"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Retry"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Selected animated image"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Selected image"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Send a message to start the conversation"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Send message"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Sending message"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Share location"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Stop Sharing Location?"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Stop Sharing"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Stop sharing your location with $peerName?"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Text size"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"The original image could not be found. This can happen when "</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"This message will be permanently deleted from this device."</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Type a message..."</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Unable to open link"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"View Details"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"Voice call"</ID>
+    <ID>NoHardcodedUiString:MessagingScreen.kt$"importing data without attachments included."</ID>
+    <ID>NoHardcodedUiString:MicronComposables.kt$"Failed to load partial"</ID>
+    <ID>NoHardcodedUiString:MicronComposables.kt$"Unable to open link"</ID>
+    <ID>NoHardcodedUiString:MicronImageBlock.kt$"Could not save image"</ID>
+    <ID>NoHardcodedUiString:MicronImageBlock.kt$"Saved to gallery"</ID>
+    <ID>NoHardcodedUiString:MicronImageBlock.kt$"Tap to load image"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.announceCount} announces"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.contactCount} contacts"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.customThemeCount} custom themes"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.identityCount} identities"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.interfaceCount} interfaces"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${exportPreview.messageCount} messages"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${preview.announceCount} announces"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${preview.contactCount} contacts"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${preview.conversationCount} conversations"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${preview.customThemeCount} custom themes"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${preview.identityCount} identities"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${preview.interfaceCount} interfaces"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${preview.messageCount} messages"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${state.result.announcesImported} announces, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${state.result.interfacesImported} interfaces imported."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${state.result.messagesImported} messages, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${uiState.result.announcesImported} announces, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${uiState.result.contactsImported} contacts, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${uiState.result.customThemesImported} themes"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${uiState.result.identitiesImported} identities, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${uiState.result.interfacesImported} interfaces, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"${uiState.result.messagesImported} messages, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Choose a password to protect your export file. "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Confirm password"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Could not load preview: ${exportPreview.message}"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Data Migration"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Data to export:"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Data to import:"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Enable Notifications?"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Enable"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Encrypt Export"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Encrypted Backup"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Enter the password that was used during export."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Existing identities with the same ID will be skipped."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Export All Data"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Export Data"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Export all your data (identities, messages, contacts, settings) "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Export complete! Save dialog opened."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Export saved successfully"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Images and files won't be included in export"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Import Data"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Import Data?"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Import complete! ${state.result.identitiesImported} identities, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Import complete!"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Import data from a previous export. This will add identities, "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Import"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Importing... ${(importProgress * 100).toInt()}%"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Include file attachments"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Navigate back"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Not Now"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Password"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Restarting Service"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Restarting network service..."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Select Migration File"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"This backup file is encrypted. "</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"This backup was created on:"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"This may take a few seconds"</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"To receive notifications for new messages, you'll need to grant notification permission."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"You will need this password to import the data on another device."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"Your backup data has been restored, including your notification preferences."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"messages, and contacts from the backup file."</ID>
+    <ID>NoHardcodedUiString:MigrationScreen.kt$"to a file that can be imported into a new installation."</ID>
+    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Choose a preset that matches your range and speed needs. "</ID>
+    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Recommended"</ID>
+    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Select Modem Preset"</ID>
+    <ID>NoHardcodedUiString:ModemPresetStep.kt$"Selected"</ID>
+    <ID>NoHardcodedUiString:ModemPresetStep.kt$"These are compatible with Meshtastic naming conventions."</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Close"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Copy $label"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Copy Identity Link"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Copy"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Current: $currentDisplayName"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Custom Display Name"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Customize your profile icon that others will see. "</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Default: $defaultDisplayName"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Destination Hash (LXMF)"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Destination Hash"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Display Name &amp; Identity"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Display name saved successfully"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Full Screen"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Generating QR code..."</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Got it"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Identity Hash"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Identity"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Info about $label"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"It's safe to share publicly and allows others to:\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Leave empty to use default"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"My Identity"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Profile Icon"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Public Key"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"QR Code"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Save"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Scan this QR code to add me as a contact"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Scan to add $displayName as a contact"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Share Your Identity"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Share"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Think of it like a username that:\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"This is compatible with Sideband and other Reticulum apps."</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"This is what peers use to:\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"View QR"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"What is a Destination Hash?"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"What is a Public Key?"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"What is an Identity Hash?"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your LXMF destination hash is derived from your identity and is used for sending and receiving messages.\n\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your display name is shown to other peers when you send announces and messages."</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your identity hash is a unique cryptographic fingerprint derived from your public key.\n\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"Your public key is the cryptographic key that enables secure messaging.\n\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Add you as a contact"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Allows others to verify your identity"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Cannot be changed or duplicated\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Encrypt messages only you can read\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Establish secure communication"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Find you on the network\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Proves messages came from you\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Send you messages\n"</ID>
+    <ID>NoHardcodedUiString:MyIdentityScreen.kt$"• Verify your identity\n"</ID>
+    <ID>NoHardcodedUiString:NavTab.kt$NavTab.ANNOUNCES$"Announces"</ID>
+    <ID>NoHardcodedUiString:NavTab.kt$NavTab.CHATS$"Chats"</ID>
+    <ID>NoHardcodedUiString:NavTab.kt$NavTab.CONTACTS$"Contacts"</ID>
+    <ID>NoHardcodedUiString:NavTab.kt$NavTab.MAP$"Map"</ID>
+    <ID>NoHardcodedUiString:NavTab.kt$NavTab.NOMADNET$"NomadNet"</ID>
+    <ID>NoHardcodedUiString:NavTab.kt$NavTab.SETTINGS$"Settings"</ID>
+    <ID>NoHardcodedUiString:NavTab.kt$NavTab.VOICE$"Voice"</ID>
+    <ID>NoHardcodedUiString:NetworkCard.kt$"BLE Connections"</ID>
+    <ID>NoHardcodedUiString:NetworkCard.kt$"Manage Interfaces"</ID>
+    <ID>NoHardcodedUiString:NetworkCard.kt$"Monitor your Reticulum network status, active interfaces, BLE connections, and connection diagnostics."</ID>
+    <ID>NoHardcodedUiString:NetworkCard.kt$"Network"</ID>
+    <ID>NoHardcodedUiString:NetworkCard.kt$"View Network Status"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"&lt;hash&gt;:/page/index.mu"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Clear image cache"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Close site"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Close"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Copy URL"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Enter a node address to start browsing.\nFormat: &lt;hash&gt;:/page/index.mu"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Failed to load page"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Load all images"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Menu"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"NomadNet Browser"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Open"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Refresh"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Reload all images"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Retry"</ID>
+    <ID>NoHardcodedUiString:NomadNetBrowserScreen.kt$"Share"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Announce from $peerName"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Announces"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"BLE Peer Connected"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"BLE Peer Disconnected"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Bluetooth Events"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Connected to $displayName"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Disconnected from $displayName"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Messages"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Notifications for Bluetooth connection events"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Notifications for heard announces"</ID>
+    <ID>NoHardcodedUiString:NotificationHelper.kt$NotificationHelper$"Notifications for received messages"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Manage Notifications"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsCard.kt$"Notifications"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"BLE Peer Connected"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"BLE Peer Disconnected"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Direct Only"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Enable Notifications"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Exclude TCP"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Heard Announce"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Message from Saved Peer"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notification Settings"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notification Types"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notifications"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when a Bluetooth LE peer connects"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when a Bluetooth LE peer disconnects"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when you hear a new announce from a peer"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when you receive a message from a saved peer"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Notify when you receive a new message"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Only notify for direct (1-hop) announces from nearby peers"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Received Message"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Select which events you want to be notified about"</ID>
+    <ID>NoHardcodedUiString:NotificationSettingsScreen.kt$"Skip announces received via TCP interfaces"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"$estimatedTileCount tiles"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"${progress.completedResources} / ${progress.requiredResources} resources"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Are you sure you want to cancel the download? Progress will be lost."</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Cancel Download"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Cancel Download?"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Choose the center point for your offline map region."</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Continue"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Download"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Enable"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Enter a geohash to set the location"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Estimated Download"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Estimated Size"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Geohash"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"HTTP map source is disabled. Enable it to download tiles."</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Internet Access Required"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Latitude"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Location set: ${String.format(Locale.US, "%.4f", latitude)}, "</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Location"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Longitude"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Make sure you're connected to Wi-Fi for large downloads."</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Max zoom: $maxZoom (more detail, larger size)"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Min zoom: $minZoom (less detail, smaller size)"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Name Your Map"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Next"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Preparing download..."</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Radius"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Region Name"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Search City or Address"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Search"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Select Area Size"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Summary"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"This will download map tiles from OpenFreeMap for offline use. "</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Tiles"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Use Current Location"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"Zoom Range"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"e.g., Home, Downtown, Trail"</ID>
+    <ID>NoHardcodedUiString:OfflineMapDownloadScreen.kt$"e.g., dqcjq"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"${(region.downloadProgress * 100).toInt()}% - ${region.tileCount} tiles"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"${region.radiusKm} km radius - Zoom ${region.minZoom}-${region.maxZoom}"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Are you sure you want to delete \"${region.name}\"? This will free up ${region.getSizeString()} of storage."</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Check for Updates"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Checking..."</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Default"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Delete Offline Map"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Download new region"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Download or import map regions for offline use"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Download the latest map data for \"${region.name}\"? "</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Import MBTiles file"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"No Offline Maps"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Offline Maps"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Regions"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Retry"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Tap + to download, or use the import button to load an MBTiles file"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"This will replace the current data and may take a few minutes."</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Total Storage"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Up to date"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Update Now"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Update Offline Map"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Update available"</ID>
+    <ID>NoHardcodedUiString:OfflineMapsScreen.kt$"Update"</ID>
+    <ID>NoHardcodedUiString:OnboardingPagerScreen.kt$"Skip"</ID>
+    <ID>NoHardcodedUiString:PeerCard.kt$"Other"</ID>
+    <ID>NoHardcodedUiString:PermissionDeniedCard.kt$"Open Settings"</ID>
+    <ID>NoHardcodedUiString:PermissionDeniedCard.kt$"Permissions Required"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Columba can notify you when:"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Continue"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Enable"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Get alerts for new messages"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Granted"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Notifications"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Prevents Android from pausing Columba"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Receive messages even when phone is idle"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Stay Connected"</ID>
+    <ID>NoHardcodedUiString:PermissionsPage.kt$"Unrestricted Battery"</ID>
+    <ID>NoHardcodedUiString:PrivacyCard.kt$"Blocked Users"</ID>
+    <ID>NoHardcodedUiString:PrivacyCard.kt$"Calls from contacts only"</ID>
+    <ID>NoHardcodedUiString:PrivacyCard.kt$"Messages from contacts only"</ID>
+    <ID>NoHardcodedUiString:PrivacyCard.kt$"Privacy"</ID>
+    <ID>NoHardcodedUiString:ProfileIcon.kt$"Profile icon"</ID>
+    <ID>NoHardcodedUiString:PropagationNodeReorderList.kt$"Current relay"</ID>
+    <ID>NoHardcodedUiString:PropagationNodeReorderList.kt$"Remove"</ID>
+    <ID>NoHardcodedUiString:PropagationNodeReorderList.kt$"Reorder ${row.displayName}"</ID>
+    <ID>NoHardcodedUiString:PropagationNodeReorderList.kt$"Set active now"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$" hops"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Add propagation node"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Add relays to build a transport-aware priority list. The highest-priority "</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Add"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Added"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"By destination hash"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Currently active"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Destination hash (hex)"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"From announces"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Import your current relay"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Loading…"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Nickname (optional)"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"No preferred propagation nodes"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Propagation Nodes"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"Saved relays"</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"node that matches the current transport is used; with none matching, "</ID>
+    <ID>NoHardcodedUiString:PropagationNodesScreen.kt$"the nearest announced relay is used."</ID>
+    <ID>NoHardcodedUiString:QrCodeBottomSheet.kt$"QR Code"</ID>
+    <ID>NoHardcodedUiString:QrCodeBottomSheet.kt$"Scan QR Code"</ID>
+    <ID>NoHardcodedUiString:QrCodeBottomSheet.kt$"Scan a contact's QR code"</ID>
+    <ID>NoHardcodedUiString:QrCodeBottomSheet.kt$"Show QR Code"</ID>
+    <ID>NoHardcodedUiString:QrCodeBottomSheet.kt$"Show your QR code for others to scan"</ID>
+    <ID>NoHardcodedUiString:QrCodeComposables.kt$"Copy"</ID>
+    <ID>NoHardcodedUiString:QrCodeComposables.kt$"QR Code (tap to close)"</ID>
+    <ID>NoHardcodedUiString:QrCodeComposables.kt$"QR Code"</ID>
+    <ID>NoHardcodedUiString:QrScannerScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Already Added"</ID>
+    <ID>NoHardcodedUiString:QrScannerScreen.kt$"Contact Exists"</ID>
+    <ID>NoHardcodedUiString:QrScannerScreen.kt$"Grant Permission"</ID>
+    <ID>NoHardcodedUiString:QrScannerScreen.kt$"Open Settings"</ID>
+    <ID>NoHardcodedUiString:QrScannerScreen.kt$"Point camera at QR code\nIt will scan automatically"</ID>
+    <ID>NoHardcodedUiString:QrScannerScreen.kt$"Scan QR Code"</ID>
+    <ID>NoHardcodedUiString:QualitySelectionDialog.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:QualitySelectionDialog.kt$"Experimental"</ID>
+    <ID>NoHardcodedUiString:QualitySelectionDialog.kt$"Recommended"</ID>
+    <ID>NoHardcodedUiString:QuickShareLocationBottomSheet.kt$"Duration:"</ID>
+    <ID>NoHardcodedUiString:QuickShareLocationBottomSheet.kt$"Share your location"</ID>
+    <ID>NoHardcodedUiString:QuickShareLocationBottomSheet.kt$"Start Sharing"</ID>
+    <ID>NoHardcodedUiString:QuickShareLocationBottomSheet.kt$"with $contactName"</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Are you sure you want to exit? Any unsaved progress will be lost."</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Close"</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Error"</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit Flasher?"</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"Exit"</ID>
+    <ID>NoHardcodedUiString:RNodeFlasherScreen.kt$"flasher_step"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$CommunitySlots$"⚠️ Avoid - Meshtastic interference"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$CommunitySlots$"⚠️ Avoid - Northern Virginia Meshtastic mesh"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"2.4 GHz ISM (worldwide, short range)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"433-434 MHz ISM, 10% duty cycle"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"864-868 MHz alternative band"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"868-868.6 MHz, 1% duty cycle (very restrictive)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"902-907.5 MHz (limited band)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"902-928 MHz ISM band"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"915-918 MHz NTC"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"915-928 MHz ISM band"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"917-925 MHz IMDA"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"919-924 MHz MCMC"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"920-925 MHz NBTC"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"920.8-927.8 MHz ARIB STD-T108"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band L: 1% duty cycle, 25 mW (UK, IT, NL presets)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band M: 1% duty cycle, 25 mW (LoRaWAN default)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band P: 10% duty cycle, 500 mW (best for LoRa)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$FrequencyRegions$"Sub-band Q: 1% duty cycle, 25 mW"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"433 MHz band shared by Gothenburg, Borås, Älvsered"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"868 MHz EU band"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"868 MHz UK band"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"869 MHz EU band"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"915 MHz ISM band (default)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"915-928 MHz AU band (default)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"920 MHz AS923 band"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Bern configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Brescia configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Brisbane configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Brugge (Bruges) configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Chicago, IL configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Darmstadt configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Duffel configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Edinburgh 2.4 GHz configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Edinburgh 868 MHz configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Genova 433 MHz configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Gothenburg area configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Madrid configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Mörbylånga/Bredinge configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Norway narrowband"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Olympia, WA configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Portsmouth, NH configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Rotterdam Nesselande configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Ruhrgebiet configuration (869.4625 MHz, region-default TX, 10% LT airtime)"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Salerno configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"St. Helens configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Sydney long-range configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Treviso configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Turku configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Western Sydney configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeRegionalPreset.kt$RNodeRegionalPresets$"Wiesbaden configuration"</ID>
+    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Error"</ID>
+    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Repair RNode Pairing"</ID>
+    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"Transport Configuration Failed"</ID>
+    <ID>NoHardcodedUiString:RNodeWizardScreen.kt$"wizard_step"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Choose a reaction"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Copy"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Details"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Done"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"More emojis"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Reply"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Retry"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Select text"</ID>
+    <ID>NoHardcodedUiString:ReactionComponents.kt$"Selected message"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"${region.dutyCycle}% duty"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Back to countries"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Choose your region to set the correct frequency band and power limits."</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Configure all parameters manually"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Custom Settings"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Popular Local Presets"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Search countries"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Select Frequency Region"</ID>
+    <ID>NoHardcodedUiString:RegionSelectionStep.kt$"Selected"</ID>
+    <ID>NoHardcodedUiString:ReplyComponents.kt$"Cancel reply"</ID>
+    <ID>NoHardcodedUiString:ReplyComponents.kt$"File"</ID>
+    <ID>NoHardcodedUiString:ReplyComponents.kt$"Image"</ID>
+    <ID>NoHardcodedUiString:ReplyComponents.kt$"Message"</ID>
+    <ID>NoHardcodedUiString:ReplyComponents.kt$"Photo"</ID>
+    <ID>NoHardcodedUiString:ReplyComponents.kt$"Reply"</ID>
+    <ID>NoHardcodedUiString:ReplyComponents.kt$"Replying to ${replyPreview.senderName}"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"${region.frequency / 1_000_000.0} MHz • ${region.maxTxPower} dBm max • ${region.dutyCycleDisplay}"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Advanced Settings"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Airtime Limits"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Bandwidth (Hz)"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Display Logo on RNode"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Duty Cycle Limit: ${region.dutyCycle}%"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Frequency (Hz)"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Frequency Region"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Frequency Slot"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Interface Name"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Leave blank unless the RNode network requires an IFAC "</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Long-term (%)"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Modem Preset"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Popular Preset"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Radio Settings"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Short-term (%)"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Show Columba logo on RNode's display when connected"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"Slot ${state.selectedSlot}"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"TCP-only field — does not apply to Bluetooth or USB connections."</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"matching credentials can communicate."</ID>
+    <ID>NoHardcodedUiString:ReviewConfigStep.kt$"network name and passphrase. Only interfaces with "</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Auto-disconnect once better connections are discovered"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Bootstrap Interface"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Connect via Tor (Orbot)"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Interface Name"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Orbot must be installed and connected."</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Route through SOCKS5 proxy. Required for .onion addresses. "</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"SOCKS5 Proxy Host"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"SOCKS5 Proxy Port"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Server"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Target Host"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"Target Port"</ID>
+    <ID>NoHardcodedUiString:ReviewConfigureStep.kt$"hostname or IP address"</ID>
+    <ID>NoHardcodedUiString:SearchableTopAppBar.kt$"Clear search"</ID>
+    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Choose Server"</ID>
+    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Custom"</ID>
+    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Enter server details manually"</ID>
+    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Select a community server or enter custom connection details."</ID>
+    <ID>NoHardcodedUiString:ServerSelectionStep.kt$"Selected"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Access configuration copied to clipboard"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Bug Report"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Go to Permissions &gt; Location to change"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Grant Location Access"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Group Tracker shares your location with a group host "</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Host access configuration is unavailable"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Settings"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Shared instance access configuration"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Shared instance available"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Switch"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"System Info"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"System info copied to clipboard"</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"Your location is encrypted and only readable by the group host you configure."</ID>
+    <ID>NoHardcodedUiString:SettingsScreen.kt$"so everyone can see where each other is.\n\n"</ID>
+    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share Columba APK"</ID>
+    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share Columba"</ID>
+    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"Share the Columba app with someone nearby. "</ID>
+    <ID>NoHardcodedUiString:ShareColumbaCard.kt$"The other person scans a QR code to download and install the app directly from your phone."</ID>
+    <ID>NoHardcodedUiString:ShareLocationBottomSheet.kt$"Duration:"</ID>
+    <ID>NoHardcodedUiString:ShareLocationBottomSheet.kt$"Remove ${contact.displayName}"</ID>
+    <ID>NoHardcodedUiString:ShareLocationBottomSheet.kt$"Search contacts"</ID>
+    <ID>NoHardcodedUiString:ShareLocationBottomSheet.kt$"Search"</ID>
+    <ID>NoHardcodedUiString:ShareLocationBottomSheet.kt$"Share your location"</ID>
+    <ID>NoHardcodedUiString:ShareLocationBottomSheet.kt$"Start Sharing"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Columba's own instance"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Copy access configuration"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Disable Share Instance in Advanced settings and restart "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"If the shared instance becomes available again, you can "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Instance Mode"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Other RNS apps on this device can connect to Columba's "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Paste config or key..."</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Paste full config or just the hex key"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"RPC Key (from Sideband → Connectivity)"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Reticulum to stop hosting."</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Save"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"The shared Reticulum instance (e.g., Sideband) is no longer "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Use Columba's own instance"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"You enabled Share Instance in Advanced settings, but another "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"Your messages will continue to be sent and received. "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"a shared Reticulum instance on TCP 37428. Columba has "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"app on this device (e.g., Sideband) is already hosting "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"available. Columba has automatically restarted with its own "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"disable sharing in the other app and restart Columba."</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"joined it as a client. To host from Columba instead, "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"network interfaces."</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"switch back to it from Settings."</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"transport via the shared instance on TCP 37428. "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"• BLE connections to other Columba users require "</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"• Network interfaces are managed by the other app"</ID>
+    <ID>NoHardcodedUiString:SharedInstanceBannerCard.kt$"• Your identities and messages remain private to Columba"</ID>
+    <ID>NoHardcodedUiString:SharingStatusChip.kt$"Sharing with $sharingWithCount ${if (sharingWithCount == 1) "person" else "people"}"</ID>
+    <ID>NoHardcodedUiString:SharingStatusChip.kt$"Stop sharing"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Clear signal, very low noise"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Excellent ($rssi dBm)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Excellent ($snrStr dB)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Fair ($rssi dBm)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Fair ($snrStr dB)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Good ($rssi dBm)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Good ($snrStr dB)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"High noise, may be unreliable"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Low noise level"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Low signal, may be unreliable"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Marginal signal at edge of range"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Moderate noise level"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Moderate signal strength"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Poor ($snrStr dB)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Strong signal"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Very Poor ($snrStr dB)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Very Weak ($rssi dBm)"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Very noisy, at decodability limit"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Very strong signal"</ID>
+    <ID>NoHardcodedUiString:SignalQualityInfo.kt$"Weak ($rssi dBm)"</ID>
+    <ID>NoHardcodedUiString:SortModeSelector.kt$"Proximity"</ID>
+    <ID>NoHardcodedUiString:SortModeSelector.kt$"Quality"</ID>
+    <ID>NoHardcodedUiString:SyncStatusBottomSheet.kt$"Download complete"</ID>
+    <ID>NoHardcodedUiString:SyncStatusBottomSheet.kt$"Initiating connection to relay"</ID>
+    <ID>NoHardcodedUiString:SyncStatusBottomSheet.kt$"Messages received"</ID>
+    <ID>NoHardcodedUiString:SyncStatusBottomSheet.kt$"Not currently syncing"</ID>
+    <ID>NoHardcodedUiString:SyncStatusBottomSheet.kt$"Propagation Node Sync"</ID>
+    <ID>NoHardcodedUiString:SyncStatusBottomSheet.kt$"Ready"</ID>
+    <ID>NoHardcodedUiString:SyncStatusBottomSheet.kt$"Starting sync..."</ID>
+    <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"Error"</ID>
+    <ID>NoHardcodedUiString:TcpClientWizardScreen.kt$"tcp_wizard_step"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Auto-harmonize colors"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Change Color"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Color Palette"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Dark Mode"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Describe your theme..."</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Description (Optional)"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Light Mode"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"My Custom Theme"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Pick $currentColorRoleName Color"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Primary"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Save &amp; Apply"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Save"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Secondary"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Surface Variant"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Surface"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Tertiary"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Theme Colors"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Theme Name"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Theme Preview"</ID>
+    <ID>NoHardcodedUiString:ThemeEditorScreen.kt$"Top App Bar"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Apply Theme"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Are you sure you want to delete \"${theme.name}\"? This action cannot be undone."</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Create Theme"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Create your first theme"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Custom Themes"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Delete Theme?"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Delete"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"Edit"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"More options"</ID>
+    <ID>NoHardcodedUiString:ThemeManagementScreen.kt$"No custom themes yet"</ID>
+    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Built-in Themes"</ID>
+    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Custom Themes"</ID>
+    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Preview:"</ID>
+    <ID>NoHardcodedUiString:ThemeSelectionCard.kt$"Theme"</ID>
+    <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map for ${params.name}"</ID>
+    <ID>NoHardcodedUiString:TileDownloadManager.kt$TileDownloadManager$"Offline map from RMSP: ${params.name}"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Advanced Settings"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Apply Configuration"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Configure transport mode"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Configuring..."</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Frequency (MHz)"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Modem Preset"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Recommended"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Region"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Select your region and modem preset below. "</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Selected"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Show all regions"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"Show fewer"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"TX Power (dBm)"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"TX: ${selectedRegion.defaultTxPower} dBm (max ${selectedRegion.maxTxPower})"</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"These settings are saved to the device."</ID>
+    <ID>NoHardcodedUiString:TncConfigurationStep.kt$"microReticulum operates as a standalone transport node. "</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Back"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Cancel"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Clear saved config and return to normal mode"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Clearing configuration and resetting device..."</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Configure RNode"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Configure Transport"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disable Transport Mode?"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disable Transport"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disable"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Disabling Transport"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Flash RNode Firmware"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"It will return to normal host-controlled mode."</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"RNode options"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Set radio parameters for standalone transport mode"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Set up this device as a Reticulum interface"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"This will clear the saved radio configuration and reset the device. "</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"USB Device Connected"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Update Pyxis"</ID>
+    <ID>NoHardcodedUiString:UsbDeviceActionScreen.kt$"Update or install RNode firmware on this device"</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"All permissions granted. Incoming voice calls will show a full-screen call screen."</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Display over other apps"</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Full-screen notifications"</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Incoming voice calls are currently disabled. Outgoing calls still work."</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Microphone"</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Open Settings"</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Required on Android 14+ to launch the call screen from a notification."</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Required to capture audio during voice calls."</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Required to show the call screen when the app is in the background."</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Some permissions are missing. Without them, voice calls may not work correctly."</ID>
+    <ID>NoHardcodedUiString:VoiceCallPermissionsCard.kt$"Voice Call Permissions"</ID>
+    <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End Call"</ID>
+    <ID>NoHardcodedUiString:VoiceCallScreen.kt$"End call"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"A private messenger that requires:"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"Columba"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"Get Started"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"No email address"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"No phone number"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"No sign-up or accounts"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"Restore from backup"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"Welcome to Columba"</ID>
+    <ID>NoHardcodedUiString:WelcomePage.kt$"Your identity is generated and stored securely on your device. You control it completely."</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Anonymous Peer"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Choose Your Display Name"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Columba"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Display Name"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Restore from backup"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Secure mesh messaging over Reticulum"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Skip"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"This name will be visible to other peers when you send messages and announces."</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"Welcome to Columba"</ID>
+    <ID>NoHardcodedUiString:WelcomeScreen.kt$"You can change this later in Settings"</ID>
+    <ID>NoHardcodedUiString:WizardComponents.kt$"Selected"</ID>
     <ID>ReturnCount:BatteryOptimizationManager.kt$BatteryOptimizationManager$fun shouldPromptForExemption(context: Context): Boolean</ID>
     <ID>ReturnCount:DebugViewModel.kt$DebugViewModel$fun generateShareText(displayName: String): String?</ID>
     <ID>ReturnCount:IdentityQrCodeUtils.kt$IdentityQrCodeUtils$fun decodeFromQrString(qrString: String): IdentityData?</ID>
@@ -66,7 +1869,6 @@
     <ID>UnusedParameter:MyIdentityScreen.kt$publicKey: ByteArray?</ID>
     <ID>UnusedParameter:QrScannerScreen.kt$onNavigateToConversation: (destinationHash: String) -&gt; Unit = {}</ID>
     <ID>UnusedPrivateMember:AnnounceStreamScreen.kt$private fun formatHash(hash: ByteArray): String</ID>
-    <ID>UnusedPrivateMember:ColumbaApplication.kt$ColumbaApplication$private suspend fun initializeReticulumService(rnsCore: RnsCore)</ID>
     <ID>UnusedPrivateMember:InterfaceDatabase.kt$InterfaceDatabase.Callback$private suspend fun populateDatabase(interfaceDao: InterfaceDao)</ID>
     <ID>UnusedPrivateMember:MessageCollector.kt$MessageCollector$private fun getPeerName(peerHash: String): String</ID>
     <ID>UnusedPrivateMember:MessageMapper.kt$@Deprecated( "Use parseReplyToFromFields — it accepts both the canonical 0x30 " + "format AND the legacy 0x10 overload.", ReplaceWith("parseReplyToFromFields(fieldsJson)"), ) private fun parseReplyToFromField16(fieldsJson: String?): String?</ID>

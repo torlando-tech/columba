@@ -128,6 +128,9 @@ columba:
     active: true
   DiscardedConcurrencyReturn:
     active: true
+  NoHardcodedUiString:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**']
   NoRelaxedMocks:
     active: true
   NoVerifyOnlyTests:

@@ -10,13 +10,32 @@
     <ID>EmptyFunctionBlock:BoundRnsBackendTest.kt$BoundRnsBackendTest.StubRnsNomadnet${}</ID>
     <ID>InstanceOfCheckForException:ServiceNotificationManager.kt$ServiceNotificationManager$e is android.app.ForegroundServiceStartNotAllowedException</ID>
     <ID>LongMethod:BleGattClient.kt$BleGattClient$private suspend fun enableNotifications( address: String, gatt: BluetoothGatt, txChar: BluetoothGattCharacteristic, )</ID>
-    <ID>LongMethod:BleGattClient.kt$BleGattClient$private suspend fun handleServicesDiscovered( address: String, gatt: BluetoothGatt, status: Int, )</ID>
     <ID>LongMethod:BleOperationQueue.kt$BleOperationQueue$private suspend fun executeOperation(operation: BleOperation): OperationResult</ID>
     <ID>LongMethod:KotlinBLEBridge.kt$KotlinBLEBridge$private suspend fun handleIdentityReceived( address: String, identityHash: String, isCentralConnection: Boolean, )</ID>
     <ID>LoopWithTooManyJumpStatements:KotlinRNodeBridge.kt$KotlinRNodeBridge$while</ID>
     <ID>MaxLineLength:BoundRnsBackendTest.kt$BoundRnsBackendTest.StubRnsLxmf$override suspend fun sendLxmfMessage(destinationHash: ByteArray, content: String, sourceIdentity: Identity, imageData: ByteArray?, imageFormat: String?, fileAttachments: List&lt;Pair&lt;String, ByteArray&gt;&gt;?): Result&lt;MessageReceipt&gt;</ID>
     <ID>MaxLineLength:BoundRnsBackendTest.kt$BoundRnsBackendTest.StubRnsLxmf$override suspend fun sendLxmfMessageWithMethod(destinationHash: ByteArray, content: String, sourceIdentity: Identity, deliveryMethod: DeliveryMethod, tryPropagationOnFail: Boolean, imageData: ByteArray?, imageFormat: String?, fileAttachments: List&lt;Pair&lt;String, ByteArray&gt;&gt;?, replyToMessageId: String?, replyQuotedContent: String?, iconAppearance: IconAppearance?, extraFields: Map&lt;Int, Any&gt;?): Result&lt;MessageReceipt&gt;</ID>
     <ID>MaxLineLength:BoundRnsBackendTest.kt$BoundRnsBackendTest.StubRnsTelemetry$override suspend fun sendLocationTelemetry(destinationHash: ByteArray, telemetry: LocationTelemetry, sourceIdentity: Identity, iconAppearance: IconAppearance?): Result&lt;MessageReceipt&gt;</ID>
+    <ID>NoHardcodedUiString:FirmwarePackage.kt$FrequencyBand.UNKNOWN$"Unknown"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.HELTEC_T114$"Heltec T114"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.HELTEC_V2$"Heltec LoRa32 v2"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.HELTEC_V3$"Heltec LoRa32 v3"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.HELTEC_V4$"Heltec LoRa32 v4"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.HOMEBREW$"Homebrew ESP32"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.LORA32_V2_0$"TTGO LoRa32 v2.0"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.LORA32_V2_1$"TTGO LoRa32 v2.1"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.RAK4631$"RAK4631"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.RNODE$"RNode (Original)"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.TBEAM$"LilyGO T-Beam"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.TBEAM_S$"LilyGO T-Beam Supreme"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.TDECK$"LilyGO T-Deck"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.TECHO$"LilyGO T-Echo"</ID>
+    <ID>NoHardcodedUiString:RNodeConstants.kt$RNodeBoard.UNKNOWN$"Unknown"</ID>
+    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"$names lost connection. Attempting to reconnect..."</ID>
+    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"Alerts when an RNode radio loses connection"</ID>
+    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"Columba Mesh Network"</ID>
+    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"Keeps Reticulum network running in background"</ID>
+    <ID>NoHardcodedUiString:ServiceNotificationManager.kt$ServiceNotificationManager$"RNode Disconnected"</ID>
     <ID>ReturnCount:BleConnectionManager.kt$BleConnectionManager$suspend fun connectToDevice(address: String): Result&lt;Unit&gt;</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$fun shouldConnect(peerAddress: String): Boolean</ID>
     <ID>ReturnCount:KotlinBLEBridge.kt$KotlinBLEBridge$suspend fun start( serviceUuid: String, rxCharUuid: String, txCharUuid: String, identityCharUuid: String, ): Result&lt;Unit&gt;</ID>
@@ -36,7 +55,6 @@
     <ID>TooManyFunctions:BleConnectionManager.kt$BleConnectionManager</ID>
     <ID>TooManyFunctions:BleGattClient.kt$BleGattClient</ID>
     <ID>TooManyFunctions:BleGattServer.kt$BleGattServer</ID>
-    <ID>TooManyFunctions:KotlinBLEBridge.kt$KotlinBLEBridge</ID>
     <ID>TooManyFunctions:KotlinRNodeBridge.kt$KotlinRNodeBridge</ID>
     <ID>UnusedParameter:BleGattClient.kt$BleGattClient$characteristic: BluetoothGattCharacteristic</ID>
     <ID>UnusedParameter:BleGattServer.kt$BleGattServer$preparedWrite: Boolean</ID>

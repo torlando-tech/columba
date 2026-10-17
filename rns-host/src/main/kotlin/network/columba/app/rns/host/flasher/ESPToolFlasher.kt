@@ -196,11 +196,36 @@ class ESPToolFlasher(
     private var lastProtocolError: String? = null
 
     /**
+     * Flash stage marker accompanying each [ProgressCallback.onProgress].
+     * Consumers branch on the stage, never on the display text of the
+     * message (i18n ticket 02: control flow must not depend on text that
+     * will eventually be translated).
+     */
+    enum class FlashStage {
+        PARSING_PACKAGE,
+        CONNECTING,
+        SYNCING,
+        ENTERING_BOOTLOADER,
+        DETECTING_CHIP,
+        SETTING_BAUD,
+        ATTACHING_FLASH,
+        CONFIGURING_FLASH,
+        FLASHING_BOOTLOADER,
+        FLASHING_PARTITION_TABLE,
+        FLASHING_BOOT_APP0,
+        FLASHING_APPLICATION,
+        FLASHING_CONSOLE,
+        FINALIZING,
+        COMPLETE,
+    }
+
+    /**
      * Callback interface for flash progress updates.
      */
     interface ProgressCallback {
         fun onProgress(
             percent: Int,
+            stage: FlashStage,
             message: String,
         )
 
@@ -250,7 +275,7 @@ class ESPToolFlasher(
                     "bootloader offset=0x${bootloaderOffset.toString(16)}",
             )
             try {
-                progressCallback.onProgress(0, "Parsing firmware package...")
+                progressCallback.onProgress(0, FlashStage.PARSING_PACKAGE, "Parsing firmware package...")
 
                 // Parse the firmware ZIP
                 val firmwareData = parseFirmwareZip(firmwareZipStream)
@@ -262,7 +287,7 @@ class ESPToolFlasher(
                 // Read console image if provided
                 val consoleImage = consoleImageStream?.readBytes()
 
-                progressCallback.onProgress(5, "Connecting to device...")
+                progressCallback.onProgress(5, FlashStage.CONNECTING, "Connecting to device...")
 
                 // Connect at initial baud rate
                 if (!usbBridge.connect(deviceId, INITIAL_BAUD)) {
@@ -273,7 +298,7 @@ class ESPToolFlasher(
                 // Enable raw mode for ESPTool - stops async reads so readBlocking() works
                 usbBridge.enableRawMode()
 
-                progressCallback.onProgress(8, "Syncing with bootloader...")
+                progressCallback.onProgress(8, FlashStage.SYNCING, "Syncing with bootloader...")
 
                 // First try to sync WITHOUT entering bootloader.
                 // This handles the case where user has manually entered bootloader mode.
@@ -285,13 +310,13 @@ class ESPToolFlasher(
                     Log.d(TAG, "Device already in bootloader mode (manual entry detected)")
                 } else {
                     // Not in bootloader yet, try to enter via DTR/RTS sequence
-                    progressCallback.onProgress(9, "Entering bootloader...")
+                    progressCallback.onProgress(9, FlashStage.ENTERING_BOOTLOADER, "Entering bootloader...")
                     if (!enterBootloader()) {
                         progressCallback.onError("Failed to enter bootloader mode")
                         return@withContext false
                     }
 
-                    progressCallback.onProgress(10, "Syncing with bootloader...")
+                    progressCallback.onProgress(10, FlashStage.SYNCING, "Syncing with bootloader...")
                     synced = sync()
                 }
 
@@ -301,7 +326,7 @@ class ESPToolFlasher(
                 }
 
                 // Read chip detect register - this "activates" the bootloader for subsequent commands
-                progressCallback.onProgress(11, "Detecting chip...")
+                progressCallback.onProgress(11, FlashStage.DETECTING_CHIP, "Detecting chip...")
                 val chipMagic = readChipDetectReg()
                 if (chipMagic != null) {
                     Log.d(TAG, "Chip magic: 0x${chipMagic.toString(16)}")
@@ -312,7 +337,7 @@ class ESPToolFlasher(
                 // Native USB doesn't use baud rate (it's not UART)
                 // Only attempt baud rate change for devices with USB-UART bridges
                 if (!isNativeUsb) {
-                    progressCallback.onProgress(12, "Switching to high-speed mode...")
+                    progressCallback.onProgress(12, FlashStage.SETTING_BAUD, "Switching to high-speed mode...")
                     if (changeBaudRate(FLASH_BAUD)) {
                         delay(50)
                         usbBridge.setBaudRate(FLASH_BAUD)
@@ -325,7 +350,7 @@ class ESPToolFlasher(
                 }
 
                 // SPI attach configures flash pins (required before flash operations)
-                progressCallback.onProgress(13, "Attaching SPI flash...")
+                progressCallback.onProgress(13, FlashStage.ATTACHING_FLASH, "Attaching SPI flash...")
                 if (!spiAttach()) {
                     if (verifyFlashWrites) {
                         progressCallback.onError(
@@ -338,7 +363,7 @@ class ESPToolFlasher(
                 }
 
                 flashSizeBytes?.let { size ->
-                    progressCallback.onProgress(14, "Configuring ${size / (1024 * 1024)} MiB flash...")
+                    progressCallback.onProgress(14, FlashStage.CONFIGURING_FLASH, "Configuring ${size / (1024 * 1024)} MiB flash...")
                     if (!spiSetParameters(size)) {
                         progressCallback.onError(
                             "Failed to configure ${size / (1024 * 1024)} MiB SPI flash: " +
@@ -348,7 +373,7 @@ class ESPToolFlasher(
                     }
                 }
 
-                progressCallback.onProgress(15, "Flashing bootloader...")
+                progressCallback.onProgress(15, FlashStage.FLASHING_BOOTLOADER, "Flashing bootloader...")
 
                 // Flash each region
                 var success = true
@@ -360,7 +385,7 @@ class ESPToolFlasher(
                         flashRegion(
                             bootloader,
                             bootloaderOffset,
-                            "bootloader",
+                            FlashStage.FLASHING_BOOTLOADER,
                             currentProgress,
                             20,
                             verifyFlashWrites,
@@ -370,7 +395,7 @@ class ESPToolFlasher(
                     currentProgress = 20
                 }
 
-                progressCallback.onProgress(currentProgress, "Flashing partition table...")
+                progressCallback.onProgress(currentProgress, FlashStage.FLASHING_PARTITION_TABLE, "Flashing partition table...")
 
                 // Partition table (if present)
                 firmwareData.partitions?.let { partitions ->
@@ -378,7 +403,7 @@ class ESPToolFlasher(
                         flashRegion(
                             partitions,
                             OFFSET_PARTITIONS,
-                            "partition table",
+                            FlashStage.FLASHING_PARTITION_TABLE,
                             currentProgress,
                             25,
                             verifyFlashWrites,
@@ -394,7 +419,7 @@ class ESPToolFlasher(
                         flashRegion(
                             bootApp0,
                             OFFSET_BOOT_APP0,
-                            "boot_app0",
+                            FlashStage.FLASHING_BOOT_APP0,
                             currentProgress,
                             30,
                             verifyFlashWrites,
@@ -404,14 +429,14 @@ class ESPToolFlasher(
                     currentProgress = 30
                 }
 
-                progressCallback.onProgress(currentProgress, "Flashing application...")
+                progressCallback.onProgress(currentProgress, FlashStage.FLASHING_APPLICATION, "Flashing application...")
 
                 // Main application (required)
                 success =
                     flashRegion(
                         firmwareData.application,
                         OFFSET_APPLICATION,
-                        "application",
+                        FlashStage.FLASHING_APPLICATION,
                         currentProgress,
                         80,
                         verifyFlashWrites,
@@ -421,12 +446,12 @@ class ESPToolFlasher(
 
                 // Console image (SPIFFS)
                 consoleImage?.let { image ->
-                    progressCallback.onProgress(80, "Flashing console image...")
+                    progressCallback.onProgress(80, FlashStage.FLASHING_CONSOLE, "Flashing console image...")
                     success =
                         flashRegion(
                             image,
                             OFFSET_CONSOLE,
-                            "console image",
+                            FlashStage.FLASHING_CONSOLE,
                             80,
                             95,
                             verifyFlashWrites,
@@ -435,7 +460,7 @@ class ESPToolFlasher(
                     if (!success) return@withContext false
                 }
 
-                progressCallback.onProgress(95, "Finalizing...")
+                progressCallback.onProgress(95, FlashStage.FINALIZING, "Finalizing...")
 
                 // Send FLASH_END to tell bootloader to reboot and run application
                 if (!sendFlashEnd(reboot = true)) {
@@ -451,7 +476,7 @@ class ESPToolFlasher(
                     hardReset()
                 }
 
-                progressCallback.onProgress(100, "Flash complete!")
+                progressCallback.onProgress(100, FlashStage.COMPLETE, "Flash complete!")
                 progressCallback.onComplete()
 
                 true
@@ -761,12 +786,13 @@ class ESPToolFlasher(
     private suspend fun flashRegion(
         data: ByteArray,
         offset: Int,
-        name: String,
+        stage: FlashStage,
         startProgress: Int,
         endProgress: Int,
         verifyWrite: Boolean,
         progressCallback: ProgressCallback,
     ): Boolean {
+        val name = stage.name.lowercase().removePrefix("flashing_").replace('_', ' ')
         Log.d(TAG, "Flashing $name: ${data.size} bytes at 0x${offset.toString(16)}")
 
         // ROM bootloader always uses 0x400 block size
@@ -848,6 +874,7 @@ class ESPToolFlasher(
                     ((blockNum + 1) * (endProgress - startProgress) / numBlocks)
             progressCallback.onProgress(
                 blockProgress,
+                stage,
                 "Flashing $name: ${blockNum + 1}/$numBlocks",
             )
         }

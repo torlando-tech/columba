@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -229,10 +231,12 @@ class CallViewModel
                             return@launch
                         }
 
-                        val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                        val error = result.exceptionOrNull()
+                        val errorMsg = error?.message ?: "Unknown error"
 
-                        // Retry if CallManager not initialized yet
-                        if (errorMsg.contains("not initialized", ignoreCase = true)) {
+                        // Retry while the backend's CallManager is still initializing (typed marker;
+                        // i18n ticket 02 — never sniff display text)
+                        if ((error as? RnsException)?.error is RnsError.CallManagerNotInitialized) {
                             retryCount++
                             if (retryCount < maxRetries) {
                                 Log.w(TAG, "📞 CallManager not ready, retrying in ${retryDelayMs}ms...")

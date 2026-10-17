@@ -671,6 +671,7 @@ class RNodeFlasher(
         object : ESPToolFlasher.ProgressCallback {
             override fun onProgress(
                 percent: Int,
+                stage: ESPToolFlasher.FlashStage,
                 message: String,
             ) {
                 _flashState.value = FlashState.Progress(percent, message)

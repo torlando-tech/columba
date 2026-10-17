@@ -2136,7 +2136,7 @@ class NativeRnsBackendImpl(
             runCatching {
                 val mgr =
                     callManager
-                        ?: error("Call manager not initialized")
+                        ?: throw RnsException(RnsError.CallManagerNotInitialized)
                 mgr.call(destinationHash, profileCode)
             }
         }
@@ -2146,7 +2146,7 @@ class NativeRnsBackendImpl(
             runCatching {
                 val mgr =
                     callManager
-                        ?: error("Call manager not initialized")
+                        ?: throw RnsException(RnsError.CallManagerNotInitialized)
                 mgr.answer()
             }
         }

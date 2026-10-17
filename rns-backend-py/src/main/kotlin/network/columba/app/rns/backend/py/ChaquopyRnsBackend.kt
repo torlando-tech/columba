@@ -91,7 +91,7 @@ class ChaquopyRnsBackend(
     /**
      * Duty-cycle wake-lock hook: stash on the runtime; [PythonRnsRuntime.start]
      * forwards it into `event_bridge.install_traffic_activity_callback` so the
-     * wrapped `Interface.process_incoming/process_outgoing` can signal the
+     * wrapped `Transport.inbound/outbound` can signal the
      * service's LockManager on mesh traffic.
      */
     override fun setTrafficActivityCallback(callback: (() -> Unit)?) {

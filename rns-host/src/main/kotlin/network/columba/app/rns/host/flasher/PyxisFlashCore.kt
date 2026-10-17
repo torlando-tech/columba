@@ -44,8 +44,12 @@ internal class PyxisFlashCore(
         var callbackError = false
         val callback =
             object : ESPToolFlasher.ProgressCallback {
-                override fun onProgress(percent: Int, message: String) {
-                    if (message !in SUPPRESSED_RNODE_PROGRESS_MESSAGES) {
+                override fun onProgress(
+                    percent: Int,
+                    stage: ESPToolFlasher.FlashStage,
+                    message: String,
+                ) {
+                    if (stage !in SUPPRESSED_RNODE_STAGES) {
                         emitState(RNodeFlasher.FlashState.Progress(percent, message))
                     }
                 }
@@ -98,10 +102,12 @@ internal class PyxisFlashCore(
     }
 
     private companion object {
-        val SUPPRESSED_RNODE_PROGRESS_MESSAGES =
+        // The T-Deck Plus has no user-visible bootloader/partition-table stage;
+        // suppress by stage enum, never by message text (i18n ticket 02).
+        val SUPPRESSED_RNODE_STAGES =
             setOf(
-                "Flashing bootloader...",
-                "Flashing partition table...",
+                ESPToolFlasher.FlashStage.FLASHING_BOOTLOADER,
+                ESPToolFlasher.FlashStage.FLASHING_PARTITION_TABLE,
             )
     }
 }

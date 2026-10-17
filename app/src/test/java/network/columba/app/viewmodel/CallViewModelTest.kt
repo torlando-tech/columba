@@ -8,6 +8,8 @@ import network.columba.app.data.repository.AnnounceRepository
 import network.columba.app.data.repository.ContactRepository
 import network.columba.app.audio.CallMicrophoneAdmissionCoordinator
 import network.columba.app.audio.MicrophoneAdmissionArbiter
+import network.columba.app.rns.api.RnsError
+import network.columba.app.rns.api.RnsException
 import network.columba.app.rns.api.RnsTelephony
 import network.columba.app.rns.api.model.CallState
 import io.mockk.clearAllMocks
@@ -23,6 +25,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -233,6 +236,39 @@ class CallViewModelTest {
 
             assertTrue(connectingHashSlot.isCaptured)
             assertEquals(testHash, connectingHashSlot.captured)
+        }
+
+    @Test
+    fun `initiateCall retries while CallManagerNotInitialized then succeeds`() =
+        runTest {
+            var attempts = 0
+            coEvery { mockTelephony.initiateCall(any(), any()) } coAnswers {
+                attempts++
+                if (attempts < 3) {
+                    Result.failure(RnsException(RnsError.CallManagerNotInitialized))
+                } else {
+                    Result.success(Unit)
+                }
+            }
+
+            viewModel.initiateCall("abc123def456789012345678901234567890")
+            advanceUntilIdle()
+
+            assertEquals(3, attempts)
+            coVerify(exactly = 0) { mockTelephony.setEnded() }
+        }
+
+    @Test
+    fun `initiateCall does not retry other typed errors`() =
+        runTest {
+            coEvery { mockTelephony.initiateCall(any(), any()) } returns
+                Result.failure(RnsException(RnsError.BackendNotReady))
+
+            viewModel.initiateCall("abc123def456789012345678901234567890")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { mockTelephony.initiateCall(any(), any()) }
+            coVerify(exactly = 1) { mockTelephony.setEnded() }
         }
 
     @Test

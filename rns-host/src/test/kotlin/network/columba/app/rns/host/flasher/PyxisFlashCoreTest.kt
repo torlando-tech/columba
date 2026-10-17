@@ -24,7 +24,7 @@ class PyxisFlashCoreTest {
                 findDevice = { id -> if (id == 42) usbDevice(id, 0x303A, 0x1001) else null },
                 transport = PyxisEspToolTransport { request ->
                     captured = request
-                    request.progressCallback.onProgress(50, "writing")
+                    request.progressCallback.onProgress(50, ESPToolFlasher.FlashStage.FLASHING_APPLICATION, "writing")
                     request.progressCallback.onComplete()
                     true
                 },
@@ -105,8 +105,8 @@ class PyxisFlashCoreTest {
             PyxisFlashCore(
                 findDevice = { usbDevice(it, 0x303A, 0x1001) },
                 transport = PyxisEspToolTransport { request ->
-                    request.progressCallback.onProgress(10, "Flashing bootloader...")
-                    request.progressCallback.onProgress(20, "Flashing partition table...")
+                    request.progressCallback.onProgress(10, ESPToolFlasher.FlashStage.FLASHING_BOOTLOADER, "Flashing bootloader...")
+                    request.progressCallback.onProgress(20, ESPToolFlasher.FlashStage.FLASHING_PARTITION_TABLE, "Flashing partition table...")
                     throw ESPToolFlasher.ManualBootModeRequired("RNode firmware is installed")
                 },
                 emitState = states::add,

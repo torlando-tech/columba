@@ -134,6 +134,64 @@ jobs:
             build/reports/cpd/
           retention-days: 7
 
+  ui-text-equivalence:
+    name: UI text equivalence (sink gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.4.0
+        with:
+          cache-read-only: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Diff base vs head UI-text skeletons
+        # Machine proof that a PR does not change rendered UI text (i18n
+        # ticket 23). The dumper runs from the HEAD checkout with
+        # -PdumpRoot pointed at each tree, so the base tree needs no
+        # uiTextDump task of its own. PRs that intentionally change strings
+        # carry the `string-changes-expected` label; reviewers approve the
+        # printed diff.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if echo "$LABELS" | grep -q 'string-changes-expected'; then
+            echo "Label 'string-changes-expected' present — string changes approved."
+            exit 0
+          fi
+          git fetch -q origin "$BASE_SHA"
+          git worktree add -q ../base "$BASE_SHA"
+          mapfile -t FILES < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '*.kt' | grep -vE '(^|/)(test|androidTest)/' || true)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "No changed main-source .kt files."
+            exit 0
+          fi
+          IFS=,
+          ./gradlew -q :detekt-rules:uiTextDump -PdumpRoot=. -PdumpOut=/tmp/head.txt -PdumpFiles="${FILES[*]}"
+          ./gradlew -q :detekt-rules:uiTextDump -PdumpRoot=../base -PdumpOut=/tmp/base.txt -PdumpFiles="${FILES[*]}"
+          if ! diff -u /tmp/base.txt /tmp/head.txt > /tmp/gate.diff; then
+            echo "::error::UI text changed without the 'string-changes-expected' label. Diff below (base -> head). If the change is intentional, add that label and request review."
+            cat /tmp/gate.diff
+            exit 1
+          fi
+          echo "✓ UI text identical across base and head (${#FILES[@]} files checked)"
+
+
   threading-audit:
     name: Threading Architecture Audit
     runs-on: ubuntu-latest

@@ -172,6 +172,7 @@ class SettingsRepository
             val BLOCK_UNKNOWN_SENDERS = booleanPreferencesKey("block_unknown_senders")
             val ALLOW_CALLS_FROM_CONTACTS_ONLY = booleanPreferencesKey("allow_calls_from_contacts_only")
             val ALLOW_VOICE_CALLS = booleanPreferencesKey("allow_voice_calls")
+            val PERSISTENT_WAKE_LOCK = booleanPreferencesKey("persistent_wake_lock")
 
             // Telemetry collector preferences
             val TELEMETRY_COLLECTOR_ADDRESS = stringPreferencesKey("telemetry_collector_address")
@@ -2204,6 +2205,7 @@ class SettingsRepository
             const val KEY_BLOCK_UNKNOWN_SENDERS = "block_unknown_senders"
             const val KEY_ALLOW_CALLS_FROM_CONTACTS_ONLY = "allow_calls_from_contacts_only"
             const val KEY_ALLOW_VOICE_CALLS = "allow_voice_calls"
+            const val KEY_PERSISTENT_WAKE_LOCK = "persistent_wake_lock"
 
             /** Default telemetry send interval: 5 minutes */
             const val DEFAULT_TELEMETRY_SEND_INTERVAL_SECONDS = 300
@@ -2487,6 +2489,48 @@ class SettingsRepository
                 .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
                 .edit()
                 .putBoolean(KEY_ALLOW_VOICE_CALLS, enabled)
+                .apply()
+        }
+
+        /**
+         * Persistent wake lock setting (Advanced). True (default) = the Reticulum
+         * service holds a PARTIAL_WAKE_LOCK for its whole lifetime so the CPU never
+         * suspends and mesh packets are processed with zero latency. False =
+         * duty-cycle mode: the CPU may sleep between mesh traffic; short timed
+         * locks cover active RX/TX bursts instead.
+         */
+        val persistentWakeLockFlow: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PERSISTENT_WAKE_LOCK] ?: true
+                }.distinctUntilChanged()
+
+        /** Get the persistent-wake-lock setting (non-flow). */
+        suspend fun getPersistentWakeLock(): Boolean =
+            context.dataStore.data
+                .map { preferences ->
+                    preferences[PreferencesKeys.PERSISTENT_WAKE_LOCK] ?: true
+                }.first()
+
+        /**
+         * Save the persistent-wake-lock setting.
+         *
+         * Dual-writes DataStore + MODE_MULTI_PROCESS SharedPreferences so the
+         * `:reticulum` process reads the persisted value at cold-start
+         * (START_STICKY restart / snapshot self-init). Runtime delivery to the
+         * live service happens via the `ACTION_SET_WAKE_LOCK_MODE` intent from
+         * the ViewModel — SharedPreferences listeners do not fire across
+         * processes.
+         */
+        @Suppress("DEPRECATION") // MODE_MULTI_PROCESS needed for cross-process reads
+        suspend fun savePersistentWakeLock(enabled: Boolean) {
+            context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.PERSISTENT_WAKE_LOCK] = enabled
+            }
+            context
+                .getSharedPreferences(CROSS_PROCESS_PREFS_NAME, Context.MODE_MULTI_PROCESS)
+                .edit()
+                .putBoolean(KEY_PERSISTENT_WAKE_LOCK, enabled)
                 .apply()
         }
 

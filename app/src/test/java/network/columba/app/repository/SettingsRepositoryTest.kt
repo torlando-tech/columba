@@ -1174,6 +1174,48 @@ class SettingsRepositoryTest {
             assertFalse("Both should be false after save(false)", methodValue)
         }
 
+    // ========== Persistent Wake Lock Flow Tests ==========
+
+    @Test
+    fun persistentWakeLockFlow_defaultsToTrue() =
+        runTest {
+            repository.persistentWakeLockFlow.test(timeout = 5.seconds) {
+                assertTrue("Persistent wake lock defaults to enabled (existing behavior)", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun getPersistentWakeLock_matchesFlow() =
+        runTest {
+            repository.savePersistentWakeLock(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val flowValue = repository.persistentWakeLockFlow.first()
+            val methodValue = repository.getPersistentWakeLock()
+
+            assertEquals("Flow and method should return same value", flowValue, methodValue)
+            assertFalse("Both should be false after save(false)", methodValue)
+        }
+
+    @Test
+    fun savePersistentWakeLock_dualWritesCrossProcessPrefs() =
+        runTest {
+            repository.savePersistentWakeLock(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            @Suppress("DEPRECATION")
+            val crossPrefs =
+                context.getSharedPreferences(
+                    SettingsRepository.CROSS_PROCESS_PREFS_NAME,
+                    android.content.Context.MODE_MULTI_PROCESS,
+                )
+            assertFalse(
+                "Service-side mirror must see the toggled value",
+                crossPrefs.getBoolean(SettingsRepository.KEY_PERSISTENT_WAKE_LOCK, true),
+            )
+        }
+
     // ========== Telemetry Collector Flow Tests ==========
 
     @Test

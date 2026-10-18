@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,6 +61,7 @@ fun IdentityUnlockScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val activeIdentity by viewModel.activeIdentity.collectAsState()
+    val context = LocalContext.current
 
     val importLauncher =
         rememberLauncherForActivityResult(
@@ -139,10 +141,10 @@ fun IdentityUnlockScreen(
 
             when (val state = uiState) {
                 is IdentityUnlockUiState.Loading -> {
-                    LoadingBlock(state.message)
+                    LoadingBlock(state.message.resolve(context))
                 }
                 is IdentityUnlockUiState.Error -> {
-                    ErrorBlock(state.message) {
+                    ErrorBlock(state.message.resolve(context)) {
                         viewModel.dismissError()
                     }
                 }

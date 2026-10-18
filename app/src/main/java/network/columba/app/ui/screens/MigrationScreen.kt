@@ -173,7 +173,7 @@ fun MigrationScreen(
                 )
             }
             is MigrationUiState.Error -> {
-                snackbarHostState.showSnackbar(state.message)
+                snackbarHostState.showSnackbar(state.message.resolve(context))
             }
             else -> {}
         }
@@ -327,6 +327,7 @@ private fun ExportSection(
     onIncludeAttachmentsChange: (Boolean) -> Unit,
     onExport: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors =
@@ -390,7 +391,7 @@ private fun ExportSection(
                 }
                 is ExportResult.Error -> {
                     Text(
-                        "Could not load preview: ${exportPreview.message}",
+                        "Could not load preview: ${exportPreview.message.resolve(context)}",
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -494,6 +495,7 @@ private fun ImportSection(
     onSelectFile: () -> Unit,
     onImportComplete: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors =
@@ -605,7 +607,7 @@ private fun ImportSection(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                uiState.message,
+                                uiState.message.resolve(context),
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                             )
                         }

@@ -5,11 +5,13 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.FileProvider
+import network.columba.app.R
 import network.columba.app.data.crypto.IdentityKeyEncryptor
 import network.columba.app.data.crypto.IdentityKeyProvider
 import network.columba.app.data.database.InterfaceDatabase
 import network.columba.app.data.db.ColumbaDatabase
 import network.columba.app.repository.SettingsRepository
+import network.columba.app.viewmodel.UiMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -577,7 +579,7 @@ class MigrationExporter
                         callHistoryCount = callHistoryCount,
                     )
                 } catch (e: Exception) {
-                    ExportResult.Error("Failed to get export preview: ${e.message}", e)
+                    ExportResult.Error(UiMessage.Text(R.string.migration_export_preview_failed, listOf(e.message ?: "null")), e)
                 }
             }
 

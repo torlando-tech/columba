@@ -42,3 +42,11 @@ sealed interface UiMessage {
         override fun resolve(context: Context): String = text
     }
 }
+
+/**
+ * Maps an exception to a [UiMessage]: a non-null exception message passes
+ * through verbatim as [UiMessage.Raw] (developer diagnostics stay English);
+ * a null message falls back to the localized [fallbackRes].
+ */
+fun Throwable?.toUiMessage(@StringRes fallbackRes: Int): UiMessage =
+    this?.message?.let { UiMessage.Raw(it) } ?: UiMessage.Text(fallbackRes)

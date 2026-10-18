@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import network.columba.app.R
 import network.columba.app.nomadnet.NomadNetPageCache
 import network.columba.app.micron.MicronParser
 import network.columba.app.repository.SettingsRepository
@@ -730,7 +731,7 @@ class NomadNetBrowserViewModelTest {
 
             val state = viewModel.browserState.value
             assertTrue("Should be Error", state is NomadNetBrowserViewModel.BrowserState.Error)
-            assertEquals("Connection timed out", (state as NomadNetBrowserViewModel.BrowserState.Error).message)
+            assertEquals(UiMessage.Raw("Connection timed out"), (state as NomadNetBrowserViewModel.BrowserState.Error).message)
         }
 
     @Test
@@ -1227,7 +1228,7 @@ class NomadNetBrowserViewModelTest {
 
             val state = viewModel.browserState.value
             assertTrue(state is NomadNetBrowserViewModel.BrowserState.Error)
-            assertEquals("Cancelled", (state as NomadNetBrowserViewModel.BrowserState.Error).message)
+            assertEquals(UiMessage.Text(R.string.nomadnet_status_cancelled), (state as NomadNetBrowserViewModel.BrowserState.Error).message)
         }
 
     // ── updateField ──
@@ -1360,7 +1361,7 @@ class NomadNetBrowserViewModelTest {
             Thread.sleep(100) // Wait for Dispatchers.IO coroutine
 
             assertFalse(viewModel.isIdentified.value)
-            assertEquals("Link failed", viewModel.identifyError.value)
+            assertEquals(UiMessage.Raw("Link failed"), viewModel.identifyError.value)
             assertFalse(viewModel.identifyInProgress.value)
         }
 

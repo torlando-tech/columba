@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
+import network.columba.app.R
 import network.columba.app.data.repository.OfflineMapRegion
 import network.columba.app.data.repository.OfflineMapRegionRepository
 import network.columba.app.map.MapLibreOfflineManager
@@ -437,8 +438,10 @@ class OfflineMapsViewModelTest {
 
                 val finalState = expectMostRecentItem()
                 assertNotNull(finalState.errorMessage)
-                assertTrue(finalState.errorMessage!!.contains("Failed to delete region"))
-                assertTrue(finalState.errorMessage!!.contains("Database error"))
+                assertEquals(
+                    UiMessage.Text(R.string.offline_map_delete_failed, listOf("Database error")),
+                    finalState.errorMessage,
+                )
                 assertFalse(finalState.isDeleting)
 
                 cancelAndConsumeRemainingEvents()
@@ -531,7 +534,10 @@ class OfflineMapsViewModelTest {
                 regionsFlow.value = listOf(createTestRegion(TestRegionConfig(id = 99, name = "New Region")))
                 state = awaitItem()
                 assertNotNull(state.errorMessage)
-                assertTrue(state.errorMessage!!.contains("Persistent error"))
+                assertEquals(
+                    UiMessage.Text(R.string.offline_map_delete_failed, listOf("Persistent error")),
+                    state.errorMessage,
+                )
 
                 cancelAndConsumeRemainingEvents()
             }
@@ -713,7 +719,7 @@ class OfflineMapsViewModelTest {
                 totalStorageBytes = 1000L,
                 isLoading = false,
                 isDeleting = true,
-                errorMessage = "test error",
+                errorMessage = UiMessage.Raw("test error"),
             )
 
         // Copy with one field changed
@@ -723,7 +729,7 @@ class OfflineMapsViewModelTest {
         assertEquals(1000L, copiedState.totalStorageBytes)
         assertFalse(copiedState.isLoading)
         assertFalse(copiedState.isDeleting)
-        assertEquals("test error", copiedState.errorMessage)
+        assertEquals(UiMessage.Raw("test error"), copiedState.errorMessage)
     }
 
     // endregion
@@ -975,8 +981,7 @@ class OfflineMapsViewModelTest {
                     assertNotNull(result)
                     assertFalse(result!!.isChecking)
                     assertNull(result.latestVersion)
-                    assertNotNull(result.error)
-                    assertTrue(result.error!!.contains("Could not reach"))
+                    assertEquals(UiMessage.Text(R.string.offline_map_update_server_unreachable), result.error)
 
                     cancelAndConsumeRemainingEvents()
                 }
@@ -1004,8 +1009,10 @@ class OfflineMapsViewModelTest {
                     val result = state.updateCheckResults[42L]
                     assertNotNull(result)
                     assertFalse(result!!.isChecking)
-                    assertNotNull(result.error)
-                    assertTrue(result.error!!.contains("Network timeout"))
+                    assertEquals(
+                        UiMessage.Text(R.string.offline_map_update_check_failed, listOf(UiMessage.Raw("Network timeout"))),
+                        result.error,
+                    )
 
                     cancelAndConsumeRemainingEvents()
                 }
@@ -1232,7 +1239,7 @@ class OfflineMapsViewModelTest {
                 currentVersion = "v1",
                 latestVersion = "v2",
                 isChecking = true,
-                error = "test error",
+                error = UiMessage.Raw("test error"),
             )
 
         val copied = original.copy(isChecking = false)
@@ -1241,7 +1248,7 @@ class OfflineMapsViewModelTest {
         assertEquals("v1", copied.currentVersion)
         assertEquals("v2", copied.latestVersion)
         assertFalse(copied.isChecking)
-        assertEquals("test error", copied.error)
+        assertEquals(UiMessage.Raw("test error"), copied.error)
     }
 
     @Test

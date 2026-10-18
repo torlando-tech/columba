@@ -24,6 +24,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import network.columba.app.R
 import network.columba.app.data.model.BluetoothType
 import network.columba.app.data.model.CommunitySlots
 import network.columba.app.data.model.DeviceClassifier
@@ -44,6 +45,7 @@ import network.columba.app.util.RssiThrottler
 import network.columba.app.util.validation.DeviceNameValidator
 import network.columba.app.util.validation.InputValidator
 import network.columba.app.util.validation.ValidationResult
+import network.columba.app.util.validation.messageResource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -121,20 +123,20 @@ data class RNodeWizardState(
     // Transport mode - sends TNC KISS commands instead of saving interface config
     val transportMode: Boolean = false,
     val transportConfiguring: Boolean = false,
-    val transportConfigError: String? = null,
+    val transportConfigError: UiMessage? = null,
     // Step 1: Device Discovery
     val connectionType: RNodeConnectionType = RNodeConnectionType.BLUETOOTH,
     val isScanning: Boolean = false,
     val discoveredDevices: List<DiscoveredRNode> = emptyList(),
     val selectedDevice: DiscoveredRNode? = null,
-    val scanError: String? = null,
+    val scanError: UiMessage? = null,
     val showManualEntry: Boolean = false,
     val manualDeviceName: String = "",
-    val manualDeviceNameError: String? = null,
-    val manualDeviceNameWarning: String? = null,
+    val manualDeviceNameError: UiMessage? = null,
+    val manualDeviceNameWarning: UiMessage? = null,
     val manualBluetoothType: BluetoothType = BluetoothType.CLASSIC,
     val isPairingInProgress: Boolean = false,
-    val pairingError: String? = null,
+    val pairingError: UiMessage? = null,
     val pairingTimeRemaining: Int = 0,
     val lastPairingDeviceAddress: String? = null,
     val isWaitingForReconnect: Boolean = false,
@@ -144,17 +146,17 @@ data class RNodeWizardState(
     val tcpPort: String = "7633",
     val isTcpValidating: Boolean = false,
     val tcpValidationSuccess: Boolean? = null,
-    val tcpValidationError: String? = null,
+    val tcpValidationError: UiMessage? = null,
     // USB Serial connection fields
     val usbDevices: List<network.columba.app.data.model.DiscoveredUsbDevice> = emptyList(),
     val selectedUsbDevice: network.columba.app.data.model.DiscoveredUsbDevice? = null,
     val isUsbScanning: Boolean = false,
-    val usbScanError: String? = null,
+    val usbScanError: UiMessage? = null,
     val isRequestingUsbPermission: Boolean = false,
     // Bluetooth pairing via USB mode
     val isUsbPairingMode: Boolean = false,
     val usbBluetoothPin: String? = null,
-    val usbPairingStatus: String? = null,
+    val usbPairingStatus: UiMessage? = null,
     val usbPairingPhase: UsbPairingPhase? = null,
     val showManualPinEntry: Boolean = false,
     val manualPinInput: String = "",
@@ -162,11 +164,10 @@ data class RNodeWizardState(
     val isUsbAssistedPairingActive: Boolean = false,
     val usbAssistedPairingDevices: List<network.columba.app.data.model.DiscoveredRNode> = emptyList(),
     val usbAssistedPairingPin: String? = null,
-    val usbAssistedPairingStatus: String? = null,
     // Companion Device Association (Android 12+)
     val isAssociating: Boolean = false,
     val pendingAssociationIntent: IntentSender? = null,
-    val associationError: String? = null,
+    val associationError: UiMessage? = null,
     // Step 2: Region/Frequency Selection
     val searchQuery: String = "",
     val selectedCountry: String? = null,
@@ -211,20 +212,20 @@ data class RNodeWizardState(
     // Network transport restriction (TCP-only field; ignored when connectionType != TCP_WIFI)
     val networkRestriction: String = NetworkRestriction.ANY.value,
     // Validation errors
-    val nameError: String? = null,
-    val frequencyError: String? = null,
-    val bandwidthError: String? = null,
-    val txPowerError: String? = null,
-    val spreadingFactorError: String? = null,
-    val codingRateError: String? = null,
-    val stAlockError: String? = null,
-    val ltAlockError: String? = null,
+    val nameError: UiMessage? = null,
+    val frequencyError: UiMessage? = null,
+    val bandwidthError: UiMessage? = null,
+    val txPowerError: UiMessage? = null,
+    val spreadingFactorError: UiMessage? = null,
+    val codingRateError: UiMessage? = null,
+    val stAlockError: UiMessage? = null,
+    val ltAlockError: UiMessage? = null,
     // Regulatory warning
     val showRegulatoryWarning: Boolean = false,
-    val regulatoryWarningMessage: String? = null,
+    val regulatoryWarningMessage: UiMessage? = null,
     // Save state
     val isSaving: Boolean = false,
-    val saveError: String? = null,
+    val saveError: UiMessage? = null,
     val saveSuccess: Boolean = false,
     // Pending LoRa params from discovered interfaces (applied when reaching Review step)
     val pendingFrequency: Long? = null,
@@ -438,7 +439,7 @@ class RNodeWizardViewModel
                                 manufacturerName = null,
                                 productName = "Configured USB RNode",
                                 serialNumber = null,
-                                driverType = "Unknown",
+                                driverType = network.columba.app.data.model.DiscoveredUsbDevice.DRIVER_TYPE_UNKNOWN,
                                 hasPermission = true, // Assume permission since it was previously configured
                             )
                         } else {
@@ -981,7 +982,7 @@ class RNodeWizardViewModel
         fun startDeviceScan() {
             // Check for Bluetooth availability early before starting scan
             if (bluetoothAdapter == null) {
-                setScanError("Bluetooth not available on this device")
+                setScanError(UiMessage.Text(R.string.rnode_wizard_bt_unavailable))
                 return
             }
 
@@ -1129,9 +1130,7 @@ class RNodeWizardViewModel
             if (devices.isEmpty()) {
                 _state.update {
                     it.copy(
-                        scanError =
-                            "No RNode devices found. " +
-                                "Make sure your RNode is powered on and Bluetooth is enabled.",
+                        scanError = UiMessage.Text(R.string.rnode_wizard_no_devices_found),
                     )
                 }
             }
@@ -1211,17 +1210,20 @@ class RNodeWizardViewModel
 
                     override fun onScanFailed(errorCode: Int) {
                         Log.e(TAG, "BLE scan failed: $errorCode")
-                        val errorMessage =
+                        val message: UiMessage =
                             when (errorCode) {
-                                1 -> "BLE scan failed: already started"
-                                2 -> "BLE scan failed: app not registered"
-                                3 -> "BLE scan failed: internal error"
-                                4 -> "BLE scan failed: feature unsupported"
-                                5 -> "BLE scan failed: out of hardware resources"
-                                6 -> "BLE scan failed: scanning too frequently"
-                                else -> "BLE scan failed: error code $errorCode"
+                                1 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_already_started)
+                                2 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_not_registered)
+                                3 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_internal_error)
+                                4 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_unsupported)
+                                5 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_no_resources)
+                                6 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_too_frequent)
+                                else -> UiMessage.Text(
+                                    R.string.rnode_wizard_ble_scan_failed_error_code,
+                                    listOf(errorCode),
+                                )
                             }
-                        setScanError(errorMessage)
+                        setScanError(message)
                     }
                 }
 
@@ -1231,14 +1233,14 @@ class RNodeWizardViewModel
                 scanner.stopScan(callback)
             } catch (e: SecurityException) {
                 Log.e(TAG, "BLE scan permission denied", e)
-                setScanError("Bluetooth permission required. Please grant Bluetooth permissions in Settings.")
+                setScanError(UiMessage.Text(R.string.rnode_wizard_bt_permission_required))
             }
         }
 
         /**
          * Set a scan error message and stop scanning.
          */
-        private fun setScanError(message: String) {
+        private fun setScanError(message: UiMessage) {
             _state.update {
                 it.copy(
                     scanError = message,
@@ -1547,7 +1549,9 @@ class RNodeWizardViewModel
                                 it.copy(
                                     isAssociating = false,
                                     pendingAssociationIntent = null,
-                                    associationError = error?.toString() ?: "Association failed",
+                                    associationError =
+                                        error?.toString()?.let { UiMessage.Raw(it) }
+                                            ?: UiMessage.Text(R.string.rnode_wizard_association_failed),
                                 )
                             }
                         }
@@ -1560,7 +1564,9 @@ class RNodeWizardViewModel
                 _state.update {
                     it.copy(
                         isAssociating = false,
-                        associationError = e.message ?: "Failed to start association",
+                        associationError =
+                            e.message?.let { UiMessage.Raw(it) }
+                                ?: UiMessage.Text(R.string.rnode_wizard_association_start_failed),
                     )
                 }
             }
@@ -1663,12 +1669,17 @@ class RNodeWizardViewModel
          * Validates the manual device name entry.
          * @return Pair of (error, warning) - error prevents proceeding, warning is informational
          */
-        private fun validateManualDeviceName(name: String): Pair<String?, String?> =
+        private fun validateManualDeviceName(name: String): Pair<UiMessage?, UiMessage?> =
             when (val result = DeviceNameValidator.validate(name)) {
                 is DeviceNameValidator.ValidationResult.Valid -> null to null
-                is DeviceNameValidator.ValidationResult.Error -> result.message to null
-                is DeviceNameValidator.ValidationResult.Warning -> null to result.message
+                is DeviceNameValidator.ValidationResult.Error ->
+                    result.error.toUiMessage() to null
+                is DeviceNameValidator.ValidationResult.Warning ->
+                    null to result.warning.toUiMessage()
             }
+
+        private fun DeviceNameValidator.DeviceNameError.toUiMessage(): UiMessage =
+            UiMessage.Text(reason.messageResource(), args)
 
         fun updateManualBluetoothType(type: BluetoothType) {
             _state.update { it.copy(manualBluetoothType = type) }
@@ -1765,7 +1776,7 @@ class RNodeWizardViewModel
                 _state.update {
                     it.copy(
                         tcpValidationSuccess = false,
-                        tcpValidationError = "Host cannot be empty",
+                        tcpValidationError = UiMessage.Text(R.string.rnode_wizard_tcp_host_empty),
                     )
                 }
                 return
@@ -1775,7 +1786,7 @@ class RNodeWizardViewModel
                 _state.update {
                     it.copy(
                         tcpValidationSuccess = false,
-                        tcpValidationError = "Port must be between 1 and 65535",
+                        tcpValidationError = UiMessage.Text(R.string.rnode_wizard_tcp_port_range),
                     )
                 }
                 return
@@ -1802,7 +1813,12 @@ class RNodeWizardViewModel
                         it.copy(
                             isTcpValidating = false,
                             tcpValidationSuccess = success,
-                            tcpValidationError = if (!success) "Could not connect to $host:$port" else null,
+                            tcpValidationError =
+                                if (!success) {
+                                    UiMessage.Text(R.string.rnode_wizard_tcp_connect_failed, listOf(host, port))
+                                } else {
+                                    null
+                                },
                         )
                     }
                 } catch (e: Exception) {
@@ -1811,7 +1827,9 @@ class RNodeWizardViewModel
                         it.copy(
                             isTcpValidating = false,
                             tcpValidationSuccess = false,
-                            tcpValidationError = e.message ?: "Connection failed",
+                            tcpValidationError =
+                                e.message?.let { UiMessage.Raw(it) }
+                                    ?: UiMessage.Text(R.string.rnode_wizard_tcp_connection_failed),
                         )
                     }
                 }
@@ -1854,7 +1872,12 @@ class RNodeWizardViewModel
                         it.copy(
                             isUsbScanning = false,
                             usbDevices = usbDevices,
-                            usbScanError = if (usbDevices.isEmpty()) "No USB serial devices found" else null,
+                            usbScanError =
+                                if (usbDevices.isEmpty()) {
+                                    UiMessage.Text(R.string.rnode_wizard_usb_no_devices)
+                                } else {
+                                    null
+                                },
                         )
                     }
 
@@ -1864,7 +1887,7 @@ class RNodeWizardViewModel
                     _state.update {
                         it.copy(
                             isUsbScanning = false,
-                            usbScanError = "Failed to scan USB devices: ${e.message}",
+                            usbScanError = UiMessage.Text(R.string.rnode_wizard_usb_scan_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -1933,7 +1956,7 @@ class RNodeWizardViewModel
                         _state.update {
                             it.copy(
                                 isRequestingUsbPermission = false,
-                                usbScanError = "USB permission denied. Please grant permission to use this device.",
+                                usbScanError = UiMessage.Text(R.string.rnode_wizard_usb_permission_denied),
                             )
                         }
                     }
@@ -1982,7 +2005,7 @@ class RNodeWizardViewModel
                             manufacturerName = null,
                             productName = "USB RNode",
                             serialNumber = null,
-                            driverType = "Unknown",
+                            driverType = network.columba.app.data.model.DiscoveredUsbDevice.DRIVER_TYPE_UNKNOWN,
                             hasPermission = false,
                         )
                     _state.update {
@@ -2036,7 +2059,7 @@ class RNodeWizardViewModel
                         _state.update {
                             it.copy(
                                 isUsbPairingMode = false,
-                                usbScanError = "Failed to connect to USB device",
+                                usbScanError = UiMessage.Text(R.string.rnode_wizard_usb_connect_failed),
                             )
                         }
                         return@launch
@@ -2063,7 +2086,7 @@ class RNodeWizardViewModel
                         _state.update {
                             it.copy(
                                 isUsbPairingMode = false,
-                                usbScanError = "Failed to send pairing command",
+                                usbScanError = UiMessage.Text(R.string.rnode_wizard_usb_pair_command_failed),
                             )
                         }
                         usbBridge.disconnect()
@@ -2075,7 +2098,7 @@ class RNodeWizardViewModel
                     // Show unified status during PIN wait + discovery
                     _state.update {
                         it.copy(
-                            usbPairingStatus = "Waiting for PIN or scanning for RNode...",
+                            usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_waiting_pin),
                             usbPairingPhase = UsbPairingPhase.AwaitingPin,
                         )
                     }
@@ -2105,7 +2128,7 @@ class RNodeWizardViewModel
                         _state.update {
                             it.copy(
                                 showManualPinEntry = true,
-                                usbPairingStatus = "Enter the PIN shown on your RNode's display",
+                                usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_enter_pin),
                                 usbPairingPhase = UsbPairingPhase.AwaitingPin,
                             )
                         }
@@ -2117,7 +2140,7 @@ class RNodeWizardViewModel
                     _state.update {
                         it.copy(
                             isUsbPairingMode = false,
-                            usbScanError = "Error: ${e.message}",
+                            usbScanError = UiMessage.Text(R.string.rnode_wizard_usb_error, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -2151,7 +2174,7 @@ class RNodeWizardViewModel
                 Log.d(TAG, "Starting BOTH Classic BT discovery AND BLE scan for RNode")
                 _state.update {
                     it.copy(
-                        usbPairingStatus = "Scanning for RNode...",
+                        usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_scanning),
                         usbPairingPhase = UsbPairingPhase.Scanning,
                     )
                 }
@@ -2163,7 +2186,7 @@ class RNodeWizardViewModel
                 Log.e(TAG, "Auto-pairing failed", e)
                 _state.update {
                     it.copy(
-                        usbPairingStatus = "Auto-pairing failed: ${e.message}",
+                        usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_auto_pair_failed, listOf(e.message ?: "null")),
                         usbPairingPhase = UsbPairingPhase.Failed,
                     )
                 }
@@ -2225,7 +2248,7 @@ class RNodeWizardViewModel
                 Log.e(TAG, "BLE scanner not available")
                 _state.update {
                     it.copy(
-                        usbPairingStatus = "BLE scanner not available",
+                        usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_ble_scanner_unavailable),
                         usbPairingPhase = UsbPairingPhase.Failed,
                     )
                 }
@@ -2288,7 +2311,7 @@ class RNodeWizardViewModel
                             viewModelScope.launch {
                                 _state.update { state ->
                                     state.copy(
-                                        usbPairingStatus = "$deviceName is already paired!",
+                                        usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_already_paired, listOf(deviceName)),
                                         usbPairingPhase = UsbPairingPhase.Done,
                                         isUsbPairingMode = false,
                                         usbBluetoothPin = null,
@@ -2317,7 +2340,7 @@ class RNodeWizardViewModel
                             viewModelScope.launch {
                                 _state.update {
                                     it.copy(
-                                        usbPairingStatus = "Found $deviceName, pairing...",
+                                        usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_found_pairing, listOf(deviceName)),
                                         usbPairingPhase = UsbPairingPhase.Pairing,
                                     )
                                 }
@@ -2343,19 +2366,22 @@ class RNodeWizardViewModel
                     override fun onScanFailed(errorCode: Int) {
                         Log.e(TAG, "BLE pairing scan failed: $errorCode")
                         pairingScanCallback = null
-                        val errorMessage =
+                        val message: UiMessage =
                             when (errorCode) {
-                                1 -> "BLE scan failed: already started"
-                                2 -> "BLE scan failed: app not registered"
-                                3 -> "BLE scan failed: internal error"
-                                4 -> "BLE scan failed: feature unsupported"
-                                5 -> "BLE scan failed: out of hardware resources"
-                                6 -> "BLE scan failed: scanning too frequently"
-                                else -> "BLE scan failed: error code $errorCode"
+                                1 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_already_started)
+                                2 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_not_registered)
+                                3 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_internal_error)
+                                4 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_unsupported)
+                                5 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_no_resources)
+                                6 -> UiMessage.Text(R.string.rnode_wizard_ble_scan_failed_too_frequent)
+                                else -> UiMessage.Text(
+                                    R.string.rnode_wizard_ble_scan_failed_error_code,
+                                    listOf(errorCode),
+                                )
                             }
                         _state.update {
                             it.copy(
-                                usbPairingStatus = errorMessage,
+                                usbPairingStatus = message,
                                 usbPairingPhase = UsbPairingPhase.Failed,
                             )
                         }
@@ -2384,7 +2410,7 @@ class RNodeWizardViewModel
                         if (_state.value.usbPairingPhase == UsbPairingPhase.Scanning) {
                             _state.update {
                                 it.copy(
-                                    usbPairingStatus = "No RNode found. Make sure your RNode is in pairing mode.",
+                                    usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_no_rnode_found),
                                     usbPairingPhase = UsbPairingPhase.Failed,
                                 )
                             }
@@ -2395,7 +2421,7 @@ class RNodeWizardViewModel
                 Log.e(TAG, "BLE scan permission denied", e)
                 _state.update {
                     it.copy(
-                        usbPairingStatus = "Bluetooth permission required",
+                        usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_bt_permission_short),
                         usbPairingPhase = UsbPairingPhase.Failed,
                     )
                 }
@@ -2478,7 +2504,7 @@ class RNodeWizardViewModel
                                         viewModelScope.launch {
                                             _state.update { state ->
                                                 state.copy(
-                                                    usbPairingStatus = "Found $deviceName, pairing...",
+                                                    usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_found_pairing, listOf(deviceName)),
                                                     usbPairingPhase = UsbPairingPhase.Pairing,
                                                 )
                                             }
@@ -2515,7 +2541,7 @@ class RNodeWizardViewModel
                                 if (_state.value.usbPairingPhase == UsbPairingPhase.Scanning) {
                                     _state.update {
                                         it.copy(
-                                            usbPairingStatus = "No RNode found. Make sure your RNode is in pairing mode.",
+                                            usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_no_rnode_found),
                                             usbPairingPhase = UsbPairingPhase.Failed,
                                         )
                                     }
@@ -2619,7 +2645,7 @@ class RNodeWizardViewModel
                                         // Update UI to indicate device was found
                                         viewModelScope.launch {
                                             _state.update { state ->
-                                                state.copy(usbPairingStatus = "Found $deviceName - enter PIN to pair")
+                                                state.copy(usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_found_enter_pin, listOf(deviceName)))
                                             }
                                         }
 
@@ -2747,7 +2773,7 @@ class RNodeWizardViewModel
                             // Update UI to indicate device was found
                             viewModelScope.launch {
                                 _state.update { state ->
-                                    state.copy(usbPairingStatus = "Found $deviceName - enter PIN to pair")
+                                    state.copy(usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_found_enter_pin, listOf(deviceName)))
                                 }
                             }
                         }
@@ -2846,7 +2872,7 @@ class RNodeWizardViewModel
             val pin = _state.value.manualPinInput
             if (pin.length != 6) {
                 _state.update {
-                    it.copy(usbScanError = "PIN must be 6 digits")
+                    it.copy(usbScanError = UiMessage.Text(R.string.rnode_wizard_pin_length))
                 }
                 return
             }
@@ -2893,7 +2919,7 @@ class RNodeWizardViewModel
             val deviceName = device.name ?: "RNode"
             Log.d(TAG, "Pairing with pre-discovered device: $deviceName (${device.address})")
 
-            _state.update { it.copy(usbPairingStatus = "Pairing with $deviceName...") }
+            _state.update { it.copy(usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_pairing_with, listOf(deviceName))) }
 
             // Unregister any existing pairing handler to avoid duplicate receivers
             pairingHandler?.unregister()
@@ -2946,7 +2972,7 @@ class RNodeWizardViewModel
                                         )
                                     _state.update { state ->
                                         state.copy(
-                                            usbPairingStatus = "Successfully paired with $deviceName!",
+                                            usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_paired_success, listOf(deviceName)),
                                             isUsbPairingMode = false,
                                             usbBluetoothPin = null,
                                             // Add to discovered devices and auto-select it
@@ -2972,7 +2998,7 @@ class RNodeWizardViewModel
                                 Log.e(TAG, "Pairing failed with ${device.name}")
                                 viewModelScope.launch {
                                     _state.update {
-                                        it.copy(usbPairingStatus = "Pairing failed with $deviceName")
+                                        it.copy(usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_pairing_failed_with, listOf(deviceName)))
                                     }
                                 }
                                 // Unregister receiver
@@ -3078,7 +3104,7 @@ class RNodeWizardViewModel
                 _state.update {
                     it.copy(
                         usbScanError = null,
-                        usbPairingStatus = "Scanning for USB devices...",
+                        usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_scanning_usb),
                     )
                 }
 
@@ -3109,7 +3135,7 @@ class RNodeWizardViewModel
                             it.copy(
                                 usbPairingStatus = null,
                                 usbPairingPhase = null,
-                                pairingError = "No USB devices found. Connect your RNode via USB cable.",
+                                pairingError = UiMessage.Text(R.string.rnode_wizard_usb_none_for_pairing),
                             )
                         }
                         return@launch
@@ -3134,7 +3160,7 @@ class RNodeWizardViewModel
                         it.copy(
                             usbPairingStatus = null,
                             usbPairingPhase = null,
-                            pairingError = "USB-assisted pairing failed: ${e.message}",
+                            pairingError = UiMessage.Text(R.string.rnode_wizard_usb_assist_failed, listOf(e.message ?: "null")),
                         )
                     }
                 }
@@ -3147,7 +3173,7 @@ class RNodeWizardViewModel
                 it.copy(
                     selectedUsbDevice = usbDevice,
                     isRequestingUsbPermission = true,
-                    usbPairingStatus = "Requesting USB permission...",
+                    usbPairingStatus = UiMessage.Text(R.string.rnode_wizard_requesting_usb_permission),
                 )
             }
             usbBridge.requestPermission(usbDevice.deviceId) { granted ->
@@ -3163,7 +3189,7 @@ class RNodeWizardViewModel
                             it.copy(
                                 usbPairingStatus = null,
                                 usbPairingPhase = null,
-                                pairingError = "USB permission denied. Please grant permission.",
+                                pairingError = UiMessage.Text(R.string.rnode_wizard_usb_permission_grant),
                             )
                         }
                     }
@@ -3258,10 +3284,7 @@ class RNodeWizardViewModel
                                     // Timeout - device not found
                                     _state.update {
                                         it.copy(
-                                            pairingError =
-                                                "Could not find RNode. Please ensure the device is powered on, " +
-                                                    "Bluetooth is enabled, and it's within range. " +
-                                                    "Tap 'Scan Again' to refresh the device list.",
+                                            pairingError = UiMessage.Text(R.string.rnode_wizard_pair_not_found),
                                         )
                                     }
                                     return@launch
@@ -3270,9 +3293,7 @@ class RNodeWizardViewModel
                                 // Classic Bluetooth - show standard error
                                 _state.update {
                                     it.copy(
-                                        pairingError =
-                                            "RNode is not in pairing mode. Press the " +
-                                                "pairing button until a PIN code appears on the display.",
+                                        pairingError = UiMessage.Text(R.string.rnode_wizard_pair_not_pairing_mode),
                                     )
                                 }
                                 return@launch
@@ -3313,13 +3334,7 @@ class RNodeWizardViewModel
                                 // instructions instead of a generic retry hint.
                                 _state.update {
                                     it.copy(
-                                        pairingError =
-                                            "Ensure your RNode has Bluetooth enabled " +
-                                                "and is in pairing mode. Hold the user " +
-                                                "button on the RNode for at least 5 " +
-                                                "seconds — a 6-digit PIN will appear on " +
-                                                "the screen while pairing mode is active. " +
-                                                "Then tap Pair again.",
+                                        pairingError = UiMessage.Text(R.string.rnode_wizard_pair_instructions),
                                     )
                                 }
                             }
@@ -3331,7 +3346,13 @@ class RNodeWizardViewModel
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Pairing failed", e)
-                    _state.update { it.copy(pairingError = e.message ?: "Pairing failed") }
+                    _state.update {
+                        it.copy(
+                            pairingError =
+                                e.message?.let { UiMessage.Raw(it) }
+                                    ?: UiMessage.Text(R.string.rnode_wizard_pairing_failed),
+                        )
+                    }
                 } finally {
                     pairingHandler?.unregister()
                     pairingHandler = null
@@ -3426,11 +3447,13 @@ class RNodeWizardViewModel
             val (showWarning, message) =
                 when {
                     isCustomMode && region == null ->
-                        true to "No region selected. You are responsible for ensuring compliance with local regulations."
+                        true to UiMessage.Text(R.string.rnode_wizard_reg_no_region)
 
                     region != null && region.dutyCycle < 100 && (stAlock == null || ltAlock == null) ->
-                        true to "Region ${region.name} has a ${region.dutyCycle}% duty cycle limit. " +
-                            "Airtime limits are not set. Ensure compliance with local regulations."
+                        true to UiMessage.Text(
+                            R.string.rnode_wizard_reg_duty_cycle,
+                            listOf(region.name, region.dutyCycle),
+                        )
 
                     else -> false to null
                 }
@@ -3511,36 +3534,36 @@ class RNodeWizardViewModel
             userModifiedFields.add("frequency")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateFrequency(value, region)
-            _state.update { it.copy(frequency = value, frequencyError = result.errorMessage) }
+            _state.update { it.copy(frequency = value, frequencyError = result.error?.toUiMessage()) }
         }
 
         fun updateBandwidth(value: String) {
             val result = RNodeConfigValidator.validateBandwidth(value)
-            _state.update { it.copy(bandwidth = value, bandwidthError = result.errorMessage) }
+            _state.update { it.copy(bandwidth = value, bandwidthError = result.error?.toUiMessage()) }
         }
 
         fun updateSpreadingFactor(value: String) {
             val result = RNodeConfigValidator.validateSpreadingFactor(value)
-            _state.update { it.copy(spreadingFactor = value, spreadingFactorError = result.errorMessage) }
+            _state.update { it.copy(spreadingFactor = value, spreadingFactorError = result.error?.toUiMessage()) }
         }
 
         fun updateCodingRate(value: String) {
             val result = RNodeConfigValidator.validateCodingRate(value)
-            _state.update { it.copy(codingRate = value, codingRateError = result.errorMessage) }
+            _state.update { it.copy(codingRate = value, codingRateError = result.error?.toUiMessage()) }
         }
 
         fun updateTxPower(value: String) {
             userModifiedFields.add("txPower")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateTxPower(value, region)
-            _state.update { it.copy(txPower = value, txPowerError = result.errorMessage) }
+            _state.update { it.copy(txPower = value, txPowerError = result.error?.toUiMessage()) }
         }
 
         fun updateStAlock(value: String) {
             userModifiedFields.add("stAlock")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateAirtimeLimit(value, region)
-            _state.update { it.copy(stAlock = value, stAlockError = result.errorMessage) }
+            _state.update { it.copy(stAlock = value, stAlockError = result.error?.toUiMessage()) }
             updateRegulatoryWarning()
         }
 
@@ -3548,7 +3571,7 @@ class RNodeWizardViewModel
             userModifiedFields.add("ltAlock")
             val region = _state.value.selectedFrequencyRegion
             val result = RNodeConfigValidator.validateAirtimeLimit(value, region)
-            _state.update { it.copy(ltAlock = value, ltAlockError = result.errorMessage) }
+            _state.update { it.copy(ltAlock = value, ltAlockError = result.error?.toUiMessage()) }
             updateRegulatoryWarning()
         }
 
@@ -3633,14 +3656,14 @@ class RNodeWizardViewModel
 
             _state.update {
                 it.copy(
-                    nameError = result.nameError,
-                    frequencyError = result.frequencyError,
-                    bandwidthError = result.bandwidthError,
-                    spreadingFactorError = result.spreadingFactorError,
-                    codingRateError = result.codingRateError,
-                    txPowerError = result.txPowerError,
-                    stAlockError = result.stAlockError,
-                    ltAlockError = result.ltAlockError,
+                    nameError = result.nameError?.toUiMessage(),
+                    frequencyError = result.frequencyError?.toUiMessage(),
+                    bandwidthError = result.bandwidthError?.toUiMessage(),
+                    spreadingFactorError = result.spreadingFactorError?.toUiMessage(),
+                    codingRateError = result.codingRateError?.toUiMessage(),
+                    txPowerError = result.txPowerError?.toUiMessage(),
+                    stAlockError = result.stAlockError?.toUiMessage(),
+                    ltAlockError = result.ltAlockError?.toUiMessage(),
                 )
             }
 
@@ -3652,7 +3675,7 @@ class RNodeWizardViewModel
             if (!validateConfiguration()) return
             if (!hasRequiredBluetoothEditIdentity(_state.value)) {
                 _state.update {
-                    it.copy(saveError = "Select the original RNode before updating this interface.")
+                    it.copy(saveError = UiMessage.Text(R.string.rnode_wizard_save_select_original))
                 }
                 return
             }
@@ -3670,8 +3693,8 @@ class RNodeWizardViewModel
                                 it.copy(
                                     isSaving = false,
                                     selectedDevice = selectedDevice?.copy(isPaired = false),
-                                    pairingError = "Android pairing was lost. Pair the configured RNode again.",
-                                    saveError = "Android pairing was lost before the repair could be saved.",
+                                    pairingError = UiMessage.Text(R.string.rnode_wizard_pairing_lost),
+                                    saveError = UiMessage.Text(R.string.rnode_wizard_save_pairing_lost),
                                 )
                             }
                             return@launch
@@ -3701,7 +3724,7 @@ class RNodeWizardViewModel
                             )
                     ) {
                         is ValidationResult.Error -> {
-                            _state.update { it.copy(nameError = uniqueResult.message, isSaving = false) }
+                            _state.update { it.copy(nameError = UiMessage.Raw(uniqueResult.message), isSaving = false) }
                             return@launch
                         }
                         is ValidationResult.Success -> { /* Name is unique, continue */ }
@@ -3802,8 +3825,8 @@ class RNodeWizardViewModel
                             it.copy(
                                 isSaving = false,
                                 selectedDevice = state.selectedDevice.copy(isPaired = false),
-                                pairingError = "Android pairing was lost. Pair the configured RNode again.",
-                                saveError = "Android pairing was lost before the repair could be saved.",
+                                pairingError = UiMessage.Text(R.string.rnode_wizard_pairing_lost),
+                                saveError = UiMessage.Text(R.string.rnode_wizard_save_pairing_lost),
                             )
                         }
                         return@launch
@@ -3829,7 +3852,9 @@ class RNodeWizardViewModel
                     Log.e(TAG, "Failed to save configuration", e)
                     _state.update {
                         it.copy(
-                            saveError = e.message ?: "Failed to save configuration",
+                            saveError =
+                                e.message?.let { UiMessage.Raw(it) }
+                                    ?: UiMessage.Text(R.string.rnode_wizard_save_failed),
                             isSaving = false,
                         )
                     }
@@ -3895,7 +3920,7 @@ class RNodeWizardViewModel
                     _state.update {
                         it.copy(
                             transportConfiguring = false,
-                            transportConfigError = "Failed to configure transport mode",
+                            transportConfigError = UiMessage.Text(R.string.rnode_wizard_transport_failed),
                         )
                     }
                 }
@@ -3906,28 +3931,33 @@ class RNodeWizardViewModel
          * Get the effective device name for display.
          * For TCP mode, shows the host:port. For USB, shows USB device name. For Bluetooth, shows device name.
          */
-        fun getEffectiveDeviceName(): String {
+        fun getEffectiveDeviceName(): UiMessage {
             val state = _state.value
             return when (state.connectionType) {
                 RNodeConnectionType.TCP_WIFI -> {
                     val port = state.tcpPort.toIntOrNull() ?: 7633
                     if (state.tcpHost.isNotBlank()) {
-                        if (port == 7633) state.tcpHost else "${state.tcpHost}:$port"
+                        UiMessage.Raw(if (port == 7633) state.tcpHost else "${state.tcpHost}:$port")
                     } else {
-                        "No host specified"
+                        UiMessage.Text(R.string.rnode_wizard_no_host)
                     }
                 }
                 RNodeConnectionType.USB_SERIAL -> {
                     state.selectedUsbDevice?.let { device ->
                         // Prefer product name, fall back to manufacturer, then driver type
-                        device.productName
-                            ?: device.manufacturerName?.let { "$it Device" }
-                            ?: device.driverType
-                    } ?: "No USB device selected"
+                        device.productName?.let { UiMessage.Raw(it) }
+                            ?: device.manufacturerName?.let {
+                                UiMessage.Text(R.string.rnode_wizard_usb_manufacturer_device, listOf(it))
+                            }
+                            ?: UiMessage.Raw(device.driverType)
+                    } ?: UiMessage.Text(R.string.rnode_wizard_no_usb_device)
                 }
                 RNodeConnectionType.BLUETOOTH -> {
-                    state.selectedDevice?.name
-                        ?: state.manualDeviceName.ifBlank { "No device selected" }
+                    state.selectedDevice?.name?.let { UiMessage.Raw(it) }
+                        ?: state.manualDeviceName.ifBlank { "" }
+                            .takeIf { it.isNotBlank() }
+                            ?.let { UiMessage.Raw(it) }
+                        ?: UiMessage.Text(R.string.rnode_wizard_no_device)
                 }
             }
         }
@@ -3948,16 +3978,16 @@ class RNodeWizardViewModel
         /**
          * Get the connection type string for display.
          */
-        fun getConnectionTypeString(): String {
+        fun getConnectionTypeString(): UiMessage {
             val state = _state.value
             return when (state.connectionType) {
-                RNodeConnectionType.TCP_WIFI -> "WiFi / TCP"
-                RNodeConnectionType.USB_SERIAL -> "USB Serial"
+                RNodeConnectionType.TCP_WIFI -> UiMessage.Text(R.string.rnode_wizard_conn_tcp)
+                RNodeConnectionType.USB_SERIAL -> UiMessage.Text(R.string.rnode_wizard_conn_usb)
                 RNodeConnectionType.BLUETOOTH -> {
                     when (state.selectedDevice?.type ?: state.manualBluetoothType) {
-                        BluetoothType.CLASSIC -> "Bluetooth Classic"
-                        BluetoothType.BLE -> "Bluetooth LE"
-                        BluetoothType.UNKNOWN -> "Bluetooth"
+                        BluetoothType.CLASSIC -> UiMessage.Text(R.string.rnode_wizard_conn_bt_classic)
+                        BluetoothType.BLE -> UiMessage.Text(R.string.rnode_wizard_conn_bt_le)
+                        BluetoothType.UNKNOWN -> UiMessage.Text(R.string.rnode_wizard_conn_bt)
                     }
                 }
             }

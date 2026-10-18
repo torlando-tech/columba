@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.ui.components.WizardBottomBar
 import network.columba.app.viewmodel.RNodeWizardViewModel
@@ -243,7 +244,7 @@ fun RNodeWizardScreen(
         AlertDialog(
             onDismissRequest = { viewModel.clearSaveError() },
             title = { Text("Error") },
-            text = { Text(error) },
+            text = { Text(error.resolve(LocalContext.current)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearSaveError() }) {
                     Text("OK")
@@ -257,7 +258,7 @@ fun RNodeWizardScreen(
         AlertDialog(
             onDismissRequest = { viewModel.clearTransportConfigError() },
             title = { Text("Transport Configuration Failed") },
-            text = { Text(error) },
+            text = { Text(error.resolve(LocalContext.current)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearTransportConfigError() }) {
                     Text("OK")

@@ -397,4 +397,92 @@
         <item quantity="one">%1$d of %2$d images failed to compress</item>
         <item quantity="other">%1$d of %2$d images failed to compress</item>
     </plurals>
+    <!-- ViewModels: RNode wizard, flasher, TCP client, validators (i18n ticket 07) -->
+    <string name="rnode_val_name_required">Interface name is required</string>
+    <string name="rnode_val_invalid_number">Invalid number</string>
+    <string name="rnode_val_frequency_range">Must be %1$.1f-%2$.1f MHz</string>
+    <string name="rnode_val_frequency_required_range">Frequency must be %1$.1f-%2$.1f MHz</string>
+    <string name="rnode_val_bandwidth_min">Must be &gt;= 7.8 kHz</string>
+    <string name="rnode_val_bandwidth_max">Must be &lt;= 1625 kHz</string>
+    <string name="rnode_val_bandwidth_required">Bandwidth must be 7.8-1625 kHz</string>
+    <string name="rnode_val_sf_min">Must be &gt;= %1$d</string>
+    <string name="rnode_val_sf_max">Must be &lt;= %1$d</string>
+    <string name="rnode_val_sf_required">SF must be %1$d-%2$d</string>
+    <string name="rnode_val_cr_min">Must be &gt;= %1$d</string>
+    <string name="rnode_val_cr_max">Must be &lt;= %1$d</string>
+    <string name="rnode_val_cr_required">CR must be %1$d-%2$d</string>
+    <string name="rnode_val_tx_power_min">Must be &gt;= %1$d</string>
+    <string name="rnode_val_tx_power_max">Max: %1$d dBm</string>
+    <string name="rnode_val_tx_power_required">TX power must be %1$d-%2$d dBm for %3$s</string>
+    <string name="rnode_val_tx_power_required_no_region">TX power must be %1$d-%2$d dBm for this region</string>
+    <string name="rnode_val_airtime_min">Must be &gt;= 0</string>
+    <string name="rnode_val_airtime_max">Must be &lt;= 100%%</string>
+    <string name="rnode_val_airtime_regional_max">Max: %1$s%% (regional limit)</string>
+    <string name="rnode_device_name_too_long">Device name must be %1$d characters or less</string>
+    <string name="rnode_device_name_not_rnode">Device may not be an RNode. Proceed with caution.</string>
+    <string name="rnode_wizard_bt_unavailable">Bluetooth not available on this device</string>
+    <string name="rnode_wizard_no_devices_found">No RNode devices found. Make sure your RNode is powered on and Bluetooth is enabled.</string>
+    <string name="rnode_wizard_bt_permission_required">Bluetooth permission required. Please grant Bluetooth permissions in Settings.</string>
+    <string name="rnode_wizard_ble_scan_failed_already_started">BLE scan failed: already started</string>
+    <string name="rnode_wizard_ble_scan_failed_not_registered">BLE scan failed: app not registered</string>
+    <string name="rnode_wizard_ble_scan_failed_internal_error">BLE scan failed: internal error</string>
+    <string name="rnode_wizard_ble_scan_failed_unsupported">BLE scan failed: feature unsupported</string>
+    <string name="rnode_wizard_ble_scan_failed_no_resources">BLE scan failed: out of hardware resources</string>
+    <string name="rnode_wizard_ble_scan_failed_too_frequent">BLE scan failed: scanning too frequently</string>
+    <string name="rnode_wizard_ble_scan_failed_error_code">BLE scan failed: error code %1$d</string>
+    <string name="rnode_wizard_association_failed">Association failed</string>
+    <string name="rnode_wizard_association_start_failed">Failed to start association</string>
+    <string name="rnode_wizard_tcp_host_empty">Host cannot be empty</string>
+    <string name="rnode_wizard_tcp_port_range">Port must be between 1 and 65535</string>
+    <string name="rnode_wizard_tcp_connect_failed">Could not connect to %1$s:%2$d</string>
+    <string name="rnode_wizard_tcp_connection_failed">Connection failed</string>
+    <string name="rnode_wizard_usb_no_devices">No USB serial devices found</string>
+    <string name="rnode_wizard_usb_scan_failed">Failed to scan USB devices: %1$s</string>
+    <string name="rnode_wizard_usb_permission_denied">USB permission denied. Please grant permission to use this device.</string>
+    <string name="rnode_wizard_usb_connect_failed">Failed to connect to USB device</string>
+    <string name="rnode_wizard_usb_pair_command_failed">Failed to send pairing command</string>
+    <string name="rnode_wizard_usb_error">Error: %1$s</string>
+    <string name="rnode_wizard_pin_length">PIN must be 6 digits</string>
+    <string name="rnode_wizard_waiting_pin">Waiting for PIN or scanning for RNode...</string>
+    <string name="rnode_wizard_enter_pin">Enter the PIN shown on your RNode\'s display</string>
+    <string name="rnode_wizard_scanning">Scanning for RNode...</string>
+    <string name="rnode_wizard_auto_pair_failed">Auto-pairing failed: %1$s</string>
+    <string name="rnode_wizard_ble_scanner_unavailable">BLE scanner not available</string>
+    <string name="rnode_wizard_already_paired">%1$s is already paired!</string>
+    <string name="rnode_wizard_found_pairing">Found %1$s, pairing...</string>
+    <string name="rnode_wizard_no_rnode_found">No RNode found. Make sure your RNode is in pairing mode.</string>
+    <string name="rnode_wizard_bt_permission_short">Bluetooth permission required</string>
+    <string name="rnode_wizard_found_enter_pin">Found %1$s - enter PIN to pair</string>
+    <string name="rnode_wizard_pairing_with">Pairing with %1$s...</string>
+    <string name="rnode_wizard_paired_success">Successfully paired with %1$s!</string>
+    <string name="rnode_wizard_pairing_failed_with">Pairing failed with %1$s</string>
+    <string name="rnode_wizard_scanning_usb">Scanning for USB devices...</string>
+    <string name="rnode_wizard_requesting_usb_permission">Requesting USB permission...</string>
+    <string name="rnode_wizard_usb_none_for_pairing">No USB devices found. Connect your RNode via USB cable.</string>
+    <string name="rnode_wizard_usb_assist_failed">USB-assisted pairing failed: %1$s</string>
+    <string name="rnode_wizard_usb_permission_grant">USB permission denied. Please grant permission.</string>
+    <string name="rnode_wizard_pair_not_found">Could not find RNode. Please ensure the device is powered on, Bluetooth is enabled, and it\'s within range. Tap \'Scan Again\' to refresh the device list.</string>
+    <string name="rnode_wizard_pair_not_pairing_mode">RNode is not in pairing mode. Press the pairing button until a PIN code appears on the display.</string>
+    <string name="rnode_wizard_pair_instructions">Ensure your RNode has Bluetooth enabled and is in pairing mode. Hold the user button on the RNode for at least 5 seconds — a 6-digit PIN will appear on the screen while pairing mode is active. Then tap Pair again.</string>
+    <string name="rnode_wizard_pairing_failed">Pairing failed</string>
+    <string name="rnode_wizard_pairing_lost">Android pairing was lost. Pair the configured RNode again.</string>
+    <string name="rnode_wizard_save_select_original">Select the original RNode before updating this interface.</string>
+    <string name="rnode_wizard_save_pairing_lost">Android pairing was lost before the repair could be saved.</string>
+    <string name="rnode_wizard_save_failed">Failed to save configuration</string>
+    <string name="rnode_wizard_transport_failed">Failed to configure transport mode</string>
+    <string name="rnode_wizard_reg_no_region">No region selected. You are responsible for ensuring compliance with local regulations.</string>
+    <string name="rnode_wizard_reg_duty_cycle">Region %1$s has a %2$d%% duty cycle limit. Airtime limits are not set. Ensure compliance with local regulations.</string>
+    <string name="rnode_wizard_no_host">No host specified</string>
+    <string name="rnode_wizard_usb_manufacturer_device">%1$s Device</string>
+    <string name="rnode_wizard_no_usb_device">No USB device selected</string>
+    <string name="rnode_wizard_no_device">No device selected</string>
+    <string name="rnode_wizard_conn_tcp">WiFi / TCP</string>
+    <string name="rnode_wizard_conn_usb">USB Serial</string>
+    <string name="rnode_wizard_conn_bt_classic">Bluetooth Classic</string>
+    <string name="rnode_wizard_conn_bt_le">Bluetooth LE</string>
+    <string name="rnode_wizard_conn_bt">Bluetooth</string>
+    <string name="rnode_wizard_driver_unknown">Unknown</string>
+    <string name="flasher_usb_permission_denied">USB permission denied</string>
+    <string name="flasher_load_firmware_failed">Failed to load firmware: %1$s</string>
+    <string name="tcp_client_save_failed">Failed to save configuration</string>
 </resources>

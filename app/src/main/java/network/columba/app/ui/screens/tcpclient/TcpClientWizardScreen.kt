@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import network.columba.app.ui.components.WizardBottomBar
 import network.columba.app.viewmodel.TcpClientWizardStep
@@ -157,7 +158,7 @@ fun TcpClientWizardScreen(
         AlertDialog(
             onDismissRequest = { viewModel.clearSaveError() },
             title = { Text("Error") },
-            text = { Text(error) },
+            text = { Text(error.resolve(LocalContext.current)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearSaveError() }) {
                     Text("OK")
